@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    cache::InternSet,
     model::*,
     ops::{SuspenseReadyFuture, read_model},
 };
@@ -10,9 +11,9 @@ use dioxus_core::{
     VComponent, VNode, VText,
 };
 use std::{
-    collections::HashMap,
+    borrow::Borrow,
     future::pending,
-    sync::{Mutex, OnceLock},
+    hash::{Hash, Hasher},
 };
 
 // ---------- VNode construction --------------------------------------------------------------
@@ -229,13 +230,6 @@ fn build_dynamic(spec: &DynamicSpec) -> DynamicNode {
             },
             "OtherGeneratedComponent",
         )),
-        DynamicSpec::Portal(spec) => DynamicNode::Component(VComponent::new(
-            GeneratedComponent,
-            GeneratedProps {
-                node: spec.child.as_ref().clone(),
-            },
-            "GeneratedPortal",
-        )),
         DynamicSpec::Suspense(spec) => DynamicNode::Component(VComponent::new(
             GeneratedSuspenseBoundary,
             GeneratedSuspenseProps {
@@ -294,140 +288,452 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
 }
 
 fn compile_template(spec: &TemplateSpec) -> Template {
-    static CACHE: OnceLock<Mutex<HashMap<TemplateCacheKey, Template>>> = OnceLock::new();
+    static CACHE: InternSet<CompiledTemplate> = InternSet::new();
 
     let key = spec.cache_key();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut cache = cache.lock().unwrap();
-    if let Some(template) = cache.get(&key) {
-        return *template;
-    }
-
-    let template = compile_template_uncached(spec);
-    cache.insert(key, template);
-    template
+    CACHE
+        .get_or_insert_with(&key, || CompiledTemplate {
+            key: key.clone(),
+            template: compile_template_uncached(spec),
+        })
+        .template
 }
 
 fn compile_template_uncached(spec: &TemplateSpec) -> Template {
-    let mut compiler = TemplateCompiler::default();
-    let roots: Vec<_> = spec
-        .roots
-        .iter()
-        .enumerate()
-        .map(|(index, root)| compiler.compile_node(root, &[index as u8]))
-        .collect();
     Template::new(
-        leak_slice(roots),
-        leak_path_list(compiler.node_paths),
-        leak_path_list(compiler.attr_paths),
+        intern_template_node_slice(&spec.roots, 0, 0),
+        intern_path_list(collect_node_paths(&spec.roots)),
+        intern_path_list(collect_attr_paths(&spec.roots)),
     )
 }
 
-#[derive(Default)]
-struct TemplateCompiler {
-    next_dynamic: usize,
-    next_attr: usize,
-    node_paths: Vec<Vec<u8>>,
-    attr_paths: Vec<Vec<u8>>,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct TemplateNodeCacheKey {
+    spec: TemplateNodeSpec,
+    dynamic_base: usize,
+    attr_base: usize,
 }
 
-impl TemplateCompiler {
-    fn compile_node(&mut self, spec: &TemplateNodeSpec, path: &[u8]) -> TemplateNode {
-        match spec {
-            TemplateNodeSpec::Element {
-                tag,
-                namespace,
-                attrs,
-                children,
-            } => {
-                let attrs = attrs
-                    .iter()
-                    .map(|attr| self.compile_attr(attr, path))
-                    .collect();
-                let children = children
-                    .iter()
-                    .enumerate()
-                    .map(|(index, child)| {
-                        let mut child_path = path.to_vec();
-                        child_path.push(index as u8);
-                        self.compile_node(child, &child_path)
-                    })
-                    .collect();
-                TemplateNode::Element {
-                    tag: tag_name(*tag),
-                    namespace: namespace.map(namespace_name),
-                    attrs: leak_slice(attrs),
-                    children: leak_slice(children),
-                }
-            }
-            TemplateNodeSpec::Text(value) => TemplateNode::Text {
-                text: text_value(*value),
-            },
-            TemplateNodeSpec::Dynamic => {
-                let id = self.next_dynamic;
-                self.next_dynamic += 1;
-                self.node_paths.push(path.to_vec());
-                TemplateNode::Dynamic { id }
-            }
-        }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct TemplateNodeSliceCacheKey {
+    specs: Vec<TemplateNodeSpec>,
+    dynamic_base: usize,
+    attr_base: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct TemplateAttrSliceCacheKey {
+    attrs: Vec<TemplateAttrSpec>,
+    attr_base: usize,
+}
+
+#[derive(Clone)]
+struct CompiledTemplate {
+    key: TemplateCacheKey,
+    template: Template,
+}
+
+impl Borrow<TemplateCacheKey> for CompiledTemplate {
+    fn borrow(&self) -> &TemplateCacheKey {
+        &self.key
+    }
+}
+
+impl PartialEq for CompiledTemplate {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl Eq for CompiledTemplate {}
+
+impl Hash for CompiledTemplate {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct TemplateNodeSliceEntry {
+    key: TemplateNodeSliceCacheKey,
+    nodes: &'static [TemplateNode],
+}
+
+impl Borrow<TemplateNodeSliceCacheKey> for TemplateNodeSliceEntry {
+    fn borrow(&self) -> &TemplateNodeSliceCacheKey {
+        &self.key
+    }
+}
+
+impl PartialEq for TemplateNodeSliceEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl Eq for TemplateNodeSliceEntry {}
+
+impl Hash for TemplateNodeSliceEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct TemplateNodeEntry {
+    key: TemplateNodeCacheKey,
+    node: TemplateNode,
+}
+
+impl Borrow<TemplateNodeCacheKey> for TemplateNodeEntry {
+    fn borrow(&self) -> &TemplateNodeCacheKey {
+        &self.key
+    }
+}
+
+impl PartialEq for TemplateNodeEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl Eq for TemplateNodeEntry {}
+
+impl Hash for TemplateNodeEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct TemplateAttrSliceEntry {
+    key: TemplateAttrSliceCacheKey,
+    attrs: &'static [TemplateAttribute],
+}
+
+impl Borrow<TemplateAttrSliceCacheKey> for TemplateAttrSliceEntry {
+    fn borrow(&self) -> &TemplateAttrSliceCacheKey {
+        &self.key
+    }
+}
+
+impl PartialEq for TemplateAttrSliceEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+
+impl Eq for TemplateAttrSliceEntry {}
+
+impl Hash for TemplateAttrSliceEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct PathListEntry {
+    paths: Vec<Vec<u8>>,
+    leaked: &'static [&'static [u8]],
+}
+
+impl Borrow<[Vec<u8>]> for PathListEntry {
+    fn borrow(&self) -> &[Vec<u8>] {
+        &self.paths
+    }
+}
+
+impl PartialEq for PathListEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.paths == other.paths
+    }
+}
+
+impl Eq for PathListEntry {}
+
+impl Hash for PathListEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.paths.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct PathEntry {
+    path: Vec<u8>,
+    leaked: &'static [u8],
+}
+
+impl Borrow<[u8]> for PathEntry {
+    fn borrow(&self) -> &[u8] {
+        &self.path
+    }
+}
+
+impl PartialEq for PathEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+impl Eq for PathEntry {}
+
+impl Hash for PathEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+    }
+}
+
+#[derive(Clone)]
+struct StaticString {
+    text: String,
+    leaked: &'static str,
+}
+
+impl Borrow<str> for StaticString {
+    fn borrow(&self) -> &str {
+        &self.text
+    }
+}
+
+impl PartialEq for StaticString {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
+}
+
+impl Eq for StaticString {}
+
+impl Hash for StaticString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+    }
+}
+
+fn intern_template_node_slice(
+    specs: &[TemplateNodeSpec],
+    dynamic_base: usize,
+    attr_base: usize,
+) -> &'static [TemplateNode] {
+    if specs.is_empty() {
+        return &[];
     }
 
-    fn compile_attr(&mut self, spec: &TemplateAttrSpec, path: &[u8]) -> TemplateAttribute {
-        match spec {
-            TemplateAttrSpec::Static {
-                name,
-                value,
-                namespace,
-            } => TemplateAttribute::Static {
-                name: attr_name(*name),
-                value: attr_static_value(*value),
+    static CACHE: InternSet<TemplateNodeSliceEntry> = InternSet::new();
+    let key = TemplateNodeSliceCacheKey {
+        specs: specs.to_vec(),
+        dynamic_base,
+        attr_base,
+    };
+    CACHE
+        .get_or_insert_with(&key, || {
+            let mut dynamic_base = key.dynamic_base;
+            let mut attr_base = key.attr_base;
+            let mut nodes = Vec::with_capacity(key.specs.len());
+            for spec in &key.specs {
+                nodes.push(intern_template_node(spec, dynamic_base, attr_base));
+                dynamic_base += spec.dynamic_count();
+                attr_base += spec.attr_count();
+            }
+            TemplateNodeSliceEntry {
+                key: key.clone(),
+                nodes: Box::leak(nodes.into_boxed_slice()),
+            }
+        })
+        .nodes
+}
+
+fn intern_template_node(
+    spec: &TemplateNodeSpec,
+    dynamic_base: usize,
+    attr_base: usize,
+) -> TemplateNode {
+    static CACHE: InternSet<TemplateNodeEntry> = InternSet::new();
+    let key = TemplateNodeCacheKey {
+        spec: spec.clone(),
+        dynamic_base,
+        attr_base,
+    };
+    CACHE
+        .get_or_insert_with(&key, || TemplateNodeEntry {
+            node: compile_template_node(&key),
+            key: key.clone(),
+        })
+        .node
+}
+
+fn compile_template_node(key: &TemplateNodeCacheKey) -> TemplateNode {
+    match &key.spec {
+        TemplateNodeSpec::Element {
+            tag,
+            namespace,
+            attrs,
+            children,
+        } => {
+            let static_attrs = intern_template_attr_slice(attrs, key.attr_base);
+            let children_attr_base = key.attr_base + dynamic_attr_count(attrs);
+            TemplateNode::Element {
+                tag: tag_name(*tag),
                 namespace: namespace.map(namespace_name),
-            },
-            TemplateAttrSpec::Dynamic => {
-                let id = self.next_attr;
-                self.next_attr += 1;
-                self.attr_paths.push(path.to_vec());
-                TemplateAttribute::Dynamic { id }
+                attrs: static_attrs,
+                children: intern_template_node_slice(
+                    children,
+                    key.dynamic_base,
+                    children_attr_base,
+                ),
             }
         }
+        TemplateNodeSpec::Text(value) => TemplateNode::Text {
+            text: text_value(*value),
+        },
+        TemplateNodeSpec::Dynamic => TemplateNode::Dynamic {
+            id: key.dynamic_base,
+        },
     }
 }
 
-fn leak_slice<T: 'static>(value: Vec<T>) -> &'static [T] {
-    if value.is_empty() {
-        &[]
-    } else {
-        Box::leak(value.into_boxed_slice())
+fn intern_template_attr_slice(
+    attrs: &[TemplateAttrSpec],
+    attr_base: usize,
+) -> &'static [TemplateAttribute] {
+    if attrs.is_empty() {
+        return &[];
+    }
+
+    static CACHE: InternSet<TemplateAttrSliceEntry> = InternSet::new();
+    let key = TemplateAttrSliceCacheKey {
+        attrs: attrs.to_vec(),
+        attr_base,
+    };
+    CACHE
+        .get_or_insert_with(&key, || {
+            let mut next_attr = key.attr_base;
+            let attrs = key
+                .attrs
+                .iter()
+                .map(|attr| match attr {
+                    TemplateAttrSpec::Static {
+                        name,
+                        value,
+                        namespace,
+                    } => TemplateAttribute::Static {
+                        name: attr_name(*name),
+                        value: attr_static_value(*value),
+                        namespace: namespace.map(namespace_name),
+                    },
+                    TemplateAttrSpec::Dynamic => {
+                        let id = next_attr;
+                        next_attr += 1;
+                        TemplateAttribute::Dynamic { id }
+                    }
+                })
+                .collect::<Vec<_>>();
+            TemplateAttrSliceEntry {
+                key: key.clone(),
+                attrs: Box::leak(attrs.into_boxed_slice()),
+            }
+        })
+        .attrs
+}
+
+fn dynamic_attr_count(attrs: &[TemplateAttrSpec]) -> usize {
+    attrs
+        .iter()
+        .filter(|attr| matches!(attr, TemplateAttrSpec::Dynamic))
+        .count()
+}
+
+fn collect_node_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    for (index, root) in roots.iter().enumerate() {
+        let path = vec![index as u8];
+        collect_node_paths_from_node(root, path, &mut out);
+    }
+    out
+}
+
+fn collect_node_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mut Vec<Vec<u8>>) {
+    match node {
+        TemplateNodeSpec::Dynamic => out.push(path),
+        TemplateNodeSpec::Element { children, .. } => {
+            for (index, child) in children.iter().enumerate() {
+                let mut child_path = path.clone();
+                child_path.push(index as u8);
+                collect_node_paths_from_node(child, child_path, out);
+            }
+        }
+        TemplateNodeSpec::Text(_) => {}
     }
 }
 
-fn leak_path_list(paths: Vec<Vec<u8>>) -> &'static [&'static [u8]] {
+fn collect_attr_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    for (index, root) in roots.iter().enumerate() {
+        let path = vec![index as u8];
+        collect_attr_paths_from_node(root, path, &mut out);
+    }
+    out
+}
+
+fn collect_attr_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mut Vec<Vec<u8>>) {
+    let TemplateNodeSpec::Element {
+        attrs, children, ..
+    } = node
+    else {
+        return;
+    };
+
+    for attr in attrs {
+        if matches!(attr, TemplateAttrSpec::Dynamic) {
+            out.push(path.clone());
+        }
+    }
+
+    for (index, child) in children.iter().enumerate() {
+        let mut child_path = path.clone();
+        child_path.push(index as u8);
+        collect_attr_paths_from_node(child, child_path, out);
+    }
+}
+
+fn intern_path_list(paths: Vec<Vec<u8>>) -> &'static [&'static [u8]] {
     if paths.is_empty() {
         return &[];
     }
 
-    let paths = paths
-        .into_iter()
-        .map(|path| {
-            let path: &'static mut [u8] = Box::leak(path.into_boxed_slice());
-            &*path as &'static [u8]
+    static CACHE: InternSet<PathListEntry> = InternSet::new();
+    CACHE
+        .get_or_insert_with(paths.as_slice(), || {
+            let leaked = paths.iter().cloned().map(intern_path).collect::<Vec<_>>();
+            PathListEntry {
+                paths: paths.clone(),
+                leaked: Box::leak(leaked.into_boxed_slice()),
+            }
         })
-        .collect();
-    leak_slice(paths)
+        .leaked
+}
+
+fn intern_path(path: Vec<u8>) -> &'static [u8] {
+    if path.is_empty() {
+        return &[];
+    }
+
+    static CACHE: InternSet<PathEntry> = InternSet::new();
+    CACHE
+        .get_or_insert_with(path.as_slice(), || PathEntry {
+            leaked: Box::leak(path.clone().into_boxed_slice()),
+            path: path.clone(),
+        })
+        .leaked
 }
 
 fn leak_str(value: String) -> &'static str {
-    static CACHE: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
-
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut cache = cache.lock().unwrap();
-    if let Some(interned) = cache.get(value.as_str()) {
-        return *interned;
-    }
-
-    let interned: &'static str = Box::leak(value.clone().into_boxed_str());
-    cache.insert(value, interned);
-    interned
+    static CACHE: InternSet<StaticString> = InternSet::new();
+    CACHE
+        .get_or_insert_with(value.as_str(), || StaticString {
+            leaked: Box::leak(value.clone().into_boxed_str()),
+            text: value.clone(),
+        })
+        .leaked
 }
 
 fn tag_name(value: u8) -> &'static str {
@@ -452,4 +758,118 @@ fn attr_static_value(value: u8) -> &'static str {
 
 fn text_value(value: u8) -> &'static str {
     leak_str(format!("static-text-{value}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr;
+
+    fn element(
+        tag: u8,
+        attrs: Vec<TemplateAttrSpec>,
+        children: Vec<TemplateNodeSpec>,
+    ) -> TemplateNodeSpec {
+        TemplateNodeSpec::Element {
+            tag,
+            namespace: None,
+            attrs,
+            children,
+        }
+    }
+
+    #[test]
+    fn identical_expanded_templates_reuse_static_parts() {
+        let spec = TemplateSpec {
+            cache_key: None,
+            roots: vec![element(
+                1,
+                vec![TemplateAttrSpec::Dynamic],
+                vec![TemplateNodeSpec::Dynamic],
+            )],
+        };
+
+        let first = compile_template(&spec);
+        let second = compile_template(&spec);
+
+        assert!(ptr::eq(first.roots(), second.roots()));
+        assert!(ptr::eq(first.node_paths(), second.node_paths()));
+        assert!(ptr::eq(first.attr_paths(), second.attr_paths()));
+    }
+
+    #[test]
+    fn related_templates_reuse_shared_child_slices() {
+        let shared_child = element(
+            9,
+            vec![TemplateAttrSpec::Dynamic],
+            vec![TemplateNodeSpec::Dynamic],
+        );
+        let first = compile_template(&TemplateSpec {
+            cache_key: None,
+            roots: vec![element(1, Vec::new(), vec![shared_child.clone()])],
+        });
+        let second = compile_template(&TemplateSpec {
+            cache_key: None,
+            roots: vec![element(2, Vec::new(), vec![shared_child])],
+        });
+
+        let [
+            TemplateNode::Element {
+                children: first_children,
+                ..
+            },
+        ] = first.roots()
+        else {
+            panic!("expected first root element");
+        };
+        let [
+            TemplateNode::Element {
+                children: second_children,
+                ..
+            },
+        ] = second.roots()
+        else {
+            panic!("expected second root element");
+        };
+
+        assert!(ptr::eq(*first_children, *second_children));
+    }
+
+    #[test]
+    fn dynamic_subtrees_include_dynamic_base_in_key() {
+        let spec = element(1, Vec::new(), vec![TemplateNodeSpec::Dynamic]);
+
+        let base_zero = intern_template_node(&spec, 0, 0);
+        let base_one = intern_template_node(&spec, 1, 0);
+
+        let TemplateNode::Element {
+            children: [TemplateNode::Dynamic { id: zero_id }],
+            ..
+        } = base_zero
+        else {
+            panic!("expected base zero dynamic child");
+        };
+        let TemplateNode::Element {
+            children: [TemplateNode::Dynamic { id: one_id }],
+            ..
+        } = base_one
+        else {
+            panic!("expected base one dynamic child");
+        };
+
+        assert_eq!(*zero_id, 0);
+        assert_eq!(*one_id, 1);
+    }
+
+    #[test]
+    fn dynamic_attr_slices_include_attr_base_in_key() {
+        let attrs = [TemplateAttrSpec::Dynamic];
+
+        let base_zero = intern_template_attr_slice(&attrs, 0);
+        let base_one = intern_template_attr_slice(&attrs, 1);
+
+        assert!(matches!(base_zero, [TemplateAttribute::Dynamic { id: 0 }]));
+        assert!(matches!(base_one, [TemplateAttribute::Dynamic { id: 1 }]));
+        assert!(!ptr::eq(base_zero, base_one));
+    }
 }

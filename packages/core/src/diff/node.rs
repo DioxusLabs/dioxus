@@ -105,13 +105,13 @@ impl VNode {
         let mount_id = self.mount.take();
         new.mount.set(mount_id);
 
-        if mount_id.mounted() {
-            let mut mounts = dom.runtime.mounts.borrow_mut();
-            let mount = &mut mounts[mount_id.0];
+        debug_assert!(mount_id.mounted());
 
-            // Update the reference to the node for bubbling events
-            mount.node = new.clone();
-        }
+        let mut mounts = dom.runtime.mounts.borrow_mut();
+        let mount = &mut mounts[mount_id.0];
+
+        // Update the reference to the node for bubbling events
+        mount.node = new.clone();
     }
 
     fn diff_dynamic_node(
@@ -312,25 +312,25 @@ impl VNode {
         replace_with: Option<usize>,
     ) {
         let mount = self.mount.get();
-        if mount.mounted() {
-            // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
-            // Will not generate mutations!
-            self.reclaim_attributes(mount, dom);
+        debug_assert!(mount.mounted());
 
-            // Remove the nested dynamic nodes
-            // We don't generate mutations for these, as they will be removed by the parent (in the next line)
-            // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
-            self.remove_nested_dyn_nodes::<M>(mount, dom, destroy_component_state);
+        // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
+        // Will not generate mutations!
+        self.reclaim_attributes(mount, dom);
 
-            // Clean up the roots, assuming we need to generate mutations for these
-            // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-            self.reclaim_roots(mount, dom, to, destroy_component_state, replace_with);
+        // Remove the nested dynamic nodes
+        // We don't generate mutations for these, as they will be removed by the parent (in the next line)
+        // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
+        self.remove_nested_dyn_nodes::<M>(mount, dom, destroy_component_state);
 
-            if destroy_component_state {
-                let mount = self.mount.take();
-                // Remove the mount information
-                dom.runtime.mounts.borrow_mut().remove(mount.0);
-            }
+        // Clean up the roots, assuming we need to generate mutations for these
+        // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
+        self.reclaim_roots(mount, dom, to, destroy_component_state, replace_with);
+
+        if destroy_component_state {
+            let mount = self.mount.take();
+            // Remove the mount information
+            dom.runtime.mounts.borrow_mut().remove(mount.0);
         }
     }
 
@@ -785,9 +785,8 @@ impl VNode {
             while let Some((idx, p)) =
                 dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
             {
-                if p.len() > 1 {
-                    end = idx;
-                }
+                debug_assert!(p.len() > 1);
+                end = idx;
             }
 
             Some((start, end))

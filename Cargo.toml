@@ -404,6 +404,14 @@ incremental = true
 [profile.dev.package.walrus]
 opt-level = 3
 
+# Keep debug assertions for fuzzing, but compile the fuzz harness and reusable
+# fuzzer crate with release-style optimizations.
+[profile.dev.package.dioxus-fuzz]
+opt-level = 3
+
+[profile.dev.package.dioxus-vdom-fuzz]
+opt-level = 3
+
 # ensure we have adversarial setup for tls
 [profile.dev.package.cross-tls-crate]
 opt-level = 2

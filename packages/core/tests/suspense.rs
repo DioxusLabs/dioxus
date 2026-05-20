@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, ElementId, Mutation, generation};
+use dioxus_core::{AttributeValue, ElementId, Mutation, ScopeId, generation};
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;
@@ -71,6 +72,55 @@ fn suspended_child() -> Element {
     }
 
     rsx!("child")
+}
+
+#[test]
+fn suspense_switches_to_fallback_when_child_suspends_during_diff() {
+    fn app() -> Element {
+        let should_suspend = generation() > 0;
+
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child { should_suspend }
+            }
+        }
+    }
+
+    #[component]
+    fn Child(should_suspend: bool) -> Element {
+        if should_suspend {
+            let task = spawn(async { std::future::pending::<()>().await });
+            suspend(task)?;
+        }
+
+        rsx! {
+            div { "resolved" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    dom.rebuild(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Element {
+            tag: "div".to_string(),
+            namespace: None,
+            attrs: Vec::new(),
+            listeners: Vec::new(),
+            children: vec![SnapshotNode::Text("resolved".to_string())],
+        }]
+    );
+
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Text("fallback".to_string())]
+    );
 }
 
 /// When switching from a suspense fallback to the real child, the state of that component must be kept
@@ -414,28 +464,24 @@ fn toggle_suspense() {
             dom.mark_dirty(ScopeId::APP);
             let mutations = dom.render_immediate_to_vec();
 
-            // Then replace that with nothing
+            // Then replace that with the fallback in the same render
             println!("{:#?}", mutations);
             assert_eq!(
                 mutations.edits,
                 [
                     Mutation::CreatePlaceholder { id: ElementId(2) },
                     Mutation::ReplaceWith { id: ElementId(1), m: 1 },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
+                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
                 ]
             );
 
             dom.wait_for_work().await;
             let mutations = dom.render_immediate_to_vec();
 
-            // Then replace it with a placeholder
+            // The fallback was already rendered when the child suspended
             println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
-                ]
-            );
+            assert_eq!(mutations.edits, []);
 
             dom.wait_for_work().await;
             let mutations = dom.render_immediate_to_vec();
@@ -898,4 +944,3 @@ fn nested_suspense_resolves_client() {
             )
         });
 }
-

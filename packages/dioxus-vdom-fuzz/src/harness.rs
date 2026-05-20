@@ -1,7 +1,7 @@
 use crate::{
     model::*,
     ops::{
-        Op, TemplateEdit, apply_to_model, clear_suspense_ready_tasks, read_model,
+        ModelEdit, Op, WakeMode, apply_to_model, clear_suspense_ready_tasks, read_model,
         release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
         without_suspense_ready_registration,
     },
@@ -10,8 +10,8 @@ use crate::{
 use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
-use dioxus_renderer_oracle::{RendererOracle, SnapshotNode, panic_message};
-use std::{any::Any, panic, rc::Rc, sync::Mutex};
+use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode, panic_message};
+use std::{any::Any, fmt, panic, rc::Rc};
 
 // ---------- Harness -------------------------------------------------------------------------
 
@@ -52,16 +52,79 @@ impl Harness {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct TargetedEventListenerTarget {
-    name: &'static str,
-    id: ElementId,
-}
-
 struct TargetedRendererOracle {
     renderer: RendererOracle,
-    last_mutation: Option<String>,
-    recent_mutations: Vec<String>,
+    last_mutation: Option<MutationTrace>,
+    recent_mutations: [Option<MutationTrace>; RECENT_MUTATION_LIMIT],
+    recent_mutation_start: usize,
+    recent_mutation_len: usize,
+}
+
+const RECENT_MUTATION_LIMIT: usize = 16;
+
+#[derive(Copy, Clone, Debug)]
+enum MutationTrace {
+    AppendChildren { id: ElementId, m: usize },
+    AssignNodeId { path: &'static [u8], id: ElementId },
+    CreatePlaceholder { id: ElementId },
+    CreateTextNode { len: usize, id: ElementId },
+    LoadTemplate { index: usize, id: ElementId },
+    ReplaceNodeWith { id: ElementId, m: usize },
+    ReplacePlaceholderWithNodes { path: &'static [u8], m: usize },
+    InsertNodesAfter { id: ElementId, m: usize },
+    InsertNodesBefore { id: ElementId, m: usize },
+    SetAttribute { name: &'static str, id: ElementId },
+    SetNodeText { len: usize, id: ElementId },
+    CreateEventListener { name: &'static str, id: ElementId },
+    RemoveEventListener { name: &'static str, id: ElementId },
+    RemoveNode { id: ElementId },
+    PushRoot { id: ElementId },
+}
+
+impl fmt::Display for MutationTrace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AppendChildren { id, m } => {
+                write!(f, "append_children(id: {id:?}, m: {m})")
+            }
+            Self::AssignNodeId { path, id } => {
+                write!(f, "assign_node_id(path: {path:?}, id: {id:?})")
+            }
+            Self::CreatePlaceholder { id } => write!(f, "create_placeholder(id: {id:?})"),
+            Self::CreateTextNode { len, id } => {
+                write!(f, "create_text_node(len: {len}, id: {id:?})")
+            }
+            Self::LoadTemplate { index, id } => {
+                write!(f, "load_template(index: {index}, id: {id:?})")
+            }
+            Self::ReplaceNodeWith { id, m } => {
+                write!(f, "replace_node_with(id: {id:?}, m: {m})")
+            }
+            Self::ReplacePlaceholderWithNodes { path, m } => {
+                write!(f, "replace_placeholder_with_nodes(path: {path:?}, m: {m})")
+            }
+            Self::InsertNodesAfter { id, m } => {
+                write!(f, "insert_nodes_after(id: {id:?}, m: {m})")
+            }
+            Self::InsertNodesBefore { id, m } => {
+                write!(f, "insert_nodes_before(id: {id:?}, m: {m})")
+            }
+            Self::SetAttribute { name, id } => {
+                write!(f, "set_attribute(name: {name:?}, id: {id:?})")
+            }
+            Self::SetNodeText { len, id } => {
+                write!(f, "set_node_text(len: {len}, id: {id:?})")
+            }
+            Self::CreateEventListener { name, id } => {
+                write!(f, "create_event_listener(name: {name:?}, id: {id:?})")
+            }
+            Self::RemoveEventListener { name, id } => {
+                write!(f, "remove_event_listener(name: {name:?}, id: {id:?})")
+            }
+            Self::RemoveNode { id } => write!(f, "remove_node(id: {id:?})"),
+            Self::PushRoot { id } => write!(f, "push_root(id: {id:?})"),
+        }
+    }
 }
 
 impl TargetedRendererOracle {
@@ -69,7 +132,9 @@ impl TargetedRendererOracle {
         Self {
             renderer: RendererOracle::new(),
             last_mutation: None,
-            recent_mutations: Vec::new(),
+            recent_mutations: [None; RECENT_MUTATION_LIMIT],
+            recent_mutation_start: 0,
+            recent_mutation_len: 0,
         }
     }
 
@@ -77,13 +142,31 @@ impl TargetedRendererOracle {
         &mut self.renderer
     }
 
-    fn record_mutation(&mut self, mutation: impl Into<String>) {
-        let mutation = mutation.into();
-        self.last_mutation = Some(mutation.clone());
-        self.recent_mutations.push(mutation);
-        if self.recent_mutations.len() > 16 {
-            self.recent_mutations.remove(0);
+    fn record_mutation(&mut self, mutation: MutationTrace) {
+        self.last_mutation = Some(mutation);
+        if self.recent_mutation_len < RECENT_MUTATION_LIMIT {
+            let index =
+                (self.recent_mutation_start + self.recent_mutation_len) % RECENT_MUTATION_LIMIT;
+            self.recent_mutations[index] = Some(mutation);
+            self.recent_mutation_len += 1;
+        } else {
+            self.recent_mutations[self.recent_mutation_start] = Some(mutation);
+            self.recent_mutation_start = (self.recent_mutation_start + 1) % RECENT_MUTATION_LIMIT;
         }
+    }
+
+    fn recent_mutations_text(&self) -> String {
+        let mut out = String::new();
+        for offset in 0..self.recent_mutation_len {
+            let index = (self.recent_mutation_start + offset) % RECENT_MUTATION_LIMIT;
+            if let Some(mutation) = self.recent_mutations[index] {
+                if !out.is_empty() {
+                    out.push_str("\n  ");
+                }
+                out.push_str(&mutation.to_string());
+            }
+        }
+        out
     }
 
     fn assert_stack_clean(&self) {
@@ -101,12 +184,12 @@ impl TargetedRendererOracle {
         let mut fresh = RendererOracle::new();
         without_suspense_ready_registration(|| fresh_vdom.rebuild(&mut fresh));
         fresh.check_stack_clean()?;
-        let fresh_snapshot = fresh.snapshot();
-        let incremental_snapshot = self.snapshot();
-        if incremental_snapshot == fresh_snapshot {
+        if self.renderer.snapshot_eq(&fresh) {
             return Ok(());
         }
 
+        let fresh_snapshot = fresh.snapshot();
+        let incremental_snapshot = self.snapshot();
         Err(format!(
             "incremental renderer snapshot does not match fresh render\nincremental:\n{incremental_snapshot:#?}\nfresh:\n{fresh_snapshot:#?}"
         ))
@@ -116,64 +199,58 @@ impl TargetedRendererOracle {
         self.renderer.snapshot()
     }
 
-    fn historical_event_listener_targets(&self) -> Vec<TargetedEventListenerTarget> {
-        self.renderer
-            .historical_event_listener_targets()
-            .iter()
-            .map(|listener| TargetedEventListenerTarget {
-                name: listener.name,
-                id: listener.id,
-            })
-            .collect()
+    fn historical_event_listener_targets(&self) -> &[EventListenerTarget] {
+        self.renderer.historical_event_listener_targets()
     }
 }
 
 impl WriteMutations for TargetedRendererOracle {
     fn append_children(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(format!("append_children(id: {id:?}, m: {m})"));
+        self.record_mutation(MutationTrace::AppendChildren { id, m });
         self.current_renderer().append_children(id, m)
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.record_mutation(format!("assign_node_id(path: {path:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::AssignNodeId { path, id });
         self.current_renderer().assign_node_id(path, id)
     }
 
     fn create_placeholder(&mut self, id: ElementId) {
-        self.record_mutation(format!("create_placeholder(id: {id:?})"));
+        self.record_mutation(MutationTrace::CreatePlaceholder { id });
         self.current_renderer().create_placeholder(id)
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.record_mutation(format!("create_text_node(value: {value:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::CreateTextNode {
+            len: value.len(),
+            id,
+        });
         self.current_renderer().create_text_node(value, id)
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.record_mutation(format!("load_template(index: {index}, id: {id:?})"));
+        self.record_mutation(MutationTrace::LoadTemplate { index, id });
         self.current_renderer().load_template(template, index, id)
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(format!("replace_node_with(id: {id:?}, m: {m})"));
+        self.record_mutation(MutationTrace::ReplaceNodeWith { id, m });
         self.current_renderer().replace_node_with(id, m)
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        self.record_mutation(format!(
-            "replace_placeholder_with_nodes(path: {path:?}, m: {m})"
-        ));
+        self.record_mutation(MutationTrace::ReplacePlaceholderWithNodes { path, m });
         self.current_renderer()
             .replace_placeholder_with_nodes(path, m)
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(format!("insert_nodes_after(id: {id:?}, m: {m})"));
+        self.record_mutation(MutationTrace::InsertNodesAfter { id, m });
         self.current_renderer().insert_nodes_after(id, m)
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(format!("insert_nodes_before(id: {id:?}, m: {m})"));
+        self.record_mutation(MutationTrace::InsertNodesBefore { id, m });
         self.current_renderer().insert_nodes_before(id, m)
     }
 
@@ -184,56 +261,51 @@ impl WriteMutations for TargetedRendererOracle {
         value: &AttributeValue,
         id: ElementId,
     ) {
-        self.record_mutation(format!("set_attribute(name: {name:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::SetAttribute { name, id });
         self.current_renderer().set_attribute(name, ns, value, id)
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.record_mutation(format!("set_node_text(value: {value:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::SetNodeText {
+            len: value.len(),
+            id,
+        });
         self.current_renderer().set_node_text(value, id)
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation(format!("create_event_listener(name: {name:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::CreateEventListener { name, id });
         self.current_renderer().create_event_listener(name, id)
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation(format!("remove_event_listener(name: {name:?}, id: {id:?})"));
+        self.record_mutation(MutationTrace::RemoveEventListener { name, id });
         self.current_renderer().remove_event_listener(name, id)
     }
 
     fn remove_node(&mut self, id: ElementId) {
-        self.record_mutation(format!("remove_node(id: {id:?})"));
+        self.record_mutation(MutationTrace::RemoveNode { id });
         self.current_renderer().remove_node(id)
     }
 
     fn push_root(&mut self, id: ElementId) {
-        self.record_mutation(format!("push_root(id: {id:?})"));
+        self.record_mutation(MutationTrace::PushRoot { id });
         self.current_renderer().push_root(id)
     }
 }
 
 const TRACE_CONTEXT: usize = 6;
 const MAX_HTML_CHARS: usize = 240;
-static PANIC_HOOK_LOCK: Mutex<()> = Mutex::new(());
 
-fn catch_unwind_silent<F, R>(f: F) -> std::thread::Result<R>
+fn catch_unwind_result<F, R>(f: F) -> std::thread::Result<R>
 where
     F: FnOnce() -> R,
 {
-    let _lock = PANIC_HOOK_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let previous_hook = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(f));
-    panic::set_hook(previous_hook);
-    result
+    panic::catch_unwind(panic::AssertUnwindSafe(f))
 }
 
 fn render_model_with_ssr(model: &Model) -> Result<String, String> {
-    catch_unwind_silent(|| {
+    catch_unwind_result(|| {
         without_suspense_ready_registration(|| {
             with_model(|global| *global = model.clone());
             let mut vdom = VirtualDom::new(App);
@@ -375,12 +447,11 @@ pub(crate) fn apply_step(state: &mut Harness, op: &Op) -> Result<(), String> {
 
 fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
     match op {
-        Op::Reset => {
-            *state = Harness::fresh_with_strict_renderer_errors(state.strict_renderer_errors);
-            Ok(())
-        }
         Op::Rerender => render_and_assert(state),
-        Op::WakeSuspense { suspense } => {
+        Op::WakeSuspense {
+            suspense,
+            mode: WakeMode::Harness,
+        } => {
             let Some(key) = read_model().selected_ready_suspense_key(*suspense) else {
                 return Ok(());
             };
@@ -388,7 +459,10 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             release_suspense_ready_task(key);
             render_and_assert(state)
         }
-        Op::WakeSuspenseNatural { suspense } => {
+        Op::WakeSuspense {
+            suspense,
+            mode: WakeMode::Natural,
+        } => {
             let Some(key) = selected_registered_ready_suspense_key(*suspense) else {
                 return Ok(());
             };
@@ -413,28 +487,23 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
 fn op_requires_app_render(op: &Op) -> bool {
     matches!(
         op,
-        Op::Template { .. }
-            | Op::Dynamic { .. }
-            | Op::DynamicAttrs { .. }
-            | Op::Fragment { .. }
-            | Op::Suspense { .. }
+        Op::Mutate(ModelEdit::VNode { .. }) | Op::Mutate(ModelEdit::Suspense { .. })
     )
 }
 
 fn op_requires_fresh_compare(op: &Op) -> bool {
-    matches!(
-        op,
-        Op::Template {
-            edit: TemplateEdit::Generated { .. },
-            ..
-        }
-    )
+    let _ = op;
+    false
 }
 
 fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
     let targets = state.incremental.historical_event_listener_targets();
+    if targets.is_empty() {
+        return Ok(());
+    }
+
     let runtime = state.vdom.runtime();
-    let result = catch_unwind_silent(|| {
+    let result = catch_unwind_result(|| {
         for target in targets {
             let event = Event::new(
                 Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
@@ -458,29 +527,28 @@ fn render_once(
     mark_app_dirty: bool,
     assert_matches_vdom: bool,
     label: &'static str,
-) -> Result<TargetSnapshots, String> {
+) -> Result<(), String> {
     fire_historical_event_listeners(state)?;
     if mark_app_dirty {
         state.vdom.mark_dirty(ScopeId::APP);
     }
-    let render_result = catch_unwind_silent(|| {
+    let render_result = catch_unwind_result(|| {
         state.vdom.render_immediate(&mut state.incremental);
         state.incremental.check_stack_clean().map_err(|err| {
             let last_mutation = state
                 .incremental
                 .last_mutation
-                .as_deref()
-                .unwrap_or("<none>");
+                .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
+            let recent_mutations = state.incremental.recent_mutations_text();
             format!(
                 "{err} after {last_mutation}\nrecent mutations:\n  {}",
-                state.incremental.recent_mutations.join("\n  ")
+                recent_mutations
             )
         })?;
-        let snap = state.incremental.snapshot();
         if assert_matches_vdom {
             state.incremental.check_matches_vdom(&state.vdom)?;
         }
-        Ok(snap)
+        Ok(())
     });
 
     match render_result {
@@ -489,8 +557,7 @@ fn render_once(
             let last_mutation = state
                 .incremental
                 .last_mutation
-                .as_deref()
-                .unwrap_or("<none>");
+                .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
             Err(format!(
                 "panic in {label} after {last_mutation}: {}",
                 panic_message(&payload),
@@ -522,7 +589,7 @@ fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result
 
 fn render_result_to_fuzz_failure(
     state: &Harness,
-    result: Result<TargetSnapshots, String>,
+    result: Result<(), String>,
 ) -> Result<(), String> {
     if state.strict_renderer_errors {
         result.map(|_| ())
@@ -540,7 +607,7 @@ mod tests {
             AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
             TemplateNodeKind, WakeMutationSpec,
         },
-        ops::{FragmentEdit, IteratorScenario, ListEdit, TemplateEdit, iterator_scenario_ops},
+        ops::{FragmentEdit, ListEdit, TemplateEdit},
     };
 
     fn replay_ops(ops: impl IntoIterator<Item = Op>) {
@@ -550,14 +617,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn large_template_hash_stress_replay() {
-        replay_ops(iterator_scenario_ops(
-            IteratorScenario::LargeTemplateHashStress,
-            0,
-        ));
-    }
-
     // Regression test for a panic in `SuspenseContext::remove_suspended_task` when
     // a nested suspense boundary was unmounted while a child task was still suspended.
     // The boundary scope was dropped before the task cleanup ran, so `needs_update`
@@ -565,134 +624,112 @@ mod tests {
     #[test]
     fn unmounting_nested_pending_suspense_does_not_panic_on_drop() {
         replay_ops([
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 1,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 1,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                1,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Pending,
-            },
-            Op::Dynamic {
-                vnode: 1,
-                slot: 0,
-                kind: DynamicKind::Placeholder,
-            },
+            Op::suspense(0, SuspenseMode::Pending),
+            Op::dynamic(1, 0, DynamicKind::Placeholder),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Resolved,
-            },
+            Op::suspense(0, SuspenseMode::Resolved),
             Op::Rerender,
         ]);
     }
 
     #[test]
-    fn replacing_root_portal_with_fragment_removes_old_target_subtree() {
+    fn replacing_root_component_with_fragment_removes_old_subtree() {
         replay_ops([
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Portal {
-                    target: PortalTargetSpec::TargetA,
-                },
-            },
+            ),
+            Op::dynamic(0, 0, DynamicKind::ComponentA),
             Op::Rerender,
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
         ]);
     }
 
     #[test]
-    fn keyed_fragment_move_with_noop_portal_child_skips_placeholder_root() {
+    fn keyed_fragment_move_with_component_child_skips_placeholder_root() {
         replay_ops([
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Template {
-                vnode: 1,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 1,
-                slot: 0,
-                kind: DynamicKind::Portal {
-                    target: PortalTargetSpec::Noop,
-                },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::dynamic(1, 0, DynamicKind::ComponentA),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Move { from: 1, to: 0 }),
-            },
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Move { from: 1, to: 0 }),
+            ),
             Op::Rerender,
         ]);
     }
@@ -700,71 +737,61 @@ mod tests {
     #[test]
     fn domless_root_fragment_child_materializes_before_sibling() {
         replay_ops([
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Template {
-                vnode: 1,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Dynamic {
-                vnode: 1,
-                slot: 0,
-                kind: DynamicKind::Text(0),
-            },
+            Op::dynamic(1, 0, DynamicKind::Text(0)),
             Op::Rerender,
         ]);
     }
 
     #[test]
-    fn replacing_root_portal_with_static_text_uses_root_anchor() {
+    fn replacing_root_component_with_static_text_uses_root_anchor() {
         replay_ops([
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Portal {
-                    target: PortalTargetSpec::TargetA,
-                },
-            },
+            ),
+            Op::dynamic(0, 0, DynamicKind::ComponentA),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Text(0),
                 },
-            },
+            ),
             Op::Rerender,
         ]);
     }
@@ -772,20 +799,20 @@ mod tests {
     #[test]
     fn stale_event_after_listener_removal_is_noop() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Attrs {
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateAttrSpec::Dynamic,
                     },
                 },
-            },
-            Op::DynamicAttrs {
-                vnode: 0,
-                slot: 0,
-                edit: ListEdit::Insert {
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
                     index: 0,
                     item: AttrSpec {
                         name: 0,
@@ -794,13 +821,9 @@ mod tests {
                         volatile: false,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::DynamicAttrs {
-                vnode: 0,
-                slot: 0,
-                edit: ListEdit::Remove { index: 0 },
-            },
+            Op::dynamic_attrs(0, 0, ListEdit::Remove { index: 0 }),
             Op::Rerender,
             Op::Rerender,
         ];
@@ -822,20 +845,20 @@ mod tests {
     #[test]
     fn stale_event_after_listener_element_removal_is_noop() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Attrs {
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateAttrSpec::Dynamic,
                     },
                 },
-            },
-            Op::DynamicAttrs {
-                vnode: 0,
-                slot: 0,
-                edit: ListEdit::Insert {
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
                     index: 0,
                     item: AttrSpec {
                         name: 0,
@@ -844,15 +867,15 @@ mod tests {
                         volatile: false,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Text(0),
                 },
-            },
+            ),
             Op::Rerender,
             Op::Rerender,
         ];
@@ -874,54 +897,48 @@ mod tests {
     #[test]
     fn suspense_replay_does_not_duplicate_promoted_children() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                3,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 7,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                7,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Pending,
-            },
-            Op::Template {
-                vnode: 7,
-                edit: TemplateEdit::Roots {
+            Op::suspense(0, SuspenseMode::Pending),
+            Op::template(
+                7,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Resolved,
-            },
-            Op::WakeSuspense { suspense: 0 },
+            Op::suspense(0, SuspenseMode::Resolved),
+            Op::wake_suspense(0),
         ];
 
         let mut harness = Harness::fresh();
@@ -933,64 +950,58 @@ mod tests {
     #[test]
     fn suspense_wake_after_parent_root_insert_does_not_duplicate_promoted_children() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                3,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 7,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                7,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Pending,
-            },
-            Op::Template {
-                vnode: 7,
-                edit: TemplateEdit::Roots {
+            Op::suspense(0, SuspenseMode::Pending),
+            Op::template(
+                7,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Resolved,
-            },
+            Op::suspense(0, SuspenseMode::Resolved),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::WakeSuspense { suspense: 0 },
+            ),
+            Op::wake_suspense(0),
         ];
 
         let mut harness = Harness::fresh();
@@ -1002,65 +1013,62 @@ mod tests {
     #[test]
     fn nested_suspense_wake_after_parent_attr_and_child_edit_does_not_duplicate_children() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                3,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 7,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                7,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Ready,
-            },
+            Op::suspense(0, SuspenseMode::Ready),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Attrs {
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateAttrSpec::Dynamic,
                     },
                 },
-            },
-            Op::WakeSuspense { suspense: 0 },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Children {
+            ),
+            Op::wake_suspense(0),
+            Op::template(
+                0,
+                TemplateEdit::Children {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::WakeSuspense { suspense: 0 },
+            Op::wake_suspense(0),
         ];
 
         let mut harness = Harness::fresh();
@@ -1072,24 +1080,24 @@ mod tests {
     #[test]
     fn natural_wake_unmounted_ready_suspense_is_noop() {
         let ops = [
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::Children {
+            Op::template(
+                3,
+                TemplateEdit::Children {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 5,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 5,
-                slot: 2,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                5,
+                2,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
-            Op::WakeSuspenseNatural { suspense: 3 },
+            ),
+            Op::wake_suspense_natural(3),
         ];
 
         let mut harness = Harness::fresh();
@@ -1101,33 +1109,33 @@ mod tests {
     #[test]
     fn natural_wake_after_unrendered_parent_edit_does_not_compare_fresh_model() {
         let ops = [
-            Op::Template {
-                vnode: 2,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                2,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 4,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 6,
-                slot: 4,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                6,
+                4,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Template {
-                vnode: 2,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                2,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 5,
                         item: TemplateNodeKind::Text(110),
                     },
                 },
-            },
-            Op::WakeSuspenseNatural { suspense: 0 },
+            ),
+            Op::wake_suspense_natural(0),
             Op::Rerender,
         ];
 
@@ -1140,46 +1148,40 @@ mod tests {
     #[test]
     fn natural_wake_nested_suspense_applies_hidden_wake_mutation() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                3,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 7,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                7,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
-            Op::SuspenseWakeMutation {
-                suspense: 1,
-                mutation: WakeMutationSpec::PrependStaticRoot { tag: 42 },
-            },
+            ),
+            Op::suspense_wake_mutation(1, WakeMutationSpec::PrependStaticRoot { tag: 42 }),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Ready,
-            },
+            Op::suspense(0, SuspenseMode::Ready),
             Op::Rerender,
-            Op::WakeSuspenseNatural { suspense: 1 },
-            Op::WakeSuspenseNatural { suspense: 0 },
+            Op::wake_suspense_natural(1),
+            Op::wake_suspense_natural(0),
         ];
 
         let mut harness = Harness::fresh();
@@ -1191,42 +1193,39 @@ mod tests {
     #[test]
     fn nested_suspense_wake_with_prepended_root_does_not_use_cleared_mount_id() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Template {
-                vnode: 1,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 1,
-                slot: 0,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                1,
+                0,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
-            Op::WakeSuspense { suspense: 0 },
-            Op::SuspenseWakeMutation {
-                suspense: 1,
-                mutation: WakeMutationSpec::PrependStaticRoot { tag: 0 },
-            },
+            ),
+            Op::wake_suspense(0),
+            Op::suspense_wake_mutation(1, WakeMutationSpec::PrependStaticRoot { tag: 0 }),
             Op::Rerender,
-            Op::WakeSuspense { suspense: 0 },
+            Op::wake_suspense(0),
         ];
 
         let mut harness = Harness::fresh_strict();
@@ -1238,53 +1237,46 @@ mod tests {
     #[test]
     fn removing_suspended_empty_fragment_does_not_reclaim_live_fallback_id() {
         let ops = [
-            Op::Template {
-                vnode: 223,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                223,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Dynamic {
-                vnode: 109,
-                slot: 103,
-                kind: DynamicKind::Suspense {
+            Op::dynamic(
+                109,
+                103,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
             Op::Rerender,
-            Op::WakeSuspenseNatural { suspense: 34 },
-            Op::Suspense {
-                suspense: 22,
-                mode: SuspenseMode::Pending,
-            },
+            Op::wake_suspense_natural(34),
+            Op::suspense(22, SuspenseMode::Pending),
             Op::Rerender,
             Op::Rerender,
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 1,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 2,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
-            Op::Dynamic {
-                vnode: 0,
-                slot: 0,
-                kind: DynamicKind::Empty,
-            },
+            Op::dynamic(0, 0, DynamicKind::Empty),
             Op::Rerender,
         ];
 
@@ -1297,64 +1289,64 @@ mod tests {
     #[test]
     fn template_hash_distinguishes_root_sibling_from_nested_child() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Remove { index: 0 },
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 5,
                     kind: TemplateNodeKind::Text(36),
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Element {
                         tag: 0,
                         namespace: None,
                     },
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                0,
+                TemplateEdit::Roots {
                     edit: ListEdit::Remove { index: 1 },
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Children {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Children {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Text(36),
                     },
                 },
-            },
+            ),
             Op::Rerender,
         ];
 
@@ -1367,30 +1359,30 @@ mod tests {
     #[test]
     fn dynamic_attribute_shadowing_survives_no_change_rerender() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Attrs {
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateAttrSpec::Dynamic,
                     },
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Attrs {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateAttrSpec::Dynamic,
                     },
                 },
-            },
-            Op::DynamicAttrs {
-                vnode: 0,
-                slot: 7,
-                edit: ListEdit::Insert {
+            ),
+            Op::dynamic_attrs(
+                0,
+                7,
+                ListEdit::Insert {
                     index: 0,
                     item: AttrSpec {
                         name: 0,
@@ -1399,11 +1391,11 @@ mod tests {
                         volatile: false,
                     },
                 },
-            },
-            Op::DynamicAttrs {
-                vnode: 0,
-                slot: 0,
-                edit: ListEdit::Insert {
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
                     index: 0,
                     item: AttrSpec {
                         name: 0,
@@ -1412,7 +1404,7 @@ mod tests {
                         volatile: true,
                     },
                 },
-            },
+            ),
             Op::Rerender,
         ];
 
@@ -1425,35 +1417,35 @@ mod tests {
     #[test]
     fn root_dynamic_suspense_then_static_text_survives_no_change_rerender() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Dynamic {
-                vnode: 206,
-                slot: 3,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                206,
+                3,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Resolved,
                 },
-            },
-            Op::Template {
-                vnode: 5,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                5,
+                TemplateEdit::SetNode {
                     node: 2,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 3,
                     kind: TemplateNodeKind::Text(0),
                 },
-            },
+            ),
             Op::Rerender,
         ];
 
@@ -1466,35 +1458,35 @@ mod tests {
     #[test]
     fn nested_suspense_slot_static_child_survives_no_change_rerender() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Children {
+            Op::template(
+                0,
+                TemplateEdit::Children {
                     element: 7,
                     edit: ListEdit::Insert {
                         index: 16,
                         item: TemplateNodeKind::Text(68),
                     },
                 },
-            },
-            Op::Template {
-                vnode: 5,
-                edit: TemplateEdit::Roots {
+            ),
+            Op::template(
+                5,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 1,
                         item: TemplateNodeKind::Text(24),
                     },
                 },
-            },
-            Op::Template {
-                vnode: 1,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
                     node: 143,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Template {
-                vnode: 3,
-                edit: TemplateEdit::Children {
+            ),
+            Op::template(
+                3,
+                TemplateEdit::Children {
                     element: 3,
                     edit: ListEdit::Insert {
                         index: 6,
@@ -1504,69 +1496,65 @@ mod tests {
                         },
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 4,
-                slot: 4,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                4,
+                4,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
-            Op::Template {
-                vnode: 7,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                7,
+                TemplateEdit::SetNode {
                     node: 7,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Template {
-                vnode: 88,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                88,
+                TemplateEdit::SetNode {
                     node: 6,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::Children {
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Children {
                     element: 1,
                     edit: ListEdit::Insert {
                         index: 5,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 4,
-                slot: 2,
-                kind: DynamicKind::ComponentB,
-            },
-            Op::WakeSuspense { suspense: 120 },
-            Op::Dynamic {
-                vnode: 1,
-                slot: 5,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(4, 2, DynamicKind::ComponentB),
+            Op::wake_suspense(120),
+            Op::dynamic(
+                1,
+                5,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
-            Op::Template {
-                vnode: 6,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                6,
+                TemplateEdit::SetNode {
                     node: 7,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::WakeSuspense { suspense: 4 },
-            Op::Template {
-                vnode: 5,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::wake_suspense(4),
+            Op::template(
+                5,
+                TemplateEdit::SetNode {
                     node: 7,
                     kind: TemplateNodeKind::Element {
                         tag: 0,
                         namespace: Some(0),
                     },
                 },
-            },
+            ),
             Op::Rerender,
         ];
 
@@ -1579,53 +1567,44 @@ mod tests {
     #[test]
     fn nested_suspense_wake_replaces_inner_fallback_root() {
         let ops = [
-            Op::Template {
-                vnode: 183,
-                edit: TemplateEdit::Roots {
+            Op::template(
+                183,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Dynamic {
-                vnode: 0,
-                slot: 1,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::dynamic(
+                0,
+                1,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Pending,
                 },
-            },
-            Op::Template {
-                vnode: 7,
-                edit: TemplateEdit::Roots {
+            ),
+            Op::template(
+                7,
+                TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 1,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Suspense {
-                suspense: 4,
-                mode: SuspenseMode::Resolved,
-            },
-            Op::Dynamic {
-                vnode: 3,
-                slot: 2,
-                kind: DynamicKind::Suspense {
+            ),
+            Op::suspense(4, SuspenseMode::Resolved),
+            Op::dynamic(
+                3,
+                2,
+                DynamicKind::Suspense {
                     mode: SuspenseMode::Ready,
                 },
-            },
+            ),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 0,
-                mode: SuspenseMode::Ready,
-            },
+            Op::suspense(0, SuspenseMode::Ready),
             Op::Rerender,
-            Op::Suspense {
-                suspense: 1,
-                mode: SuspenseMode::Resolved,
-            },
-            Op::WakeSuspense { suspense: 2 },
+            Op::suspense(1, SuspenseMode::Resolved),
+            Op::wake_suspense(2),
         ];
 
         let mut harness = Harness::fresh();
@@ -1637,94 +1616,90 @@ mod tests {
     #[test]
     fn keyed_fragment_moves_nested_child_after_component_insert() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Template {
-                vnode: 6,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::template(
+                6,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Template {
-                vnode: 7,
-                edit: TemplateEdit::Children {
+            ),
+            Op::template(
+                7,
+                TemplateEdit::Children {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
                         item: TemplateNodeKind::Dynamic,
                     },
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 177,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                177,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
-            Op::Dynamic {
-                vnode: 2,
-                slot: 0,
-                kind: DynamicKind::ComponentA,
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Move { from: 3, to: 2 }),
-            },
+            Op::dynamic(2, 0, DynamicKind::ComponentA),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Move { from: 3, to: 2 }),
+            ),
             Op::Rerender,
         ];
 
@@ -1737,81 +1712,70 @@ mod tests {
     #[test]
     fn keyed_fragment_remove_after_domless_child_move_keeps_parent_links() {
         let ops = [
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
-            },
-            Op::Template {
-                vnode: 6,
-                edit: TemplateEdit::SetNode {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 0 }),
+            ),
+            Op::template(
+                6,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
+            ),
             Op::Rerender,
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Move { from: 3, to: 2 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Remove { index: 0 }),
-            },
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Move { from: 3, to: 2 }),
+            ),
+            Op::fragment(0, 0, FragmentEdit::Children(ListEdit::Remove { index: 0 })),
             Op::Rerender,
         ];
 
         let mut harness = Harness::fresh();
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
-        }
-    }
-
-    #[test]
-    fn iterator_scenarios_replay() {
-        for scenario in IteratorScenario::ALL {
-            replay_ops(iterator_scenario_ops(scenario, 0));
         }
     }
 }

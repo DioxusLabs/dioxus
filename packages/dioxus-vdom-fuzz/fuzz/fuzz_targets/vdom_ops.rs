@@ -42,9 +42,31 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
         return fuzzer_mutate(data, size, max_size);
     }
 
+    if minimizing {
+        for _ in 0..extra_minimization_mutations(seed) {
+            if session.mutate(&mut case).is_err() {
+                break;
+            }
+        }
+    }
+
     case.normalize();
     encode_case(&case, data, max_size).unwrap_or_else(|| fuzzer_mutate(data, size, max_size))
 });
+
+fn extra_minimization_mutations(seed: u32) -> usize {
+    let mut state = seed as u64 ^ 0x9E37_79B9_7F4A_7C15;
+    state ^= state >> 12;
+    state ^= state << 25;
+    state ^= state >> 27;
+    state = state.wrapping_mul(0x2545_F491_4F6C_DD1D);
+
+    if state & 0b11 == 0 {
+        1 + ((state >> 8) as usize % 7)
+    } else {
+        0
+    }
+}
 
 fn cargo_fuzz_minimizing() -> bool {
     static MINIMIZING: OnceLock<bool> = OnceLock::new();

@@ -1,10 +1,13 @@
 use crate::{
     FuzzCase, FuzzFailure,
     model::{
-        AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, PortalTargetSpec, SuspenseMode,
-        TemplateAttrSpec, TemplateNodeKind, WakeMutationSpec,
+        AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
+        TemplateNodeKind, WakeMutationSpec,
     },
-    ops::{FragmentEdit, ListEdit, Op, TemplateEdit},
+    ops::{
+        DynamicEdit, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit, VNodeEdit,
+        WakeMode,
+    },
     run_case,
 };
 use std::{
@@ -329,182 +332,119 @@ pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
 
     match op {
         Op::Rerender => {}
-        Op::Reset => {}
-        Op::WakeSuspense { suspense } => {
+        Op::WakeSuspense {
+            suspense,
+            mode: WakeMode::Harness,
+        } => {
             for suspense in simpler_u8_values(*suspense) {
-                push_unique(&mut out, Op::WakeSuspense { suspense });
+                push_unique(&mut out, Op::wake_suspense(suspense));
             }
         }
-        Op::WakeSuspenseNatural { suspense } => {
+        Op::WakeSuspense {
+            suspense,
+            mode: WakeMode::Natural,
+        } => {
             for suspense in simpler_u8_values(*suspense) {
-                push_unique(&mut out, Op::WakeSuspenseNatural { suspense });
+                push_unique(&mut out, Op::wake_suspense_natural(suspense));
             }
-            push_unique(
-                &mut out,
-                Op::WakeSuspense {
-                    suspense: *suspense,
-                },
-            );
+            push_unique(&mut out, Op::wake_suspense(*suspense));
         }
-        Op::Template { vnode, edit } => {
-            for vnode in simpler_u8_values(*vnode) {
-                push_unique(
-                    &mut out,
-                    Op::Template {
-                        vnode,
-                        edit: edit.clone(),
-                    },
-                );
-            }
-            for edit in simplified_template_edits(edit) {
-                push_unique(
-                    &mut out,
-                    Op::Template {
-                        vnode: *vnode,
-                        edit,
-                    },
-                );
-            }
-        }
-        Op::Dynamic { vnode, slot, kind } => {
-            for vnode in simpler_u8_values(*vnode) {
-                push_unique(
-                    &mut out,
-                    Op::Dynamic {
-                        vnode,
-                        slot: *slot,
-                        kind: kind.clone(),
-                    },
-                );
-            }
-            for slot in simpler_u8_values(*slot) {
-                push_unique(
-                    &mut out,
-                    Op::Dynamic {
-                        vnode: *vnode,
-                        slot,
-                        kind: kind.clone(),
-                    },
-                );
-            }
-            for kind in simplified_dynamic_kinds(kind) {
-                push_unique(
-                    &mut out,
-                    Op::Dynamic {
-                        vnode: *vnode,
-                        slot: *slot,
-                        kind,
-                    },
-                );
-            }
-        }
-        Op::DynamicAttrs { vnode, slot, edit } => {
-            for vnode in simpler_u8_values(*vnode) {
-                push_unique(
-                    &mut out,
-                    Op::DynamicAttrs {
-                        vnode,
-                        slot: *slot,
-                        edit: edit.clone(),
-                    },
-                );
-            }
-            for slot in simpler_u8_values(*slot) {
-                push_unique(
-                    &mut out,
-                    Op::DynamicAttrs {
-                        vnode: *vnode,
-                        slot,
-                        edit: edit.clone(),
-                    },
-                );
-            }
-            for edit in simplified_list_edits(edit, simplified_attr_specs) {
-                push_unique(
-                    &mut out,
-                    Op::DynamicAttrs {
-                        vnode: *vnode,
-                        slot: *slot,
-                        edit,
-                    },
-                );
-            }
-        }
-        Op::Fragment { vnode, slot, edit } => {
-            for vnode in simpler_u8_values(*vnode) {
-                push_unique(
-                    &mut out,
-                    Op::Fragment {
-                        vnode,
-                        slot: *slot,
-                        edit: edit.clone(),
-                    },
-                );
-            }
-            for slot in simpler_u8_values(*slot) {
-                push_unique(
-                    &mut out,
-                    Op::Fragment {
-                        vnode: *vnode,
-                        slot,
-                        edit: edit.clone(),
-                    },
-                );
-            }
-            for edit in simplified_fragment_edits(edit) {
-                push_unique(
-                    &mut out,
-                    Op::Fragment {
-                        vnode: *vnode,
-                        slot: *slot,
-                        edit,
-                    },
-                );
-            }
-        }
-        Op::Suspense { suspense, mode } => {
-            for suspense in simpler_u8_values(*suspense) {
-                push_unique(
-                    &mut out,
-                    Op::Suspense {
-                        suspense,
-                        mode: *mode,
-                    },
-                );
-            }
-            for mode in simplified_suspense_modes(*mode) {
-                push_unique(
-                    &mut out,
-                    Op::Suspense {
-                        suspense: *suspense,
-                        mode,
-                    },
-                );
-            }
-        }
-        Op::SuspenseWakeMutation { suspense, mutation } => {
-            for suspense in simpler_u8_values(*suspense) {
-                push_unique(
-                    &mut out,
-                    Op::SuspenseWakeMutation {
-                        suspense,
-                        mutation: *mutation,
-                    },
-                );
-            }
-            for mutation in simplified_wake_mutations(*mutation) {
-                push_unique(
-                    &mut out,
-                    Op::SuspenseWakeMutation {
-                        suspense: *suspense,
-                        mutation,
-                    },
-                );
-            }
-        }
+        Op::Mutate(edit) => simplified_model_edit_ops(edit, &mut out),
     }
 
     out
+}
+
+fn simplified_model_edit_ops(edit: &ModelEdit, out: &mut Vec<Op>) {
+    match edit {
+        ModelEdit::VNode { vnode, edit } => simplified_vnode_edit_ops(*vnode, edit, out),
+        ModelEdit::Suspense { suspense, edit } => {
+            for suspense in simpler_u8_values(*suspense) {
+                push_unique(
+                    out,
+                    Op::Mutate(ModelEdit::Suspense {
+                        suspense,
+                        edit: *edit,
+                    }),
+                );
+            }
+            match edit {
+                SuspenseEdit::Mode(mode) => {
+                    for mode in simplified_suspense_modes(*mode) {
+                        push_unique(out, Op::suspense(*suspense, mode));
+                    }
+                }
+                SuspenseEdit::WakeMutation(mutation) => {
+                    for mutation in simplified_wake_mutations(*mutation) {
+                        push_unique(out, Op::suspense_wake_mutation(*suspense, mutation));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn simplified_vnode_edit_ops(vnode: u8, edit: &VNodeEdit, out: &mut Vec<Op>) {
+    for simpler_vnode in simpler_u8_values(vnode) {
+        push_unique(
+            out,
+            Op::Mutate(ModelEdit::VNode {
+                vnode: simpler_vnode,
+                edit: edit.clone(),
+            }),
+        );
+    }
+
+    match edit {
+        VNodeEdit::Template(edit) => {
+            for edit in simplified_template_edits(edit) {
+                push_unique(out, Op::template(vnode, edit));
+            }
+        }
+        VNodeEdit::DynamicSlot { slot, edit } => {
+            for slot in simpler_u8_values(*slot) {
+                push_unique(
+                    out,
+                    Op::Mutate(ModelEdit::VNode {
+                        vnode,
+                        edit: VNodeEdit::DynamicSlot {
+                            slot,
+                            edit: edit.clone(),
+                        },
+                    }),
+                );
+            }
+            match edit {
+                DynamicEdit::SetKind(kind) => {
+                    for kind in simplified_dynamic_kinds(kind) {
+                        push_unique(out, Op::dynamic(vnode, *slot, kind));
+                    }
+                }
+                DynamicEdit::Fragment(edit) => {
+                    for edit in simplified_fragment_edits(edit) {
+                        push_unique(out, Op::fragment(vnode, *slot, edit));
+                    }
+                }
+            }
+        }
+        VNodeEdit::DynamicAttrs { slot, edit } => {
+            for slot in simpler_u8_values(*slot) {
+                push_unique(
+                    out,
+                    Op::Mutate(ModelEdit::VNode {
+                        vnode,
+                        edit: VNodeEdit::DynamicAttrs {
+                            slot,
+                            edit: edit.clone(),
+                        },
+                    }),
+                );
+            }
+            for edit in simplified_list_edits(edit, simplified_attr_specs) {
+                push_unique(out, Op::dynamic_attrs(vnode, *slot, edit));
+            }
+        }
+    }
 }
 
 fn peephole_cases(case: &FuzzCase, index: usize) -> Vec<FuzzCase> {
@@ -518,20 +458,26 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
         return;
     }
 
-    let Op::Fragment {
+    let Op::Mutate(ModelEdit::VNode {
         vnode,
-        slot,
-        edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base }),
-    } = &case.ops[index]
+        edit:
+            VNodeEdit::DynamicSlot {
+                slot,
+                edit: DynamicEdit::Fragment(FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base })),
+            },
+    }) = &case.ops[index]
     else {
         return;
     };
 
-    let Op::Fragment {
+    let Op::Mutate(ModelEdit::VNode {
         vnode: previous_vnode,
-        slot: previous_slot,
-        edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
-    } = &case.ops[index - 1]
+        edit:
+            VNodeEdit::DynamicSlot {
+                slot: previous_slot,
+                edit: DynamicEdit::Fragment(FragmentEdit::Children(ListEdit::Insert { item, .. })),
+            },
+    }) = &case.ops[index - 1]
     else {
         return;
     };
@@ -541,10 +487,14 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     }
 
     let mut candidate = case.clone();
-    let Op::Fragment {
-        edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
+    let Op::Mutate(ModelEdit::VNode {
+        edit:
+            VNodeEdit::DynamicSlot {
+                edit: DynamicEdit::Fragment(FragmentEdit::Children(ListEdit::Insert { item, .. })),
+                ..
+            },
         ..
-    } = &mut candidate.ops[index - 1]
+    }) = &mut candidate.ops[index - 1]
     else {
         unreachable!();
     };
@@ -742,42 +692,6 @@ fn simplified_template_edits(edit: &TemplateEdit) -> Vec<TemplateEdit> {
                 );
             }
         }
-        TemplateEdit::Generated {
-            seed,
-            dynamic_nodes,
-            dynamic_attrs,
-        } => {
-            for seed in simpler_u64_values(*seed) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Generated {
-                        seed,
-                        dynamic_nodes: *dynamic_nodes,
-                        dynamic_attrs: *dynamic_attrs,
-                    },
-                );
-            }
-            for dynamic_nodes in simpler_u16_values(*dynamic_nodes) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Generated {
-                        seed: *seed,
-                        dynamic_nodes,
-                        dynamic_attrs: *dynamic_attrs,
-                    },
-                );
-            }
-            for dynamic_attrs in simpler_u16_values(*dynamic_attrs) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Generated {
-                        seed: *seed,
-                        dynamic_nodes: *dynamic_nodes,
-                        dynamic_attrs,
-                    },
-                );
-            }
-        }
     }
     out
 }
@@ -887,14 +801,6 @@ fn simplified_dynamic_kinds(kind: &DynamicKind) -> Vec<DynamicKind> {
             push_unique(&mut out, DynamicKind::Fragment);
             push_unique(&mut out, DynamicKind::Empty);
         }
-        DynamicKind::Portal { target } => {
-            for target in simplified_portal_targets(*target) {
-                push_unique(&mut out, DynamicKind::Portal { target });
-            }
-            push_unique(&mut out, DynamicKind::ComponentA);
-            push_unique(&mut out, DynamicKind::Fragment);
-            push_unique(&mut out, DynamicKind::Empty);
-        }
         DynamicKind::Suspense { mode } => {
             for mode in simplified_suspense_modes(*mode) {
                 push_unique(&mut out, DynamicKind::Suspense { mode });
@@ -902,21 +808,6 @@ fn simplified_dynamic_kinds(kind: &DynamicKind) -> Vec<DynamicKind> {
             push_unique(&mut out, DynamicKind::ComponentA);
             push_unique(&mut out, DynamicKind::Fragment);
             push_unique(&mut out, DynamicKind::Empty);
-        }
-    }
-    out
-}
-
-fn simplified_portal_targets(target: PortalTargetSpec) -> Vec<PortalTargetSpec> {
-    let mut out = Vec::new();
-    match target {
-        PortalTargetSpec::TargetA => {}
-        PortalTargetSpec::TargetB => {
-            push_unique(&mut out, PortalTargetSpec::TargetA);
-        }
-        PortalTargetSpec::Noop => {
-            push_unique(&mut out, PortalTargetSpec::TargetA);
-            push_unique(&mut out, PortalTargetSpec::TargetB);
         }
     }
     out
@@ -1133,38 +1024,6 @@ fn simpler_u8_values(value: u8) -> Vec<u8> {
     out
 }
 
-fn simpler_u16_values(value: u16) -> Vec<u16> {
-    let mut out = Vec::new();
-    for candidate in [
-        0,
-        1,
-        2,
-        8,
-        16,
-        64,
-        128,
-        255,
-        256,
-        value / 2,
-        value.saturating_sub(1),
-    ] {
-        if candidate < value {
-            push_unique(&mut out, candidate);
-        }
-    }
-    out
-}
-
-fn simpler_u64_values(value: u64) -> Vec<u64> {
-    let mut out = Vec::new();
-    for candidate in [0, 1, value & 0xff, value / 2, value.saturating_sub(1)] {
-        if candidate < value {
-            push_unique(&mut out, candidate);
-        }
-    }
-    out
-}
-
 fn push_unique<T>(values: &mut Vec<T>, value: T)
 where
     T: PartialEq,
@@ -1200,40 +1059,40 @@ mod tests {
     #[test]
     fn key_mode_can_fold_into_previous_insert() {
         let case = FuzzCase::new(vec![
-            Op::Template {
-                vnode: 0,
-                edit: TemplateEdit::SetNode {
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
                     node: 0,
                     kind: TemplateNodeKind::Dynamic,
                 },
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: None,
                 }),
-            },
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 3 }),
-            },
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 3 }),
+            ),
         ]);
 
         let candidates = peephole_cases(&case, 2);
         assert_eq!(candidates.len(), 1);
         assert_eq!(
             candidates[0].ops[1],
-            Op::Fragment {
-                vnode: 0,
-                slot: 0,
-                edit: FragmentEdit::Children(ListEdit::Insert {
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
                     index: 0,
                     item: Some(3),
                 }),
-            }
+            )
         );
         assert_eq!(candidates[0].ops.len(), 2);
     }

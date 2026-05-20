@@ -14,6 +14,12 @@ fn listener_app() -> Element {
     }
 }
 
+fn simple_app_with_different_attr() -> Element {
+    rsx! {
+        main { class: "different", "hello" }
+    }
+}
+
 fn empty_dynamic_slot_app() -> Element {
     let show = false;
     rsx! {
@@ -23,6 +29,13 @@ fn empty_dynamic_slot_app() -> Element {
             }
         }
     }
+}
+
+fn render_app(app: fn() -> Element) -> RendererOracle {
+    let mut vdom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    renderer.rebuild(&mut vdom);
+    renderer
 }
 
 #[test]
@@ -158,6 +171,27 @@ fn assert_matches_round_trips_listeners() {
     let mut renderer = RendererOracle::new();
     renderer.rebuild(&mut vdom);
     renderer.assert_matches(listener_app);
+}
+
+#[test]
+fn snapshot_eq_matches_equal_visible_trees_without_allocated_snapshots() {
+    let left = render_app(simple_app);
+    let right = render_app(simple_app);
+    assert!(left.snapshot_eq(&right));
+}
+
+#[test]
+fn snapshot_eq_detects_visible_tree_differences() {
+    let left = render_app(simple_app);
+    let right = render_app(simple_app_with_different_attr);
+    assert!(!left.snapshot_eq(&right));
+}
+
+#[test]
+fn snapshot_eq_ignores_empty_dynamic_placeholders() {
+    let left = render_app(empty_dynamic_slot_app);
+    let right = render_app(empty_dynamic_slot_app);
+    assert!(left.snapshot_eq(&right));
 }
 
 #[test]

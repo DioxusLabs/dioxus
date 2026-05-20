@@ -85,7 +85,9 @@ pub struct EventListenerTarget {
 pub struct RendererOracle {
     arena: Vec<Option<Node>>,
     element_to_node: Vec<Option<NodeId>>,
+    node_to_elements: Vec<Vec<ElementId>>,
     stack: Vec<NodeId>,
+    popped_nodes: Vec<NodeId>,
     root: NodeId,
     edit_counters: EditSummary,
     historical_event_listener_targets: Vec<EventListenerTarget>,
@@ -110,7 +112,9 @@ impl RendererOracle {
                 parent: None,
             })],
             element_to_node: vec![Some(root)],
+            node_to_elements: vec![vec![ElementId(0)]],
             stack: vec![root],
+            popped_nodes: Vec::new(),
             root,
             edit_counters: EditSummary::default(),
             historical_event_listener_targets: Vec::new(),
@@ -140,6 +144,14 @@ impl RendererOracle {
             .iter()
             .filter_map(|&child| self.snapshot_node(child))
             .collect()
+    }
+
+    /// Return true if two oracle DOMs have the same visible snapshot tree.
+    ///
+    /// This is equivalent to comparing [`RendererOracle::snapshot`] output, but it
+    /// avoids allocating and cloning the full snapshot on the success path.
+    pub fn snapshot_eq(&self, other: &Self) -> bool {
+        self.visible_children_eq(self.root, other, other.root)
     }
 
     /// Return the number of non-document nodes currently left on the mutation stack.
@@ -336,6 +348,7 @@ impl RendererOracle {
             children: Vec::new(),
             parent: None,
         }));
+        self.node_to_elements.push(Vec::new());
         id
     }
 
@@ -361,6 +374,9 @@ impl RendererOracle {
             self.element_to_node.resize(id.0 + 1, None);
         }
         if let Some(old) = self.element_to_node[id.0] {
+            if old == node {
+                return;
+            }
             if old != node && self.arena.get(old).is_some_and(Option::is_some) {
                 if self.node(old).parent.is_none() {
                     self.drop_subtree(old);
@@ -372,7 +388,21 @@ impl RendererOracle {
                 }
             }
         }
+        self.clear_element_mapping(id);
         self.element_to_node[id.0] = Some(node);
+        self.node_to_elements[node].push(id);
+    }
+
+    fn clear_element_mapping(&mut self, id: ElementId) {
+        let Some(mapped) = self.element_to_node.get_mut(id.0).and_then(Option::take) else {
+            return;
+        };
+        let Some(elements) = self.node_to_elements.get_mut(mapped) else {
+            return;
+        };
+        if let Some(index) = elements.iter().position(|&element| element == id) {
+            elements.swap_remove(index);
+        }
     }
 
     fn lookup(&self, id: ElementId) -> NodeId {
@@ -455,7 +485,15 @@ impl RendererOracle {
             );
         }
         let split = self.stack.len() - m;
-        self.stack.split_off(split)
+        let mut nodes = std::mem::take(&mut self.popped_nodes);
+        nodes.clear();
+        nodes.extend(self.stack.drain(split..));
+        nodes
+    }
+
+    fn recycle_popped_nodes(&mut self, mut nodes: Vec<NodeId>) {
+        nodes.clear();
+        self.popped_nodes = nodes;
     }
 
     fn position_in_parent(&self, node: NodeId) -> (NodeId, usize) {
@@ -492,27 +530,27 @@ impl RendererOracle {
         }
     }
 
-    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: Vec<NodeId>) {
+    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: &mut Vec<NodeId>) {
         if index > self.node(parent).children.len() {
             panic!(
                 "renderer insertion index {index} out of bounds for parent {parent} with {} children",
                 self.node(parent).children.len()
             );
         }
-        for &node in &nodes {
+        for &node in nodes.iter() {
             self.node_mut(node).parent = Some(parent);
         }
         let parent_node = self.node_mut(parent);
-        for (offset, node) in nodes.into_iter().enumerate() {
+        for (offset, node) in nodes.drain(..).enumerate() {
             parent_node.children.insert(index + offset, node);
         }
     }
 
-    fn append_detached(&mut self, parent: NodeId, nodes: Vec<NodeId>) {
-        for &node in &nodes {
+    fn append_detached(&mut self, parent: NodeId, nodes: &mut Vec<NodeId>) {
+        for &node in nodes.iter() {
             self.node_mut(node).parent = Some(parent);
         }
-        self.node_mut(parent).children.extend(nodes);
+        self.node_mut(parent).children.extend(nodes.drain(..));
     }
 
     fn drop_subtree(&mut self, node: NodeId) {
@@ -522,9 +560,11 @@ impl RendererOracle {
         let node_data = self.arena[node]
             .take()
             .unwrap_or_else(|| panic!("renderer tried to drop already-dead node {node}"));
-        for mapped in &mut self.element_to_node {
-            if *mapped == Some(node) {
-                *mapped = None;
+        for id in self.node_to_elements[node].drain(..) {
+            if let Some(mapped) = self.element_to_node.get_mut(id.0) {
+                if *mapped == Some(node) {
+                    *mapped = None;
+                }
             }
         }
         for child in node_data.children {
@@ -573,6 +613,59 @@ impl RendererOracle {
         }
     }
 
+    fn snapshot_node_eq(&self, node: NodeId, other: &Self, other_node: NodeId) -> bool {
+        let node_data = self.node(node);
+        let other_node_data = other.node(other_node);
+        match (&node_data.kind, &other_node_data.kind) {
+            (NodeKind::Document, NodeKind::Document) => {
+                self.visible_children_eq(node, other, other_node)
+            }
+            (
+                NodeKind::Element { tag, namespace },
+                NodeKind::Element {
+                    tag: other_tag,
+                    namespace: other_namespace,
+                },
+            ) => {
+                tag == other_tag
+                    && namespace == other_namespace
+                    && node_data.attrs == other_node_data.attrs
+                    && node_data.listeners == other_node_data.listeners
+                    && self.visible_children_eq(node, other, other_node)
+            }
+            (NodeKind::Text(text), NodeKind::Text(other_text)) => text == other_text,
+            (NodeKind::Placeholder, NodeKind::Placeholder) => true,
+            _ => false,
+        }
+    }
+
+    fn visible_children_eq(&self, node: NodeId, other: &Self, other_node: NodeId) -> bool {
+        let mut children = self.node(node).children.iter().copied().filter(|&child| {
+            !matches!(self.node(child).kind, NodeKind::Placeholder)
+        });
+        let mut other_children =
+            other
+                .node(other_node)
+                .children
+                .iter()
+                .copied()
+                .filter(|&child| {
+                    !matches!(other.node(child).kind, NodeKind::Placeholder)
+                });
+
+        loop {
+            match (children.next(), other_children.next()) {
+                (Some(child), Some(other_child)) => {
+                    if !self.snapshot_node_eq(child, other, other_child) {
+                        return false;
+                    }
+                }
+                (None, None) => return true,
+                _ => return false,
+            }
+        }
+    }
+
     fn snapshot_node(&self, node: NodeId) -> Option<SnapshotNode> {
         let node_data = self.node(node);
         match &node_data.kind {
@@ -597,9 +690,10 @@ impl RendererOracle {
 impl WriteMutations for RendererOracle {
     fn append_children(&mut self, id: ElementId, m: usize) {
         self.edit_counters.inserts += 1;
-        let nodes = self.pop_nodes(m);
+        let mut nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
-        self.append_detached(self.lookup(id), nodes);
+        self.append_detached(self.lookup(id), &mut nodes);
+        self.recycle_popped_nodes(nodes);
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
@@ -637,19 +731,20 @@ impl WriteMutations for RendererOracle {
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
         self.edit_counters.replaces += 1;
-        let nodes = self.pop_nodes(m);
+        let mut nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let target = self.lookup(id);
         let (parent, index) = self.detach(target);
         self.drop_subtree(target);
-        self.insert_detached(parent, index, nodes);
+        self.insert_detached(parent, index, &mut nodes);
+        self.recycle_popped_nodes(nodes);
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
         self.edit_counters.inserts += 1;
         // Order matters: pop the stack first, then walk_path reads from the top.
         // Mirrors `native-dom`'s `replace_placeholder_with_nodes` (mutation_writer.rs).
-        let nodes = self.pop_nodes(m);
+        let mut nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let top = *self
             .stack
@@ -658,25 +753,28 @@ impl WriteMutations for RendererOracle {
         let anchor = self.walk_path(top, path);
         let (parent, index) = self.detach(anchor);
         self.drop_subtree(anchor);
-        self.insert_detached(parent, index, nodes);
+        self.insert_detached(parent, index, &mut nodes);
+        self.recycle_popped_nodes(nodes);
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
         self.edit_counters.inserts += 1;
-        let nodes = self.pop_nodes(m);
+        let mut nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        self.insert_detached(parent, index + 1, nodes);
+        self.insert_detached(parent, index + 1, &mut nodes);
+        self.recycle_popped_nodes(nodes);
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
         self.edit_counters.inserts += 1;
-        let nodes = self.pop_nodes(m);
+        let mut nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        self.insert_detached(parent, index, nodes);
+        self.insert_detached(parent, index, &mut nodes);
+        self.recycle_popped_nodes(nodes);
     }
 
     fn set_attribute(

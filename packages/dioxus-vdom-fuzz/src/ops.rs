@@ -9,1047 +9,108 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-// ---------- Structured seed operation generation --------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum IteratorScenario {
-    BranchSweep,
-    UnkeyedAppend,
-    UnkeyedRemove,
-    KeyedPrepend,
-    KeyedAppend,
-    KeyedMiddleInsert,
-    KeyedMiddleRemove,
-    KeyedReplaceAll,
-    KeyedMoveNearFront,
-    KeyedMoveFirstToEnd,
-    NestedDomlessMove,
-    PortalRetarget,
-    LargeTemplateHashStress,
-}
-
-impl IteratorScenario {
-    pub(crate) const ALL: [Self; 13] = [
-        Self::BranchSweep,
-        Self::UnkeyedAppend,
-        Self::UnkeyedRemove,
-        Self::KeyedPrepend,
-        Self::KeyedAppend,
-        Self::KeyedMiddleInsert,
-        Self::KeyedMiddleRemove,
-        Self::KeyedReplaceAll,
-        Self::KeyedMoveNearFront,
-        Self::KeyedMoveFirstToEnd,
-        Self::NestedDomlessMove,
-        Self::PortalRetarget,
-        Self::LargeTemplateHashStress,
-    ];
-}
-
-pub(crate) fn iterator_scenario_ops(scenario: IteratorScenario, key_base: u8) -> Vec<Op> {
-    match scenario {
-        IteratorScenario::BranchSweep => branch_sweep_scenario(),
-        IteratorScenario::UnkeyedAppend => {
-            let mut ops = unkeyed_fragment_with_len(2);
-            ops.push(Op::Rerender);
-            ops.push(fragment_insert(2, None));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::UnkeyedRemove => {
-            let mut ops = unkeyed_fragment_with_len(3);
-            ops.push(Op::Rerender);
-            ops.push(fragment_remove(1));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedPrepend => {
-            let mut ops = keyed_fragment_with_len(key_base, 3);
-            ops.push(Op::Rerender);
-            ops.push(fragment_insert(0, Some(key_base.wrapping_add(16))));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedAppend => {
-            let mut ops = keyed_fragment_with_len(key_base, 3);
-            ops.push(Op::Rerender);
-            ops.push(fragment_insert(3, Some(key_base.wrapping_add(3))));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedMiddleInsert => {
-            let mut ops = keyed_fragment_with_len(key_base, 3);
-            ops.push(Op::Rerender);
-            ops.push(fragment_insert(1, Some(key_base.wrapping_add(16))));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedMiddleRemove => {
-            let mut ops = keyed_fragment_with_len(key_base, 4);
-            ops.push(Op::Rerender);
-            ops.push(fragment_remove(1));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedReplaceAll => {
-            let mut ops = keyed_fragment_with_len(key_base, 3);
-            ops.push(Op::Rerender);
-            ops.push(fragment_key_mode(FragmentKeyMode::Keyed {
-                base: key_base.wrapping_add(32),
-            }));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedMoveNearFront => {
-            let mut ops = keyed_fragment_with_len(key_base, 4);
-            ops.push(Op::Rerender);
-            ops.push(fragment_move(1, 0));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::KeyedMoveFirstToEnd => {
-            let mut ops = keyed_fragment_with_len(key_base, 4);
-            ops.push(Op::Rerender);
-            ops.push(fragment_move(0, 3));
-            ops.push(Op::Rerender);
-            ops
-        }
-        IteratorScenario::NestedDomlessMove => nested_domless_move_scenario(),
-        IteratorScenario::PortalRetarget => portal_retarget_scenario(),
-        IteratorScenario::LargeTemplateHashStress => large_template_hash_stress_scenario(),
-    }
-}
-
-fn branch_sweep_scenario() -> Vec<Op> {
-    let mut ops = unkeyed_fragment_with_len(2);
-
-    ops.push(Op::Rerender);
-    ops.push(fragment_insert(2, None));
-    ops.push(Op::Rerender);
-    ops.push(fragment_remove(1));
-    ops.push(Op::Rerender);
-
-    ops.push(fragment_key_mode(FragmentKeyMode::Keyed { base: 0 }));
-    ops.push(Op::Rerender);
-
-    ops.push(fragment_insert(0, Some(16)));
-    ops.push(Op::Rerender);
-    ops.push(fragment_insert(3, Some(17)));
-    ops.push(Op::Rerender);
-    ops.push(fragment_remove(1));
-    ops.push(Op::Rerender);
-    ops.push(fragment_insert(1, Some(18)));
-    ops.push(Op::Rerender);
-
-    ops.push(fragment_move(1, 0));
-    ops.push(Op::Rerender);
-    ops.push(fragment_move(0, 3));
-    ops.push(Op::Rerender);
-
-    ops.push(fragment_key_mode(FragmentKeyMode::Keyed { base: 64 }));
-    ops.push(Op::Rerender);
-
-    ops.push(fragment_remove(3));
-    ops.push(fragment_move(2, 1));
-    ops.push(fragment_insert(3, Some(80)));
-    ops.push(Op::Rerender);
-
-    ops
-}
-
-fn make_root_dynamic() -> Op {
-    Op::Template {
-        vnode: 0,
-        edit: TemplateEdit::SetNode {
-            node: 0,
-            kind: TemplateNodeKind::Dynamic,
-        },
-    }
-}
-
-fn fragment_insert(index: u8, item: Option<u8>) -> Op {
-    Op::Fragment {
-        vnode: 0,
-        slot: 0,
-        edit: FragmentEdit::Children(ListEdit::Insert { index, item }),
-    }
-}
-
-fn fragment_remove(index: u8) -> Op {
-    Op::Fragment {
-        vnode: 0,
-        slot: 0,
-        edit: FragmentEdit::Children(ListEdit::Remove { index }),
-    }
-}
-
-fn fragment_move(from: u8, to: u8) -> Op {
-    Op::Fragment {
-        vnode: 0,
-        slot: 0,
-        edit: FragmentEdit::Children(ListEdit::Move { from, to }),
-    }
-}
-
-fn fragment_key_mode(mode: FragmentKeyMode) -> Op {
-    Op::Fragment {
-        vnode: 0,
-        slot: 0,
-        edit: FragmentEdit::KeyMode(mode),
-    }
-}
-
-fn unkeyed_fragment_with_len(len: u8) -> Vec<Op> {
-    let mut ops = Vec::with_capacity(len as usize + 1);
-    ops.push(make_root_dynamic());
-    for index in 0..len {
-        ops.push(fragment_insert(index, None));
-    }
-    ops
-}
-
-fn keyed_fragment_with_len(key_base: u8, len: u8) -> Vec<Op> {
-    let mut ops = Vec::with_capacity(len as usize + 1);
-    ops.push(make_root_dynamic());
-    for index in 0..len {
-        ops.push(fragment_insert(index, Some(key_base.wrapping_add(index))));
-    }
-    ops
-}
-
-fn nested_domless_move_scenario() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        fragment_insert(0, None),
-        fragment_insert(0, None),
-        fragment_insert(0, None),
-        fragment_key_mode(FragmentKeyMode::Keyed { base: 0 }),
-        fragment_insert(0, None),
-        Op::Template {
-            vnode: 6,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Template {
-            vnode: 7,
-            edit: TemplateEdit::Children {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateNodeKind::Dynamic,
-                },
-            },
-        },
-        fragment_insert(0, None),
-        Op::Fragment {
-            vnode: 177,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 0,
-                item: None,
-            }),
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 2,
-            slot: 0,
-            kind: DynamicKind::ComponentA,
-        },
-        fragment_move(3, 2),
-        Op::Rerender,
-    ]
-}
-
-fn portal_retarget_scenario() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Portal {
-                target: PortalTargetSpec::TargetA,
-            },
-        },
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 0,
-                item: Some(0),
-            }),
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Portal {
-                target: PortalTargetSpec::TargetB,
-            },
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Portal {
-                target: PortalTargetSpec::Noop,
-            },
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Portal {
-                target: PortalTargetSpec::TargetA,
-            },
-        },
-        Op::Rerender,
-    ]
-}
-
-fn large_template_hash_stress_scenario() -> Vec<Op> {
-    let mut ops = Vec::new();
-    for index in 0..12 {
-        let shape = 0x00D1_0A00_0000_0000u64 ^ (index / 2);
-        ops.push(Op::Template {
-            vnode: 0,
-            edit: TemplateEdit::Generated {
-                seed: (shape << 8) | (index as u64 + 1),
-                dynamic_nodes: 257 + (index / 2) as u16 * 19,
-                dynamic_attrs: 257 + (index / 2) as u16 * 13,
-            },
-        });
-        ops.push(Op::Rerender);
-    }
-    ops
-}
-
-pub(crate) fn coverage_scenario_ops() -> Vec<Op> {
-    let scenarios = [
-        dynamic_text_and_placeholder_ops(),
-        no_change_diff_ops(),
-        suspended_text_diff_ops(),
-        dynamic_anchor_removal_ops(),
-        dynamic_attribute_ops(),
-        dynamic_root_keyed_move_ops(),
-        dynamic_root_reference_ops(),
-        dynamic_root_find_anchor_ops(),
-        component_replacement_ops(),
-        suspense_background_ops(),
-        suspense_dynamic_recovery_ops(),
-        suspense_hidden_component_recovery_ops(false),
-        suspense_hidden_component_recovery_ops(true),
-        suspended_keyed_middle_ops(),
-    ];
-
-    let mut ops = Vec::new();
-    for scenario in scenarios {
-        if !ops.is_empty() {
-            ops.push(Op::Reset);
-        }
-        ops.extend(scenario);
-    }
-    ops
-}
-
-fn dynamic_text_and_placeholder_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(1),
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Placeholder,
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(2),
-        },
-        Op::Rerender,
-    ]
-}
-
-fn no_change_diff_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Rerender,
-    ]
-}
-
-fn suspended_text_diff_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        },
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Pending,
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(1),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Resolved,
-        },
-        Op::Rerender,
-    ]
-}
-
-fn dynamic_anchor_removal_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Template {
-            vnode: 0,
-            edit: TemplateEdit::Roots {
-                edit: ListEdit::Insert {
-                    index: 1,
-                    item: TemplateNodeKind::Element {
-                        tag: 1,
-                        namespace: None,
-                    },
-                },
-            },
-        },
-        Op::Rerender,
-        Op::Template {
-            vnode: 0,
-            edit: TemplateEdit::Roots {
-                edit: ListEdit::Remove { index: 0 },
-            },
-        },
-        Op::Rerender,
-    ]
-}
-
-fn dynamic_attribute_ops() -> Vec<Op> {
-    let attr = |name, value, volatile| AttrSpec {
-        name,
-        namespace: None,
-        value,
-        volatile,
-    };
-
-    vec![
-        Op::Template {
-            vnode: 0,
-            edit: TemplateEdit::Attrs {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateAttrSpec::Dynamic,
-                },
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 0,
-                item: attr(0, AttrValueSpec::Text(0), false),
-            },
-        },
-        Op::Rerender,
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 1,
-                item: attr(1, AttrValueSpec::Float(1), false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 2,
-                item: attr(2, AttrValueSpec::Int(2), false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 3,
-                item: attr(3, AttrValueSpec::Bool(true), false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 4,
-                item: attr(4, AttrValueSpec::Any(4), false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 5,
-                item: attr(5, AttrValueSpec::None, false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 6,
-                item: attr(6, AttrValueSpec::Listener, false),
-            },
-        },
-        Op::Rerender,
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 0,
-                item: attr(0, AttrValueSpec::Text(1), true),
-            },
-        },
-        Op::Rerender,
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Remove { index: 0 },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Insert {
-                index: 0,
-                item: attr(0, AttrValueSpec::Int(9), false),
-            },
-        },
-        Op::DynamicAttrs {
-            vnode: 0,
-            slot: 0,
-            edit: ListEdit::Remove { index: 6 },
-        },
-        Op::Rerender,
-    ]
-}
-
-fn dynamic_root_keyed_move_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        fragment_insert(0, Some(0)),
-        fragment_insert(1, Some(1)),
-        fragment_insert(2, Some(2)),
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(7),
-        },
-        Op::Template {
-            vnode: 2,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 2,
-            slot: 0,
-            kind: DynamicKind::Placeholder,
-        },
-        Op::Template {
-            vnode: 3,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 3,
-            slot: 0,
-            kind: DynamicKind::ComponentA,
-        },
-        Op::Rerender,
-        fragment_move(2, 0),
-        fragment_move(1, 2),
-        Op::Rerender,
-    ]
-}
-
-fn dynamic_root_reference_ops() -> Vec<Op> {
-    let dynamic_root_child = |vnode, kind| -> Vec<Op> {
-        vec![
-            Op::Template {
-                vnode,
-                edit: TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic,
-                },
-            },
-            Op::Dynamic {
-                vnode,
-                slot: 0,
-                kind,
-            },
-        ]
-    };
-
-    let mut ops = vec![
-        make_root_dynamic(),
-        fragment_insert(0, Some(0)),
-        fragment_insert(1, Some(1)),
-        fragment_insert(2, Some(2)),
-    ];
-    ops.extend(dynamic_root_child(1, DynamicKind::Text(20)));
-    ops.extend(dynamic_root_child(2, DynamicKind::Placeholder));
-    ops.extend(dynamic_root_child(3, DynamicKind::ComponentA));
-    ops.push(Op::Rerender);
-    ops.push(fragment_insert(0, Some(3)));
-    ops.push(Op::Rerender);
-    ops.push(fragment_insert(4, Some(4)));
-    ops.push(Op::Rerender);
-    ops.push(fragment_move(2, 4));
-    ops.push(Op::Rerender);
-
-    ops
-}
-
-fn dynamic_root_find_anchor_ops() -> Vec<Op> {
-    fn append_after_dynamic_last(kind: DynamicKind) -> Vec<Op> {
-        vec![
-            make_root_dynamic(),
-            fragment_insert(0, None),
-            fragment_insert(1, None),
-            Op::Template {
-                vnode: 2,
-                edit: TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic,
-                },
-            },
-            Op::Dynamic {
-                vnode: 2,
-                slot: 0,
-                kind,
-            },
-            Op::Rerender,
-            fragment_insert(2, None),
-            Op::Rerender,
-        ]
-    }
-
-    let mut ops = Vec::new();
-    for scenario in [
-        append_after_dynamic_last(DynamicKind::Text(40)),
-        append_after_dynamic_last(DynamicKind::Placeholder),
-        append_after_dynamic_last(DynamicKind::Empty),
-    ] {
-        if !ops.is_empty() {
-            ops.push(Op::Reset);
-        }
-        ops.extend(scenario);
-    }
-
-    ops.push(Op::Reset);
-    ops.extend([
-        make_root_dynamic(),
-        fragment_insert(0, None),
-        fragment_insert(1, None),
-        Op::Template {
-            vnode: 2,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 2,
-            slot: 0,
-            kind: DynamicKind::Fragment,
-        },
-        Op::Fragment {
-            vnode: 2,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 0,
-                item: None,
-            }),
-        },
-        Op::Rerender,
-        fragment_insert(2, None),
-        Op::Rerender,
-    ]);
-
-    ops.push(Op::Reset);
-    ops.extend([
-        make_root_dynamic(),
-        fragment_insert(0, Some(0)),
-        fragment_insert(1, Some(1)),
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 0,
-                item: None,
-            }),
-        },
-        Op::Rerender,
-        fragment_insert(0, Some(9)),
-        Op::Rerender,
-    ]);
-
-    ops
-}
-
-fn component_replacement_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::ComponentA,
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::ComponentB,
-        },
-        Op::Rerender,
-    ]
-}
-
-fn suspense_background_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        },
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(0),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Pending,
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Placeholder,
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Resolved,
-        },
-        Op::Rerender,
-    ]
-}
-
-fn suspense_dynamic_recovery_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        },
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::Children {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateNodeKind::Dynamic,
-                },
-            },
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(30),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Pending,
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Placeholder,
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Resolved,
-        },
-        Op::Rerender,
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(31),
-        },
-        Op::Rerender,
-    ]
-}
-
-fn suspense_hidden_component_recovery_ops(nested: bool) -> Vec<Op> {
-    let mut ops = vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        },
-    ];
-
-    if nested {
-        ops.push(Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::Children {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateNodeKind::Dynamic,
-                },
-            },
-        });
-    } else {
-        ops.push(Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        });
-    }
-
-    ops.extend([
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(50),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Pending,
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::ComponentA,
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Resolved,
-        },
-        Op::Dynamic {
-            vnode: 1,
-            slot: 0,
-            kind: DynamicKind::Text(51),
-        },
-        Op::Rerender,
-    ]);
-
-    ops
-}
-
-fn suspended_keyed_middle_ops() -> Vec<Op> {
-    vec![
-        make_root_dynamic(),
-        Op::Dynamic {
-            vnode: 0,
-            slot: 0,
-            kind: DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        },
-        Op::Template {
-            vnode: 1,
-            edit: TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Dynamic,
-            },
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 0,
-                item: Some(0),
-            }),
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 1,
-                item: Some(1),
-            }),
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 2,
-                item: Some(2),
-            }),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Pending,
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Move { from: 0, to: 2 }),
-        },
-        Op::Fragment {
-            vnode: 1,
-            slot: 0,
-            edit: FragmentEdit::Children(ListEdit::Insert {
-                index: 1,
-                item: Some(8),
-            }),
-        },
-        Op::Rerender,
-        Op::Suspense {
-            suspense: 0,
-            mode: SuspenseMode::Resolved,
-        },
-        Op::Rerender,
-    ]
-}
-
 // ---------- Model operations -----------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
 pub(crate) enum Op {
     Rerender,
-    WakeSuspense {
-        suspense: u8,
-    },
-    WakeSuspenseNatural {
-        suspense: u8,
-    },
-    Template {
-        vnode: u8,
-        edit: TemplateEdit,
-    },
-    Dynamic {
-        vnode: u8,
-        slot: u8,
-        kind: DynamicKind,
-    },
-    DynamicAttrs {
-        vnode: u8,
-        slot: u8,
-        edit: ListEdit<AttrSpec>,
-    },
-    Fragment {
-        vnode: u8,
-        slot: u8,
-        edit: FragmentEdit,
-    },
-    Suspense {
-        suspense: u8,
-        mode: SuspenseMode,
-    },
-    SuspenseWakeMutation {
-        suspense: u8,
-        mutation: WakeMutationSpec,
-    },
-    Reset,
+    WakeSuspense { suspense: u8, mode: WakeMode },
+    Mutate(ModelEdit),
+}
+
+impl Op {
+    pub(crate) fn wake_suspense(suspense: u8) -> Self {
+        Self::WakeSuspense {
+            suspense,
+            mode: WakeMode::Harness,
+        }
+    }
+
+    pub(crate) fn wake_suspense_natural(suspense: u8) -> Self {
+        Self::WakeSuspense {
+            suspense,
+            mode: WakeMode::Natural,
+        }
+    }
+
+    pub(crate) fn template(vnode: u8, edit: TemplateEdit) -> Self {
+        Self::Mutate(ModelEdit::VNode {
+            vnode,
+            edit: VNodeEdit::Template(edit),
+        })
+    }
+
+    pub(crate) fn dynamic(vnode: u8, slot: u8, kind: DynamicKind) -> Self {
+        Self::Mutate(ModelEdit::VNode {
+            vnode,
+            edit: VNodeEdit::DynamicSlot {
+                slot,
+                edit: DynamicEdit::SetKind(kind),
+            },
+        })
+    }
+
+    pub(crate) fn dynamic_attrs(vnode: u8, slot: u8, edit: ListEdit<AttrSpec>) -> Self {
+        Self::Mutate(ModelEdit::VNode {
+            vnode,
+            edit: VNodeEdit::DynamicAttrs { slot, edit },
+        })
+    }
+
+    pub(crate) fn fragment(vnode: u8, slot: u8, edit: FragmentEdit) -> Self {
+        Self::Mutate(ModelEdit::VNode {
+            vnode,
+            edit: VNodeEdit::DynamicSlot {
+                slot,
+                edit: DynamicEdit::Fragment(edit),
+            },
+        })
+    }
+
+    pub(crate) fn suspense(suspense: u8, mode: SuspenseMode) -> Self {
+        Self::Mutate(ModelEdit::Suspense {
+            suspense,
+            edit: SuspenseEdit::Mode(mode),
+        })
+    }
+
+    pub(crate) fn suspense_wake_mutation(suspense: u8, mutation: WakeMutationSpec) -> Self {
+        Self::Mutate(ModelEdit::Suspense {
+            suspense,
+            edit: SuspenseEdit::WakeMutation(mutation),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
+pub(crate) enum WakeMode {
+    Harness,
+    Natural,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+pub(crate) enum ModelEdit {
+    VNode { vnode: u8, edit: VNodeEdit },
+    Suspense { suspense: u8, edit: SuspenseEdit },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+pub(crate) enum VNodeEdit {
+    Template(TemplateEdit),
+    DynamicSlot { slot: u8, edit: DynamicEdit },
+    DynamicAttrs { slot: u8, edit: ListEdit<AttrSpec> },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+pub(crate) enum DynamicEdit {
+    SetKind(DynamicKind),
+    Fragment(FragmentEdit),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
+pub(crate) enum SuspenseEdit {
+    Mode(SuspenseMode),
+    WakeMutation(WakeMutationSpec),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
@@ -1068,11 +129,6 @@ pub(crate) enum TemplateEdit {
     Attrs {
         element: u8,
         edit: ListEdit<TemplateAttrSpec>,
-    },
-    Generated {
-        seed: u64,
-        dynamic_nodes: u16,
-        dynamic_attrs: u16,
     },
 }
 
@@ -1308,40 +364,68 @@ pub(crate) fn apply_op_to_model(model: &mut Model, op: &Op) {
     let can_grow = model.can_grow();
     match op {
         Op::Rerender => {}
-        Op::Reset => {
-            *model = Model::initial();
-        }
-        Op::WakeSuspense { suspense } | Op::WakeSuspenseNatural { suspense } => {
+        Op::WakeSuspense { suspense, .. } => {
             if let Some(key) = model.selected_ready_suspense_key(*suspense) {
                 model.resolve_ready_suspense(key);
             }
         }
-        Op::Template { vnode, edit } => {
-            let vnode = model.selected_vnode_mut(*vnode);
+        Op::Mutate(edit) => apply_model_edit(model, edit, can_grow),
+    }
+}
+
+pub(crate) fn apply_to_model(op: &Op) {
+    with_model(|model| apply_op_to_model(model, op));
+}
+
+fn apply_model_edit(model: &mut Model, edit: &ModelEdit, can_grow: bool) {
+    match edit {
+        ModelEdit::VNode { vnode, edit } => apply_vnode_edit(model, *vnode, edit, can_grow),
+        ModelEdit::Suspense { suspense, edit } => match edit {
+            SuspenseEdit::Mode(mode) => model.set_selected_suspense_mode(*suspense, *mode),
+            SuspenseEdit::WakeMutation(mutation) => {
+                model.set_selected_suspense_wake_mutation(*suspense, *mutation);
+            }
+        },
+    }
+}
+
+fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bool) {
+    match edit {
+        VNodeEdit::Template(edit) => {
+            let vnode = model.selected_vnode_mut(vnode);
             apply_template_edit(vnode, edit, can_grow);
             vnode.normalize_in_place();
         }
-        Op::Dynamic { vnode, slot, kind } => {
+        VNodeEdit::DynamicSlot { slot, edit } => {
             let mut next_suspense_id = model.next_suspense_id;
             {
-                let vnode = model.selected_vnode_mut(*vnode);
-                if !vnode.dynamics.is_empty() {
-                    let index = *slot as usize % vnode.dynamics.len();
-                    if can_grow
-                        || matches!(
-                            kind,
-                            DynamicKind::Empty | DynamicKind::Text(_) | DynamicKind::Placeholder
-                        )
-                    {
-                        vnode.dynamics[index].set_kind(kind, &mut next_suspense_id);
+                let vnode = model.selected_vnode_mut(vnode);
+                match edit {
+                    DynamicEdit::SetKind(kind) => {
+                        if !vnode.dynamics.is_empty() {
+                            let index = *slot as usize % vnode.dynamics.len();
+                            if can_grow
+                                || matches!(
+                                    kind,
+                                    DynamicKind::Empty
+                                        | DynamicKind::Text(_)
+                                        | DynamicKind::Placeholder
+                                )
+                            {
+                                vnode.dynamics[index].set_kind(kind, &mut next_suspense_id);
+                            }
+                        }
+                    }
+                    DynamicEdit::Fragment(edit) => {
+                        apply_fragment_edit(vnode, *slot, edit, can_grow);
                     }
                 }
                 vnode.normalize_in_place();
             }
             model.next_suspense_id = next_suspense_id;
         }
-        Op::DynamicAttrs { vnode, slot, edit } => {
-            let vnode = model.selected_vnode_mut(*vnode);
+        VNodeEdit::DynamicAttrs { slot, edit } => {
+            let vnode = model.selected_vnode_mut(vnode);
             if !vnode.attrs.is_empty() {
                 let index = *slot as usize % vnode.attrs.len();
                 apply_attr_list_edit(&mut vnode.attrs[index], edit);
@@ -1349,22 +433,7 @@ pub(crate) fn apply_op_to_model(model: &mut Model, op: &Op) {
             }
             vnode.normalize_in_place();
         }
-        Op::Fragment { vnode, slot, edit } => {
-            let vnode = model.selected_vnode_mut(*vnode);
-            apply_fragment_edit(vnode, *slot, edit, can_grow);
-            vnode.normalize_in_place();
-        }
-        Op::Suspense { suspense, mode } => {
-            model.set_selected_suspense_mode(*suspense, *mode);
-        }
-        Op::SuspenseWakeMutation { suspense, mutation } => {
-            model.set_selected_suspense_wake_mutation(*suspense, *mutation);
-        }
     }
-}
-
-pub(crate) fn apply_to_model(op: &Op) {
-    with_model(|model| apply_op_to_model(model, op));
 }
 
 fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: bool) {
@@ -1400,13 +469,6 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
                     apply_template_attr_list_edit(attrs, edit);
                 }
             }
-        }
-        TemplateEdit::Generated {
-            seed,
-            dynamic_nodes,
-            dynamic_attrs,
-        } => {
-            vnode.template = TemplateSpec::generated(*seed, *dynamic_nodes, *dynamic_attrs);
         }
     }
 }
