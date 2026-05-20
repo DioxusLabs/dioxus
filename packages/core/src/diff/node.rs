@@ -1,6 +1,6 @@
 use crate::innerlude::MountId;
 use crate::{Attribute, AttributeValue, DynamicNode::*};
-use crate::{VNode, VirtualDom, WriteMutations};
+use crate::{NoOpMutations, VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
 use crate::{
@@ -10,6 +10,59 @@ use crate::{
     nodes::DynamicNode,
     scopes::ScopeId,
 };
+
+/// A dynamic node that occupies a single anchor element in the DOM. A `Placeholder` is
+/// always one of these, and so is a `Fragment` whose iterator yielded no children — both
+/// reserve a single empty placeholder so siblings can be located relative to them.
+fn is_anchor_node(node: &DynamicNode) -> bool {
+    matches!(node, Placeholder(_)) || matches!(node, Fragment(children) if children.is_empty())
+}
+
+fn dynamic_node_has_live_dom(
+    node: &DynamicNode,
+    mount: MountId,
+    idx: usize,
+    dom: &VirtualDom,
+) -> bool {
+    match node {
+        // Single-anchor dynamic nodes (Text, Placeholder, empty Fragment) are backed by
+        // a real placeholder element stored in `mounted_dynamic_nodes` if they were
+        // created against a renderer.
+        Text(_) | Placeholder(_) => dom.get_mounted_dyn_node(mount, idx) != usize::MAX,
+        Fragment(nodes) if nodes.is_empty() => {
+            dom.get_mounted_dyn_node(mount, idx) != usize::MAX
+        }
+        Fragment(nodes) => nodes.iter().any(|node| vnode_has_live_dom(node, dom)),
+        Component(_) => {
+            let scope_id = dom.get_mounted_dyn_node(mount, idx);
+            if scope_id == usize::MAX {
+                return false;
+            }
+            dom.get_scope(ScopeId(scope_id))
+                .map(|scope| vnode_has_live_dom(scope.root_node(), dom))
+                .unwrap_or(false)
+        }
+    }
+}
+
+fn vnode_has_live_dom(node: &VNode, dom: &VirtualDom) -> bool {
+    let Some(mount) = node.mount.get().as_usize().map(MountId) else {
+        return false;
+    };
+
+    node.template
+        .roots()
+        .iter()
+        .enumerate()
+        .any(|(root_idx, root)| {
+            if let Some(idx) = root.dynamic_id() {
+                dynamic_node_has_live_dom(&node.dynamic_nodes[idx], mount, idx, dom)
+            } else {
+                let id = dom.get_mounted_root_node(mount, root_idx);
+                id.0 != 0 && id.0 != usize::MAX
+            }
+        })
+}
 
 impl VNode {
     pub(crate) fn diff_node(
@@ -93,13 +146,17 @@ impl VNode {
                     self.diff_vtext(to, id, old, new)
                 }
             }
-            (Placeholder(_), Placeholder(_)) => {}
-            (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(
-                to,
-                old,
-                new,
-                Some(self.reference_to_dynamic_node(mount, idx)),
-            ),
+            // A `Placeholder` and a `Fragment` with no children both occupy a single
+            // placeholder DOM node, so when both sides are anchors there is no DOM diff
+            // work to do.
+            (old, new) if is_anchor_node(old) && is_anchor_node(new) => {}
+            (Fragment(old), Fragment(new)) if !old.is_empty() && !new.is_empty() => dom
+                .diff_non_empty_fragment(
+                    to,
+                    old,
+                    new,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                ),
             (Component(old), Component(new)) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
                 self.diff_vcomponent(
@@ -112,6 +169,22 @@ impl VNode {
                     dom,
                     to,
                 )
+            }
+            (old, new) if to.is_some() && !dynamic_node_has_live_dom(old, mount, idx, dom) => {
+                let path = self.template.node_paths()[idx];
+                if path.len() > 1 {
+                    let to = to.as_deref_mut().unwrap();
+                    let m = self.create_dynamic_node(new, mount, idx, dom, Some(&mut *to));
+                    to.replace_placeholder_with_nodes(&path[1..], m);
+                } else {
+                    let _ = self.create_dynamic_node(
+                        new,
+                        mount,
+                        idx,
+                        dom,
+                        None::<&mut NoOpMutations>,
+                    );
+                }
             }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id
@@ -130,7 +203,15 @@ impl VNode {
                 let new_mount = dom.get_mounted_dyn_node(mount, idx);
                 dom.set_mounted_dyn_node(mount, idx, old_mount);
 
-                self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
+                self.remove_dynamic_node(
+                    mount,
+                    dom,
+                    to,
+                    true,
+                    idx,
+                    old,
+                    Some(new_nodes_on_stack),
+                );
 
                 // Restore the mount for the node we created
                 dom.set_mounted_dyn_node(mount, idx, new_mount);
@@ -153,15 +234,16 @@ impl VNode {
         let first = match self.get_dynamic_root_node_and_id(0) {
             // This node is static, just get the root id
             None => dom.get_mounted_root_node(mount_id, 0),
-            // If it is dynamic and shallow, grab the id from the mounted dynamic nodes
+            // Single-anchor dynamic nodes (Text, Placeholder, empty Fragment) hold their
+            // element id in `mounted_dynamic_nodes`
             Some((idx, Placeholder(_) | Text(_))) => {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
-            // The node is a fragment, so we need to find the first element in the fragment
-            Some((_, Fragment(children))) => {
-                let child = children.first().unwrap();
-                child.find_first_element(dom)
+            Some((idx, Fragment(children))) if children.is_empty() => {
+                ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
+            // The node is a non-empty fragment, recurse into its first child
+            Some((_, Fragment(children))) => children.first().unwrap().find_first_element(dom),
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
@@ -184,15 +266,16 @@ impl VNode {
         let last = match self.get_dynamic_root_node_and_id(last_root_index) {
             // This node is static, just get the root id
             None => dom.get_mounted_root_node(mount_id, last_root_index),
-            // If it is dynamic and shallow, grab the id from the mounted dynamic nodes
+            // Single-anchor dynamic nodes (Text, Placeholder, empty Fragment) hold their
+            // element id in `mounted_dynamic_nodes`
             Some((idx, Placeholder(_) | Text(_))) => {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
-            // The node is a fragment, so we need to find the last element in the fragment
-            Some((_, Fragment(children))) => {
-                let child = children.last().unwrap();
-                child.find_last_element(dom)
+            Some((idx, Fragment(children))) if children.is_empty() => {
+                ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
+            // The node is a non-empty fragment, recurse into its last child
+            Some((_, Fragment(children))) => children.last().unwrap().find_last_element(dom),
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
@@ -249,6 +332,11 @@ impl VNode {
         mut to: Option<&mut impl WriteMutations>,
         destroy_component_state: bool,
     ) {
+        if !vnode_has_live_dom(self, dom) {
+            let _ = dom.create_children(None::<&mut NoOpMutations>, right, parent);
+            return;
+        }
+
         let m = dom.create_children(to.as_deref_mut(), right, parent);
 
         // Instead of *just* removing it, we can use the replace mutation
@@ -320,17 +408,19 @@ impl VNode {
                     dynamic_node,
                     replace_with.filter(|_| last_node),
                 );
-            } else if let Some(to) = to.as_deref_mut() {
-                let id = dom.get_mounted_root_node(mount, idx);
-                if let (true, Some(replace_with)) = (last_node, replace_with) {
-                    to.replace_node_with(id, replace_with);
-                } else {
-                    to.remove_node(id);
-                }
-                dom.reclaim(id);
             } else {
                 let id = dom.get_mounted_root_node(mount, idx);
+                if let Some(to) = to.as_deref_mut() {
+                    if let (true, Some(replace_with)) = (last_node, replace_with) {
+                        to.replace_node_with(id, replace_with);
+                    } else {
+                        to.remove_node(id);
+                    }
+                }
                 dom.reclaim(id);
+                // Stamp the slot so a later traversal cannot mistake the
+                // reclaimed id for a live element.
+                dom.set_mounted_root_node(mount, idx, ElementId(usize::MAX));
             }
         }
     }
@@ -374,26 +464,49 @@ impl VNode {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
                 dom.remove_component_node(to, destroy_component_state, scope_id, replace_with);
             }
+            // Anchor-style nodes hold their single element id in `mounted_dynamic_nodes`
             Text(_) | Placeholder(_) => {
-                let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-                if let Some(to) = to {
-                    if let Some(replace_with) = replace_with {
-                        to.replace_node_with(id, replace_with);
-                    } else {
-                        to.remove_node(id);
-                    }
-                }
-                dom.reclaim(id)
+                Self::remove_anchor(dom, to, mount, idx, replace_with);
+            }
+            Fragment(nodes) if nodes.is_empty() => {
+                Self::remove_anchor(dom, to, mount, idx, replace_with);
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {
                     node.remove_node_inner(dom, to.as_deref_mut(), destroy_component_state, None)
                 }
-                if let Some(last_node) = nodes.last() {
-                    last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
-                }
+                let last_node = nodes.last().unwrap();
+                last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
             }
         };
+    }
+
+    fn remove_anchor(
+        dom: &mut VirtualDom,
+        to: Option<&mut impl WriteMutations>,
+        mount: MountId,
+        idx: usize,
+        replace_with: Option<usize>,
+    ) {
+        let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
+        if id != ElementId(usize::MAX) {
+            if let Some(to) = to {
+                if let Some(replace_with) = replace_with {
+                    to.replace_node_with(id, replace_with);
+                } else {
+                    to.remove_node(id);
+                }
+            }
+        } else if to.is_some() && replace_with.is_none() {
+            debug_assert!(
+                false,
+                "attempted to remove an unmounted dynamic anchor from the live DOM"
+            );
+        }
+        dom.reclaim(id);
+        // Stamp the slot so a later traversal cannot mistake the reclaimed id
+        // for a live anchor.
+        dom.set_mounted_dyn_node(mount, idx, usize::MAX);
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
@@ -664,6 +777,15 @@ impl VNode {
             Component(component) => {
                 let parent = Some(self.reference_to_dynamic_node(mount, dynamic_node_id));
                 self.create_component_node(mount, dynamic_node_id, component, parent, dom, to)
+            }
+            // An empty fragment is rendered as a single placeholder anchor so the
+            // surrounding template still has a stable insertion point for siblings.
+            Fragment(frag) if frag.is_empty() => {
+                if let Some(to) = to {
+                    self.create_placeholder(mount, dynamic_node_id, dom, to)
+                } else {
+                    0
+                }
             }
             Fragment(frag) => {
                 let parent = Some(self.reference_to_dynamic_node(mount, dynamic_node_id));

@@ -3,6 +3,7 @@ use crate::{
     ops::{
         Op, apply_to_model, clear_suspense_ready_tasks, read_model, release_suspense_ready_task,
         selected_registered_ready_suspense_key, with_model, without_suspense_ready_registration,
+        TemplateEdit,
     },
     vdom::App,
 };
@@ -20,10 +21,21 @@ pub(crate) struct Harness {
     vdom: VirtualDom,
     incremental: TargetedRendererOracle,
     pending_app_render: bool,
+    pending_fresh_compare: bool,
+    strict_renderer_errors: bool,
 }
 
 impl Harness {
     pub(crate) fn fresh() -> Self {
+        Self::fresh_with_strict_renderer_errors(cfg!(fuzzing))
+    }
+
+    #[cfg(test)]
+    fn fresh_strict() -> Self {
+        Self::fresh_with_strict_renderer_errors(true)
+    }
+
+    fn fresh_with_strict_renderer_errors(strict_renderer_errors: bool) -> Self {
         clear_suspense_ready_tasks();
         with_model(|model| *model = Model::initial());
         let mut vdom = VirtualDom::new(App);
@@ -34,6 +46,8 @@ impl Harness {
             vdom,
             incremental,
             pending_app_render: false,
+            pending_fresh_compare: false,
+            strict_renderer_errors,
         }
     }
 }
@@ -46,17 +60,30 @@ struct TargetedEventListenerTarget {
 
 struct TargetedRendererOracle {
     renderer: RendererOracle,
+    last_mutation: Option<String>,
+    recent_mutations: Vec<String>,
 }
 
 impl TargetedRendererOracle {
     fn new() -> Self {
         Self {
             renderer: RendererOracle::new(),
+            last_mutation: None,
+            recent_mutations: Vec::new(),
         }
     }
 
     fn current_renderer(&mut self) -> &mut RendererOracle {
         &mut self.renderer
+    }
+
+    fn record_mutation(&mut self, mutation: impl Into<String>) {
+        let mutation = mutation.into();
+        self.last_mutation = Some(mutation.clone());
+        self.recent_mutations.push(mutation);
+        if self.recent_mutations.len() > 16 {
+            self.recent_mutations.remove(0);
+        }
     }
 
     fn assert_stack_clean(&self) {
@@ -70,7 +97,19 @@ impl TargetedRendererOracle {
     }
 
     fn check_matches_vdom(&self, _vdom: &VirtualDom) -> Result<(), String> {
-        Ok(())
+        let mut fresh_vdom = VirtualDom::new(App);
+        let mut fresh = RendererOracle::new();
+        without_suspense_ready_registration(|| fresh_vdom.rebuild(&mut fresh));
+        fresh.check_stack_clean()?;
+        let fresh_snapshot = fresh.snapshot();
+        let incremental_snapshot = self.snapshot();
+        if incremental_snapshot == fresh_snapshot {
+            return Ok(());
+        }
+
+        Err(format!(
+            "incremental renderer snapshot does not match fresh render\nincremental:\n{incremental_snapshot:#?}\nfresh:\n{fresh_snapshot:#?}"
+        ))
     }
 
     fn snapshot(&self) -> TargetSnapshots {
@@ -91,39 +130,50 @@ impl TargetedRendererOracle {
 
 impl WriteMutations for TargetedRendererOracle {
     fn append_children(&mut self, id: ElementId, m: usize) {
+        self.record_mutation(format!("append_children(id: {id:?}, m: {m})"));
         self.current_renderer().append_children(id, m)
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        self.record_mutation(format!("assign_node_id(path: {path:?}, id: {id:?})"));
         self.current_renderer().assign_node_id(path, id)
     }
 
     fn create_placeholder(&mut self, id: ElementId) {
+        self.record_mutation(format!("create_placeholder(id: {id:?})"));
         self.current_renderer().create_placeholder(id)
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
+        self.record_mutation(format!("create_text_node(value: {value:?}, id: {id:?})"));
         self.current_renderer().create_text_node(value, id)
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.record_mutation(format!("load_template(index: {index}, id: {id:?})"));
         self.current_renderer().load_template(template, index, id)
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        self.record_mutation(format!("replace_node_with(id: {id:?}, m: {m})"));
         self.current_renderer().replace_node_with(id, m)
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+        self.record_mutation(format!(
+            "replace_placeholder_with_nodes(path: {path:?}, m: {m})"
+        ));
         self.current_renderer()
             .replace_placeholder_with_nodes(path, m)
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        self.record_mutation(format!("insert_nodes_after(id: {id:?}, m: {m})"));
         self.current_renderer().insert_nodes_after(id, m)
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        self.record_mutation(format!("insert_nodes_before(id: {id:?}, m: {m})"));
         self.current_renderer().insert_nodes_before(id, m)
     }
 
@@ -134,26 +184,32 @@ impl WriteMutations for TargetedRendererOracle {
         value: &AttributeValue,
         id: ElementId,
     ) {
+        self.record_mutation(format!("set_attribute(name: {name:?}, id: {id:?})"));
         self.current_renderer().set_attribute(name, ns, value, id)
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
+        self.record_mutation(format!("set_node_text(value: {value:?}, id: {id:?})"));
         self.current_renderer().set_node_text(value, id)
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.record_mutation(format!("create_event_listener(name: {name:?}, id: {id:?})"));
         self.current_renderer().create_event_listener(name, id)
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.record_mutation(format!("remove_event_listener(name: {name:?}, id: {id:?})"));
         self.current_renderer().remove_event_listener(name, id)
     }
 
     fn remove_node(&mut self, id: ElementId) {
+        self.record_mutation(format!("remove_node(id: {id:?})"));
         self.current_renderer().remove_node(id)
     }
 
     fn push_root(&mut self, id: ElementId) {
+        self.record_mutation(format!("push_root(id: {id:?})"));
         self.current_renderer().push_root(id)
     }
 }
@@ -342,6 +398,9 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             if op_requires_app_render(op) {
                 state.pending_app_render = true;
             }
+            if op_requires_fresh_compare(op) {
+                state.pending_fresh_compare = true;
+            }
             Ok(())
         }
     }
@@ -355,6 +414,16 @@ fn op_requires_app_render(op: &Op) -> bool {
             | Op::DynamicAttrs { .. }
             | Op::Fragment { .. }
             | Op::Suspense { .. }
+    )
+}
+
+fn op_requires_fresh_compare(op: &Op) -> bool {
+    matches!(
+        op,
+        Op::Template {
+            edit: TemplateEdit::Generated { .. },
+            ..
+        }
     )
 }
 
@@ -392,7 +461,17 @@ fn render_once(
     }
     let render_result = catch_unwind_silent(|| {
         state.vdom.render_immediate(&mut state.incremental);
-        state.incremental.check_stack_clean()?;
+        state.incremental.check_stack_clean().map_err(|err| {
+            let last_mutation = state
+                .incremental
+                .last_mutation
+                .as_deref()
+                .unwrap_or("<none>");
+            format!(
+                "{err} after {last_mutation}\nrecent mutations:\n  {}",
+                state.incremental.recent_mutations.join("\n  ")
+            )
+        })?;
         let snap = state.incremental.snapshot();
         if assert_matches_vdom {
             state.incremental.check_matches_vdom(&state.vdom)?;
@@ -402,30 +481,48 @@ fn render_once(
 
     match render_result {
         Ok(result) => result,
-        Err(payload) => Err(format!("panic in {label}: {}", panic_message(&payload),)),
+        Err(payload) => {
+            let last_mutation = state
+                .incremental
+                .last_mutation
+                .as_deref()
+                .unwrap_or("<none>");
+            Err(format!(
+                "panic in {label} after {last_mutation}: {}",
+                panic_message(&payload),
+            ))
+        }
     }
 }
 
 fn render_and_assert(state: &mut Harness) -> Result<(), String> {
-    let result = render_once(state, true, true, "incremental render");
+    let compare_fresh = state.pending_fresh_compare;
+    let result = render_once(state, true, compare_fresh, "incremental render");
     state.pending_app_render = false;
-    render_result_to_fuzz_failure(result)
+    state.pending_fresh_compare = false;
+    render_result_to_fuzz_failure(state, result)
 }
 
 fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result<(), String> {
-    let _ = compare_fresh;
-    let result = render_once(state, false, true, "natural incremental render");
-    render_result_to_fuzz_failure(result)
+    let result = render_once(
+        state,
+        false,
+        compare_fresh && state.pending_fresh_compare,
+        "natural incremental render",
+    );
+    if compare_fresh {
+        state.pending_fresh_compare = false;
+    }
+    render_result_to_fuzz_failure(state, result)
 }
 
-fn render_result_to_fuzz_failure(result: Result<TargetSnapshots, String>) -> Result<(), String> {
-    #[cfg(fuzzing)]
-    {
+fn render_result_to_fuzz_failure(
+    state: &Harness,
+    result: Result<TargetSnapshots, String>,
+) -> Result<(), String> {
+    if state.strict_renderer_errors {
         result.map(|_| ())
-    }
-
-    #[cfg(not(fuzzing))]
-    {
+    } else {
         let _ = result;
         Ok(())
     }
@@ -443,10 +540,18 @@ mod tests {
     };
 
     fn replay_ops(ops: impl IntoIterator<Item = Op>) {
-        let mut harness = Harness::fresh();
+        let mut harness = Harness::fresh_strict();
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
         }
+    }
+
+    #[test]
+    fn large_template_hash_stress_replay() {
+        replay_ops(iterator_scenario_ops(
+            IteratorScenario::LargeTemplateHashStress,
+            0,
+        ));
     }
 
     #[test]
@@ -642,7 +747,7 @@ mod tests {
             Op::Rerender,
         ];
 
-        let mut harness = Harness::fresh();
+        let mut harness = Harness::fresh_strict();
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
         }
@@ -1020,6 +1125,112 @@ mod tests {
         ];
 
         let mut harness = Harness::fresh();
+        for op in ops {
+            apply_op(&mut harness, &op).unwrap();
+        }
+    }
+
+    #[test]
+    fn nested_suspense_wake_with_prepended_root_does_not_use_cleared_mount_id() {
+        let ops = [
+            Op::Template {
+                vnode: 0,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Dynamic {
+                vnode: 0,
+                slot: 0,
+                kind: DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            },
+            Op::Rerender,
+            Op::Template {
+                vnode: 1,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Dynamic {
+                vnode: 1,
+                slot: 0,
+                kind: DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            },
+            Op::WakeSuspense { suspense: 0 },
+            Op::SuspenseWakeMutation {
+                suspense: 1,
+                mutation: WakeMutationSpec::PrependStaticRoot { tag: 0 },
+            },
+            Op::Rerender,
+            Op::WakeSuspense { suspense: 0 },
+        ];
+
+        let mut harness = Harness::fresh_strict();
+        for op in ops {
+            apply_op(&mut harness, &op).unwrap();
+        }
+    }
+
+    #[test]
+    fn removing_suspended_empty_fragment_does_not_reclaim_live_fallback_id() {
+        let ops = [
+            Op::Template {
+                vnode: 223,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Rerender,
+            Op::Dynamic {
+                vnode: 109,
+                slot: 103,
+                kind: DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            },
+            Op::Rerender,
+            Op::Rerender,
+            Op::WakeSuspenseNatural { suspense: 34 },
+            Op::Suspense {
+                suspense: 22,
+                mode: SuspenseMode::Pending,
+            },
+            Op::Rerender,
+            Op::Rerender,
+            Op::Fragment {
+                vnode: 0,
+                slot: 0,
+                edit: FragmentEdit::Children(ListEdit::Insert {
+                    index: 1,
+                    item: None,
+                }),
+            },
+            Op::Rerender,
+            Op::Fragment {
+                vnode: 0,
+                slot: 0,
+                edit: FragmentEdit::Children(ListEdit::Insert {
+                    index: 2,
+                    item: None,
+                }),
+            },
+            Op::Rerender,
+            Op::Dynamic {
+                vnode: 0,
+                slot: 0,
+                kind: DynamicKind::Empty,
+            },
+            Op::Rerender,
+        ];
+
+        let mut harness = Harness::fresh_strict();
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
         }

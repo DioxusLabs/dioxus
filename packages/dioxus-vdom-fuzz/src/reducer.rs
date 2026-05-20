@@ -741,6 +741,42 @@ fn simplified_template_edits(edit: &TemplateEdit) -> Vec<TemplateEdit> {
                 );
             }
         }
+        TemplateEdit::Generated {
+            seed,
+            dynamic_nodes,
+            dynamic_attrs,
+        } => {
+            for seed in simpler_u64_values(*seed) {
+                push_unique(
+                    &mut out,
+                    TemplateEdit::Generated {
+                        seed,
+                        dynamic_nodes: *dynamic_nodes,
+                        dynamic_attrs: *dynamic_attrs,
+                    },
+                );
+            }
+            for dynamic_nodes in simpler_u16_values(*dynamic_nodes) {
+                push_unique(
+                    &mut out,
+                    TemplateEdit::Generated {
+                        seed: *seed,
+                        dynamic_nodes,
+                        dynamic_attrs: *dynamic_attrs,
+                    },
+                );
+            }
+            for dynamic_attrs in simpler_u16_values(*dynamic_attrs) {
+                push_unique(
+                    &mut out,
+                    TemplateEdit::Generated {
+                        seed: *seed,
+                        dynamic_nodes: *dynamic_nodes,
+                        dynamic_attrs,
+                    },
+                );
+            }
+        }
     }
     out
 }
@@ -1086,6 +1122,38 @@ fn simpler_u8_values(value: u8) -> Vec<u8> {
         value / 2,
         value.saturating_sub(1),
     ] {
+        if candidate < value {
+            push_unique(&mut out, candidate);
+        }
+    }
+    out
+}
+
+fn simpler_u16_values(value: u16) -> Vec<u16> {
+    let mut out = Vec::new();
+    for candidate in [
+        0,
+        1,
+        2,
+        8,
+        16,
+        64,
+        128,
+        255,
+        256,
+        value / 2,
+        value.saturating_sub(1),
+    ] {
+        if candidate < value {
+            push_unique(&mut out, candidate);
+        }
+    }
+    out
+}
+
+fn simpler_u64_values(value: u64) -> Vec<u64> {
+    let mut out = Vec::new();
+    for candidate in [0, 1, value & 0xff, value / 2, value.saturating_sub(1)] {
         if candidate < value {
             push_unique(&mut out, candidate);
         }

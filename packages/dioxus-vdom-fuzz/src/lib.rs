@@ -53,6 +53,31 @@ impl FuzzCase {
     pub fn is_empty(&self) -> bool {
         self.ops.is_empty()
     }
+
+    /// Build a copy of this case with the op at `index` removed.
+    pub fn without_op(&self, index: usize) -> Self {
+        let mut ops = self.ops.clone();
+        if index < ops.len() {
+            ops.remove(index);
+        }
+        Self::new(ops)
+    }
+
+    /// Build a copy of this case truncated to the first `len` ops.
+    pub fn truncated(&self, len: usize) -> Self {
+        let mut ops = self.ops.clone();
+        ops.truncate(len);
+        Self::new(ops)
+    }
+
+    /// Build a copy of this case with `start..end` removed.
+    pub fn without_range(&self, start: usize, end: usize) -> Self {
+        let end = end.min(self.ops.len());
+        let start = start.min(end);
+        let mut ops = self.ops.clone();
+        ops.drain(start..end);
+        Self::new(ops)
+    }
 }
 
 impl Default for FuzzCase {

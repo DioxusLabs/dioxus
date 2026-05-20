@@ -125,3 +125,36 @@ fn anchors() {
         )
         .run();
 }
+
+#[test]
+fn empty_fragment_root_via_direct_vnode_api_is_diffable() {
+    // Constructing `VNode::new(..)` with `DynamicNode::Fragment(Vec::new())` bypasses
+    // the rsx macro's `IntoDynNode for FromNodeIterator` normalization. Without the
+    // fix in `VNode::new`, the diff path indexes `new[0].key` on the empty fragment
+    // and panics with "index out of bounds: the len is 0 but the index is 0" on the
+    // second rerender.
+    use dioxus_core::{DynamicNode, ScopeId, Template, TemplateNode, VNode, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+
+    fn app() -> Element {
+        let template = Template::new(
+            &[TemplateNode::Dynamic { id: 0 }],
+            &[&[0u8] as &[u8]],
+            &[],
+        );
+        Ok(VNode::new(
+            None,
+            template,
+            Box::new([DynamicNode::Fragment(Vec::new())]),
+            Vec::<Box<[dioxus_core::Attribute]>>::new().into_boxed_slice(),
+        ))
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    vdom.rebuild(&mut oracle);
+    vdom.mark_dirty(ScopeId::APP);
+    vdom.render_immediate(&mut oracle);
+    vdom.mark_dirty(ScopeId::APP);
+    vdom.render_immediate(&mut oracle);
+}

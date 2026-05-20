@@ -7,6 +7,8 @@ pub(crate) const MAX_TEMPLATE_ATTRS: usize = 12;
 pub(crate) const MAX_DYNAMIC_ATTRS: usize = 8;
 pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 8;
 pub(crate) const MAX_MODEL_COST: u64 = 256;
+pub(crate) const MAX_GENERATED_TEMPLATE_DYNAMICS: usize = 512;
+pub(crate) const MAX_GENERATED_TEMPLATE_ATTRS: usize = 512;
 
 // ---------- Spec model ----------------------------------------------------------------------
 
@@ -199,6 +201,22 @@ pub(crate) struct TemplateSpec {
 }
 
 impl TemplateSpec {
+    pub(crate) fn generated(seed: u64, dynamic_nodes: u16, dynamic_attrs: u16) -> Self {
+        let dynamic_nodes = 1 + dynamic_nodes as usize % MAX_GENERATED_TEMPLATE_DYNAMICS;
+        let dynamic_attrs =
+            dynamic_attrs as usize % (MAX_GENERATED_TEMPLATE_ATTRS.saturating_add(1));
+        let mut rng = TemplateRng::new(seed >> 8);
+
+        Self {
+            roots: vec![TemplateNodeSpec::Element {
+                tag: seed as u8,
+                namespace: rng.next_namespace(),
+                attrs: generated_attrs(&mut rng, dynamic_attrs),
+                children: generated_dynamic_tree(&mut rng, dynamic_nodes),
+            }],
+        }
+    }
+
     pub(crate) fn dynamic_count(&self) -> usize {
         self.roots.iter().map(TemplateNodeSpec::dynamic_count).sum()
     }
@@ -238,6 +256,78 @@ impl TemplateSpec {
     pub(crate) fn element_mut(&mut self, path: &[usize]) -> Option<&mut TemplateNodeSpec> {
         self.node_mut(path)
             .filter(|node| matches!(node, TemplateNodeSpec::Element { .. }))
+    }
+}
+
+fn generated_attrs(rng: &mut TemplateRng, dynamic_attrs: usize) -> Vec<TemplateAttrSpec> {
+    let mut attrs = Vec::with_capacity(dynamic_attrs.saturating_add(8));
+    for index in 0..dynamic_attrs {
+        if index % 17 == 0 {
+            attrs.push(TemplateAttrSpec::Static {
+                name: rng.next_u8(),
+                value: rng.next_u8(),
+                namespace: rng.next_namespace(),
+            });
+        }
+        attrs.push(TemplateAttrSpec::Dynamic);
+    }
+    attrs
+}
+
+fn generated_dynamic_tree(rng: &mut TemplateRng, dynamic_nodes: usize) -> Vec<TemplateNodeSpec> {
+    const FANOUT: usize = MAX_CHILDREN;
+
+    if dynamic_nodes <= FANOUT {
+        return (0..dynamic_nodes)
+            .map(|index| {
+                if index % 7 == 0 {
+                    TemplateNodeSpec::Element {
+                        tag: rng.next_u8(),
+                        namespace: rng.next_namespace(),
+                        attrs: Vec::new(),
+                        children: vec![TemplateNodeSpec::Dynamic],
+                    }
+                } else {
+                    TemplateNodeSpec::Dynamic
+                }
+            })
+            .collect();
+    }
+
+    let child_count = FANOUT;
+    let base = dynamic_nodes / child_count;
+    let remainder = dynamic_nodes % child_count;
+    (0..child_count)
+        .map(|index| {
+            let child_dynamic_nodes = base + usize::from(index < remainder);
+            TemplateNodeSpec::Element {
+                tag: rng.next_u8(),
+                namespace: rng.next_namespace(),
+                attrs: generated_attrs(rng, usize::from(index % 5 == 0)),
+                children: generated_dynamic_tree(rng, child_dynamic_nodes),
+            }
+        })
+        .collect()
+}
+
+struct TemplateRng(u64);
+
+impl TemplateRng {
+    fn new(seed: u64) -> Self {
+        Self(seed ^ 0x9E37_79B9_7F4A_7C15)
+    }
+
+    fn next_u8(&mut self) -> u8 {
+        let mut x = self.0;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.0 = x;
+        (x.wrapping_mul(0x2545_F491_4F6C_DD1D) >> 56) as u8
+    }
+
+    fn next_namespace(&mut self) -> Option<u8> {
+        (self.next_u8() % 4 == 0).then(|| self.next_u8())
     }
 }
 

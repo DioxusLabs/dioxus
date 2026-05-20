@@ -27,7 +27,7 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
     let mut case = decode_case(&data[..size]).unwrap_or_else(FuzzCase::seed);
     let minimizing = cargo_fuzz_minimizing();
 
-    if minimizing {
+    if cargo_fuzz_semantic_reduction_enabled() {
         if let Some(reduced) = cached_semantic_reduction(&case, &data[..size], max_size) {
             data[..reduced.len()].copy_from_slice(&reduced);
             return reduced.len();
@@ -48,15 +48,39 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
 
 fn cargo_fuzz_minimizing() -> bool {
     static MINIMIZING: OnceLock<bool> = OnceLock::new();
-    *MINIMIZING.get_or_init(|| {
-        std::env::args().any(|arg| {
-            arg == "-minimize_crash=1"
-                || arg == "-minimize_crash"
-                || arg == "--minimize_crash=1"
-                || arg == "-minimize_crash_internal_step=1"
-                || arg == "--minimize_crash_internal_step=1"
-        })
+    *MINIMIZING.get_or_init(|| std::env::args().any(|arg| is_minimize_crash_arg(&arg)))
+}
+
+fn cargo_fuzz_semantic_reduction_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        let mut minimizing = false;
+        for arg in std::env::args() {
+            if is_minimize_crash_internal_step_arg(&arg) {
+                return false;
+            }
+            minimizing |= is_minimize_crash_arg(&arg);
+        }
+        minimizing
     })
+}
+
+fn is_minimize_crash_arg(arg: &str) -> bool {
+    matches!(
+        arg,
+        "-minimize_crash=1"
+            | "-minimize_crash"
+            | "--minimize_crash=1"
+            | "-minimize_crash_internal_step=1"
+            | "--minimize_crash_internal_step=1"
+    )
+}
+
+fn is_minimize_crash_internal_step_arg(arg: &str) -> bool {
+    matches!(
+        arg,
+        "-minimize_crash_internal_step=1" | "--minimize_crash_internal_step=1"
+    )
 }
 
 fn cached_semantic_reduction(

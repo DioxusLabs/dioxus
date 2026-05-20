@@ -25,10 +25,11 @@ pub(crate) enum IteratorScenario {
     KeyedMoveFirstToEnd,
     NestedDomlessMove,
     PortalRetarget,
+    LargeTemplateHashStress,
 }
 
 impl IteratorScenario {
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::BranchSweep,
         Self::UnkeyedAppend,
         Self::UnkeyedRemove,
@@ -41,6 +42,7 @@ impl IteratorScenario {
         Self::KeyedMoveFirstToEnd,
         Self::NestedDomlessMove,
         Self::PortalRetarget,
+        Self::LargeTemplateHashStress,
     ];
 }
 
@@ -114,6 +116,7 @@ pub(crate) fn iterator_scenario_ops(scenario: IteratorScenario, key_base: u8) ->
         }
         IteratorScenario::NestedDomlessMove => nested_domless_move_scenario(),
         IteratorScenario::PortalRetarget => portal_retarget_scenario(),
+        IteratorScenario::LargeTemplateHashStress => large_template_hash_stress_scenario(),
     }
 }
 
@@ -312,6 +315,23 @@ fn portal_retarget_scenario() -> Vec<Op> {
     ]
 }
 
+fn large_template_hash_stress_scenario() -> Vec<Op> {
+    let mut ops = Vec::new();
+    for index in 0..12 {
+        let shape = 0x00D1_0A00_0000_0000u64 ^ (index / 2);
+        ops.push(Op::Template {
+            vnode: 0,
+            edit: TemplateEdit::Generated {
+                seed: (shape << 8) | (index as u64 + 1),
+                dynamic_nodes: 257 + (index / 2) as u16 * 19,
+                dynamic_attrs: 257 + (index / 2) as u16 * 13,
+            },
+        });
+        ops.push(Op::Rerender);
+    }
+    ops
+}
+
 // ---------- Model operations -----------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
@@ -368,6 +388,11 @@ pub(crate) enum TemplateEdit {
     Attrs {
         element: u8,
         edit: ListEdit<TemplateAttrSpec>,
+    },
+    Generated {
+        seed: u64,
+        dynamic_nodes: u16,
+        dynamic_attrs: u16,
     },
 }
 
@@ -683,6 +708,13 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
                     apply_template_attr_list_edit(attrs, edit);
                 }
             }
+        }
+        TemplateEdit::Generated {
+            seed,
+            dynamic_nodes,
+            dynamic_attrs,
+        } => {
+            vnode.template = TemplateSpec::generated(*seed, *dynamic_nodes, *dynamic_attrs);
         }
     }
 }

@@ -1082,13 +1082,7 @@ where
     I: IntoVNode,
 {
     fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
-        }
+        DynamicNode::Fragment(self.into_iter().map(|node| node.into_vnode()).collect())
     }
 }
 

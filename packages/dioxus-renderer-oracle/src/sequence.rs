@@ -1,6 +1,6 @@
 use crate::renderer::{EditSummary, OracleNodeId, RendererOracle};
 use crate::vdom_snapshot::vdom_snapshot;
-use dioxus_core::{consume_context, generation, Element, ScopeId, VNode, VirtualDom};
+use dioxus_core::{Element, ScopeId, VNode, VirtualDom, consume_context, generation};
 use std::rc::Rc;
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so
@@ -67,8 +67,8 @@ impl StepSource {
 /// One entry in a [`Sequence`]'s timeline. Steps and callbacks interleave in
 /// authoring order — there's no parallel-indexed second list.
 enum SequenceItem {
-    /// An expected DOM state. Doubles as the source content for that generation.
-    Step(StepSource),
+    /// A rendered DOM state and the expected tree it should match.
+    Step(Step),
     /// A side-effect that runs in authoring position. Useful for firing synthetic
     /// events, reading context, or making side-channel assertions on the
     /// `VirtualDom` between renders. Receives the live oracle so that event
@@ -76,6 +76,14 @@ enum SequenceItem {
     /// `oracle.element_id_by_attr(...)`) instead of by raw `ElementId(N)`
     /// literal.
     Then(Box<dyn FnMut(&mut VirtualDom, &RendererOracle)>),
+}
+
+enum Step {
+    Shared(StepSource),
+    Compared {
+        source: StepSource,
+        expected: StepSource,
+    },
 }
 
 /// An assertion registered against the [`EditSummary`] captured at a specific
@@ -119,7 +127,7 @@ impl Sequence {
     /// for handler-free, signal-free content.
     pub fn render(mut self, state: Element) -> Self {
         self.items
-            .push(SequenceItem::Step(StepSource::Static(state)));
+            .push(SequenceItem::Step(Step::Shared(StepSource::Static(state))));
         self
     }
 
@@ -128,7 +136,23 @@ impl Sequence {
     /// reads signals — those constructions require an active runtime.
     pub fn render_with(mut self, state: impl Fn() -> Element + 'static) -> Self {
         self.items
-            .push(SequenceItem::Step(StepSource::Lazy(Box::new(state))));
+            .push(SequenceItem::Step(Step::Shared(StepSource::Lazy(
+                Box::new(state),
+            ))));
+        self
+    }
+
+    /// Append a state from a runtime closure, but compare the final DOM against
+    /// an explicitly equivalent static `rsx!` block.
+    pub fn render_with_expected(
+        mut self,
+        source: impl Fn() -> Element + 'static,
+        expected: Element,
+    ) -> Self {
+        self.items.push(SequenceItem::Step(Step::Compared {
+            source: StepSource::Lazy(Box::new(source)),
+            expected: StepSource::Static(expected),
+        }));
         self
     }
 
@@ -207,22 +231,29 @@ impl Sequence {
     /// the DOM matches; each `Then` runs its side-effect at that point in
     /// the timeline.
     pub fn run(mut self) {
-        // Pull the steps into a shared list. Callbacks don't reach the source
+        // Pull the steps into shared lists. Callbacks don't reach the source
         // VDom — they manipulate it externally between renders.
-        let just_steps: Vec<Rc<StepSource>> = self
+        let step_pairs: Vec<(Rc<StepSource>, Rc<StepSource>)> = self
             .items
             .iter_mut()
             .filter_map(|item| match item {
-                SequenceItem::Step(src) => {
-                    // Replace the StepSource with a placeholder so we can move it
-                    // out (Element is Clone but Box<dyn Fn> isn't); we'll share
-                    // each step via Rc to allow both source and expected sides.
-                    let taken = std::mem::replace(src, StepSource::Static(VNode::empty()));
-                    Some(Rc::new(taken))
-                }
+                SequenceItem::Step(step) => Some(match step {
+                    Step::Shared(src) => {
+                        let taken = std::mem::replace(src, StepSource::Static(VNode::empty()));
+                        let shared = Rc::new(taken);
+                        (shared.clone(), shared)
+                    }
+                    Step::Compared { source, expected } => {
+                        let source = std::mem::replace(source, StepSource::Static(VNode::empty()));
+                        let expected =
+                            std::mem::replace(expected, StepSource::Static(VNode::empty()));
+                        (Rc::new(source), Rc::new(expected))
+                    }
+                }),
                 SequenceItem::Then(_) => None,
             })
             .collect();
+        let (just_steps, expected_steps): (Vec<_>, Vec<_>) = step_pairs.into_iter().unzip();
         assert!(!just_steps.is_empty(), "Sequence needs at least one step");
 
         let source_steps: Vec<StepSource> = just_steps
@@ -262,7 +293,7 @@ impl Sequence {
                         dom.mark_dirty(ScopeId::APP);
                         oracle.render(&mut dom);
                     }
-                    assert_step(&oracle, &just_steps[step_index]);
+                    assert_step(&oracle, &expected_steps[step_index]);
                     if let Some(attr) = identity_attr.as_deref() {
                         let current = oracle.identities_by_attr(attr);
                         if let Some(prev) = prev_identities.as_deref() {

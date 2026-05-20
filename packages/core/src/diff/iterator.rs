@@ -488,6 +488,13 @@ impl VNode {
             .enumerate()
             .map(
                 |(root_idx, _)| match self.get_dynamic_root_node_and_id(root_idx) {
+                    // An empty fragment is materialised as a single placeholder anchor,
+                    // identical to `DynamicNode::Placeholder` from the DOM's perspective.
+                    Some((idx, DynamicNode::Fragment(nodes))) if nodes.is_empty() => {
+                        let id = mount.mounted_dynamic_nodes[idx];
+                        to.push_root(crate::ElementId(id));
+                        1
+                    }
                     Some((_, DynamicNode::Fragment(nodes))) => {
                         let mut accumulated = 0;
                         for node in nodes {
