@@ -7,15 +7,7 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
-#[derive(
-    Debug,
-    Eq,
-    Clone,
-    Copy,
-    SerializeConst,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 #[const_serialize(crate = const_serialize_08)]
 pub struct BundledAsset {
     /// The absolute path of the asset
