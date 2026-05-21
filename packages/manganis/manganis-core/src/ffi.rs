@@ -1,6 +1,5 @@
 use crate::BundledAsset;
 use const_serialize::{ConstStr, SerializeConst};
-use const_serialize_08 as const_serialize;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 

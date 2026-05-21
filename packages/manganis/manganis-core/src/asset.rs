@@ -1,6 +1,5 @@
 use crate::AssetOptions;
-use const_serialize_07 as const_serialize;
-use const_serialize_08::{ConstStr, SerializeConst, deserialize_const};
+use const_serialize::{ConstStr, SerializeConst, deserialize_const};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
@@ -8,17 +7,7 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
-#[derive(
-    Debug,
-    Eq,
-    Clone,
-    Copy,
-    SerializeConst,
-    const_serialize::SerializeConst,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-#[const_serialize(crate = const_serialize_08)]
+#[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
@@ -121,8 +110,6 @@ pub struct Asset {
     /// the data for this is filled in by the CLI after the binary is built. Instead, use
     /// [`std::ptr::read_volatile`] to read the data.
     bundled: fn() -> &'static [u8],
-    /// The legacy version of [`Self::bundled`]. This is only used for backwards compatibility with older versions of the CLI
-    legacy: fn() -> &'static [u8],
 }
 
 impl Debug for Asset {
@@ -138,50 +125,31 @@ impl Asset {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset from the bundled form of the asset and the link section
-    pub const fn new(
-        bundled: extern "Rust" fn() -> &'static [u8],
-        legacy: extern "Rust" fn() -> &'static [u8],
-    ) -> Self {
-        Self { bundled, legacy }
+    pub const fn new(bundled: extern "Rust" fn() -> &'static [u8]) -> Self {
+        Self { bundled }
     }
 
     /// Get the bundled asset
     pub fn bundled(&self) -> BundledAsset {
         // Read the slice using volatile reads to prevent the compiler from optimizing
         // away the read at compile time
-        fn read_slice_volatile(bundled: &'static [u8]) -> Vec<u8> {
-            let ptr = bundled as *const [u8] as *const u8;
-            let len = bundled.len();
-            if ptr.is_null() {
-                panic!(
-                    "Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker"
-                );
-            }
-            let mut bytes = Vec::with_capacity(len);
-            for byte in 0..len {
-                // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
-                // since we are reading a u8 there are no alignment requirements
-                let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
-                bytes.push(byte);
-            }
-            bytes
-        }
-
         let bundled = (self.bundled)();
-        let bytes = read_slice_volatile(bundled);
-        let read = bytes.as_slice();
-        let asset = deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1;
-
-        // If the asset wasn't bundled with the newer format, try the legacy format
-        if asset.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
-            let bundled = (self.legacy)();
-            let bytes = read_slice_volatile(bundled);
-            let read = const_serialize_07::ConstReadBuffer::new(bytes.as_ref());
-
-            const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
-        } else {
-            asset
+        let ptr = bundled as *const [u8] as *const u8;
+        let len = bundled.len();
+        if ptr.is_null() {
+            panic!(
+                "Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker"
+            );
         }
+        let mut bytes = Vec::with_capacity(len);
+        for byte in 0..len {
+            // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
+            // since we are reading a u8 there are no alignment requirements
+            let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
+            bytes.push(byte);
+        }
+
+        deserialize_const!(BundledAsset, bytes.as_slice()).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
     }
 
     /// Return a canonicalized path to the asset
