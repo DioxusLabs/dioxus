@@ -258,17 +258,12 @@ impl VNode {
         to: Option<&mut impl WriteMutations>,
         destroy_component_state: bool,
     ) {
-        let write_mutations = to.is_some();
-        let mut to = to.filter(|_| write_mutations);
+        let mut to = to;
         let m = dom.create_children(to.as_deref_mut(), right, parent);
+        let replace_with = to.is_some().then_some(m);
 
         // Instead of *just* removing it, we can use the replace mutation
-        self.remove_node_inner(
-            dom,
-            to,
-            destroy_component_state,
-            write_mutations.then_some(m),
-        )
+        self.remove_node_inner(dom, to, destroy_component_state, replace_with)
     }
 
     /// Remove a node from the dom and potentially replace it with the top m nodes from the stack
