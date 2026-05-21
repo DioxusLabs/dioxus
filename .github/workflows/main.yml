@@ -33,7 +33,7 @@ jobs:
   # of truth that also works inside `strategy.matrix` (where `env.*` is not
   # available, but `needs.*.outputs` is).
   # ---------------------------------------------------------------------------
-  check-paths:
+  rust:
     runs-on: warp-ubuntu-latest-x64-4x
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
@@ -93,8 +93,8 @@ jobs:
   # Rust jobs — only run when relevant paths change
   # ---------------------------------------------------------------------------
   lint:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Lint | Clippy, fmt, schema, msrv"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -105,7 +105,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-msrv
@@ -135,8 +135,8 @@ jobs:
         run: cargo msrv --output-format json -- cargo check
 
   docs:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Docs | Build"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -145,10 +145,10 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - name: Install Rust ${{ needs.check-paths.outputs.rust_nightly }}
+      - name: Install Rust ${{ needs.rust.outputs.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
+          toolchain: ${{ needs.rust.outputs.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -162,8 +162,8 @@ jobs:
           RUSTDOCFLAGS: -Dwarnings --document-private-items
 
   test-docs:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Docs | Test"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -172,10 +172,10 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - name: Install Rust ${{ needs.check-paths.outputs.rust_nightly }}
+      - name: Install Rust ${{ needs.rust.outputs.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
+          toolchain: ${{ needs.rust.outputs.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -187,8 +187,8 @@ jobs:
           cargo test --doc --workspace --all-features
 
   bundle-linux-smoke:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Bundle | Linux"
     runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 45
@@ -202,7 +202,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -232,8 +232,8 @@ jobs:
           retention-days: 7
 
   bundle-macos-smoke:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Bundle | macOS"
     runs-on: warp-macos-latest-arm64-6x
     timeout-minutes: 45
@@ -241,7 +241,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -268,8 +268,8 @@ jobs:
           retention-days: 7
 
   windows-bundle-smoke:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Bundle | Windows"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 45
@@ -282,7 +282,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -327,8 +327,8 @@ jobs:
           retention-days: 7
 
   windows:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Playwright | Windows"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 60
@@ -344,7 +344,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -377,15 +377,15 @@ jobs:
 
 
   playwright:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Playwright | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ needs.check-paths.outputs.rust_stable }}" }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ needs.rust.outputs.rust_stable }}" }
           - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -437,8 +437,8 @@ jobs:
 
 
   test:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Test | Linux"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
@@ -451,7 +451,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -463,8 +463,8 @@ jobs:
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Test | Linux (Release)"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
@@ -477,7 +477,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -489,9 +489,9 @@ jobs:
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   matrix_test:
-    needs: check-paths
+    needs: rust
     runs-on: ${{ matrix.platform.os }}
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Cross | ${{ matrix.platform.target }}"
     env:
       RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
@@ -501,7 +501,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
+              toolchain: "${{ needs.rust.outputs.rust_stable }}",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -510,7 +510,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
+              toolchain: "${{ needs.rust.outputs.rust_stable }}",
               cross: false,
               command: "build",
               args: "--package dioxus-desktop",
@@ -519,7 +519,7 @@ jobs:
           - {
               target: aarch64-unknown-linux-gnu,
               os: warp-ubuntu-latest-arm64-4x,
-              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
+              toolchain: "${{ needs.rust.outputs.rust_stable }}",
               cross: false,
               command: "build",
               args: "--all --tests",
@@ -528,7 +528,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: warp-ubuntu-latest-x64-4x,
-              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
+              toolchain: "${{ needs.rust.outputs.rust_stable }}",
               cross: true,
               command: "build",
               args: "--package dioxus-desktop",
@@ -594,8 +594,8 @@ jobs:
   # Catches issues like https://github.com/DioxusLabs/dioxus/issues/5433 where
   # the code uses APIs not available in the declared minimum version.
   min-deps:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Check | Minimum dependency versions"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -606,23 +606,23 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
+          toolchain: ${{ needs.rust.outputs.rust_nightly }}
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
       - name: Generate minimal-version lockfile
-        run: cargo +${{ needs.check-paths.outputs.rust_nightly }} update -Zdirect-minimal-versions
+        run: cargo +${{ needs.rust.outputs.rust_nightly }} update -Zdirect-minimal-versions
       - name: Check workspace with minimum versions
-        run: cargo +${{ needs.check-paths.outputs.rust_stable }} check --workspace
+        run: cargo +${{ needs.rust.outputs.rust_stable }} check --workspace
 
   nix:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    needs: rust
+    if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
     name: "Nix | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     strategy:
