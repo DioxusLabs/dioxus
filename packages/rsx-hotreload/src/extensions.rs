@@ -27,6 +27,32 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
         .unwrap_or((intern(attribute_name_rust.as_str()), None))
 }
 
+fn sorted_template_attributes<Ctx: HotReloadingContext>(
+    attributes: &[Attribute],
+) -> Vec<dioxus_core::TemplateAttribute> {
+    let mut static_attrs = Vec::new();
+    let mut dynamic_attrs = Vec::new();
+
+    for attr in attributes {
+        let template_attr = to_template_attribute::<Ctx>(attr);
+        match &template_attr {
+            dioxus_core::TemplateAttribute::Static { name, .. } => {
+                static_attrs.push((*name, template_attr));
+            }
+            dioxus_core::TemplateAttribute::Dynamic { .. } => {
+                dynamic_attrs.push(template_attr);
+            }
+        }
+    }
+
+    static_attrs.sort_by(|(left, _), (right, _)| left.cmp(right));
+    static_attrs
+        .into_iter()
+        .map(|(_, attr)| attr)
+        .chain(dynamic_attrs)
+        .collect()
+}
+
 pub fn to_template_attribute<Ctx: HotReloadingContext>(
     attr: &Attribute,
 ) -> dioxus_core::TemplateAttribute {
@@ -76,12 +102,7 @@ pub fn to_template_node<Ctx: HotReloadingContext>(node: &BodyNode) -> dioxus_cor
                         .map(|c| to_template_node::<Ctx>(c))
                         .collect::<Vec<_>>(),
                 ),
-                attrs: intern(
-                    el.merged_attributes
-                        .iter()
-                        .map(|attr| to_template_attribute::<Ctx>(attr))
-                        .collect::<Vec<_>>(),
-                ),
+                attrs: intern(sorted_template_attributes::<Ctx>(&el.merged_attributes)),
             }
         }
         BodyNode::Text(text) => text_to_template_node(text),

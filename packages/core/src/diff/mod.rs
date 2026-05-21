@@ -17,6 +17,7 @@ use crate::{
     virtual_dom::VirtualDom,
 };
 
+mod attributes;
 mod component;
 mod iterator;
 mod node;

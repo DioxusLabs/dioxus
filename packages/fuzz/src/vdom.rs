@@ -758,25 +758,37 @@ fn intern_template_attr_shape_slice(
     CACHE
         .get_or_insert_with(&key, || {
             let mut next_attr = key.attr_base;
-            let attrs = key
-                .attrs
-                .iter()
-                .map(|attr| match attr {
+            let mut static_attrs = Vec::new();
+            let mut dynamic_attrs = Vec::new();
+            for attr in &key.attrs {
+                match attr {
                     TemplateAttrShape::Static {
                         name,
                         value,
                         namespace,
-                    } => TemplateAttribute::Static {
-                        name: attr_name(*name),
-                        value: attr_static_value(*value),
-                        namespace: namespace.map(namespace_name),
-                    },
+                    } => {
+                        let name = attr_name(*name);
+                        static_attrs.push((
+                            name,
+                            TemplateAttribute::Static {
+                                name,
+                                value: attr_static_value(*value),
+                                namespace: namespace.map(namespace_name),
+                            },
+                        ));
+                    }
                     TemplateAttrShape::Dynamic => {
                         let id = next_attr;
                         next_attr += 1;
-                        TemplateAttribute::Dynamic { id }
+                        dynamic_attrs.push(TemplateAttribute::Dynamic { id });
                     }
-                })
+                }
+            }
+            static_attrs.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let attrs = static_attrs
+                .into_iter()
+                .map(|(_, attr)| attr)
+                .chain(dynamic_attrs)
                 .collect::<Vec<_>>();
             TemplateAttrSliceEntry {
                 key: key.clone(),

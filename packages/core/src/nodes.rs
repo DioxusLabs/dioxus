@@ -548,6 +548,7 @@ pub enum TemplateNode {
         /// A list of possibly dynamic attributes for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
+        /// Static attributes must come first, sorted by name, followed by dynamic attributes in id order.
         #[cfg_attr(
             feature = "serialize",
             serde(deserialize_with = "deserialize_leaky", bound = "")

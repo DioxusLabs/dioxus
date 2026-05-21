@@ -35,6 +35,9 @@ fuzz_target!(|data: &[u8]| {
 
     let current_case = CurrentFuzzCase::new(case.clone());
     if let Err(failure) = run_case(&case) {
+        if coverage_ignore_failures() {
+            return;
+        }
         print_case_trace(&case, &failure);
         drop(current_case);
         panic!("{}", format_failure_report(&case, &failure));
@@ -177,6 +180,12 @@ fn panic_info_message(info: &PanicHookInfo<'_>) -> String {
 fn cargo_fuzz_minimizing() -> bool {
     static MINIMIZING: OnceLock<bool> = OnceLock::new();
     *MINIMIZING.get_or_init(|| std::env::args().any(|arg| is_minimize_crash_arg(&arg)))
+}
+
+fn coverage_ignore_failures() -> bool {
+    static IGNORE_FAILURES: OnceLock<bool> = OnceLock::new();
+    *IGNORE_FAILURES
+        .get_or_init(|| std::env::var_os("DIOXUS_VDOM_FUZZ_COVERAGE_IGNORE_FAILURES").is_some())
 }
 
 fn claim_semantic_reduction_attempt() -> bool {

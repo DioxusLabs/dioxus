@@ -23,30 +23,6 @@ fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
 
 type AttributeKey = (&'static str, Option<&'static str>);
 
-#[derive(Clone, Copy)]
-enum ResolvedAttribute<'a> {
-    Missing,
-    Static(&'static str),
-    Dynamic(&'a Attribute),
-}
-
-impl<'a> ResolvedAttribute<'a> {
-    fn is_listener(&self) -> bool {
-        matches!(
-            self,
-            ResolvedAttribute::Dynamic(attribute)
-                if matches!(attribute.value, AttributeValue::Listener(_))
-        )
-    }
-
-    fn volatile(&self) -> bool {
-        match self {
-            ResolvedAttribute::Dynamic(attribute) => attribute.volatile,
-            ResolvedAttribute::Static(_) | ResolvedAttribute::Missing => false,
-        }
-    }
-}
-
 impl VNode {
     pub(crate) fn diff_node(
         &self,
@@ -561,30 +537,22 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        let old = self.resolve_attribute(path, attr_group.clone(), key);
-        let new = new.resolve_attribute(path, attr_group, key);
-        self.diff_resolved_attribute(path, key, id, mount, old, new, dom, to);
+        let old = self.resolve_dynamic_attribute(attr_group.clone(), key);
+        let new = new.resolve_dynamic_attribute(attr_group, key);
+        self.diff_dynamic_attribute(path, key, id, mount, old, new, dom, to);
     }
 
-    fn resolve_attribute(
+    fn resolve_dynamic_attribute(
         &self,
-        path: &'static [u8],
         attr_group: std::ops::Range<usize>,
         key: AttributeKey,
-    ) -> ResolvedAttribute<'_> {
-        let mut resolved = self
-            .static_template_attribute_value(path, key)
-            .map(ResolvedAttribute::Static)
-            .unwrap_or(ResolvedAttribute::Missing);
+    ) -> Option<&Attribute> {
+        let mut resolved = None;
 
         for idx in attr_group {
             for attr in &self.dynamic_attrs[idx][..] {
                 if Self::attribute_key(attr) == key {
-                    resolved = if matches!(attr.value, AttributeValue::None) {
-                        ResolvedAttribute::Missing
-                    } else {
-                        ResolvedAttribute::Dynamic(attr)
-                    };
+                    resolved = Some(attr);
                 }
             }
         }
@@ -601,95 +569,123 @@ impl VNode {
             (AttributeValue::Any(left), AttributeValue::Any(right)) => {
                 !left.as_ref().any_cmp(right.as_ref())
             }
+            (AttributeValue::None, AttributeValue::None) => false,
+            (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
             _ => true,
         }
     }
 
-    fn diff_resolved_attribute(
+    fn diff_dynamic_attribute(
         &self,
         path: &'static [u8],
         key: AttributeKey,
         id: ElementId,
         mount: MountId,
-        old: ResolvedAttribute<'_>,
-        new: ResolvedAttribute<'_>,
+        old: Option<&Attribute>,
+        new: Option<&Attribute>,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        if old.is_listener() != new.is_listener() {
-            self.remove_resolved_attribute(key, old, id, to);
-            self.write_resolved_attribute(path, key, new, id, mount, dom, to);
+        let old_is_listener = Self::attribute_is_listener(old);
+        let new_is_listener = Self::attribute_is_listener(new);
+
+        if old_is_listener != new_is_listener {
+            self.remove_dynamic_attribute(old, id, to);
+            if let Some(new) = new {
+                self.write_attribute(path, new, id, mount, dom, to);
+            } else {
+                self.write_static_attribute_fallback(path, key, id, to);
+            }
             return;
         }
 
-        if new.is_listener() {
+        if new_is_listener {
             return;
         }
 
-        if old.volatile() || new.volatile() || Self::resolved_attribute_changed(old, new) {
-            match new {
-                ResolvedAttribute::Missing => self.remove_resolved_attribute(key, old, id, to),
-                _ => self.write_resolved_attribute(path, key, new, id, mount, dom, to),
+        if Self::attribute_volatile(old)
+            || Self::attribute_volatile(new)
+            || Self::dynamic_attribute_changed(old, new)
+        {
+            if let Some(new) = new {
+                self.write_attribute(path, new, id, mount, dom, to);
+            } else {
+                self.write_static_attribute_fallback_or_remove(path, key, id, to);
             }
         }
     }
 
-    fn resolved_attribute_changed(old: ResolvedAttribute<'_>, new: ResolvedAttribute<'_>) -> bool {
+    fn attribute_is_listener(attribute: Option<&Attribute>) -> bool {
+        matches!(
+            attribute,
+            Some(Attribute {
+                value: AttributeValue::Listener(_),
+                ..
+            })
+        )
+    }
+
+    fn attribute_volatile(attribute: Option<&Attribute>) -> bool {
+        attribute
+            .map(|attribute| attribute.volatile)
+            .unwrap_or(false)
+    }
+
+    fn dynamic_attribute_changed(old: Option<&Attribute>, new: Option<&Attribute>) -> bool {
         match (old, new) {
-            (ResolvedAttribute::Missing, ResolvedAttribute::Missing)
-            | (ResolvedAttribute::Static(_), ResolvedAttribute::Static(_)) => false,
-            (ResolvedAttribute::Missing, _) | (_, ResolvedAttribute::Missing) => true,
-            (ResolvedAttribute::Static(left), ResolvedAttribute::Dynamic(right)) => {
-                !matches!(&right.value, AttributeValue::Text(right) if left == right)
-            }
-            (ResolvedAttribute::Dynamic(left), ResolvedAttribute::Static(right)) => {
-                !matches!(&left.value, AttributeValue::Text(left) if left == right)
-            }
-            (ResolvedAttribute::Dynamic(left), ResolvedAttribute::Dynamic(right)) => {
-                Self::attribute_value_changed(left, right)
-            }
+            (None, None) => false,
+            (Some(left), Some(right)) => Self::attribute_value_changed(left, right),
+            (None, Some(_)) | (Some(_), None) => true,
         }
     }
 
-    fn remove_resolved_attribute(
+    fn remove_dynamic_attribute(
         &self,
-        key: AttributeKey,
-        attribute: ResolvedAttribute<'_>,
+        attribute: Option<&Attribute>,
         id: ElementId,
         to: &mut impl WriteMutations,
     ) {
         match attribute {
-            ResolvedAttribute::Missing => {}
-            ResolvedAttribute::Dynamic(attribute)
-                if matches!(attribute.value, AttributeValue::Listener(_)) =>
-            {
+            None => {}
+            Some(attribute) if matches!(attribute.value, AttributeValue::Listener(_)) => {
                 self.remove_event_listener(attribute, id, to);
             }
-            _ => {
-                to.set_attribute(key.0, key.1, &AttributeValue::None, id);
+            Some(attribute) => {
+                to.set_attribute(
+                    attribute.name,
+                    attribute.namespace,
+                    &AttributeValue::None,
+                    id,
+                );
             }
         }
     }
 
-    fn write_resolved_attribute(
+    fn write_static_attribute_fallback_or_remove(
         &self,
         path: &'static [u8],
         key: AttributeKey,
-        attribute: ResolvedAttribute<'_>,
         id: ElementId,
-        mount: MountId,
-        dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        match attribute {
-            ResolvedAttribute::Missing => self.remove_resolved_attribute(key, attribute, id, to),
-            ResolvedAttribute::Static(value) => {
-                let value = AttributeValue::Text(value.to_string());
-                to.set_attribute(key.0, key.1, &value, id);
-            }
-            ResolvedAttribute::Dynamic(attribute) => {
-                self.write_attribute(path, attribute, id, mount, dom, to);
-            }
+        if !self.write_static_attribute_fallback(path, key, id, to) {
+            to.set_attribute(key.0, key.1, &AttributeValue::None, id);
+        }
+    }
+
+    fn write_static_attribute_fallback(
+        &self,
+        path: &'static [u8],
+        key: AttributeKey,
+        id: ElementId,
+        to: &mut impl WriteMutations,
+    ) -> bool {
+        if let Some(value) = self.static_template_attribute_value(path, key) {
+            let value = AttributeValue::Text(value.to_string());
+            to.set_attribute(key.0, key.1, &value, id);
+            true
+        } else {
+            false
         }
     }
 
@@ -698,19 +694,40 @@ impl VNode {
         path: &'static [u8],
         key: AttributeKey,
     ) -> Option<&'static str> {
-        let mut value = None;
+        let attrs = self.template_node_at_path(path).element_attrs();
+        let index = attrs
+            .binary_search_by(|attr| match attr {
+                TemplateAttribute::Static { name, .. } => name.cmp(&key.0),
+                TemplateAttribute::Dynamic { .. } => std::cmp::Ordering::Greater,
+            })
+            .ok()?;
 
-        for attr in self.template_node_at_path(path).element_attrs().iter() {
-            if let TemplateAttribute::Static {
-                name,
-                value: static_value,
-                namespace,
-            } = attr
-                && key.0 == *name
-                && key.1 == *namespace
-            {
+        let mut value = None;
+        let mut idx = index;
+        while idx > 0 {
+            let Some(TemplateAttribute::Static { name, .. }) = attrs.get(idx - 1) else {
+                break;
+            };
+            if *name != key.0 {
+                break;
+            }
+
+            idx -= 1;
+        }
+
+        while let Some(TemplateAttribute::Static {
+            name,
+            value: static_value,
+            namespace,
+        }) = attrs.get(idx)
+        {
+            if *name != key.0 {
+                break;
+            }
+            if *namespace == key.1 {
                 value = Some(*static_value);
             }
+            idx += 1;
         }
 
         value
