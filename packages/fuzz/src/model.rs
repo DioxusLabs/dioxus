@@ -7,6 +7,7 @@ pub(crate) const MAX_TEMPLATE_ATTRS: usize = 12;
 pub(crate) const MAX_DYNAMIC_ATTRS: usize = 8;
 pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 8;
 pub(crate) const MAX_MODEL_COST: u64 = 256;
+pub(crate) const MAX_READY_WAKE_COUNT: u8 = 4;
 
 // ---------- Spec model ----------------------------------------------------------------------
 
@@ -70,8 +71,8 @@ impl Model {
         }
     }
 
-    pub(crate) fn resolve_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        self.root.resolve_ready_suspense(key);
+    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
+        self.root.wake_ready_suspense(key);
     }
 
     pub(crate) fn wake_mutation_for_ready_key(&self, key: SuspenseReadyKey) -> WakeMutationSpec {
@@ -180,9 +181,9 @@ impl VNodeSpec {
         }
     }
 
-    pub(crate) fn resolve_ready_suspense(&mut self, key: SuspenseReadyKey) {
+    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
         for dynamic in &mut self.dynamics {
-            dynamic.resolve_ready_suspense(key);
+            dynamic.wake_ready_suspense(key);
         }
     }
 
@@ -416,6 +417,7 @@ pub(crate) struct ComponentSpec {
 pub(crate) struct SuspenseSpec {
     pub(crate) id: u64,
     pub(crate) ready_generation: u64,
+    pub(crate) ready_wakes: u8,
     pub(crate) mode: SuspenseMode,
     pub(crate) wake_mutation: WakeMutationSpec,
     pub(crate) wake_applied: bool,
@@ -436,6 +438,7 @@ impl SuspenseSpec {
         Self {
             id,
             ready_generation: 0,
+            ready_wakes: 0,
             mode,
             wake_mutation: WakeMutationSpec::None,
             wake_applied: false,
@@ -451,8 +454,9 @@ impl SuspenseSpec {
     }
 
     pub(crate) fn set_mode(&mut self, mode: SuspenseMode) {
-        if self.mode != SuspenseMode::Ready && mode == SuspenseMode::Ready {
+        if mode.is_ready() && self.mode != mode {
             self.ready_generation += 1;
+            self.ready_wakes = 0;
         }
         self.mode = mode;
         self.wake_applied = false;
@@ -463,9 +467,15 @@ impl SuspenseSpec {
         self.wake_applied = false;
     }
 
-    pub(crate) fn resolve_ready(&mut self) {
-        self.mode = SuspenseMode::Resolved;
-        self.wake_applied = self.wake_mutation != WakeMutationSpec::None;
+    pub(crate) fn wake_ready(&mut self) {
+        if !self.mode.is_ready() {
+            return;
+        }
+        self.ready_wakes = self.ready_wakes.saturating_add(1);
+        if self.ready_wakes >= self.mode.required_ready_wakes().unwrap_or(1) {
+            self.mode = SuspenseMode::Resolved;
+            self.wake_applied = self.wake_mutation != WakeMutationSpec::None;
+        }
     }
 }
 
@@ -600,7 +610,7 @@ impl DynamicSpec {
                 component.child.collect_ready_suspense_keys(out)
             }
             Self::Suspense(spec) => {
-                if spec.mode == SuspenseMode::Ready {
+                if spec.mode.is_ready() {
                     out.push(spec.ready_key());
                 }
                 spec.child.collect_ready_suspense_keys(out);
@@ -608,22 +618,22 @@ impl DynamicSpec {
         }
     }
 
-    pub(crate) fn resolve_ready_suspense(&mut self, key: SuspenseReadyKey) {
+    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
         match self {
             Self::Empty | Self::Text(_) | Self::Placeholder => {}
             Self::Fragment(nodes) => {
                 for node in nodes {
-                    node.resolve_ready_suspense(key);
+                    node.wake_ready_suspense(key);
                 }
             }
             Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.resolve_ready_suspense(key)
+                component.child.wake_ready_suspense(key)
             }
             Self::Suspense(spec) => {
-                if spec.mode == SuspenseMode::Ready && spec.ready_key() == key {
-                    spec.resolve_ready();
+                if spec.mode.is_ready() && spec.ready_key() == key {
+                    spec.wake_ready();
                 }
-                spec.child.resolve_ready_suspense(key);
+                spec.child.wake_ready_suspense(key);
             }
         }
     }
@@ -666,7 +676,20 @@ pub(crate) enum DynamicKind {
 pub(crate) enum SuspenseMode {
     Resolved,
     Pending,
-    Ready,
+    Ready { wakes: u8 },
+}
+
+impl SuspenseMode {
+    pub(crate) fn is_ready(self) -> bool {
+        matches!(self, Self::Ready { .. })
+    }
+
+    pub(crate) fn required_ready_wakes(self) -> Option<u8> {
+        let Self::Ready { wakes } = self else {
+            return None;
+        };
+        Some((wakes % MAX_READY_WAKE_COUNT) + 1)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]

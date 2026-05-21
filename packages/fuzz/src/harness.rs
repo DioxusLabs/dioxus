@@ -2,9 +2,9 @@ use crate::{
     lifecycle::{self, LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
     model::*,
     ops::{
-        DynamicEdit, ModelEdit, Op, VNodeEdit, WakeMode, apply_to_model,
-        clear_suspense_ready_tasks, read_model, release_suspense_ready_task,
-        selected_registered_ready_suspense_key, with_model, without_suspense_ready_registration,
+        ModelEdit, Op, apply_to_model, clear_suspense_ready_tasks, read_model,
+        release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
+        without_suspense_ready_registration,
     },
     vdom::App,
 };
@@ -21,8 +21,6 @@ type TargetSnapshots = Vec<SnapshotNode>;
 pub(crate) struct Harness {
     vdom: VirtualDom,
     incremental: TargetedRendererOracle,
-    pending_app_render: bool,
-    pending_fresh_compare: bool,
     strict_renderer_errors: bool,
     strict_lifecycle_errors: bool,
 }
@@ -56,8 +54,6 @@ impl Harness {
         let state = Self {
             vdom,
             incremental,
-            pending_app_render: false,
-            pending_fresh_compare: false,
             strict_renderer_errors,
             strict_lifecycle_errors,
         };
@@ -383,7 +379,7 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
     std::panic::set_hook(Box::new(|_| {}));
 
     println!();
-    println!("dioxus-vdom-fuzz failure");
+    println!("fuzz failure");
     println!("decoded operations: {}", ops.len());
     println!("reported failing step: {failing_step}");
     println!("summary: {}", first_line(minimized_error));
@@ -456,37 +452,19 @@ pub(crate) fn apply_step(state: &mut Harness, op: &Op) -> Result<(), String> {
 fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
     match op {
         Op::Rerender => render_and_assert(state),
-        Op::WakeSuspense {
-            suspense,
-            mode: WakeMode::Harness,
-        } => {
-            let Some(key) = read_model().selected_ready_suspense_key(*suspense) else {
-                return Ok(());
-            };
-            apply_to_model(op);
-            update_pending_fresh_compare(state, op);
-            release_suspense_ready_task(key);
-            render_and_assert(state)
-        }
-        Op::WakeSuspense {
-            suspense,
-            mode: WakeMode::Natural,
-        } => {
+        Op::WakeSuspense { suspense } => {
             let Some(key) = selected_registered_ready_suspense_key(*suspense) else {
                 return Ok(());
             };
-            with_model(|model| model.resolve_ready_suspense(key));
-            update_pending_fresh_compare(state, op);
             release_suspense_ready_task(key);
-            let compare_fresh = !state.pending_app_render;
-            render_natural_and_assert(state, compare_fresh)
+            with_model(|model| model.wake_ready_suspense(key));
+            render_wake_and_assert(state)
         }
         _ => {
             apply_to_model(op);
             if op_requires_app_render(op) {
-                state.pending_app_render = true;
+                state.vdom.mark_dirty(ScopeId::APP);
             }
-            update_pending_fresh_compare(state, op);
             Ok(())
         }
     }
@@ -496,41 +474,6 @@ fn op_requires_app_render(op: &Op) -> bool {
     matches!(
         op,
         Op::Mutate(ModelEdit::VNode { .. }) | Op::Mutate(ModelEdit::Suspense { .. })
-    )
-}
-
-fn update_pending_fresh_compare(state: &mut Harness, op: &Op) {
-    if op_blocks_fresh_compare(op) {
-        state.pending_fresh_compare = false;
-    } else if op_requires_fresh_compare(op) {
-        state.pending_fresh_compare = true;
-    }
-}
-
-fn op_requires_fresh_compare(op: &Op) -> bool {
-    match op {
-        Op::Mutate(ModelEdit::VNode { edit, .. }) => !vnode_edit_blocks_fresh_compare(edit),
-        Op::Rerender | Op::WakeSuspense { .. } | Op::Mutate(ModelEdit::Suspense { .. }) => false,
-    }
-}
-
-fn op_blocks_fresh_compare(op: &Op) -> bool {
-    // Suspense transitions can legitimately leave the incremental renderer on
-    // fallback output while a fresh rebuild observes the updated model.
-    match op {
-        Op::WakeSuspense { .. } | Op::Mutate(ModelEdit::Suspense { .. }) => true,
-        Op::Mutate(ModelEdit::VNode { edit, .. }) => vnode_edit_blocks_fresh_compare(edit),
-        Op::Rerender => false,
-    }
-}
-
-fn vnode_edit_blocks_fresh_compare(edit: &VNodeEdit) -> bool {
-    matches!(
-        edit,
-        VNodeEdit::DynamicSlot {
-            edit: DynamicEdit::SetKind(DynamicKind::Suspense { .. }),
-            ..
-        }
     )
 }
 
@@ -589,29 +532,14 @@ fn render_once(
 }
 
 fn render_and_assert(state: &mut Harness) -> Result<(), String> {
-    let compare_fresh = state.pending_fresh_compare;
     let compare_lifecycle = state.strict_lifecycle_errors;
-    let result = render_once(state, true, compare_fresh, compare_lifecycle);
-    state.pending_app_render = false;
-    state.pending_fresh_compare = false;
+    let result = render_once(state, true, true, compare_lifecycle);
     render_result_to_fuzz_failure(state, result)
 }
 
-fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result<(), String> {
-    // Natural suspense wakes can observe an intermediate render pass where a
-    // dirty boundary is processed before the released task is polled. The
-    // renderer output must still match, but lifecycle state may not settle
-    // until a later queued pass.
-    let compare_lifecycle = false;
-    let result = render_once(
-        state,
-        false,
-        compare_fresh && state.pending_fresh_compare,
-        compare_lifecycle,
-    );
-    if compare_fresh {
-        state.pending_fresh_compare = false;
-    }
+fn render_wake_and_assert(state: &mut Harness) -> Result<(), String> {
+    let compare_lifecycle = state.strict_lifecycle_errors;
+    let result = render_once(state, false, true, compare_lifecycle);
     render_result_to_fuzz_failure(state, result)
 }
 
@@ -911,6 +839,14 @@ mod tests {
         }
     }
 
+    fn first_suspense_mode_and_wakes() -> Option<(SuspenseMode, u8)> {
+        let model = read_model();
+        let DynamicSpec::Suspense(spec) = model.root.dynamics.first()? else {
+            return None;
+        };
+        Some((spec.mode, spec.ready_wakes))
+    }
+
     fn set_pending_suspense_model() {
         with_model(|model| *model = Model::initial());
         apply_to_model(&Op::template(
@@ -930,7 +866,7 @@ mod tests {
     }
 
     #[test]
-    fn vnode_mutation_arms_fresh_render_compare() {
+    fn vnode_mutation_still_compares_fresh_render() {
         let mut harness = Harness::fresh_strict();
 
         apply_op(
@@ -945,17 +881,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(harness.pending_app_render);
-        assert!(harness.pending_fresh_compare);
-
         apply_op(&mut harness, &Op::Rerender).unwrap();
-
-        assert!(!harness.pending_app_render);
-        assert!(!harness.pending_fresh_compare);
     }
 
     #[test]
-    fn suspense_slot_mutation_disarms_fresh_render_compare() {
+    fn suspense_slot_mutation_still_compares_fresh_render() {
         let mut harness = Harness::fresh_strict();
 
         apply_op(
@@ -975,14 +905,56 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
         )
         .unwrap();
 
-        assert!(harness.pending_app_render);
-        assert!(!harness.pending_fresh_compare);
+        apply_op(&mut harness, &Op::Rerender).unwrap();
+    }
+
+    #[test]
+    fn ready_suspense_resolves_after_configured_real_wakes() {
+        let mut harness = Harness::fresh_strict();
+
+        apply_op(
+            &mut harness,
+            &Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+        )
+        .unwrap();
+        apply_op(
+            &mut harness,
+            &Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready { wakes: 1 },
+                },
+            ),
+        )
+        .unwrap();
+        apply_op(&mut harness, &Op::Rerender).unwrap();
+
+        apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
+        assert!(read_model().selected_ready_suspense_key(0).is_some());
+        assert_eq!(
+            first_suspense_mode_and_wakes(),
+            Some((SuspenseMode::Ready { wakes: 1 }, 1))
+        );
+
+        apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
+        assert!(read_model().selected_ready_suspense_key(0).is_none());
+        assert_eq!(
+            first_suspense_mode_and_wakes(),
+            Some((SuspenseMode::Resolved, 2))
+        );
     }
 
     #[test]
@@ -999,7 +971,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1080,7 +1052,7 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1256,7 +1228,7 @@ mod tests {
                 195,
                 186,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1281,7 +1253,7 @@ mod tests {
             Op::Rerender,
             Op::wake_suspense(4),
             Op::Rerender,
-            Op::wake_suspense_natural(210),
+            Op::wake_suspense(210),
             Op::Rerender,
             Op::suspense(0, SuspenseMode::Pending),
             Op::Rerender,
@@ -1327,9 +1299,9 @@ mod tests {
                 },
             ),
             Op::wake_suspense(130),
-            Op::wake_suspense_natural(167),
+            Op::wake_suspense(167),
             Op::Rerender,
-            Op::suspense(245, SuspenseMode::Ready),
+            Op::suspense(245, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::suspense(0, SuspenseMode::Pending),
             Op::Rerender,
@@ -1388,7 +1360,7 @@ mod tests {
             Op::dynamic(3, 0, DynamicKind::ComponentB),
             Op::suspense(124, SuspenseMode::Resolved),
             Op::Rerender,
-            Op::suspense(23, SuspenseMode::Ready),
+            Op::suspense(23, SuspenseMode::Ready { wakes: 0 }),
             Op::wake_suspense(50),
         ]);
     }
@@ -1428,7 +1400,7 @@ mod tests {
             ),
             Op::dynamic(1, 0, DynamicKind::ComponentB),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready),
+            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::suspense_wake_mutation(0, WakeMutationSpec::PrependStaticRoot { tag: 127 }),
             Op::Rerender,
@@ -1452,7 +1424,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -1469,10 +1441,10 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
-            Op::suspense(0, SuspenseMode::Ready),
+            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
         ]);
     }
@@ -1491,7 +1463,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -1505,7 +1477,7 @@ mod tests {
                 15,
                 170,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -1519,14 +1491,14 @@ mod tests {
             Op::suspense(83, SuspenseMode::Pending),
             Op::wake_suspense(0),
             Op::Rerender,
-            Op::suspense(204, SuspenseMode::Ready),
+            Op::suspense(204, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::wake_suspense(2),
-            Op::suspense(31, SuspenseMode::Ready),
+            Op::suspense(31, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::Rerender,
-            Op::suspense(2, SuspenseMode::Ready),
-            Op::wake_suspense_natural(0),
+            Op::suspense(2, SuspenseMode::Ready { wakes: 0 }),
+            Op::wake_suspense(0),
             Op::Rerender,
             Op::wake_suspense(50),
         ]);
@@ -1546,7 +1518,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -1559,13 +1531,13 @@ mod tests {
             Op::Rerender,
             Op::dynamic(1, 0, DynamicKind::ComponentB),
             Op::Rerender,
-            Op::wake_suspense_natural(164),
+            Op::wake_suspense(164),
             Op::dynamic(0, 0, DynamicKind::ComponentB),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1584,12 +1556,12 @@ mod tests {
             ),
             Op::Rerender,
             Op::Rerender,
-            Op::wake_suspense_natural(104),
+            Op::wake_suspense(104),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -1601,9 +1573,9 @@ mod tests {
             ),
             Op::wake_suspense(94),
             Op::Rerender,
-            Op::suspense(50, SuspenseMode::Ready),
+            Op::suspense(50, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
-            Op::wake_suspense_natural(120),
+            Op::wake_suspense(120),
             Op::template(
                 3,
                 TemplateEdit::Roots {
@@ -1803,7 +1775,7 @@ mod tests {
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1856,7 +1828,7 @@ mod tests {
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -1921,11 +1893,11 @@ mod tests {
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready),
+            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::template(
                 0,
@@ -1959,7 +1931,7 @@ mod tests {
     }
 
     #[test]
-    fn natural_wake_unmounted_ready_suspense_is_noop() {
+    fn waker_wake_unmounted_ready_suspense_is_noop() {
         let ops = [
             Op::template(
                 3,
@@ -1975,10 +1947,10 @@ mod tests {
                 5,
                 2,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
-            Op::wake_suspense_natural(3),
+            Op::wake_suspense(3),
         ];
 
         let mut harness = Harness::fresh();
@@ -1988,7 +1960,7 @@ mod tests {
     }
 
     #[test]
-    fn natural_wake_after_unrendered_parent_edit_does_not_compare_fresh_model() {
+    fn waker_wake_after_unrendered_parent_edit_matches_fresh_model() {
         let ops = [
             Op::template(
                 2,
@@ -2003,7 +1975,7 @@ mod tests {
                 6,
                 4,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -2016,7 +1988,7 @@ mod tests {
                     },
                 },
             ),
-            Op::wake_suspense_natural(0),
+            Op::wake_suspense(0),
             Op::Rerender,
         ];
 
@@ -2027,7 +1999,7 @@ mod tests {
     }
 
     #[test]
-    fn natural_wake_nested_suspense_applies_hidden_wake_mutation() {
+    fn waker_wake_nested_suspense_applies_hidden_wake_mutation() {
         let ops = [
             Op::template(
                 0,
@@ -2054,15 +2026,15 @@ mod tests {
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::suspense_wake_mutation(1, WakeMutationSpec::PrependStaticRoot { tag: 42 }),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready),
+            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
-            Op::wake_suspense_natural(1),
-            Op::wake_suspense_natural(0),
+            Op::wake_suspense(1),
+            Op::wake_suspense(0),
         ];
 
         let mut harness = Harness::fresh();
@@ -2085,7 +2057,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
@@ -2100,7 +2072,7 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::wake_suspense(0),
@@ -2130,12 +2102,12 @@ mod tests {
                 109,
                 103,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
             Op::Rerender,
-            Op::wake_suspense_natural(34),
+            Op::wake_suspense(34),
             Op::suspense(22, SuspenseMode::Pending),
             Op::Rerender,
             Op::Rerender,
@@ -2597,7 +2569,7 @@ mod tests {
                 4,
                 4,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -2630,7 +2602,7 @@ mod tests {
                 1,
                 5,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -2693,11 +2665,11 @@ mod tests {
                 3,
                 2,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready),
+            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
             Op::suspense(1, SuspenseMode::Resolved),
             Op::wake_suspense(2),
@@ -2732,7 +2704,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
             Op::template(
@@ -2767,9 +2739,9 @@ mod tests {
                     edit: ListEdit::Remove { index: 97 },
                 },
             ),
-            Op::suspense(31, SuspenseMode::Ready),
+            Op::suspense(31, SuspenseMode::Ready { wakes: 0 }),
             Op::Rerender,
-            Op::suspense(240, SuspenseMode::Ready),
+            Op::suspense(240, SuspenseMode::Ready { wakes: 0 }),
             Op::wake_suspense(197),
         ];
 

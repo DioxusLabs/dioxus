@@ -14,23 +14,13 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
 pub(crate) enum Op {
     Rerender,
-    WakeSuspense { suspense: u8, mode: WakeMode },
+    WakeSuspense { suspense: u8 },
     Mutate(ModelEdit),
 }
 
 impl Op {
     pub(crate) fn wake_suspense(suspense: u8) -> Self {
-        Self::WakeSuspense {
-            suspense,
-            mode: WakeMode::Harness,
-        }
-    }
-
-    pub(crate) fn wake_suspense_natural(suspense: u8) -> Self {
-        Self::WakeSuspense {
-            suspense,
-            mode: WakeMode::Natural,
-        }
+        Self::WakeSuspense { suspense }
     }
 
     pub(crate) fn template(vnode: u8, edit: TemplateEdit) -> Self {
@@ -80,12 +70,6 @@ impl Op {
             edit: SuspenseEdit::WakeMutation(mutation),
         })
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
-pub(crate) enum WakeMode {
-    Harness,
-    Natural,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
@@ -251,7 +235,7 @@ where
 
 thread_local! {
     static MODEL: RefCell<Model> = RefCell::new(Model::initial());
-    static SUSPENSE_READY_RELEASED: RefCell<Vec<SuspenseReadyKey>> = RefCell::new(Vec::new());
+    static SUSPENSE_READY_WAKES: RefCell<Vec<(SuspenseReadyKey, usize)>> = RefCell::new(Vec::new());
     static SUSPENSE_READY_WAKERS: RefCell<Vec<(SuspenseReadyKey, Waker)>> = RefCell::new(Vec::new());
     static REGISTER_SUSPENSE_READY_SENDERS: Cell<bool> = Cell::new(true);
 }
@@ -264,10 +248,19 @@ pub(crate) fn with_model<R>(f: impl FnOnce(&mut Model) -> R) -> R {
     MODEL.with(|m| f(&mut m.borrow_mut()))
 }
 
-fn suspense_ready_released(key: SuspenseReadyKey) -> bool {
-    REGISTER_SUSPENSE_READY_SENDERS.with(|enabled| {
-        enabled.get() && SUSPENSE_READY_RELEASED.with(|released| released.borrow().contains(&key))
+fn suspense_ready_wake_count(key: SuspenseReadyKey) -> usize {
+    SUSPENSE_READY_WAKES.with(|wakes| {
+        wakes
+            .borrow()
+            .iter()
+            .find_map(|(wake_key, count)| (*wake_key == key).then_some(*count))
+            .unwrap_or(0)
     })
+}
+
+fn suspense_ready_released(key: SuspenseReadyKey, required_wakes: usize) -> bool {
+    REGISTER_SUSPENSE_READY_SENDERS
+        .with(|enabled| enabled.get() && suspense_ready_wake_count(key) >= required_wakes)
 }
 
 fn register_suspense_ready_waker(key: SuspenseReadyKey, waker: Waker) {
@@ -279,21 +272,21 @@ fn register_suspense_ready_waker(key: SuspenseReadyKey, waker: Waker) {
 }
 
 pub(crate) fn release_suspense_ready_task(key: SuspenseReadyKey) {
-    SUSPENSE_READY_RELEASED.with(|released| {
-        if !released.borrow().contains(&key) {
-            released.borrow_mut().push(key);
+    SUSPENSE_READY_WAKES.with(|wakes| {
+        let mut wakes = wakes.borrow_mut();
+        if let Some((_, count)) = wakes.iter_mut().find(|(wake_key, _)| *wake_key == key) {
+            *count = count.saturating_add(1);
+        } else {
+            wakes.push((key, 1));
         }
     });
     SUSPENSE_READY_WAKERS.with(|wakers| {
-        let mut wakers = wakers.borrow_mut();
-        let mut index = 0;
-        while index < wakers.len() {
-            if wakers[index].0 == key {
-                let (_, waker) = wakers.swap_remove(index);
-                waker.wake();
-            } else {
-                index += 1;
-            }
+        for (_, waker) in wakers
+            .borrow()
+            .iter()
+            .filter(|(wake_key, _)| *wake_key == key)
+        {
+            waker.wake_by_ref();
         }
     });
 }
@@ -316,7 +309,7 @@ pub(crate) fn selected_registered_ready_suspense_key(selector: u8) -> Option<Sus
 }
 
 pub(crate) fn clear_suspense_ready_tasks() {
-    SUSPENSE_READY_RELEASED.with(|released| released.borrow_mut().clear());
+    SUSPENSE_READY_WAKES.with(|wakes| wakes.borrow_mut().clear());
     SUSPENSE_READY_WAKERS.with(|wakers| wakers.borrow_mut().clear());
 }
 
@@ -340,6 +333,7 @@ pub(crate) fn without_suspense_ready_registration<R>(f: impl FnOnce() -> R) -> R
 
 pub(crate) struct SuspenseReadyFuture {
     pub(crate) key: SuspenseReadyKey,
+    pub(crate) required_wakes: usize,
 }
 
 impl Future for SuspenseReadyFuture {
@@ -347,7 +341,7 @@ impl Future for SuspenseReadyFuture {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let key = self.key;
-        if suspense_ready_released(key) {
+        if suspense_ready_released(key, self.required_wakes) {
             Poll::Ready(())
         } else {
             register_suspense_ready_waker(key, cx.waker().clone());
@@ -364,9 +358,9 @@ pub(crate) fn apply_op_to_model(model: &mut Model, op: &Op) {
     let can_grow = model.can_grow();
     match op {
         Op::Rerender => {}
-        Op::WakeSuspense { suspense, .. } => {
+        Op::WakeSuspense { suspense } => {
             if let Some(key) = model.selected_ready_suspense_key(*suspense) {
-                model.resolve_ready_suspense(key);
+                model.wake_ready_suspense(key);
             }
         }
         Op::Mutate(edit) => apply_model_edit(model, edit, can_grow),

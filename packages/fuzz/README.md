@@ -33,7 +33,7 @@ cargo +nightly fuzz run vdom_ops fuzz/corpus/vdom_ops -- -runs=256
 From the workspace root, pass the nested fuzz project explicitly:
 
 ```sh
-cargo +nightly fuzz run --fuzz-dir packages/dioxus-vdom-fuzz/fuzz vdom_ops packages/dioxus-vdom-fuzz/fuzz/corpus/vdom_ops -- -runs=256
+cargo +nightly fuzz run --fuzz-dir packages/fuzz/fuzz vdom_ops packages/fuzz/fuzz/corpus/vdom_ops -- -runs=256
 ```
 
 Run a longer session:

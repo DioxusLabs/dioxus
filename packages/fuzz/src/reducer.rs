@@ -6,7 +6,6 @@ use crate::{
     },
     ops::{
         DynamicEdit, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit, VNodeEdit,
-        WakeMode,
     },
     run_case,
 };
@@ -347,22 +346,10 @@ pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
 
     match op {
         Op::Rerender => {}
-        Op::WakeSuspense {
-            suspense,
-            mode: WakeMode::Harness,
-        } => {
+        Op::WakeSuspense { suspense } => {
             for suspense in simpler_u8_values(*suspense) {
                 push_unique(&mut out, Op::wake_suspense(suspense));
             }
-        }
-        Op::WakeSuspense {
-            suspense,
-            mode: WakeMode::Natural,
-        } => {
-            for suspense in simpler_u8_values(*suspense) {
-                push_unique(&mut out, Op::wake_suspense_natural(suspense));
-            }
-            push_unique(&mut out, Op::wake_suspense(*suspense));
         }
         Op::Mutate(edit) => simplified_model_edit_ops(edit, &mut out),
     }
@@ -944,15 +931,18 @@ fn simplified_wake_mutations(mutation: WakeMutationSpec) -> Vec<WakeMutationSpec
 
 fn simplified_suspense_modes(mode: SuspenseMode) -> Vec<SuspenseMode> {
     let mut out = Vec::new();
-    for candidate in [
-        SuspenseMode::Resolved,
-        SuspenseMode::Pending,
-        SuspenseMode::Ready,
-    ] {
+    if let SuspenseMode::Ready { wakes } = mode {
+        for wakes in simpler_u8_values(wakes) {
+            push_unique(&mut out, SuspenseMode::Ready { wakes });
+        }
+        push_unique(&mut out, SuspenseMode::Ready { wakes: 0 });
+    }
+    for candidate in [SuspenseMode::Resolved, SuspenseMode::Pending] {
         if candidate != mode {
-            out.push(candidate);
+            push_unique(&mut out, candidate);
         }
     }
+    push_unique(&mut out, SuspenseMode::Ready { wakes: 0 });
     out
 }
 

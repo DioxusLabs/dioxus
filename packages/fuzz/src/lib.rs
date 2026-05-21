@@ -43,8 +43,7 @@ const OPTIMIZED_STRATEGIES: &[OptimizedStrategy] = &[
     OptimizedStrategy::EditDynamicAttrs,
     OptimizedStrategy::SetSuspenseMode,
     OptimizedStrategy::SetSuspenseWakeMutation,
-    OptimizedStrategy::WakeSuspenseHarness,
-    OptimizedStrategy::WakeSuspenseNatural,
+    OptimizedStrategy::WakeSuspense,
     OptimizedStrategy::SetSelectedNodeElement,
     OptimizedStrategy::Rerender,
 ];
@@ -66,8 +65,7 @@ enum OptimizedStrategy {
     EditDynamicAttrs,
     SetSuspenseMode,
     SetSuspenseWakeMutation,
-    WakeSuspenseHarness,
-    WakeSuspenseNatural,
+    WakeSuspense,
     SetSelectedNodeElement,
     Rerender,
 }
@@ -348,16 +346,10 @@ fn optimized_model_aware_op(
         OptimizedStrategy::SetSuspenseWakeMutation if facts.has_dynamic_slots() => {
             ready_suspense_slot_op(&facts, vnode, selector)
         }
-        OptimizedStrategy::WakeSuspenseHarness if facts.has_suspense() => {
+        OptimizedStrategy::WakeSuspense if facts.has_suspense() => {
             Op::wake_suspense(facts.select_suspense(selector))
         }
-        OptimizedStrategy::WakeSuspenseHarness if facts.has_dynamic_slots() => {
-            ready_suspense_slot_op(&facts, vnode, selector)
-        }
-        OptimizedStrategy::WakeSuspenseNatural if facts.has_suspense() => {
-            Op::wake_suspense_natural(facts.select_suspense(selector))
-        }
-        OptimizedStrategy::WakeSuspenseNatural if facts.has_dynamic_slots() => {
+        OptimizedStrategy::WakeSuspense if facts.has_dynamic_slots() => {
             ready_suspense_slot_op(&facts, vnode, selector)
         }
         OptimizedStrategy::SetSelectedNodeElement if model.can_grow() => Op::template(
@@ -391,7 +383,7 @@ fn ready_suspense_slot_op(facts: &ModelFacts, vnode: u8, selector: u8) -> Op {
         vnode,
         selector,
         DynamicKind::Suspense {
-            mode: SuspenseMode::Ready,
+            mode: SuspenseMode::Ready { wakes: 0 },
         },
     )
 }
@@ -749,7 +741,7 @@ fn biased_suspense_mode(value: u8) -> SuspenseMode {
     match value % 3 {
         0 => SuspenseMode::Resolved,
         1 => SuspenseMode::Pending,
-        _ => SuspenseMode::Ready,
+        _ => SuspenseMode::Ready { wakes: value / 3 },
     }
 }
 
@@ -910,7 +902,7 @@ pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
     let summary = failure.message.lines().next().unwrap_or(&failure.message);
 
     use fmt::Write;
-    writeln!(&mut report, "dioxus-vdom-fuzz failure").unwrap();
+    writeln!(&mut report, "fuzz failure").unwrap();
     writeln!(&mut report, "decoded operations: {}", case.ops.len()).unwrap();
     writeln!(&mut report, "failed at step: {}", failure.step).unwrap();
     writeln!(&mut report, "failing op: {}", failure.op).unwrap();
@@ -1041,7 +1033,7 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready,
+                    mode: SuspenseMode::Ready { wakes: 0 },
                 },
             ),
         ];

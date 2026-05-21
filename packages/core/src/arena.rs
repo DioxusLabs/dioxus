@@ -89,6 +89,8 @@ impl VirtualDom {
     }
 
     pub(crate) fn drop_orphaned_child_scopes(&mut self, parent: ScopeId) {
+        // Parent rendered output can be removed before every child scope has
+        // been dropped. Clean those children without emitting more DOM edits.
         let children = self
             .scopes
             .iter()

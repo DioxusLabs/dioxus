@@ -118,6 +118,91 @@ fn attribute_diff() {
 }
 
 #[test]
+fn dynamic_attr_override_restores_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("class", "active")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            div {
+                class: "base",
+                ..attrs,
+            }
+        }
+    }
+
+    Sequence::new()
+        .render_with_expected(app, rsx! { div { class: "active" } })
+        .render_with_expected(app, rsx! { div { class: "base" } })
+        .render_with_expected(app, rsx! { div { class: "active" } })
+        .run();
+}
+
+#[test]
+fn dynamic_attr_none_removes_static_attr() {
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![Attribute::new("class", AttributeValue::None, None, false)]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            div {
+                class: "base",
+                ..attrs,
+            }
+        }
+    }
+
+    Sequence::new()
+        .render_with_expected(app, rsx! { div {} })
+        .render_with_expected(app, rsx! { div { class: "base" } })
+        .render_with_expected(app, rsx! { div {} })
+        .run();
+}
+
+#[test]
+fn duplicate_dynamic_attr_slots_use_final_effective_attr() {
+    fn attr(value: &'static str) -> Attribute {
+        Attribute::new("class", AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let generation = generation();
+        let first = match generation {
+            0..=2 => vec![attr("first")],
+            _ => vec![],
+        };
+        let second = match generation {
+            0..=1 => vec![attr("second")],
+            _ => vec![],
+        };
+
+        rsx! {
+            div {
+                ..first,
+                ..second,
+            }
+        }
+    }
+
+    Sequence::new()
+        .render_with_expected(app, rsx! { div { class: "second" } })
+        .render_with_expected(app, rsx! { div { class: "second" } })
+        .render_with_expected(app, rsx! { div { class: "first" } })
+        .render_with_expected(app, rsx! { div {} })
+        .run();
+}
+
+#[test]
 fn diff_empty() {
     fn app() -> Element {
         match generation() % 2 {

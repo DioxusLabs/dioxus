@@ -34,6 +34,7 @@ struct GeneratedProps {
 struct GeneratedSuspenseProps {
     id: u64,
     ready_generation: u64,
+    ready_wakes_required: usize,
     mode: SuspenseMode,
     wake_mutation: WakeMutationSpec,
     wake_applied: bool,
@@ -73,6 +74,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     );
     let id = props.id;
     let ready_generation = props.ready_generation;
+    let ready_wakes_required = props.ready_wakes_required;
     let mode = props.mode;
     let wake_mutation = props.wake_mutation;
     let wake_applied = props.wake_applied;
@@ -84,6 +86,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
             GeneratedSuspenseChild {
                 id,
                 ready_generation,
+                ready_wakes_required,
                 mode,
                 wake_mutation,
                 wake_applied,
@@ -114,7 +117,7 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
     let next_task_key = match props.mode {
         SuspenseMode::Resolved => None,
         SuspenseMode::Pending => Some(SuspenseTaskKey::Pending(props.id)),
-        SuspenseMode::Ready => Some(SuspenseTaskKey::Ready(SuspenseReadyKey {
+        SuspenseMode::Ready { .. } => Some(SuspenseTaskKey::Ready(SuspenseReadyKey {
             id: props.id,
             generation: props.ready_generation,
         })),
@@ -156,25 +159,33 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
             });
             suspend(running)?;
         }
-        SuspenseMode::Ready => {
+        SuspenseMode::Ready { .. } => {
             if !ready_resolved() {
-                let running = task.cloned().unwrap_or_else(|| {
+                if let Some(running) = task.cloned() {
+                    suspend(running)?;
+                } else {
                     let Some(SuspenseTaskKey::Ready(key)) = next_task_key else {
                         unreachable!();
                     };
+                    let required_wakes = props.ready_wakes_required;
                     let new_task = spawn(async move {
-                        SuspenseReadyFuture { key }.await;
+                        SuspenseReadyFuture {
+                            key,
+                            required_wakes,
+                        }
+                        .await;
                         let wake_mutation = read_model().wake_mutation_for_ready_key(key);
                         if wake_mutation != WakeMutationSpec::None {
                             applied_wake_mutation.set(wake_mutation);
                         }
                         ready_resolved.set(true);
                     });
-                    task.set(Some(new_task));
                     task_key.set(next_task_key);
-                    new_task
-                });
-                suspend(running)?;
+                    if new_task.poll_now().is_pending() {
+                        task.set(Some(new_task));
+                        suspend(new_task)?;
+                    }
+                }
             }
         }
     }
@@ -294,6 +305,7 @@ fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode 
             GeneratedSuspenseProps {
                 id: spec.id,
                 ready_generation: spec.ready_generation,
+                ready_wakes_required: spec.mode.required_ready_wakes().unwrap_or(1) as usize,
                 mode: spec.mode,
                 wake_mutation: spec.wake_mutation,
                 wake_applied: spec.wake_applied,
