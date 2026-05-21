@@ -640,18 +640,18 @@ impl RendererOracle {
     }
 
     fn visible_children_eq(&self, node: NodeId, other: &Self, other_node: NodeId) -> bool {
-        let mut children = self.node(node).children.iter().copied().filter(|&child| {
-            !matches!(self.node(child).kind, NodeKind::Placeholder)
-        });
-        let mut other_children =
-            other
-                .node(other_node)
-                .children
-                .iter()
-                .copied()
-                .filter(|&child| {
-                    !matches!(other.node(child).kind, NodeKind::Placeholder)
-                });
+        let mut children = self
+            .node(node)
+            .children
+            .iter()
+            .copied()
+            .filter(|&child| !matches!(self.node(child).kind, NodeKind::Placeholder));
+        let mut other_children = other
+            .node(other_node)
+            .children
+            .iter()
+            .copied()
+            .filter(|&child| !matches!(other.node(child).kind, NodeKind::Placeholder));
 
         loop {
             match (children.next(), other_children.next()) {
