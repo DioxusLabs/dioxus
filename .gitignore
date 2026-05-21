@@ -48,3 +48,9 @@ tmp/
 
 # Fuzzing logs
 fuzz-*.log
+
+# LibFuzzer failure artifacts
+/crash-*
+/timeout-*
+/oom-*
+/leak-*

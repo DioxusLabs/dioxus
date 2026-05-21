@@ -73,7 +73,7 @@ jobs:
           cache-provider: "warpbuild"
 
       - name: Test fuzz support crate
-        run: cargo test -p fuzz --lib --examples
+        run: cargo test -p dioxus-vdom-fuzz --lib --examples
 
       - name: Smoke test fuzz target
         run: |

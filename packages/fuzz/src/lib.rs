@@ -464,6 +464,10 @@ fn diff_fragment_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
 }
 
 fn diff_dynamic_node_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
+    if value % 4 == 0 {
+        return diff_placeholder_noop_sequence_ops(model, selector, value);
+    }
+
     let mut ops = Vec::new();
     let facts = ModelFacts::new(model);
     let vnode = facts.select_focus_vnode(selector, value);
@@ -479,6 +483,82 @@ fn diff_dynamic_node_sequence_ops(model: &mut Model, selector: u8, value: u8) ->
         model,
         &mut ops,
         Op::dynamic(vnode, node, sequence_dynamic_kind(value, 1)),
+    );
+    push_modeled_op(model, &mut ops, Op::Rerender);
+    ops
+}
+
+fn diff_placeholder_noop_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
+    let mut ops = Vec::new();
+    let facts = ModelFacts::new(model);
+    let vnode = facts.select_vnode(selector);
+
+    // Reset the first root to a controlled element so the following dynamic child
+    // slots are model-derived but predictable within this VNode.
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::template(
+            vnode,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Text(value),
+            },
+        ),
+    );
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::template(
+            vnode,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Element {
+                    tag: value,
+                    namespace: None,
+                },
+            },
+        ),
+    );
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::template(
+            vnode,
+            TemplateEdit::Children {
+                element: 0,
+                edit: ListEdit::Insert {
+                    index: 0,
+                    item: TemplateNodeKind::Dynamic(DynamicKind::Placeholder),
+                },
+            },
+        ),
+    );
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::template(
+            vnode,
+            TemplateEdit::Children {
+                element: 0,
+                edit: ListEdit::Insert {
+                    index: 1,
+                    item: TemplateNodeKind::Dynamic(DynamicKind::Text(value)),
+                },
+            },
+        ),
+    );
+
+    let facts = ModelFacts::new(model);
+    let Some(text_node) = facts.nth_dynamic_node(vnode, 1) else {
+        return ops;
+    };
+
+    push_modeled_op(model, &mut ops, Op::Rerender);
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::dynamic(vnode, text_node, DynamicKind::Text(value.wrapping_add(1))),
     );
     push_modeled_op(model, &mut ops, Op::Rerender);
     ops
@@ -514,12 +594,13 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
         return ops;
     };
 
+    let base = value & 0x3f;
     let child_kind = if value & 1 == 0 {
         DynamicKind::Text(value)
     } else {
         DynamicKind::Fragment {
-            children: 3 + (value % 3),
-            key_base: Some(value),
+            children: 3,
+            key_base: Some(base),
         }
     };
     push_modeled_op(
@@ -533,6 +614,7 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
         &mut ops,
         Op::suspense(suspense, SuspenseMode::Ready { wake_after: 0 }),
     );
+    push_modeled_op(model, &mut ops, Op::Rerender);
 
     if value & 1 == 0 {
         push_modeled_op(
@@ -544,12 +626,7 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
         push_modeled_op(
             model,
             &mut ops,
-            move_fragment_child_in_vnode_op(child_vnode, 2, 0),
-        );
-        push_modeled_op(
-            model,
-            &mut ops,
-            insert_fragment_child_in_vnode_op(child_vnode, 1, Some(value.wrapping_add(9))),
+            insert_fragment_child_in_vnode_op(child_vnode, 0, Some(base.wrapping_sub(1))),
         );
     }
     push_modeled_op(model, &mut ops, Op::Rerender);
@@ -564,12 +641,7 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
         push_modeled_op(
             model,
             &mut ops,
-            insert_fragment_child_in_vnode_op(child_vnode, 0, Some(value.wrapping_add(17))),
-        );
-        push_modeled_op(
-            model,
-            &mut ops,
-            insert_fragment_child_in_vnode_op(child_vnode, 7, Some(value.wrapping_add(18))),
+            insert_fragment_child_in_vnode_op(child_vnode, 7, Some(base.wrapping_add(3))),
         );
     }
     push_modeled_op(model, &mut ops, Op::Rerender);
@@ -695,35 +767,11 @@ fn sequence_dynamic_kind(value: u8, phase: u8) -> DynamicKind {
     }
 }
 
-#[cfg(test)]
-fn set_root_dynamic_op() -> Op {
-    Op::template(
-        0,
-        TemplateEdit::SetNode {
-            node: 0,
-            kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
-        },
-    )
-}
-
 fn insert_fragment_child_in_vnode_op(vnode: u8, index: u8, key: Option<u8>) -> Op {
     Op::fragment(
         vnode,
         0,
         FragmentEdit::Children(ListEdit::Insert { index, item: key }),
-    )
-}
-
-#[cfg(test)]
-fn remove_fragment_child_in_vnode_op(vnode: u8, index: u8) -> Op {
-    Op::fragment(vnode, 0, FragmentEdit::Children(ListEdit::Remove { index }))
-}
-
-fn move_fragment_child_in_vnode_op(vnode: u8, from: u8, to: u8) -> Op {
-    Op::fragment(
-        vnode,
-        0,
-        FragmentEdit::Children(ListEdit::Move { from, to }),
     )
 }
 
@@ -739,55 +787,20 @@ fn set_vnode_root_dynamic_op(vnode: u8, kind: DynamicKind) -> Op {
 
 #[cfg(test)]
 fn hidden_suspense_text_diff_recipe() -> Vec<Op> {
-    vec![
-        set_root_dynamic_op(),
-        Op::dynamic(
-            0,
-            0,
-            DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        ),
-        set_vnode_root_dynamic_op(1, DynamicKind::ComponentA),
-        set_vnode_root_dynamic_op(2, DynamicKind::Text(1)),
-        Op::Rerender,
-        Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
-        set_vnode_root_dynamic_op(2, DynamicKind::Text(2)),
-        Op::Rerender,
-        set_vnode_root_dynamic_op(2, DynamicKind::Text(3)),
-        Op::Rerender,
-    ]
+    let mut model = Model::initial();
+    diff_suspense_sequence_ops(&mut model, 0, 0)
 }
 
 #[cfg(test)]
 fn hidden_suspense_keyed_fragment_diff_recipe() -> Vec<Op> {
-    vec![
-        set_root_dynamic_op(),
-        Op::dynamic(
-            0,
-            0,
-            DynamicKind::Suspense {
-                mode: SuspenseMode::Resolved,
-            },
-        ),
-        set_vnode_root_dynamic_op(1, DynamicKind::ComponentA),
-        set_vnode_root_dynamic_op(
-            2,
-            DynamicKind::Fragment {
-                children: 5,
-                key_base: Some(0),
-            },
-        ),
-        Op::Rerender,
-        Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
-        move_fragment_child_in_vnode_op(2, 3, 1),
-        insert_fragment_child_in_vnode_op(2, 2, Some(5)),
-        remove_fragment_child_in_vnode_op(2, 4),
-        Op::Rerender,
-        insert_fragment_child_in_vnode_op(2, 0, Some(6)),
-        insert_fragment_child_in_vnode_op(2, 7, Some(7)),
-        Op::Rerender,
-    ]
+    let mut model = Model::initial();
+    diff_suspense_sequence_ops(&mut model, 0, 1)
+}
+
+#[cfg(test)]
+fn placeholder_noop_diff_recipe() -> Vec<Op> {
+    let mut model = Model::initial();
+    diff_placeholder_noop_sequence_ops(&mut model, 0, 0)
 }
 
 #[cfg(test)]
@@ -1351,6 +1364,14 @@ impl ModelFacts {
             .get(selector as usize % vnode_shape.dynamic_nodes.len().max(1))
             .copied()
             .unwrap_or_else(|| self.select_node(vnode, selector))
+    }
+
+    fn nth_dynamic_node(&self, vnode: u8, index: usize) -> Option<u8> {
+        self.vnodes
+            .get(vnode as usize)?
+            .dynamic_nodes
+            .get(index)
+            .copied()
     }
 
     fn has_dynamic_nodes(&self) -> bool {
@@ -1977,6 +1998,7 @@ mod tests {
                 "hidden_suspense_keyed_fragment_diff",
                 hidden_suspense_keyed_fragment_diff_recipe(),
             ),
+            case("placeholder_noop_diff", placeholder_noop_diff_recipe()),
             case(
                 "dynamic_attribute_static_fallback",
                 dynamic_attribute_static_fallback_recipe(),

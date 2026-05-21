@@ -1005,15 +1005,6 @@ mod tests {
         ]
     }
 
-    fn catch_expected_panic_message(f: impl FnOnce()) -> String {
-        let previous_hook = panic::take_hook();
-        panic::set_hook(Box::new(|_| {}));
-        let result = catch_unwind_result(f);
-        panic::set_hook(previous_hook);
-        let payload = result.expect_err("expected operation to panic");
-        panic_message(&payload)
-    }
-
     #[test]
     fn vnode_mutation_still_compares_fresh_render() {
         let mut harness = Harness::fresh_strict();
@@ -1146,24 +1137,25 @@ mod tests {
     }
 
     #[test]
-    fn explicit_nested_event_reproduces_callback_borrow_panic() {
-        let message = catch_expected_panic_message(|| {
-            let mut harness = Harness::fresh_strict();
-            for op in mount_listener_ops() {
-                apply_op(&mut harness, &op).unwrap();
-            }
+    fn explicit_nested_event_ignores_reentrant_dispatch() {
+        let mut harness = Harness::fresh_strict();
+        for op in mount_listener_ops() {
+            apply_op(&mut harness, &op).unwrap();
+        }
 
-            apply_op(
-                &mut harness,
-                &Op::fire_event(0, EventBehaviorSpec::DispatchNestedEvent { target: 0 }),
-            )
-            .unwrap();
-        });
-
-        assert!(
-            message.contains("already borrowed"),
-            "unexpected panic: {message}"
+        assert_eq!(
+            harness
+                .incremental
+                .borrow()
+                .historical_event_listener_targets()
+                .len(),
+            1
         );
+        apply_op(
+            &mut harness,
+            &Op::fire_event(0, EventBehaviorSpec::DispatchNestedEvent { target: 0 }),
+        )
+        .unwrap();
     }
 
     #[test]

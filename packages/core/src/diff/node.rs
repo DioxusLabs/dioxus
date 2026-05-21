@@ -671,7 +671,10 @@ impl VNode {
             );
             if let Some(to) = to.as_deref_mut() {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
-                debug_assert!(m > 0, "Create dynamic node will always create at least once placeholder node on the stack");
+                debug_assert!(
+                    m > 0,
+                    "Create dynamic node will always create at least once placeholder node on the stack"
+                );
                 // The path is one shorter because the top node is the root
                 let path = &self.template.node_paths()[dynamic_node_id][1..];
                 to.replace_placeholder_with_nodes(path, m);
