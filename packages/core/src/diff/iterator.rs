@@ -357,11 +357,8 @@ impl VirtualDom {
                     // If the node existed in the old list, diff it
                     if let Some(old_node) = old.get(old_index) {
                         old_node.diff_node(new_node, vdom, to.as_deref_mut());
-                        if let Some(to) = to.as_deref_mut() {
-                            new_node.push_all_root_nodes(vdom, to)
-                        } else {
-                            0
-                        }
+                        to.as_deref_mut()
+                            .map_or(0, |to| new_node.push_all_root_nodes(vdom, to))
                     } else {
                         // Otherwise, just add it to the stack
                         new_node.create(vdom, parent, to.as_deref_mut())

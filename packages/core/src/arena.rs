@@ -9,6 +9,13 @@ use crate::{ScopeId, virtual_dom::VirtualDom};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 
+pub(crate) const UNMOUNTED: usize = usize::MAX;
+
+impl ElementId {
+    pub(crate) const ROOT: Self = Self(0);
+    pub(crate) const UNMOUNTED: Self = Self(UNMOUNTED);
+}
+
 /// An Element that can be bubbled to's unique identifier.
 ///
 /// `BubbleId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
@@ -24,7 +31,7 @@ impl Default for MountId {
 }
 
 impl MountId {
-    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+    pub(crate) const PLACEHOLDER: Self = Self(UNMOUNTED);
 
     pub(crate) fn as_usize(self) -> Option<usize> {
         if self.mounted() { Some(self.0) } else { None }
@@ -64,7 +71,7 @@ impl VirtualDom {
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
         // We never reclaim the unmounted elements or the root element
-        if el.0 == 0 || el.0 == usize::MAX {
+        if el == ElementId::ROOT || el == ElementId::UNMOUNTED {
             return true;
         }
 

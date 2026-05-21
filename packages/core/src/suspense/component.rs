@@ -630,7 +630,7 @@ fn switch_rendered_children_to_fallback_after_child_suspended<M: WriteMutations>
     let newly_suspended_scopes = suspense_context
         .suspended_futures()
         .iter()
-        .map(|future| future.origin())
+        .map(|future| future.origin)
         .collect::<std::collections::BTreeSet<_>>();
 
     let mount = currently_rendered.mount.get();

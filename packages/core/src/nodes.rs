@@ -585,6 +585,20 @@ impl TemplateNode {
             _ => None,
         }
     }
+
+    pub(crate) fn element_child(&self, child_idx: usize) -> &'static TemplateNode {
+        let TemplateNode::Element { children, .. } = self else {
+            unreachable!("template attribute paths only pass through elements")
+        };
+        &children[child_idx]
+    }
+
+    pub(crate) fn element_attrs(&self) -> &'static [TemplateAttribute] {
+        let TemplateNode::Element { attrs, .. } = self else {
+            unreachable!("template attribute paths only point to elements")
+        };
+        attrs
+    }
 }
 
 /// A node created at runtime

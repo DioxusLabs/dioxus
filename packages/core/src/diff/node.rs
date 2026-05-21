@@ -1,11 +1,11 @@
 use crate::innerlude::MountId;
 use crate::{Attribute, AttributeValue, DynamicNode::*, TemplateAttribute};
-use crate::{NoOpMutations, VNode, VirtualDom, WriteMutations};
+use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
 use crate::{
     TemplateNode,
-    arena::ElementId,
+    arena::{ElementId, UNMOUNTED},
     innerlude::{ElementPath, ElementRef, VNodeMount, VText},
     nodes::DynamicNode,
     scopes::ScopeId,
@@ -18,11 +18,11 @@ fn dynamic_node_is_rendered_in_dom(
     dom: &VirtualDom,
 ) -> bool {
     match node {
-        Text(_) | Placeholder(_) => mounted_dynamic_node_is_live(dom, mount, idx),
+        Text(_) | Placeholder(_) => dom.get_mounted_dyn_node(mount, idx) != UNMOUNTED,
         Fragment(nodes) => nodes.iter().any(|node| vnode_is_rendered_in_dom(node, dom)),
         Component(_) => {
             let scope_id = dom.get_mounted_dyn_node(mount, idx);
-            mounted_dynamic_node_is_live(dom, mount, idx)
+            scope_id != UNMOUNTED
                 && dom
                     .get_scope(ScopeId(scope_id))
                     .map(|scope| vnode_is_rendered_in_dom(scope.root_node(), dom))
@@ -42,29 +42,9 @@ fn vnode_is_rendered_in_dom(node: &VNode, dom: &VirtualDom) -> bool {
                 dynamic_node_is_rendered_in_dom(&node.dynamic_nodes[idx], mount, idx, dom)
             } else {
                 let id = dom.get_mounted_root_node(mount, root_idx);
-                mounted_root_node_is_live(id)
+                id != ElementId::ROOT && id != ElementId::UNMOUNTED
             }
         })
-}
-
-fn mounted_dynamic_node_is_live(dom: &VirtualDom, mount: MountId, idx: usize) -> bool {
-    dom.get_mounted_dyn_node(mount, idx) != usize::MAX
-}
-
-fn mounted_root_node_is_live(id: ElementId) -> bool {
-    id.0 != 0 && id.0 != usize::MAX
-}
-
-fn clear_mounted_root_node(dom: &mut VirtualDom, mount: MountId, idx: usize) {
-    dom.set_mounted_root_node(mount, idx, ElementId(usize::MAX));
-}
-
-fn clear_mounted_dynamic_node(dom: &mut VirtualDom, mount: MountId, idx: usize) {
-    dom.set_mounted_dyn_node(mount, idx, usize::MAX);
-}
-
-fn clear_mounted_dynamic_attr(dom: &mut VirtualDom, mount: MountId, idx: usize) {
-    dom.set_mounted_dyn_attr(mount, idx, ElementId(usize::MAX));
 }
 
 fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
@@ -77,30 +57,13 @@ fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
     mount
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct AttributeKey {
-    name: &'static str,
-    namespace: Option<&'static str>,
-}
+type AttributeKey = (&'static str, Option<&'static str>);
 
 #[derive(Clone, Copy)]
 enum ResolvedAttribute<'a> {
     Missing,
     Static(&'static str),
     Dynamic(&'a Attribute),
-}
-
-impl AttributeKey {
-    fn from_attribute(attribute: &Attribute) -> Self {
-        Self {
-            name: attribute.name,
-            namespace: attribute.namespace,
-        }
-    }
-
-    fn matches(self, attribute: &Attribute) -> bool {
-        self.name == attribute.name && self.namespace == attribute.namespace
-    }
 }
 
 impl<'a> ResolvedAttribute<'a> {
@@ -230,7 +193,7 @@ impl VNode {
                 // reuse the scope
                 let old_mount = dom.get_mounted_dyn_node(mount, idx);
                 let old_has_live_dom = dynamic_node_is_rendered_in_dom(old, mount, idx, dom);
-                clear_mounted_dynamic_node(dom, mount, idx);
+                dom.set_mounted_dyn_node(mount, idx, UNMOUNTED);
 
                 let new_nodes_on_stack = self.create_dynamic_node(
                     new,
@@ -372,24 +335,20 @@ impl VNode {
         right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        to: Option<&mut impl WriteMutations>,
         destroy_component_state: bool,
     ) {
-        if !vnode_is_rendered_in_dom(self, dom) {
-            let _ = dom.create_children(None::<&mut NoOpMutations>, right, parent);
-            self.remove_node_inner(
-                dom,
-                None::<&mut NoOpMutations>,
-                destroy_component_state,
-                None,
-            );
-            return;
-        }
-
+        let write_mutations = to.is_some() && vnode_is_rendered_in_dom(self, dom);
+        let mut to = to.filter(|_| write_mutations);
         let m = dom.create_children(to.as_deref_mut(), right, parent);
 
         // Instead of *just* removing it, we can use the replace mutation
-        self.remove_node_inner(dom, to, destroy_component_state, Some(m))
+        self.remove_node_inner(
+            dom,
+            to,
+            destroy_component_state,
+            write_mutations.then_some(m),
+        )
     }
 
     /// Remove a node from the dom and potentially replace it with the top m nodes from the stack
@@ -466,7 +425,7 @@ impl VNode {
                 dom.reclaim(id);
                 // Stamp the slot so a later traversal cannot mistake the
                 // reclaimed id for a live element.
-                clear_mounted_root_node(dom, mount, idx);
+                dom.set_mounted_root_node(mount, idx, ElementId::UNMOUNTED);
             }
         }
     }
@@ -534,7 +493,7 @@ impl VNode {
     ) {
         let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
         let removing_live_anchor = to.is_some() && replace_with.is_none();
-        if id != ElementId(usize::MAX) {
+        if id != ElementId::UNMOUNTED {
             if let Some(to) = to {
                 if let Some(replace_with) = replace_with {
                     to.replace_node_with(id, replace_with);
@@ -544,13 +503,13 @@ impl VNode {
             }
         }
         debug_assert!(
-            id != ElementId(usize::MAX) || !removing_live_anchor,
+            id != ElementId::UNMOUNTED || !removing_live_anchor,
             "attempted to remove an unmounted dynamic anchor from the live DOM"
         );
         dom.reclaim(id);
         // Stamp the slot so a later traversal cannot mistake the reclaimed id
         // for a live anchor.
-        clear_mounted_dynamic_node(dom, mount, idx);
+        dom.set_mounted_dyn_node(mount, idx, UNMOUNTED);
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
@@ -567,7 +526,7 @@ impl VNode {
                 dom.reclaim(new_id);
                 next_id = Some(new_id);
             }
-            clear_mounted_dynamic_attr(dom, mount, idx);
+            dom.set_mounted_dyn_attr(mount, idx, ElementId::UNMOUNTED);
         }
     }
 
@@ -585,51 +544,48 @@ impl VNode {
             let path = attr_paths[idx];
             let attr_group = self.dynamic_attribute_group_starting_at(idx);
             let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
-            let mut handled_keys = Vec::new();
+            let mut affected_keys = Vec::<(AttributeKey, usize)>::new();
 
-            for slot_idx in attr_group.clone().rev() {
-                let mut old_attrs = self.dynamic_attrs[slot_idx].iter().peekable();
-                let mut new_attrs = new.dynamic_attrs[slot_idx].iter().peekable();
-
-                while let Some(key) =
-                    Self::next_merged_attribute_key(&mut old_attrs, &mut new_attrs)
+            for slot_idx in attr_group.clone() {
+                for attr in self.dynamic_attrs[slot_idx]
+                    .iter()
+                    .chain(new.dynamic_attrs[slot_idx].iter())
                 {
-                    if handled_keys.contains(&key) {
-                        continue;
+                    let key = Self::attribute_key(attr);
+                    match affected_keys
+                        .iter_mut()
+                        .find(|(existing_key, _)| *existing_key == key)
+                    {
+                        Some((_, last_slot)) => *last_slot = slot_idx,
+                        None => affected_keys.push((key, slot_idx)),
                     }
-                    handled_keys.push(key);
-
-                    self.diff_attribute_key(
-                        new,
-                        path,
-                        attr_group.start..(slot_idx + 1),
-                        key,
-                        attribute_id,
-                        mount_id,
-                        dom,
-                        to,
-                    );
                 }
+            }
+
+            for (key, last_slot) in affected_keys {
+                self.diff_attribute_key(
+                    new,
+                    path,
+                    attr_group.start..(last_slot + 1),
+                    key,
+                    attribute_id,
+                    mount_id,
+                    dom,
+                    to,
+                );
             }
 
             idx = attr_group.end;
         }
     }
 
-    fn remove_attribute(&self, attribute: &Attribute, id: ElementId, to: &mut impl WriteMutations) {
-        match &attribute.value {
-            AttributeValue::Listener(_) => {
-                to.remove_event_listener(&attribute.name[2..], id);
-            }
-            _ => {
-                to.set_attribute(
-                    attribute.name,
-                    attribute.namespace,
-                    &AttributeValue::None,
-                    id,
-                );
-            }
-        }
+    fn remove_event_listener(
+        &self,
+        attribute: &Attribute,
+        id: ElementId,
+        to: &mut impl WriteMutations,
+    ) {
+        to.remove_event_listener(&attribute.name[2..], id);
     }
 
     fn dynamic_attribute_group_starting_at(&self, start: usize) -> std::ops::Range<usize> {
@@ -644,43 +600,8 @@ impl VNode {
         start..end
     }
 
-    fn next_merged_attribute_key<'a>(
-        old_attrs: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
-        new_attrs: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
-    ) -> Option<AttributeKey> {
-        match (old_attrs.peek(), new_attrs.peek()) {
-            (Some(old_attribute), Some(new_attribute)) => {
-                let old_key = AttributeKey::from_attribute(old_attribute);
-                let new_key = AttributeKey::from_attribute(new_attribute);
-
-                match old_key.cmp(&new_key) {
-                    std::cmp::Ordering::Equal => {
-                        old_attrs.next();
-                        new_attrs.next();
-                        Some(new_key)
-                    }
-                    std::cmp::Ordering::Less => {
-                        old_attrs.next();
-                        Some(old_key)
-                    }
-                    std::cmp::Ordering::Greater => {
-                        new_attrs.next();
-                        Some(new_key)
-                    }
-                }
-            }
-            (Some(old_attribute), None) => {
-                let key = AttributeKey::from_attribute(old_attribute);
-                old_attrs.next();
-                Some(key)
-            }
-            (None, Some(new_attribute)) => {
-                let key = AttributeKey::from_attribute(new_attribute);
-                new_attrs.next();
-                Some(key)
-            }
-            (None, None) => None,
-        }
+    fn attribute_key(attribute: &Attribute) -> AttributeKey {
+        (attribute.name, attribute.namespace)
     }
 
     fn diff_attribute_key(
@@ -712,7 +633,7 @@ impl VNode {
 
         for idx in attr_group {
             for attr in &self.dynamic_attrs[idx][..] {
-                if key.matches(attr) {
+                if Self::attribute_key(attr) == key {
                     resolved = if matches!(attr.value, AttributeValue::None) {
                         ResolvedAttribute::Missing
                     } else {
@@ -734,8 +655,6 @@ impl VNode {
             (AttributeValue::Any(left), AttributeValue::Any(right)) => {
                 !left.as_ref().any_cmp(right.as_ref())
             }
-            (AttributeValue::None, AttributeValue::None) => false,
-            (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
             _ => true,
         }
     }
@@ -771,9 +690,9 @@ impl VNode {
 
     fn resolved_attribute_changed(old: ResolvedAttribute<'_>, new: ResolvedAttribute<'_>) -> bool {
         match (old, new) {
-            (ResolvedAttribute::Missing, ResolvedAttribute::Missing) => false,
+            (ResolvedAttribute::Missing, ResolvedAttribute::Missing)
+            | (ResolvedAttribute::Static(_), ResolvedAttribute::Static(_)) => false,
             (ResolvedAttribute::Missing, _) | (_, ResolvedAttribute::Missing) => true,
-            (ResolvedAttribute::Static(left), ResolvedAttribute::Static(right)) => left != right,
             (ResolvedAttribute::Static(left), ResolvedAttribute::Dynamic(right)) => {
                 !matches!(&right.value, AttributeValue::Text(right) if left == right)
             }
@@ -798,10 +717,10 @@ impl VNode {
             ResolvedAttribute::Dynamic(attribute)
                 if matches!(attribute.value, AttributeValue::Listener(_)) =>
             {
-                self.remove_attribute(attribute, id, to);
+                self.remove_event_listener(attribute, id, to);
             }
             _ => {
-                to.set_attribute(key.name, key.namespace, &AttributeValue::None, id);
+                to.set_attribute(key.0, key.1, &AttributeValue::None, id);
             }
         }
     }
@@ -820,7 +739,7 @@ impl VNode {
             ResolvedAttribute::Missing => self.remove_resolved_attribute(key, attribute, id, to),
             ResolvedAttribute::Static(value) => {
                 let value = AttributeValue::Text(value.to_string());
-                to.set_attribute(key.name, key.namespace, &value, id);
+                to.set_attribute(key.0, key.1, &value, id);
             }
             ResolvedAttribute::Dynamic(attribute) => {
                 self.write_attribute(path, attribute, id, mount, dom, to);
@@ -835,36 +754,33 @@ impl VNode {
     ) -> Option<&'static str> {
         let mut value = None;
 
-        if let Some(TemplateNode::Element { attrs, .. }) = self.template_node_at_path(path) {
-            for attr in attrs.iter() {
-                if let TemplateAttribute::Static {
-                    name,
-                    value: static_value,
-                    namespace,
-                } = attr
-                    && key.name == *name
-                    && key.namespace == *namespace
-                {
-                    value = Some(*static_value);
-                }
+        for attr in self.template_node_at_path(path).element_attrs().iter() {
+            if let TemplateAttribute::Static {
+                name,
+                value: static_value,
+                namespace,
+            } = attr
+                && key.0 == *name
+                && key.1 == *namespace
+            {
+                value = Some(*static_value);
             }
         }
 
         value
     }
 
-    fn template_node_at_path(&self, path: &'static [u8]) -> Option<&'static TemplateNode> {
-        let (root_idx, child_path) = path.split_first()?;
-        let mut node = self.template.roots().get(*root_idx as usize)?;
+    fn template_node_at_path(&self, path: &'static [u8]) -> &'static TemplateNode {
+        let (root_idx, child_path) = path
+            .split_first()
+            .expect("template attribute paths should not be empty");
+        let mut node = &self.template.roots()[*root_idx as usize];
 
         for child_idx in child_path {
-            let TemplateNode::Element { children, .. } = node else {
-                return None;
-            };
-            node = children.get(*child_idx as usize)?;
+            node = node.element_child(*child_idx as usize);
         }
 
-        Some(node)
+        node
     }
 
     fn write_attribute(
@@ -915,7 +831,7 @@ impl VNode {
                 root_ids: vec![ElementId(0); template.roots().len()].into_boxed_slice(),
                 mounted_attributes: vec![ElementId(0); template.attr_paths().len()]
                     .into_boxed_slice(),
-                mounted_dynamic_nodes: vec![usize::MAX; template.node_paths().len()]
+                mounted_dynamic_nodes: vec![UNMOUNTED; template.node_paths().len()]
                     .into_boxed_slice(),
             });
         }
