@@ -2,9 +2,9 @@ use crate::{
     lifecycle::{self, LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
     model::*,
     ops::{
-        ModelEdit, Op, WakeMode, apply_to_model, clear_suspense_ready_tasks, read_model,
-        release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
-        without_suspense_ready_registration,
+        DynamicEdit, ModelEdit, Op, VNodeEdit, WakeMode, apply_to_model,
+        clear_suspense_ready_tasks, read_model, release_suspense_ready_task,
+        selected_registered_ready_suspense_key, with_model, without_suspense_ready_registration,
     },
     vdom::App,
 };
@@ -464,6 +464,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
                 return Ok(());
             };
             apply_to_model(op);
+            update_pending_fresh_compare(state, op);
             release_suspense_ready_task(key);
             render_and_assert(state)
         }
@@ -475,6 +476,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
                 return Ok(());
             };
             with_model(|model| model.resolve_ready_suspense(key));
+            update_pending_fresh_compare(state, op);
             release_suspense_ready_task(key);
             let compare_fresh = !state.pending_app_render;
             render_natural_and_assert(state, compare_fresh)
@@ -484,9 +486,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             if op_requires_app_render(op) {
                 state.pending_app_render = true;
             }
-            if op_requires_fresh_compare(op) {
-                state.pending_fresh_compare = true;
-            }
+            update_pending_fresh_compare(state, op);
             Ok(())
         }
     }
@@ -499,9 +499,39 @@ fn op_requires_app_render(op: &Op) -> bool {
     )
 }
 
+fn update_pending_fresh_compare(state: &mut Harness, op: &Op) {
+    if op_blocks_fresh_compare(op) {
+        state.pending_fresh_compare = false;
+    } else if op_requires_fresh_compare(op) {
+        state.pending_fresh_compare = true;
+    }
+}
+
 fn op_requires_fresh_compare(op: &Op) -> bool {
-    let _ = op;
-    false
+    match op {
+        Op::Mutate(ModelEdit::VNode { edit, .. }) => !vnode_edit_blocks_fresh_compare(edit),
+        Op::Rerender | Op::WakeSuspense { .. } | Op::Mutate(ModelEdit::Suspense { .. }) => false,
+    }
+}
+
+fn op_blocks_fresh_compare(op: &Op) -> bool {
+    // Suspense transitions can legitimately leave the incremental renderer on
+    // fallback output while a fresh rebuild observes the updated model.
+    match op {
+        Op::WakeSuspense { .. } | Op::Mutate(ModelEdit::Suspense { .. }) => true,
+        Op::Mutate(ModelEdit::VNode { edit, .. }) => vnode_edit_blocks_fresh_compare(edit),
+        Op::Rerender => false,
+    }
+}
+
+fn vnode_edit_blocks_fresh_compare(edit: &VNodeEdit) -> bool {
+    matches!(
+        edit,
+        VNodeEdit::DynamicSlot {
+            edit: DynamicEdit::SetKind(DynamicKind::Suspense { .. }),
+            ..
+        }
+    )
 }
 
 fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
@@ -897,6 +927,86 @@ mod tests {
                 mode: SuspenseMode::Pending,
             },
         ));
+    }
+
+    #[test]
+    fn vnode_mutation_arms_fresh_render_compare() {
+        let mut harness = Harness::fresh_strict();
+
+        apply_op(
+            &mut harness,
+            &Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+        )
+        .unwrap();
+
+        assert!(harness.pending_app_render);
+        assert!(harness.pending_fresh_compare);
+
+        apply_op(&mut harness, &Op::Rerender).unwrap();
+
+        assert!(!harness.pending_app_render);
+        assert!(!harness.pending_fresh_compare);
+    }
+
+    #[test]
+    fn suspense_slot_mutation_disarms_fresh_render_compare() {
+        let mut harness = Harness::fresh_strict();
+
+        apply_op(
+            &mut harness,
+            &Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+        )
+        .unwrap();
+        apply_op(
+            &mut harness,
+            &Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+        )
+        .unwrap();
+
+        assert!(harness.pending_app_render);
+        assert!(!harness.pending_fresh_compare);
+    }
+
+    #[test]
+    fn resolved_suspense_with_edited_child_matches_fresh_render() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::Rerender,
+            Op::suspense(240, SuspenseMode::Resolved),
+            Op::dynamic(1, 51, DynamicKind::ComponentA),
+            Op::Rerender,
+        ]);
     }
 
     #[test]
@@ -2183,6 +2293,221 @@ mod tests {
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
         }
+    }
+
+    #[test]
+    fn removing_none_dynamic_attr_restores_static_template_attr() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Static {
+                            name: 209,
+                            value: 0,
+                            namespace: None,
+                        },
+                    },
+                },
+            ),
+            Op::template(
+                195,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                108,
+                137,
+                ListEdit::Insert {
+                    index: 142,
+                    item: AttrSpec {
+                        name: 209,
+                        namespace: None,
+                        value: AttrValueSpec::None,
+                        volatile: true,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(0, 185, ListEdit::Remove { index: 2 }),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn dynamic_attr_namespace_change_removes_old_namespace() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 49,
+                        namespace: None,
+                        value: AttrValueSpec::Float(0),
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 49,
+                        namespace: Some(122),
+                        value: AttrValueSpec::Text(48),
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn later_dynamic_attr_slot_shadows_earlier_slot() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 0,
+                        namespace: None,
+                        value: AttrValueSpec::Text(50),
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(0, 0, ListEdit::Remove { index: 0 }),
+            Op::Rerender,
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(
+                0,
+                1,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 0,
+                        namespace: None,
+                        value: AttrValueSpec::Text(195),
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 0,
+                        namespace: None,
+                        value: AttrValueSpec::Any(229),
+                        volatile: true,
+                    },
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn later_none_dynamic_attr_slot_shadows_earlier_slot() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                0,
+                67,
+                ListEdit::Insert {
+                    index: 5,
+                    item: AttrSpec {
+                        name: 0,
+                        namespace: None,
+                        value: AttrValueSpec::None,
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 0,
+                        namespace: None,
+                        value: AttrValueSpec::Int(114),
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+        ]);
     }
 
     #[test]

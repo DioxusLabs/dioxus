@@ -465,20 +465,6 @@ impl SuspenseBoundaryProps {
                 (Some(suspended_nodes), true) => {
                     let new_suspended_nodes: VNode = children.as_vnode().clone();
 
-                    // Diff the placeholder nodes in the dom
-                    let new_placeholder =
-                        suspense_context.in_suspense_placeholder(&dom.runtime(), || {
-                            let old_placeholder = last_rendered_node;
-                            let new_placeholder =
-                                LastRenderedNode::new(fallback.call(suspense_context.clone()));
-
-                            old_placeholder.diff_node(&new_placeholder, dom, to);
-                            new_placeholder
-                        });
-
-                    // Set the last rendered node to the placeholder
-                    dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
-
                     // Diff the suspended nodes in the background
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
                         suspended_nodes.diff_node(&new_suspended_nodes, dom, None::<&mut M>);
@@ -489,8 +475,47 @@ impl SuspenseBoundaryProps {
                         scope_id,
                     )
                     .unwrap();
-                    suspense_context.set_suspended_nodes(new_suspended_nodes);
-                    sync_suspense_children_from_suspended_nodes(scope_id, dom, &children);
+
+                    if suspense_context.suspended_futures().is_empty() {
+                        suspense_context.take_suspended_nodes();
+
+                        if let Some(to) = to {
+                            let mount = last_rendered_node.mount.get();
+                            let parent = dom.get_mounted_parent(mount);
+                            last_rendered_node.replace(
+                                std::slice::from_ref(&new_suspended_nodes),
+                                parent,
+                                dom,
+                                Some(to),
+                            );
+                        } else {
+                            last_rendered_node.remove_node(dom, None::<&mut M>, None);
+                        }
+
+                        let resolved_children =
+                            children_with_rendered_nodes(&children, new_suspended_nodes);
+                        sync_suspense_children(scope_id, dom, resolved_children.clone());
+                        dom.scopes[scope_id.0].last_rendered_node = Some(resolved_children);
+
+                        mark_suspense_resolved(&suspense_context, dom, scope_id);
+                    } else {
+                        // Diff the placeholder nodes in the dom
+                        let new_placeholder =
+                            suspense_context.in_suspense_placeholder(&dom.runtime(), || {
+                                let old_placeholder = last_rendered_node;
+                                let new_placeholder =
+                                    LastRenderedNode::new(fallback.call(suspense_context.clone()));
+
+                                old_placeholder.diff_node(&new_placeholder, dom, to);
+                                new_placeholder
+                            });
+
+                        // Set the last rendered node to the placeholder
+                        dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
+
+                        suspense_context.set_suspended_nodes(new_suspended_nodes);
+                        sync_suspense_children_from_suspended_nodes(scope_id, dom, &children);
+                    }
                 }
                 // We have no suspended nodes, and we are not suspended. Just diff the children like normal
                 (None, false) => {
@@ -673,13 +698,15 @@ fn sync_suspense_children_from_suspended_nodes(
     sync_suspense_children(
         scope_id,
         dom,
-        match children {
-            LastRenderedNode::Real(_) => LastRenderedNode::Real(suspended_nodes),
-            LastRenderedNode::Placeholder(_, err) => {
-                LastRenderedNode::Placeholder(suspended_nodes, err.clone())
-            }
-        },
+        children_with_rendered_nodes(children, suspended_nodes),
     );
+}
+
+fn children_with_rendered_nodes(children: &LastRenderedNode, nodes: VNode) -> LastRenderedNode {
+    match children {
+        LastRenderedNode::Real(_) => LastRenderedNode::Real(nodes),
+        LastRenderedNode::Placeholder(_, err) => LastRenderedNode::Placeholder(nodes, err.clone()),
+    }
 }
 
 /// Move to a resolved suspense state

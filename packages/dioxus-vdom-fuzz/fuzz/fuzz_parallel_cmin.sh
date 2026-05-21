@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Minimize the corpus, then run cargo-fuzz in parallel once.
+# Minimize the corpus in parallel, then run cargo-fuzz in parallel once.
 #
 # Environment overrides:
 #   TARGET=vdom_ops
 #   WORKERS=8
 #   JOBS=8
 #   FUZZ_SECONDS=1800
+#   FUZZ_CHUNK_SECONDS=120
 #   CORPUS=corpus/vdom_ops
 #   TOOLCHAIN=nightly
 #   LIBFUZZER_ARGS="-rss_limit_mb=8192"
@@ -21,6 +22,7 @@ corpus="${CORPUS:-corpus/$target}"
 artifacts="${ARTIFACTS:-artifacts/$target}"
 toolchain="${TOOLCHAIN:-nightly}"
 fuzz_seconds="${FUZZ_SECONDS:-1800}"
+fuzz_chunk_seconds="${FUZZ_CHUNK_SECONDS:-120}"
 
 is_failure_artifact() {
   local name="${1##*/}"
@@ -106,24 +108,50 @@ echo "corpus:       $corpus"
 echo "artifacts:    $artifacts"
 echo "workers/jobs: $workers/$jobs"
 echo "epoch:        ${fuzz_seconds}s"
+echo "chunk:        ${fuzz_chunk_seconds}s"
 echo
 
 echo "==> minimizing corpus in place"
-cargo "+$toolchain" fuzz cmin -s none "$target" "$corpus"
+cargo "+$toolchain" fuzz cmin -s none "$target" "$corpus" -- \
+  -jobs="$jobs" \
+  -workers="$workers" \
+  ${LIBFUZZER_ARGS:-}
 
-fuzz_log="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.XXXXXX.log")"
-artifact_marker="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.XXXXXX.marker")"
+fuzz_log="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.log.XXXXXX")"
+artifact_marker="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.marker.XXXXXX")"
 trap 'rm -f "$fuzz_log" "$artifact_marker"' EXIT
 
 echo "==> fuzzing for ${fuzz_seconds}s"
-set +e
-cargo "+$toolchain" fuzz run -s none "$target" "$corpus" -- \
-  -jobs="$jobs" \
-  -workers="$workers" \
-  -max_total_time="$fuzz_seconds" \
-  ${LIBFUZZER_ARGS:-} 2>&1 | tee "$fuzz_log"
-fuzz_status="${PIPESTATUS[0]}"
-set -e
+fuzz_status=0
+remaining_seconds="$fuzz_seconds"
+chunk_index=1
+
+while ((remaining_seconds > 0)); do
+  chunk_seconds="$remaining_seconds"
+  if ((fuzz_chunk_seconds > 0 && chunk_seconds > fuzz_chunk_seconds)); then
+    chunk_seconds="$fuzz_chunk_seconds"
+  fi
+
+  if ((fuzz_seconds != chunk_seconds)); then
+    echo "==> fuzz chunk $chunk_index (${chunk_seconds}s, ${remaining_seconds}s remaining)"
+  fi
+
+  set +e
+  cargo "+$toolchain" fuzz run -s none "$target" "$corpus" -- \
+    -jobs="$jobs" \
+    -workers="$workers" \
+    -max_total_time="$chunk_seconds" \
+    ${LIBFUZZER_ARGS:-} 2>&1 | tee -a "$fuzz_log"
+  fuzz_status="${PIPESTATUS[0]}"
+  set -e
+
+  if ((fuzz_status != 0)); then
+    break
+  fi
+
+  remaining_seconds=$((remaining_seconds - chunk_seconds))
+  chunk_index=$((chunk_index + 1))
+done
 
 if ((fuzz_status == 0)); then
   exit 0

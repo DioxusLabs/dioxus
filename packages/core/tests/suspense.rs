@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, ElementId, Mutation, ScopeId, generation};
+use dioxus_core::{AttributeValue, ElementId, Mutation, ScopeId, Task, generation};
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
@@ -120,6 +120,79 @@ fn suspense_switches_to_fallback_when_child_suspends_during_diff() {
     assert_eq!(
         renderer.snapshot(),
         [SnapshotNode::Text("fallback".to_string())]
+    );
+}
+
+#[test]
+fn suspense_promotes_child_when_suspended_task_is_cancelled_during_diff() {
+    fn app() -> Element {
+        let render_generation = generation();
+
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {
+                    should_suspend: render_generation == 0,
+                    show_component: render_generation > 0,
+                }
+            }
+        }
+    }
+
+    #[component]
+    fn Child(should_suspend: bool, show_component: bool) -> Element {
+        let mut task = use_signal(|| None::<Task>);
+
+        if should_suspend {
+            let running = task.cloned().unwrap_or_else(|| {
+                let new_task = spawn(async { std::future::pending::<()>().await });
+                task.set(Some(new_task));
+                new_task
+            });
+            suspend(running)?;
+        } else if let Some(task) = task.take() {
+            task.cancel();
+        }
+
+        if show_component {
+            rsx! {
+                LoadedChild {}
+            }
+        } else {
+            rsx! {
+                div {}
+            }
+        }
+    }
+
+    #[component]
+    fn LoadedChild() -> Element {
+        rsx! {
+            div {}
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    dom.rebuild(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Text("fallback".to_string())]
+    );
+
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Element {
+            tag: "div".to_string(),
+            namespace: None,
+            attrs: Vec::new(),
+            listeners: Vec::new(),
+            children: Vec::new(),
+        }]
     );
 }
 

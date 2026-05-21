@@ -1,5 +1,5 @@
 use crate::innerlude::MountId;
-use crate::{Attribute, AttributeValue, DynamicNode::*};
+use crate::{Attribute, AttributeValue, DynamicNode::*, TemplateAttribute};
 use crate::{NoOpMutations, VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
@@ -55,6 +55,56 @@ fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
         .expect("node should already be mounted");
     debug_assert!(dom.runtime.mounts.borrow().contains(mount.0));
     mount
+}
+
+#[derive(Clone, Copy)]
+struct EffectiveAttribute<'a> {
+    name: &'static str,
+    namespace: Option<&'static str>,
+    value: EffectiveAttributeValue<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum EffectiveAttributeValue<'a> {
+    Static(&'static str),
+    Dynamic(&'a Attribute),
+}
+
+impl<'a> EffectiveAttribute<'a> {
+    fn static_attr(
+        name: &'static str,
+        value: &'static str,
+        namespace: Option<&'static str>,
+    ) -> Self {
+        Self {
+            name,
+            namespace,
+            value: EffectiveAttributeValue::Static(value),
+        }
+    }
+
+    fn dynamic_attr(attribute: &'a Attribute) -> Self {
+        Self {
+            name: attribute.name,
+            namespace: attribute.namespace,
+            value: EffectiveAttributeValue::Dynamic(attribute),
+        }
+    }
+
+    fn is_listener(&self) -> bool {
+        matches!(
+            self.value,
+            EffectiveAttributeValue::Dynamic(attribute)
+                if matches!(attribute.value, AttributeValue::Listener(_))
+        )
+    }
+
+    fn volatile(&self) -> bool {
+        match self.value {
+            EffectiveAttributeValue::Dynamic(attribute) => attribute.volatile,
+            EffectiveAttributeValue::Static(_) => false,
+        }
+    }
 }
 
 impl VNode {
@@ -515,80 +565,32 @@ impl VNode {
         to: &mut impl WriteMutations,
     ) {
         let mount_id = new.mount.get();
-        for (idx, (old_attrs, new_attrs)) in self
-            .dynamic_attrs
-            .iter()
-            .zip(new.dynamic_attrs.iter())
-            .enumerate()
-        {
-            let mut old_attributes_iter = old_attrs.iter().peekable();
-            let mut new_attributes_iter = new_attrs.iter().peekable();
-            let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
-            let path = self.template.attr_paths()[idx];
+        let attr_paths = self.template.attr_paths();
+        let mut visited_paths = Vec::new();
 
-            loop {
-                match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
-                    (Some(old_attribute), Some(new_attribute)) => {
-                        // check which name is greater
-                        match old_attribute.name.cmp(new_attribute.name) {
-                            // The two attributes are the same, so diff them
-                            std::cmp::Ordering::Equal => {
-                                let old = old_attributes_iter.next().unwrap();
-                                let new = new_attributes_iter.next().unwrap();
-                                // Volatile attributes are attributes that the browser may override so we always update them
-                                let volatile = old.volatile;
-                                // We only need to write the attribute if the attribute is volatile or the value has changed
-                                // and this is not an event listener.
-                                // Interpreters reference event listeners by name and element id, so we don't need to write them
-                                // even if the closure has changed.
-                                let attribute_changed = match (&old.value, &new.value) {
-                                    (AttributeValue::Text(l), AttributeValue::Text(r)) => l != r,
-                                    (AttributeValue::Float(l), AttributeValue::Float(r)) => l != r,
-                                    (AttributeValue::Int(l), AttributeValue::Int(r)) => l != r,
-                                    (AttributeValue::Bool(l), AttributeValue::Bool(r)) => l != r,
-                                    (AttributeValue::Any(l), AttributeValue::Any(r)) => {
-                                        !l.as_ref().any_cmp(r.as_ref())
-                                    }
-                                    (AttributeValue::None, AttributeValue::None) => false,
-                                    (AttributeValue::Listener(_), AttributeValue::Listener(_)) => {
-                                        false
-                                    }
-                                    _ => true,
-                                };
-                                if volatile || attribute_changed {
-                                    self.write_attribute(
-                                        path,
-                                        new,
-                                        attribute_id,
-                                        mount_id,
-                                        dom,
-                                        to,
-                                    );
-                                }
-                            }
-                            // In a sorted list, if the old attribute name is first, then the new attribute is missing
-                            std::cmp::Ordering::Less => {
-                                let old = old_attributes_iter.next().unwrap();
-                                self.remove_attribute(old, attribute_id, to)
-                            }
-                            // In a sorted list, if the new attribute name is first, then the old attribute is missing
-                            std::cmp::Ordering::Greater => {
-                                let new = new_attributes_iter.next().unwrap();
-                                self.write_attribute(path, new, attribute_id, mount_id, dom, to);
-                            }
-                        }
-                    }
-                    (Some(_), None) => {
-                        let left = old_attributes_iter.next().unwrap();
-                        self.remove_attribute(left, attribute_id, to)
-                    }
-                    (None, Some(_)) => {
-                        let right = new_attributes_iter.next().unwrap();
-                        self.write_attribute(path, right, attribute_id, mount_id, dom, to)
-                    }
-                    (None, None) => break,
-                }
+        for (idx, path) in attr_paths.iter().copied().enumerate() {
+            if visited_paths.contains(&path) {
+                continue;
             }
+            visited_paths.push(path);
+
+            let dynamic_attr_indices = attr_paths
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, attr_path)| (*attr_path == path).then_some(idx))
+                .collect::<Vec<_>>();
+            let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
+            let old_attrs = self.effective_attributes_for_path(path, &dynamic_attr_indices);
+            let new_attrs = new.effective_attributes_for_path(path, &dynamic_attr_indices);
+            self.diff_effective_attributes(
+                path,
+                attribute_id,
+                mount_id,
+                &old_attrs,
+                &new_attrs,
+                dom,
+                to,
+            );
         }
     }
 
@@ -606,6 +608,234 @@ impl VNode {
                 );
             }
         }
+    }
+
+    fn effective_attributes_for_path<'a>(
+        &'a self,
+        path: &'static [u8],
+        dynamic_attr_indices: &[usize],
+    ) -> Vec<EffectiveAttribute<'a>> {
+        let mut out = Vec::new();
+
+        if let Some(TemplateNode::Element { attrs, .. }) = self.template_node_at_path(path) {
+            for attr in attrs.iter() {
+                if let TemplateAttribute::Static {
+                    name,
+                    value,
+                    namespace,
+                } = attr
+                {
+                    Self::set_effective_attribute(
+                        &mut out,
+                        EffectiveAttribute::static_attr(*name, *value, *namespace),
+                    );
+                }
+            }
+        }
+
+        for idx in dynamic_attr_indices {
+            for attr in &self.dynamic_attrs[*idx][..] {
+                if matches!(attr.value, AttributeValue::None) {
+                    Self::remove_effective_attribute(&mut out, attr.name, attr.namespace);
+                } else {
+                    Self::set_effective_attribute(&mut out, EffectiveAttribute::dynamic_attr(attr));
+                }
+            }
+        }
+
+        out.sort_by(|left, right| {
+            left.name
+                .cmp(right.name)
+                .then_with(|| left.namespace.cmp(&right.namespace))
+        });
+        out
+    }
+
+    fn set_effective_attribute<'a>(
+        attrs: &mut Vec<EffectiveAttribute<'a>>,
+        attribute: EffectiveAttribute<'a>,
+    ) {
+        if let Some(existing) = attrs.iter_mut().find(|existing| {
+            existing.name == attribute.name && existing.namespace == attribute.namespace
+        }) {
+            *existing = attribute;
+        } else {
+            attrs.push(attribute);
+        }
+    }
+
+    fn remove_effective_attribute(
+        attrs: &mut Vec<EffectiveAttribute<'_>>,
+        name: &'static str,
+        namespace: Option<&'static str>,
+    ) {
+        if let Some(idx) = attrs
+            .iter()
+            .position(|attr| attr.name == name && attr.namespace == namespace)
+        {
+            attrs.remove(idx);
+        }
+    }
+
+    fn diff_effective_attributes(
+        &self,
+        path: &'static [u8],
+        id: ElementId,
+        mount: MountId,
+        old_attrs: &[EffectiveAttribute<'_>],
+        new_attrs: &[EffectiveAttribute<'_>],
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        let mut old_attributes_iter = old_attrs.iter().peekable();
+        let mut new_attributes_iter = new_attrs.iter().peekable();
+
+        loop {
+            match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
+                (Some(old_attribute), Some(new_attribute)) => {
+                    match old_attribute
+                        .name
+                        .cmp(new_attribute.name)
+                        .then_with(|| old_attribute.namespace.cmp(&new_attribute.namespace))
+                    {
+                        std::cmp::Ordering::Equal => {
+                            let old = old_attributes_iter.next().unwrap();
+                            let new = new_attributes_iter.next().unwrap();
+                            self.diff_effective_attribute(path, id, mount, old, new, dom, to);
+                        }
+                        std::cmp::Ordering::Less => {
+                            let old = old_attributes_iter.next().unwrap();
+                            self.remove_effective_attribute_from_dom(old, id, to);
+                        }
+                        std::cmp::Ordering::Greater => {
+                            let new = new_attributes_iter.next().unwrap();
+                            self.write_effective_attribute(path, new, id, mount, dom, to);
+                        }
+                    }
+                }
+                (Some(_), None) => {
+                    let old = old_attributes_iter.next().unwrap();
+                    self.remove_effective_attribute_from_dom(old, id, to);
+                }
+                (None, Some(_)) => {
+                    let new = new_attributes_iter.next().unwrap();
+                    self.write_effective_attribute(path, new, id, mount, dom, to);
+                }
+                (None, None) => break,
+            }
+        }
+    }
+
+    fn diff_effective_attribute(
+        &self,
+        path: &'static [u8],
+        id: ElementId,
+        mount: MountId,
+        old: &EffectiveAttribute<'_>,
+        new: &EffectiveAttribute<'_>,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        if old.is_listener() != new.is_listener() {
+            self.remove_effective_attribute_from_dom(old, id, to);
+            self.write_effective_attribute(path, new, id, mount, dom, to);
+            return;
+        }
+
+        if new.is_listener() {
+            return;
+        }
+
+        if old.volatile() || new.volatile() || Self::effective_attribute_changed(old, new) {
+            self.write_effective_attribute(path, new, id, mount, dom, to);
+        }
+    }
+
+    fn effective_attribute_changed(
+        old: &EffectiveAttribute<'_>,
+        new: &EffectiveAttribute<'_>,
+    ) -> bool {
+        match (old.value, new.value) {
+            (EffectiveAttributeValue::Static(left), EffectiveAttributeValue::Static(right)) => {
+                left != right
+            }
+            (EffectiveAttributeValue::Static(left), EffectiveAttributeValue::Dynamic(right)) => {
+                !matches!(&right.value, AttributeValue::Text(right) if left == right)
+            }
+            (EffectiveAttributeValue::Dynamic(left), EffectiveAttributeValue::Static(right)) => {
+                !matches!(&left.value, AttributeValue::Text(left) if left == right)
+            }
+            (EffectiveAttributeValue::Dynamic(left), EffectiveAttributeValue::Dynamic(right)) => {
+                match (&left.value, &right.value) {
+                    (AttributeValue::Text(left), AttributeValue::Text(right)) => left != right,
+                    (AttributeValue::Float(left), AttributeValue::Float(right)) => left != right,
+                    (AttributeValue::Int(left), AttributeValue::Int(right)) => left != right,
+                    (AttributeValue::Bool(left), AttributeValue::Bool(right)) => left != right,
+                    (AttributeValue::Any(left), AttributeValue::Any(right)) => {
+                        !left.as_ref().any_cmp(right.as_ref())
+                    }
+                    (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
+                    _ => true,
+                }
+            }
+        }
+    }
+
+    fn remove_effective_attribute_from_dom(
+        &self,
+        attribute: &EffectiveAttribute<'_>,
+        id: ElementId,
+        to: &mut impl WriteMutations,
+    ) {
+        match attribute.value {
+            EffectiveAttributeValue::Dynamic(attribute)
+                if matches!(attribute.value, AttributeValue::Listener(_)) =>
+            {
+                self.remove_attribute(attribute, id, to);
+            }
+            _ => {
+                to.set_attribute(
+                    attribute.name,
+                    attribute.namespace,
+                    &AttributeValue::None,
+                    id,
+                );
+            }
+        }
+    }
+
+    fn write_effective_attribute(
+        &self,
+        path: &'static [u8],
+        attribute: &EffectiveAttribute<'_>,
+        id: ElementId,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        match attribute.value {
+            EffectiveAttributeValue::Static(value) => {
+                let value = AttributeValue::Text(value.to_string());
+                to.set_attribute(attribute.name, attribute.namespace, &value, id);
+            }
+            EffectiveAttributeValue::Dynamic(attribute) => {
+                self.write_attribute(path, attribute, id, mount, dom, to);
+            }
+        }
+    }
+
+    fn template_node_at_path(&self, path: &'static [u8]) -> Option<&'static TemplateNode> {
+        let (root_idx, child_path) = path.split_first()?;
+        let mut node = self.template.roots().get(*root_idx as usize)?;
+
+        for child_idx in child_path {
+            let TemplateNode::Element { children, .. } = node else {
+                return None;
+            };
+            node = children.get(*child_idx as usize)?;
+        }
+
+        Some(node)
     }
 
     fn write_attribute(

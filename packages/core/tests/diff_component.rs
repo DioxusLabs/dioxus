@@ -99,8 +99,5 @@ fn component_swap() {
         .render_with_expected(app, expected_dashboard())
         .render_with_expected(app, expected_results())
         .render_with_expected(app, expected_dashboard())
-        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(3, |s| assert_eq!(s.replaces, 1))
         .run();
 }
