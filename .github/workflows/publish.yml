@@ -40,6 +40,7 @@ env:
   # PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
   RELEASE_TAG: ${{ github.event.inputs.channel }}
   RELEASE_POST: ${{ github.event.inputs.post }}
+  rust_stable: 1.94.0
 
 jobs:
   release-cli:
@@ -114,7 +115,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.92.0"
+          toolchain: ${{ env.rust_stable }}
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
