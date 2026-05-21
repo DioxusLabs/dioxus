@@ -15,6 +15,12 @@ use crate::server::file_name_looks_immutable;
 #[folder = "$DIOXUS_EMBED_DIR"]
 struct PublicAssets;
 
+/// Read the embedded index.html contents, if present.
+pub(crate) fn embedded_index_html() -> Option<String> {
+    let file = PublicAssets::get("index.html")?;
+    String::from_utf8(file.data.into_owned()).ok()
+}
+
 pub(crate) fn serve_embedded_assets<S>(mut router: Router<S>) -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
