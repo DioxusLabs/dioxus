@@ -3420,6 +3420,7 @@ dependencies = [
  "dioxus",
  "dioxus-core-types",
  "dioxus-html",
+ "dioxus-renderer-oracle",
  "dioxus-ssr",
  "futures-channel",
  "futures-util",
