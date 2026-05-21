@@ -1,5 +1,4 @@
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
-use const_serialize_07 as const_serialize;
 use const_serialize_08::SerializeConst;
 
 /// Options for a css asset
@@ -12,7 +11,6 @@ use const_serialize_08::SerializeConst;
     Copy,
     Hash,
     SerializeConst,
-    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]

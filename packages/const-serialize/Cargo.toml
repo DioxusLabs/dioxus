@@ -13,7 +13,6 @@ rust-version = "1.85.0"
 [dependencies]
 const-serialize-macro = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-const-serialize-07 = { package = "const-serialize", version = "=0.7.2", optional = true }
 
 [dev-dependencies]
 rand = { workspace = true }
@@ -21,5 +20,3 @@ rand = { workspace = true }
 [features]
 test-big-endian = []
 serde = ["dep:serde"]
-# Enables serialization of the ConstStr with the older const-serialize-0.7 crate
-const-serialize-07 = ["dep:const-serialize-07"]

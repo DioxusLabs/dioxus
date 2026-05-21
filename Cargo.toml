@@ -75,7 +75,6 @@ members = [
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-macro",
-    "packages/manganis/manganis-07",
 
     # wasm-split
     "packages/wasm-split/wasm-split",
@@ -180,11 +179,8 @@ depinfo = { path = "packages/depinfo", version = "0.8.0-alpha.0" }
 manganis = { path = "packages/manganis/manganis", version = "0.8.0-alpha.0" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.8.0-alpha.0" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.8.0-alpha.0" }
-manganis-core-07 = { path = "packages/manganis/manganis-07", version = "0.7.2" }
 
-# const-serialize.
-# these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
-# once the workspace moves onto 0.8, we can clean this up, moving the const-serialize stuff back to normal versions
+# const-serialize
 const-serialize = { path = "packages/const-serialize", version = "0.8.0-alpha.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0-alpha.0" }
 

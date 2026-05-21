@@ -1,4 +1,3 @@
-use const_serialize_07 as const_serialize;
 use const_serialize_08::SerializeConst;
 
 use crate::{
@@ -15,7 +14,6 @@ use crate::{
     Copy,
     Hash,
     SerializeConst,
-    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -156,7 +154,6 @@ impl<T> AssetOptionsBuilder<T> {
     Copy,
     Hash,
     SerializeConst,
-    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]

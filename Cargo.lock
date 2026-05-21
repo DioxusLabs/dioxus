@@ -2287,33 +2287,11 @@ dependencies = [
 
 [[package]]
 name = "const-serialize"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad7154afa56de2f290e3c82c2c6dc4f5b282b6870903f56ef3509aba95866edc"
-dependencies = [
- "const-serialize-macro 0.7.2",
- "serde",
-]
-
-[[package]]
-name = "const-serialize"
 version = "0.8.0-alpha.0"
 dependencies = [
- "const-serialize 0.7.2",
- "const-serialize-macro 0.8.0-alpha.0",
+ "const-serialize-macro",
  "rand 0.9.4",
  "serde",
-]
-
-[[package]]
-name = "const-serialize-macro"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f160aad86b4343e8d4e261fee9965c3005b2fd6bc117d172ab65948779e4acf"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -3259,8 +3237,7 @@ dependencies = [
  "codemap",
  "console 0.16.3",
  "console-subscriber",
- "const-serialize 0.7.2",
- "const-serialize 0.8.0-alpha.0",
+ "const-serialize",
  "convert_case 0.8.0",
  "crossterm",
  "ctrlc",
@@ -3305,7 +3282,6 @@ dependencies = [
  "log",
  "manganis",
  "manganis-core",
- "manganis-core-07",
  "md5",
  "mozjpeg",
  "notify",
@@ -8108,8 +8084,7 @@ dependencies = [
 name = "manganis"
 version = "0.8.0-alpha.0"
 dependencies = [
- "const-serialize 0.7.2",
- "const-serialize 0.8.0-alpha.0",
+ "const-serialize",
  "jni 0.21.1",
  "manganis-core",
  "manganis-macro",
@@ -8122,21 +8097,12 @@ dependencies = [
 name = "manganis-core"
 version = "0.8.0-alpha.0"
 dependencies = [
- "const-serialize 0.7.2",
- "const-serialize 0.8.0-alpha.0",
+ "const-serialize",
  "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
  "serde",
  "winnow 0.7.15",
-]
-
-[[package]]
-name = "manganis-core-07"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.7.2",
- "serde",
 ]
 
 [[package]]
