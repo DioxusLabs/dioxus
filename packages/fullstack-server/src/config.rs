@@ -53,24 +53,7 @@ impl ServeConfig {
     ///
     /// To provide an alternate `index.html`, you can use `with_index_html` method instead.
     pub fn new() -> Self {
-        let index = if let Some(public_path) = crate::public_path() {
-            let index_html_path = public_path.join("index.html");
-
-            if index_html_path.exists() {
-                let index_html = std::fs::read_to_string(index_html_path)
-                    .expect("Failed to read index.html from public directory");
-
-                IndexHtml::new(&index_html, "main")
-                    .expect("Failed to parse index.html from public directory")
-            } else {
-                IndexHtml::ssr_only()
-            }
-        } else {
-            tracing::warn!(
-                "Cannot identify public directory, using default index.html. If you need client-side scripts (like JS + WASM), please provide an explicit public directory."
-            );
-            IndexHtml::ssr_only()
-        };
+        let index = Self::load_index_html();
 
         Self {
             index,
@@ -91,6 +74,35 @@ impl ServeConfig {
             context_providers: Default::default(),
             streaming_mode: Default::default(),
         }
+    }
+
+    /// Load index.html from the appropriate source.
+    ///
+    /// When the `embed` feature is active, reads from the embedded assets first.
+    /// Otherwise, looks for it on the filesystem next to the executable.
+    fn load_index_html() -> IndexHtml {
+        // When assets are embedded, read index.html from the bundle
+        #[cfg(feature = "embed")]
+        if let Some(index_html) = crate::embedded::embedded_index_html() {
+            return IndexHtml::new(&index_html, "main")
+                .expect("Failed to parse embedded index.html");
+        }
+
+        if let Some(public_path) = crate::public_path() {
+            let index_html_path = public_path.join("index.html");
+            if index_html_path.exists() {
+                let index_html = std::fs::read_to_string(index_html_path)
+                    .expect("Failed to read index.html from public directory");
+                return IndexHtml::new(&index_html, "main")
+                    .expect("Failed to parse index.html from public directory");
+            }
+        } else {
+            tracing::warn!(
+                "Cannot identify public directory, using default index.html. If you need client-side scripts (like JS + WASM), please provide an explicit public directory."
+            );
+        }
+
+        IndexHtml::ssr_only()
     }
 
     /// Enable incremental static generation. Incremental static generation caches the

@@ -226,6 +226,7 @@ slotmap = { version = "1.0.7", features = ["serde"] }
 futures = "0.3.32"
 futures-channel = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false }
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 rustc-hash = "2.1.1"
 wasm-bindgen = "0.2.121"
 wasm-bindgen-futures = "0.4.71"

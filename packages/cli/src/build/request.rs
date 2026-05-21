@@ -272,6 +272,10 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+    /// Embed public assets into the server binary via rust-embed
+    pub(crate) embed_assets: bool,
+    /// Path to the public directory to embed (set from client's root_dir)
+    pub(crate) embed_dir: Option<PathBuf>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -921,6 +925,8 @@ impl BuildRequest {
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
+            embed_assets: false,
+            embed_dir: None,
         })
     }
 
@@ -1925,6 +1931,11 @@ impl BuildRequest {
                 APP_TITLE_ENV.into(),
                 self.config.web.app.title.clone().into(),
             ));
+        }
+
+        // Set DIOXUS_EMBED_DIR so rust-embed picks up the public assets at compile time
+        if let Some(ref embed_dir) = self.embed_dir {
+            env_vars.push(("DIOXUS_EMBED_DIR".into(), embed_dir.as_os_str().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file

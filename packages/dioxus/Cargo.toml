@@ -113,6 +113,7 @@ server = [
   "ssr",
   "dioxus-liveview?/axum",
 ]
+embed = ["dioxus-server?/embed"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []

@@ -48,3 +48,6 @@ pub use isrg::*;
 
 mod index_html;
 pub(crate) use index_html::IndexHtml;
+
+#[cfg(feature = "embed")]
+mod embedded;
