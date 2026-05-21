@@ -438,7 +438,10 @@ impl VirtualDom {
 
     fn insert_before(&mut self, to: Option<&mut impl WriteMutations>, new: usize, before: &VNode) {
         if let Some(to) = to {
-            debug_assert!(new > 0);
+            debug_assert!(
+                new > 0,
+                "we currently always insert at least one placeholder node. if we did not, this would result in insert before failing"
+            );
             let id = before.find_first_element(self);
             to.insert_nodes_before(id, new);
         }
