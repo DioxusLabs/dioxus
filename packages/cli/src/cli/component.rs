@@ -441,7 +441,7 @@ impl RemoteComponentRegistry {
         repo.checkout_tree(&object, None)?;
 
         if let Some(gref) = reference {
-            if let Some(name) = gref.name() {
+            if let Ok(name) = gref.name() {
                 repo.set_head(name)?;
             }
         } else {
