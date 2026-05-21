@@ -11,16 +11,26 @@ use std::{
 
 // ---------- Model operations -----------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum Op {
     Rerender,
-    WakeSuspense { suspense: u8 },
+    WakeSuspense {
+        suspense: u8,
+    },
+    FireEvent {
+        target: u8,
+        behavior: EventBehaviorSpec,
+    },
     Mutate(ModelEdit),
 }
 
 impl Op {
     pub(crate) fn wake_suspense(suspense: u8) -> Self {
         Self::WakeSuspense { suspense }
+    }
+
+    pub(crate) fn fire_event(target: u8, behavior: EventBehaviorSpec) -> Self {
+        Self::FireEvent { target, behavior }
     }
 
     pub(crate) fn template(vnode: u8, edit: TemplateEdit) -> Self {
@@ -30,30 +40,27 @@ impl Op {
         })
     }
 
-    pub(crate) fn dynamic(vnode: u8, slot: u8, kind: DynamicKind) -> Self {
+    pub(crate) fn dynamic(vnode: u8, node: u8, kind: DynamicKind) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::DynamicSlot {
-                slot,
-                edit: DynamicEdit::SetKind(kind),
-            },
+            edit: VNodeEdit::Template(TemplateEdit::SetNode {
+                node,
+                kind: TemplateNodeKind::Dynamic(kind),
+            }),
         })
     }
 
-    pub(crate) fn dynamic_attrs(vnode: u8, slot: u8, edit: ListEdit<AttrSpec>) -> Self {
+    pub(crate) fn dynamic_attrs(vnode: u8, attr: u8, edit: ListEdit<AttrSpec>) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::DynamicAttrs { slot, edit },
+            edit: VNodeEdit::Template(TemplateEdit::DynamicAttrs { attr, edit }),
         })
     }
 
-    pub(crate) fn fragment(vnode: u8, slot: u8, edit: FragmentEdit) -> Self {
+    pub(crate) fn fragment(vnode: u8, node: u8, edit: FragmentEdit) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::DynamicSlot {
-                slot,
-                edit: DynamicEdit::Fragment(edit),
-            },
+            edit: VNodeEdit::Template(TemplateEdit::Fragment { node, edit }),
         })
     }
 
@@ -72,32 +79,30 @@ impl Op {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
+pub(crate) enum EventBehaviorSpec {
+    Noop,
+    DispatchNestedEvent { target: u8 },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum ModelEdit {
     VNode { vnode: u8, edit: VNodeEdit },
     Suspense { suspense: u8, edit: SuspenseEdit },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum VNodeEdit {
     Template(TemplateEdit),
-    DynamicSlot { slot: u8, edit: DynamicEdit },
-    DynamicAttrs { slot: u8, edit: ListEdit<AttrSpec> },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
-pub(crate) enum DynamicEdit {
-    SetKind(DynamicKind),
-    Fragment(FragmentEdit),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum SuspenseEdit {
     Mode(SuspenseMode),
     WakeMutation(WakeMutationSpec),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum TemplateEdit {
     SetNode {
         node: u8,
@@ -114,15 +119,23 @@ pub(crate) enum TemplateEdit {
         element: u8,
         edit: ListEdit<TemplateAttrSpec>,
     },
+    Fragment {
+        node: u8,
+        edit: FragmentEdit,
+    },
+    DynamicAttrs {
+        attr: u8,
+        edit: ListEdit<AttrSpec>,
+    },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum FragmentEdit {
     KeyMode(FragmentKeyMode),
     Children(ListEdit<Option<u8>>),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) enum ListEdit<T> {
     Insert { index: u8, item: T },
     Remove { index: u8 },
@@ -233,11 +246,66 @@ where
     }
 }
 
+#[derive(Default)]
+struct SuspenseReadyRegistry {
+    wake_counts: Vec<(SuspenseReadyKey, usize)>,
+    wakers: Vec<(SuspenseReadyKey, Waker)>,
+}
+
+impl SuspenseReadyRegistry {
+    fn wake_count(&self, key: SuspenseReadyKey) -> usize {
+        self.wake_counts
+            .iter()
+            .find_map(|(wake_key, count)| (*wake_key == key).then_some(*count))
+            .unwrap_or(0)
+    }
+
+    fn released(&self, key: SuspenseReadyKey, required_wakes: usize) -> bool {
+        self.wake_count(key) >= required_wakes
+    }
+
+    fn register_waker(&mut self, key: SuspenseReadyKey, waker: Waker) {
+        if let Some((_, existing)) = self
+            .wakers
+            .iter_mut()
+            .find(|(wake_key, _)| *wake_key == key)
+        {
+            *existing = waker;
+        } else {
+            self.wakers.push((key, waker));
+        }
+    }
+
+    fn release(&mut self, key: SuspenseReadyKey) {
+        if let Some((_, count)) = self
+            .wake_counts
+            .iter_mut()
+            .find(|(wake_key, _)| *wake_key == key)
+        {
+            *count = count.saturating_add(1);
+        } else {
+            self.wake_counts.push((key, 1));
+        }
+
+        if let Some((_, waker)) = self.wakers.iter().find(|(wake_key, _)| *wake_key == key) {
+            waker.wake_by_ref();
+        }
+    }
+
+    fn registered_keys(&self) -> Vec<SuspenseReadyKey> {
+        self.wakers.iter().map(|(key, _)| *key).collect()
+    }
+
+    fn clear(&mut self) {
+        self.wake_counts.clear();
+        self.wakers.clear();
+    }
+}
+
 thread_local! {
     static MODEL: RefCell<Model> = RefCell::new(Model::initial());
-    static SUSPENSE_READY_WAKES: RefCell<Vec<(SuspenseReadyKey, usize)>> = RefCell::new(Vec::new());
-    static SUSPENSE_READY_WAKERS: RefCell<Vec<(SuspenseReadyKey, Waker)>> = RefCell::new(Vec::new());
-    static REGISTER_SUSPENSE_READY_SENDERS: Cell<bool> = Cell::new(true);
+    static SUSPENSE_READY: RefCell<SuspenseReadyRegistry> = RefCell::new(SuspenseReadyRegistry::default());
+    static REGISTER_SUSPENSE_READY_WAKERS: Cell<bool> = Cell::new(true);
 }
 
 pub(crate) fn read_model() -> Model {
@@ -248,59 +316,26 @@ pub(crate) fn with_model<R>(f: impl FnOnce(&mut Model) -> R) -> R {
     MODEL.with(|m| f(&mut m.borrow_mut()))
 }
 
-fn suspense_ready_wake_count(key: SuspenseReadyKey) -> usize {
-    SUSPENSE_READY_WAKES.with(|wakes| {
-        wakes
-            .borrow()
-            .iter()
-            .find_map(|(wake_key, count)| (*wake_key == key).then_some(*count))
-            .unwrap_or(0)
+fn suspense_ready_released(key: SuspenseReadyKey, required_wakes: usize) -> bool {
+    REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
+        enabled.get() && SUSPENSE_READY.with(|ready| ready.borrow().released(key, required_wakes))
     })
 }
 
-fn suspense_ready_released(key: SuspenseReadyKey, required_wakes: usize) -> bool {
-    REGISTER_SUSPENSE_READY_SENDERS
-        .with(|enabled| enabled.get() && suspense_ready_wake_count(key) >= required_wakes)
-}
-
 fn register_suspense_ready_waker(key: SuspenseReadyKey, waker: Waker) {
-    REGISTER_SUSPENSE_READY_SENDERS.with(|enabled| {
+    REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
         if enabled.get() {
-            SUSPENSE_READY_WAKERS.with(|wakers| wakers.borrow_mut().push((key, waker)));
+            SUSPENSE_READY.with(|ready| ready.borrow_mut().register_waker(key, waker));
         }
     });
 }
 
 pub(crate) fn release_suspense_ready_task(key: SuspenseReadyKey) {
-    SUSPENSE_READY_WAKES.with(|wakes| {
-        let mut wakes = wakes.borrow_mut();
-        if let Some((_, count)) = wakes.iter_mut().find(|(wake_key, _)| *wake_key == key) {
-            *count = count.saturating_add(1);
-        } else {
-            wakes.push((key, 1));
-        }
-    });
-    SUSPENSE_READY_WAKERS.with(|wakers| {
-        for (_, waker) in wakers
-            .borrow()
-            .iter()
-            .filter(|(wake_key, _)| *wake_key == key)
-        {
-            waker.wake_by_ref();
-        }
-    });
+    SUSPENSE_READY.with(|ready| ready.borrow_mut().release(key));
 }
 
 pub(crate) fn selected_registered_ready_suspense_key(selector: u8) -> Option<SuspenseReadyKey> {
-    let registered = SUSPENSE_READY_WAKERS.with(|wakers| {
-        let mut keys = Vec::new();
-        for (key, _) in wakers.borrow().iter() {
-            if !keys.contains(key) {
-                keys.push(*key);
-            }
-        }
-        keys
-    });
+    let registered = SUSPENSE_READY.with(|ready| ready.borrow().registered_keys());
 
     let mut ready = Vec::new();
     read_model().root.collect_ready_suspense_keys(&mut ready);
@@ -309,8 +344,7 @@ pub(crate) fn selected_registered_ready_suspense_key(selector: u8) -> Option<Sus
 }
 
 pub(crate) fn clear_suspense_ready_tasks() {
-    SUSPENSE_READY_WAKES.with(|wakes| wakes.borrow_mut().clear());
-    SUSPENSE_READY_WAKERS.with(|wakers| wakers.borrow_mut().clear());
+    SUSPENSE_READY.with(|ready| ready.borrow_mut().clear());
 }
 
 struct SuspenseReadyRegistrationGuard {
@@ -319,12 +353,12 @@ struct SuspenseReadyRegistrationGuard {
 
 impl Drop for SuspenseReadyRegistrationGuard {
     fn drop(&mut self) {
-        REGISTER_SUSPENSE_READY_SENDERS.with(|enabled| enabled.set(self.previous));
+        REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| enabled.set(self.previous));
     }
 }
 
 pub(crate) fn without_suspense_ready_registration<R>(f: impl FnOnce() -> R) -> R {
-    let _guard = REGISTER_SUSPENSE_READY_SENDERS.with(|enabled| {
+    let _guard = REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
         let previous = enabled.replace(false);
         SuspenseReadyRegistrationGuard { previous }
     });
@@ -350,14 +384,15 @@ impl Future for SuspenseReadyFuture {
     }
 }
 
-pub(crate) fn apply_op_to_model(model: &mut Model, op: &Op) {
-    if matches!(op, Op::Rerender) {
+pub(crate) fn apply_strategy_op_to_model(model: &mut Model, op: &Op) {
+    if matches!(op, Op::Rerender | Op::FireEvent { .. }) {
         return;
     }
 
     let can_grow = model.can_grow();
     match op {
         Op::Rerender => {}
+        Op::FireEvent { .. } => {}
         Op::WakeSuspense { suspense } => {
             if let Some(key) = model.selected_ready_suspense_key(*suspense) {
                 model.wake_ready_suspense(key);
@@ -368,7 +403,14 @@ pub(crate) fn apply_op_to_model(model: &mut Model, op: &Op) {
 }
 
 pub(crate) fn apply_to_model(op: &Op) {
-    with_model(|model| apply_op_to_model(model, op));
+    let Op::Mutate(edit) = op else {
+        return;
+    };
+
+    with_model(|model| {
+        let can_grow = model.can_grow();
+        apply_model_edit(model, edit, can_grow);
+    });
 }
 
 fn apply_model_edit(model: &mut Model, edit: &ModelEdit, can_grow: bool) {
@@ -386,69 +428,54 @@ fn apply_model_edit(model: &mut Model, edit: &ModelEdit, can_grow: bool) {
 fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bool) {
     match edit {
         VNodeEdit::Template(edit) => {
-            let vnode = model.selected_vnode_mut(vnode);
-            apply_template_edit(vnode, edit, can_grow);
-            vnode.normalize_in_place();
-        }
-        VNodeEdit::DynamicSlot { slot, edit } => {
             let mut next_suspense_id = model.next_suspense_id;
             let mut next_component_id = model.next_component_id;
             {
                 let vnode = model.selected_vnode_mut(vnode);
-                match edit {
-                    DynamicEdit::SetKind(kind) => {
-                        if !vnode.dynamics.is_empty() {
-                            let index = *slot as usize % vnode.dynamics.len();
-                            if can_grow
-                                || matches!(
-                                    kind,
-                                    DynamicKind::Empty
-                                        | DynamicKind::Text(_)
-                                        | DynamicKind::Placeholder
-                                )
-                            {
-                                vnode.dynamics[index].set_kind(
-                                    kind,
-                                    &mut next_suspense_id,
-                                    &mut next_component_id,
-                                );
-                            }
-                        }
-                    }
-                    DynamicEdit::Fragment(edit) => {
-                        apply_fragment_edit(vnode, *slot, edit, can_grow);
-                    }
-                }
+                apply_template_edit(
+                    vnode,
+                    edit,
+                    can_grow,
+                    &mut next_suspense_id,
+                    &mut next_component_id,
+                );
                 vnode.normalize_in_place();
             }
             model.next_suspense_id = next_suspense_id;
             model.next_component_id = next_component_id;
         }
-        VNodeEdit::DynamicAttrs { slot, edit } => {
-            let vnode = model.selected_vnode_mut(vnode);
-            if !vnode.attrs.is_empty() {
-                let index = *slot as usize % vnode.attrs.len();
-                apply_attr_list_edit(&mut vnode.attrs[index], edit);
-                sort_attrs(index, &mut vnode.attrs[index]);
-            }
-            vnode.normalize_in_place();
-        }
     }
 }
 
-fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: bool) {
+fn apply_template_edit(
+    vnode: &mut VNodeSpec,
+    edit: &TemplateEdit,
+    can_grow: bool,
+    next_suspense_id: &mut u64,
+    next_component_id: &mut u64,
+) {
     match edit {
         TemplateEdit::SetNode { node, kind } => {
             vnode.template.cache_key = None;
             if let Some(path) = select(vnode.template.node_paths(), *node) {
                 if let Some(node) = vnode.template.node_mut(&path) {
-                    node.set_kind(kind);
+                    if can_apply_template_node_kind(kind, can_grow) {
+                        node.set_kind(kind, next_suspense_id, next_component_id);
+                    }
                 }
             }
         }
         TemplateEdit::Roots { edit } => {
             vnode.template.cache_key = None;
-            apply_template_node_list_edit(&mut vnode.template.roots, edit, 1, MAX_ROOTS, can_grow);
+            apply_template_node_list_edit(
+                &mut vnode.template.roots,
+                edit,
+                1,
+                MAX_ROOTS,
+                can_grow,
+                next_suspense_id,
+                next_component_id,
+            );
         }
         TemplateEdit::Children { element, edit } => {
             vnode.template.cache_key = None;
@@ -456,7 +483,15 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
                 if let Some(TemplateNodeSpec::Element { children, .. }) =
                     vnode.template.element_mut(&path)
                 {
-                    apply_template_node_list_edit(children, edit, 0, MAX_CHILDREN, can_grow);
+                    apply_template_node_list_edit(
+                        children,
+                        edit,
+                        0,
+                        MAX_CHILDREN,
+                        can_grow,
+                        next_suspense_id,
+                        next_component_id,
+                    );
                 }
             }
         }
@@ -470,7 +505,28 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
                 }
             }
         }
+        TemplateEdit::Fragment { node, edit } => {
+            apply_fragment_edit(vnode, *node, edit, can_grow);
+        }
+        TemplateEdit::DynamicAttrs { attr, edit } => {
+            if let Some(attrs) = selected_dynamic_attr_mut(vnode, *attr) {
+                apply_attr_list_edit(attrs, edit);
+            }
+        }
     }
+}
+
+fn can_apply_template_node_kind(kind: &TemplateNodeKind, can_grow: bool) -> bool {
+    can_grow
+        || matches!(
+            kind,
+            TemplateNodeKind::Element { .. }
+                | TemplateNodeKind::Text(_)
+                | TemplateNodeKind::Dynamic(
+                    DynamicKind::Empty | DynamicKind::Text(_) | DynamicKind::Placeholder
+                )
+                | TemplateNodeKind::Dynamic(DynamicKind::Fragment { children: 0, .. })
+        )
 }
 
 fn apply_fragment_edit(vnode: &mut VNodeSpec, slot: u8, edit: &FragmentEdit, can_grow: bool) {
@@ -506,12 +562,17 @@ fn apply_template_node_list_edit(
     min_len: usize,
     max_len: usize,
     can_grow: bool,
+    next_suspense_id: &mut u64,
+    next_component_id: &mut u64,
 ) {
     match edit {
         ListEdit::Insert { index, item } => {
             if can_grow && nodes.len() < max_len {
                 let index = insert_index(nodes.len(), *index);
-                nodes.insert(index, TemplateNodeSpec::from_kind(item));
+                nodes.insert(
+                    index,
+                    TemplateNodeSpec::from_kind(item, next_suspense_id, next_component_id),
+                );
             }
         }
         ListEdit::Remove { index } => {
@@ -583,11 +644,21 @@ fn move_selected<T>(items: &mut Vec<T>, from: u8, to: u8) {
 }
 
 fn selected_dynamic_mut(vnode: &mut VNodeSpec, selector: u8) -> Option<&mut DynamicSpec> {
-    if vnode.dynamics.is_empty() {
+    let dynamic_count = vnode.template.dynamic_count();
+    if dynamic_count == 0 {
         return None;
     }
-    let index = selector as usize % vnode.dynamics.len();
-    Some(&mut vnode.dynamics[index])
+    let mut index = selector as usize % dynamic_count;
+    vnode.template.nth_dynamic_mut(&mut index)
+}
+
+fn selected_dynamic_attr_mut(vnode: &mut VNodeSpec, selector: u8) -> Option<&mut Vec<AttrSpec>> {
+    let attr_count = vnode.template.attr_count();
+    if attr_count == 0 {
+        return None;
+    }
+    let mut index = selector as usize % attr_count;
+    vnode.template.nth_dynamic_attr_mut(&mut index)
 }
 
 fn selected_fragment_mut(vnode: &mut VNodeSpec, selector: u8) -> Option<&mut Vec<VNodeSpec>> {

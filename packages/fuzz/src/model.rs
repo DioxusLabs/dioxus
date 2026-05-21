@@ -86,8 +86,6 @@ impl Model {
 pub(crate) struct VNodeSpec {
     pub(crate) key: Option<u8>,
     pub(crate) template: TemplateSpec,
-    pub(crate) dynamics: Vec<DynamicSpec>,
-    pub(crate) attrs: Vec<Vec<AttrSpec>>,
 }
 
 impl VNodeSpec {
@@ -103,8 +101,6 @@ impl VNodeSpec {
                     children: Vec::new(),
                 }],
             },
-            dynamics: Vec::new(),
-            attrs: Vec::new(),
         }
     }
 
@@ -114,25 +110,11 @@ impl VNodeSpec {
     }
 
     pub(crate) fn normalize_in_place(&mut self) {
-        let dynamic_count = self.template.dynamic_count();
-        self.dynamics.resize(dynamic_count, DynamicSpec::Empty);
-        self.dynamics.truncate(dynamic_count);
-
-        let attr_count = self.template.attr_count();
-        self.attrs.resize(attr_count, Vec::new());
-        self.attrs.truncate(attr_count);
-        for (slot, attrs) in self.attrs.iter_mut().enumerate() {
-            sort_attrs(slot, attrs);
-            attrs.truncate(MAX_DYNAMIC_ATTRS);
-        }
+        self.template.normalize_in_place();
     }
 
     pub(crate) fn vnode_count(&self) -> usize {
-        1 + self
-            .dynamics
-            .iter()
-            .map(DynamicSpec::vnode_count)
-            .sum::<usize>()
+        1 + self.template.vnode_count()
     }
 
     pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
@@ -140,75 +122,66 @@ impl VNodeSpec {
             return Some(self);
         }
         *index -= 1;
-        for dynamic in &mut self.dynamics {
-            if let Some(node) = dynamic.nth_vnode_mut(index) {
-                return Some(node);
-            }
-        }
-        None
+        self.template.nth_vnode_mut(index)
     }
 
     pub(crate) fn node_count(&self) -> u64 {
         1 + self.template.node_count()
-            + self
-                .dynamics
-                .iter()
-                .map(DynamicSpec::node_count)
-                .sum::<u64>()
-            + self
-                .attrs
-                .iter()
-                .map(|attrs| attrs.len() as u64)
-                .sum::<u64>()
     }
 
     pub(crate) fn suspense_count(&self) -> usize {
-        self.dynamics.iter().map(DynamicSpec::suspense_count).sum()
+        self.template.suspense_count()
     }
 
     pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
-        for dynamic in &mut self.dynamics {
-            if let Some(found) = dynamic.nth_suspense_mut(index) {
-                return Some(found);
-            }
-        }
-        None
+        self.template.nth_suspense_mut(index)
     }
 
     pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
-        for dynamic in &self.dynamics {
-            dynamic.collect_ready_suspense_keys(out);
-        }
+        self.template.collect_ready_suspense_keys(out);
     }
 
     pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        for dynamic in &mut self.dynamics {
-            dynamic.wake_ready_suspense(key);
-        }
+        self.template.wake_ready_suspense(key);
     }
 
     pub(crate) fn wake_mutation_for_ready_key(
         &self,
         key: SuspenseReadyKey,
     ) -> Option<WakeMutationSpec> {
-        self.dynamics
-            .iter()
-            .find_map(|dynamic| dynamic.wake_mutation_for_ready_key(key))
+        self.template.wake_mutation_for_ready_key(key)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TemplateCacheKey {
-    Expanded(Vec<TemplateNodeSpec>),
+    Expanded(Vec<TemplateNodeShape>),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TemplateSpec {
     pub(crate) cache_key: Option<TemplateCacheKey>,
     pub(crate) roots: Vec<TemplateNodeSpec>,
 }
 
 impl TemplateSpec {
+    pub(crate) fn normalize_in_place(&mut self) {
+        self.roots.truncate(MAX_ROOTS);
+        if self.roots.is_empty() {
+            self.roots.push(TemplateNodeSpec::Element {
+                tag: 0,
+                namespace: None,
+                attrs: Vec::new(),
+                children: Vec::new(),
+            });
+        }
+
+        let mut attr_slot = 0;
+        for root in &mut self.roots {
+            root.normalize_in_place(&mut attr_slot);
+        }
+    }
+
     pub(crate) fn dynamic_count(&self) -> usize {
         self.roots.iter().map(TemplateNodeSpec::dynamic_count).sum()
     }
@@ -221,10 +194,78 @@ impl TemplateSpec {
         self.roots.iter().map(TemplateNodeSpec::node_count).sum()
     }
 
+    pub(crate) fn vnode_count(&self) -> usize {
+        self.roots.iter().map(TemplateNodeSpec::vnode_count).sum()
+    }
+
+    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
+        for root in &mut self.roots {
+            if let Some(found) = root.nth_vnode_mut(index) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn nth_dynamic_mut(&mut self, index: &mut usize) -> Option<&mut DynamicSpec> {
+        for root in &mut self.roots {
+            if let Some(found) = root.nth_dynamic_mut(index) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn nth_dynamic_attr_mut(&mut self, index: &mut usize) -> Option<&mut Vec<AttrSpec>> {
+        for root in &mut self.roots {
+            if let Some(found) = root.nth_dynamic_attr_mut(index) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn suspense_count(&self) -> usize {
+        self.roots
+            .iter()
+            .map(TemplateNodeSpec::suspense_count)
+            .sum()
+    }
+
+    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
+        for root in &mut self.roots {
+            if let Some(found) = root.nth_suspense_mut(index) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
+        for root in &self.roots {
+            root.collect_ready_suspense_keys(out);
+        }
+    }
+
+    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
+        for root in &mut self.roots {
+            root.wake_ready_suspense(key);
+        }
+    }
+
+    pub(crate) fn wake_mutation_for_ready_key(
+        &self,
+        key: SuspenseReadyKey,
+    ) -> Option<WakeMutationSpec> {
+        self.roots
+            .iter()
+            .find_map(|root| root.wake_mutation_for_ready_key(key))
+    }
+
     pub(crate) fn cache_key(&self) -> TemplateCacheKey {
-        self.cache_key
-            .clone()
-            .unwrap_or_else(|| TemplateCacheKey::Expanded(self.roots.clone()))
+        self.cache_key.clone().unwrap_or_else(|| {
+            TemplateCacheKey::Expanded(self.roots.iter().map(TemplateNodeSpec::shape).collect())
+        })
     }
 
     pub(crate) fn node_paths(&self) -> Vec<Vec<usize>> {
@@ -257,7 +298,7 @@ impl TemplateSpec {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum TemplateNodeSpec {
     Element {
         tag: u8,
@@ -266,11 +307,15 @@ pub(crate) enum TemplateNodeSpec {
         children: Vec<TemplateNodeSpec>,
     },
     Text(u8),
-    Dynamic,
+    Dynamic(DynamicSpec),
 }
 
 impl TemplateNodeSpec {
-    pub(crate) fn from_kind(kind: &TemplateNodeKind) -> Self {
+    pub(crate) fn from_kind(
+        kind: &TemplateNodeKind,
+        next_suspense_id: &mut u64,
+        next_component_id: &mut u64,
+    ) -> Self {
         match kind {
             TemplateNodeKind::Element { tag, namespace } => Self::Element {
                 tag: *tag,
@@ -279,11 +324,20 @@ impl TemplateNodeSpec {
                 children: Vec::new(),
             },
             TemplateNodeKind::Text(value) => Self::Text(*value),
-            TemplateNodeKind::Dynamic => Self::Dynamic,
+            TemplateNodeKind::Dynamic(kind) => Self::Dynamic(DynamicSpec::from_kind(
+                kind,
+                next_suspense_id,
+                next_component_id,
+            )),
         }
     }
 
-    pub(crate) fn set_kind(&mut self, kind: &TemplateNodeKind) {
+    pub(crate) fn set_kind(
+        &mut self,
+        kind: &TemplateNodeKind,
+        next_suspense_id: &mut u64,
+        next_component_id: &mut u64,
+    ) {
         match kind {
             TemplateNodeKind::Element { tag, namespace } => match self {
                 Self::Element {
@@ -294,10 +348,63 @@ impl TemplateNodeSpec {
                     *current_tag = *tag;
                     *current_namespace = *namespace;
                 }
-                _ => *self = Self::from_kind(kind),
+                _ => *self = Self::from_kind(kind, next_suspense_id, next_component_id),
             },
             TemplateNodeKind::Text(value) => *self = Self::Text(*value),
-            TemplateNodeKind::Dynamic => *self = Self::Dynamic,
+            TemplateNodeKind::Dynamic(kind) => match self {
+                Self::Dynamic(dynamic) => {
+                    dynamic.set_kind(kind, next_suspense_id, next_component_id);
+                }
+                _ => {
+                    *self = Self::Dynamic(DynamicSpec::from_kind(
+                        kind,
+                        next_suspense_id,
+                        next_component_id,
+                    ));
+                }
+            },
+        }
+    }
+
+    pub(crate) fn normalize_in_place(&mut self, next_attr_slot: &mut usize) {
+        match self {
+            Self::Element {
+                attrs, children, ..
+            } => {
+                attrs.truncate(MAX_TEMPLATE_ATTRS);
+                for attr in attrs {
+                    if let TemplateAttrSpec::Dynamic(dynamic_attrs) = attr {
+                        sort_attrs(*next_attr_slot, dynamic_attrs);
+                        dynamic_attrs.truncate(MAX_DYNAMIC_ATTRS);
+                        *next_attr_slot += 1;
+                    }
+                }
+
+                children.truncate(MAX_CHILDREN);
+                for child in children {
+                    child.normalize_in_place(next_attr_slot);
+                }
+            }
+            Self::Dynamic(dynamic) => dynamic.normalize_in_place(),
+            Self::Text(_) => {}
+        }
+    }
+
+    pub(crate) fn shape(&self) -> TemplateNodeShape {
+        match self {
+            Self::Element {
+                tag,
+                namespace,
+                attrs,
+                children,
+            } => TemplateNodeShape::Element {
+                tag: *tag,
+                namespace: *namespace,
+                attrs: attrs.iter().map(TemplateAttrSpec::shape).collect(),
+                children: children.iter().map(TemplateNodeSpec::shape).collect(),
+            },
+            Self::Text(value) => TemplateNodeShape::Text(*value),
+            Self::Dynamic(_) => TemplateNodeShape::Dynamic,
         }
     }
 
@@ -307,7 +414,7 @@ impl TemplateNodeSpec {
                 children.iter().map(TemplateNodeSpec::dynamic_count).sum()
             }
             Self::Text(_) => 0,
-            Self::Dynamic => 1,
+            Self::Dynamic(_) => 1,
         }
     }
 
@@ -318,14 +425,14 @@ impl TemplateNodeSpec {
             } => {
                 attrs
                     .iter()
-                    .filter(|attr| matches!(attr, TemplateAttrSpec::Dynamic))
+                    .filter(|attr| matches!(attr, TemplateAttrSpec::Dynamic(_)))
                     .count()
                     + children
                         .iter()
                         .map(TemplateNodeSpec::attr_count)
                         .sum::<usize>()
             }
-            Self::Text(_) | Self::Dynamic => 0,
+            Self::Text(_) | Self::Dynamic(_) => 0,
         }
     }
 
@@ -335,12 +442,148 @@ impl TemplateNodeSpec {
                 attrs, children, ..
             } => {
                 1 + attrs.len() as u64
+                    + attrs.iter().map(TemplateAttrSpec::node_count).sum::<u64>()
                     + children
                         .iter()
                         .map(TemplateNodeSpec::node_count)
                         .sum::<u64>()
             }
-            Self::Text(_) | Self::Dynamic => 1,
+            Self::Text(_) => 1,
+            Self::Dynamic(dynamic) => 1 + dynamic.node_count(),
+        }
+    }
+
+    pub(crate) fn vnode_count(&self) -> usize {
+        match self {
+            Self::Element { children, .. } => {
+                children.iter().map(TemplateNodeSpec::vnode_count).sum()
+            }
+            Self::Text(_) => 0,
+            Self::Dynamic(dynamic) => dynamic.vnode_count(),
+        }
+    }
+
+    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
+        match self {
+            Self::Element { children, .. } => {
+                for child in children {
+                    if let Some(found) = child.nth_vnode_mut(index) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Self::Text(_) => None,
+            Self::Dynamic(dynamic) => dynamic.nth_vnode_mut(index),
+        }
+    }
+
+    pub(crate) fn nth_dynamic_mut(&mut self, index: &mut usize) -> Option<&mut DynamicSpec> {
+        match self {
+            Self::Element { children, .. } => {
+                for child in children {
+                    if let Some(found) = child.nth_dynamic_mut(index) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Self::Text(_) => None,
+            Self::Dynamic(dynamic) => {
+                if *index == 0 {
+                    return Some(dynamic);
+                }
+                *index -= 1;
+                None
+            }
+        }
+    }
+
+    pub(crate) fn nth_dynamic_attr_mut(&mut self, index: &mut usize) -> Option<&mut Vec<AttrSpec>> {
+        match self {
+            Self::Element {
+                attrs, children, ..
+            } => {
+                for attr in attrs {
+                    let TemplateAttrSpec::Dynamic(attrs) = attr else {
+                        continue;
+                    };
+                    if *index == 0 {
+                        return Some(attrs);
+                    }
+                    *index -= 1;
+                }
+
+                for child in children {
+                    if let Some(found) = child.nth_dynamic_attr_mut(index) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Self::Text(_) | Self::Dynamic(_) => None,
+        }
+    }
+
+    pub(crate) fn suspense_count(&self) -> usize {
+        match self {
+            Self::Element { children, .. } => {
+                children.iter().map(TemplateNodeSpec::suspense_count).sum()
+            }
+            Self::Text(_) => 0,
+            Self::Dynamic(dynamic) => dynamic.suspense_count(),
+        }
+    }
+
+    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
+        match self {
+            Self::Element { children, .. } => {
+                for child in children {
+                    if let Some(found) = child.nth_suspense_mut(index) {
+                        return Some(found);
+                    }
+                }
+                None
+            }
+            Self::Text(_) => None,
+            Self::Dynamic(dynamic) => dynamic.nth_suspense_mut(index),
+        }
+    }
+
+    pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
+        match self {
+            Self::Element { children, .. } => {
+                for child in children {
+                    child.collect_ready_suspense_keys(out);
+                }
+            }
+            Self::Text(_) => {}
+            Self::Dynamic(dynamic) => dynamic.collect_ready_suspense_keys(out),
+        }
+    }
+
+    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
+        match self {
+            Self::Element { children, .. } => {
+                for child in children {
+                    child.wake_ready_suspense(key);
+                }
+            }
+            Self::Text(_) => {}
+            Self::Dynamic(dynamic) => dynamic.wake_ready_suspense(key),
+        }
+    }
+
+    pub(crate) fn wake_mutation_for_ready_key(
+        &self,
+        key: SuspenseReadyKey,
+    ) -> Option<WakeMutationSpec> {
+        match self {
+            Self::Element { children, .. } => children
+                .iter()
+                .find_map(|child| child.wake_mutation_for_ready_key(key)),
+            Self::Text(_) => None,
+            Self::Dynamic(dynamic) => dynamic.wake_mutation_for_ready_key(key),
         }
     }
 
@@ -379,15 +622,91 @@ impl TemplateNodeSpec {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum TemplateNodeKind {
     Element { tag: u8, namespace: Option<u8> },
     Text(u8),
-    Dynamic,
+    Dynamic(DynamicKind),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum TemplateAttrSpec {
+    Static {
+        name: u8,
+        value: u8,
+        namespace: Option<u8>,
+    },
+    Dynamic(Vec<AttrSpec>),
+}
+
+impl TemplateAttrSpec {
+    pub(crate) fn shape(&self) -> TemplateAttrShape {
+        match self {
+            Self::Static {
+                name,
+                value,
+                namespace,
+            } => TemplateAttrShape::Static {
+                name: *name,
+                value: *value,
+                namespace: *namespace,
+            },
+            Self::Dynamic(_) => TemplateAttrShape::Dynamic,
+        }
+    }
+
+    fn node_count(&self) -> u64 {
+        match self {
+            Self::Static { .. } => 0,
+            Self::Dynamic(attrs) => attrs.len() as u64,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TemplateNodeShape {
+    Element {
+        tag: u8,
+        namespace: Option<u8>,
+        attrs: Vec<TemplateAttrShape>,
+        children: Vec<TemplateNodeShape>,
+    },
+    Text(u8),
+    Dynamic,
+}
+
+impl TemplateNodeShape {
+    pub(crate) fn dynamic_count(&self) -> usize {
+        match self {
+            Self::Element { children, .. } => {
+                children.iter().map(TemplateNodeShape::dynamic_count).sum()
+            }
+            Self::Text(_) => 0,
+            Self::Dynamic => 1,
+        }
+    }
+
+    pub(crate) fn attr_count(&self) -> usize {
+        match self {
+            Self::Element {
+                attrs, children, ..
+            } => {
+                attrs
+                    .iter()
+                    .filter(|attr| matches!(attr, TemplateAttrShape::Dynamic))
+                    .count()
+                    + children
+                        .iter()
+                        .map(TemplateNodeShape::attr_count)
+                        .sum::<usize>()
+            }
+            Self::Text(_) | Self::Dynamic => 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TemplateAttrShape {
     Static {
         name: u8,
         value: u8,
@@ -417,7 +736,7 @@ pub(crate) struct ComponentSpec {
 pub(crate) struct SuspenseSpec {
     pub(crate) id: u64,
     pub(crate) ready_generation: u64,
-    pub(crate) ready_wakes: u8,
+    pub(crate) ready_wake_count: u8,
     pub(crate) mode: SuspenseMode,
     pub(crate) wake_mutation: WakeMutationSpec,
     pub(crate) wake_applied: bool,
@@ -438,7 +757,7 @@ impl SuspenseSpec {
         Self {
             id,
             ready_generation: 0,
-            ready_wakes: 0,
+            ready_wake_count: 0,
             mode,
             wake_mutation: WakeMutationSpec::None,
             wake_applied: false,
@@ -456,7 +775,7 @@ impl SuspenseSpec {
     pub(crate) fn set_mode(&mut self, mode: SuspenseMode) {
         if mode.is_ready() && self.mode != mode {
             self.ready_generation += 1;
-            self.ready_wakes = 0;
+            self.ready_wake_count = 0;
         }
         self.mode = mode;
         self.wake_applied = false;
@@ -471,8 +790,8 @@ impl SuspenseSpec {
         if !self.mode.is_ready() {
             return;
         }
-        self.ready_wakes = self.ready_wakes.saturating_add(1);
-        if self.ready_wakes >= self.mode.required_ready_wakes().unwrap_or(1) {
+        self.ready_wake_count = self.ready_wake_count.saturating_add(1);
+        if self.ready_wake_count >= self.mode.required_ready_wake_count().unwrap_or(1) {
             self.mode = SuspenseMode::Resolved;
             self.wake_applied = self.wake_mutation != WakeMutationSpec::None;
         }
@@ -480,6 +799,34 @@ impl SuspenseSpec {
 }
 
 impl DynamicSpec {
+    pub(crate) fn from_kind(
+        kind: &DynamicKind,
+        next_suspense_id: &mut u64,
+        next_component_id: &mut u64,
+    ) -> Self {
+        let mut dynamic = Self::Empty;
+        dynamic.set_kind(kind, next_suspense_id, next_component_id);
+        dynamic
+    }
+
+    pub(crate) fn normalize_in_place(&mut self) {
+        match self {
+            Self::Fragment(nodes) => {
+                nodes.truncate(MAX_FRAGMENT_CHILDREN);
+                for node in nodes {
+                    node.normalize_in_place();
+                }
+            }
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.normalize_in_place();
+            }
+            Self::Suspense(spec) => {
+                spec.child.normalize_in_place();
+            }
+            Self::Empty | Self::Text(_) | Self::Placeholder => {}
+        }
+    }
+
     pub(crate) fn set_kind(
         &mut self,
         kind: &DynamicKind,
@@ -490,9 +837,27 @@ impl DynamicSpec {
             DynamicKind::Empty => *self = Self::Empty,
             DynamicKind::Text(value) => *self = Self::Text(*value),
             DynamicKind::Placeholder => *self = Self::Placeholder,
-            DynamicKind::Fragment => {
+            DynamicKind::Fragment { children, key_base } => {
                 if !matches!(self, Self::Fragment(_)) {
                     *self = Self::Fragment(Vec::new());
+                }
+                let Self::Fragment(nodes) = self else {
+                    unreachable!();
+                };
+                let len = (*children as usize).min(MAX_FRAGMENT_CHILDREN);
+                nodes.resize_with(len, VNodeSpec::minimal);
+                nodes.truncate(len);
+                match key_base {
+                    Some(base) => {
+                        for (index, child) in nodes.iter_mut().enumerate() {
+                            child.key = Some(base.wrapping_add(index as u8));
+                        }
+                    }
+                    None => {
+                        for child in nodes {
+                            child.key = None;
+                        }
+                    }
                 }
             }
             DynamicKind::ComponentA => {
@@ -661,22 +1026,22 @@ impl DynamicSpec {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum DynamicKind {
     Empty,
     Text(u8),
-    Fragment,
+    Fragment { children: u8, key_base: Option<u8> },
     ComponentA,
     ComponentB,
     Suspense { mode: SuspenseMode },
     Placeholder,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum SuspenseMode {
     Resolved,
     Pending,
-    Ready { wakes: u8 },
+    Ready { wake_after: u8 },
 }
 
 impl SuspenseMode {
@@ -684,15 +1049,15 @@ impl SuspenseMode {
         matches!(self, Self::Ready { .. })
     }
 
-    pub(crate) fn required_ready_wakes(self) -> Option<u8> {
-        let Self::Ready { wakes } = self else {
+    pub(crate) fn required_ready_wake_count(self) -> Option<u8> {
+        let Self::Ready { wake_after } = self else {
             return None;
         };
-        Some((wakes % MAX_READY_WAKE_COUNT) + 1)
+        Some((wake_after % MAX_READY_WAKE_COUNT) + 1)
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum WakeMutationSpec {
     None,
     PrependStaticRoot { tag: u8 },
@@ -716,13 +1081,13 @@ pub(crate) enum SuspenseTaskKey {
     Ready(SuspenseReadyKey),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum FragmentKeyMode {
     Unkeyed,
     Keyed { base: u8 },
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) struct AttrSpec {
     pub(crate) name: u8,
     pub(crate) namespace: Option<u8>,
@@ -730,7 +1095,7 @@ pub(crate) struct AttrSpec {
     pub(crate) volatile: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum AttrValueSpec {
     Text(u8),
     Float(u8),

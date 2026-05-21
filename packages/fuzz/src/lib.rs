@@ -3,8 +3,10 @@
 //! The `cargo-fuzz` target feeds encoded [`FuzzCase`] values into this crate.
 //! LibFuzzer owns coverage guidance and corpus management; this crate owns the
 //! structured operation stream and renderer oracle.
+#![deny(unsafe_code)]
 
 mod cache;
+mod event;
 mod harness;
 mod lifecycle;
 mod model;
@@ -18,7 +20,7 @@ use model::{
     TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec, WakeMutationSpec,
 };
 use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
-use ops::{FragmentEdit, ListEdit, Op, TemplateEdit};
+use ops::{EventBehaviorSpec, FragmentEdit, ListEdit, Op, TemplateEdit};
 pub use reducer::{ReduceError, ReductionOptions, ReductionReport, ReductionStats, reduce_case};
 use reducer::{random_multistep_shrink_case, simplified_ops};
 use serde::{Deserialize, Serialize};
@@ -44,6 +46,7 @@ const OPTIMIZED_STRATEGIES: &[OptimizedStrategy] = &[
     OptimizedStrategy::SetSuspenseMode,
     OptimizedStrategy::SetSuspenseWakeMutation,
     OptimizedStrategy::WakeSuspense,
+    OptimizedStrategy::FireReentrantEvent,
     OptimizedStrategy::SetSelectedNodeElement,
     OptimizedStrategy::Rerender,
 ];
@@ -66,6 +69,7 @@ enum OptimizedStrategy {
     SetSuspenseMode,
     SetSuspenseWakeMutation,
     WakeSuspense,
+    FireReentrantEvent,
     SetSelectedNodeElement,
     Rerender,
 }
@@ -185,7 +189,7 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
 fn replay_model_prefix(ops: &[Op], len: usize) -> Model {
     let mut model = Model::initial();
     for op in ops.iter().take(len) {
-        ops::apply_op_to_model(&mut model, op);
+        ops::apply_strategy_op_to_model(&mut model, op);
     }
     model
 }
@@ -214,6 +218,11 @@ fn insert_optimized_model_aware_ops(
     case: &mut FuzzCase,
     strategy: OptimizedStrategy,
 ) {
+    if matches!(strategy, OptimizedStrategy::FireReentrantEvent) {
+        insert_reentrant_event_reproducer_ops(context, case);
+        return;
+    }
+
     insert_optimized_model_aware_op(context, case, strategy);
 
     let burst_len = context.rng().gen_index(OPTIMIZED_BURST_LIMIT).unwrap_or(0);
@@ -223,6 +232,62 @@ fn insert_optimized_model_aware_ops(
             .gen_index(OPTIMIZED_STRATEGIES.len())
             .unwrap_or(0)];
         insert_optimized_model_aware_op(context, case, strategy);
+    }
+}
+
+fn insert_reentrant_event_reproducer_ops(context: &mut mutatis::Context, case: &mut FuzzCase) {
+    let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
+    let value = context.rng().gen_u8();
+    let listener_name = optimized_attr_name(&AttrValueSpec::Listener);
+    let ops = [
+        Op::template(
+            0,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Element {
+                    tag: value,
+                    namespace: None,
+                },
+            },
+        ),
+        Op::template(
+            0,
+            TemplateEdit::Attrs {
+                element: 0,
+                edit: ListEdit::Insert {
+                    index: 0,
+                    item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
+                        name: listener_name,
+                        namespace: None,
+                        value: AttrValueSpec::Listener,
+                        volatile: false,
+                    }]),
+                },
+            },
+        ),
+        Op::Rerender,
+        Op::template(
+            0,
+            TemplateEdit::Roots {
+                edit: ListEdit::Insert {
+                    index: 1,
+                    item: TemplateNodeKind::Element {
+                        tag: value.wrapping_add(1),
+                        namespace: None,
+                    },
+                },
+            },
+        ),
+        Op::fire_event(0, EventBehaviorSpec::DispatchNestedEvent { target: 0 }),
+    ];
+
+    for (offset, op) in ops.into_iter().enumerate() {
+        if case.ops.len() < MAX_STEPS {
+            case.ops.insert((index + offset).min(case.ops.len()), op);
+        } else if !case.ops.is_empty() {
+            let replace = (index + offset).min(case.ops.len() - 1);
+            case.ops[replace] = op;
+        }
     }
 }
 
@@ -297,13 +362,13 @@ fn optimized_model_aware_op(
                 ),
             },
         ),
-        OptimizedStrategy::SetDynamicFragment if facts.has_dynamic_slots() => {
-            dynamic_slot_op(&facts, vnode, selector, DynamicKind::Fragment)
+        OptimizedStrategy::SetDynamicFragment => {
+            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
         }
-        OptimizedStrategy::SetDynamicLeaf if facts.has_dynamic_slots() => {
-            dynamic_slot_op(&facts, vnode, selector, biased_leaf_dynamic_kind(value))
+        OptimizedStrategy::SetDynamicLeaf => {
+            dynamic_node_op(&facts, vnode, selector, biased_leaf_dynamic_kind(value))
         }
-        OptimizedStrategy::SetDynamicComponent if facts.has_dynamic_slots() => dynamic_slot_op(
+        OptimizedStrategy::SetDynamicComponent => dynamic_node_op(
             &facts,
             vnode,
             selector,
@@ -313,18 +378,24 @@ fn optimized_model_aware_op(
                 DynamicKind::ComponentB
             },
         ),
-        OptimizedStrategy::SetFragmentKeyMode if facts.has_dynamic_slots() => {
+        OptimizedStrategy::SetFragmentKeyMode if facts.has_dynamic_nodes() => {
             let fragment = facts
                 .select_fragment(selector)
                 .unwrap_or_else(|| facts.fragment_prerequisite(selector));
             Op::fragment(
                 fragment.vnode,
-                fragment.slot,
+                fragment.node,
                 FragmentEdit::KeyMode(biased_fragment_key_mode(value)),
             )
         }
-        OptimizedStrategy::EditFragmentChildren if facts.has_dynamic_slots() => {
+        OptimizedStrategy::SetFragmentKeyMode => {
+            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
+        }
+        OptimizedStrategy::EditFragmentChildren if facts.has_dynamic_nodes() => {
             edit_fragment_children_op(&facts, model.can_grow(), selector, value)
+        }
+        OptimizedStrategy::EditFragmentChildren => {
+            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
         }
         OptimizedStrategy::EditDynamicAttrs => {
             edit_dynamic_attrs_op(&facts, model.can_grow(), vnode, element, selector, value)
@@ -332,7 +403,7 @@ fn optimized_model_aware_op(
         OptimizedStrategy::SetSuspenseMode if facts.has_suspense() => {
             Op::suspense(facts.select_suspense(selector), biased_suspense_mode(value))
         }
-        OptimizedStrategy::SetSuspenseMode if facts.has_dynamic_slots() => dynamic_slot_op(
+        OptimizedStrategy::SetSuspenseMode => dynamic_node_op(
             &facts,
             vnode,
             selector,
@@ -343,14 +414,15 @@ fn optimized_model_aware_op(
         OptimizedStrategy::SetSuspenseWakeMutation if facts.has_suspense() => {
             Op::suspense_wake_mutation(facts.select_suspense(selector), biased_wake_mutation(value))
         }
-        OptimizedStrategy::SetSuspenseWakeMutation if facts.has_dynamic_slots() => {
-            ready_suspense_slot_op(&facts, vnode, selector)
+        OptimizedStrategy::SetSuspenseWakeMutation => {
+            ready_suspense_node_op(&facts, vnode, selector)
         }
         OptimizedStrategy::WakeSuspense if facts.has_suspense() => {
             Op::wake_suspense(facts.select_suspense(selector))
         }
-        OptimizedStrategy::WakeSuspense if facts.has_dynamic_slots() => {
-            ready_suspense_slot_op(&facts, vnode, selector)
+        OptimizedStrategy::WakeSuspense => ready_suspense_node_op(&facts, vnode, selector),
+        OptimizedStrategy::FireReentrantEvent => {
+            Op::fire_event(selector, optimized_event_behavior(selector, value))
         }
         OptimizedStrategy::SetSelectedNodeElement if model.can_grow() => Op::template(
             vnode,
@@ -367,25 +439,32 @@ fn optimized_model_aware_op(
             vnode,
             TemplateEdit::SetNode {
                 node,
-                kind: TemplateNodeKind::Dynamic,
+                kind: TemplateNodeKind::Dynamic(biased_leaf_dynamic_kind(value)),
             },
         ),
     }
 }
 
-fn dynamic_slot_op(facts: &ModelFacts, vnode: u8, selector: u8, kind: DynamicKind) -> Op {
-    Op::dynamic(vnode, facts.select_dynamic_slot(vnode, selector), kind)
+fn dynamic_node_op(facts: &ModelFacts, vnode: u8, selector: u8, kind: DynamicKind) -> Op {
+    Op::dynamic(vnode, facts.select_dynamic_node(vnode, selector), kind)
 }
 
-fn ready_suspense_slot_op(facts: &ModelFacts, vnode: u8, selector: u8) -> Op {
-    dynamic_slot_op(
+fn ready_suspense_node_op(facts: &ModelFacts, vnode: u8, selector: u8) -> Op {
+    dynamic_node_op(
         facts,
         vnode,
         selector,
         DynamicKind::Suspense {
-            mode: SuspenseMode::Ready { wakes: 0 },
+            mode: SuspenseMode::Ready { wake_after: 0 },
         },
     )
+}
+
+fn optimized_event_behavior(selector: u8, value: u8) -> EventBehaviorSpec {
+    match value & 1 {
+        0 => EventBehaviorSpec::Noop,
+        _ => EventBehaviorSpec::DispatchNestedEvent { target: selector },
+    }
 }
 
 fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, value: u8) -> Op {
@@ -411,7 +490,7 @@ fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, v
         _ => ListEdit::Remove { index: 0 },
     };
 
-    Op::fragment(fragment.vnode, fragment.slot, FragmentEdit::Children(edit))
+    Op::fragment(fragment.vnode, fragment.node, FragmentEdit::Children(edit))
 }
 
 fn edit_dynamic_attrs_op(
@@ -455,7 +534,7 @@ fn prerequisite_dynamic_attr_op(facts: &ModelFacts, vnode: u8, element: u8, valu
             element,
             edit: ListEdit::Insert {
                 index: biased_index(value, facts.template_attr_count(vnode, element)),
-                item: TemplateAttrSpec::Dynamic,
+                item: TemplateAttrSpec::Dynamic(vec![optimized_attr(value)]),
             },
         },
     )
@@ -464,7 +543,7 @@ fn prerequisite_dynamic_attr_op(facts: &ModelFacts, vnode: u8, element: u8, valu
 #[derive(Clone, Copy)]
 struct FragmentShape {
     vnode: u8,
-    slot: u8,
+    node: u8,
     len: usize,
     keyed: bool,
 }
@@ -481,7 +560,7 @@ struct VNodeShape {
     roots: usize,
     nodes: usize,
     elements: Vec<ElementShape>,
-    dynamic_slots: usize,
+    dynamic_nodes: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -533,44 +612,101 @@ impl ModelFacts {
             roots: vnode.template.roots.len(),
             nodes: vnode.template.node_paths().len(),
             elements,
-            dynamic_slots: vnode.dynamics.len(),
+            dynamic_nodes: vnode
+                .template
+                .node_paths()
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, path)| {
+                    matches!(
+                        template_node_at(&vnode.template.roots, &path),
+                        Some(TemplateNodeSpec::Dynamic(_))
+                    )
+                    .then_some(index.min(u8::MAX as usize) as u8)
+                })
+                .collect(),
         });
 
-        for (slot, attrs) in vnode.attrs.iter().enumerate() {
-            self.attrs.push(AttrShape {
-                vnode: vnode_index,
-                slot: slot as u8,
-                len: attrs.len(),
-            });
-        }
+        let mut attr_slot = 0;
+        self.collect_dynamic_attrs(vnode_index, &vnode.template.roots, &mut attr_slot);
 
-        for (slot, dynamic) in vnode.dynamics.iter().enumerate() {
-            match dynamic {
-                DynamicSpec::Fragment(children) => {
-                    for child in children {
-                        self.collect_vnode(child, suspense);
-                    }
-                    self.fragments.push(FragmentShape {
-                        vnode: vnode_index,
-                        slot: slot as u8,
-                        len: children.len(),
-                        keyed: children.first().and_then(|child| child.key).is_some(),
-                    });
-                }
-                DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component) => {
-                    self.collect_vnode(&component.child, suspense);
-                }
-                DynamicSpec::Suspense(suspense) => {
-                    let suspense_index = self.suspense_count.min(u8::MAX as usize) as u8;
-                    self.suspense_count += 1;
-                    let child = self.collect_vnode(&suspense.child, Some(suspense_index));
-                    self.suspense_child_vnodes.push(child);
-                }
-                DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
-            }
-        }
+        let mut dynamic_slot = 0;
+        self.collect_dynamic_nodes(
+            vnode_index,
+            &vnode.template.roots,
+            suspense,
+            &mut dynamic_slot,
+        );
 
         vnode_index
+    }
+
+    fn collect_dynamic_attrs(&mut self, vnode: u8, nodes: &[TemplateNodeSpec], slot: &mut usize) {
+        for node in nodes {
+            let TemplateNodeSpec::Element {
+                attrs, children, ..
+            } = node
+            else {
+                continue;
+            };
+
+            for attr in attrs {
+                if let TemplateAttrSpec::Dynamic(attrs) = attr {
+                    self.attrs.push(AttrShape {
+                        vnode,
+                        slot: (*slot).min(u8::MAX as usize) as u8,
+                        len: attrs.len(),
+                    });
+                    *slot += 1;
+                }
+            }
+
+            self.collect_dynamic_attrs(vnode, children, slot);
+        }
+    }
+
+    fn collect_dynamic_nodes(
+        &mut self,
+        vnode: u8,
+        nodes: &[TemplateNodeSpec],
+        suspense: Option<u8>,
+        slot: &mut usize,
+    ) {
+        for node in nodes {
+            match node {
+                TemplateNodeSpec::Element { children, .. } => {
+                    self.collect_dynamic_nodes(vnode, children, suspense, slot);
+                }
+                TemplateNodeSpec::Text(_) => {}
+                TemplateNodeSpec::Dynamic(dynamic) => {
+                    let current_slot = (*slot).min(u8::MAX as usize) as u8;
+                    *slot += 1;
+                    match dynamic {
+                        DynamicSpec::Fragment(children) => {
+                            for child in children {
+                                self.collect_vnode(child, suspense);
+                            }
+                            self.fragments.push(FragmentShape {
+                                vnode,
+                                node: current_slot,
+                                len: children.len(),
+                                keyed: children.first().and_then(|child| child.key).is_some(),
+                            });
+                        }
+                        DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component) => {
+                            self.collect_vnode(&component.child, suspense);
+                        }
+                        DynamicSpec::Suspense(suspense) => {
+                            let suspense_index = self.suspense_count.min(u8::MAX as usize) as u8;
+                            self.suspense_count += 1;
+                            let child = self.collect_vnode(&suspense.child, Some(suspense_index));
+                            self.suspense_child_vnodes.push(child);
+                        }
+                        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
+                    }
+                }
+            }
+        }
     }
 
     fn select_vnode(&self, selector: u8) -> u8 {
@@ -617,12 +753,19 @@ impl ModelFacts {
             .unwrap_or(0)
     }
 
-    fn select_dynamic_slot(&self, vnode: u8, selector: u8) -> u8 {
-        select_bounded(selector, self.vnodes[vnode as usize].dynamic_slots)
+    fn select_dynamic_node(&self, vnode: u8, selector: u8) -> u8 {
+        let vnode_shape = &self.vnodes[vnode as usize];
+        vnode_shape
+            .dynamic_nodes
+            .get(selector as usize % vnode_shape.dynamic_nodes.len().max(1))
+            .copied()
+            .unwrap_or_else(|| self.select_node(vnode, selector))
     }
 
-    fn has_dynamic_slots(&self) -> bool {
-        self.vnodes.iter().any(|vnode| vnode.dynamic_slots > 0)
+    fn has_dynamic_nodes(&self) -> bool {
+        self.vnodes
+            .iter()
+            .any(|vnode| !vnode.dynamic_nodes.is_empty())
     }
 
     fn select_fragment(&self, selector: u8) -> Option<FragmentShape> {
@@ -633,9 +776,10 @@ impl ModelFacts {
 
     fn fragment_prerequisite(&self, selector: u8) -> FragmentShape {
         let vnode = self.select_vnode(selector);
+        let vnode_shape = &self.vnodes[vnode as usize];
         FragmentShape {
             vnode,
-            slot: self.select_dynamic_slot(vnode, selector),
+            node: select_bounded(selector, vnode_shape.dynamic_nodes.len()),
             len: 0,
             keyed: false,
         }
@@ -708,7 +852,7 @@ fn remove_or_move_list_edit<T>(len: usize, selector: u8, value: u8) -> ListEdit<
 
 fn biased_template_node_kind(value: u8) -> TemplateNodeKind {
     match value % 3 {
-        0 => TemplateNodeKind::Dynamic,
+        0 => TemplateNodeKind::Dynamic(biased_dynamic_kind(value)),
         1 => TemplateNodeKind::Text(value),
         _ => TemplateNodeKind::Element {
             tag: value,
@@ -719,13 +863,26 @@ fn biased_template_node_kind(value: u8) -> TemplateNodeKind {
 
 fn biased_template_attr(value: u8) -> TemplateAttrSpec {
     if value & 1 == 0 {
-        TemplateAttrSpec::Dynamic
+        TemplateAttrSpec::Dynamic(vec![optimized_attr(value)])
     } else {
         TemplateAttrSpec::Static {
             name: value,
             value: value.wrapping_add(1),
             namespace: (value & 2 == 0).then_some(value.wrapping_add(2)),
         }
+    }
+}
+
+fn biased_dynamic_kind(value: u8) -> DynamicKind {
+    match value % 6 {
+        0 => biased_leaf_dynamic_kind(value),
+        1 => biased_fragment_dynamic_kind(value),
+        2 => DynamicKind::ComponentA,
+        3 => DynamicKind::ComponentB,
+        4 => DynamicKind::Suspense {
+            mode: biased_suspense_mode(value),
+        },
+        _ => DynamicKind::Placeholder,
     }
 }
 
@@ -737,11 +894,20 @@ fn biased_leaf_dynamic_kind(value: u8) -> DynamicKind {
     }
 }
 
+fn biased_fragment_dynamic_kind(value: u8) -> DynamicKind {
+    DynamicKind::Fragment {
+        children: (value % 3).saturating_add(1),
+        key_base: (value & 4 != 0).then_some(value),
+    }
+}
+
 fn biased_suspense_mode(value: u8) -> SuspenseMode {
     match value % 3 {
         0 => SuspenseMode::Resolved,
         1 => SuspenseMode::Pending,
-        _ => SuspenseMode::Ready { wakes: value / 3 },
+        _ => SuspenseMode::Ready {
+            wake_after: value / 3,
+        },
     }
 }
 
@@ -1001,16 +1167,89 @@ mod tests {
     }
 
     #[test]
+    fn optimized_dynamic_ops_from_initial_model_are_meaningful() {
+        let dynamic_cases = [
+            (OptimizedStrategy::SetDynamicFragment, 1),
+            (OptimizedStrategy::SetDynamicLeaf, 3),
+            (OptimizedStrategy::SetDynamicComponent, 4),
+            (OptimizedStrategy::SetSuspenseMode, 5),
+            (OptimizedStrategy::SetSuspenseWakeMutation, 6),
+            (OptimizedStrategy::WakeSuspense, 7),
+        ];
+
+        for (strategy, value) in dynamic_cases {
+            let mut model = Model::initial();
+            let op = optimized_model_aware_op(&model, strategy, 0, value);
+            ops::apply_strategy_op_to_model(&mut model, &op);
+            let dynamic = first_dynamic(&model.root.template.roots)
+                .unwrap_or_else(|| panic!("expected dynamic for {strategy:?}: {op:?}"));
+            assert!(
+                !matches!(dynamic, DynamicSpec::Empty),
+                "expected non-empty dynamic for {strategy:?}: {op:?}"
+            );
+        }
+
+        let mut model = Model::initial();
+        let op = optimized_model_aware_op(&model, OptimizedStrategy::EditDynamicAttrs, 0, 9);
+        ops::apply_strategy_op_to_model(&mut model, &op);
+        let attrs = first_dynamic_attrs(&model.root.template.roots)
+            .unwrap_or_else(|| panic!("expected dynamic attrs: {op:?}"));
+        assert!(
+            !attrs.is_empty(),
+            "expected non-empty dynamic attrs: {op:?}"
+        );
+    }
+
+    fn first_dynamic(nodes: &[TemplateNodeSpec]) -> Option<&DynamicSpec> {
+        for node in nodes {
+            match node {
+                TemplateNodeSpec::Element { children, .. } => {
+                    if let Some(dynamic) = first_dynamic(children) {
+                        return Some(dynamic);
+                    }
+                }
+                TemplateNodeSpec::Text(_) => {}
+                TemplateNodeSpec::Dynamic(dynamic) => return Some(dynamic),
+            }
+        }
+        None
+    }
+
+    fn first_dynamic_attrs(nodes: &[TemplateNodeSpec]) -> Option<&[AttrSpec]> {
+        for node in nodes {
+            let TemplateNodeSpec::Element {
+                attrs, children, ..
+            } = node
+            else {
+                continue;
+            };
+
+            for attr in attrs {
+                if let TemplateAttrSpec::Dynamic(attrs) = attr {
+                    return Some(attrs);
+                }
+            }
+
+            if let Some(attrs) = first_dynamic_attrs(children) {
+                return Some(attrs);
+            }
+        }
+        None
+    }
+
+    #[test]
     fn optimized_model_aware_op_replays_after_prefix() {
         let prefix = vec![
             Op::template(
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 1,
+                        key_base: Some(7),
+                    }),
                 },
             ),
-            Op::dynamic(0, 0, DynamicKind::Fragment),
             Op::fragment(
                 0,
                 0,
@@ -1025,7 +1264,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -1033,7 +1272,7 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
         ];

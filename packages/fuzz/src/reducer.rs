@@ -5,12 +5,15 @@ use crate::{
         TemplateNodeKind, WakeMutationSpec,
     },
     ops::{
-        DynamicEdit, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit, VNodeEdit,
+        EventBehaviorSpec, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit,
+        VNodeEdit,
     },
     run_case,
 };
 use std::{
+    collections::HashSet,
     fmt,
+    hash::Hash,
     panic::{self, AssertUnwindSafe},
     sync::Mutex,
 };
@@ -339,46 +342,65 @@ fn failure_summary(failure: &FuzzFailure) -> &str {
 }
 
 pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     if !matches!(op, Op::Rerender) {
-        push_unique(&mut out, Op::Rerender);
+        out.insert(Op::Rerender);
     }
 
     match op {
         Op::Rerender => {}
         Op::WakeSuspense { suspense } => {
             for suspense in simpler_u8_values(*suspense) {
-                push_unique(&mut out, Op::wake_suspense(suspense));
+                out.insert(Op::wake_suspense(suspense));
+            }
+        }
+        Op::FireEvent { target, behavior } => {
+            for target in simpler_u8_values(*target) {
+                out.insert(Op::fire_event(target, *behavior));
+            }
+            for behavior in simplified_event_behaviors(*behavior) {
+                out.insert(Op::fire_event(*target, behavior));
             }
         }
         Op::Mutate(edit) => simplified_model_edit_ops(edit, &mut out),
     }
 
-    out
+    out.into_iter().collect()
 }
 
-fn simplified_model_edit_ops(edit: &ModelEdit, out: &mut Vec<Op>) {
+fn simplified_event_behaviors(behavior: EventBehaviorSpec) -> Vec<EventBehaviorSpec> {
+    let mut out = HashSet::new();
+    match behavior {
+        EventBehaviorSpec::Noop => {}
+        EventBehaviorSpec::DispatchNestedEvent { target } => {
+            for target in simpler_u8_values(target) {
+                out.insert(EventBehaviorSpec::DispatchNestedEvent { target });
+            }
+            out.insert(EventBehaviorSpec::Noop);
+        }
+    }
+    out.into_iter().collect()
+}
+
+fn simplified_model_edit_ops(edit: &ModelEdit, out: &mut HashSet<Op>) {
     match edit {
         ModelEdit::VNode { vnode, edit } => simplified_vnode_edit_ops(*vnode, edit, out),
         ModelEdit::Suspense { suspense, edit } => {
             for suspense in simpler_u8_values(*suspense) {
-                push_unique(
-                    out,
-                    Op::Mutate(ModelEdit::Suspense {
-                        suspense,
-                        edit: *edit,
-                    }),
-                );
+                out.insert(Op::Mutate(ModelEdit::Suspense {
+                    suspense,
+                    edit: *edit,
+                }));
             }
             match edit {
                 SuspenseEdit::Mode(mode) => {
                     for mode in simplified_suspense_modes(*mode) {
-                        push_unique(out, Op::suspense(*suspense, mode));
+                        out.insert(Op::suspense(*suspense, mode));
                     }
                 }
                 SuspenseEdit::WakeMutation(mutation) => {
                     for mutation in simplified_wake_mutations(*mutation) {
-                        push_unique(out, Op::suspense_wake_mutation(*suspense, mutation));
+                        out.insert(Op::suspense_wake_mutation(*suspense, mutation));
                     }
                 }
             }
@@ -386,64 +408,18 @@ fn simplified_model_edit_ops(edit: &ModelEdit, out: &mut Vec<Op>) {
     }
 }
 
-fn simplified_vnode_edit_ops(vnode: u8, edit: &VNodeEdit, out: &mut Vec<Op>) {
+fn simplified_vnode_edit_ops(vnode: u8, edit: &VNodeEdit, out: &mut HashSet<Op>) {
     for simpler_vnode in simpler_u8_values(vnode) {
-        push_unique(
-            out,
-            Op::Mutate(ModelEdit::VNode {
-                vnode: simpler_vnode,
-                edit: edit.clone(),
-            }),
-        );
+        out.insert(Op::Mutate(ModelEdit::VNode {
+            vnode: simpler_vnode,
+            edit: edit.clone(),
+        }));
     }
 
     match edit {
         VNodeEdit::Template(edit) => {
             for edit in simplified_template_edits(edit) {
-                push_unique(out, Op::template(vnode, edit));
-            }
-        }
-        VNodeEdit::DynamicSlot { slot, edit } => {
-            for slot in simpler_u8_values(*slot) {
-                push_unique(
-                    out,
-                    Op::Mutate(ModelEdit::VNode {
-                        vnode,
-                        edit: VNodeEdit::DynamicSlot {
-                            slot,
-                            edit: edit.clone(),
-                        },
-                    }),
-                );
-            }
-            match edit {
-                DynamicEdit::SetKind(kind) => {
-                    for kind in simplified_dynamic_kinds(kind) {
-                        push_unique(out, Op::dynamic(vnode, *slot, kind));
-                    }
-                }
-                DynamicEdit::Fragment(edit) => {
-                    for edit in simplified_fragment_edits(edit) {
-                        push_unique(out, Op::fragment(vnode, *slot, edit));
-                    }
-                }
-            }
-        }
-        VNodeEdit::DynamicAttrs { slot, edit } => {
-            for slot in simpler_u8_values(*slot) {
-                push_unique(
-                    out,
-                    Op::Mutate(ModelEdit::VNode {
-                        vnode,
-                        edit: VNodeEdit::DynamicAttrs {
-                            slot,
-                            edit: edit.clone(),
-                        },
-                    }),
-                );
-            }
-            for edit in simplified_list_edits(edit, simplified_attr_specs) {
-                push_unique(out, Op::dynamic_attrs(vnode, *slot, edit));
+                out.insert(Op::template(vnode, edit));
             }
         }
     }
@@ -463,10 +439,10 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     let Op::Mutate(ModelEdit::VNode {
         vnode,
         edit:
-            VNodeEdit::DynamicSlot {
-                slot,
-                edit: DynamicEdit::Fragment(FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base })),
-            },
+            VNodeEdit::Template(TemplateEdit::Fragment {
+                node,
+                edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base }),
+            }),
     }) = &case.ops[index]
     else {
         return;
@@ -475,26 +451,26 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     let Op::Mutate(ModelEdit::VNode {
         vnode: previous_vnode,
         edit:
-            VNodeEdit::DynamicSlot {
-                slot: previous_slot,
-                edit: DynamicEdit::Fragment(FragmentEdit::Children(ListEdit::Insert { item, .. })),
-            },
+            VNodeEdit::Template(TemplateEdit::Fragment {
+                node: previous_node,
+                edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
+            }),
     }) = &case.ops[index - 1]
     else {
         return;
     };
 
-    if vnode != previous_vnode || slot != previous_slot || item.is_some() {
+    if vnode != previous_vnode || node != previous_node || item.is_some() {
         return;
     }
 
     let mut candidate = case.clone();
     let Op::Mutate(ModelEdit::VNode {
         edit:
-            VNodeEdit::DynamicSlot {
-                edit: DynamicEdit::Fragment(FragmentEdit::Children(ListEdit::Insert { item, .. })),
+            VNodeEdit::Template(TemplateEdit::Fragment {
+                edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
                 ..
-            },
+            }),
         ..
     }) = &mut candidate.ops[index - 1]
     else {
@@ -633,109 +609,114 @@ impl ReductionRng {
 }
 
 fn simplified_template_edits(edit: &TemplateEdit) -> Vec<TemplateEdit> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match edit {
         TemplateEdit::SetNode { node, kind } => {
             for node in simpler_u8_values(*node) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::SetNode {
-                        node,
-                        kind: kind.clone(),
-                    },
-                );
+                out.insert(TemplateEdit::SetNode {
+                    node,
+                    kind: kind.clone(),
+                });
             }
             for kind in simplified_template_node_kinds(kind) {
-                push_unique(&mut out, TemplateEdit::SetNode { node: *node, kind });
+                out.insert(TemplateEdit::SetNode { node: *node, kind });
             }
         }
         TemplateEdit::Roots { edit } => {
             for edit in simplified_list_edits(edit, simplified_template_node_kinds) {
-                push_unique(&mut out, TemplateEdit::Roots { edit });
+                out.insert(TemplateEdit::Roots { edit });
             }
         }
         TemplateEdit::Children { element, edit } => {
             for element in simpler_u8_values(*element) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Children {
-                        element,
-                        edit: edit.clone(),
-                    },
-                );
+                out.insert(TemplateEdit::Children {
+                    element,
+                    edit: edit.clone(),
+                });
             }
             for edit in simplified_list_edits(edit, simplified_template_node_kinds) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Children {
-                        element: *element,
-                        edit,
-                    },
-                );
+                out.insert(TemplateEdit::Children {
+                    element: *element,
+                    edit,
+                });
             }
         }
         TemplateEdit::Attrs { element, edit } => {
             for element in simpler_u8_values(*element) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Attrs {
-                        element,
-                        edit: edit.clone(),
-                    },
-                );
+                out.insert(TemplateEdit::Attrs {
+                    element,
+                    edit: edit.clone(),
+                });
             }
             for edit in simplified_list_edits(edit, simplified_template_attr_specs) {
-                push_unique(
-                    &mut out,
-                    TemplateEdit::Attrs {
-                        element: *element,
-                        edit,
-                    },
-                );
+                out.insert(TemplateEdit::Attrs {
+                    element: *element,
+                    edit,
+                });
+            }
+        }
+        TemplateEdit::Fragment { node, edit } => {
+            for node in simpler_u8_values(*node) {
+                out.insert(TemplateEdit::Fragment {
+                    node,
+                    edit: edit.clone(),
+                });
+            }
+            for edit in simplified_fragment_edits(edit) {
+                out.insert(TemplateEdit::Fragment { node: *node, edit });
+            }
+        }
+        TemplateEdit::DynamicAttrs { attr, edit } => {
+            for attr in simpler_u8_values(*attr) {
+                out.insert(TemplateEdit::DynamicAttrs {
+                    attr,
+                    edit: edit.clone(),
+                });
+            }
+            for edit in simplified_list_edits(edit, simplified_attr_specs) {
+                out.insert(TemplateEdit::DynamicAttrs { attr: *attr, edit });
             }
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_template_node_kinds(kind: &TemplateNodeKind) -> Vec<TemplateNodeKind> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match kind {
         TemplateNodeKind::Element { tag, namespace } => {
             for tag in simpler_u8_values(*tag) {
-                push_unique(
-                    &mut out,
-                    TemplateNodeKind::Element {
-                        tag,
-                        namespace: *namespace,
-                    },
-                );
+                out.insert(TemplateNodeKind::Element {
+                    tag,
+                    namespace: *namespace,
+                });
             }
             for namespace in simplified_options(*namespace) {
-                push_unique(
-                    &mut out,
-                    TemplateNodeKind::Element {
-                        tag: *tag,
-                        namespace,
-                    },
-                );
+                out.insert(TemplateNodeKind::Element {
+                    tag: *tag,
+                    namespace,
+                });
             }
-            push_unique(&mut out, TemplateNodeKind::Text(0));
-            push_unique(&mut out, TemplateNodeKind::Dynamic);
+            out.insert(TemplateNodeKind::Text(0));
+            out.insert(TemplateNodeKind::Dynamic(DynamicKind::Empty));
         }
         TemplateNodeKind::Text(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, TemplateNodeKind::Text(value));
+                out.insert(TemplateNodeKind::Text(value));
             }
-            push_unique(&mut out, TemplateNodeKind::Dynamic);
+            out.insert(TemplateNodeKind::Dynamic(DynamicKind::Empty));
         }
-        TemplateNodeKind::Dynamic => {}
+        TemplateNodeKind::Dynamic(kind) => {
+            for kind in simplified_dynamic_kinds(kind) {
+                out.insert(TemplateNodeKind::Dynamic(kind));
+            }
+        }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_template_attr_specs(attr: &TemplateAttrSpec) -> Vec<TemplateAttrSpec> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match attr {
         TemplateAttrSpec::Static {
             name,
@@ -743,263 +724,294 @@ fn simplified_template_attr_specs(attr: &TemplateAttrSpec) -> Vec<TemplateAttrSp
             namespace,
         } => {
             for name in simpler_u8_values(*name) {
-                push_unique(
-                    &mut out,
-                    TemplateAttrSpec::Static {
-                        name,
-                        value: *value,
-                        namespace: *namespace,
-                    },
-                );
+                out.insert(TemplateAttrSpec::Static {
+                    name,
+                    value: *value,
+                    namespace: *namespace,
+                });
             }
             for value in simpler_u8_values(*value) {
-                push_unique(
-                    &mut out,
-                    TemplateAttrSpec::Static {
-                        name: *name,
-                        value,
-                        namespace: *namespace,
-                    },
-                );
+                out.insert(TemplateAttrSpec::Static {
+                    name: *name,
+                    value,
+                    namespace: *namespace,
+                });
             }
             for namespace in simplified_options(*namespace) {
-                push_unique(
-                    &mut out,
-                    TemplateAttrSpec::Static {
-                        name: *name,
-                        value: *value,
-                        namespace,
-                    },
-                );
+                out.insert(TemplateAttrSpec::Static {
+                    name: *name,
+                    value: *value,
+                    namespace,
+                });
             }
         }
-        TemplateAttrSpec::Dynamic => {}
+        TemplateAttrSpec::Dynamic(attrs) => {
+            for attrs in simplified_attr_vecs(attrs) {
+                out.insert(TemplateAttrSpec::Dynamic(attrs));
+            }
+        }
     }
-    out
+    out.into_iter().collect()
+}
+
+fn simplified_attr_vecs(attrs: &[AttrSpec]) -> Vec<Vec<AttrSpec>> {
+    let mut out = HashSet::new();
+    if !attrs.is_empty() {
+        out.insert(Vec::new());
+    }
+
+    for index in 0..attrs.len() {
+        let mut candidate = attrs.to_vec();
+        candidate.remove(index);
+        out.insert(candidate);
+
+        for attr in simplified_attr_specs(&attrs[index]) {
+            let mut candidate = attrs.to_vec();
+            candidate[index] = attr;
+            out.insert(candidate);
+        }
+    }
+
+    out.into_iter().collect()
 }
 
 fn simplified_dynamic_kinds(kind: &DynamicKind) -> Vec<DynamicKind> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match kind {
         DynamicKind::Empty => {}
         DynamicKind::Text(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, DynamicKind::Text(value));
+                out.insert(DynamicKind::Text(value));
             }
-            push_unique(&mut out, DynamicKind::Empty);
+            out.insert(DynamicKind::Empty);
         }
         DynamicKind::Placeholder => {
-            push_unique(&mut out, DynamicKind::Empty);
+            out.insert(DynamicKind::Empty);
         }
-        DynamicKind::Fragment => {
-            push_unique(&mut out, DynamicKind::Empty);
+        DynamicKind::Fragment { children, key_base } => {
+            for children in simpler_u8_values(*children) {
+                out.insert(DynamicKind::Fragment {
+                    children,
+                    key_base: *key_base,
+                });
+            }
+            for key_base in simplified_options(*key_base) {
+                out.insert(DynamicKind::Fragment {
+                    children: *children,
+                    key_base,
+                });
+            }
+            out.insert(DynamicKind::Empty);
         }
         DynamicKind::ComponentA => {
-            push_unique(&mut out, DynamicKind::Fragment);
-            push_unique(&mut out, DynamicKind::Empty);
+            out.insert(DynamicKind::Fragment {
+                children: 0,
+                key_base: None,
+            });
+            out.insert(DynamicKind::Empty);
         }
         DynamicKind::ComponentB => {
-            push_unique(&mut out, DynamicKind::ComponentA);
-            push_unique(&mut out, DynamicKind::Fragment);
-            push_unique(&mut out, DynamicKind::Empty);
+            out.insert(DynamicKind::ComponentA);
+            out.insert(DynamicKind::Fragment {
+                children: 0,
+                key_base: None,
+            });
+            out.insert(DynamicKind::Empty);
         }
         DynamicKind::Suspense { mode } => {
             for mode in simplified_suspense_modes(*mode) {
-                push_unique(&mut out, DynamicKind::Suspense { mode });
+                out.insert(DynamicKind::Suspense { mode });
             }
-            push_unique(&mut out, DynamicKind::ComponentA);
-            push_unique(&mut out, DynamicKind::Fragment);
-            push_unique(&mut out, DynamicKind::Empty);
+            out.insert(DynamicKind::ComponentA);
+            out.insert(DynamicKind::Fragment {
+                children: 0,
+                key_base: None,
+            });
+            out.insert(DynamicKind::Empty);
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_fragment_edits(edit: &FragmentEdit) -> Vec<FragmentEdit> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match edit {
         FragmentEdit::KeyMode(mode) => {
             for mode in simplified_fragment_key_modes(mode) {
-                push_unique(&mut out, FragmentEdit::KeyMode(mode));
+                out.insert(FragmentEdit::KeyMode(mode));
             }
         }
         FragmentEdit::Children(edit) => {
             for edit in simplified_list_edits(edit, simplified_option_values) {
-                push_unique(&mut out, FragmentEdit::Children(edit));
+                out.insert(FragmentEdit::Children(edit));
             }
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_fragment_key_modes(mode: &FragmentKeyMode) -> Vec<FragmentKeyMode> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match mode {
         FragmentKeyMode::Unkeyed => {}
         FragmentKeyMode::Keyed { base } => {
             for base in simpler_u8_values(*base) {
-                push_unique(&mut out, FragmentKeyMode::Keyed { base });
+                out.insert(FragmentKeyMode::Keyed { base });
             }
-            push_unique(&mut out, FragmentKeyMode::Unkeyed);
+            out.insert(FragmentKeyMode::Unkeyed);
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_attr_specs(attr: &AttrSpec) -> Vec<AttrSpec> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     for name in simpler_u8_values(attr.name) {
         let mut candidate = attr.clone();
         candidate.name = name;
-        push_unique(&mut out, candidate);
+        out.insert(candidate);
     }
     for namespace in simplified_options(attr.namespace) {
         let mut candidate = attr.clone();
         candidate.namespace = namespace;
-        push_unique(&mut out, candidate);
+        out.insert(candidate);
     }
     for value in simplified_attr_values(&attr.value) {
         let mut candidate = attr.clone();
         candidate.value = value;
-        push_unique(&mut out, candidate);
+        out.insert(candidate);
     }
     if attr.volatile {
         let mut candidate = attr.clone();
         candidate.volatile = false;
-        push_unique(&mut out, candidate);
+        out.insert(candidate);
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_attr_values(value: &AttrValueSpec) -> Vec<AttrValueSpec> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match value {
         AttrValueSpec::Text(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, AttrValueSpec::Text(value));
+                out.insert(AttrValueSpec::Text(value));
             }
         }
         AttrValueSpec::Float(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, AttrValueSpec::Float(value));
+                out.insert(AttrValueSpec::Float(value));
             }
-            push_unique(&mut out, AttrValueSpec::Int(*value));
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::Int(*value));
+            out.insert(AttrValueSpec::Text(0));
         }
         AttrValueSpec::Int(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, AttrValueSpec::Int(value));
+                out.insert(AttrValueSpec::Int(value));
             }
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::Text(0));
         }
         AttrValueSpec::Bool(value) => {
             if *value {
-                push_unique(&mut out, AttrValueSpec::Bool(false));
+                out.insert(AttrValueSpec::Bool(false));
             }
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::Text(0));
         }
         AttrValueSpec::Any(value) => {
             for value in simpler_u8_values(*value) {
-                push_unique(&mut out, AttrValueSpec::Any(value));
+                out.insert(AttrValueSpec::Any(value));
             }
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::Text(0));
         }
         AttrValueSpec::None => {
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::Text(0));
         }
         AttrValueSpec::Listener => {
-            push_unique(&mut out, AttrValueSpec::None);
-            push_unique(&mut out, AttrValueSpec::Text(0));
+            out.insert(AttrValueSpec::None);
+            out.insert(AttrValueSpec::Text(0));
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_wake_mutations(mutation: WakeMutationSpec) -> Vec<WakeMutationSpec> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match mutation {
         WakeMutationSpec::None => {}
         WakeMutationSpec::PrependStaticRoot { tag } => {
             for tag in simpler_u8_values(tag) {
-                push_unique(&mut out, WakeMutationSpec::PrependStaticRoot { tag });
+                out.insert(WakeMutationSpec::PrependStaticRoot { tag });
             }
-            push_unique(&mut out, WakeMutationSpec::None);
+            out.insert(WakeMutationSpec::None);
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_suspense_modes(mode: SuspenseMode) -> Vec<SuspenseMode> {
-    let mut out = Vec::new();
-    if let SuspenseMode::Ready { wakes } = mode {
-        for wakes in simpler_u8_values(wakes) {
-            push_unique(&mut out, SuspenseMode::Ready { wakes });
+    let mut out = HashSet::new();
+    if let SuspenseMode::Ready { wake_after } = mode {
+        for wake_after in simpler_u8_values(wake_after) {
+            out.insert(SuspenseMode::Ready { wake_after });
         }
-        push_unique(&mut out, SuspenseMode::Ready { wakes: 0 });
+        out.insert(SuspenseMode::Ready { wake_after: 0 });
     }
     for candidate in [SuspenseMode::Resolved, SuspenseMode::Pending] {
         if candidate != mode {
-            push_unique(&mut out, candidate);
+            out.insert(candidate);
         }
     }
-    push_unique(&mut out, SuspenseMode::Ready { wakes: 0 });
-    out
+    out.insert(SuspenseMode::Ready { wake_after: 0 });
+    out.into_iter().collect()
 }
 
 fn simplified_list_edits<T>(edit: &ListEdit<T>, simplify_item: fn(&T) -> Vec<T>) -> Vec<ListEdit<T>>
 where
-    T: Clone + PartialEq,
+    T: Clone + Eq + Hash,
 {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     match edit {
         ListEdit::Insert { index, item } => {
             for index in simpler_u8_values(*index) {
-                push_unique(
-                    &mut out,
-                    ListEdit::Insert {
-                        index,
-                        item: item.clone(),
-                    },
-                );
+                out.insert(ListEdit::Insert {
+                    index,
+                    item: item.clone(),
+                });
             }
             for item in simplify_item(item) {
-                push_unique(
-                    &mut out,
-                    ListEdit::Insert {
-                        index: *index,
-                        item,
-                    },
-                );
+                out.insert(ListEdit::Insert {
+                    index: *index,
+                    item,
+                });
             }
-            push_unique(&mut out, ListEdit::Remove { index: *index });
+            out.insert(ListEdit::Remove { index: *index });
         }
         ListEdit::Remove { index } => {
             for index in simpler_u8_values(*index) {
-                push_unique(&mut out, ListEdit::Remove { index });
+                out.insert(ListEdit::Remove { index });
             }
         }
         ListEdit::Move { from, to } => {
             for from in simpler_u8_values(*from) {
-                push_unique(&mut out, ListEdit::Move { from, to: *to });
+                out.insert(ListEdit::Move { from, to: *to });
             }
             for to in simpler_u8_values(*to) {
-                push_unique(&mut out, ListEdit::Move { from: *from, to });
+                out.insert(ListEdit::Move { from: *from, to });
             }
-            push_unique(&mut out, ListEdit::Remove { index: *from });
+            out.insert(ListEdit::Remove { index: *from });
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_options(value: Option<u8>) -> Vec<Option<u8>> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     if let Some(value) = value {
-        push_unique(&mut out, None);
+        out.insert(None);
         for value in simpler_u8_values(value) {
-            push_unique(&mut out, Some(value));
+            out.insert(Some(value));
         }
     }
-    out
+    out.into_iter().collect()
 }
 
 fn simplified_option_values(value: &Option<u8>) -> Vec<Option<u8>> {
@@ -1007,7 +1019,7 @@ fn simplified_option_values(value: &Option<u8>) -> Vec<Option<u8>> {
 }
 
 fn simpler_u8_values(value: u8) -> Vec<u8> {
-    let mut out = Vec::new();
+    let mut out = HashSet::new();
     for candidate in [
         0,
         1,
@@ -1023,19 +1035,12 @@ fn simpler_u8_values(value: u8) -> Vec<u8> {
         value.saturating_sub(1),
     ] {
         if candidate < value {
-            push_unique(&mut out, candidate);
+            out.insert(candidate);
         }
     }
+    let mut out = out.into_iter().collect::<Vec<_>>();
+    out.sort_unstable();
     out
-}
-
-fn push_unique<T>(values: &mut Vec<T>, value: T)
-where
-    T: PartialEq,
-{
-    if !values.contains(&value) {
-        values.push(value);
-    }
 }
 
 #[cfg(test)]
@@ -1068,7 +1073,10 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 0,
+                        key_base: None,
+                    }),
                 },
             ),
             Op::fragment(

@@ -34,7 +34,7 @@ struct GeneratedProps {
 struct GeneratedSuspenseProps {
     id: u64,
     ready_generation: u64,
-    ready_wakes_required: usize,
+    required_ready_wake_count: usize,
     mode: SuspenseMode,
     wake_mutation: WakeMutationSpec,
     wake_applied: bool,
@@ -74,7 +74,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     );
     let id = props.id;
     let ready_generation = props.ready_generation;
-    let ready_wakes_required = props.ready_wakes_required;
+    let required_ready_wake_count = props.required_ready_wake_count;
     let mode = props.mode;
     let wake_mutation = props.wake_mutation;
     let wake_applied = props.wake_applied;
@@ -86,7 +86,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
             GeneratedSuspenseChild {
                 id,
                 ready_generation,
-                ready_wakes_required,
+                required_ready_wake_count,
                 mode,
                 wake_mutation,
                 wake_applied,
@@ -167,7 +167,7 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
                     let Some(SuspenseTaskKey::Ready(key)) = next_task_key else {
                         unreachable!();
                     };
-                    let required_wakes = props.ready_wakes_required;
+                    let required_wakes = props.required_ready_wake_count;
                     let new_task = spawn(async move {
                         SuspenseReadyFuture {
                             key,
@@ -238,7 +238,7 @@ fn build_suspense_child_vnode(
                 attrs: Vec::new(),
                 children: Vec::new(),
             },
-            TemplateNodeSpec::Dynamic,
+            TemplateNodeSpec::Dynamic(DynamicSpec::Empty),
         ],
     });
 
@@ -256,19 +256,52 @@ fn build_vnode(spec: &VNodeSpec) -> VNode {
 
 fn build_vnode_with_suspense(spec: &VNodeSpec, suspense_ancestors: &[u64]) -> VNode {
     let spec = spec.clone().normalize();
+    let mut dynamics = Vec::new();
+    collect_dynamic_specs(&spec.template.roots, &mut dynamics);
+    let mut attrs = Vec::new();
+    collect_dynamic_attr_specs(&spec.template.roots, &mut attrs);
     VNode::new(
         spec.key.map(|key| format!("k{key}")),
         compile_template(&spec.template),
-        spec.dynamics
+        dynamics
             .iter()
             .map(|dynamic| build_dynamic(dynamic, suspense_ancestors))
             .collect(),
-        spec.attrs
+        attrs
             .iter()
             .enumerate()
             .map(|(slot, attrs)| attrs.iter().map(|attr| build_attr(slot, attr)).collect())
             .collect(),
     )
+}
+
+fn collect_dynamic_specs<'a>(nodes: &'a [TemplateNodeSpec], out: &mut Vec<&'a DynamicSpec>) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => collect_dynamic_specs(children, out),
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => out.push(dynamic),
+        }
+    }
+}
+
+fn collect_dynamic_attr_specs<'a>(nodes: &'a [TemplateNodeSpec], out: &mut Vec<&'a [AttrSpec]>) {
+    for node in nodes {
+        let TemplateNodeSpec::Element {
+            attrs, children, ..
+        } = node
+        else {
+            continue;
+        };
+
+        for attr in attrs {
+            if let TemplateAttrSpec::Dynamic(attrs) = attr {
+                out.push(attrs);
+            }
+        }
+
+        collect_dynamic_attr_specs(children, out);
+    }
 }
 
 fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode {
@@ -305,7 +338,8 @@ fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode 
             GeneratedSuspenseProps {
                 id: spec.id,
                 ready_generation: spec.ready_generation,
-                ready_wakes_required: spec.mode.required_ready_wakes().unwrap_or(1) as usize,
+                required_ready_wake_count: spec.mode.required_ready_wake_count().unwrap_or(1)
+                    as usize,
                 mode: spec.mode,
                 wake_mutation: spec.wake_mutation,
                 wake_applied: spec.wake_applied,
@@ -352,7 +386,7 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
         ),
         AttrValueSpec::Listener => Attribute::new(
             listener_name(slot, spec.name),
-            AttributeValue::listener(|_: Event<String>| {}),
+            AttributeValue::listener(|_: Event<String>| crate::event::handle_listener_event()),
             None,
             spec.volatile,
         ),
@@ -381,21 +415,21 @@ fn compile_template_uncached(spec: &TemplateSpec) -> Template {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct TemplateNodeCacheKey {
-    spec: TemplateNodeSpec,
+    spec: TemplateNodeShape,
     dynamic_base: usize,
     attr_base: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct TemplateNodeSliceCacheKey {
-    specs: Vec<TemplateNodeSpec>,
+    specs: Vec<TemplateNodeShape>,
     dynamic_base: usize,
     attr_base: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct TemplateAttrSliceCacheKey {
-    attrs: Vec<TemplateAttrSpec>,
+    attrs: Vec<TemplateAttrShape>,
     attr_base: usize,
 }
 
@@ -592,7 +626,7 @@ fn intern_template_node_slice(
 
     static CACHE: InternSet<TemplateNodeSliceEntry> = InternSet::new();
     let key = TemplateNodeSliceCacheKey {
-        specs: specs.to_vec(),
+        specs: specs.iter().map(TemplateNodeSpec::shape).collect(),
         dynamic_base,
         attr_base,
     };
@@ -615,7 +649,7 @@ fn intern_template_node_slice(
 }
 
 fn intern_template_node(
-    spec: &TemplateNodeSpec,
+    spec: &TemplateNodeShape,
     dynamic_base: usize,
     attr_base: usize,
 ) -> TemplateNode {
@@ -635,36 +669,81 @@ fn intern_template_node(
 
 fn compile_template_node(key: &TemplateNodeCacheKey) -> TemplateNode {
     match &key.spec {
-        TemplateNodeSpec::Element {
+        TemplateNodeShape::Element {
             tag,
             namespace,
             attrs,
             children,
         } => {
-            let static_attrs = intern_template_attr_slice(attrs, key.attr_base);
+            let static_attrs = intern_template_attr_shape_slice(attrs, key.attr_base);
             let children_attr_base = key.attr_base + dynamic_attr_count(attrs);
             TemplateNode::Element {
                 tag: tag_name(*tag),
                 namespace: namespace.map(namespace_name),
                 attrs: static_attrs,
-                children: intern_template_node_slice(
+                children: intern_template_node_shape_slice(
                     children,
                     key.dynamic_base,
                     children_attr_base,
                 ),
             }
         }
-        TemplateNodeSpec::Text(value) => TemplateNode::Text {
+        TemplateNodeShape::Text(value) => TemplateNode::Text {
             text: text_value(*value),
         },
-        TemplateNodeSpec::Dynamic => TemplateNode::Dynamic {
+        TemplateNodeShape::Dynamic => TemplateNode::Dynamic {
             id: key.dynamic_base,
         },
     }
 }
 
+fn intern_template_node_shape_slice(
+    specs: &[TemplateNodeShape],
+    dynamic_base: usize,
+    attr_base: usize,
+) -> &'static [TemplateNode] {
+    if specs.is_empty() {
+        return &[];
+    }
+
+    static CACHE: InternSet<TemplateNodeSliceEntry> = InternSet::new();
+    let key = TemplateNodeSliceCacheKey {
+        specs: specs.to_vec(),
+        dynamic_base,
+        attr_base,
+    };
+    CACHE
+        .get_or_insert_with(&key, || {
+            let mut dynamic_base = key.dynamic_base;
+            let mut attr_base = key.attr_base;
+            let mut nodes = Vec::with_capacity(key.specs.len());
+            for spec in &key.specs {
+                nodes.push(intern_template_node(spec, dynamic_base, attr_base));
+                dynamic_base += spec.dynamic_count();
+                attr_base += spec.attr_count();
+            }
+            TemplateNodeSliceEntry {
+                key: key.clone(),
+                nodes: Box::leak(nodes.into_boxed_slice()),
+            }
+        })
+        .nodes
+}
+
+#[cfg(test)]
 fn intern_template_attr_slice(
     attrs: &[TemplateAttrSpec],
+    attr_base: usize,
+) -> &'static [TemplateAttribute] {
+    let attrs = attrs
+        .iter()
+        .map(TemplateAttrSpec::shape)
+        .collect::<Vec<_>>();
+    intern_template_attr_shape_slice(&attrs, attr_base)
+}
+
+fn intern_template_attr_shape_slice(
+    attrs: &[TemplateAttrShape],
     attr_base: usize,
 ) -> &'static [TemplateAttribute] {
     if attrs.is_empty() {
@@ -683,7 +762,7 @@ fn intern_template_attr_slice(
                 .attrs
                 .iter()
                 .map(|attr| match attr {
-                    TemplateAttrSpec::Static {
+                    TemplateAttrShape::Static {
                         name,
                         value,
                         namespace,
@@ -692,7 +771,7 @@ fn intern_template_attr_slice(
                         value: attr_static_value(*value),
                         namespace: namespace.map(namespace_name),
                     },
-                    TemplateAttrSpec::Dynamic => {
+                    TemplateAttrShape::Dynamic => {
                         let id = next_attr;
                         next_attr += 1;
                         TemplateAttribute::Dynamic { id }
@@ -707,10 +786,10 @@ fn intern_template_attr_slice(
         .attrs
 }
 
-fn dynamic_attr_count(attrs: &[TemplateAttrSpec]) -> usize {
+fn dynamic_attr_count(attrs: &[TemplateAttrShape]) -> usize {
     attrs
         .iter()
-        .filter(|attr| matches!(attr, TemplateAttrSpec::Dynamic))
+        .filter(|attr| matches!(attr, TemplateAttrShape::Dynamic))
         .count()
 }
 
@@ -725,7 +804,7 @@ fn collect_node_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
 
 fn collect_node_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mut Vec<Vec<u8>>) {
     match node {
-        TemplateNodeSpec::Dynamic => out.push(path),
+        TemplateNodeSpec::Dynamic(_) => out.push(path),
         TemplateNodeSpec::Element { children, .. } => {
             for (index, child) in children.iter().enumerate() {
                 let mut child_path = path.clone();
@@ -755,7 +834,7 @@ fn collect_attr_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mu
     };
 
     for attr in attrs {
-        if matches!(attr, TemplateAttrSpec::Dynamic) {
+        if matches!(attr, TemplateAttrSpec::Dynamic(_)) {
             out.push(path.clone());
         }
     }
@@ -856,8 +935,8 @@ mod tests {
             cache_key: None,
             roots: vec![element(
                 1,
-                vec![TemplateAttrSpec::Dynamic],
-                vec![TemplateNodeSpec::Dynamic],
+                vec![TemplateAttrSpec::Dynamic(Vec::new())],
+                vec![TemplateNodeSpec::Dynamic(DynamicSpec::Empty)],
             )],
         };
 
@@ -873,8 +952,8 @@ mod tests {
     fn related_templates_reuse_shared_child_slices() {
         let shared_child = element(
             9,
-            vec![TemplateAttrSpec::Dynamic],
-            vec![TemplateNodeSpec::Dynamic],
+            vec![TemplateAttrSpec::Dynamic(Vec::new())],
+            vec![TemplateNodeSpec::Dynamic(DynamicSpec::Empty)],
         );
         let first = compile_template(&TemplateSpec {
             cache_key: None,
@@ -909,10 +988,14 @@ mod tests {
 
     #[test]
     fn dynamic_subtrees_include_dynamic_base_in_key() {
-        let spec = element(1, Vec::new(), vec![TemplateNodeSpec::Dynamic]);
+        let spec = element(
+            1,
+            Vec::new(),
+            vec![TemplateNodeSpec::Dynamic(DynamicSpec::Empty)],
+        );
 
-        let base_zero = intern_template_node(&spec, 0, 0);
-        let base_one = intern_template_node(&spec, 1, 0);
+        let base_zero = intern_template_node(&spec.shape(), 0, 0);
+        let base_one = intern_template_node(&spec.shape(), 1, 0);
 
         let TemplateNode::Element {
             children: [TemplateNode::Dynamic { id: zero_id }],
@@ -935,7 +1018,7 @@ mod tests {
 
     #[test]
     fn dynamic_attr_slices_include_attr_base_in_key() {
-        let attrs = [TemplateAttrSpec::Dynamic];
+        let attrs = [TemplateAttrSpec::Dynamic(Vec::new())];
 
         let base_zero = intern_template_attr_slice(&attrs, 0);
         let base_one = intern_template_attr_slice(&attrs, 1);

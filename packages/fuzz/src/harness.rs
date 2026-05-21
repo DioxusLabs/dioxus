@@ -1,8 +1,9 @@
 use crate::{
+    event,
     lifecycle::{self, LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
     model::*,
     ops::{
-        ModelEdit, Op, apply_to_model, clear_suspense_ready_tasks, read_model,
+        EventBehaviorSpec, Op, apply_to_model, clear_suspense_ready_tasks, read_model,
         release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
         without_suspense_ready_registration,
     },
@@ -12,15 +13,15 @@ use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
 use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode, panic_message};
-use std::{any::Any, collections::BTreeSet, fmt, panic, rc::Rc};
+use std::{any::Any, cell::RefCell, collections::BTreeSet, fmt, panic, rc::Rc};
 
 // ---------- Harness -------------------------------------------------------------------------
 
 type TargetSnapshots = Vec<SnapshotNode>;
 
 pub(crate) struct Harness {
-    vdom: VirtualDom,
-    incremental: TargetedRendererOracle,
+    vdom: Rc<RefCell<VirtualDom>>,
+    incremental: Rc<RefCell<TargetedRendererOracle>>,
     strict_renderer_errors: bool,
     strict_lifecycle_errors: bool,
 }
@@ -47,10 +48,12 @@ impl Harness {
         clear_suspense_ready_tasks();
         lifecycle::reset_all();
         with_model(|model| *model = Model::initial());
-        let mut vdom = VirtualDom::new(App);
-        let mut incremental = TargetedRendererOracle::new();
-        lifecycle::with_run(LifecycleRun::Incremental, || vdom.rebuild(&mut incremental));
-        incremental.assert_stack_clean();
+        let vdom = Rc::new(RefCell::new(VirtualDom::new(App)));
+        let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
+        lifecycle::with_run(LifecycleRun::Incremental, || {
+            vdom.borrow_mut().rebuild(&mut *incremental.borrow_mut())
+        });
+        incremental.borrow().assert_stack_clean();
         let state = Self {
             vdom,
             incremental,
@@ -451,39 +454,37 @@ pub(crate) fn apply_step(state: &mut Harness, op: &Op) -> Result<(), String> {
 
 fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
     match op {
-        Op::Rerender => render_and_assert(state),
+        Op::Rerender => render_app_and_assert(state),
         Op::WakeSuspense { suspense } => {
             let Some(key) = selected_registered_ready_suspense_key(*suspense) else {
                 return Ok(());
             };
             release_suspense_ready_task(key);
             with_model(|model| model.wake_ready_suspense(key));
-            render_wake_and_assert(state)
+            render_dirty_and_assert(state)
         }
-        _ => {
+        Op::FireEvent { target, behavior } => {
+            fire_selected_event_listener(state, *target, *behavior)
+        }
+        Op::Mutate(_) => {
             apply_to_model(op);
-            if op_requires_app_render(op) {
-                state.vdom.mark_dirty(ScopeId::APP);
-            }
+            state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
             Ok(())
         }
     }
 }
 
-fn op_requires_app_render(op: &Op) -> bool {
-    matches!(
-        op,
-        Op::Mutate(ModelEdit::VNode { .. }) | Op::Mutate(ModelEdit::Suspense { .. })
-    )
-}
-
 fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
-    let targets = state.incremental.historical_event_listener_targets();
+    let targets = state
+        .incremental
+        .borrow()
+        .historical_event_listener_targets()
+        .to_vec();
     if targets.is_empty() {
         return Ok(());
     }
 
-    let runtime = state.vdom.runtime();
+    let runtime = state.vdom.borrow().runtime();
     for target in targets {
         let event = Event::new(
             Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
@@ -494,52 +495,98 @@ fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
     Ok(())
 }
 
-fn render_once(
+fn fire_selected_event_listener(
     state: &mut Harness,
-    mark_app_dirty: bool,
-    assert_matches_vdom: bool,
+    target_selector: u8,
+    behavior: EventBehaviorSpec,
+) -> Result<(), String> {
+    let targets = state
+        .incremental
+        .borrow()
+        .historical_event_listener_targets()
+        .to_vec();
+    if targets.is_empty() {
+        return Ok(());
+    }
+
+    let target = targets[target_selector as usize % targets.len()];
+    let runtime = state.vdom.borrow().runtime();
+    let nested_runtime = runtime.clone();
+    let nested_targets = targets.clone();
+    let listener_driver = Rc::new(move |behavior| match behavior {
+        EventBehaviorSpec::Noop => {}
+        EventBehaviorSpec::DispatchNestedEvent { target } => {
+            let Some(target) = nested_targets.get(target as usize % nested_targets.len()) else {
+                return;
+            };
+            let event = Event::new(
+                Rc::new(String::from("fuzzer nested event")) as Rc<dyn Any>,
+                true,
+            );
+            event::with_listener_driver(EventBehaviorSpec::Noop, Rc::new(|_| {}), || {
+                nested_runtime.handle_event(target.name, event, target.id)
+            });
+        }
+    });
+
+    event::with_listener_driver(behavior, listener_driver, || {
+        let event = Event::new(
+            Rc::new(String::from("fuzzer explicit event")) as Rc<dyn Any>,
+            true,
+        );
+        runtime.handle_event(target.name, event, target.id);
+    });
+
+    Ok(())
+}
+
+fn render_once(state: &mut Harness, assert_lifecycle_matches_fresh: bool) -> Result<(), String> {
+    fire_historical_event_listeners(state)?;
+    lifecycle::with_run(LifecycleRun::Incremental, || {
+        state
+            .vdom
+            .borrow_mut()
+            .render_immediate(&mut *state.incremental.borrow_mut())
+    });
+    check_incremental_state(state, assert_lifecycle_matches_fresh)
+}
+
+fn check_incremental_state(
+    state: &Harness,
     assert_lifecycle_matches_fresh: bool,
 ) -> Result<(), String> {
-    fire_historical_event_listeners(state)?;
-    if mark_app_dirty {
-        state.vdom.mark_dirty(ScopeId::APP);
-    }
-    lifecycle::with_run(LifecycleRun::Incremental, || {
-        state.vdom.render_immediate(&mut state.incremental)
-    });
-    state.incremental.check_stack_clean().map_err(|err| {
-        let last_mutation = state
-            .incremental
+    let incremental = state.incremental.borrow();
+    incremental.check_stack_clean().map_err(|err| {
+        let last_mutation = incremental
             .last_mutation
             .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
-        let recent_mutations = state.incremental.recent_mutations_text();
+        let recent_mutations = incremental.recent_mutations_text();
         format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
     })?;
-    if assert_matches_vdom {
-        state.incremental.check_matches_vdom(&state.vdom)?;
-    }
+    let vdom = state.vdom.borrow();
+    incremental.check_matches_vdom(&vdom)?;
     if assert_lifecycle_matches_fresh {
         check_lifecycle_matches_fresh().map_err(|err| {
-            let last_mutation = state
-                .incremental
+            let last_mutation = incremental
                 .last_mutation
                 .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
-            let recent_mutations = state.incremental.recent_mutations_text();
+            let recent_mutations = incremental.recent_mutations_text();
             format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
         })?;
     }
     Ok(())
 }
 
-fn render_and_assert(state: &mut Harness) -> Result<(), String> {
+fn render_app_and_assert(state: &mut Harness) -> Result<(), String> {
+    state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
     let compare_lifecycle = state.strict_lifecycle_errors;
-    let result = render_once(state, true, true, compare_lifecycle);
+    let result = render_once(state, compare_lifecycle);
     render_result_to_fuzz_failure(state, result)
 }
 
-fn render_wake_and_assert(state: &mut Harness) -> Result<(), String> {
+fn render_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
     let compare_lifecycle = state.strict_lifecycle_errors;
-    let result = render_once(state, false, true, compare_lifecycle);
+    let result = render_once(state, compare_lifecycle);
     render_result_to_fuzz_failure(state, result)
 }
 
@@ -666,8 +713,20 @@ fn model_lifecycle_with_suspense_ancestor_snapshot(
 }
 
 fn collect_current_suspense_ids(vnode: &VNodeSpec, out: &mut BTreeSet<u64>) {
-    for dynamic in &vnode.dynamics {
-        collect_dynamic_current_suspense_ids(dynamic, out);
+    collect_template_current_suspense_ids(&vnode.template.roots, out);
+}
+
+fn collect_template_current_suspense_ids(nodes: &[TemplateNodeSpec], out: &mut BTreeSet<u64>) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                collect_template_current_suspense_ids(children, out);
+            }
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => {
+                collect_dynamic_current_suspense_ids(dynamic, out)
+            }
+        }
     }
 }
 
@@ -695,13 +754,40 @@ fn collect_model_lifecycle_with_suspense_ancestor(
     suspense_ids: &BTreeSet<u64>,
     out: &mut LifecycleSnapshot,
 ) {
-    for dynamic in &vnode.dynamics {
-        collect_model_dynamic_lifecycle_with_suspense_ancestor(
-            dynamic,
-            within_retaining_suspense,
-            suspense_ids,
-            out,
-        );
+    collect_model_template_lifecycle_with_suspense_ancestor(
+        &vnode.template.roots,
+        within_retaining_suspense,
+        suspense_ids,
+        out,
+    );
+}
+
+fn collect_model_template_lifecycle_with_suspense_ancestor(
+    nodes: &[TemplateNodeSpec],
+    within_retaining_suspense: bool,
+    suspense_ids: &BTreeSet<u64>,
+    out: &mut LifecycleSnapshot,
+) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                collect_model_template_lifecycle_with_suspense_ancestor(
+                    children,
+                    within_retaining_suspense,
+                    suspense_ids,
+                    out,
+                );
+            }
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => {
+                collect_model_dynamic_lifecycle_with_suspense_ancestor(
+                    dynamic,
+                    within_retaining_suspense,
+                    suspense_ids,
+                    out,
+                );
+            }
+        }
     }
 }
 
@@ -757,8 +843,18 @@ fn collect_model_dynamic_lifecycle_with_suspense_ancestor(
 }
 
 fn collect_vnode_lifecycle(vnode: &VNodeSpec, out: &mut LifecycleSnapshot) {
-    for dynamic in &vnode.dynamics {
-        collect_dynamic_lifecycle(dynamic, out);
+    collect_template_lifecycle(&vnode.template.roots, out);
+}
+
+fn collect_template_lifecycle(nodes: &[TemplateNodeSpec], out: &mut LifecycleSnapshot) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                collect_template_lifecycle(children, out);
+            }
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => collect_dynamic_lifecycle(dynamic, out),
+        }
     }
 }
 
@@ -820,9 +916,9 @@ mod tests {
     use crate::{
         model::{
             AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
-            TemplateNodeKind, WakeMutationSpec,
+            TemplateNodeKind, TemplateNodeSpec, WakeMutationSpec,
         },
-        ops::{FragmentEdit, ListEdit, TemplateEdit},
+        ops::{EventBehaviorSpec, FragmentEdit, ListEdit, TemplateEdit},
     };
 
     fn replay_ops(ops: impl IntoIterator<Item = Op>) {
@@ -839,12 +935,27 @@ mod tests {
         }
     }
 
-    fn first_suspense_mode_and_wakes() -> Option<(SuspenseMode, u8)> {
+    fn first_suspense_mode_and_wake_count() -> Option<(SuspenseMode, u8)> {
         let model = read_model();
-        let DynamicSpec::Suspense(spec) = model.root.dynamics.first()? else {
+        let DynamicSpec::Suspense(spec) = first_dynamic(&model.root.template.roots)? else {
             return None;
         };
-        Some((spec.mode, spec.ready_wakes))
+        Some((spec.mode, spec.ready_wake_count))
+    }
+
+    fn first_dynamic(nodes: &[TemplateNodeSpec]) -> Option<&DynamicSpec> {
+        for node in nodes {
+            match node {
+                TemplateNodeSpec::Element { children, .. } => {
+                    if let Some(dynamic) = first_dynamic(children) {
+                        return Some(dynamic);
+                    }
+                }
+                TemplateNodeSpec::Text(_) => {}
+                TemplateNodeSpec::Dynamic(dynamic) => return Some(dynamic),
+            }
+        }
+        None
     }
 
     fn set_pending_suspense_model() {
@@ -853,7 +964,7 @@ mod tests {
             0,
             TemplateEdit::SetNode {
                 node: 0,
-                kind: TemplateNodeKind::Dynamic,
+                kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
             },
         ));
         apply_to_model(&Op::dynamic(
@@ -863,6 +974,44 @@ mod tests {
                 mode: SuspenseMode::Pending,
             },
         ));
+    }
+
+    fn mount_listener_ops() -> Vec<Op> {
+        vec![
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 1,
+                        namespace: None,
+                        value: AttrValueSpec::Listener,
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+        ]
+    }
+
+    fn catch_expected_panic_message(f: impl FnOnce()) -> String {
+        let previous_hook = panic::take_hook();
+        panic::set_hook(Box::new(|_| {}));
+        let result = catch_unwind_result(f);
+        panic::set_hook(previous_hook);
+        let payload = result.expect_err("expected operation to panic");
+        panic_message(&payload)
     }
 
     #[test]
@@ -875,13 +1024,146 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
         )
         .unwrap();
 
         apply_op(&mut harness, &Op::Rerender).unwrap();
+    }
+
+    #[test]
+    fn single_op_creates_dynamic_text_at_root() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Text(7)),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn single_op_creates_dynamic_component() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn single_op_creates_dynamic_fragment_with_children() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 2,
+                        key_base: Some(10),
+                    }),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn single_op_creates_dynamic_suspense_boundary() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Resolved,
+                    }),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn single_op_creates_dynamic_listener_attr() {
+        let mut harness = Harness::fresh_strict();
+        apply_op(
+            &mut harness,
+            &Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
+                            name: 1,
+                            namespace: None,
+                            value: AttrValueSpec::Listener,
+                            volatile: false,
+                        }]),
+                    },
+                },
+            ),
+        )
+        .unwrap();
+        apply_op(&mut harness, &Op::Rerender).unwrap();
+        assert_eq!(
+            harness
+                .incremental
+                .borrow()
+                .historical_event_listener_targets()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn explicit_noop_event_fires_listener_without_rendering() {
+        let mut harness = Harness::fresh_strict();
+        for op in mount_listener_ops() {
+            apply_op(&mut harness, &op).unwrap();
+        }
+
+        assert_eq!(
+            harness
+                .incremental
+                .borrow()
+                .historical_event_listener_targets()
+                .len(),
+            1
+        );
+        apply_op(&mut harness, &Op::fire_event(0, EventBehaviorSpec::Noop)).unwrap();
+    }
+
+    #[test]
+    fn explicit_nested_event_reproduces_callback_borrow_panic() {
+        let message = catch_expected_panic_message(|| {
+            let mut harness = Harness::fresh_strict();
+            for op in mount_listener_ops() {
+                apply_op(&mut harness, &op).unwrap();
+            }
+
+            apply_op(
+                &mut harness,
+                &Op::fire_event(0, EventBehaviorSpec::DispatchNestedEvent { target: 0 }),
+            )
+            .unwrap();
+        });
+
+        assert!(
+            message.contains("already borrowed"),
+            "unexpected panic: {message}"
+        );
     }
 
     #[test]
@@ -894,7 +1176,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
         )
@@ -905,7 +1187,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
         )
@@ -924,7 +1206,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
         )
@@ -935,7 +1217,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 1 },
+                    mode: SuspenseMode::Ready { wake_after: 1 },
                 },
             ),
         )
@@ -945,14 +1227,14 @@ mod tests {
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
         assert!(read_model().selected_ready_suspense_key(0).is_some());
         assert_eq!(
-            first_suspense_mode_and_wakes(),
-            Some((SuspenseMode::Ready { wakes: 1 }, 1))
+            first_suspense_mode_and_wake_count(),
+            Some((SuspenseMode::Ready { wake_after: 1 }, 1))
         );
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
         assert!(read_model().selected_ready_suspense_key(0).is_none());
         assert_eq!(
-            first_suspense_mode_and_wakes(),
+            first_suspense_mode_and_wake_count(),
             Some((SuspenseMode::Resolved, 2))
         );
     }
@@ -964,14 +1246,14 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1031,7 +1313,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1045,14 +1327,14 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1071,7 +1353,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(0, 0, DynamicKind::ComponentA),
@@ -1095,7 +1377,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::fragment(
@@ -1110,7 +1392,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(1, 0, DynamicKind::ComponentA),
@@ -1144,7 +1426,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1160,7 +1442,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1170,7 +1452,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 1,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1201,7 +1483,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 51,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(0, 0, DynamicKind::ComponentA),
@@ -1221,14 +1503,14 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 195,
                 186,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1239,7 +1521,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 207,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1267,7 +1549,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1286,7 +1568,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 207,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1301,7 +1583,7 @@ mod tests {
             Op::wake_suspense(130),
             Op::wake_suspense(167),
             Op::Rerender,
-            Op::suspense(245, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(245, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::suspense(0, SuspenseMode::Pending),
             Op::Rerender,
@@ -1315,7 +1597,7 @@ mod tests {
                 50,
                 TemplateEdit::SetNode {
                     node: 196,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(109, 211, DynamicKind::ComponentB),
@@ -1323,7 +1605,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1337,7 +1619,7 @@ mod tests {
                 2,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1352,7 +1634,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 20,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1360,7 +1642,7 @@ mod tests {
             Op::dynamic(3, 0, DynamicKind::ComponentB),
             Op::suspense(124, SuspenseMode::Resolved),
             Op::Rerender,
-            Op::suspense(23, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(23, SuspenseMode::Ready { wake_after: 0 }),
             Op::wake_suspense(50),
         ]);
     }
@@ -1372,7 +1654,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1386,7 +1668,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::template(
@@ -1400,7 +1682,7 @@ mod tests {
             ),
             Op::dynamic(1, 0, DynamicKind::ComponentB),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::suspense_wake_mutation(0, WakeMutationSpec::PrependStaticRoot { tag: 127 }),
             Op::Rerender,
@@ -1417,21 +1699,21 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(1, 0, DynamicKind::ComponentA),
@@ -1441,10 +1723,10 @@ mod tests {
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
-            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
         ]);
     }
@@ -1456,48 +1738,48 @@ mod tests {
                 50,
                 TemplateEdit::SetNode {
                     node: 189,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 15,
                 170,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 2,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(2, 0, DynamicKind::ComponentA),
             Op::suspense(83, SuspenseMode::Pending),
             Op::wake_suspense(0),
             Op::Rerender,
-            Op::suspense(204, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(204, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::wake_suspense(2),
-            Op::suspense(31, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(31, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::Rerender,
-            Op::suspense(2, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(2, SuspenseMode::Ready { wake_after: 0 }),
             Op::wake_suspense(0),
             Op::Rerender,
             Op::wake_suspense(50),
@@ -1511,21 +1793,21 @@ mod tests {
                 50,
                 TemplateEdit::SetNode {
                     node: 84,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1537,7 +1819,7 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1551,7 +1833,7 @@ mod tests {
                 50,
                 TemplateEdit::SetNode {
                     node: 2,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1561,19 +1843,19 @@ mod tests {
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::wake_suspense(94),
             Op::Rerender,
-            Op::suspense(50, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(50, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::wake_suspense(120),
             Op::template(
@@ -1594,7 +1876,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::fragment(
@@ -1617,7 +1899,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -1633,7 +1915,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(0, 0, DynamicKind::ComponentA),
@@ -1658,7 +1940,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -1688,6 +1970,7 @@ mod tests {
         assert_eq!(
             harness
                 .incremental
+                .borrow()
                 .historical_event_listener_targets()
                 .len(),
             1
@@ -1704,7 +1987,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -1740,6 +2023,7 @@ mod tests {
         assert_eq!(
             harness
                 .incremental
+                .borrow()
                 .historical_event_listener_targets()
                 .len(),
             1
@@ -1754,7 +2038,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1768,14 +2052,14 @@ mod tests {
                 3,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1785,7 +2069,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1807,7 +2091,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -1821,14 +2105,14 @@ mod tests {
                 3,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -1838,7 +2122,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1850,7 +2134,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1871,7 +2155,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1886,18 +2170,18 @@ mod tests {
                 3,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::template(
                 0,
@@ -1905,7 +2189,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -1916,7 +2200,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1939,7 +2223,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 5,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1947,7 +2231,7 @@ mod tests {
                 5,
                 2,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::wake_suspense(3),
@@ -1967,7 +2251,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 4,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -1975,7 +2259,7 @@ mod tests {
                 6,
                 4,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -2005,7 +2289,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -2019,19 +2303,19 @@ mod tests {
                 3,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 7,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::suspense_wake_mutation(1, WakeMutationSpec::PrependStaticRoot { tag: 42 }),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::wake_suspense(1),
             Op::wake_suspense(0),
@@ -2050,14 +2334,14 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -2065,14 +2349,14 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 1,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::wake_suspense(0),
@@ -2094,7 +2378,7 @@ mod tests {
                 223,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -2102,7 +2386,7 @@ mod tests {
                 109,
                 103,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
@@ -2147,7 +2431,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2156,7 +2440,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2218,7 +2502,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2228,7 +2512,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2290,7 +2574,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2322,7 +2606,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2366,7 +2650,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2392,7 +2676,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 1,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2437,7 +2721,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2447,7 +2731,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateAttrSpec::Dynamic,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
                     },
                 },
             ),
@@ -2489,7 +2773,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -2503,7 +2787,7 @@ mod tests {
                 5,
                 TemplateEdit::SetNode {
                     node: 2,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::Rerender,
@@ -2549,7 +2833,7 @@ mod tests {
                 1,
                 TemplateEdit::SetNode {
                     node: 143,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::template(
@@ -2569,21 +2853,21 @@ mod tests {
                 4,
                 4,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 7,
                 TemplateEdit::SetNode {
                     node: 7,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::template(
                 88,
                 TemplateEdit::SetNode {
                     node: 6,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::template(
@@ -2592,7 +2876,7 @@ mod tests {
                     element: 1,
                     edit: ListEdit::Insert {
                         index: 5,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2602,14 +2886,14 @@ mod tests {
                 1,
                 5,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 6,
                 TemplateEdit::SetNode {
                     node: 7,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::wake_suspense(4),
@@ -2640,7 +2924,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2656,7 +2940,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 1,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2665,11 +2949,11 @@ mod tests {
                 3,
                 2,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::Rerender,
-            Op::suspense(0, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
             Op::suspense(1, SuspenseMode::Resolved),
             Op::wake_suspense(2),
@@ -2697,21 +2981,21 @@ mod tests {
                 50,
                 TemplateEdit::SetNode {
                     node: 189,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
                 0,
                 0,
                 DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wakes: 0 },
+                    mode: SuspenseMode::Ready { wake_after: 0 },
                 },
             ),
             Op::template(
                 1,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::dynamic(
@@ -2726,7 +3010,7 @@ mod tests {
                 TemplateEdit::Roots {
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2739,9 +3023,9 @@ mod tests {
                     edit: ListEdit::Remove { index: 97 },
                 },
             ),
-            Op::suspense(31, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(31, SuspenseMode::Ready { wake_after: 0 }),
             Op::Rerender,
-            Op::suspense(240, SuspenseMode::Ready { wakes: 0 }),
+            Op::suspense(240, SuspenseMode::Ready { wake_after: 0 }),
             Op::wake_suspense(197),
         ];
 
@@ -2758,7 +3042,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::fragment(
@@ -2802,7 +3086,7 @@ mod tests {
                 6,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::template(
@@ -2811,7 +3095,7 @@ mod tests {
                     element: 0,
                     edit: ListEdit::Insert {
                         index: 0,
-                        item: TemplateNodeKind::Dynamic,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                     },
                 },
             ),
@@ -2854,7 +3138,7 @@ mod tests {
                 0,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::fragment(
@@ -2890,7 +3174,7 @@ mod tests {
                 6,
                 TemplateEdit::SetNode {
                     node: 0,
-                    kind: TemplateNodeKind::Dynamic,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
                 },
             ),
             Op::fragment(
