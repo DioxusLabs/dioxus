@@ -29,7 +29,6 @@ xxhash-rust = { workspace = true, features = ["const_xxh64"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-dioxus-renderer-oracle = { workspace = true }
 dioxus-ssr = { workspace = true }
 dioxus-html = { workspace = true, features = ["serialize"] }
 tokio = { workspace = true, features = ["full"] }

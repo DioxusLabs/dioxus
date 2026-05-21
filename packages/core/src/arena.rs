@@ -73,9 +73,6 @@ impl VirtualDom {
     }
 
     // Drop a scope whose rendered nodes have already been removed.
-    //
-    // Normal vnode removal drops child component scopes before their parent. Suspense can keep
-    // background nodes outside of that traversal, so clean up any remaining live child scopes here.
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         self.drop_orphaned_child_scopes(id);
 

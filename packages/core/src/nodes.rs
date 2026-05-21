@@ -157,12 +157,10 @@ impl VNode {
         mut dynamic_nodes: Box<[DynamicNode]>,
         dynamic_attrs: Box<[Box<[Attribute]>]>,
     ) -> Self {
-        // An empty `Fragment` is operationally identical to a `Placeholder` (both reserve
-        // a single anchor element), so normalize once at construction. This is the single
-        // chokepoint for VNode creation (rsx macro, `IntoDynNode`, direct API, hotreload),
-        // letting every diff/render path assume `Fragment` is non-empty.
         for node in &mut dynamic_nodes {
-            normalize_empty_fragment(node);
+            if matches!(node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
+                *node = DynamicNode::Placeholder(Default::default());
+            }
         }
         Self {
             vnode: Rc::new(VNodeInner {
@@ -624,15 +622,6 @@ impl DynamicNode {
     /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`]
     pub fn make_node<'c, I>(into: impl IntoDynNode<I> + 'c) -> DynamicNode {
         into.into_dyn_node()
-    }
-}
-
-/// Collapse an empty `Fragment` to a `Placeholder`. They are operationally identical
-/// (both reserve a single anchor element) so the diff layer is simpler when only one
-/// shape can show up.
-fn normalize_empty_fragment(node: &mut DynamicNode) {
-    if matches!(node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
-        *node = DynamicNode::Placeholder(Default::default());
     }
 }
 

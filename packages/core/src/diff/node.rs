@@ -32,31 +32,29 @@ fn dynamic_node_has_live_dom(
 }
 
 fn vnode_has_live_dom(node: &VNode, dom: &VirtualDom) -> bool {
-    mounted_mount(node, dom).is_some_and(|mount| {
-        node.template
-            .roots()
-            .iter()
-            .enumerate()
-            .any(|(root_idx, root)| {
-                if let Some(idx) = root.dynamic_id() {
-                    dynamic_node_has_live_dom(&node.dynamic_nodes[idx], mount, idx, dom)
-                } else {
-                    let id = dom.get_mounted_root_node(mount, root_idx);
-                    id.0 != 0 && id.0 != usize::MAX
-                }
-            })
-    })
+    let mount = mounted_mount(node, dom);
+    node.template
+        .roots()
+        .iter()
+        .enumerate()
+        .any(|(root_idx, root)| {
+            if let Some(idx) = root.dynamic_id() {
+                dynamic_node_has_live_dom(&node.dynamic_nodes[idx], mount, idx, dom)
+            } else {
+                let id = dom.get_mounted_root_node(mount, root_idx);
+                id.0 != 0 && id.0 != usize::MAX
+            }
+        })
 }
 
-fn mounted_mount(node: &VNode, dom: &VirtualDom) -> Option<MountId> {
+fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
     let mount = node.mount.get();
-    let mount = mount.as_usize().map(MountId)?;
-    if dom.runtime.mounts.borrow().contains(mount.0) {
-        Some(mount)
-    } else {
-        node.mount.take();
-        None
-    }
+    let mount = mount
+        .as_usize()
+        .map(MountId)
+        .expect("node should already be mounted");
+    debug_assert!(dom.runtime.mounts.borrow().contains(mount.0));
+    mount
 }
 
 impl VNode {
@@ -66,21 +64,15 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
-        let Some(mount_id) = mounted_mount(self, dom) else {
-            let _ =
-                dom.create_children(None::<&mut NoOpMutations>, std::slice::from_ref(new), None);
-            return;
-        };
+        let mount_id = mounted_mount(self, dom);
 
         // The node we are diffing from should always be mounted
         debug_assert!(
-            to.is_none()
-                || dom
-                    .runtime
-                    .mounts
-                    .borrow()
-                    .get(self.mount.get().0)
-                    .is_some()
+            dom.runtime
+                .mounts
+                .borrow()
+                .get(self.mount.get().0)
+                .is_some()
         );
 
         // If the templates are different, we need to replace the entire template
@@ -91,24 +83,27 @@ impl VNode {
 
         self.move_mount_to(new, dom);
 
-        if self != new {
-            // If the templates are the same, we can diff the attributes and children
-            // Start with the attributes
-            // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
-            if let Some(to) = to.as_deref_mut() {
-                self.diff_attributes(new, dom, to);
-            }
+        // If the templates are the same, we don't need to do anything, except copy over the mount information
+        if self == new {
+            return;
+        }
 
-            // Now diff the dynamic nodes
-            let mount_id = new.mount.get();
-            for (dyn_node_idx, (old, new)) in self
-                .dynamic_nodes
-                .iter()
-                .zip(new.dynamic_nodes.iter())
-                .enumerate()
-            {
-                self.diff_dynamic_node(mount_id, dyn_node_idx, old, new, dom, to.as_deref_mut())
-            }
+        // If the templates are the same, we can diff the attributes and children
+        // Start with the attributes
+        // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
+        if let Some(to) = to.as_deref_mut() {
+            self.diff_attributes(new, dom, to);
+        }
+
+        // Now diff the dynamic nodes
+        let mount_id = new.mount.get();
+        for (dyn_node_idx, (old, new)) in self
+            .dynamic_nodes
+            .iter()
+            .zip(new.dynamic_nodes.iter())
+            .enumerate()
+        {
+            self.diff_dynamic_node(mount_id, dyn_node_idx, old, new, dom, to.as_deref_mut())
         }
     }
 
@@ -118,7 +113,6 @@ impl VNode {
         new.mount.set(mount_id);
 
         debug_assert!(mount_id.mounted());
-
         let mut mounts = dom.runtime.mounts.borrow_mut();
         let mount = &mut mounts[mount_id.0];
 
@@ -227,7 +221,10 @@ impl VNode {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
             // The node is a fragment, so we need to find the first element in the fragment
-            Some((_, Fragment(children))) => children.first().unwrap().find_first_element(dom),
+            Some((_, Fragment(children))) => {
+                let child = children.first().unwrap();
+                child.find_first_element(dom)
+            }
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
@@ -255,7 +252,10 @@ impl VNode {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
             // The node is a fragment, so we need to find the last element in the fragment
-            Some((_, Fragment(children))) => children.last().unwrap().find_last_element(dom),
+            Some((_, Fragment(children))) => {
+                let child = children.last().unwrap();
+                child.find_last_element(dom)
+            }
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
@@ -347,9 +347,7 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        let Some(mount) = mounted_mount(self, dom) else {
-            return;
-        };
+        let mount = mounted_mount(self, dom);
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
@@ -456,7 +454,9 @@ impl VNode {
                 for node in &nodes[..nodes.len() - 1] {
                     node.remove_node_inner(dom, to.as_deref_mut(), destroy_component_state, None)
                 }
-                let last_node = nodes.last().unwrap();
+                let last_node = nodes
+                    .last()
+                    .expect("fragment dynamic nodes should be normalized to non-empty fragments");
                 last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
             }
         };
@@ -504,6 +504,7 @@ impl VNode {
                 dom.reclaim(new_id);
                 next_id = Some(new_id);
             }
+            dom.set_mounted_dyn_attr(mount, idx, ElementId(usize::MAX));
         }
     }
 

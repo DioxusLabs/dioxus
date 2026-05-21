@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,6 +29,7 @@ pub(crate) type LifecycleSnapshot = BTreeMap<LifecycleKey, usize>;
 thread_local! {
     static CURRENT_RUN: Cell<Option<LifecycleRun>> = const { Cell::new(None) };
     static LIVE_COMPONENTS: RefCell<BTreeMap<(LifecycleRun, LifecycleKey, LifecycleContext), usize>> = RefCell::new(BTreeMap::new());
+    static LIVE_GUARDS: RefCell<Vec<Weak<LifecycleGuard>>> = const { RefCell::new(Vec::new()) };
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,11 +49,38 @@ impl LifecycleContext {
             .iter()
             .any(|id| suspense_ids.contains(id))
     }
+
+    fn retargeted_suspense_ancestor(
+        &self,
+        old_parent: &Self,
+        old_id: u64,
+        new_parent: &Self,
+        new_id: u64,
+    ) -> Option<Self> {
+        let old_prefix = &old_parent.suspense_ancestors;
+        if !self.suspense_ancestors.starts_with(old_prefix) {
+            return None;
+        }
+
+        let after_parent = &self.suspense_ancestors[old_prefix.len()..];
+        let [first, suffix @ ..] = after_parent else {
+            return None;
+        };
+        if *first != old_id {
+            return None;
+        }
+
+        let mut suspense_ancestors = new_parent.suspense_ancestors.clone();
+        suspense_ancestors.push(new_id);
+        suspense_ancestors.extend_from_slice(suffix);
+        Some(Self { suspense_ancestors })
+    }
 }
 
 pub(crate) fn reset_all() {
     CURRENT_RUN.with(|run| run.set(None));
     LIVE_COMPONENTS.with(|live| live.borrow_mut().clear());
+    LIVE_GUARDS.with(|guards| guards.borrow_mut().clear());
 }
 
 pub(crate) fn reset_run(run: LifecycleRun) {
@@ -85,11 +113,13 @@ pub(crate) fn track(
     let key = LifecycleKey { role, id };
     let context = LifecycleContext::new(suspense_ancestors);
     increment(run, key, &context);
-    Rc::new(LifecycleGuard {
+    let guard = Rc::new(LifecycleGuard {
         run: Cell::new(run),
         key: Cell::new(key),
         context: RefCell::new(context),
-    })
+    });
+    LIVE_GUARDS.with(|guards| guards.borrow_mut().push(Rc::downgrade(&guard)));
+    guard
 }
 
 pub(crate) fn snapshot(run: LifecycleRun) -> LifecycleSnapshot {
@@ -139,6 +169,22 @@ impl LifecycleGuard {
             return;
         }
 
+        if current_key.role == LifecycleRole::SuspenseBoundary
+            && next_key.role == LifecycleRole::SuspenseBoundary
+            && current_key.id != next_key.id
+        {
+            // A reused suspense boundary can keep descendants alive without
+            // rerendering them, so retarget their recorded ancestry to the
+            // boundary identity observed by the current render.
+            retarget_suspense_descendant_contexts(
+                current_run,
+                current_key.id,
+                next_key.id,
+                &current_context,
+                &next_context,
+            );
+        }
+
         decrement(current_run, current_key, &current_context);
         increment(next_run, next_key, &next_context);
         self.run.set(next_run);
@@ -181,4 +227,46 @@ fn decrement(run: Option<LifecycleRun>, key: LifecycleKey, context: &LifecycleCo
             *count -= 1;
         }
     });
+}
+
+fn retarget_suspense_descendant_contexts(
+    run: Option<LifecycleRun>,
+    old_id: u64,
+    new_id: u64,
+    old_parent: &LifecycleContext,
+    new_parent: &LifecycleContext,
+) {
+    let Some(run) = run else {
+        return;
+    };
+
+    let retargeted = LIVE_GUARDS.with(|guards| {
+        let mut retargeted = Vec::new();
+        guards.borrow_mut().retain(|guard| {
+            let Some(guard) = guard.upgrade() else {
+                return false;
+            };
+
+            if guard.run.get() == Some(run) {
+                let current_context = guard.context.borrow().clone();
+                if let Some(next_context) = current_context
+                    .retargeted_suspense_ancestor(old_parent, old_id, new_parent, new_id)
+                {
+                    if next_context != current_context {
+                        let key = guard.key.get();
+                        guard.context.replace(next_context.clone());
+                        retargeted.push((key, current_context, next_context));
+                    }
+                }
+            }
+
+            true
+        });
+        retargeted
+    });
+
+    for (key, current_context, next_context) in retargeted {
+        decrement(Some(run), key, &current_context);
+        increment(Some(run), key, &next_context);
+    }
 }

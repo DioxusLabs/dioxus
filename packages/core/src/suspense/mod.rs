@@ -160,13 +160,7 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task != task.id);
-        // The boundary scope may already have been torn down by the time this is called
-        // (e.g. when dropping the VirtualDom or unmounting a suspended subtree), so only
-        // request a rerender if the scope still exists.
-        let id = self.inner.id.get();
-        if self.inner.rt.try_get_state(id).is_some() {
-            self.inner.rt.needs_update(id);
-        }
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Get all suspended tasks
