@@ -59,6 +59,10 @@ pub struct VNodeInner {
     /// This is a list of positions in the template where dynamic attributes can be inserted.
     ///
     /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
+    /// More than one slot can point at the same template element when named dynamic attributes and
+    /// spread attributes are mixed. Creation writes those slots in order, and diffing groups slots
+    /// with the same attribute path so duplicate keys keep the same last-write-wins behavior and
+    /// removed dynamic overrides can reveal the static template attribute underneath.
     ///
     /// For example:
     /// ```rust
