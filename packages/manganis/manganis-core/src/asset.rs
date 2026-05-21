@@ -1,5 +1,5 @@
 use crate::AssetOptions;
-use const_serialize_08::{ConstStr, SerializeConst, deserialize_const};
+use const_serialize::{ConstStr, SerializeConst, deserialize_const};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
@@ -8,7 +8,6 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 /// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
 /// to use.
 #[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
-#[const_serialize(crate = const_serialize_08)]
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,

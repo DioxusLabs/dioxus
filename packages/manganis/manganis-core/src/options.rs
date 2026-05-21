@@ -1,4 +1,4 @@
-use const_serialize_08::SerializeConst;
+use const_serialize::SerializeConst;
 
 use crate::{
     CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions,
@@ -17,7 +17,6 @@ use crate::{
     serde::Serialize,
     serde::Deserialize,
 )]
-#[const_serialize(crate = const_serialize_08)]
 #[non_exhaustive]
 pub struct AssetOptions {
     /// If a hash should be added to the asset path
@@ -157,7 +156,6 @@ impl<T> AssetOptionsBuilder<T> {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[const_serialize(crate = const_serialize_08)]
 #[repr(C, u8)]
 #[non_exhaustive]
 pub enum AssetVariant {

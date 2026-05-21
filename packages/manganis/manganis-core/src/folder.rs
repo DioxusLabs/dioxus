@@ -1,4 +1,4 @@
-use const_serialize_08::SerializeConst;
+use const_serialize::SerializeConst;
 
 use crate::{AssetOptions, AssetOptionsBuilder};
 
@@ -15,7 +15,6 @@ use crate::{AssetOptions, AssetOptionsBuilder};
     serde::Serialize,
     serde::Deserialize,
 )]
-#[const_serialize(crate = const_serialize_08)]
 pub struct FolderAssetOptions {}
 
 impl Default for FolderAssetOptions {
