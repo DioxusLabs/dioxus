@@ -904,6 +904,11 @@ fn listener_name(slot: usize, value: u8) -> &'static str {
 }
 
 fn attr_static_value(value: u8) -> &'static str {
+    // Reserve high static values for aliasing dynamic text attributes.
+    if value >= 128 {
+        return leak_str(format!("attr-value-{}", value - 128));
+    }
+
     leak_str(format!("static{value}"))
 }
 
