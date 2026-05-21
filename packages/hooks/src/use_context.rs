@@ -1,8 +1,14 @@
 use dioxus_core::{consume_context, provide_context, try_consume_context, use_hook};
 
-/// Consume some context in the tree, providing a sharable handle to the value
+/// Try to consume some context in the tree, returning `None` if it is not found.
 ///
-/// Does not regenerate the value if the value is changed at the parent.
+/// This is a **hook** — the context value is captured once on the first render and cached
+/// for the lifetime of the component. It follows the [rules of hooks](https://dioxuslabs.com/learn/essentials/state/#rules-of-hooks),
+/// meaning it must be called unconditionally at the top level of a component.
+///
+/// If you need to read context from outside a component body (e.g., inside an event handler,
+/// async task, or spawned future), use [`try_consume_context`] instead,
+/// which can be called anywhere the Dioxus runtime is active.
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[doc = include_str!("../docs/moving_state_around.md")]
 #[must_use]
@@ -10,9 +16,16 @@ pub fn try_use_context<T: 'static + Clone>() -> Option<T> {
     use_hook(|| try_consume_context::<T>())
 }
 
-/// Consume some context in the tree, providing a sharable handle to the value
+/// Consume some context in the tree, panicking if it is not found.
 ///
-/// Does not regenerate the value if the value is changed at the parent.
+/// This is a **hook** — the context value is captured once on the first render and cached
+/// for the lifetime of the component. It follows the [rules of hooks](https://dioxuslabs.com/learn/essentials/state/#rules-of-hooks),
+/// meaning it must be called unconditionally at the top level of a component.
+///
+/// If you need to read context from outside a component body (e.g., inside an event handler,
+/// async task, or spawned future), use [`consume_context`] instead,
+/// which can be called anywhere the Dioxus runtime is active.
+///
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # #[derive(Clone, Copy, PartialEq, Debug)]

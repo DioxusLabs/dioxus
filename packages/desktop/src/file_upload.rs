@@ -6,14 +6,14 @@ use std::{any::Any, collections::HashMap};
 use tokio::{fs::File, io::AsyncReadExt};
 
 use dioxus_html::{
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    Modifiers, NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    Modifiers, NativeFileData, SerializedFormObject, SerializedMouseData,
-    SerializedPointInteraction,
 };
 use dioxus_web_sys_events::Synthetic;
 
@@ -306,14 +306,28 @@ impl HasFormData for DesktopFormData {
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
     event: Arc<Mutex<Option<DragDropEvent>>>,
+    paths: Arc<Mutex<Vec<PathBuf>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
+        match event {
+            DragDropEvent::Enter { ref paths, .. } => {
+                self.paths.lock().unwrap().clone_from(paths)
+            }
+            DragDropEvent::Drop { ref paths, .. } => {
+                self.paths.lock().unwrap().clone_from(paths)
+            }
+            _ => {}
+        }
         *self.event.lock().unwrap() = Some(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
         self.event.lock().unwrap().clone()
+    }
+
+    pub fn current_paths(&self) -> Vec<PathBuf> {
+        self.paths.lock().unwrap().clone()
     }
 }
 

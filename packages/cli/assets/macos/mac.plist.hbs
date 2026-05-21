@@ -24,15 +24,39 @@
 		<string>APPL</string>
 
 		<key>CFBundleShortVersionString</key>
-		<string>7.4.0</string>
+		<string>{{ version }}</string>
 
 		<key>CFBundleVersion</key>
-		<string>1</string>
-
-		<key>LSApplicationCategoryType</key>
-		<string>public.app-category.social-networking</string>
+		<string>{{ version }}</string>
 
 		<key>LSMinimumSystemVersion</key>
-		<string>10.15</string>
+		<string>{{ minimum_system_version }}</string>
+
+		<!-- Permission usage descriptions from Dioxus.toml [permissions] section -->
+		{{#each permissions}}
+		<key>{{ this.key }}</key>
+		<string>{{ this.description }}</string>
+		{{/each}}
+
+		{{#if url_schemes}}
+		<!-- URL schemes from Dioxus.toml [deep_links] and [macos] sections -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					{{#each url_schemes}}
+					<string>{{ this }}</string>
+					{{/each}}
+				</array>
+			</dict>
+		</array>
+		{{/if}}
+
+		<!-- Additional plist entries from Dioxus.toml [macos.plist] section -->
+		{{{ plist_entries }}}
+
+		<!-- Raw plist XML from Dioxus.toml [macos.raw.info_plist] -->
+		{{{ raw_plist }}}
 	</dict>
 </plist>

@@ -351,18 +351,3 @@ impl InteractionLocation for SerializedTouchPoint {
         PagePoint::new(self.page_x, self.page_y)
     }
 }
-
-impl_event! {
-    TouchData;
-    /// touchstart
-    ontouchstart
-
-    /// touchmove
-    ontouchmove
-
-    /// touchend
-    ontouchend
-
-    /// touchcancel
-    ontouchcancel
-}

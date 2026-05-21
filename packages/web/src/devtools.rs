@@ -221,7 +221,7 @@ pub(crate) fn show_toast(
     duration: Duration,
     after_reload: bool,
 ) {
-    let as_ms = duration.as_millis();
+    let as_ms: u32 = duration.as_millis().try_into().unwrap();
 
     let js_fn_name = match after_reload {
         true => "scheduleDXToast",

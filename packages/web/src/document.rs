@@ -1,5 +1,5 @@
-use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
+use dioxus_core::queue_effect;
 use dioxus_core::{provide_context, Runtime};
 use dioxus_document::{Document, Eval, LinkProps, MetaProps, ScriptProps, StyleProps};
 use dioxus_history::History;

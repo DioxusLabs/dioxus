@@ -3,15 +3,15 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use std::hash::{Hash, Hasher};
 use syn::{
+    Attribute, Expr, Pat, PatType, Result, ReturnType, Token, Type,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Attribute, Expr, Pat, PatType, Result, ReturnType, Token, Type,
 };
 use syn::{BoundLifetimes, ExprClosure};
 
 /// A closure whose body might not be valid rust code but we want to interpret it regardless.
 /// This lets us provide expansions in way more cases than normal closures at the expense of an
-/// increased mainteance burden and complexity.
+/// increased maintenance burden and complexity.
 ///
 /// We do our best to reuse the same logic from partial exprs for the body of the PartialClosure.
 /// The code here is simply stolen from `syn::ExprClosure` and lightly modified to work with

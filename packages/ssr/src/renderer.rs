@@ -37,9 +37,9 @@ impl Renderer {
     pub fn set_render_components(
         &mut self,
         callback: impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) {
         self.render_components = Some(Arc::new(callback));
     }
@@ -158,12 +158,12 @@ impl Renderer {
                             write_attribute(buf, attr)?;
                         }
 
-                        if self.pre_render {
-                            if let AttributeValue::Listener(_) = &attr.value {
-                                // The onmounted event doesn't need a DOM listener
-                                if attr.name != "onmounted" {
-                                    accumulated_listeners.push(attr.name);
-                                }
+                        if self.pre_render
+                            && let AttributeValue::Listener(_) = &attr.value
+                        {
+                            // The onmounted event doesn't need a DOM listener
+                            if attr.name != "onmounted" {
+                                accumulated_listeners.push(attr.name);
                             }
                         }
                     }
@@ -362,7 +362,10 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&#62;123&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&#60;/diiiiiiiiv&#62;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(
+        out,
+        "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&#62;123&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&#60;/diiiiiiiiv&#62;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>"
+    );
 }
 
 #[test]
@@ -447,6 +450,7 @@ pub(crate) const BOOL_ATTRS: &[&str] = &[
     "disabled",
     "formnovalidate",
     "hidden",
+    "inert",
     "ismap",
     "itemscope",
     "loop",

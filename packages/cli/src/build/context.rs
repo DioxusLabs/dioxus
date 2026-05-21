@@ -5,7 +5,7 @@ use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::diagnostic::Diagnostic;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::ExitStatus};
+use std::{path::PathBuf, process::ExitStatus, time::SystemTime};
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
@@ -35,6 +35,10 @@ pub enum BuilderUpdate {
         stage: BuildStage,
     },
 
+    ProfilePhase {
+        profile: BuildPhaseProfile,
+    },
+
     CompilerMessage {
         message: Diagnostic,
     },
@@ -48,6 +52,15 @@ pub enum BuilderUpdate {
     /// The build failed. This might be because of a compilation error, or an error internal to DX.
     BuildFailed {
         err: Error,
+    },
+
+    /// A rustc invocation finished and its `.d` dep-info file has been parsed. The included
+    /// `files` are the source/include targets rustc reported as inputs for that crate. The runner
+    /// folds these into its filemap and watch set so edits to non-`.rs` includes (e.g. CSS pulled
+    /// in via `include_str!`) and to source files in workspace dep crates trigger rebuilds /
+    /// hot-reloads even when those files weren't already under a watched crate root.
+    DepInfoDiscovered {
+        files: Vec<PathBuf>,
     },
 
     /// A running process has received a stdout.
@@ -78,20 +91,41 @@ pub enum BuilderUpdate {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildPhaseProfile {
+    pub label: &'static str,
+    pub start: SystemTime,
+}
+
 impl BuildContext {
+    pub(crate) fn new(tx: ProgressTx, mode: BuildMode, build_id: BuildId) -> Self {
+        Self { tx, mode, build_id }
+    }
+
     /// Returns true if this is a client build - basically, is this the primary build?
     /// We try not to duplicate work between client and server builds, like asset copying.
     pub(crate) fn is_primary_build(&self) -> bool {
         self.build_id == BuildId::PRIMARY
     }
 
+    pub(crate) fn profile_phase(&self, label: &'static str) {
+        _ = self.tx.unbounded_send(BuilderUpdate::ProfilePhase {
+            profile: BuildPhaseProfile {
+                label,
+                start: SystemTime::now(),
+            },
+        });
+    }
+
     pub(crate) fn status_wasm_bindgen_start(&self) {
+        self.profile_phase("Wasm Bindgen");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningBindgen,
         });
     }
 
     pub(crate) fn status_splitting_bundle(&self) {
+        self.profile_phase("Wasm Split");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::SplittingBundle,
         });
@@ -104,12 +138,23 @@ impl BuildContext {
     }
 
     pub(crate) fn status_running_gradle(&self) {
+        self.profile_phase("Gradle");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningGradle,
         })
     }
 
+    pub(crate) fn status_compiling_native_plugins(&self, detail: impl Into<String>) {
+        self.profile_phase("Compiling Native Plugins");
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+            stage: BuildStage::CompilingNativePlugins {
+                detail: detail.into(),
+            },
+        });
+    }
+
     pub(crate) fn status_codesigning(&self) {
+        self.profile_phase("Code Signing");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CodeSigning,
         });
@@ -129,17 +174,26 @@ impl BuildContext {
         tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
 
-    pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
+    pub(crate) fn status_build_progress(
+        &self,
+        count: usize,
+        total: usize,
+        name: String,
+        fresh: bool,
+    ) {
+        self.profile_phase("Compiling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
                 krate: name,
+                fresh,
             },
         });
     }
 
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
+        self.profile_phase("Compiling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Starting {
                 patch: matches!(self.mode, BuildMode::Thin { .. }),
@@ -148,19 +202,16 @@ impl BuildContext {
         });
     }
 
-    pub(crate) fn status_starting_link(&self) {
+    pub(crate) fn status_starting_fat_link(&self) {
+        self.profile_phase("Fat Linking");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Linking,
         });
     }
 
-    pub(crate) fn status_copied_asset(
-        progress: &UnboundedSender<BuilderUpdate>,
-        current: usize,
-        total: usize,
-        path: PathBuf,
-    ) {
-        _ = progress.unbounded_send(BuilderUpdate::Progress {
+    pub(crate) fn status_copied_asset(&self, current: usize, total: usize, path: PathBuf) {
+        self.profile_phase("Copying Assets");
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,
                 total,
@@ -170,31 +221,45 @@ impl BuildContext {
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
+        self.profile_phase("Optimizing Wasm");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::OptimizingWasm,
         });
     }
 
-    pub(crate) fn status_hotpatching(&self) {
+    pub(crate) fn status_writing_patch(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Hotpatching,
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
+        self.profile_phase("Installing Tooling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::InstallingTooling,
         });
     }
 
     pub(crate) fn status_compressing_assets(&self) {
+        self.profile_phase("Compressing Assets");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CompressingAssets,
         });
     }
+
     pub(crate) fn status_extracting_assets(&self) {
+        self.profile_phase("Extracting assets");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::ExtractingAssets,
         });
+    }
+
+    pub(crate) fn status_dep_info_discovered(&self, files: Vec<PathBuf>) {
+        if files.is_empty() {
+            return;
+        }
+        _ = self
+            .tx
+            .unbounded_send(BuilderUpdate::DepInfoDiscovered { files });
     }
 }

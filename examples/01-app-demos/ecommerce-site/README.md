@@ -1,6 +1,6 @@
 # Dioxus Example: An e-commerce site using the FakeStoreAPI
 
-This example app is a fullstack web application leveraging the [FakeStoreAPI](https://fakestoreapi.com) and [Tailwind CSS](https://tailwindcss.com/).
+This example app is a fullstack web application leveraging the FakeStoreAPI and [Tailwind CSS](https://tailwindcss.com/).
 
 ![Demo Image](demo.png)
 

@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-html-internal-macro"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "liveview"]

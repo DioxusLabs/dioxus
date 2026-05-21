@@ -7,11 +7,11 @@ use layout::Layout;
 use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use redirect::Redirect;
 use route::{Route, RouteType};
 use segment::RouteSegment;
-use syn::{parse::ParseStream, parse_macro_input, Ident, Token, Type};
+use syn::{Ident, Token, Type, parse::ParseStream, parse_macro_input};
 
 use proc_macro2::TokenStream as TokenStream2;
 
@@ -584,9 +584,7 @@ impl RouteEnum {
                     let route_str = &route.route;
                     let comment = format!(
                         " An error that can occur when trying to parse the route [`{}::{}`] ('{}').",
-                        self.name,
-                        route_name,
-                        route_str
+                        self.name, route_name, route_str
                     );
 
                     error_variants.push(quote! {

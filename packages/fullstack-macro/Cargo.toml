@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-fullstack-macro"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/DioxusLabs/dioxus/"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 authors = ["Jonathan Kelley", "Evan Almloff"]

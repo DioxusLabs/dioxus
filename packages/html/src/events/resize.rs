@@ -132,13 +132,6 @@ use crate::geometry::PixelsSize;
 
 pub type ResizeEvent = Event<ResizeData>;
 
-impl_event! {
-    ResizeData;
-
-    /// onresize
-    onresize
-}
-
 /// The ResizeResult type for the ResizeData
 pub type ResizeResult<T> = Result<T, ResizeError>;
 

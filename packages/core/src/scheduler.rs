@@ -76,10 +76,10 @@
 //!    Description: Effects should always run after all changes to the DOM have been applied.
 //!    Priority: These are the lowest priority tasks in the scheduler. They are run after all other dirty scopes and futures have been resolved. Other tasks may cause components to rerun, which would update the DOM. These effects should only run after the DOM has been updated.
 
-use crate::innerlude::Effect;
 use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
+use crate::innerlude::Effect;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;

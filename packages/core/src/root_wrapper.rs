@@ -1,17 +1,14 @@
 use crate::{
-    fc_to_builder, properties::RootProps, DynamicNode, Element, ErrorBoundary, Properties,
-    SuspenseBoundary, Template, TemplateNode, VComponent, VNode,
+    DynamicNode, Element, ErrorBoundary, Properties, SuspenseBoundary, Template, TemplateNode,
+    VComponent, VNode, fc_to_builder, properties::RootProps,
 };
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary
 #[allow(non_snake_case)]
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
-    static TEMPLATE: Template = Template {
-        roots: &[TemplateNode::Dynamic { id: 0usize }],
-        node_paths: &[&[0u8]],
-        attr_paths: &[],
-    };
+    static TEMPLATE: Template =
+        Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
     Element::Ok(VNode::new(
         None,
         TEMPLATE,

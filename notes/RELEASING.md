@@ -1,6 +1,6 @@
 # Releasing Dioxus
 
-Dioxus is big and requires a lot of hand-holding to release. This guide is accurate as of of Dec 17, 2024. As we improve the release process, we'll update this guide.
+Dioxus is big and requires a lot of hand-holding to release. This guide is accurate as of Dec 17, 2024. As we improve the release process, we'll update this guide.
 
 ## Checklist
 
@@ -34,18 +34,18 @@ This involves making sure the metadata of the crates is correct before we publis
 18. [ ] Go to the [template repo](http://github.com/dioxusLabs/dioxus-template) and make sure a branch exists for the new major version. IE a v0.5, v0.6, v0.7, etc branch. If it doesn't exist, create it. This *needs* to exist for `dx new` to work. It's likely that this already exists since we tend to try `dx new` frequently before releasing.
 19. [ ] If performing a major release, make sure all the links in `dioxus` are updated to point to the new version. This involves basically CTRL-F'ing for `/0.6/` and replacing it with `/0.7/` etc.
 20. [ ] It's likely that docsite links might not be updated just yet. If nightly docs are released, there shouldn't need to be any changes. It's fine to bypass the link checker for now, but you should be ready to fix links once the docsite is ready. Any links that are broken are "frozen in time" and will need to be fixed. We can't change links in published crates, so if the link never exists, it's just broken forever.
-21. [ ] Inform "VIP" community projects that that a final RC is out (ie projects like [Freya](http://freyaui.dev)) so their authors can test new versions.
+21. [ ] Inform "VIP" community projects that a final RC is out (i.e. projects like [Freya](http://freyaui.dev)) so their authors can test new versions.
 
 ### Releasing the workspace:
 
 1. [ ] Make sure all latent commits have been merged into the `main` branch and pushed to github.
-2. [ ] Ensure you've published a pre-release of the same code (only necessary for for major releases... patch releases are generally fine to skip a prerelease)
+2. [ ] Ensure you've published a pre-release of the same code (only necessary for major releases... patch releases are generally fine to skip a prerelease)
 3. [ ] Make sure the version you're releasing is correct (see above)
 4. [ ] Make sure you're on the `main` branch (cargo workspaces publish requires you to be on the main branch)
 5. [ ] Make sure you have [`cargo-workspaces` installed](https://crates.io/crates/cargo-workspaces). There are other tools but this one is the one we've used in the past. It has some small bugs but is generally reliable. This tool is important because it coordinates the release order of the crates since they depend on each other. Eventually cargo itself will have this functionality, I believe. Unfortunately, there's no way to "dry-run" a workspace publish since crates rely on each other and won't succeed if their dependencies aren't published.
 6. [ ] Run the release: `cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags`. This will publish the crates to crates.io. It might take a while. Only `jkelleyrtp` currently has sufficient rate-limits to publish all the crates at once. If any crate fails, you might need to fix the problems manually and then run the command again. If an error occurs, you might also need to reset the most recent git commit and wipe the tag. `git reset --hard HEAD~1` and `git tag -d <tag>`. Be careful with these commands, especially if you're on the `main` branch.
 7. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
-8. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
+8. [ ] Also push the tag to the `main` branch, e.g. `git push origin v0.6.0`
 9. [ ] Verify crates.io is showing the new version
 10. [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure there's no errors. We've had issues before with docs.rs [not building properly](https://docs.rs/crate/dioxus/0.6.0).
 11. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.

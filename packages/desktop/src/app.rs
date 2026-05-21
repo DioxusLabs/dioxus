@@ -42,6 +42,7 @@ pub(crate) struct App {
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
+    pub(crate) tray_icon_show_window_on_click: bool,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
     ///
@@ -74,6 +75,7 @@ impl App {
             move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
         });
         let desktop_thread_handle = spawn_dom_thread(proxy.clone());
+        let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -84,6 +86,7 @@ impl App {
             unmounted_dom: Cell::new(Some(virtual_dom)),
             float_all: false,
             show_devtools: false,
+            tray_icon_show_window_on_click,
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -181,7 +184,7 @@ impl App {
             button_state: _,
         } = event
         {
-            if button == tray_icon::MouseButton::Left {
+            if button == tray_icon::MouseButton::Left && self.tray_icon_show_window_on_click {
                 for webview in self.webviews.values() {
                     webview.desktop_context.window.set_visible(true);
                     webview.desktop_context.window.set_focus();

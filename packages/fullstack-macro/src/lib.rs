@@ -9,18 +9,18 @@ use quote::ToTokens;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 use syn::{
-    braced, bracketed,
+    Attribute, Expr, ExprClosure, Lit, Result,
+    token::{Brace, Star},
+};
+use syn::{
+    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath, braced,
+    bracketed,
     parse::ParseStream,
     punctuated::Punctuated,
     token::{Comma, Slash},
-    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath,
 };
-use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr, Path};
-use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
-use syn::{
-    token::{Brace, Star},
-    Attribute, Expr, ExprClosure, Lit, Result,
-};
+use syn::{Ident, ItemFn, LitStr, Path, parse::Parse, parse_quote};
+use syn::{LitBool, LitInt, Pat, PatType, spanned::Spanned};
 
 /// ## Usage
 ///
@@ -254,7 +254,7 @@ fn route_impl_with_route(
     let body_json_names = body_json_args
         .iter()
         .map(|(i, pat_type)| match &*pat_type.pat {
-            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
             _ => format_ident!("___Arg{}", i),
         })
         .collect::<Vec<_>>();
@@ -421,7 +421,7 @@ fn route_impl_with_route(
         let input = &function.sig.inputs[query.arg_idx];
         let name = match input {
             FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+                Pat::Ident(pat_ident) => pat_ident.ident.clone(),
                 _ => format_ident!("___Arg{}", query.arg_idx),
             },
             FnArg::Receiver(_receiver) => panic!(),
@@ -731,13 +731,13 @@ impl CompiledRoute {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method specified both in macro and in attribute",
-                ))
+                ));
             }
             (None, None) => {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method not specified in macro or in attribute",
-                ))
+                ));
             }
         };
 
@@ -830,8 +830,8 @@ impl CompiledRoute {
             .enumerate()
             .filter_map(|(i, item)| {
                 if let FnArg::Typed(pat_type) = item {
-                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                        if self.path_params.iter().any(|(_slash, path_param)| {
+                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat
+                        && (self.path_params.iter().any(|(_slash, path_param)| {
                             if let Some((path_ident, _ty)) = path_param.capture() {
                                 path_ident == &pat_ident.ident
                             } else {
@@ -840,10 +840,9 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|query| query.binding == pat_ident.ident)
-                        {
-                            return None;
-                        }
+                            .any(|query| query.binding == pat_ident.ident))
+                    {
+                        return None;
                     }
 
                     Some((i, pat_type.clone()))
@@ -1275,7 +1274,7 @@ impl Parse for OapiOptions {
                     return Err(syn::Error::new(
                         ident.span(),
                         "unexpected field, expected one of (summary, description, id, hidden, tags, security, responses, transform)",
-                    ))
+                    ));
                 }
             }
             let _ = input.parse::<Token![,]>().ok();
@@ -1801,7 +1800,7 @@ impl Parse for ServerFnArg {
                 return Err(syn::Error::new(
                     arg.span(),
                     "cannot use receiver types in server function macro",
-                ))
+                ));
             }
             FnArg::Typed(t) => t,
         };

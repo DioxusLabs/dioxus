@@ -1,4 +1,4 @@
-use crate::{use_context_provider, use_future, UseFuture};
+use crate::{UseFuture, use_context_provider, use_future};
 use dioxus_core::Task;
 use dioxus_core::{consume_context, use_hook};
 use dioxus_signals::*;

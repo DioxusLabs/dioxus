@@ -1,13 +1,13 @@
 [package]
 name = "subsecond-types"
 version.workspace = true
-edition = "2021"
+edition = "2024"
 authors = ["Jonathan Kelley"]
 description = "Types crate for the Subsecond hotpatch engine."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/subsecond"
 keywords = ["hotpatch", "engine", "subsecond", "dioxus"]
-
+readme = "../README.md"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

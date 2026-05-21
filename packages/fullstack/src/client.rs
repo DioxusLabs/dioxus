@@ -1,14 +1,14 @@
 #![allow(unreachable_code)]
 
-use crate::{reqwest_error_to_request_error, StreamingError};
+use crate::{StreamingError, reqwest_error_to_request_error};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
-use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, response::Parts};
 use send_wrapper::SendWrapper;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future};
 use url::Url;

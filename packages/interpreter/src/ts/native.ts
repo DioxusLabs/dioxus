@@ -148,7 +148,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     // make sure we pass the handler to the base interpreter
     const handler: EventListener = (event) =>
-      this.handleEvent(event, event.type, true);
+      this.handleEvent(event, event.type, event.bubbles);
 
     super.initialize(root, handler);
   }

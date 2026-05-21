@@ -1,7 +1,7 @@
 use crate::{
+    DynamicNode, ScopeId, VirtualDom,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
-    DynamicNode, ScopeId, VirtualDom,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -483,7 +483,7 @@ impl VNode {
         let mount = mounts.get(self.mount.get().0).unwrap();
 
         template
-            .roots
+            .roots()
             .iter()
             .enumerate()
             .map(
@@ -500,8 +500,14 @@ impl VNode {
                         let node = dom.get_scope(scope).unwrap().root_node();
                         node.push_all_root_nodes(dom, to)
                     }
+                    // For a single dynamic node of Placeholder or Text, push its element id
+                    Some((idx, DynamicNode::Placeholder(_) | DynamicNode::Text(_))) => {
+                        let id = mount.mounted_dynamic_nodes[idx];
+                        to.push_root(crate::ElementId(id));
+                        1
+                    }
                     // This is a static root node or a single dynamic node, just push it
-                    None | Some((_, DynamicNode::Placeholder(_) | DynamicNode::Text(_))) => {
+                    None => {
                         to.push_root(mount.root_ids[root_idx]);
                         1
                     }

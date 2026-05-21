@@ -11,6 +11,7 @@ mod android_sync_lock;
 mod app;
 mod assets;
 mod config;
+mod default_icon;
 mod desktop_context;
 mod document;
 mod dom_thread;
@@ -52,6 +53,7 @@ pub mod trayicon;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
+pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{window, DesktopContext, DesktopService, PendingDesktopContext};
 pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
-    HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler,
+    DesktopContext, HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler, assets::*,
+    ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
 };
 use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup};
 

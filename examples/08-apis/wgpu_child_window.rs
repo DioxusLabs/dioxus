@@ -11,6 +11,7 @@ use dioxus::{
     desktop::{Config, tao::window::WindowBuilder, use_wry_event_handler, window},
 };
 use std::sync::Arc;
+use wgpu::CurrentSurfaceTexture;
 
 fn main() {
     let config = Config::new()
@@ -152,7 +153,7 @@ fn fs_main() -> @location(0) vec4<f32> {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -176,7 +177,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -208,12 +209,23 @@ fn fs_main() -> @location(0) vec4<f32> {
             device,
             pipeline,
             queue,
-            ..
+            config,
         } = self;
 
-        let frame = surface
-            .get_current_texture()
-            .expect("Failed to acquire next swap chain texture");
+        let frame = match surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+            CurrentSurfaceTexture::Lost
+            | CurrentSurfaceTexture::Outdated
+            | CurrentSurfaceTexture::Suboptimal(_) => {
+                surface.configure(device, config);
+                return;
+            }
+            CurrentSurfaceTexture::Occluded | CurrentSurfaceTexture::Timeout => {
+                return;
+            }
+            CurrentSurfaceTexture::Validation => panic!("Current surface texture is invalid"),
+        };
+
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -236,6 +248,7 @@ fn fs_main() -> @location(0) vec4<f32> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(pipeline);
             rpass.draw(0..3, 0..1);

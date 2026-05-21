@@ -6,7 +6,9 @@ fn check_gnu() {
         && std::env::var("CARGO_CFG_TARGET_ENV").unwrap() == "gnu"
         && !cfg!(feature = "gnu")
     {
-        println!("cargo:warning=GNU windows targets have some limitations within Wry. Using the MSVC windows toolchain is recommended. If you would like to use continue using GNU, you can read https://github.com/wravery/webview2-rs#cross-compilation and disable this warning by adding the gnu feature to dioxus-desktop in your Cargo.toml")
+        println!(
+            "cargo:warning=GNU windows targets have some limitations within Wry. Using the MSVC windows toolchain is recommended. If you would like to use continue using GNU, you can read https://github.com/wravery/webview2-rs#cross-compilation and disable this warning by adding the gnu feature to dioxus-desktop in your Cargo.toml"
+        )
     }
 
     // To prepare for a release, we add extra examples to desktop for doc scraping and copy assets from the workspace to make those examples compile

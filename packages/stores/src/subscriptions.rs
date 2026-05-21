@@ -1,20 +1,16 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::BuildHasher;
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    ops::Deref,
-    sync::Arc,
-};
+use std::ops::BitOrAssign;
+use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
 /// A single node in the [`StoreSubscriptions`] tree. Each path is a specific view into the store
-/// and can be subscribed to and marked dirty separately. If the whole store is read or written to, all
-/// nodes in the subtree are subscribed to or marked as dirty.
+/// and can be subscribed to and marked dirty separately.
 #[derive(Clone, Default)]
 pub(crate) struct SelectorNode {
-    subscribers: HashSet<ReactiveContext>,
+    subscribers: HashMap<ReactiveContext, SubscriptionDepth>,
     root: HashMap<PathKey, SelectorNode>,
 }
 
@@ -61,7 +57,7 @@ impl SelectorNode {
         }
     }
 
-    /// Get paths to only children before a certain index.
+    /// Get paths to children at and after a certain index.
     ///
     /// This is used when inserting a new item into a list.
     /// Items after the index that is inserted need to be marked dirty because the value that index points to may have changed.
@@ -75,7 +71,7 @@ impl SelectorNode {
             return;
         };
 
-        // Mark the nodes before the index as dirty
+        // Mark the nodes at and after the index as dirty
         for (i, child) in node.root.iter() {
             if *i as usize >= index {
                 let mut child_path: Vec<PathKey> = path.into();
@@ -85,18 +81,67 @@ impl SelectorNode {
         }
     }
 
-    /// Remove a path from the subscription tree
-    fn remove(&mut self, path: &[PathKey]) {
+    fn is_empty(&self) -> bool {
+        self.subscribers.is_empty() && self.root.is_empty()
+    }
+
+    fn prune_if_empty(&mut self, path: &[PathKey]) {
         let [first, rest @ ..] = path else {
             return;
         };
-        if let Some(node) = self.root.get_mut(first) {
-            if rest.is_empty() {
-                self.root.remove(first);
-            } else {
-                node.remove(rest);
-            }
+        let Some(child) = self.root.get_mut(first) else {
+            return;
+        };
+        child.prune_if_empty(rest);
+        if child.is_empty() {
+            self.root.remove(first);
         }
+    }
+
+    fn add_subscriber(&mut self, reactive_context: ReactiveContext, depth: SubscriptionDepth) {
+        self.subscribers
+            .entry(reactive_context)
+            .and_modify(|existing_depth| {
+                *existing_depth |= depth;
+            })
+            .or_insert(depth);
+    }
+
+    fn remove_subscriber(&mut self, reactive_context: &ReactiveContext) {
+        self.subscribers.remove(reactive_context);
+    }
+
+    // ReactiveContext uses stable pointer/id-based Eq+Hash, so it is safe as a map key here.
+    #[allow(clippy::mutable_key_type)]
+    fn take_subscribers(&mut self) -> HashMap<ReactiveContext, SubscriptionDepth> {
+        std::mem::take(&mut self.subscribers)
+    }
+
+    // ReactiveContext uses stable pointer/id-based Eq+Hash, so it is safe as a map key here.
+    #[allow(clippy::mutable_key_type)]
+    fn restore_subscribers(&mut self, subscribers: HashMap<ReactiveContext, SubscriptionDepth>) {
+        self.subscribers.extend(subscribers);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SubscriptionDepth {
+    Shallow,
+    Deep,
+}
+
+impl BitOrAssign for SubscriptionDepth {
+    fn bitor_assign(&mut self, rhs: Self) {
+        match (*self, rhs) {
+            (SubscriptionDepth::Shallow, SubscriptionDepth::Shallow) => {}
+            _ => *self = SubscriptionDepth::Deep,
+        }
+    }
+}
+
+impl SubscriptionDepth {
+    fn includes_deep(self) -> bool {
+        matches!(self, Self::Deep)
     }
 }
 
@@ -132,6 +177,14 @@ impl TinyVec {
             length: 0,
             path: [0; PATH_LENGTH],
         }
+    }
+
+    pub(crate) fn from_slice(path: &[PathKey]) -> Self {
+        let mut out = Self::new();
+        for key in path {
+            out.push(*key);
+        }
+        out
     }
 
     pub(crate) const fn push(&mut self, index: u16) {
@@ -194,77 +247,68 @@ impl StoreSubscriptions {
         (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
     }
 
-    /// Subscribe to a specific path in the store.
+    /// Subscribe shallowly to a specific path in the store.
+    ///
+    /// Shallow subscriptions rerun only when this exact path is written to.
     pub(crate) fn track(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
-            let subscribers = self.subscribers(key);
+            let subscribers = self.shallow_subscribers(key);
             rc.subscribe(subscribers);
         }
     }
 
-    /// Subscribe to a path and all of its children recursively. This should be called any time we give out
-    /// a raw reference to a store, because the user could read any level of the store.
-    pub(crate) fn track_recursive(&self, key: &[PathKey]) {
+    /// Subscribe deeply to a specific path in the store.
+    ///
+    /// Deep subscriptions rerun when this path or any descendant path is written to.
+    pub(crate) fn track_deep(&self, key: &[PathKey]) {
         if let Some(rc) = ReactiveContext::current() {
-            let mut paths = Vec::new();
-            {
-                let mut write = self.inner.write_unchecked();
+            let subscribers = self.deep_subscribers(key);
+            rc.subscribe(subscribers);
+        }
+    }
 
-                let root = write.root.get_mut_or_default(key);
-                let mut nodes = vec![(key.to_vec(), &*root)];
-                while let Some((path, node)) = nodes.pop() {
-                    for (child_key, child_node) in &node.root {
-                        let mut new_path = path.clone();
-                        new_path.push(*child_key);
-                        nodes.push((new_path, child_node));
-                    }
-                    paths.push(path);
+    /// Mark the written node and its descendants as dirty.
+    ///
+    /// Deep subscribers on ancestor nodes are also notified because child writes
+    /// change the value observed by a deep read of the parent.
+    pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
+        self.mark_node_dirty(key);
+        let descendant_paths = {
+            let read = &self.inner.read_unchecked();
+            let mut paths = Vec::new();
+            if let Some(node) = read.root.get(key) {
+                for (child_key, child_node) in &node.root {
+                    let mut child_path: Vec<PathKey> = key.into();
+                    child_path.push(*child_key);
+                    child_node.paths_under(&child_path, &mut paths);
                 }
             }
-            for path in paths {
-                let subscribers = self.subscribers(&path);
-                rc.subscribe(subscribers);
-            }
-        }
-    }
-
-    /// Mark the node and all its children as dirty
-    pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
-        let paths = {
-            let read = &self.inner.read_unchecked();
-            let Some(node) = read.root.get(key) else {
-                return;
-            };
-            let mut paths = Vec::new();
-            node.paths_under(key, &mut paths);
             paths
         };
-        for path in paths {
-            self.mark_dirty_shallow(&path);
+        for path in descendant_paths {
+            self.mark_node_subscribers_dirty(&path);
         }
     }
 
-    /// Mark a single node as dirty
-    pub(crate) fn mark_dirty_shallow(&self, key: &[PathKey]) {
-        // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
-        #[allow(clippy::mutable_key_type)]
-        let mut subscribers = {
-            let mut write = self.inner.write_unchecked();
-            let Some(node) = write.root.get_mut(key) else {
-                return;
-            };
-            std::mem::take(&mut node.subscribers)
-        };
-        subscribers.retain(|reactive_context| reactive_context.mark_dirty());
-        // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
-        let mut write = self.inner.write_unchecked();
-        let Some(node) = write.root.get_mut(key) else {
-            return;
-        };
-        node.subscribers.extend(subscribers);
+    /// Mark all subscribers on a single node as dirty.
+    ///
+    /// Deep subscribers on ancestors are also notified because an exact write to
+    /// this path changes any deep read of its parents.
+    pub(crate) fn mark_node_dirty(&self, key: &[PathKey]) {
+        for i in 0..key.len() {
+            self.mark_ancestor_deep_subscribers_dirty(&key[..i]);
+        }
+        self.mark_node_subscribers_dirty(key);
     }
 
-    /// Mark all nodes after the index and their children as dirty
+    /// Mark only deep subscribers for a single ancestor node as dirty.
+    fn mark_ancestor_deep_subscribers_dirty(&self, key: &[PathKey]) {
+        self.retain_subscribers(key, |reactive_context, depth| {
+            !depth.includes_deep() || reactive_context.mark_dirty()
+        });
+    }
+
+    /// Mark all nodes at and after the index and their children as dirty.
     pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[PathKey], index: usize) {
         let paths = {
             let read = self.inner.read_unchecked();
@@ -273,25 +317,76 @@ impl StoreSubscriptions {
             paths
         };
         for path in paths {
-            self.mark_dirty_shallow(&path);
+            self.mark_node_dirty(&path);
         }
     }
 
-    /// Get a subscriber list for a specific path in the store. This is used to subscribe to changes
-    /// to a specific path in the store and remove the node from the subscription tree when it is no longer needed.
-    pub(crate) fn subscribers(&self, key: &[PathKey]) -> Subscribers {
+    /// Get the shallow subscribers for a specific path in the store.
+    pub(crate) fn shallow_subscribers(&self, key: &[PathKey]) -> Subscribers {
         Arc::new(StoreSubscribers {
             subscriptions: *self,
-            path: key.to_vec().into_boxed_slice(),
+            path: TinyVec::from_slice(key),
+            depth: SubscriptionDepth::Shallow,
         })
         .into()
+    }
+
+    /// Get the deep subscribers for a specific path in the store.
+    pub(crate) fn deep_subscribers(&self, key: &[PathKey]) -> Subscribers {
+        Arc::new(StoreSubscribers {
+            subscriptions: *self,
+            path: TinyVec::from_slice(key),
+            depth: SubscriptionDepth::Deep,
+        })
+        .into()
+    }
+
+    fn retain_subscribers(
+        &self,
+        key: &[PathKey],
+        mut retain: impl FnMut(&ReactiveContext, SubscriptionDepth) -> bool,
+    ) {
+        // We cannot hold the subscribers lock while calling mark_dirty, because
+        // mark_dirty can run user code which may cause a new subscriber to be
+        // added. If we hold the lock, we will deadlock.
+        // ReactiveContext uses stable pointer/id-based Eq+Hash, so it is safe as a map key here.
+        #[allow(clippy::mutable_key_type)]
+        let mut subscribers = {
+            let mut write = self.inner.write_unchecked();
+            let Some(node) = write.root.get_mut(key) else {
+                return;
+            };
+            node.take_subscribers()
+        };
+        subscribers.retain(|reactive_context, depth| retain(reactive_context, *depth));
+
+        // Extend the subscribers list instead of overwriting it in case a
+        // subscriber is added while reactive contexts are marked dirty.
+        let mut write = self.inner.write_unchecked();
+        let Some(node) = write.root.get_mut(key) else {
+            return;
+        };
+        node.restore_subscribers(subscribers);
+    }
+
+    fn mark_node_subscribers_dirty(&self, key: &[PathKey]) {
+        self.retain_subscribers(key, |reactive_context, _| reactive_context.mark_dirty());
     }
 }
 
 /// A subscriber list implementation that handles garbage collection of the subscription tree.
 struct StoreSubscribers {
     subscriptions: StoreSubscriptions,
-    path: Box<[PathKey]>,
+    path: TinyVec,
+    depth: SubscriptionDepth,
+}
+
+impl StoreSubscribers {
+    fn visible_prefixes(&self) -> impl Iterator<Item = &[PathKey]> {
+        (0..=self.path.len())
+            .rev()
+            .map(move |len| &self.path[..len])
+    }
 }
 
 impl SubscriberList for StoreSubscribers {
@@ -301,7 +396,7 @@ impl SubscriberList for StoreSubscribers {
             return;
         };
         let node = write.root.get_mut_or_default(&self.path);
-        node.subscribers.insert(subscriber);
+        node.add_subscriber(subscriber, self.depth);
     }
 
     /// Remove a subscriber from the subscription list for this path in the store. If the node has no subscribers left
@@ -310,12 +405,23 @@ impl SubscriberList for StoreSubscribers {
         let Ok(mut write) = self.subscriptions.inner.try_write_unchecked() else {
             return;
         };
-        let Some(node) = write.root.get_mut(&self.path) else {
-            return;
-        };
-        node.subscribers.remove(subscriber);
-        if node.subscribers.is_empty() && node.root.is_empty() {
-            write.root.remove(&self.path);
+        let mut empty_prefixes = Vec::new();
+        for prefix in self.visible_prefixes() {
+            let Some(node) = write.root.get_mut(prefix) else {
+                continue;
+            };
+            let Some(depth) = node.subscribers.get(subscriber).copied() else {
+                continue;
+            };
+            if prefix.len() == self.path.len() || depth.includes_deep() {
+                node.remove_subscriber(subscriber);
+                if node.is_empty() {
+                    empty_prefixes.push(prefix.to_vec());
+                }
+            }
+        }
+        for prefix in empty_prefixes {
+            write.root.prune_if_empty(&prefix);
         }
     }
 
@@ -324,9 +430,72 @@ impl SubscriberList for StoreSubscribers {
         let Ok(read) = self.subscriptions.inner.try_read() else {
             return;
         };
-        let Some(node) = read.root.get(&self.path) else {
-            return;
-        };
-        node.subscribers.iter().for_each(f);
+        // ReactiveContext uses stable pointer/id-based Eq+Hash, so it is safe in this set.
+        #[allow(clippy::mutable_key_type)]
+        let mut seen = HashSet::new();
+        for prefix in self.visible_prefixes() {
+            let Some(node) = read.root.get(prefix) else {
+                continue;
+            };
+            for (reactive_context, depth) in &node.subscribers {
+                if (prefix.len() == self.path.len() || depth.includes_deep())
+                    && seen.insert(*reactive_context)
+                {
+                    f(reactive_context);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::{ScopeId, VNode, VirtualDom};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    fn empty_app() -> dioxus_core::Element {
+        VNode::empty()
+    }
+
+    #[track_caller]
+    fn counting_context(counter: Arc<AtomicUsize>) -> ReactiveContext {
+        ReactiveContext::new_with_callback(
+            move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+            },
+            ScopeId::ROOT,
+            std::panic::Location::caller(),
+        )
+    }
+
+    #[test]
+    fn mark_dirty_marks_descendants_without_remarking_ancestors() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_scope(ScopeId::ROOT, || {
+            let subscriptions = StoreSubscriptions::new();
+
+            let root_count = Arc::new(AtomicUsize::new(0));
+            let root = counting_context(root_count.clone());
+            root.subscribe(subscriptions.deep_subscribers(&[]));
+
+            let child_count = Arc::new(AtomicUsize::new(0));
+            let child = counting_context(child_count.clone());
+            child.subscribe(subscriptions.deep_subscribers(&[1, 2]));
+
+            let leaf_count = Arc::new(AtomicUsize::new(0));
+            let leaf = counting_context(leaf_count.clone());
+            leaf.subscribe(subscriptions.shallow_subscribers(&[1, 2, 3]));
+
+            subscriptions.mark_dirty(&[1]);
+
+            assert_eq!(root_count.load(Ordering::Relaxed), 1);
+            assert_eq!(child_count.load(Ordering::Relaxed), 1);
+            assert_eq!(leaf_count.load(Ordering::Relaxed), 1);
+        });
     }
 }
