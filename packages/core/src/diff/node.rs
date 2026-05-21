@@ -11,42 +11,6 @@ use crate::{
     scopes::ScopeId,
 };
 
-fn dynamic_node_is_rendered_in_dom(
-    node: &DynamicNode,
-    mount: MountId,
-    idx: usize,
-    dom: &VirtualDom,
-) -> bool {
-    match node {
-        Text(_) | Placeholder(_) => dom.get_mounted_dyn_node(mount, idx) != UNMOUNTED,
-        Fragment(nodes) => nodes.iter().any(|node| vnode_is_rendered_in_dom(node, dom)),
-        Component(_) => {
-            let scope_id = dom.get_mounted_dyn_node(mount, idx);
-            scope_id != UNMOUNTED
-                && dom
-                    .get_scope(ScopeId(scope_id))
-                    .map(|scope| vnode_is_rendered_in_dom(scope.root_node(), dom))
-                    .unwrap_or(false)
-        }
-    }
-}
-
-fn vnode_is_rendered_in_dom(node: &VNode, dom: &VirtualDom) -> bool {
-    let mount = mounted_mount(node, dom);
-    node.template
-        .roots()
-        .iter()
-        .enumerate()
-        .any(|(root_idx, root)| {
-            if let Some(idx) = root.dynamic_id() {
-                dynamic_node_is_rendered_in_dom(&node.dynamic_nodes[idx], mount, idx, dom)
-            } else {
-                let id = dom.get_mounted_root_node(mount, root_idx);
-                id != ElementId::ROOT && id != ElementId::UNMOUNTED
-            }
-        })
-}
-
 fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
     let mount = node.mount.get();
     let mount = mount
@@ -192,34 +156,16 @@ impl VNode {
                 // if it is the placeholder value, it will create the scope, otherwise it will
                 // reuse the scope
                 let old_mount = dom.get_mounted_dyn_node(mount, idx);
-                let old_has_live_dom = dynamic_node_is_rendered_in_dom(old, mount, idx, dom);
-                dom.set_mounted_dyn_node(mount, idx, UNMOUNTED);
+                dom.set_mounted_dyn_node(mount, idx, usize::MAX);
 
-                let new_nodes_on_stack = self.create_dynamic_node(
-                    new,
-                    mount,
-                    idx,
-                    dom,
-                    if old_has_live_dom {
-                        to.as_deref_mut()
-                    } else {
-                        None
-                    },
-                );
+                let new_nodes_on_stack =
+                    self.create_dynamic_node(new, mount, idx, dom, to.as_deref_mut());
 
                 // Restore the mount for the scope we are removing
                 let new_mount = dom.get_mounted_dyn_node(mount, idx);
                 dom.set_mounted_dyn_node(mount, idx, old_mount);
 
-                self.remove_dynamic_node(
-                    mount,
-                    dom,
-                    if old_has_live_dom { to } else { None },
-                    true,
-                    idx,
-                    old,
-                    old_has_live_dom.then_some(new_nodes_on_stack),
-                );
+                self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
 
                 // Restore the mount for the node we created
                 dom.set_mounted_dyn_node(mount, idx, new_mount);
@@ -338,7 +284,7 @@ impl VNode {
         to: Option<&mut impl WriteMutations>,
         destroy_component_state: bool,
     ) {
-        let write_mutations = to.is_some() && vnode_is_rendered_in_dom(self, dom);
+        let write_mutations = to.is_some();
         let mut to = to.filter(|_| write_mutations);
         let m = dom.create_children(to.as_deref_mut(), right, parent);
 
