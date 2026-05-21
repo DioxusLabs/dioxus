@@ -77,7 +77,7 @@ fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
     mount
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct AttributeKey {
     name: &'static str,
     namespace: Option<&'static str>,
@@ -579,147 +579,40 @@ impl VNode {
     ) {
         let mount_id = new.mount.get();
         let attr_paths = self.template.attr_paths();
-        let mut attr_group = 0..0;
-        let mut delayed_keys = Vec::new();
+        let mut idx = 0;
 
-        for (idx, (old_attrs, new_attrs)) in self
-            .dynamic_attrs
-            .iter()
-            .zip(new.dynamic_attrs.iter())
-            .enumerate()
-        {
-            let mut old_attributes_iter = old_attrs.iter().peekable();
-            let mut new_attributes_iter = new_attrs.iter().peekable();
-            let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
+        while idx < attr_paths.len() {
             let path = attr_paths[idx];
-            if idx == attr_group.end {
-                attr_group = self.dynamic_attribute_group_starting_at(idx);
-                delayed_keys.clear();
-            }
+            let attr_group = self.dynamic_attribute_group_starting_at(idx);
+            let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
+            let mut handled_keys = Vec::new();
 
-            loop {
-                match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
-                    (Some(old_attribute), Some(new_attribute)) => {
-                        match Self::attribute_key_cmp(
-                            AttributeKey::from_attribute(old_attribute),
-                            AttributeKey::from_attribute(new_attribute),
-                        ) {
-                            std::cmp::Ordering::Equal => {
-                                let old = old_attributes_iter.next().unwrap();
-                                let new_attribute = new_attributes_iter.next().unwrap();
-                                let key = AttributeKey::from_attribute(new_attribute);
-                                if self.diff_resolved_attribute_if_needed(
-                                    new,
-                                    path,
-                                    attr_group.clone(),
-                                    key,
-                                    attribute_id,
-                                    mount_id,
-                                    dom,
-                                    to,
-                                    &mut delayed_keys,
-                                ) {
-                                    continue;
-                                }
+            for slot_idx in attr_group.clone().rev() {
+                let mut old_attrs = self.dynamic_attrs[slot_idx].iter().peekable();
+                let mut new_attrs = new.dynamic_attrs[slot_idx].iter().peekable();
 
-                                self.diff_dynamic_attribute(
-                                    path,
-                                    old,
-                                    new_attribute,
-                                    attribute_id,
-                                    mount_id,
-                                    dom,
-                                    to,
-                                );
-                            }
-                            std::cmp::Ordering::Less => {
-                                let old = old_attributes_iter.next().unwrap();
-                                let key = AttributeKey::from_attribute(old);
-                                if self.diff_resolved_attribute_if_needed(
-                                    new,
-                                    path,
-                                    attr_group.clone(),
-                                    key,
-                                    attribute_id,
-                                    mount_id,
-                                    dom,
-                                    to,
-                                    &mut delayed_keys,
-                                ) {
-                                    continue;
-                                }
-
-                                self.remove_attribute(old, attribute_id, to)
-                            }
-                            std::cmp::Ordering::Greater => {
-                                let new_attribute = new_attributes_iter.next().unwrap();
-                                let key = AttributeKey::from_attribute(new_attribute);
-                                if self.diff_resolved_attribute_if_needed(
-                                    new,
-                                    path,
-                                    attr_group.clone(),
-                                    key,
-                                    attribute_id,
-                                    mount_id,
-                                    dom,
-                                    to,
-                                    &mut delayed_keys,
-                                ) {
-                                    continue;
-                                }
-
-                                self.write_attribute(
-                                    path,
-                                    new_attribute,
-                                    attribute_id,
-                                    mount_id,
-                                    dom,
-                                    to,
-                                );
-                            }
-                        }
+                while let Some(key) =
+                    Self::next_merged_attribute_key(&mut old_attrs, &mut new_attrs)
+                {
+                    if handled_keys.contains(&key) {
+                        continue;
                     }
-                    (Some(_), None) => {
-                        let old = old_attributes_iter.next().unwrap();
-                        let key = AttributeKey::from_attribute(old);
-                        if self.diff_resolved_attribute_if_needed(
-                            new,
-                            path,
-                            attr_group.clone(),
-                            key,
-                            attribute_id,
-                            mount_id,
-                            dom,
-                            to,
-                            &mut delayed_keys,
-                        ) {
-                            continue;
-                        }
+                    handled_keys.push(key);
 
-                        self.remove_attribute(old, attribute_id, to)
-                    }
-                    (None, Some(_)) => {
-                        let new_attribute = new_attributes_iter.next().unwrap();
-                        let key = AttributeKey::from_attribute(new_attribute);
-                        if self.diff_resolved_attribute_if_needed(
-                            new,
-                            path,
-                            attr_group.clone(),
-                            key,
-                            attribute_id,
-                            mount_id,
-                            dom,
-                            to,
-                            &mut delayed_keys,
-                        ) {
-                            continue;
-                        }
-
-                        self.write_attribute(path, new_attribute, attribute_id, mount_id, dom, to)
-                    }
-                    (None, None) => break,
+                    self.diff_attribute_key(
+                        new,
+                        path,
+                        attr_group.start..(slot_idx + 1),
+                        key,
+                        attribute_id,
+                        mount_id,
+                        dom,
+                        to,
+                    );
                 }
             }
+
+            idx = attr_group.end;
         }
     }
 
@@ -739,39 +632,6 @@ impl VNode {
         }
     }
 
-    fn attribute_key_cmp(left: AttributeKey, right: AttributeKey) -> std::cmp::Ordering {
-        left.name
-            .cmp(right.name)
-            .then_with(|| left.namespace.cmp(&right.namespace))
-    }
-
-    fn diff_resolved_attribute_if_needed(
-        &self,
-        new: &VNode,
-        path: &'static [u8],
-        attr_group: std::ops::Range<usize>,
-        key: AttributeKey,
-        id: ElementId,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-        delayed_keys: &mut Vec<AttributeKey>,
-    ) -> bool {
-        if !self.attribute_key_needs_resolved_diff(new, path, attr_group.clone(), key) {
-            return false;
-        }
-
-        if delayed_keys.contains(&key) {
-            return true;
-        }
-        delayed_keys.push(key);
-
-        let old = self.resolve_attribute_for_group(path, attr_group.clone(), key);
-        let new = new.resolve_attribute_for_group(path, attr_group, key);
-        self.diff_resolved_attribute(path, key, id, mount, old, new, dom, to);
-        true
-    }
-
     fn dynamic_attribute_group_starting_at(&self, start: usize) -> std::ops::Range<usize> {
         let attr_paths = self.template.attr_paths();
         let path = attr_paths[start];
@@ -784,62 +644,62 @@ impl VNode {
         start..end
     }
 
-    fn attribute_key_needs_resolved_diff(
+    fn next_merged_attribute_key<'a>(
+        old_attrs: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
+        new_attrs: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
+    ) -> Option<AttributeKey> {
+        match (old_attrs.peek(), new_attrs.peek()) {
+            (Some(old_attribute), Some(new_attribute)) => {
+                let old_key = AttributeKey::from_attribute(old_attribute);
+                let new_key = AttributeKey::from_attribute(new_attribute);
+
+                match old_key.cmp(&new_key) {
+                    std::cmp::Ordering::Equal => {
+                        old_attrs.next();
+                        new_attrs.next();
+                        Some(new_key)
+                    }
+                    std::cmp::Ordering::Less => {
+                        old_attrs.next();
+                        Some(old_key)
+                    }
+                    std::cmp::Ordering::Greater => {
+                        new_attrs.next();
+                        Some(new_key)
+                    }
+                }
+            }
+            (Some(old_attribute), None) => {
+                let key = AttributeKey::from_attribute(old_attribute);
+                old_attrs.next();
+                Some(key)
+            }
+            (None, Some(new_attribute)) => {
+                let key = AttributeKey::from_attribute(new_attribute);
+                new_attrs.next();
+                Some(key)
+            }
+            (None, None) => None,
+        }
+    }
+
+    fn diff_attribute_key(
         &self,
         new: &VNode,
         path: &'static [u8],
         attr_group: std::ops::Range<usize>,
         key: AttributeKey,
-    ) -> bool {
-        if self.static_template_attribute_value(path, key).is_some() {
-            return true;
-        }
-
-        self.dynamic_attr_key_is_repeated_in_group(attr_group.clone(), key)
-            || new.dynamic_attr_key_is_repeated_in_group(attr_group.clone(), key)
-            || matches!(
-                (
-                    self.first_dynamic_attr_slot_with_key(attr_group.clone(), key),
-                    new.first_dynamic_attr_slot_with_key(attr_group, key),
-                ),
-                (Some(old_idx), Some(new_idx)) if old_idx != new_idx
-            )
+        id: ElementId,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        let old = self.resolve_attribute(path, attr_group.clone(), key);
+        let new = new.resolve_attribute(path, attr_group, key);
+        self.diff_resolved_attribute(path, key, id, mount, old, new, dom, to);
     }
 
-    fn first_dynamic_attr_slot_with_key(
-        &self,
-        mut attr_group: std::ops::Range<usize>,
-        key: AttributeKey,
-    ) -> Option<usize> {
-        attr_group.find(|idx| {
-            self.dynamic_attrs[*idx]
-                .iter()
-                .any(|attr| key.matches(attr))
-        })
-    }
-
-    fn dynamic_attr_key_is_repeated_in_group(
-        &self,
-        attr_group: std::ops::Range<usize>,
-        key: AttributeKey,
-    ) -> bool {
-        let mut found = false;
-
-        for idx in attr_group {
-            for attr in &self.dynamic_attrs[idx][..] {
-                if key.matches(attr) {
-                    if found {
-                        return true;
-                    }
-                    found = true;
-                }
-            }
-        }
-
-        false
-    }
-
-    fn resolve_attribute_for_group(
+    fn resolve_attribute(
         &self,
         path: &'static [u8],
         attr_group: std::ops::Range<usize>,
@@ -865,28 +725,18 @@ impl VNode {
         resolved
     }
 
-    fn diff_dynamic_attribute(
-        &self,
-        path: &'static [u8],
-        old: &Attribute,
-        new: &Attribute,
-        id: ElementId,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) {
-        if Self::attribute_is_listener(old) != Self::attribute_is_listener(new) {
-            self.remove_attribute(old, id, to);
-            self.write_attribute(path, new, id, mount, dom, to);
-            return;
-        }
-
-        if Self::attribute_is_listener(new) {
-            return;
-        }
-
-        if old.volatile || new.volatile || Self::attribute_value_changed(old, new) {
-            self.write_attribute(path, new, id, mount, dom, to);
+    fn attribute_value_changed(old: &Attribute, new: &Attribute) -> bool {
+        match (&old.value, &new.value) {
+            (AttributeValue::Text(left), AttributeValue::Text(right)) => left != right,
+            (AttributeValue::Float(left), AttributeValue::Float(right)) => left != right,
+            (AttributeValue::Int(left), AttributeValue::Int(right)) => left != right,
+            (AttributeValue::Bool(left), AttributeValue::Bool(right)) => left != right,
+            (AttributeValue::Any(left), AttributeValue::Any(right)) => {
+                !left.as_ref().any_cmp(right.as_ref())
+            }
+            (AttributeValue::None, AttributeValue::None) => false,
+            (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
+            _ => true,
         }
     }
 
@@ -916,25 +766,6 @@ impl VNode {
                 ResolvedAttribute::Missing => self.remove_resolved_attribute(key, old, id, to),
                 _ => self.write_resolved_attribute(path, key, new, id, mount, dom, to),
             }
-        }
-    }
-
-    fn attribute_is_listener(attribute: &Attribute) -> bool {
-        matches!(attribute.value, AttributeValue::Listener(_))
-    }
-
-    fn attribute_value_changed(old: &Attribute, new: &Attribute) -> bool {
-        match (&old.value, &new.value) {
-            (AttributeValue::Text(left), AttributeValue::Text(right)) => left != right,
-            (AttributeValue::Float(left), AttributeValue::Float(right)) => left != right,
-            (AttributeValue::Int(left), AttributeValue::Int(right)) => left != right,
-            (AttributeValue::Bool(left), AttributeValue::Bool(right)) => left != right,
-            (AttributeValue::Any(left), AttributeValue::Any(right)) => {
-                !left.as_ref().any_cmp(right.as_ref())
-            }
-            (AttributeValue::None, AttributeValue::None) => false,
-            (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
-            _ => true,
         }
     }
 

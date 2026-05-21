@@ -4,15 +4,15 @@ use std::{
 };
 
 use crate::{
-    Element, SuspenseContext,
     any_props::AnyProps,
     innerlude::{
-        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
-        VComponent, WriteMutations,
+        ElementRef, MountId, NoOpMutations, ScopeOrder, SuspenseBoundaryProps,
+        SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
     },
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
+    Element, SuspenseContext,
 };
 
 impl VirtualDom {
@@ -114,25 +114,12 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn clear_scope_rendered_output<M: WriteMutations>(&mut self, scope_id: ScopeId) {
-        let old = self.scopes[scope_id.0]
-            .last_rendered_node
-            .take()
+    pub(crate) fn clear_scope_rendered_output(&mut self, scope_id: ScopeId) {
+        let parent = self
+            .remove_scope_rendered_output_without_mutations(scope_id)
             .expect("suspended scope should have rendered output to clear");
-
-        let parent = old.mount.get().as_usize().and_then(|mount| {
-            self.runtime
-                .mounts
-                .borrow()
-                .get(mount)
-                .map(|mount| mount.parent)
-        });
-
-        old.remove_node_inner(self, None::<&mut M>, true, None);
-        self.drop_orphaned_child_scopes(scope_id);
-
         let placeholder = LastRenderedNode::Real(VNode::placeholder());
-        placeholder.create(self, parent.flatten(), None::<&mut M>);
+        placeholder.create(self, parent, None::<&mut NoOpMutations>);
         self.scopes[scope_id.0].last_rendered_node = Some(placeholder);
     }
 }

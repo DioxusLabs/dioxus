@@ -646,7 +646,7 @@ fn switch_rendered_children_to_fallback_after_child_suspended<M: WriteMutations>
     });
 
     for scope in newly_suspended_scopes {
-        dom.clear_scope_rendered_output::<M>(scope);
+        dom.clear_scope_rendered_output(scope);
     }
 
     dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);

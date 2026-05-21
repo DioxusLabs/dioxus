@@ -74,8 +74,35 @@ impl VirtualDom {
 
     // Drop a scope whose rendered nodes have already been removed.
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        self.drop_orphaned_child_scopes(id);
+        self.finish_scope_output_removed(id);
+        self.drop_scope_state(id);
+    }
 
+    pub(crate) fn remove_scope_rendered_output_without_mutations(
+        &mut self,
+        id: ScopeId,
+    ) -> Option<Option<ElementRef>> {
+        let old = self.scopes[id.0].last_rendered_node.take()?;
+        let parent = old
+            .mount
+            .get()
+            .as_usize()
+            .and_then(|mount| {
+                self.runtime
+                    .mounts
+                    .borrow()
+                    .get(mount)
+                    .map(|mount| mount.parent)
+            })
+            .flatten();
+
+        old.remove_node_inner(self, None::<&mut NoOpMutations>, true, None);
+        self.finish_scope_output_removed(id);
+
+        Some(parent)
+    }
+
+    fn drop_scope_state(&mut self, id: ScopeId) {
         let height = {
             let scope = self.scopes.remove(id.0);
             let context = scope.state();
@@ -88,7 +115,7 @@ impl VirtualDom {
         self.resolved_scopes.retain(|s| s != &id);
     }
 
-    pub(crate) fn drop_orphaned_child_scopes(&mut self, parent: ScopeId) {
+    fn finish_scope_output_removed(&mut self, parent: ScopeId) {
         // Parent rendered output can be removed before every child scope has
         // been dropped. Clean those children without emitting more DOM edits.
         let children = self
