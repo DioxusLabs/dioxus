@@ -25,17 +25,20 @@ env:
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
   # CARGO_PROFILE_DEV_PACKAGE_STAR_STRIP: debuginfo # strip debug info from deps to shrink cache
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2026-05-01
-  rust_stable: 1.94.0
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Path gate — determines whether Rust jobs should run
+  # Path gate + shared Rust toolchain config — every Rust job consumes the
+  # `rust_stable` / `rust_nightly` outputs from here so we have a single source
+  # of truth that also works inside `strategy.matrix` (where `env.*` is not
+  # available, but `needs.*.outputs` is).
   # ---------------------------------------------------------------------------
   check-paths:
     runs-on: warp-ubuntu-latest-x64-4x
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
+      rust_stable: ${{ steps.toolchains.outputs.rust_stable }}
+      rust_nightly: ${{ steps.toolchains.outputs.rust_nightly }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
@@ -51,6 +54,10 @@ jobs:
               - 'lib.rs'
               - 'Cargo.toml'
               - 'Makefile.toml'
+      - id: toolchains
+        run: |
+          echo "rust_stable=1.94.0" >> "$GITHUB_OUTPUT"
+          echo "rust_nightly=nightly-2026-05-01" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Language linting — runs on every push
@@ -98,7 +105,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-msrv
@@ -138,10 +145,10 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - name: Install Rust ${{ env.rust_nightly }}
+      - name: Install Rust ${{ needs.check-paths.outputs.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ env.rust_nightly }}
+          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -165,10 +172,10 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - name: Install Rust ${{ env.rust_nightly }}
+      - name: Install Rust ${{ needs.check-paths.outputs.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ env.rust_nightly }}
+          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -195,7 +202,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -234,7 +241,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -275,7 +282,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -337,7 +344,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -378,7 +385,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ env.rust_stable }}" }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ needs.check-paths.outputs.rust_stable }}" }
           - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -444,7 +451,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -470,7 +477,7 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -494,7 +501,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "${{ env.rust_stable }}",
+              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -503,7 +510,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "${{ env.rust_stable }}",
+              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
               cross: false,
               command: "build",
               args: "--package dioxus-desktop",
@@ -512,7 +519,7 @@ jobs:
           - {
               target: aarch64-unknown-linux-gnu,
               os: warp-ubuntu-latest-arm64-4x,
-              toolchain: "${{ env.rust_stable }}",
+              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
               cross: false,
               command: "build",
               args: "--all --tests",
@@ -521,22 +528,12 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: warp-ubuntu-latest-x64-4x,
-              toolchain: "${{ env.rust_stable }}",
+              toolchain: "${{ needs.check-paths.outputs.rust_stable }}",
               cross: true,
               command: "build",
               args: "--package dioxus-desktop",
               platform: "android",
             }
-          # commented out because it's having issues with space on the device, but we already test it above
-          # - {
-          #     target: x86_64-unknown-linux-gnu,
-          #     os: ubuntu-24.04,
-          #     toolchain: "${{ env.rust_stable }}",
-          #     cross: false,
-          #     command: "build",
-          #     args: "--all --tests",
-          #     platform: "desktop",
-          #   }
 
     steps:
       - uses: actions/checkout@v5
@@ -609,19 +606,19 @@ jobs:
           version: 1.0
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: ${{ env.rust_nightly }}
+          toolchain: ${{ needs.check-paths.outputs.rust_nightly }}
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ needs.check-paths.outputs.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
       - name: Generate minimal-version lockfile
-        run: cargo +${{ env.rust_nightly }} update -Zdirect-minimal-versions
+        run: cargo +${{ needs.check-paths.outputs.rust_nightly }} update -Zdirect-minimal-versions
       - name: Check workspace with minimum versions
-        run: cargo +${{ env.rust_stable }} check --workspace
+        run: cargo +${{ needs.check-paths.outputs.rust_stable }} check --workspace
 
   nix:
     needs: check-paths
