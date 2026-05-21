@@ -212,7 +212,7 @@ winit = { version = "=0.31.0-beta.2" }
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
 anyhow = "1.0.98"
-clap = { version = "4.5.54" }
+clap = { version = "4.6.0" }
 askama_escape = "0.13.0"
 tracing = "0.1.41"
 tracing-futures = "0.2.5"
@@ -271,9 +271,9 @@ serde_json = "1.0.140"
 serde = "1.0.228"
 schemars = "1.2.1"
 syn = "2.0.117"
-quote = "1.0.38"
+quote = "1.0.45"
 axum-core = "0.5.2"
-proc-macro2 = "1.0.101"
+proc-macro2 = "1.0.106"
 axum_session = "0.16.0"
 axum_session_auth = "0.16.0"
 axum_session_sqlx = "0.5.0"
@@ -328,7 +328,7 @@ serde_repr = "0.1.19"
 hyper-util = "0.1.12"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
-libc = "0.2.177"
+libc = "0.2.182"
 memmap2 = "0.9.10"
 memfd = "0.6.4"
 xxhash-rust = { version = "0.8.15", default-features = false }
