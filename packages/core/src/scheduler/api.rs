@@ -85,37 +85,6 @@ pub struct SuspenseRenderStats {
     pub resolved_scopes: Vec<ScopeId>,
 }
 
-/// Controls how often concurrent rendering yields to the async scheduler.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct YieldPolicy {
-    /// The number of completed scheduler work units to process before yielding.
-    ///
-    /// A value of `0` yields after every completed work unit.
-    pub work_units_per_yield: usize,
-}
-
-impl Default for YieldPolicy {
-    fn default() -> Self {
-        Self {
-            work_units_per_yield: 32,
-        }
-    }
-}
-
-impl YieldPolicy {
-    /// Never yield during a render pass.
-    ///
-    /// This is used by APIs that should drain ready work before returning to
-    /// the async scheduler.
-    pub const NEVER: Self = Self {
-        work_units_per_yield: usize::MAX,
-    };
-
-    pub(crate) fn should_yield_after(self, work_done: usize) -> bool {
-        work_done >= self.work_units_per_yield
-    }
-}
-
 /// Information available to a renderer at a concurrent render checkpoint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RenderCheckpoint {

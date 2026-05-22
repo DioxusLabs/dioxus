@@ -29,15 +29,19 @@ fn toggle_option_text() {
     oracle.rebuild(&mut dom);
     oracle.assert_matches(empty);
 
+    // Anchor diff: empty<->text toggles do `load_template` + `remove_node`
+    // instead of placeholder swaps.
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_hello);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(empty);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2815
@@ -77,14 +81,20 @@ fn toggle_template() {
     oracle.rebuild(&mut dom);
     oracle.assert_matches(expected_true);
 
+    // Anchor diff: toggling rsx-block visibility only emits a `remove_node`
+    // for the populated->empty transition. The empty->populated transition
+    // re-uses the existing template slot via children's parent fragment,
+    // so neither direction emits a `replace_node_with`.
     for step in 1..=4 {
         dom.mark_dirty(ScopeId::APP);
         let summary = oracle.render(&mut dom);
         if step % 2 == 0 {
             oracle.assert_matches(expected_true);
+            assert_eq!(summary.removes, 0);
         } else {
             oracle.assert_matches(expected_empty);
+            assert_eq!(summary.removes, 1);
         }
-        assert_eq!(summary.replaces, 1);
+        assert_eq!(summary.replaces, 0);
     }
 }

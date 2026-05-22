@@ -2,7 +2,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
-use dioxus_core::{NoOpMutations, RuntimeGuard, UpdatePriority, YieldPolicy};
+use dioxus_core::{NoOpMutations, RenderSchedulerDecision, RuntimeGuard, UpdatePriority};
 use futures_util::{FutureExt, pin_mut};
 use std::cell::RefCell;
 use std::task::{Context, Poll, Waker};
@@ -50,14 +50,17 @@ fn bump_round(runtime: std::rc::Rc<dioxus_core::Runtime>) {
 
 fn drive_fibers(dom: &mut VirtualDom, commit_each_unit: bool) {
     let mut mutations = NoOpMutations;
-    let yield_policy = if commit_each_unit {
-        YieldPolicy {
-            work_units_per_yield: 0,
-        }
+    let decision = if commit_each_unit {
+        RenderSchedulerDecision::CommitAndYield
     } else {
-        YieldPolicy::NEVER
+        RenderSchedulerDecision::Continue
     };
-    let fut = dom.render_concurrent_with_policy(yield_policy, &mut mutations, |_, _| {});
+    let fut = dom.render_concurrent_with_scheduler(
+        &mut mutations,
+        move |_, _| decision,
+        |_, _| {},
+        |_| std::future::ready(()),
+    );
     pin_mut!(fut);
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);

@@ -8,7 +8,7 @@ use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
     DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
-    YieldPolicy, consume_context, has_context, try_consume_context,
+    consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HYDRATION_INJECT_MARKER, HydrationContext, SerializedHydrationData};
@@ -227,9 +227,7 @@ impl SsrRendererPool {
                     virtual_dom.wait_for_suspense_work().await;
 
                     // Do that async work
-                    virtual_dom
-                        .render_suspense_concurrent(YieldPolicy::default())
-                        .await;
+                    virtual_dom.render_suspense_concurrent().await;
                 }
             }
 
@@ -337,7 +335,7 @@ impl SsrRendererPool {
             while virtual_dom.suspended_tasks_remaining() {
                 virtual_dom.wait_for_suspense_work().await;
                 let resolved_suspense_nodes = virtual_dom
-                    .render_suspense_concurrent(YieldPolicy::default())
+                    .render_suspense_concurrent()
                     .await
                     .resolved_scopes;
 

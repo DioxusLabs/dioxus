@@ -109,7 +109,7 @@ pub use crate::innerlude::{
     SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
     SuspenseContext, SuspenseRenderStats, TargetedMutations, Task, Template, TemplateAttribute,
     TemplateNode, UpdatePriority, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations,
-    YieldPolicy, anyhow, consume_context, consume_context_from_scope, current_owner,
+    anyhow, consume_context, consume_context_from_scope, current_owner,
     current_scope_id, fc_to_builder, generation, has_context, needs_update, needs_update_any,
     parent_scope, provide_context, provide_create_error_boundary, provide_root_context,
     queue_effect, remove_future, schedule_update, schedule_update_any, spawn, spawn_forever,

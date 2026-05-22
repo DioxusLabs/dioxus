@@ -219,11 +219,11 @@ impl TargetedRendererOracle {
     }
 
     fn check_matches_fresh(&self, fresh: &RendererOracle) -> Result<(), String> {
-        if self.renderer.snapshot_eq(fresh) {
+        let fresh_snapshot = fresh.snapshot();
+        if self.renderer.snapshot_eq(&fresh_snapshot) {
             return Ok(());
         }
 
-        let fresh_snapshot = fresh.snapshot();
         let incremental_snapshot = self.snapshot();
         Err(format!(
             "incremental renderer snapshot does not match fresh render\nincremental:\n{incremental_snapshot:#?}\nfresh:\n{fresh_snapshot:#?}"

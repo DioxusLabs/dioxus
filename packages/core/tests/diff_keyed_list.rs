@@ -301,11 +301,13 @@ fn no_common_keys() {
         })
     }
 
+    // Anchor diff: with no common keys, all 3 old items are removed and 3 new
+    // items are loaded (no `replace_node_with` swap).
     let (mut dom, mut oracle, _) = rebuild(app, &[1, 2, 3]);
     let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 6]);
     assert_eq!(summary.loads, 3);
-    assert_eq!(summary.removes, 2);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.removes, 3);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]

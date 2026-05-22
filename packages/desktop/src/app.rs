@@ -7,7 +7,7 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{RenderStats, RenderTargetId, VirtualDom, YieldPolicy};
+use dioxus_core::{RenderStats, RenderTargetId, VirtualDom};
 use futures_util::{FutureExt, pin_mut};
 use std::{
     cell::{Cell, RefCell},
@@ -546,13 +546,7 @@ impl App {
     ) -> (BTreeSet<RenderTargetId>, std::task::Poll<RenderStats>) {
         let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
         let poll = {
-            let fut = self.dom.render_concurrent_with_policy(
-                YieldPolicy {
-                    work_units_per_yield: 4,
-                },
-                &mut mutations,
-                |_, _| {},
-            );
+            let fut = self.dom.render_concurrent(&mut mutations);
             pin_mut!(fut);
             fut.poll_unpin(cx)
         };

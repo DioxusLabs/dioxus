@@ -9,7 +9,7 @@ use crate::{
 use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{RenderTargetId, Runtime, ScopeId, VirtualDom, YieldPolicy, provide_context};
+use dioxus_core::{RenderTargetId, Runtime, ScopeId, VirtualDom, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
@@ -607,13 +607,7 @@ impl WebviewInstance {
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             let poll = self.edits.wry_queue.with_mutation_state_mut(|f| {
-                let fut = dom.render_concurrent_with_policy(
-                    YieldPolicy {
-                        work_units_per_yield: 4,
-                    },
-                    f,
-                    |_, _| {},
-                );
+                let fut = dom.render_concurrent(f);
                 pin_mut!(fut);
                 fut.poll_unpin(&mut cx)
             });

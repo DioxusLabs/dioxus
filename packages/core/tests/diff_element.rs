@@ -52,11 +52,15 @@ fn element_swap() {
         rsx!( h2 { "hello 2" } )
     }
 
+    // Anchor diff: swapping the root element to a different tag emits
+    // `load_template` + `remove_node` for the old root (no `replace_node_with`).
     let (mut dom, mut oracle, _) = rebuild(app, expected_h1);
-    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
-    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
-    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
-    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
+    for expected in [expected_h2, expected_h1, expected_h2, expected_h1] {
+        let summary = rerender(&mut dom, &mut oracle, expected);
+        assert_eq!(summary.loads, 1);
+        assert_eq!(summary.removes, 1);
+        assert_eq!(summary.replaces, 0);
+    }
 }
 
 #[test]
@@ -320,8 +324,12 @@ fn diff_empty() {
         rsx! {}
     }
 
+    // Anchor diff: removing the root element emits `remove_node` only
+    // (no placeholder needs to take its place in the markerless model).
     let (mut dom, mut oracle, _) = rebuild(app, expected_div);
-    assert_eq!(rerender(&mut dom, &mut oracle, expected_empty).replaces, 1);
+    let summary = rerender(&mut dom, &mut oracle, expected_empty);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 }
 
 fn rebuild(

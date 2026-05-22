@@ -36,25 +36,32 @@ fn attrs_cycle() {
     let mut oracle = RendererOracle::new();
     oracle.rebuild(&mut dom);
 
+    // Anchor diff: instead of `replaces=1` (placeholder swap), we get
+    // `loads=1` + `removes=1` for each empty<->populated cycle. Total
+    // mutations match: 2 in both models.
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_1);
     assert_eq!(summary.set_attrs, 2);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(app);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_3);
     assert_eq!(summary.set_attrs, 2);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(app);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 }

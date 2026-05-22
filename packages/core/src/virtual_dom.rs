@@ -11,7 +11,6 @@ use crate::{
         ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderCheckpoint,
         RenderCommit, RenderSchedulerDecision, RenderStats, SchedulerFairness, SchedulerMsg,
         ScopeOrder, ScopeState, SuspenseRenderStats, UpdatePriority, VProps, WriteMutations,
-        YieldPolicy,
     },
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
@@ -711,44 +710,21 @@ impl VirtualDom {
     }
 
     /// Render pending work into a renderer mutation queue.
+    ///
+    /// Commits and yields after every fiber checkpoint, leaving rescheduling
+    /// to the async executor. Callers that want renderer-controlled cadence
+    /// (frame timing, custom batching) should use
+    /// [`Self::render_concurrent_with_scheduler`].
     #[instrument(
         skip(self, to),
         level = "trace",
         name = "VirtualDom::render_concurrent"
     )]
     pub async fn render_concurrent(&mut self, to: &mut impl WriteMutations) -> RenderStats {
-        self.render_concurrent_with_policy(YieldPolicy::default(), to, |_, _| {})
-            .await
-    }
-
-    /// Render pending work with a custom yield policy.
-    ///
-    /// Mutations are written directly into `to`. The `commit` callback is
-    /// called after queued work should be made visible, which lets renderers
-    /// flush their own optimized mutation queue before Dioxus yields.
-    #[instrument(
-        skip(self, to, commit),
-        level = "trace",
-        name = "VirtualDom::render_concurrent_with_policy"
-    )]
-    pub async fn render_concurrent_with_policy<M: WriteMutations>(
-        &mut self,
-        yield_policy: YieldPolicy,
-        to: &mut M,
-        mut commit: impl FnMut(&mut M, UpdatePriority),
-    ) -> RenderStats {
         self.render_concurrent_with_scheduler(
             to,
-            |checkpoint, _| {
-                if checkpoint.has_higher_priority_work
-                    || yield_policy.should_yield_after(checkpoint.work_units_since_yield)
-                {
-                    RenderSchedulerDecision::CommitAndYield
-                } else {
-                    RenderSchedulerDecision::Continue
-                }
-            },
-            |to, render_commit| commit(to, render_commit.priority),
+            |_, _| RenderSchedulerDecision::CommitAndYield,
+            |_, _| {},
             |_| yield_now(),
         )
         .await
@@ -920,8 +896,7 @@ impl VirtualDom {
 
             self.wait_for_suspense_work().await;
 
-            self.render_suspense_concurrent(YieldPolicy::default())
-                .await;
+            self.render_suspense_concurrent().await;
         }
     }
 
@@ -974,27 +949,24 @@ impl VirtualDom {
 
     /// Render suspense work synchronously and return the list of suspense boundaries that resolved.
     ///
-    /// Equivalent to [`render_suspense_concurrent`] with the default yield policy, but returns the
+    /// Equivalent to [`Self::render_suspense_concurrent`], but returns the
     /// resolved scope list directly. Used by tests and callers that want to drive suspense without
     /// caring about render stats.
     pub async fn render_suspense_immediate(&mut self) -> Vec<ScopeId> {
-        self.render_suspense_concurrent(YieldPolicy::default())
-            .await
-            .resolved_scopes
+        self.render_suspense_concurrent().await.resolved_scopes
     }
 
     /// Render any suspense-ready dirty fibers without writing renderer mutations.
-    pub async fn render_suspense_concurrent(
-        &mut self,
-        yield_policy: YieldPolicy,
-    ) -> SuspenseRenderStats {
+    ///
+    /// Yields to the async scheduler after every work unit; the executor is
+    /// responsible for deciding whether other tasks should run.
+    pub async fn render_suspense_concurrent(&mut self) -> SuspenseRenderStats {
         // Queue any new events before we start working
         self.queue_events();
 
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-        let mut work_done = 0;
         let mut stats = RenderStats::default();
         while let Some(work) = self.pop_work() {
             let priority = work.priority();
@@ -1041,14 +1013,11 @@ impl VirtualDom {
             self.queue_events();
             stats.priority = stats.priority.min(priority);
             stats.work_count += 1;
-            work_done += 1;
 
-            // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
-            if yield_policy.should_yield_after(work_done) {
-                stats.yield_count += 1;
-                yield_now().await;
-                work_done = 0;
-            }
+            // Hand back to the async scheduler — the executor decides whether
+            // anything else gets to run before we resume.
+            stats.yield_count += 1;
+            yield_now().await;
         }
 
         self.resolved_scopes

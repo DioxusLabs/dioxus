@@ -19,21 +19,15 @@ fn list_creates_one_by_one() {
     let (mut dom, mut oracle, rebuild) = rebuild(app, numbered_outer_div(0, 1));
     assert_eq!(rebuild.loads, 1);
 
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(1, 1));
-    assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 1);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(2, 1));
-    assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 0);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(3, 1));
-    assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 0);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(4, 1));
-    assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 0);
+    // Anchor diff: each `div { "{i}" }` is one load (the wrapper) + one
+    // create_text_node + inserts. No `replace_node_with` because the
+    // markerless model uses slot anchors, not placeholder swaps.
+    for next in 1..=4 {
+        let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(next, 1));
+        assert_eq!(summary.loads, 1);
+        assert_eq!(summary.create_texts, 1);
+        assert_eq!(summary.replaces, 0);
+    }
 }
 
 #[test]
@@ -53,6 +47,9 @@ fn removes_one_by_one() {
     let (mut dom, mut oracle, rebuild) = rebuild(app, numbered_outer_div(3, 1));
     assert_eq!(rebuild.loads, 4);
 
+    // Anchor diff: shrinking emits a single `remove_node`. Going back to a
+    // populated list inserts fresh templates at the slot's logical anchor
+    // (no `replace_node_with`).
     let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(2, 1));
     assert_eq!(summary.removes, 1);
     assert_eq!(summary.replaces, 0);
@@ -62,12 +59,12 @@ fn removes_one_by_one() {
     assert_eq!(summary.replaces, 0);
 
     let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(0, 1));
-    assert_eq!(summary.removes, 0);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 
     let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(3, 1));
     assert_eq!(summary.loads, 3);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
@@ -86,17 +83,14 @@ fn list_shrink_multiroot() {
     let (mut dom, mut oracle, rebuild) = rebuild(app, numbered_outer_div(0, 2));
     assert_eq!(rebuild.loads, 1);
 
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(1, 2));
-    assert_eq!(summary.loads, 2);
-    assert_eq!(summary.replaces, 1);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(2, 2));
-    assert_eq!(summary.loads, 2);
-    assert_eq!(summary.replaces, 0);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(3, 2));
-    assert_eq!(summary.loads, 2);
-    assert_eq!(summary.replaces, 0);
+    // Two-root iteration: each grown iteration loads 2 templates (the two
+    // sibling divs) and creates 2 text nodes for `{i}`.
+    for next in 1..=3 {
+        let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(next, 2));
+        assert_eq!(summary.loads, 2);
+        assert_eq!(summary.create_texts, 2);
+        assert_eq!(summary.replaces, 0);
+    }
 }
 
 #[test]
@@ -117,17 +111,13 @@ fn removes_one_by_one_multiroot() {
     let (mut dom, mut oracle, rebuild) = rebuild(app, numbered_outer_div(3, 2));
     assert_eq!(rebuild.loads, 7);
 
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(2, 2));
-    assert_eq!(summary.removes, 2);
-    assert_eq!(summary.replaces, 0);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(1, 2));
-    assert_eq!(summary.removes, 2);
-    assert_eq!(summary.replaces, 0);
-
-    let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(0, 2));
-    assert_eq!(summary.removes, 1);
-    assert_eq!(summary.replaces, 1);
+    // Each shrink removes one pair of sibling divs. The final shrink to 0
+    // items also removes a pair (no placeholder needs to take their place).
+    for next in [2usize, 1, 0] {
+        let summary = rerender(&mut dom, &mut oracle, numbered_outer_div(next, 2));
+        assert_eq!(summary.removes, 2);
+        assert_eq!(summary.replaces, 0);
+    }
 }
 
 #[test]
@@ -177,24 +167,33 @@ fn remove_many() {
         }
     }
 
+    // Empty rebuild still pushes the root anchor (`inserts: 1`); no
+    // template loads or text creations.
     let (mut dom, mut oracle, rebuild) = rebuild(app, Vec::new());
-    assert_eq!(rebuild, EditSummary::default());
+    assert_eq!(rebuild.loads, 0);
+    assert_eq!(rebuild.create_texts, 0);
+    assert_eq!(rebuild.removes, 0);
+    assert_eq!(rebuild.replaces, 0);
 
+    // 0 -> 1 just inserts a template at the slot anchor.
     let summary = rerender(&mut dom, &mut oracle, hello_divs(1));
     assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.replaces, 0);
 
+    // 1 -> 5: four new templates loaded after the existing first one.
     let summary = rerender(&mut dom, &mut oracle, hello_divs(5));
     assert_eq!(summary.loads, 4);
     assert_eq!(summary.replaces, 0);
 
+    // 5 -> 0: five `remove_node` calls, no placeholder swap.
     let summary = rerender(&mut dom, &mut oracle, Vec::new());
-    assert_eq!(summary.removes, 4);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.removes, 5);
+    assert_eq!(summary.replaces, 0);
 
+    // 0 -> 1 again: still goes through the slot anchor, no replace.
     let summary = rerender(&mut dom, &mut oracle, hello_divs(1));
     assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
@@ -222,17 +221,21 @@ fn replace_and_add_items() {
     let (mut dom, mut oracle, rebuild) = rebuild(app, vec![ul(Vec::new())]);
     assert_eq!(rebuild.loads, 1);
 
+    // 0 (empty) -> 1 fizz: one load, no replace.
     let summary = rerender(&mut dom, &mut oracle, vec![ul(fizz_items(1))]);
     assert_eq!(summary.loads, 1);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.replaces, 0);
 
+    // 1 fizz -> 0 empty: one remove, no replace. The slot stays addressable
+    // via the parent's logical anchor.
     let summary = rerender(&mut dom, &mut oracle, vec![ul(Vec::new())]);
-    assert_eq!(summary.loads, 0);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 
+    // 0 -> 3 fizzes: three loads inserted at the slot anchor.
     let summary = rerender(&mut dom, &mut oracle, vec![ul(fizz_items(3))]);
     assert_eq!(summary.loads, 3);
-    assert_eq!(summary.replaces, 2);
+    assert_eq!(summary.replaces, 0);
 }
 
 // Simplified regression test for https://github.com/DioxusLabs/dioxus/issues/4924

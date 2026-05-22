@@ -19,7 +19,9 @@ fn cycling_elements() {
     for _ in 1..=3 {
         dom.mark_dirty(ScopeId::APP);
         let summary = oracle.render(&mut dom);
+        // Anchor diff: load the new template, then remove the old one.
+        // Placeholder diff would have used a single `replace_node_with`.
         assert_eq!(summary.loads, 1);
-        assert_eq!(summary.replaces, 1);
+        assert_eq!(summary.removes, 1);
     }
 }

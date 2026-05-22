@@ -68,5 +68,8 @@ fn events_generate() {
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
-    assert_eq!(summary.replaces, 1);
+    // Anchor diff: the populated div is just removed when the component
+    // returns empty. No placeholder swap is needed.
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 }
