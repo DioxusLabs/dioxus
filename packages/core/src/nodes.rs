@@ -772,7 +772,7 @@ impl From<Arguments<'_>> for VText {
 pub struct VPlaceholder {}
 
 /// An attribute of the TemplateNode, created at compile time
-#[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),
@@ -814,6 +814,70 @@ pub enum TemplateAttribute {
         /// The index
         id: usize,
     },
+}
+
+#[doc(hidden)]
+/// Sort static template attributes by their emitted name while leaving dynamic attributes in place.
+///
+/// The diffing code binary-searches the static prefix by `TemplateAttribute::Static::name` when a
+/// dynamic spread stops overriding a static value. The RSX syntax name is not always the emitted
+/// DOM name (`r#as` emits `as`, `http_equiv` emits `http-equiv`), so this runs after macro
+/// expansion has produced the actual static names.
+pub const fn sort_template_attributes<const N: usize>(
+    mut attrs: [TemplateAttribute; N],
+) -> [TemplateAttribute; N] {
+    // The macro emits static attrs first and dynamic attrs second. Only the static prefix is
+    // sorted because dynamic attrs are addressed by id from the VNode's dynamic attribute list.
+    let mut static_len = 0;
+    while static_len < N {
+        match attrs[static_len] {
+            TemplateAttribute::Static { .. } => static_len += 1,
+            TemplateAttribute::Dynamic { .. } => break,
+        }
+    }
+
+    // Attribute lists are small, and insertion sort is const-friendly on stable Rust.
+    let mut i = 1;
+    while i < static_len {
+        let mut j = i;
+        while j > 0 && template_attribute_name_less(attrs[j], attrs[j - 1]) {
+            let previous = attrs[j - 1];
+            attrs[j - 1] = attrs[j];
+            attrs[j] = previous;
+            j -= 1;
+        }
+        i += 1;
+    }
+
+    attrs
+}
+
+const fn template_attribute_name_less(left: TemplateAttribute, right: TemplateAttribute) -> bool {
+    match (left, right) {
+        (
+            TemplateAttribute::Static { name: left, .. },
+            TemplateAttribute::Static { name: right, .. },
+        ) => static_str_less(left, right),
+        _ => false,
+    }
+}
+
+const fn static_str_less(left: StaticStr, right: StaticStr) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    let mut idx = 0;
+
+    while idx < left.len() && idx < right.len() {
+        if left[idx] < right[idx] {
+            return true;
+        }
+        if left[idx] > right[idx] {
+            return false;
+        }
+        idx += 1;
+    }
+
+    left.len() < right.len()
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`

@@ -40,6 +40,8 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
+    #[doc(hidden)]
+    pub use crate::nodes::sort_template_attributes;
 
     #[allow(non_snake_case)]
     #[doc(hidden)]

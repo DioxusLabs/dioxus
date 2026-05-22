@@ -5,7 +5,6 @@ use quote::{ToTokens, TokenStreamExt, quote};
 use std::fmt::{Display, Formatter};
 use syn::{
     Ident, LitStr, Result, Token,
-    ext::IdentExt,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -127,11 +126,6 @@ impl ToTokens for Element {
                 continue;
             };
 
-            let sort_key = match name {
-                AttributeName::BuiltIn(name) => name.unraw().to_string(),
-                _ => name.to_string(),
-            };
-
             let ns = match name {
                 AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
                 AttributeName::Custom(_) => quote!(None),
@@ -153,21 +147,19 @@ impl ToTokens for Element {
 
             let value = value.to_static().unwrap();
 
-            static_attrs.push((
-                sort_key,
-                quote! {
+            static_attrs.push(quote! {
                     dioxus_core::TemplateAttribute::Static {
                         name: #name,
                         namespace: #ns,
                         value: #value,
                     }
-                },
-            ));
+            });
         }
-        static_attrs.sort_by(|(left, _), (right, _)| left.cmp(right));
+        // Dynamic attrs must stay ordered by their dynamic id, but static attrs need to be
+        // searchable by the emitted DOM name. Let core sort the fully expanded names so raw
+        // identifiers and RSX aliases do not use their Rust spelling as the sort key.
         let template_attrs = static_attrs
             .into_iter()
-            .map(|(_, attr)| attr)
             .chain(dynamic_attrs)
             .collect::<Vec<_>>();
 
@@ -215,7 +207,7 @@ impl ToTokens for Element {
                 dioxus_core::TemplateNode::Element {
                     tag: #el_name,
                     namespace: #ns,
-                    attrs: &[ #(#template_attrs),* ],
+                    attrs: &dioxus_core::internal::sort_template_attributes([ #(#template_attrs),* ]),
                     children: &[ #(#children),* ],
                 }
             }

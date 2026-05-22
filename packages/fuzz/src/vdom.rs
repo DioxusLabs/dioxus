@@ -101,7 +101,12 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
 
     let mut child_suspense_ancestors = suspense_ancestors.clone();
     child_suspense_ancestors.push(id);
-    let child = build_suspense_child_vnode(&child_spec, &child_suspense_ancestors, wake_mutation, wake_applied);
+    let child = build_suspense_child_vnode(
+        &child_spec,
+        &child_suspense_ancestors,
+        wake_mutation,
+        wake_applied,
+    );
     rsx! {
         SuspenseBoundary {
             fallback: |_| rsx! { "suspense-fallback" },
@@ -273,13 +278,24 @@ fn build_suspense_child_vnode(
     )
 }
 
-fn vnode_contains_suspense(spec: &VNodeSpec) -> bool { spec.template.roots.iter().any(template_node_contains_suspense) }
+fn vnode_contains_suspense(spec: &VNodeSpec) -> bool {
+    spec.template
+        .roots
+        .iter()
+        .any(template_node_contains_suspense)
+}
 
 fn template_node_contains_suspense(spec: &TemplateNodeSpec) -> bool {
     match spec {
-        TemplateNodeSpec::Element { children, .. } => children.iter().any(template_node_contains_suspense),
-        TemplateNodeSpec::Dynamic(DynamicSpec::Fragment(nodes)) => nodes.iter().any(vnode_contains_suspense),
-        TemplateNodeSpec::Dynamic(DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component)) => vnode_contains_suspense(&component.child),
+        TemplateNodeSpec::Element { children, .. } => {
+            children.iter().any(template_node_contains_suspense)
+        }
+        TemplateNodeSpec::Dynamic(DynamicSpec::Fragment(nodes)) => {
+            nodes.iter().any(vnode_contains_suspense)
+        }
+        TemplateNodeSpec::Dynamic(
+            DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component),
+        ) => vnode_contains_suspense(&component.child),
         TemplateNodeSpec::Dynamic(DynamicSpec::Suspense(_)) => true,
         TemplateNodeSpec::Text(_) | TemplateNodeSpec::Dynamic(_) => false,
     }
@@ -401,22 +417,18 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
             namespace,
             spec.volatile,
         ),
-        AttrValueSpec::Int(value) => {
-            Attribute::new(
-                dynamic_attr_name(slot, spec.name),
-                value as i64,
-                namespace,
-                spec.volatile,
-            )
-        }
-        AttrValueSpec::Bool(value) => {
-            Attribute::new(
-                dynamic_attr_name(slot, spec.name),
-                value,
-                namespace,
-                spec.volatile,
-            )
-        }
+        AttrValueSpec::Int(value) => Attribute::new(
+            dynamic_attr_name(slot, spec.name),
+            value as i64,
+            namespace,
+            spec.volatile,
+        ),
+        AttrValueSpec::Bool(value) => Attribute::new(
+            dynamic_attr_name(slot, spec.name),
+            value,
+            namespace,
+            spec.volatile,
+        ),
         AttrValueSpec::Any(value) => Attribute::new(
             dynamic_attr_name(slot, spec.name),
             AttributeValue::any_value(value),

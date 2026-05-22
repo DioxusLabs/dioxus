@@ -146,6 +146,73 @@ fn dynamic_attr_override_restores_static_attr() {
 }
 
 #[test]
+fn dynamic_attr_override_restores_raw_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("as", "script")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            link {
+                href: "/style.css",
+                r#as: "style",
+                ..attrs,
+            }
+        }
+    }
+
+    Sequence::new()
+        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "script" } })
+        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "style" } })
+        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "script" } })
+        .run();
+}
+
+#[test]
+fn dynamic_attr_override_restores_aliased_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("http-equiv", "refresh")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            meta {
+                "http.z": "custom",
+                http_equiv: "content-type",
+                ..attrs,
+            }
+        }
+    }
+
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! { meta { "http.z": "custom", http_equiv: "refresh" } },
+        )
+        .render_with_expected(
+            app,
+            rsx! { meta { "http.z": "custom", http_equiv: "content-type" } },
+        )
+        .render_with_expected(
+            app,
+            rsx! { meta { "http.z": "custom", http_equiv: "refresh" } },
+        )
+        .run();
+}
+
+#[test]
 fn dynamic_attr_none_removes_static_attr() {
     fn app() -> Element {
         let attrs = if generation() % 2 == 0 {
