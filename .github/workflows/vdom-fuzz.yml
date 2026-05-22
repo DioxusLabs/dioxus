@@ -76,6 +76,8 @@ jobs:
         run: cargo test -p dioxus-vdom-fuzz --lib --examples
 
       - name: Smoke test fuzz target
+        env:
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/packages/fuzz/fuzz/lsan.supp,print_suppressions=1
         run: |
           mkdir -p "$RUNNER_TEMP/fuzz-corpus" "$RUNNER_TEMP/fuzz-artifacts"
           cargo +${{ env.rust_nightly }} fuzz run --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" "$RUNNER_TEMP/fuzz-corpus" -- \

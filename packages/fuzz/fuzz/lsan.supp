@@ -1,0 +1,5 @@
+# generational_box intentionally leaks each `UnsyncStorage` slot via
+# `Box::leak` and recycles them through a thread-local free list, so any
+# slots still in the pool when the libFuzzer worker thread exits look like
+# leaks to LSan. Suppress just that allocation site.
+leak:generational_box::unsync::UnsyncStorage::create_new
