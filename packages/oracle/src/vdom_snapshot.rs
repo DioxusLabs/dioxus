@@ -1,8 +1,9 @@
 #[cfg(test)]
 use crate::renderer::RendererOracle;
 use crate::snapshot::{
-    attr_to_string, remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr,
-    snapshot_attrs, snapshot_listeners, SnapshotAttrs, SnapshotListeners, SnapshotNode,
+    SnapshotAttrs, SnapshotListeners, SnapshotNode, attr_to_string,
+    remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr, snapshot_attrs,
+    snapshot_listeners,
 };
 #[cfg(test)]
 use dioxus_core::Element;
@@ -138,21 +139,33 @@ fn apply_dynamic_attr(
 ) {
     match &attr.value {
         AttributeValue::Listener(_) => {
-            let name = attr
-                .name
-                .strip_prefix("on")
-                .unwrap_or(attr.name)
-                .to_string();
-            listeners.insert(name);
+            remove_snapshot_attr(attrs, attr.name, attr.namespace);
+            listeners.insert(listener_name(attr.name).to_string());
         }
         value => match attr_to_string(value) {
-            Some(value) => set_snapshot_attr(
-                attrs,
-                attr.name.to_string(),
-                attr.namespace.map(ToString::to_string),
-                value,
-            ),
-            None => remove_snapshot_attr(attrs, attr.name, attr.namespace),
+            Some(value) => {
+                remove_listener_for_attr(listeners, attr);
+                set_snapshot_attr(
+                    attrs,
+                    attr.name.to_string(),
+                    attr.namespace.map(ToString::to_string),
+                    value,
+                );
+            }
+            None => {
+                remove_listener_for_attr(listeners, attr);
+                remove_snapshot_attr(attrs, attr.name, attr.namespace);
+            }
         },
+    }
+}
+
+fn listener_name(attr_name: &str) -> &str {
+    attr_name.strip_prefix("on").unwrap_or(attr_name)
+}
+
+fn remove_listener_for_attr(listeners: &mut SnapshotListeners, attr: &Attribute) {
+    if attr.namespace.is_none() {
+        listeners.remove(listener_name(attr.name));
     }
 }

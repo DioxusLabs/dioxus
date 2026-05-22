@@ -12,10 +12,7 @@ fn app_drops() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -30,10 +27,7 @@ fn hooks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -54,10 +48,7 @@ fn contexts_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -71,10 +62,7 @@ fn tasks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -87,9 +75,7 @@ fn root_props_drop() {
         RootProps("asdasd".to_string()),
     );
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -159,8 +145,12 @@ fn hooks_drop_before_contexts() {
     }
 
     let mut dom = VirtualDom::new(app);
+    rebuild_and_render(&mut dom);
+}
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+fn rebuild_and_render(dom: &mut VirtualDom) {
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(dom);
     dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    oracle.render(dom);
 }

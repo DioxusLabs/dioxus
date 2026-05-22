@@ -1,7 +1,7 @@
 use super::*;
-use crate::vdom_snapshot::{assert_no_mutations, fresh_snapshot};
+use crate::vdom_snapshot::{assert_no_mutations, fresh_snapshot, vdom_snapshot};
 use dioxus::prelude::*;
-use dioxus_core::{generation, ScopeId, VirtualDom};
+use dioxus_core::{Attribute, AttributeValue, Event, ScopeId, VirtualDom, generation};
 
 fn simple_app() -> Element {
     rsx! {
@@ -63,6 +63,86 @@ fn tracks_event_listeners() {
     let snapshot = fresh_snapshot(listener_app);
     match &snapshot[..] {
         [SnapshotNode::Element { listeners, .. }] => assert_eq!(listeners, &["click"]),
+        other => panic!("unexpected snapshot: {other:#?}"),
+    }
+}
+
+#[test]
+fn vdom_snapshot_removes_listener_shadowed_by_later_none_attr() {
+    fn app() -> Element {
+        let attrs = vec![Attribute::new("onclick", AttributeValue::None, None, false)];
+
+        rsx! {
+            button {
+                onclick: move |_| {},
+                ..attrs,
+            }
+        }
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    vdom.rebuild_in_place();
+    match &vdom_snapshot(&vdom)[..] {
+        [
+            SnapshotNode::Element {
+                attrs, listeners, ..
+            },
+        ] => {
+            assert!(attrs.is_empty());
+            assert!(listeners.is_empty());
+        }
+        other => panic!("unexpected snapshot: {other:#?}"),
+    }
+}
+
+#[test]
+#[should_panic(expected = "renderer DOM diverged from expected rsx tree")]
+fn assert_matches_rejects_stale_listener_shadowed_by_attr() {
+    fn expected() -> Element {
+        let attrs = vec![Attribute::new("onclick", AttributeValue::None, None, false)];
+
+        rsx! {
+            button {
+                onclick: move |_| {},
+                ..attrs,
+                "go"
+            }
+        }
+    }
+
+    render_app(listener_app).assert_matches(expected);
+}
+
+#[test]
+fn vdom_snapshot_removes_attr_shadowed_by_later_listener() {
+    fn app() -> Element {
+        let attrs = vec![Attribute::new("onclick", "raw-listener", None, false)];
+        let listeners = vec![Attribute::new(
+            "onclick",
+            AttributeValue::listener(|_: Event<()>| {}),
+            None,
+            false,
+        )];
+
+        rsx! {
+            button {
+                ..attrs,
+                ..listeners,
+            }
+        }
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    vdom.rebuild_in_place();
+    match &vdom_snapshot(&vdom)[..] {
+        [
+            SnapshotNode::Element {
+                attrs, listeners, ..
+            },
+        ] => {
+            assert!(attrs.is_empty());
+            assert_eq!(listeners, &["click"]);
+        }
         other => panic!("unexpected snapshot: {other:#?}"),
     }
 }

@@ -1,6 +1,7 @@
 use crate::snapshot::{
-    attr_to_string, remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr,
-    snapshot_attrs, snapshot_listeners, SnapshotAttrs, SnapshotListeners, SnapshotNode,
+    SnapshotAttrs, SnapshotListeners, SnapshotNode, attr_to_string,
+    remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr, snapshot_attrs,
+    snapshot_listeners,
 };
 use crate::vdom_snapshot::vdom_snapshot;
 use dioxus_core::{

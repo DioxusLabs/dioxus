@@ -64,7 +64,7 @@ jobs:
           toolchain: ${{ env.rust_nightly }}
           components: llvm-tools-preview
 
-      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: dtolnay/install@cargo-fuzz
 
       - uses: Swatinem/rust-cache@v2
         with:
