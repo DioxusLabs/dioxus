@@ -45,6 +45,11 @@ env:
   FUZZ_TARGET: vdom_ops
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2025-10-05
+  # `cargo fuzz run` (smoke test) and `cargo fuzz coverage` both
+  # produce binaries that trip LSan on `generational_box`'s and the
+  # fuzz harness's intentional `Box::leak` sites. Apply the same
+  # suppression file to every step that runs the fuzzer.
+  LSAN_OPTIONS: suppressions=${{ github.workspace }}/packages/fuzz/fuzz/lsan.supp,print_suppressions=1
 
 jobs:
   test-and-coverage:
@@ -75,27 +80,30 @@ jobs:
       - name: Test fuzz support crate
         run: cargo test -p dioxus-vdom-fuzz --lib --examples
 
-      - name: Smoke test fuzz target
-        env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/packages/fuzz/fuzz/lsan.supp,print_suppressions=1
+      - name: Resolve LSan symbolizer
+        # Both the smoke test and `cargo fuzz coverage` need this on PATH
+        # for LSan to demangle symbols (and therefore for the `leak:`
+        # suppressions to match). Write it to $GITHUB_ENV so every later
+        # step inherits it.
         run: |
-          mkdir -p "$RUNNER_TEMP/fuzz-corpus" "$RUNNER_TEMP/fuzz-artifacts"
-          # LSan suppressions match against demangled symbols, so the
-          # sanitizer needs an `llvm-symbolizer` it can run. Try the one
-          # shipped with `llvm-tools-preview` first, then fall back to
-          # whatever the runner has on PATH.
           target_triple="$(rustc +${{ env.rust_nightly }} -vV | sed -n 's/^host: //p')"
           rustup_symbolizer="$(rustc +${{ env.rust_nightly }} --print sysroot)/lib/rustlib/$target_triple/bin/llvm-symbolizer"
           if [ -x "$rustup_symbolizer" ]; then
-            export ASAN_SYMBOLIZER_PATH="$rustup_symbolizer"
+            symbolizer="$rustup_symbolizer"
           elif command -v llvm-symbolizer >/dev/null; then
-            export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer)"
+            symbolizer="$(command -v llvm-symbolizer)"
           else
-            # Pick the highest-versioned symbolizer Ubuntu ships, if any.
-            ASAN_SYMBOLIZER_PATH="$(ls /usr/bin/llvm-symbolizer-* 2>/dev/null | sort -V | tail -n1)"
-            export ASAN_SYMBOLIZER_PATH
+            symbolizer="$(ls /usr/bin/llvm-symbolizer-* 2>/dev/null | sort -V | tail -n1)"
           fi
-          echo "ASAN_SYMBOLIZER_PATH=${ASAN_SYMBOLIZER_PATH:-<unset>}"
+          if [ -z "$symbolizer" ] || [ ! -x "$symbolizer" ]; then
+            echo "no usable llvm-symbolizer found" >&2
+            exit 1
+          fi
+          echo "ASAN_SYMBOLIZER_PATH=$symbolizer" | tee -a "$GITHUB_ENV"
+
+      - name: Smoke test fuzz target
+        run: |
+          mkdir -p "$RUNNER_TEMP/fuzz-corpus" "$RUNNER_TEMP/fuzz-artifacts"
           cargo +${{ env.rust_nightly }} fuzz run --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" "$RUNNER_TEMP/fuzz-corpus" -- \
             -runs=256 \
             -artifact_prefix="$RUNNER_TEMP/fuzz-artifacts/"
