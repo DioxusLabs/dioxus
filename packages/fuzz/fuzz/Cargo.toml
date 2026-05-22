@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 dioxus-vdom-fuzz = { path = ".." }
-libfuzzer-sys = "0.4"
+libfuzzer-sys = "0.4.7"
 
 [[bin]]
 name = "vdom_ops"

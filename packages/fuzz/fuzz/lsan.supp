@@ -1,5 +1,11 @@
 # generational_box intentionally leaks each `UnsyncStorage` slot via
 # `Box::leak` and recycles them through a thread-local free list, so any
 # slots still in the pool when the libFuzzer worker thread exits look like
-# leaks to LSan. Suppress just that allocation site.
+# leaks to LSan.
 leak:generational_box::unsync::UnsyncStorage::create_new
+
+# The fuzz harness interns generated `Template` content into `&'static`
+# caches with `Box::leak` so it satisfies `Template::new`'s static-lifetime
+# requirement. Every unique template the fuzzer produces stays alive for
+# the rest of the process by design.
+leak:dioxus_vdom_fuzz::vdom::intern_

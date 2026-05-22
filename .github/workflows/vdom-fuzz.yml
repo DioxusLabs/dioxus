@@ -80,6 +80,12 @@ jobs:
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/packages/fuzz/fuzz/lsan.supp,print_suppressions=1
         run: |
           mkdir -p "$RUNNER_TEMP/fuzz-corpus" "$RUNNER_TEMP/fuzz-artifacts"
+          # LSan suppressions match against demangled symbols, so the
+          # sanitizer needs an `llvm-symbolizer` it can run. Point it at
+          # the one shipped with the `llvm-tools-preview` component above.
+          target_triple="$(rustc +${{ env.rust_nightly }} -vV | sed -n 's/^host: //p')"
+          export ASAN_SYMBOLIZER_PATH="$(rustc +${{ env.rust_nightly }} --print sysroot)/lib/rustlib/$target_triple/bin/llvm-symbolizer"
+          test -x "$ASAN_SYMBOLIZER_PATH"
           cargo +${{ env.rust_nightly }} fuzz run --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" "$RUNNER_TEMP/fuzz-corpus" -- \
             -runs=256 \
             -artifact_prefix="$RUNNER_TEMP/fuzz-artifacts/"
