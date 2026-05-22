@@ -45,7 +45,7 @@ fn sorted_template_attributes<Ctx: HotReloadingContext>(
         }
     }
 
-    static_attrs.sort_by(|(left, _), (right, _)| left.cmp(right));
+    static_attrs.sort_by_key(|(left, _)| *left);
     static_attrs
         .into_iter()
         .map(|(_, attr)| attr)

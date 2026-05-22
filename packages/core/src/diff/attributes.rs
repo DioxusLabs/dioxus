@@ -172,47 +172,46 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        let is_listener = |attribute: Option<&Attribute>| {
-            attribute
-                .is_some_and(|attribute| matches!(&attribute.value, AttributeValue::Listener(_)))
-        };
-        let changed = old.is_some_and(|attribute| attribute.volatile)
-            || new.is_some_and(|attribute| attribute.volatile)
-            || match (old, new) {
-                (Some(left), Some(right)) => left.value != right.value,
-                (old, new) => old.is_some() != new.is_some(),
-            };
-        match (is_listener(old), is_listener(new)) {
-            (true, true) => {}
-            (true, false) | (false, true) => {
-                if let Some(old) = old {
-                    if matches!(&old.value, AttributeValue::Listener(_)) {
-                        to.remove_event_listener(&old.name[2..], id);
-                    } else {
-                        to.set_attribute(old.name, old.namespace, &AttributeValue::None, id);
-                    }
-                }
-                if let Some(new) = new {
-                    self.write_attribute(path, new, id, mount, dom, to);
-                } else {
-                    self.write_static_attribute_fallback(path, key, id, to);
-                }
-            }
-            (false, false) if changed => {
-                if let Some(new) = new {
-                    self.write_attribute(path, new, id, mount, dom, to);
-                } else if !self.write_static_attribute_fallback(path, key, id, to) {
-                    to.set_attribute(key.0, key.1, &AttributeValue::None, id);
-                }
-            }
-            (false, false) => {}
+        let old_listener = matches!(old.map(|a| &a.value), Some(AttributeValue::Listener(_)));
+        let new_listener = matches!(new.map(|a| &a.value), Some(AttributeValue::Listener(_)));
+
+        // Listener-to-listener: events dispatch by path and the handler in the vdom is already current.
+        if old_listener && new_listener {
+            return;
+        }
+
+        let value_changed = old.map(|a| &a.value) != new.map(|a| &a.value);
+        let volatile = old.is_some_and(|a| a.volatile) || new.is_some_and(|a| a.volatile);
+        // If the value didn't change and neither side is volatile, then there's no need to update the attribute.
+        if !value_changed && !volatile {
+            return;
+        }
+
+        // Clear the old slot when the upcoming write won't naturally overwrite it: listeners
+        // are torn down explicitly, and installing a listener doesn't clear a prior attribute.
+        match (old_listener, new_listener, old) {
+            // This used to be a listener but no longer is, so remove the old listener.
+            (true, _, Some(old)) => to.remove_event_listener(&old.name[2..], id),
+            // This used to be a value but is now a listener, so clear the old value that won't be overwritten by the new listener.
+            (false, true, Some(_)) => to.set_attribute(key.0, key.1, &AttributeValue::None, id),
+            _ => {}
+        }
+
+        // Write the new value, or restore the static template attribute, or clear the DOM
+        // attribute. A removed listener has nothing attribute-shaped left to clear.
+        if let Some(new) = new {
+            self.write_attribute(path, new, id, mount, dom, to);
+        } else if !old_listener {
+            self.remove_attribute_or_write_fallback(path, key, id, to)
         }
     }
 
+    /// Get the identity key for an attribute
     fn attribute_key(attribute: &Attribute) -> AttributeKey {
         (attribute.name, attribute.namespace)
     }
 
+    /// Compare two attributes by their key for sorting and merging purposes.
     fn compare_attribute_keys(left: &Attribute, right: &Attribute) -> Ordering {
         Self::attribute_key(left).cmp(&Self::attribute_key(right))
     }
@@ -233,27 +232,27 @@ impl VNode {
         start..end
     }
 
-    /// Restore the static template attribute that was shadowed by a dynamic attribute.
+    /// Restore the static template attribute that was shadowed by a dynamic attribute or clear the attribute.
     ///
     /// This is needed when an attribute from a spread disappears. The template load already wrote
     /// the static value during creation, but the dynamic attribute may have overwritten or removed
     /// it on a previous render.
-    fn write_static_attribute_fallback(
+    fn remove_attribute_or_write_fallback(
         &self,
         path: &'static [u8],
         key: AttributeKey,
         id: ElementId,
         to: &mut impl WriteMutations,
-    ) -> bool {
+    ) {
         if let Some(value) = self.static_template_attribute_value(path, key) {
             let value = AttributeValue::Text(value.to_string());
             to.set_attribute(key.0, key.1, &value, id);
-            true
         } else {
-            false
+            to.set_attribute(key.0, key.1, &AttributeValue::None, id);
         }
     }
 
+    /// Find the static template attribute value for a given key, if it exists.
     fn static_template_attribute_value(
         &self,
         path: &'static [u8],
