@@ -26,8 +26,6 @@ use crate::{
     innerlude::{ElementPath, ElementRef},
 };
 
-use super::sorted_ranges::SortedRanges;
-
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
 /// changes do.
 type AttributeKey = (&'static str, Option<&'static str>);
@@ -98,25 +96,24 @@ impl VNode {
         to: &mut impl WriteMutations,
     ) {
         let sort_by = Self::compare_attribute_keys;
-        let sorted_from = SortedRanges::new(
+        let mut from_iter = iter_sorted_last_wins(
             self.dynamic_attrs[attr_group.clone()]
                 .iter()
                 .map(|attributes| attributes.as_ref()),
             old_ranges,
-        );
-        let sorted_to = SortedRanges::new(
+            old_offsets,
+            sort_by,
+        )
+        .peekable();
+        let mut to_iter = iter_sorted_last_wins(
             new.dynamic_attrs[attr_group]
                 .iter()
                 .map(|attributes| attributes.as_ref()),
             new_ranges,
-        );
-
-        let mut from_iter = sorted_from
-            .iter_sorted_last_wins(old_offsets, sort_by)
-            .peekable();
-        let mut to_iter = sorted_to
-            .iter_sorted_last_wins(new_offsets, sort_by)
-            .peekable();
+            new_offsets,
+            sort_by,
+        )
+        .peekable();
 
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
             self.diff_dynamic_attribute(path, key, id, mount, old, new, dom, to);
@@ -322,4 +319,115 @@ impl VNode {
             }
         }
     }
+}
+
+/// K-way merge over attribute slots that are each individually sorted by their key.
+///
+/// Every dynamic attribute slot is required to be sorted by `(name, namespace)`:
+/// - named attributes occupy a slot of length 1 (trivially sorted), and
+/// - spread attributes are user-provided lists whose sortedness is checked in `VNode::new` under
+///   `debug_assertions`.
+///
+/// Duplicate keys across or within slots collapse to the last occurrence in iteration order,
+/// which matches the "later write wins" semantics of RSX source order.
+fn iter_sorted_last_wins<'items, 'scratch, T, F>(
+    slots: impl IntoIterator<Item = &'items [T]>,
+    ranges: &'scratch mut Vec<&'items [T]>,
+    offsets: &'scratch mut Vec<usize>,
+    sort_by: F,
+) -> SortedRangeIter<'items, 'scratch, T, F>
+where
+    F: Fn(&T, &T) -> Ordering + Copy,
+{
+    ranges.clear();
+    ranges.extend(slots);
+    offsets.clear();
+    offsets.resize(ranges.len(), 0);
+    SortedRangeIter {
+        ranges,
+        offsets,
+        sort_by,
+    }
+}
+
+struct SortedRangeIter<'items, 'scratch, T, F> {
+    ranges: &'scratch Vec<&'items [T]>,
+    offsets: &'scratch mut Vec<usize>,
+    sort_by: F,
+}
+
+impl<'items, T, F> Iterator for SortedRangeIter<'items, '_, T, F>
+where
+    F: Fn(&T, &T) -> Ordering + Copy,
+{
+    type Item = &'items T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut min_value = None;
+
+        // Find the smallest key currently visible across every range.
+        for (range, offset) in self.ranges.iter().zip(self.offsets.iter()) {
+            if let Some(item) = range.get(*offset) {
+                match min_value.map(|min_value| (self.sort_by)(item, min_value)) {
+                    None | Some(Ordering::Less) => min_value = Some(item),
+                    Some(Ordering::Equal | Ordering::Greater) => {}
+                }
+            }
+        }
+
+        let min_value = min_value?;
+        let mut last = None;
+
+        // Drain that key from every matching range. Later ranges come later in RSX source order,
+        // so the final item we see is the effective last-write-wins value.
+        for (range_idx, range) in self.ranges.iter().enumerate() {
+            while let Some(item) = range.get(self.offsets[range_idx]) {
+                if !matches!((self.sort_by)(item, min_value), Ordering::Equal) {
+                    break;
+                }
+                last = Some(item);
+                self.offsets[range_idx] += 1;
+            }
+        }
+
+        last
+    }
+}
+
+#[test]
+fn test_iter_sorted_last_wins() {
+    #[derive(Debug, PartialEq)]
+    struct Item {
+        value: i32,
+        id: usize,
+    }
+    impl Item {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.value.cmp(&other.value)
+        }
+    }
+    // Two sorted slots that share keys. The slot listed second wins on duplicates.
+    let slot_a = [
+        Item { value: 1, id: 0 },
+        Item { value: 2, id: 1 },
+        Item { value: 3, id: 2 },
+    ];
+    let slot_b = [
+        Item { value: 1, id: 5 },
+        Item { value: 2, id: 3 },
+        Item { value: 4, id: 4 },
+    ];
+    let mut ranges = Vec::new();
+    let mut offsets = Vec::new();
+    let mut iter = iter_sorted_last_wins(
+        [slot_a.as_slice(), slot_b.as_slice()],
+        &mut ranges,
+        &mut offsets,
+        Item::cmp,
+    );
+    assert_eq!(*iter.next().unwrap(), Item { value: 1, id: 5 });
+    assert_eq!(*iter.next().unwrap(), Item { value: 2, id: 3 });
+    assert_eq!(*iter.next().unwrap(), Item { value: 3, id: 2 });
+    assert_eq!(*iter.next().unwrap(), Item { value: 4, id: 4 });
+    assert!(iter.next().is_none());
 }

@@ -21,7 +21,6 @@ mod attributes;
 mod component;
 mod iterator;
 mod node;
-mod sorted_ranges;
 
 impl VirtualDom {
     pub(crate) fn create_children(
