@@ -43,6 +43,10 @@ env:
   CARGO_TERM_COLOR: always
   FUZZ_DIR: packages/fuzz/fuzz
   FUZZ_TARGET: vdom_ops
+  # Directory the coverage report and PR comment are scoped to. The fuzz
+  # target exercises core's diffing algorithm, so the meaningful number is
+  # how much of that algorithm got executed.
+  FUZZ_COVERAGE_SOURCES: packages/core/src/diff
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2025-10-05
   # `cargo fuzz run` (smoke test) and `cargo fuzz coverage` both
@@ -138,14 +142,14 @@ jobs:
           "$llvm_cov" report \
             --instr-profile="$coverage_profile" \
             "$coverage_binary" \
-            --sources packages/fuzz/src \
+            --sources "$FUZZ_COVERAGE_SOURCES" \
             | tee "$coverage_report"
 
           "$llvm_cov" export \
             --format=lcov \
             --instr-profile="$coverage_profile" \
             "$coverage_binary" \
-            --sources packages/fuzz/src \
+            --sources "$FUZZ_COVERAGE_SOURCES" \
             > "$coverage_lcov"
 
           test -s "$coverage_lcov"
@@ -177,7 +181,7 @@ jobs:
 
           comment = f"""## Dioxus VDOM fuzz coverage
 
-          Coverage generated from `cargo fuzz coverage` for `packages/fuzz/src` after the `{os.environ["FUZZ_TARGET"]}` smoke corpus run.
+          Coverage of `{os.environ["FUZZ_COVERAGE_SOURCES"]}` from `cargo fuzz coverage` for the `{os.environ["FUZZ_TARGET"]}` smoke corpus run.
 
           | Metric | Coverage |
           | --- | ---: |
