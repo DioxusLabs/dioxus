@@ -345,43 +345,15 @@ fn MyComponent() -> Element {{
 
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
-        // If there are no suspended futures, we know the scope is not suspended and we can skip context checks.
+        // If there are no suspended futures, we know the scope is not  and we can skip context checks
         if self.suspended_tasks.get() == 0 {
             return true;
         }
 
+        // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
-        let mut current = Some(scope_id);
-        let mut placeholder_boundaries = Vec::new();
-
-        while let Some(id) = current {
-            let Some(scope) = scopes.get(id.0).and_then(|scope| scope.as_ref()) else {
-                return false;
-            };
-            let suspense_location = scope.suspense_location();
-
-            match suspense_location {
-                SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended() => {
-                    return false;
-                }
-                SuspenseLocation::InSuspensePlaceholder(suspense) => {
-                    placeholder_boundaries.push(suspense);
-                }
-                SuspenseLocation::SuspenseBoundary(suspense) => {
-                    let rendering_placeholder = placeholder_boundaries
-                        .iter()
-                        .any(|placeholder| placeholder == &suspense);
-                    if id != scope_id && suspense.is_suspended() && !rendering_placeholder {
-                        return false;
-                    }
-                }
-                _ => {}
-            }
-
-            current = scope.parent_id();
-        }
-
-        true
+        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**

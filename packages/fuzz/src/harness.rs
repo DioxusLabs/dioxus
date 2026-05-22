@@ -674,7 +674,6 @@ fn check_lifecycle_matches_fresh_snapshot(
         &model,
         &retained_suspended,
         &model_suspended,
-        &context.lifecycle.debug_snapshot(LifecycleRun::Incremental),
     ))
 }
 
@@ -949,10 +948,9 @@ fn lifecycle_mismatch_error(
     model: &LifecycleSnapshot,
     retained_suspended: &LifecycleSnapshot,
     model_suspended: &LifecycleSnapshot,
-    incremental_contexts: &str,
 ) -> String {
     format!(
-        "incremental component lifecycle set is outside fresh/model bounds\nincremental:\n{incremental:#?}\nvisible fresh:\n{fresh:#?}\nmodel upper bound:\n{model:#?}\nretained suspended incremental:\n{retained_suspended:#?}\nmodel suspended subtree:\n{model_suspended:#?}\nincremental contexts:\n{incremental_contexts}"
+        "incremental component lifecycle set is outside fresh/model bounds\nincremental:\n{incremental:#?}\nvisible fresh:\n{fresh:#?}\nmodel upper bound:\n{model:#?}\nretained suspended incremental:\n{retained_suspended:#?}\nmodel suspended subtree:\n{model_suspended:#?}"
     )
 }
 

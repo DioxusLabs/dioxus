@@ -164,22 +164,6 @@ impl LifecycleState {
         out
     }
 
-    pub(crate) fn debug_snapshot(&self, run: LifecycleRun) -> String {
-        let mut out = String::new();
-        for ((live_run, key, context), count) in self.inner.live_components.borrow().iter() {
-            if *live_run == run {
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(&format!(
-                    "{key:?} x{count} in {:?}",
-                    context.suspense_ancestors
-                ));
-            }
-        }
-        out
-    }
-
     fn increment(&self, run: Option<LifecycleRun>, key: LifecycleKey, context: &LifecycleContext) {
         if let Some(run) = run {
             *self
