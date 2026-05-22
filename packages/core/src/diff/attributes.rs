@@ -39,9 +39,6 @@ impl VNode {
     ) {
         let mount_id = new.mount.get();
         let attr_paths = self.template.attr_paths();
-        if attr_paths.is_empty() {
-            return;
-        }
 
         let mut idx = 0;
         let mut old_ranges = Vec::new();
