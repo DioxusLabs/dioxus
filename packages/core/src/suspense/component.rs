@@ -399,6 +399,9 @@ impl SuspenseBoundaryProps {
                     // and we want to observe that before committing to a fallback render.
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
                         suspended_nodes.diff_node(&new_suspended_nodes, dom, to.as_deref_mut());
+                        while let Some(order) = dom.pop_dirty_descendant_of(scope_id) {
+                            dom.run_and_diff_scope(to.as_deref_mut(), order.id);
+                        }
                     });
 
                     if !suspense_context.suspended_futures().is_empty() {
@@ -433,13 +436,53 @@ impl SuspenseBoundaryProps {
                         mark_suspense_resolved(&suspense_context, dom, scope_id);
                     }
                 }
-                // We have no suspended nodes, and we are not suspended. Just diff the children like normal
+                // We have no suspended nodes, and we are not suspended at diff start.
+                // Diff the children normally — but a descendant scope may invoke
+                // `suspend(task)?` during diff. If that happens we need to
+                // retroactively switch this boundary to its fallback so the user
+                // never sees a half-rendered tree.
                 (None, false) => {
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                        last_rendered_node.diff_node(&children, dom, to);
+                        last_rendered_node.diff_node(&children, dom, to.as_deref_mut());
+                        // diff_node queues descendant component scopes for
+                        // diffing instead of running them inline. Flush that
+                        // queue here so any `suspend(task)?` they emit lands in
+                        // `suspense_context.suspended_futures()` before we
+                        // decide whether to commit or fall back.
+                        while let Some(order) = dom.pop_dirty_descendant_of(scope_id) {
+                            dom.run_and_diff_scope(to.as_deref_mut(), order.id);
+                        }
                     });
 
-                    set_rendered_children(dom, scope_id, children);
+                    if suspense_context.suspended_futures().is_empty() {
+                        set_rendered_children(dom, scope_id, children);
+                    } else {
+                        // A descendant suspended during diff. Move the just-diffed
+                        // children into the background and show the fallback.
+                        let new_children: VNode = children.as_vnode().clone();
+                        let new_placeholder =
+                            LastRenderedNode::new(fallback.call(suspense_context.clone()));
+
+                        let parent = dom.get_mounted_parent(new_children.mount.get());
+
+                        suspense_context.in_suspense_placeholder(&dom.runtime(), || {
+                            children.move_node_to_background(
+                                std::slice::from_ref(&new_placeholder),
+                                parent,
+                                dom,
+                                to.as_deref_mut(),
+                            );
+                        });
+
+                        dom.set_fiber_mode(new_children.mount.get(), FiberMode::Background);
+
+                        let branch = SuspenseBranch::new(new_children);
+                        store_suspended_branch(dom, scope_id, &branch);
+                        dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
+                        suspense_context.set_suspended_branch(branch);
+
+                        un_resolve_suspense(dom, scope_id);
+                    }
                 }
                 // We have no suspended nodes, but we just became suspended. Move the children to the background
                 (None, true) => {

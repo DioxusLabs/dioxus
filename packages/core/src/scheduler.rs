@@ -161,6 +161,30 @@ impl VirtualDom {
         self.dirty_fibers.insert(order);
     }
 
+    /// Pop the smallest-height dirty fiber that is a strict descendant of
+    /// `ancestor`. Suspense boundaries use this to flush queued child renders
+    /// inline, so newly suspended futures are visible before the boundary
+    /// commits its diff.
+    pub(crate) fn pop_dirty_descendant_of(&mut self, ancestor: ScopeId) -> Option<ScopeOrder> {
+        let next = self
+            .dirty_fibers
+            .iter()
+            .copied()
+            .filter(|order| {
+                order.id != ancestor
+                    && self.scope_has_live_parent_chain(order.id)
+                    && self.runtime.is_descendant_of(order.id, ancestor)
+            })
+            .min_by(|left, right| {
+                left.height
+                    .cmp(&right.height)
+                    .then(left.priority.cmp(&right.priority))
+                    .then(left.id.cmp(&right.id))
+            })?;
+        self.dirty_fibers.remove(&next);
+        Some(next)
+    }
+
     /// Check if any scopes are queued for diffing.
     pub fn has_dirty_scopes(&self) -> bool {
         self.has_dirty_fibers()
