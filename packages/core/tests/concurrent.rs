@@ -78,11 +78,10 @@ fn drive<F: Future>(fut: F) -> F::Output {
 #[tokio::test]
 async fn concurrent_render_writes_to_mutation_queue() {
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Transition);
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     assert_eq!(stats.generation, 1);
     assert_eq!(stats.priority, UpdatePriority::Transition);
@@ -93,11 +92,10 @@ async fn concurrent_render_writes_to_mutation_queue() {
 #[tokio::test]
 async fn concurrent_render_commits_each_work_unit() {
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::SyncInput);
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     assert_eq!(stats.priority, UpdatePriority::SyncInput);
     assert_eq!(stats.work_count, 1);
@@ -127,7 +125,7 @@ fn render_immediate_drains_deferred_child_prop_work() {
     IMMEDIATE_CHILD_RENDERS.with_borrow_mut(Vec::clear);
 
     let mut dom = VirtualDom::new(immediate_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     IMMEDIATE_CHILD_RENDERS.with_borrow_mut(Vec::clear);
 
     {
@@ -138,8 +136,7 @@ fn render_immediate_drains_deferred_child_prop_work() {
         });
     }
 
-    let mut mutations = Mutations::default();
-    dom.render_immediate(&mut mutations);
+    let mut mutations = dom.render_immediate_to_vec();
 
     assert_eq!(IMMEDIATE_CHILD_RENDERS.with_borrow(Clone::clone), vec![1]);
     assert!(
@@ -176,16 +173,16 @@ async fn scheduler_commits_before_new_urgent_work() {
     CHILD_A_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(preemption_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
 
     dom.mark_dirty_with_priority(ScopeId(4), UpdatePriority::Transition);
     dom.mark_dirty_with_priority(ScopeId(5), UpdatePriority::Transition);
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
     {
-        let mut fut = pin!(dom.render_concurrent(&mut mutations));
+        let mut fut = pin!(dom.render_concurrent());
         // Advance one work unit. With both scopes dirty at Transition, the first
         // child renders at Transition; we then inject a SyncInput-priority update
         // and expect the scheduler to commit and serve the urgent work next.
@@ -216,6 +213,9 @@ async fn scheduler_commits_before_new_urgent_work() {
             .any(|(_, p)| *p == UpdatePriority::SyncInput),
         "urgent SyncInput work should preempt the transition: {trace:?}"
     );
+    let mutations = dom
+        .take_render_target::<Mutations>(RenderTargetId::ROOT)
+        .expect("ROOT writer was registered before render_concurrent");
     assert!(
         !mutations.edits.is_empty(),
         "renderer must see committed mutations"
@@ -231,14 +231,13 @@ async fn higher_priority_scope_render_preserves_lower_priority_lane() {
     }
 
     let mut dom = VirtualDom::new(priority_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Transition);
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::ContinuousInput);
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    dom.render_concurrent(&mut mutations).await;
+    let (_, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     let trace = take_priority_trace();
     assert_eq!(
@@ -265,14 +264,13 @@ async fn dirty_parent_runs_before_more_urgent_child() {
     }
 
     let mut dom = VirtualDom::new(parent_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Transition);
     dom.mark_dirty_with_priority(ScopeId(4), UpdatePriority::SyncInput);
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    dom.render_concurrent(&mut mutations).await;
+    let (_, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     let trace = take_priority_trace();
     assert_eq!(
@@ -315,7 +313,7 @@ async fn memoized_dirty_child_is_not_promoted_by_parent_lane() {
     PARENT_TICK_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(parent_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
 
     PARENT_ROUND_SIGNAL.with_borrow(|slot| {
@@ -327,8 +325,8 @@ async fn memoized_dirty_child_is_not_promoted_by_parent_lane() {
     });
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    let mut fut = pin!(dom.render_concurrent(&mut mutations));
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+    let mut fut = pin!(dom.render_concurrent());
 
     // First step: parent renders at Transition, queueing memoized child prop
     // diffs at the Transition lane. Now inject a ContinuousInput tick.
@@ -417,7 +415,7 @@ async fn deferred_child_props_survive_parent_continuous_commit() {
     PARENT_TICK_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(parent_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
 
     PARENT_TICK_SIGNAL.with_borrow(|slot| {
@@ -437,8 +435,7 @@ async fn deferred_child_props_survive_parent_continuous_commit() {
     });
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    dom.render_concurrent(&mut mutations).await;
+    let (_, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     let trace = take_priority_trace();
     assert_eq!(
@@ -519,15 +516,15 @@ async fn recursive_transition_tree_progresses_under_continuous_root_updates() {
     PARENT_TICK_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(recursive_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
     let expected_leaf_updates = 3_usize.pow(DEPTH as u32);
 
     set_round(&runtime, UpdatePriority::Transition);
 
-    let mut mutations = Mutations::default();
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
     {
-        let mut fut = pin!(dom.render_concurrent(&mut mutations));
+        let mut fut = pin!(dom.render_concurrent());
         let mut ticks = 0;
         loop {
             match step(&mut fut) {
@@ -542,6 +539,9 @@ async fn recursive_transition_tree_progresses_under_continuous_root_updates() {
         }
     }
 
+    let mutations = dom
+        .take_render_target::<Mutations>(RenderTargetId::ROOT)
+        .expect("ROOT writer was registered before render_concurrent");
     let saw_metric = mutations.edits.iter().any(
         |mutation| matches!(mutation, Mutation::SetText { value, .. } if value == "metric:1"),
     );
@@ -618,14 +618,14 @@ async fn demo_sized_recursive_transition_reaches_visible_leaf_early() {
     PARENT_TICK_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(triangle_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
 
     set_seconds(&runtime);
 
-    let mut mutations = Mutations::default();
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
     {
-        let mut fut = pin!(dom.render_concurrent(&mut mutations));
+        let mut fut = pin!(dom.render_concurrent());
         let mut ticks = 0;
         loop {
             match step(&mut fut) {
@@ -640,6 +640,9 @@ async fn demo_sized_recursive_transition_reaches_visible_leaf_early() {
         }
     }
 
+    let mutations = dom
+        .take_render_target::<Mutations>(RenderTargetId::ROOT)
+        .expect("ROOT writer was registered before render_concurrent");
     let saw_leaf_update = mutations.edits.iter().any(
         |mutation| matches!(mutation, Mutation::SetText { value, .. } if value == "dot:1"),
     );
@@ -708,14 +711,14 @@ async fn host_yield_lets_continuous_input_preempt_active_transition_lane() {
     PARENT_TICK_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(recursive_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
     let runtime = dom.runtime();
 
     set_round(&runtime);
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    let mut fut = pin!(dom.render_concurrent(&mut mutations));
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+    let mut fut = pin!(dom.render_concurrent());
     let mut ticks = 0;
     loop {
         match step(&mut fut) {
@@ -765,7 +768,7 @@ async fn child_prop_updates_are_scheduled_as_separate_fibers() {
     PARENT_ROUND_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(parent_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     PARENT_ROUND_SIGNAL.with_borrow(|slot| {
         let mut round = slot.expect("parent signal should be registered");
@@ -775,8 +778,7 @@ async fn child_prop_updates_are_scheduled_as_separate_fibers() {
         });
     });
 
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     assert_eq!(stats.priority, UpdatePriority::Transition);
     assert_eq!(stats.work_count, 44);
@@ -788,23 +790,22 @@ async fn child_prop_updates_are_scheduled_as_separate_fibers() {
 #[tokio::test]
 async fn concurrent_render_without_work_does_not_commit() {
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
     assert_eq!(stats.generation, 0);
     assert_eq!(stats.priority, UpdatePriority::Idle);
     assert_eq!(stats.commit_count, 0);
     assert!(mutations.edits.is_empty());
 
     dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Default);
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let stats = dom.render_concurrent_into(&mut mutations).await;
     assert_eq!(stats.generation, 1);
     assert_eq!(stats.commit_count, 1);
     assert!(!mutations.edits.is_empty());
 
     mutations.edits.clear();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let stats = dom.render_concurrent_into(&mut mutations).await;
     assert_eq!(stats.generation, 0);
     assert_eq!(stats.commit_count, 0);
     assert!(mutations.edits.is_empty());
@@ -825,8 +826,7 @@ async fn event_priority_flows_into_concurrent_render() {
     }
 
     let mut dom = VirtualDom::new(event_app);
-    let mut mutations = Mutations::default();
-    dom.rebuild(&mut mutations);
+    let mut mutations = dom.rebuild_to_vec();
     let button = mutations
         .edits
         .iter()
@@ -838,8 +838,7 @@ async fn event_priority_flows_into_concurrent_render() {
 
     dom.runtime().handle_event("click", click_event(), button);
 
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
     assert_eq!(stats.priority, UpdatePriority::SyncInput);
     assert!(!mutations.edits.is_empty());
 }
@@ -870,15 +869,15 @@ async fn urgent_work_preempts_resumed_transition_diff() {
     CHILD_A_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(preemption_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId(4), UpdatePriority::Transition);
     dom.mark_dirty_with_priority(ScopeId(5), UpdatePriority::Transition);
 
     let runtime = dom.runtime();
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    let mut fut = pin!(dom.render_concurrent(&mut mutations));
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+    let mut fut = pin!(dom.render_concurrent());
 
     // After the first transition work unit commits, inject the urgent update.
     assert!(matches!(step(&mut fut), Poll::Pending));
@@ -937,7 +936,7 @@ async fn sync_work_commits_before_resuming_lower_priority_work() {
     CHILD_A_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(preemption_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId(5), UpdatePriority::Transition);
 
@@ -950,8 +949,7 @@ async fn sync_work_commits_before_resuming_lower_priority_work() {
     });
 
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     let priorities: Vec<UpdatePriority> = take_priority_trace()
         .into_iter()
@@ -987,7 +985,7 @@ async fn large_child_list_prop_update_resumes_without_stale_mounts() {
     PARENT_ROUND_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(parent_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     PARENT_ROUND_SIGNAL.with_borrow(|slot| {
         let mut round = slot.expect("parent signal should be registered");
@@ -997,8 +995,7 @@ async fn large_child_list_prop_update_resumes_without_stale_mounts() {
         });
     });
 
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     assert!(stats.work_count > 4);
     assert!(stats.yield_count > 4);
@@ -1021,14 +1018,14 @@ async fn work_queued_by_final_commit_is_rendered_before_return() {
     CHILD_A_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(final_commit_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     dom.mark_dirty_with_priority(ScopeId(4), UpdatePriority::Transition);
 
     let runtime = dom.runtime();
     reset_priority_trace();
-    let mut mutations = Mutations::default();
-    let mut fut = pin!(dom.render_concurrent(&mut mutations));
+    dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+    let mut fut = pin!(dom.render_concurrent());
 
     // First step renders the transition work. We then queue urgent work; the
     // future must not return until that work has been rendered too.
@@ -1074,8 +1071,8 @@ async fn effects_run_after_final_concurrent_commit() {
     EFFECT_VALUES.with_borrow_mut(Vec::clear);
 
     let mut dom = VirtualDom::new(effect_app);
-    dom.rebuild(&mut Mutations::default());
-    dom.render_immediate(&mut Mutations::default());
+    dom.rebuild();
+    dom.render_immediate();
     EFFECT_VALUES.with_borrow_mut(Vec::clear);
 
     {
@@ -1086,8 +1083,7 @@ async fn effects_run_after_final_concurrent_commit() {
         });
     }
 
-    let mut mutations = Mutations::default();
-    let stats = dom.render_concurrent(&mut mutations).await;
+    let (stats, mut mutations) = dom.render_concurrent_with(Mutations::default()).await;
 
     assert!(stats.commit_count >= 1);
     assert_eq!(EFFECT_VALUES.with_borrow(Clone::clone), vec![1]);
@@ -1170,6 +1166,8 @@ async fn effects_wait_for_buffered_commit() {
             self.0 = true;
             EFFECT_COMMIT_SEEN.set(true);
         }
+        fn commit(&mut self) {}
+        fn discard(&mut self) {}
     }
 
     fn effect_app() -> Element {
@@ -1190,8 +1188,8 @@ async fn effects_wait_for_buffered_commit() {
     EFFECT_VALUES.with_borrow_mut(Vec::clear);
 
     let mut dom = VirtualDom::new(effect_app);
-    dom.rebuild(&mut Mutations::default());
-    dom.render_immediate(&mut Mutations::default());
+    dom.rebuild();
+    dom.render_immediate();
     EFFECT_VALUES.with_borrow_mut(Vec::clear);
     EFFECT_COMMIT_SEEN.set(false);
 
@@ -1204,7 +1202,7 @@ async fn effects_wait_for_buffered_commit() {
     }
 
     let mut observer = CommitObserver(false);
-    dom.render_concurrent(&mut observer).await;
+    dom.render_concurrent_into(&mut observer).await;
 
     assert!(
         observer.0,
@@ -1237,7 +1235,7 @@ async fn dropping_render_concurrent_keeps_renderer_in_sync() {
     PARENT_ROUND_SIGNAL.with_borrow_mut(|slot| *slot = None);
 
     let mut dom = VirtualDom::new(list_app);
-    dom.rebuild(&mut Mutations::default());
+    dom.rebuild();
 
     PARENT_ROUND_SIGNAL.with_borrow(|slot| {
         let mut round = slot.expect("parent signal should be registered");
@@ -1250,7 +1248,7 @@ async fn dropping_render_concurrent_keeps_renderer_in_sync() {
     // Step the future a handful of times, then drop it before it finishes.
     let mut partial = Mutations::default();
     {
-        let mut fut = pin!(dom.render_concurrent(&mut partial));
+        let mut fut = pin!(dom.render_concurrent_into(&mut partial));
         for _ in 0..3 {
             assert!(matches!(step(&mut fut), Poll::Pending));
         }
@@ -1267,10 +1265,10 @@ async fn dropping_render_concurrent_keeps_renderer_in_sync() {
     // the remaining dirty work, and the union of both writers' mutations
     // should match what a single uninterrupted render would have produced.
     let mut rest = Mutations::default();
-    dom.render_concurrent(&mut rest).await;
+    dom.render_concurrent_into(&mut rest).await;
 
     let mut reference_dom = VirtualDom::new(list_app);
-    reference_dom.rebuild(&mut Mutations::default());
+    reference_dom.rebuild();
     PARENT_ROUND_SIGNAL.with_borrow(|slot| {
         let mut round = slot.expect("parent signal should be registered");
         let _runtime = RuntimeGuard::new(reference_dom.runtime());
@@ -1279,7 +1277,7 @@ async fn dropping_render_concurrent_keeps_renderer_in_sync() {
         });
     });
     let mut reference = Mutations::default();
-    reference_dom.render_concurrent(&mut reference).await;
+    reference_dom.render_concurrent_into(&mut reference).await;
 
     let resumed_edits = partial.edits.len() + rest.edits.len();
     assert_eq!(

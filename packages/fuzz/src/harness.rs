@@ -51,7 +51,7 @@ impl Harness {
         )));
         let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
         context.lifecycle.with_run(LifecycleRun::Incremental, || {
-            vdom.borrow_mut().rebuild(&mut *incremental.borrow_mut())
+            vdom.borrow_mut().rebuild_into(&mut *incremental.borrow_mut())
         });
         incremental.borrow().assert_stack_clean();
         let state = Self {
@@ -331,6 +331,14 @@ impl WriteMutations for TargetedRendererOracle {
         self.record_mutation(MutationTrace::PopRoot);
         self.current_renderer().pop_root()
     }
+
+    fn commit(&mut self) {
+        self.renderer.commit();
+    }
+
+    fn discard(&mut self) {
+        self.renderer.discard();
+    }
 }
 
 const TRACE_CONTEXT: usize = 6;
@@ -588,7 +596,7 @@ fn render_once(state: &mut Harness, assert_lifecycle_matches_fresh: bool) -> Res
             state
                 .vdom
                 .borrow_mut()
-                .render_immediate(&mut *state.incremental.borrow_mut())
+                .render_immediate_into(&mut *state.incremental.borrow_mut())
         });
     check_incremental_state(state, assert_lifecycle_matches_fresh)
 }
@@ -643,7 +651,7 @@ fn build_fresh_check(
     context.without_suspense_ready_registration(|| {
         context
             .lifecycle
-            .with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild(&mut renderer));
+            .with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild_into(&mut renderer));
     });
     renderer.check_stack_clean()?;
 

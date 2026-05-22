@@ -1,233 +1,29 @@
 use super::{FiberCommit, FiberStep, RenderStats, UpdatePriority};
-use crate::arena::ElementId;
-use crate::runtime::{Runtime, RuntimeGuard};
-use crate::{AttributeValue, RenderTargetId, Template, VirtualDom, WriteMutations};
-use std::rc::Rc;
+use crate::mutations::{DiffDispatch, RenderTargetWriter};
+use crate::runtime::RuntimeGuard;
+use crate::{RenderTargetId, VirtualDom};
+use std::collections::BTreeMap;
 
 /// Low-level cooperative render driver.
 ///
-/// The driver advances virtual-DOM work one unit at a time into an internal
-/// mutation buffer. Call [`Self::commit`] to replay buffered mutations into a
-/// renderer and make the completed work visible.
+/// The driver advances virtual-DOM work one unit at a time. Each work unit
+/// writes directly into the renderer-supplied writers held in
+/// `VirtualDom::targets` — the dispatcher routes calls by the runtime's active
+/// `RenderTargetId`. Call [`Self::commit`] to mark accumulated writes durable
+/// (each registered writer's `commit` runs); commit can be skipped and
+/// [`Self::discard`] called instead to roll a fiber's work back.
 pub(crate) struct FiberDriver<'a> {
     dom: &'a mut VirtualDom,
-    buffer: BufferedMutations,
+    /// Owned for the lifetime of this driver; restored to `dom.targets` on
+    /// drop. Moved out at construction so the diff hot path can mutably borrow
+    /// the registry without colliding with `&mut self.dom`.
+    targets: BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+    /// Mutations recorded since the last commit. Used as the `mutation_count`
+    /// field on `FiberCommit` and to gate `pending_commit`.
+    pending_mutations: usize,
     job: RenderJob,
     must_commit: Option<FiberCommit>,
     finished: bool,
-}
-
-#[derive(Debug)]
-struct BufferedMutationRecord {
-    target_id: RenderTargetId,
-    op: BufferedMutation,
-}
-
-#[derive(Debug)]
-enum BufferedMutation {
-    AppendChildren {
-        id: ElementId,
-        m: usize,
-    },
-    AssignId {
-        path: &'static [u8],
-        id: ElementId,
-    },
-    CreateTextNode {
-        value: String,
-        id: ElementId,
-    },
-    LoadTemplate {
-        template: Template,
-        index: usize,
-        id: ElementId,
-    },
-    ReplaceWith {
-        id: ElementId,
-        m: usize,
-    },
-    InsertChildrenAtPath {
-        path: &'static [u8],
-        m: usize,
-    },
-    InsertAfter {
-        id: ElementId,
-        m: usize,
-    },
-    InsertBefore {
-        id: ElementId,
-        m: usize,
-    },
-    SetAttribute {
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: AttributeValue,
-        id: ElementId,
-    },
-    SetText {
-        value: String,
-        id: ElementId,
-    },
-    NewEventListener {
-        name: &'static str,
-        id: ElementId,
-    },
-    RemoveEventListener {
-        name: &'static str,
-        id: ElementId,
-    },
-    Remove {
-        id: ElementId,
-    },
-    PushRoot {
-        id: ElementId,
-    },
-    PopRoot,
-}
-
-impl BufferedMutation {
-    fn replay(self, to: &mut impl WriteMutations) {
-        match self {
-            Self::AppendChildren { id, m } => to.append_children(id, m),
-            Self::AssignId { path, id } => to.assign_node_id(path, id),
-            Self::CreateTextNode { value, id } => to.create_text_node(&value, id),
-            Self::LoadTemplate {
-                template,
-                index,
-                id,
-            } => to.load_template(template, index, id),
-            Self::ReplaceWith { id, m } => to.replace_node_with(id, m),
-            Self::InsertChildrenAtPath { path, m } => to.insert_children_at_path(path, m),
-            Self::InsertAfter { id, m } => to.insert_nodes_after(id, m),
-            Self::InsertBefore { id, m } => to.insert_nodes_before(id, m),
-            Self::SetAttribute {
-                name,
-                ns,
-                value,
-                id,
-            } => to.set_attribute(name, ns, &value, id),
-            Self::SetText { value, id } => to.set_node_text(&value, id),
-            Self::NewEventListener { name, id } => to.create_event_listener(name, id),
-            Self::RemoveEventListener { name, id } => to.remove_event_listener(name, id),
-            Self::Remove { id } => to.remove_node(id),
-            Self::PushRoot { id } => to.push_root(id),
-            Self::PopRoot => to.pop_root(),
-        }
-    }
-}
-
-struct BufferedMutations {
-    runtime: Rc<Runtime>,
-    edits: Vec<BufferedMutationRecord>,
-}
-
-impl BufferedMutations {
-    fn new(runtime: Rc<Runtime>) -> Self {
-        Self {
-            runtime,
-            edits: Vec::new(),
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.edits.len()
-    }
-
-    fn push(&mut self, op: BufferedMutation) {
-        self.edits.push(BufferedMutationRecord {
-            target_id: self.runtime.current_render_target_id(),
-            op,
-        });
-    }
-
-    fn drain_into(&mut self, to: &mut impl WriteMutations) {
-        for BufferedMutationRecord { target_id, op } in self.edits.drain(..) {
-            self.runtime.with_render_target(target_id, || op.replay(to));
-        }
-    }
-}
-
-impl WriteMutations for BufferedMutations {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.push(BufferedMutation::AppendChildren { id, m });
-    }
-
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.push(BufferedMutation::AssignId { path, id });
-    }
-
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.push(BufferedMutation::CreateTextNode {
-            value: value.to_string(),
-            id,
-        });
-    }
-
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.push(BufferedMutation::LoadTemplate {
-            template,
-            index,
-            id,
-        });
-    }
-
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.push(BufferedMutation::ReplaceWith { id, m });
-    }
-
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.push(BufferedMutation::InsertChildrenAtPath { path, m });
-    }
-
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.push(BufferedMutation::InsertAfter { id, m });
-    }
-
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.push(BufferedMutation::InsertBefore { id, m });
-    }
-
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.push(BufferedMutation::SetAttribute {
-            name,
-            ns,
-            value: value.clone(),
-            id,
-        });
-    }
-
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.push(BufferedMutation::SetText {
-            value: value.to_string(),
-            id,
-        });
-    }
-
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.push(BufferedMutation::NewEventListener { name, id });
-    }
-
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.push(BufferedMutation::RemoveEventListener { name, id });
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        self.push(BufferedMutation::Remove { id });
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        self.push(BufferedMutation::PushRoot { id });
-    }
-
-    fn pop_root(&mut self) {
-        self.push(BufferedMutation::PopRoot);
-    }
 }
 
 struct RenderJob {
@@ -277,14 +73,12 @@ impl RenderJob {
         })
     }
 
-    fn commit_buffered<M: WriteMutations>(
+    fn mark_committed(
         &mut self,
         dom: &mut VirtualDom,
-        buffer: &mut BufferedMutations,
-        to: &mut M,
+        pending_mutations: usize,
     ) -> Option<FiberCommit> {
-        let mut commit = self.pending_commit(dom, buffer.len())?;
-        buffer.drain_into(to);
+        let mut commit = self.pending_commit(dom, pending_mutations)?;
         dom.commit_generation += 1;
         self.stats.generation = dom.commit_generation;
         self.stats.commit_count += 1;
@@ -333,7 +127,11 @@ impl<'a> FiberDriver<'a> {
             };
 
             let requires_commit = work.requires_commit();
-            let priority = self.dom.render_work_into(&mut self.buffer, work);
+            let runtime = self.dom.runtime.clone();
+            let mut dispatch = DiffDispatch::new(&mut self.targets, runtime);
+            dispatch.auto_create_targets = self.dom.auto_create_targets;
+            let priority = self.dom.render_work_into(&mut dispatch, work);
+            self.pending_mutations += dispatch.mutation_count;
             self.job.record_work(priority, requires_commit);
 
             self.dom.queue_events();
@@ -350,8 +148,19 @@ impl<'a> FiberDriver<'a> {
         }
     }
 
-    pub(crate) fn commit(&mut self, to: &mut impl WriteMutations) -> Option<FiberCommit> {
-        let commit = self.job.commit_buffered(self.dom, &mut self.buffer, to)?;
+    pub(crate) fn commit(&mut self) -> Option<FiberCommit> {
+        let pending = self.pending_mutations;
+        let commit = self.job.mark_committed(self.dom, pending)?;
+        // Commit each target's writer, then drain that target's effects so
+        // effects observe DOM that already reflects this target's edits.
+        let runtime = self.dom.runtime.clone();
+        for (target_id, writer) in self.targets.iter_mut() {
+            writer.commit();
+            for effect in runtime.drain_effects_for_target(*target_id) {
+                effect.run();
+            }
+        }
+        self.pending_mutations = 0;
         self.must_commit = None;
         Some(commit)
     }
@@ -363,12 +172,15 @@ impl<'a> FiberDriver<'a> {
     }
 
     fn pending_commit(&self) -> Option<FiberCommit> {
-        self.job.pending_commit(self.dom, self.buffer.len())
+        self.job.pending_commit(self.dom, self.pending_mutations)
     }
 }
 
 impl<'a> Drop for FiberDriver<'a> {
     fn drop(&mut self) {
+        // Restore the registry to the VDom so subsequent renders see the
+        // renderer's writers.
+        self.dom.targets = std::mem::take(&mut self.targets);
         if !self.finished {
             self.dom.runtime.finish_render();
         }
@@ -377,11 +189,12 @@ impl<'a> Drop for FiberDriver<'a> {
 
 impl VirtualDom {
     pub(crate) fn fiber_driver(&mut self) -> FiberDriver<'_> {
-        let runtime = self.runtime.clone();
         self.queue_events();
+        let targets = std::mem::take(&mut self.targets);
         FiberDriver {
             dom: self,
-            buffer: BufferedMutations::new(runtime),
+            targets,
+            pending_mutations: 0,
             job: RenderJob::new(),
             must_commit: None,
             finished: false,

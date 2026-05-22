@@ -191,4 +191,8 @@ impl WriteMutations for MutationState {
     fn pop_root(&mut self) {
         self.channel.pop_root();
     }
+
+    fn commit(&mut self) {}
+
+    fn discard(&mut self) {}
 }

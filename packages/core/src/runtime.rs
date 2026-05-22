@@ -258,6 +258,47 @@ fn MyComponent() -> Element {{
         RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Real)))
     }
 
+    /// Every render target id currently tracked by the runtime, in id order
+    /// (`ROOT` first, then portal/custom ids in creation order). Used by the
+    /// per-target collector helpers on [`VirtualDom`].
+    pub fn known_render_target_ids(&self) -> Vec<RenderTargetId> {
+        self.render_targets
+            .borrow()
+            .iter()
+            .map(|(idx, _)| RenderTargetId(idx))
+            .collect()
+    }
+
+    /// Drain pending effects whose owning scope belongs to `target_id`.
+    /// Returns them in `ScopeOrder` (height-asc, id-asc), the same order they
+    /// would have come out of [`Self::pop_first_effect`].
+    pub(crate) fn drain_effects_for_target(&self, target_id: RenderTargetId) -> Vec<Effect> {
+        let mut pending = self.pending_effects.borrow_mut();
+        let mut matched = Vec::new();
+        let mut remaining = std::collections::BTreeSet::new();
+        for effect in std::mem::take(&mut *pending) {
+            let belongs = self
+                .try_get_state(effect.order.id)
+                .map(|s| s.target_id() == target_id)
+                .unwrap_or(false);
+            if belongs {
+                matched.push(effect);
+            } else {
+                remaining.insert(effect);
+            }
+        }
+        *pending = remaining;
+        matched
+    }
+
+    /// Drain every remaining effect regardless of target. Run as a final pass
+    /// after all per-target drains so orphan effects (scopes whose target is
+    /// no longer registered) still fire.
+    pub(crate) fn drain_remaining_effects(&self) -> Vec<Effect> {
+        let mut pending = self.pending_effects.borrow_mut();
+        std::mem::take(&mut *pending).into_iter().collect()
+    }
+
     /// Create a new no-op renderer target.
     ///
     /// Scopes rendered into this target can keep logical state alive, but they

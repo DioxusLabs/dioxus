@@ -61,9 +61,9 @@ async fn values_memoize_in_place() {
             _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
             _ = dom.wait_for_work() => {}
         }
-        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+        dom.render_immediate();
     }
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate();
     // As we rerun the app, the drop count should be 15 one for each render of the app component
     let drop_count = DROP_COUNT.with(|c| *c.borrow());
     assert_eq!(drop_count, 16);
@@ -102,9 +102,9 @@ fn cloning_event_handler_components_work() {
             true,
         );
         dom.runtime().handle_event("click", event, ElementId(1));
-        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+        dom.render_immediate();
     }
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate();
 }
 
 #[component]
@@ -211,9 +211,9 @@ fn cloning_read_signal_components_work() {
             true,
         );
         dom.runtime().handle_event("click", event, ElementId(1));
-        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+        dom.render_immediate();
     }
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate();
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/5222

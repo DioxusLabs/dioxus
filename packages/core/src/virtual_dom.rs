@@ -5,7 +5,7 @@
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
-    ComponentFunction, Element, Mutations, RenderTargetId, TargetedMutations,
+    ComponentFunction, Element, Mutations, RenderTargetId,
     arena::ElementId,
     innerlude::{
         ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderStats,
@@ -86,8 +86,9 @@ use tracing::instrument;
 /// }
 /// ```
 ///
-/// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] with your renderer's mutation writer
-/// to queue the initial mutations required to draw the UI.
+/// To start an app, register your renderer's writer via
+/// [`VirtualDom::insert_render_target`] and call [`VirtualDom::rebuild`] to
+/// queue the initial mutations required to draw the UI.
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
@@ -95,8 +96,11 @@ use tracing::instrument;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
-/// let mut mutations = Mutations::default();
-/// vdom.rebuild(&mut mutations);
+/// vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+/// vdom.rebuild();
+/// let mutations = vdom
+///     .take_render_target::<Mutations>(RenderTargetId::ROOT)
+///     .unwrap();
 /// assert!(!mutations.edits.is_empty());
 /// ```
 ///
@@ -132,9 +136,9 @@ use tracing::instrument;
 /// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// # let mut mutations = Mutations::default();
+/// # vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
 /// tokio::runtime::Runtime::new().unwrap().block_on(async {
-///     vdom.render_concurrent(&mut mutations).await;
+///     vdom.render_concurrent().await;
 /// });
 /// ```
 /// ## Building an event loop around Dioxus:
@@ -143,19 +147,10 @@ use tracing::instrument;
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
-/// # struct RealDom {
-/// #     mutations: Mutations,
-/// # }
-/// # struct Event {}
+/// # struct RealDom;
 /// # impl RealDom {
-/// #     fn new() -> Self {
-/// #         Self { mutations: Mutations::default() }
-/// #     }
-/// #     fn apply(&mut self) -> &mut Mutations {
-/// #         &mut self.mutations
-/// #     }
-/// #     fn commit(&mut self) {
-/// #     }
+/// #     fn new() -> Self { Self }
+/// #     fn flush(&mut self, _: &Mutations) {}
 /// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
 /// #         unimplemented!()
 /// #     }
@@ -172,9 +167,10 @@ use tracing::instrument;
 /// }
 ///
 /// let mut dom = VirtualDom::new(app);
+/// dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
 ///
-/// dom.rebuild(real_dom.apply());
-/// real_dom.commit();
+/// dom.rebuild();
+/// real_dom.flush(dom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
 ///
 /// loop {
 ///     tokio::select! {
@@ -185,8 +181,8 @@ use tracing::instrument;
 ///         },
 ///     }
 ///
-///     dom.render_concurrent(real_dom.apply()).await;
-///     real_dom.commit();
+///     dom.render_concurrent().await;
+///     real_dom.flush(dom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
 /// }
 /// # });
 /// ```
@@ -229,6 +225,18 @@ pub struct VirtualDom {
     pub(crate) scheduler_fairness: SchedulerFairness,
 
     pub(crate) commit_generation: u64,
+
+    /// Renderer-supplied writers, keyed by `RenderTargetId`. Diff output for a
+    /// given target is dispatched into the matching writer; targets without a
+    /// registered writer have their mutations dropped (matches the historical
+    /// `NoOpMutations` behaviour).
+    pub(crate) targets: BTreeMap<RenderTargetId, Box<dyn crate::mutations::RenderTargetWriter>>,
+
+    /// When `true`, mutations for unregistered targets lazily get a default
+    /// `Mutations` collector instead of being dropped. Used by the
+    /// `rebuild_to_targeted_vec` / `render_immediate_to_targeted_vec` helpers
+    /// so portal targets created during diff don't lose their edits.
+    pub(crate) auto_create_targets: bool,
 
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
@@ -367,6 +375,8 @@ impl VirtualDom {
             render_deferred_priority: None,
             scheduler_fairness: Default::default(),
             commit_generation: 0,
+            targets: BTreeMap::new(),
+            auto_create_targets: false,
         };
 
         let root = VProps::new(
@@ -427,6 +437,130 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope().state().provide_any_context(context);
+    }
+
+    /// Register a writer that will receive diff output for a given
+    /// `RenderTargetId`. The root viewport uses `RenderTargetId::ROOT`; portal
+    /// hosts insert their own ids on mount.
+    ///
+    /// Calling this twice with the same id replaces the previous writer and
+    /// returns it.
+    pub fn insert_render_target<W: WriteMutations + 'static>(
+        &mut self,
+        id: RenderTargetId,
+        writer: W,
+    ) -> Option<Box<dyn crate::mutations::RenderTargetWriter>> {
+        self.targets.insert(id, Box::new(writer))
+    }
+
+    /// Remove the writer for a given target. Mutations destined for an
+    /// unregistered target are silently dropped during diff.
+    pub fn remove_render_target(
+        &mut self,
+        id: RenderTargetId,
+    ) -> Option<Box<dyn crate::mutations::RenderTargetWriter>> {
+        self.targets.remove(&id)
+    }
+
+    /// Borrow the writer for a target, downcast to its concrete type. Returns
+    /// `None` if no writer is registered for `id` or the registered writer is
+    /// not of type `W`.
+    pub fn render_target_mut<W: WriteMutations + 'static>(
+        &mut self,
+        id: RenderTargetId,
+    ) -> Option<&mut W> {
+        self.targets
+            .get_mut(&id)?
+            .as_any_mut()
+            .downcast_mut::<W>()
+    }
+
+    /// Remove the writer at `id`, recovering ownership of its concrete type.
+    /// Returns `None` if no writer is registered for `id` or the registered
+    /// writer is not of type `W`.
+    pub fn take_render_target<W: WriteMutations + 'static>(
+        &mut self,
+        id: RenderTargetId,
+    ) -> Option<W> {
+        let writer = self.targets.remove(&id)?;
+        writer.into_any().downcast::<W>().ok().map(|b| *b)
+    }
+
+    /// Test convenience: register `writer` at `ROOT`, run a full rebuild, and
+    /// return the writer back. Used to keep single-target tests compact.
+    #[doc(hidden)]
+    pub fn rebuild_with<W: WriteMutations + 'static>(&mut self, writer: W) -> W {
+        self.insert_render_target(RenderTargetId::ROOT, writer);
+        self.rebuild();
+        self.take_render_target::<W>(RenderTargetId::ROOT)
+            .expect("writer was just registered at ROOT")
+    }
+
+    /// Borrow `writer` at `ROOT` for the duration of a rebuild. Convenience
+    /// for tests / single-target hosts that don't want to give up ownership.
+    ///
+    /// Internally registers a thin pointer-wrapper at `ROOT` that forwards
+    /// every call to `writer`, then removes it before returning.
+    #[doc(hidden)]
+    pub fn rebuild_into<W: WriteMutations + 'static>(&mut self, writer: &mut W) {
+        let wrap = crate::mutations::BorrowedWriter::new(writer);
+        self.insert_render_target(RenderTargetId::ROOT, wrap);
+        self.rebuild();
+        self.remove_render_target(RenderTargetId::ROOT);
+    }
+
+    /// Borrow `writer` at `ROOT` for the duration of a [`Self::render_immediate`] call.
+    #[doc(hidden)]
+    pub fn render_immediate_into<W: WriteMutations + 'static>(&mut self, writer: &mut W) {
+        let wrap = crate::mutations::BorrowedWriter::new(writer);
+        self.insert_render_target(RenderTargetId::ROOT, wrap);
+        self.render_immediate();
+        self.remove_render_target(RenderTargetId::ROOT);
+    }
+
+    /// Borrow `writer` at `ROOT` for the duration of [`Self::render_concurrent`].
+    ///
+    /// The returned future must run to completion (or be dropped) inside the
+    /// lifetime of `writer` — the registered wrapper points into `writer` and
+    /// is removed when the future finishes.
+    #[doc(hidden)]
+    pub async fn render_concurrent_into<W: WriteMutations + 'static>(
+        &mut self,
+        writer: &mut W,
+    ) -> RenderStats {
+        let wrap = crate::mutations::BorrowedWriter::new(writer);
+        self.insert_render_target(RenderTargetId::ROOT, wrap);
+        let stats = self.render_concurrent().await;
+        self.remove_render_target(RenderTargetId::ROOT);
+        stats
+    }
+
+    /// Test convenience: register `writer` at `ROOT`, drain pending work, and
+    /// return the writer back.
+    #[doc(hidden)]
+    pub fn render_immediate_with<W: WriteMutations + 'static>(&mut self, writer: W) -> W {
+        self.insert_render_target(RenderTargetId::ROOT, writer);
+        self.render_immediate();
+        self.take_render_target::<W>(RenderTargetId::ROOT)
+            .expect("writer was just registered at ROOT")
+    }
+
+    /// Test convenience: register `writer` at `ROOT`, run the concurrent
+    /// driver, and return the writer plus the resulting stats. The writer
+    /// remains registered while the future is alive — if the future is dropped
+    /// without awaiting to completion, the writer stays in the registry; call
+    /// [`Self::take_render_target`] manually to recover it.
+    #[doc(hidden)]
+    pub async fn render_concurrent_with<W: WriteMutations + 'static>(
+        &mut self,
+        writer: W,
+    ) -> (RenderStats, W) {
+        self.insert_render_target(RenderTargetId::ROOT, writer);
+        let stats = self.render_concurrent().await;
+        let writer = self
+            .take_render_target::<W>(RenderTargetId::ROOT)
+            .expect("writer was just registered at ROOT");
+        (stats, writer)
     }
 
     /// Mark all scopes as dirty. Each scope will be re-rendered.
@@ -562,7 +696,9 @@ impl VirtualDom {
         self.poll_tasks()
     }
 
-    /// Poll any queued tasks
+    /// Poll any queued tasks, then drain any effects whose owning scopes don't
+    /// belong to a registered render target. Effects bound to a registered
+    /// target wait until that target's next commit.
     #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     fn poll_tasks(&mut self) {
         // Make sure we set the runtime since we're running user code
@@ -577,9 +713,6 @@ impl VirtualDom {
                 Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
                 }
-                Work::RunEffect(effect) => {
-                    effect.run();
-                }
                 Work::DiffFiber(_) | Work::DiffComponentProps(_) => {
                     return;
                 }
@@ -590,51 +723,91 @@ impl VirtualDom {
                 return;
             }
         }
+
+        // Effects that were dirtied by task wakeups (e.g. a subscribed signal
+        // written from a future) and that don't belong to a registered render
+        // target need to fire now — there's no render pass coming to flush
+        // them. Effects under registered targets fire when that target's next
+        // commit runs.
+        let orphan_effects: Vec<_> = {
+            let mut pending = self.runtime.pending_effects.borrow_mut();
+            let all = std::mem::take(&mut *pending);
+            let mut orphans = Vec::new();
+            let mut remaining = std::collections::BTreeSet::new();
+            for effect in all {
+                let belongs_to_registered_target = self
+                    .runtime
+                    .try_get_state(effect.order.id)
+                    .map(|s| self.targets.contains_key(&s.target_id()))
+                    .unwrap_or(false);
+                if belongs_to_registered_target {
+                    remaining.insert(effect);
+                } else {
+                    orphans.push(effect);
+                }
+            }
+            *pending = remaining;
+            orphans
+        };
+        for effect in orphan_effects {
+            effect.run();
+        }
     }
 
-    /// Rebuild the virtualdom without handling any of the mutations
+    /// Rebuild the virtualdom without handling any of the mutations.
     ///
-    /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
-    /// handling any of its mutations.
+    /// Equivalent to [`Self::rebuild`] for a VDom with no registered render
+    /// targets — diff still runs, every produced mutation is dropped.
     #[doc(hidden)]
     pub fn rebuild_in_place(&mut self) {
-        self.rebuild(&mut NoOpMutations);
+        self.rebuild();
     }
 
-    /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
+    /// [`VirtualDom::rebuild`] into a single root-target `Mutations` collector
+    /// for tests.
     #[doc(hidden)]
     pub fn rebuild_to_vec(&mut self) -> Mutations {
-        let mut mutations = Mutations::default();
-        self.rebuild(&mut mutations);
-        mutations
+        self.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+        self.rebuild();
+        let collected = std::mem::take(
+            self.render_target_mut::<Mutations>(RenderTargetId::ROOT)
+                .expect("ROOT target was just registered"),
+        );
+        self.remove_render_target(RenderTargetId::ROOT);
+        collected
     }
 
-    /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
+    /// [`VirtualDom::rebuild`] grouped into per-target mutation streams. Pairs
+    /// with [`Self::render_immediate_to_targeted_vec`]. Pre-registers a fresh
+    /// `Mutations` collector at every render target id the runtime knows
+    /// about; targets created during diff get a lazy `Mutations` collector
+    /// (the `auto_create_targets` flag).
+    #[doc(hidden)]
+    pub fn rebuild_to_targeted_vec(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
+        for id in self.runtime.known_render_target_ids() {
+            self.insert_render_target(id, Mutations::default());
+        }
+
+        self.auto_create_targets = true;
+        self.rebuild();
+        self.auto_create_targets = false;
+
+        self.drain_targeted_mutations()
+    }
+
+    /// Performs a *full* rebuild of the virtual dom, dispatching every edit to
+    /// the renderer writers registered via [`Self::insert_render_target`].
     ///
-    /// The mutations item expects the RealDom's stack to be the root of the application.
-    ///
-    /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
-    /// root component will be run once and then diffed. All updates will flow out as mutations.
+    /// Tasks will not be polled with this method, nor will any events be
+    /// processed from the event queue. Instead, the root component will be run
+    /// once and then diffed.
     ///
     /// All state stored in components will be completely wiped away.
     ///
     /// Any templates previously registered will remain.
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_core::*;
-    /// fn app() -> Element {
-    ///     rsx! { "hello world" }
-    /// }
-    ///
-    /// let mut dom = VirtualDom::new(app);
-    /// let mut mutations = Mutations::default();
-    /// dom.rebuild(&mut mutations);
-    /// ```
     #[doc(hidden)]
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
-    pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::rebuild")]
+    pub fn rebuild(&mut self) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self
             .runtime
@@ -645,37 +818,61 @@ impl VirtualDom {
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
-        // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+        // Lend the registry to the diff dispatcher for the rebuild pass.
+        let runtime = self.runtime.clone();
+        let mut targets = std::mem::take(&mut self.targets);
+        let mut dispatch =
+            crate::mutations::DiffDispatch::new(&mut targets, runtime);
+        dispatch.auto_create_targets = self.auto_create_targets;
 
-        to.append_children(ElementId::ROOT, m);
+        let m = self.create_scope(Some(&mut dispatch), ScopeId::ROOT, new_nodes, None);
+        dispatch.append_children(ElementId::ROOT, m);
+
+        for (target_id, writer) in targets.iter_mut() {
+            writer.commit();
+            for effect in self.runtime.drain_effects_for_target(*target_id) {
+                effect.run();
+            }
+        }
+
+        self.targets = targets;
+
+        for effect in self.runtime.drain_remaining_effects() {
+            effect.run();
+        }
     }
 
-    /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
-    /// suspended subtrees.
+    /// Render whatever the VirtualDom has ready as fast as possible without
+    /// requiring an executor to progress suspended subtrees. Edits flow into
+    /// the registered render targets; all accumulated writes are committed
+    /// once at the end of the call.
+    ///
+    /// Unlike [`Self::render_concurrent`], this never commits mid-pass —
+    /// suspense boundaries and other consumers that observe partial diff
+    /// state rely on the whole pass landing atomically.
     #[doc(hidden)]
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
-    pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
-        // Process any events that might be pending in the queue
-        // Signals marked with .write() need a chance to be handled by the effect driver
-        // This also processes futures which might progress into immediately rerunning a scope
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::render_immediate")]
+    pub fn render_immediate(&mut self) {
         self.process_events();
 
-        // Next, diff any dirty fibers.
-        // We choose not to poll the deadline since we complete pretty quickly anyways
         let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+        let runtime = self.runtime.clone();
+        let mut targets = std::mem::take(&mut self.targets);
+        let mut dispatch =
+            crate::mutations::DiffDispatch::new(&mut targets, runtime);
+        dispatch.auto_create_targets = self.auto_create_targets;
+
         while let Some(work) = self.pop_work() {
             match work {
                 Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
-                    // Make sure we process any new events
                     self.queue_events();
                 }
                 Work::DiffFiber(fiber) => {
-                    // If the fiber is dirty, run the scope and get the mutations.
                     let priority = fiber.order.priority;
                     self.runtime.clone().while_rendering(|| {
-                        fiber.diff_into(self, Some(to), priority);
+                        fiber.diff_into(self, Some(&mut dispatch), priority);
                     });
                 }
                 Work::DiffComponentProps(diff) => {
@@ -683,60 +880,108 @@ impl VirtualDom {
                         self.diff_component_props_work(diff);
                     });
                 }
-                Work::RunEffect(effect) => {
-                    effect.run();
-                }
             }
+        }
+
+        // Commit per target and run that subtree's effects so they observe a
+        // DOM that already reflects this target's edits.
+        for (target_id, writer) in targets.iter_mut() {
+            writer.commit();
+            for effect in self.runtime.drain_effects_for_target(*target_id) {
+                effect.run();
+            }
+        }
+        self.targets = targets;
+
+        // Any effects belonging to scopes whose target was never registered
+        // (SSR-style or orphaned portals) still need to fire so hook cleanup
+        // and one-shot side effects don't leak.
+        for effect in self.runtime.drain_remaining_effects() {
+            effect.run();
         }
 
         self.runtime.finish_render();
     }
 
-    /// [`Self::render_immediate`] to a vector of mutations for testing purposes
+    /// [`Self::render_immediate`] into a single root-target `Mutations`
+    /// collector for tests.
     #[doc(hidden)]
     pub fn render_immediate_to_vec(&mut self) -> Mutations {
-        let mut mutations = Mutations::default();
-        self.render_immediate(&mut mutations);
-        mutations
+        self.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+        self.render_immediate();
+        let collected = std::mem::take(
+            self.render_target_mut::<Mutations>(RenderTargetId::ROOT)
+                .expect("ROOT target was just registered"),
+        );
+        self.remove_render_target(RenderTargetId::ROOT);
+        collected
     }
 
-    /// [`Self::render_immediate`] grouped into isolated mutation streams per render target.
+    /// [`Self::render_immediate`] grouped into per-target mutation streams.
+    ///
+    /// Pre-registers `Mutations` collectors at every known target id and
+    /// turns on `auto_create_targets` so portal targets created during the
+    /// diff still capture their edits.
     #[doc(hidden)]
     pub fn render_immediate_to_targeted_vec(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
-        let mut mutations = TargetedMutations::new(self.runtime.clone());
-        self.render_immediate(&mut mutations);
-        mutations.into_edits()
+        for id in self.runtime.known_render_target_ids() {
+            self.insert_render_target(id, Mutations::default());
+        }
+
+        self.auto_create_targets = true;
+        self.render_immediate();
+        self.auto_create_targets = false;
+
+        self.drain_targeted_mutations()
     }
 
-    /// Render pending work into a renderer until idle.
+    fn drain_targeted_mutations(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
+        let ids: Vec<RenderTargetId> = self.targets.keys().copied().collect();
+        let mut out = BTreeMap::new();
+        for id in ids {
+            if let Some(target) = self.render_target_mut::<Mutations>(id) {
+                let m = std::mem::take(target);
+                if !m.edits.is_empty() {
+                    out.insert(id, m);
+                }
+            }
+            self.remove_render_target(id);
+        }
+        out
+    }
+
+    /// Render pending work into the registered render targets until idle.
     ///
-    /// Commits buffered mutations and yields to the async runtime after every
-    /// completed work unit. Cancel-safe: dropping the returned future stops
-    /// rendering cleanly, with the renderer in sync with the virtual DOM (no
-    /// uncommitted work is held inside the driver across an `.await`).
+    /// Commits accumulated mutations after every completed work unit and
+    /// yields to the async runtime. Cancel-safe: dropping the returned future
+    /// stops rendering cleanly.
     #[instrument(
-        skip(self, to),
+        skip(self),
         level = "trace",
         name = "VirtualDom::render_concurrent"
     )]
-    pub async fn render_concurrent(&mut self, to: &mut impl WriteMutations) -> RenderStats {
+    pub async fn render_concurrent(&mut self) -> RenderStats {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        let mut driver = self.fiber_driver();
-        loop {
-            match driver.next_fiber() {
-                FiberStep::Ran => {
-                    driver.commit(to);
-                    driver.yield_now();
-                    yield_now().await;
+        let stats = {
+            let mut driver = self.fiber_driver();
+            loop {
+                match driver.next_fiber() {
+                    FiberStep::Ran | FiberStep::MustCommit => {
+                        driver.commit();
+                        driver.yield_now();
+                        yield_now().await;
+                    }
+                    FiberStep::Idle(stats) => break stats,
                 }
-                FiberStep::MustCommit => {
-                    driver.commit(to);
-                    driver.yield_now();
-                    yield_now().await;
-                }
-                FiberStep::Idle(stats) => return stats,
             }
+        };
+        // After the driver returns the registry, run any effects whose target
+        // never got registered (orphans). Per-target effects already fired in
+        // `FiberDriver::commit` next to their commit.
+        for effect in self.runtime.drain_remaining_effects() {
+            effect.run();
         }
+        stats
     }
 
     pub(crate) fn render_work_into(
@@ -758,37 +1003,6 @@ impl VirtualDom {
                 self.runtime.clone().while_rendering(|| {
                     self.diff_component_props_work(diff);
                 });
-            }
-            Work::RunEffect(effect) => {
-                effect.run();
-            }
-        }
-        priority
-    }
-
-    #[allow(dead_code)]
-    fn render_work_into_direct(
-        &mut self,
-        to: &mut impl WriteMutations,
-        work: Work,
-    ) -> UpdatePriority {
-        let priority = work.priority();
-        match work {
-            Work::PollTask(task) => {
-                _ = self.runtime.handle_task_wakeup(task);
-            }
-            Work::DiffFiber(fiber) => {
-                self.runtime.clone().while_rendering(|| {
-                    fiber.diff_into(self, Some(to), priority);
-                });
-            }
-            Work::DiffComponentProps(diff) => {
-                self.runtime.clone().while_rendering(|| {
-                    self.diff_component_props_work(diff);
-                });
-            }
-            Work::RunEffect(effect) => {
-                effect.run();
             }
         }
         priority
@@ -940,9 +1154,6 @@ impl VirtualDom {
                     self.runtime.clone().while_rendering(|| {
                         self.diff_component_props_work(diff);
                     });
-                }
-                Work::RunEffect(effect) => {
-                    effect.run();
                 }
             }
 

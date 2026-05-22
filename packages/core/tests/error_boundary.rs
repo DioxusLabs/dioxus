@@ -5,7 +5,7 @@ use dioxus::{CapturedError, prelude::*};
 #[test]
 fn catches_panic() {
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 }
 
 fn app() -> Element {
@@ -70,15 +70,15 @@ fn clear_error_boundary() {
     }
 
     let mut dom = VirtualDom::new(App);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
     // The DOM will now contain no text - the error was thrown by ThrowsError and caught by the
     // ErrorBoundary. This calls `needs_update()`, but the update hasn't been processed yet.
 
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate();
     // The ErrorBoundary has now called its `handle_error` handler. The DOM contains the string
     // "We cleared it", and `needs_update()` has been called again (by `error.clear_errors()`)
 
-    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate();
     // `ThrowsError` is re-rendered, but this time does not throw an error, so at the end the DOM
     // contains "We should see this"
 

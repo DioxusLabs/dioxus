@@ -7,7 +7,7 @@ fn root_ids() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -25,7 +25,7 @@ fn dynamic_attributes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -44,7 +44,7 @@ fn listeners() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -59,7 +59,7 @@ fn listeners() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -77,7 +77,7 @@ fn text_nodes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div>hello</div>"#);
 
@@ -89,7 +89,7 @@ fn text_nodes() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     // Adjacent dynamic texts merge into a single DOM text node — hydration splits
     // them apart at known offsets via `SplitText` rather than relying on parser
@@ -109,7 +109,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div>hello</div>"#);
 
@@ -125,7 +125,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div>hello</div>"#);
 
@@ -138,7 +138,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app3);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div style="width:1;"></div>"#);
 
@@ -155,7 +155,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app4);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), r#"11"#);
 }
@@ -174,7 +174,7 @@ fn raw_text_elements_have_no_hydration_artifacts() {
     }
 
     let mut dom = VirtualDom::new(textarea_with_placeholder);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     let rendered = dioxus_ssr::render(&dom);
     assert!(
@@ -194,7 +194,7 @@ fn raw_text_elements_have_no_hydration_artifacts() {
     }
 
     let mut dom = VirtualDom::new(textarea_with_dynamic_text);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     let rendered = dioxus_ssr::render(&dom);
     assert!(!rendered.contains("<!--"));
@@ -216,7 +216,7 @@ fn hello_world_hydrates() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     assert_eq!(
         dioxus_ssr::render(&dom),

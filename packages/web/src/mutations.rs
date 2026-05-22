@@ -295,4 +295,8 @@ impl WriteMutations for WebsysDom {
         }
         self.interpreter.pop_root()
     }
+
+    fn commit(&mut self) {}
+
+    fn discard(&mut self) {}
 }

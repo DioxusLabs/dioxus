@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    edits::{DesktopTargetedMutations, EditWebsocket},
+    edits::EditWebsocket,
     event_handlers::{WindowCloseHandlers, WindowEventHandlers},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
@@ -235,7 +235,11 @@ impl App {
 
                 self.notify_close_handlers(id);
 
-                self.webviews.remove(&id);
+                if let Some(removed) = self.webviews.remove(&id) {
+                    if is_shared_dom {
+                        self.dom.remove_render_target(removed.target_id);
+                    }
+                }
 
                 if is_shared_dom {
                     self.render_shared_dom_after_webview_removed();
@@ -264,7 +268,11 @@ impl App {
 
         self.notify_close_handlers(id);
 
-        self.webviews.remove(&id);
+        if let Some(removed) = self.webviews.remove(&id) {
+            if is_shared_dom {
+                self.dom.remove_render_target(removed.target_id);
+            }
+        }
 
         if is_shared_dom {
             self.render_shared_dom_after_webview_removed();
@@ -351,7 +359,7 @@ impl App {
             if let Some(dom) = view.dom.as_mut() {
                 view.edits
                     .wry_queue
-                    .with_mutation_state_mut(|f| dom.rebuild(f));
+                    .with_mutation_state_mut(|f| dom.rebuild_into(f));
                 view.edits.wry_queue.send_edits();
                 true
             } else {
@@ -519,38 +527,56 @@ impl App {
         }
     }
 
-    fn shared_queues(&self) -> HashMap<RenderTargetId, crate::edits::WryQueue> {
+    /// Ensure every shared-DOM webview has its `WryQueue` registered with the
+    /// VirtualDom at the webview's target id, then clear each queue's
+    /// `touched` flag so we can detect which targets receive writes during the
+    /// upcoming render pass.
+    fn prepare_shared_targets(&mut self) {
+        for webview in self.webviews.values() {
+            if webview.dom.is_none() {
+                webview.edits.wry_queue.clear_touched();
+                self.dom
+                    .insert_render_target(webview.target_id, webview.edits.wry_queue.clone());
+            }
+        }
+    }
+
+    /// Collect every shared-DOM webview whose `WryQueue` was touched during the
+    /// preceding render pass. The diff writes directly into each registered
+    /// queue (the `WriteMutations` impl on `WryQueue`), so a touched queue
+    /// means "this webview has new edits to flush".
+    fn collect_touched(&self) -> BTreeSet<RenderTargetId> {
         self.webviews
             .values()
-            .filter(|webview| webview.dom.is_none())
-            .map(|webview| (webview.target_id, webview.edits.wry_queue.clone()))
+            .filter(|webview| webview.dom.is_none() && webview.edits.wry_queue.is_touched())
+            .map(|webview| webview.target_id)
             .collect()
     }
 
     fn rebuild_shared_dom(&mut self) -> BTreeSet<RenderTargetId> {
-        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
-        self.dom.rebuild(&mut mutations);
+        self.prepare_shared_targets();
+        self.dom.rebuild();
         self.dom_rebuilt = true;
-        mutations.into_touched()
+        self.collect_touched()
     }
 
     fn render_shared_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
-        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
-        self.dom.render_immediate(&mut mutations);
-        mutations.into_touched()
+        self.prepare_shared_targets();
+        self.dom.render_immediate();
+        self.collect_touched()
     }
 
     fn render_shared_dom_concurrent(
         &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> (BTreeSet<RenderTargetId>, std::task::Poll<RenderStats>) {
-        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
+        self.prepare_shared_targets();
         let poll = {
-            let fut = self.dom.render_concurrent(&mut mutations);
+            let fut = self.dom.render_concurrent();
             pin_mut!(fut);
             fut.poll_unpin(cx)
         };
-        (mutations.into_touched(), poll)
+        (self.collect_touched(), poll)
     }
 
     fn render_shared_dom_after_webview_removed(&mut self) {

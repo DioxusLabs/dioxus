@@ -1,7 +1,7 @@
 use super::{ComponentPropsDiff, ScopeOrder, UpdatePriority};
 use crate::{
     Task, VirtualDom,
-    innerlude::{Effect, WriteMutations},
+    innerlude::WriteMutations,
     scopes::ScopeId,
 };
 
@@ -17,7 +17,6 @@ pub(crate) enum Work {
     DiffFiber(DirtyFiber),
     DiffComponentProps(ComponentPropsDiff),
     PollTask(Task),
-    RunEffect(Effect),
 }
 
 impl Work {
@@ -26,12 +25,11 @@ impl Work {
             Self::DiffFiber(fiber) => fiber.order.priority,
             Self::DiffComponentProps(diff) => diff.priority,
             Self::PollTask(_) => UpdatePriority::Default,
-            Self::RunEffect(_) => UpdatePriority::Idle,
         }
     }
 
     pub(crate) fn requires_commit(&self) -> bool {
-        !matches!(self, Self::RunEffect(_))
+        true
     }
 }
 

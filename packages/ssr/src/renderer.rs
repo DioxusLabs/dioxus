@@ -244,7 +244,7 @@ fn to_string_works() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -270,7 +270,7 @@ fn empty_for_loop_works() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -287,7 +287,7 @@ fn empty_render_works() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild();
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);

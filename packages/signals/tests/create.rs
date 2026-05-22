@@ -111,7 +111,7 @@ fn drop_signals() {
 
     dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate();
 
     assert_eq!(SIGNAL_DROP_COUNT.load(Ordering::Relaxed), 10);
 }

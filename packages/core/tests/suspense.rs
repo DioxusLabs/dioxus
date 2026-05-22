@@ -31,7 +31,7 @@ fn suspense_resolves_ssr() {
             let mut dom = VirtualDom::new(app);
             dom.rebuild_in_place();
             dom.wait_for_suspense().await;
-            dom.render_immediate(&mut dioxus_core::NoOpMutations);
+            dom.render_immediate();
             let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "<div>Waiting for... child</div>");
@@ -101,7 +101,7 @@ fn suspense_switches_to_fallback_when_child_suspends_during_diff() {
 
     let mut dom = VirtualDom::new(app);
     let mut renderer = RendererOracle::new();
-    dom.rebuild(&mut renderer);
+    renderer.rebuild(&mut dom);
 
     assert_eq!(
         renderer.snapshot(),
@@ -115,7 +115,7 @@ fn suspense_switches_to_fallback_when_child_suspends_during_diff() {
     );
 
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut renderer);
+    renderer.render(&mut dom);
 
     assert_eq!(
         renderer.snapshot(),
@@ -174,7 +174,7 @@ fn suspense_promotes_child_when_suspended_task_is_cancelled_during_diff() {
 
     let mut dom = VirtualDom::new(app);
     let mut renderer = RendererOracle::new();
-    dom.rebuild(&mut renderer);
+    renderer.rebuild(&mut dom);
 
     assert_eq!(
         renderer.snapshot(),
@@ -182,7 +182,7 @@ fn suspense_promotes_child_when_suspended_task_is_cancelled_during_diff() {
     );
 
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut renderer);
+    renderer.render(&mut dom);
 
     assert_eq!(
         renderer.snapshot(),
@@ -205,7 +205,7 @@ fn suspense_keeps_state() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild();
             dom.render_suspense_immediate().await;
 
             let out = dioxus_ssr::render(&dom);
@@ -264,7 +264,7 @@ fn suspense_does_not_poll_spawn() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild();
 
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
@@ -317,12 +317,12 @@ fn suspended_nodes_dont_trigger_effects() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild();
 
             let work = async move {
                 loop {
                     dom.wait_for_work().await;
-                    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+                    dom.render_immediate();
                 }
             };
             tokio::select! {
@@ -373,7 +373,7 @@ fn resolved_to_suspended() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild();
 
             let out = dioxus_ssr::render(&dom);
 
@@ -436,7 +436,7 @@ fn suspense_tracks_resolved() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild();
 
             dom.render_suspense_immediate().await;
             dom.wait_for_suspense_work().await;

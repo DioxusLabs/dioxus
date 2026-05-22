@@ -162,9 +162,9 @@ fn empty_fragment_root_via_direct_vnode_api_is_diffable() {
 
     let mut vdom = VirtualDom::new(app);
     let mut oracle = RendererOracle::new();
-    vdom.rebuild(&mut oracle);
+    oracle.rebuild(&mut vdom);
     vdom.mark_dirty(ScopeId::APP);
-    vdom.render_immediate(&mut oracle);
+    oracle.render(&mut vdom);
     vdom.mark_dirty(ScopeId::APP);
-    vdom.render_immediate(&mut oracle);
+    oracle.render(&mut vdom);
 }

@@ -146,7 +146,7 @@ impl DioxusDocument {
     pub fn initial_build(&mut self) {
         let mut inner = self.inner.borrow_mut();
         let mut writer = MutationWriter::new(&mut inner, &mut self.vdom_state);
-        self.vdom.rebuild(&mut writer);
+        self.vdom.rebuild_into(&mut writer);
         drop(writer);
         drop(inner);
         self.flush_queued_mounted_events();
@@ -232,7 +232,7 @@ impl Document for DioxusDocument {
 
         let mut inner = self.inner.borrow_mut();
         let mut writer = MutationWriter::new(&mut inner, &mut self.vdom_state);
-        self.vdom.render_immediate(&mut writer);
+        self.vdom.render_immediate_into(&mut writer);
         drop(writer);
         drop(inner);
         self.flush_queued_mounted_events();

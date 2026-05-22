@@ -142,7 +142,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     pin_mut!(ws);
 
     if let Some(edits) = {
-        vdom.rebuild(&mut mutations);
+        vdom.rebuild_into(&mut mutations);
         take_edits(&mut mutations)
     } {
         // send the initial render to the client
@@ -239,7 +239,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
         }
 
         // render the vdom
-        vdom.render_immediate(&mut mutations);
+        vdom.render_immediate_into(&mut mutations);
 
         if let Some(edits) = take_edits(&mut mutations) {
             ws.send(edits).await?;

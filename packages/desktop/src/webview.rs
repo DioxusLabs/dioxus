@@ -607,7 +607,7 @@ impl WebviewInstance {
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             let poll = self.edits.wry_queue.with_mutation_state_mut(|f| {
-                let fut = dom.render_concurrent(f);
+                let fut = dom.render_concurrent_into(f);
                 pin_mut!(fut);
                 fut.poll_unpin(&mut cx)
             });

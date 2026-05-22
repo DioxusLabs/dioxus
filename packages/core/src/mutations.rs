@@ -115,83 +115,230 @@ pub trait WriteMutations {
     /// Pop the topmost entry off the renderer's stack without modifying the DOM.
     /// Used to clean up temporary roots pushed for path-based insertions during diff transitions.
     fn pop_root(&mut self);
+
+    /// Mark every edit written since the last commit/discard as durable.
+    ///
+    /// Renderers buffer edits internally in whatever encoding they prefer
+    /// (e.g. a sledgehammer command stream for web). `commit` is the point at
+    /// which those edits become non-rollback-able. It does **not** imply
+    /// flushing to the underlying surface — that is up to the renderer to
+    /// schedule when convenient.
+    fn commit(&mut self);
+
+    /// Roll back every edit written since the last commit/discard.
+    ///
+    /// The scheduler calls this when a fiber's work is thrown away (suspense
+    /// retry, time-sliced cancellation). Renderers implement it by truncating
+    /// their internal buffer to a saved checkpoint (e.g. sledgehammer's
+    /// `set_len` on the command bytes).
+    fn discard(&mut self);
 }
 
-/// Wraps a mutation writer and counts how many mutations have been forwarded
-/// since the last reset.
-pub struct MutationCounter<'a, M> {
-    inner: &'a mut M,
-    pending_mutations: usize,
+/// A registered render target writer. Blanket-implemented for every
+/// `WriteMutations + 'static`. The `'static` bound is required so the registry
+/// can hand out typed `&mut W` references via `VirtualDom::render_target_mut`.
+pub trait RenderTargetWriter: WriteMutations + 'static {
+    /// Erased self for typed downcasting via [`std::any::Any`].
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+
+    /// Move into a `Box<dyn Any>` so callers can recover the concrete writer
+    /// by ownership (via `Box::downcast`).
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
 }
 
-impl<'a, M> MutationCounter<'a, M> {
-    /// Create a new counting adapter around a mutation writer.
-    pub fn new(inner: &'a mut M) -> Self {
+impl<T: WriteMutations + 'static> RenderTargetWriter for T {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+}
+
+/// A `'static` wrapper around a `&mut W` raw pointer. Powers the
+/// `rebuild_into` / `render_immediate_into` / `render_concurrent_into`
+/// convenience methods, which need to register a borrowed writer in the
+/// `'static`-bounded target registry for the duration of a single call.
+///
+/// The wrapper is only safe to use when the registry entry is removed before
+/// the underlying borrow ends — `VirtualDom::*_into` enforce this by removing
+/// the entry before returning.
+pub(crate) struct BorrowedWriter<W: WriteMutations + 'static> {
+    ptr: *mut W,
+}
+
+impl<W: WriteMutations + 'static> BorrowedWriter<W> {
+    pub(crate) fn new(writer: &mut W) -> Self {
         Self {
-            inner,
-            pending_mutations: 0,
+            ptr: writer as *mut W,
         }
     }
 
-    /// Access the wrapped mutation writer.
-    pub fn inner_mut(&mut self) -> &mut M {
-        self.inner
-    }
-
-    /// The number of mutations forwarded since the last reset.
-    pub fn pending_mutation_count(&self) -> usize {
-        self.pending_mutations
-    }
-
-    /// Reset the pending mutation count after the renderer has flushed.
-    pub fn reset_pending_mutation_count(&mut self) {
-        self.pending_mutations = 0;
-    }
-
-    fn record_mutation(&mut self) {
-        self.pending_mutations += 1;
+    #[inline]
+    fn inner(&mut self) -> &mut W {
+        // SAFETY: `BorrowedWriter` is only registered for the lifetime of the
+        // `*_into` call that constructed it; that call holds the original
+        // `&mut W` borrow live until `remove_render_target` runs, so the
+        // pointer remains valid for the entire window in which the registry
+        // can reach this entry.
+        unsafe { &mut *self.ptr }
     }
 }
 
-impl<M: WriteMutations> WriteMutations for MutationCounter<'_, M> {
+impl<W: WriteMutations + 'static> WriteMutations for BorrowedWriter<W> {
     fn append_children(&mut self, id: ElementId, m: usize) {
-        self.record_mutation();
-        self.inner.append_children(id, m)
+        self.inner().append_children(id, m)
+    }
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        self.inner().assign_node_id(path, id)
+    }
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        self.inner().create_text_node(value, id)
+    }
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.inner().load_template(template, index, id)
+    }
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        self.inner().replace_node_with(id, m)
+    }
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+        self.inner().insert_children_at_path(path, m)
+    }
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        self.inner().insert_nodes_after(id, m)
+    }
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        self.inner().insert_nodes_before(id, m)
+    }
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        self.inner().set_attribute(name, ns, value, id)
+    }
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        self.inner().set_node_text(value, id)
+    }
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.inner().create_event_listener(name, id)
+    }
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.inner().remove_event_listener(name, id)
+    }
+    fn remove_node(&mut self, id: ElementId) {
+        self.inner().remove_node(id)
+    }
+    fn push_root(&mut self, id: ElementId) {
+        self.inner().push_root(id)
+    }
+    fn pop_root(&mut self) {
+        self.inner().pop_root()
+    }
+    fn commit(&mut self) {
+        self.inner().commit()
+    }
+    fn discard(&mut self) {
+        self.inner().discard()
+    }
+}
+
+/// Internal dispatcher used by the diff machinery. Borrows the VDom's target
+/// registry and forwards each call to the writer for the active
+/// `RenderTargetId` (read from the runtime's target stack). Mutations destined
+/// for unregistered targets are dropped.
+///
+/// `commit` and `discard` fan out to every registered writer so the scheduler
+/// can mark a fiber's work durable (or roll it back) in a single call.
+pub(crate) struct DiffDispatch<'a> {
+    pub(crate) targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+    pub(crate) runtime: Rc<Runtime>,
+    /// Count of mutations forwarded since this dispatcher was constructed.
+    /// The fiber driver reads this to populate `FiberCommit::mutation_count`.
+    pub(crate) mutation_count: usize,
+    /// When `true`, encountering a mutation for an unregistered target id will
+    /// lazily insert a `Mutations` collector so the write is captured rather
+    /// than dropped. The per-target-vec test helpers enable this; production
+    /// renderers do not (an unregistered target signals "no writer attached",
+    /// which is the SSR / portal-without-host case).
+    pub(crate) auto_create_targets: bool,
+}
+
+impl<'a> DiffDispatch<'a> {
+    pub(crate) fn new(
+        targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+        runtime: Rc<Runtime>,
+    ) -> Self {
+        Self {
+            targets,
+            runtime,
+            mutation_count: 0,
+            auto_create_targets: false,
+        }
+    }
+
+    #[inline]
+    fn current(&mut self) -> Option<&mut dyn RenderTargetWriter> {
+        self.mutation_count += 1;
+        let id = self.runtime.current_render_target_id();
+        if self.auto_create_targets && !self.targets.contains_key(&id) {
+            self.targets
+                .insert(id, Box::new(Mutations::default()));
+        }
+        self.targets.get_mut(&id).map(|b| &mut **b)
+    }
+}
+
+impl WriteMutations for DiffDispatch<'_> {
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        if let Some(w) = self.current() {
+            w.append_children(id, m);
+        }
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.record_mutation();
-        self.inner.assign_node_id(path, id)
+        if let Some(w) = self.current() {
+            w.assign_node_id(path, id);
+        }
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.record_mutation();
-        self.inner.create_text_node(value, id)
+        if let Some(w) = self.current() {
+            w.create_text_node(value, id);
+        }
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.record_mutation();
-        self.inner.load_template(template, index, id)
+        if let Some(w) = self.current() {
+            w.load_template(template, index, id);
+        }
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.record_mutation();
-        self.inner.replace_node_with(id, m)
+        if let Some(w) = self.current() {
+            w.replace_node_with(id, m);
+        }
     }
 
     fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.record_mutation();
-        self.inner.insert_children_at_path(path, m)
+        if let Some(w) = self.current() {
+            w.insert_children_at_path(path, m);
+        }
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.record_mutation();
-        self.inner.insert_nodes_after(id, m)
+        if let Some(w) = self.current() {
+            w.insert_nodes_after(id, m);
+        }
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.record_mutation();
-        self.inner.insert_nodes_before(id, m)
+        if let Some(w) = self.current() {
+            w.insert_nodes_before(id, m);
+        }
     }
 
     fn set_attribute(
@@ -201,38 +348,57 @@ impl<M: WriteMutations> WriteMutations for MutationCounter<'_, M> {
         value: &AttributeValue,
         id: ElementId,
     ) {
-        self.record_mutation();
-        self.inner.set_attribute(name, ns, value, id)
+        if let Some(w) = self.current() {
+            w.set_attribute(name, ns, value, id);
+        }
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.record_mutation();
-        self.inner.set_node_text(value, id)
+        if let Some(w) = self.current() {
+            w.set_node_text(value, id);
+        }
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation();
-        self.inner.create_event_listener(name, id)
+        if let Some(w) = self.current() {
+            w.create_event_listener(name, id);
+        }
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation();
-        self.inner.remove_event_listener(name, id)
+        if let Some(w) = self.current() {
+            w.remove_event_listener(name, id);
+        }
     }
 
     fn remove_node(&mut self, id: ElementId) {
-        self.record_mutation();
-        self.inner.remove_node(id)
+        if let Some(w) = self.current() {
+            w.remove_node(id);
+        }
     }
 
     fn push_root(&mut self, id: ElementId) {
-        self.record_mutation();
-        self.inner.push_root(id)
+        if let Some(w) = self.current() {
+            w.push_root(id);
+        }
     }
 
     fn pop_root(&mut self) {
-        self.record_mutation();
-        self.inner.pop_root()
+        if let Some(w) = self.current() {
+            w.pop_root();
+        }
+    }
+
+    fn commit(&mut self) {
+        for w in self.targets.values_mut() {
+            w.commit();
+        }
+    }
+
+    fn discard(&mut self) {
+        for w in self.targets.values_mut() {
+            w.discard();
+        }
     }
 }
 
@@ -399,6 +565,8 @@ pub enum Mutation {
 pub struct Mutations {
     /// Any mutations required to patch the renderer to match the layout of the VirtualDom
     pub edits: Vec<Mutation>,
+    /// Watermark of edits that have been committed. `discard` truncates back here.
+    committed_len: usize,
 }
 
 impl WriteMutations for Mutations {
@@ -485,114 +653,13 @@ impl WriteMutations for Mutations {
     fn pop_root(&mut self) {
         self.edits.push(Mutation::PopRoot)
     }
-}
 
-/// Mutations grouped by render target.
-///
-/// This is a compatibility collection for multi-target renders. Existing
-/// renderers can continue to use [`Mutations`] for a single target, while tests
-/// and target-aware renderers can collect isolated edit streams per target.
-pub struct TargetedMutations {
-    runtime: Rc<Runtime>,
-    edits: BTreeMap<RenderTargetId, Mutations>,
-}
-
-impl TargetedMutations {
-    /// Create a targeted mutation collector for a runtime.
-    pub fn new(runtime: Rc<Runtime>) -> Self {
-        Self {
-            runtime,
-            edits: BTreeMap::new(),
-        }
+    fn commit(&mut self) {
+        self.committed_len = self.edits.len();
     }
 
-    /// Convert this collector into target-keyed mutation streams.
-    pub fn into_edits(self) -> BTreeMap<RenderTargetId, Mutations> {
-        self.edits
-    }
-
-    /// Returns true if no target has any mutations.
-    pub fn is_empty(&self) -> bool {
-        self.edits
-            .values()
-            .all(|mutations| mutations.edits.is_empty())
-    }
-
-    fn current_target_id(&self) -> RenderTargetId {
-        self.runtime.current_render_target_id()
-    }
-
-    fn current_mutations(&mut self) -> &mut Mutations {
-        let target = self.current_target_id();
-        self.edits.entry(target).or_default()
-    }
-}
-
-impl WriteMutations for TargetedMutations {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.current_mutations().append_children(id, m)
-    }
-
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.current_mutations().assign_node_id(path, id)
-    }
-
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.current_mutations().create_text_node(value, id)
-    }
-
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.current_mutations().load_template(template, index, id)
-    }
-
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.current_mutations().replace_node_with(id, m)
-    }
-
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.current_mutations().insert_children_at_path(path, m)
-    }
-
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.current_mutations().insert_nodes_after(id, m)
-    }
-
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.current_mutations().insert_nodes_before(id, m)
-    }
-
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.current_mutations().set_attribute(name, ns, value, id)
-    }
-
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.current_mutations().set_node_text(value, id)
-    }
-
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.current_mutations().create_event_listener(name, id)
-    }
-
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.current_mutations().remove_event_listener(name, id)
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        self.current_mutations().remove_node(id)
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        self.current_mutations().push_root(id)
-    }
-
-    fn pop_root(&mut self) {
-        self.current_mutations().pop_root()
+    fn discard(&mut self) {
+        self.edits.truncate(self.committed_len);
     }
 }
 
@@ -636,4 +703,8 @@ impl WriteMutations for NoOpMutations {
     fn push_root(&mut self, _: ElementId) {}
 
     fn pop_root(&mut self) {}
+
+    fn commit(&mut self) {}
+
+    fn discard(&mut self) {}
 }

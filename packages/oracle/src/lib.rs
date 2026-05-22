@@ -5,7 +5,7 @@
 //! semantics without webviews, JS bindings, layout, or serialization.
 
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, ElementId, Mutations, ScopeId, Template,
+    Attribute, AttributeValue, DynamicNode, Element, ElementId, ScopeId, Template,
     TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations, consume_context,
     generation,
 };
@@ -276,7 +276,12 @@ impl RendererOracle {
     /// Rebuild `vdom` into this renderer and assert the renderer stack is clean.
     pub fn rebuild(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.clear();
-        vdom.rebuild(self);
+        let stolen = std::mem::take(self);
+        vdom.insert_render_target(dioxus_core::RenderTargetId::ROOT, stolen);
+        vdom.rebuild();
+        *self = vdom
+            .take_render_target::<RendererOracle>(dioxus_core::RenderTargetId::ROOT)
+            .expect("oracle was just registered at ROOT");
         self.assert_stack_clean();
         self.edit_counters.clone()
     }
@@ -284,7 +289,12 @@ impl RendererOracle {
     /// Drain pending immediate work from `vdom` into this renderer and assert the stack is clean.
     pub fn render(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.edit_counters = EditSummary::default();
-        vdom.render_immediate(self);
+        let stolen = std::mem::take(self);
+        vdom.insert_render_target(dioxus_core::RenderTargetId::ROOT, stolen);
+        vdom.render_immediate();
+        *self = vdom
+            .take_render_target::<RendererOracle>(dioxus_core::RenderTargetId::ROOT)
+            .expect("oracle was just registered at ROOT");
         self.assert_stack_clean();
         self.edit_counters.clone()
     }
@@ -919,6 +929,10 @@ impl WriteMutations for RendererOracle {
         }
         self.stack.pop();
     }
+
+    fn commit(&mut self) {}
+
+    fn discard(&mut self) {}
 }
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so
@@ -1258,8 +1272,7 @@ fn assert_step(oracle: &RendererOracle, step: &Rc<StepSource>) {
 pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
     let mut vdom = VirtualDom::new(app);
     let mut renderer = RendererOracle::new();
-    vdom.rebuild(&mut renderer);
-    renderer.assert_stack_clean();
+    renderer.rebuild(&mut vdom);
     renderer.assert_matches_vdom(&vdom);
     renderer.snapshot()
 }
@@ -1274,8 +1287,7 @@ pub fn render_immediate_snapshot(
     vdom: &mut VirtualDom,
     renderer: &mut RendererOracle,
 ) -> Vec<SnapshotNode> {
-    vdom.render_immediate(renderer);
-    renderer.assert_stack_clean();
+    renderer.render(vdom);
     renderer.assert_matches_vdom(vdom);
     renderer.snapshot()
 }
@@ -1307,8 +1319,7 @@ pub fn assert_fresh_snapshot_eq(app: fn() -> Element, expected: &[SnapshotNode])
 
 /// Assert that an immediate render emits no Dioxus mutations.
 pub fn assert_no_mutations(vdom: &mut VirtualDom) {
-    let mut mutations = Mutations::default();
-    vdom.render_immediate(&mut mutations);
+    let mutations = vdom.render_immediate_to_vec();
     assert!(
         mutations.edits.is_empty(),
         "expected no mutations, got {} mutation(s):\n{:#?}",
@@ -1638,8 +1649,7 @@ mod tests {
     fn asserts_no_mutations_for_idle_vdom() {
         let mut vdom = VirtualDom::new(simple_app);
         let mut renderer = RendererOracle::new();
-        vdom.rebuild(&mut renderer);
-        renderer.assert_stack_clean();
+        renderer.rebuild(&mut vdom);
         assert_no_mutations(&mut vdom);
     }
 

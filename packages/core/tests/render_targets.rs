@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::{
-    ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, TargetedMutations, VirtualDom,
+    ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom,
 };
 use std::{
     any::Any,
@@ -264,9 +264,7 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     let target = dom.create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
 
     let root_edits = edits.get(&RenderTargetId::ROOT).unwrap();
     let portal_edits = edits.get(&target).unwrap();
@@ -293,10 +291,9 @@ fn noop_targets_do_not_mount_effects() {
     let target = dom.create_noop_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
+    dom.rebuild();
     dom.process_events();
-    dom.render_immediate(&mut mutations);
+    dom.render_immediate();
 
     assert_eq!(EFFECTS.load(Ordering::SeqCst), 0);
 }
@@ -307,10 +304,7 @@ fn portal_children_keep_scope_context() {
     let target = dom.create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     assert!(edits.contains_key(&target));
 }
 
@@ -328,17 +322,13 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
 
     dom.runtime()
         .handle_event("click", click_event(), ElementId(2));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
 
     assert!(
         edits
@@ -367,9 +357,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
     let target = dom.create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     assert!(edits.get(&target).unwrap().edits.iter().any(
         |mutation| matches!(mutation, Mutation::LoadTemplate { id, .. } if *id == ElementId(1))
     ));
@@ -377,9 +365,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
     SHOW_PORTAL.store(0, Ordering::SeqCst);
     dom.mark_dirty(ScopeId::APP);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
 
     assert!(
         edits
@@ -401,18 +387,14 @@ fn dropped_targets_do_not_write_or_mount_effects() {
     let target = dom.create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     let show_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime().drop_render_target(target);
     dom.runtime()
         .handle_event("click", click_event(), show_button);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
 
     assert!(!edits.contains_key(&target));
     dom.process_events();
@@ -432,25 +414,19 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     let open_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
     assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
 
     dom.runtime()
         .handle_event_for_target(first, "click", click_event(), ElementId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
     assert!(
         edits
             .get(&first)
@@ -463,9 +439,7 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
 
     assert!(has_click_listener(
         edits.get(&second).unwrap(),
@@ -479,17 +453,13 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
 
     let mut dom = VirtualDom::new(dynamic_reopen_after_close_app);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.rebuild(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.rebuild_to_targeted_vec();
     let open_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
     assert!(has_click_listener(
         edits.get(&RenderTargetId(1)).unwrap(),
         ElementId(1)
@@ -498,9 +468,7 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event_for_target(RenderTargetId(1), "click", click_event(), ElementId(1));
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
     assert!(
         edits
             .get(&RenderTargetId(1))
@@ -513,9 +481,7 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let mut mutations = TargetedMutations::new(dom.runtime());
-    dom.render_immediate(&mut mutations);
-    let edits = mutations.into_edits();
+    let edits = dom.render_immediate_to_targeted_vec();
 
     assert!(has_click_listener(
         edits.get(&RenderTargetId(2)).unwrap(),

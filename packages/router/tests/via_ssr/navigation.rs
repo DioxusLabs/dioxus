@@ -8,7 +8,7 @@ fn layout_retains_state_after_navigation() {
     let mut vdom = VirtualDom::new(app);
     vdom.rebuild_in_place();
 
-    vdom.render_immediate(&mut NoOpMutations);
+    vdom.render_immediate();
     let as_string = dioxus_ssr::render(&vdom);
     assert_eq!(as_string, "Other");
 }

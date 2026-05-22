@@ -18,13 +18,13 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{AttributeValue, ElementId, RenderTargetId, Runtime, Template, WriteMutations};
+use dioxus_core::{AttributeValue, ElementId, Template, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
@@ -32,79 +32,72 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{
+    collections::HashMap,
     net::IpAddr,
     sync::{Arc, RwLock},
 };
 use tokio::sync::Notify;
 
 /// This handles communication between the requests that the webview makes and the interpreter.
+///
+/// `WryQueue` is registered with the VirtualDom at its window's `RenderTargetId`;
+/// the diff writes its mutations directly into this queue's `MutationState`.
 #[derive(Clone)]
 pub(crate) struct WryQueue {
     inner: Rc<RefCell<WryQueueInner>>,
 }
 
-/// A mutation writer that sends each edit to the webview queue for the current render target.
-pub(crate) struct DesktopTargetedMutations {
-    runtime: Rc<Runtime>,
-    queues: HashMap<RenderTargetId, WryQueue>,
-    touched: BTreeSet<RenderTargetId>,
-}
-
-impl DesktopTargetedMutations {
-    pub(crate) fn new(runtime: Rc<Runtime>, queues: HashMap<RenderTargetId, WryQueue>) -> Self {
-        Self {
-            runtime,
-            queues,
-            touched: BTreeSet::new(),
-        }
+impl WryQueue {
+    /// Whether any mutations have been written since the last `clear_touched`.
+    pub(crate) fn is_touched(&self) -> bool {
+        self.inner.borrow().touched
     }
 
-    pub(crate) fn into_touched(self) -> BTreeSet<RenderTargetId> {
-        self.touched
+    /// Reset the touched flag — called after `send_edits` so the next render
+    /// pass can detect a fresh batch of writes.
+    pub(crate) fn clear_touched(&self) {
+        self.inner.borrow_mut().touched = false;
     }
 
-    fn with_current_queue(&mut self, f: impl FnOnce(&mut MutationState)) {
-        let target = self.runtime.current_render_target_id();
-        let Some(queue) = self.queues.get(&target).cloned() else {
-            return;
-        };
-
-        self.touched.insert(target);
-        queue.with_mutation_state_mut(f);
+    #[inline]
+    fn with_mutation_state(&mut self, f: impl FnOnce(&mut MutationState)) {
+        let mut inner = self.inner.borrow_mut();
+        inner.touched = true;
+        f(&mut inner.mutation_state);
     }
 }
 
-impl WriteMutations for DesktopTargetedMutations {
+impl WriteMutations for WryQueue {
     fn append_children(&mut self, id: ElementId, m: usize) {
-        self.with_current_queue(|state| state.append_children(id, m));
+        self.with_mutation_state(|state| state.append_children(id, m));
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.with_current_queue(|state| state.assign_node_id(path, id));
+        self.with_mutation_state(|state| state.assign_node_id(path, id));
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.with_current_queue(|state| state.create_text_node(value, id));
+        self.with_mutation_state(|state| state.create_text_node(value, id));
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.with_current_queue(|state| state.load_template(template, index, id));
+        self.with_mutation_state(|state| state.load_template(template, index, id));
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.with_current_queue(|state| state.replace_node_with(id, m));
+        self.with_mutation_state(|state| state.replace_node_with(id, m));
     }
 
     fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.with_current_queue(|state| state.insert_children_at_path(path, m));
+        self.with_mutation_state(|state| state.insert_children_at_path(path, m));
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.with_current_queue(|state| state.insert_nodes_after(id, m));
+        self.with_mutation_state(|state| state.insert_nodes_after(id, m));
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.with_current_queue(|state| state.insert_nodes_before(id, m));
+        self.with_mutation_state(|state| state.insert_nodes_before(id, m));
     }
 
     fn set_attribute(
@@ -114,32 +107,36 @@ impl WriteMutations for DesktopTargetedMutations {
         value: &AttributeValue,
         id: ElementId,
     ) {
-        self.with_current_queue(|state| state.set_attribute(name, ns, value, id));
+        self.with_mutation_state(|state| state.set_attribute(name, ns, value, id));
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.with_current_queue(|state| state.set_node_text(value, id));
+        self.with_mutation_state(|state| state.set_node_text(value, id));
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.with_current_queue(|state| state.create_event_listener(name, id));
+        self.with_mutation_state(|state| state.create_event_listener(name, id));
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.with_current_queue(|state| state.remove_event_listener(name, id));
+        self.with_mutation_state(|state| state.remove_event_listener(name, id));
     }
 
     fn remove_node(&mut self, id: ElementId) {
-        self.with_current_queue(|state| state.remove_node(id));
+        self.with_mutation_state(|state| state.remove_node(id));
     }
 
     fn push_root(&mut self, id: ElementId) {
-        self.with_current_queue(|state| state.push_root(id));
+        self.with_mutation_state(|state| state.push_root(id));
     }
 
     fn pop_root(&mut self) {
-        self.with_current_queue(|state| state.pop_root());
+        self.with_mutation_state(|state| state.pop_root());
     }
+
+    fn commit(&mut self) {}
+
+    fn discard(&mut self) {}
 }
 
 impl WryQueue {
@@ -226,6 +223,10 @@ pub(crate) struct WryQueueInner {
     server_location_changed: Arc<Notify>,
     server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
     mutation_state: MutationState,
+    /// `true` if any mutation has been forwarded since the last `clear_touched`.
+    /// Used by the desktop app to decide which webviews need a `send_edits` call
+    /// after a render pass.
+    touched: bool,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
@@ -493,6 +494,7 @@ impl EditWebsocket {
                 websocket: self.clone(),
                 edits_in_progress: None,
                 mutation_state: MutationState::default(),
+                touched: false,
             })),
         }
     }

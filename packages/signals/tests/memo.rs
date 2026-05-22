@@ -124,7 +124,7 @@ fn memos_prevents_component_rerun() {
 
     dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate();
 
     {
         let current_counter = counter.borrow();
@@ -133,8 +133,8 @@ fn memos_prevents_component_rerun() {
     }
 
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate();
+    dom.render_immediate();
 
     {
         let current_counter = counter.borrow();
@@ -175,6 +175,6 @@ fn memos_sync_rerun_after_unrelated_write() {
 
     dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate();
     assert!(PASSED.load(Ordering::SeqCst));
 }

@@ -4,12 +4,15 @@
 
 ```rust, no_run
 # tokio::runtime::Runtime::new().unwrap().block_on(async {
-use dioxus_core::{VirtualDom, Event, Element, Mutations, VNode, ElementId};
+use dioxus_core::{
+    VirtualDom, Event, Element, Mutations, VNode, ElementId, RenderTargetId,
+};
 
 let mut vdom = VirtualDom::new(app);
 let mut real_dom = SomeRenderer::new();
-vdom.rebuild(real_dom.apply());
-real_dom.commit();
+vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+vdom.rebuild();
+real_dom.flush(vdom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
 
 loop {
     tokio::select! {
@@ -19,12 +22,17 @@ loop {
         },
         _ = vdom.wait_for_work() => {}
     }
-    vdom.render_concurrent(real_dom.apply()).await;
-    real_dom.commit();
+    vdom.render_concurrent().await;
+    real_dom.flush(vdom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
 }
 
 # fn app() -> Element { VNode::empty() }
-# struct SomeRenderer { mutations: Mutations } impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer { mutations: Mutations::default() } } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&mut self) -> &mut Mutations { &mut self.mutations } fn commit(&mut self) {} }
+# struct SomeRenderer;
+# impl SomeRenderer {
+#     fn new() -> Self { Self }
+#     async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() }
+#     fn flush(&mut self, _: &Mutations) {}
+# }
 # });
 ```
 
@@ -76,9 +84,13 @@ fn main() {
     // Next, create a new VirtualDom using this app as the root component.
     let mut dom = VirtualDom::new(app);
 
-    // The initial render of the dom will generate mutations for the real dom to apply.
-    let mut mutations = dioxus_core::Mutations::default();
-    dom.rebuild(&mut mutations);
+    // Register an in-memory collector at the root target. The initial render
+    // populates it with mutations.
+    dom.insert_render_target(
+        dioxus_core::RenderTargetId::ROOT,
+        dioxus_core::Mutations::default(),
+    );
+    dom.rebuild();
 }
 ```
 

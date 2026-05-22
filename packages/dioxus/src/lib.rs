@@ -247,7 +247,7 @@ pub mod prelude {
     pub use dioxus_core::{
         AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
         EventHandler, Fragment, HasAttributes, IntoDynNode, Portal, PortalProps, RenderError,
-        RenderTargetId, Result, ScopeId, SuspenseBoundary, SuspenseContext, TargetedMutations,
+        RenderTargetId, Result, ScopeId, SuspenseBoundary, SuspenseContext,
         UpdatePriority, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
         try_consume_context, use_drop, use_hook, with_update_priority,
     };

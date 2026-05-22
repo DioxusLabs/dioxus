@@ -60,14 +60,14 @@ async fn memo_updates() {
         // Wait for the signal to update
         for _ in 0..2 {
             dom.wait_for_work().await;
-            dom.render_immediate(&mut dioxus::dioxus_core::NoOpMutations);
+            dom.render_immediate();
         }
         assert_eq!(signal(), vec![0, 1, 2, 3, 4, 5]);
         // Remove each element from the vec
         for _ in 0..6 {
             signal.pop();
             dom.wait_for_work().await;
-            dom.render_immediate(&mut dioxus::dioxus_core::NoOpMutations);
+            dom.render_immediate();
             println!("Signal: {signal:?}");
         }
     };
@@ -118,7 +118,7 @@ async fn use_memo_only_triggers_one_update() {
         _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
     };
 
-    dom.render_immediate(&mut dioxus::dioxus_core::NoOpMutations);
+    dom.render_immediate();
 
     assert_eq!(VEC_SIGNAL.with(|v| v.borrow().clone()), vec![0, 20]);
 }

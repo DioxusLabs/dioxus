@@ -29,10 +29,10 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(synthetic_app);
-        dom.rebuild(&mut dioxus_core::NoOpMutations);
+        dom.rebuild();
 
         b.iter(|| {
-            dom.rebuild(&mut NoOpMutations);
+            dom.rebuild();
         })
     });
 }
@@ -222,7 +222,7 @@ impl JsFrameworkDom {
             generator: generator.clone(),
         };
         let mut dom = VirtualDom::new_with_props(js_framework_app, props);
-        dom.rebuild(&mut NoOpMutations);
+        dom.rebuild();
 
         Self {
             dom,
@@ -273,7 +273,7 @@ impl JsFrameworkDom {
     }
 
     fn render_and_count(&mut self) -> usize {
-        self.dom.render_immediate(&mut NoOpMutations);
+        self.dom.render_immediate();
         self.controls().row_count()
     }
 

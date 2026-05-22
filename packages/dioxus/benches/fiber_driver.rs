@@ -17,7 +17,7 @@ criterion_main!(benches);
 fn fiber_driver_large_prop_wave(c: &mut Criterion) {
     c.bench_function("fiber driver large prop wave", |b| {
         let mut dom = VirtualDom::new(app);
-        dom.rebuild(&mut NoOpMutations);
+        dom.rebuild();
         let runtime = dom.runtime();
 
         b.iter(|| {
@@ -39,7 +39,7 @@ fn bump_round(runtime: std::rc::Rc<dioxus_core::Runtime>) {
 
 fn drive_fibers(dom: &mut VirtualDom) {
     let mut mutations = NoOpMutations;
-    let fut = dom.render_concurrent(&mut mutations);
+    let fut = dom.render_concurrent_into(&mut mutations);
     pin_mut!(fut);
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);
