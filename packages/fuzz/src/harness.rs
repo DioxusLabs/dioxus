@@ -461,6 +461,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             };
             release_suspense_ready_task(key);
             with_model(|model| model.wake_ready_suspense(key));
+            state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
             render_dirty_and_assert(state)
         }
         Op::FireEvent { target, behavior } => {

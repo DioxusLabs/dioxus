@@ -256,6 +256,9 @@ impl VNode {
     }
 
     fn attribute_value_changed(old: &Attribute, new: &Attribute) -> bool {
+        debug_assert!(!Self::attribute_is_listener(Some(old)));
+        debug_assert!(!Self::attribute_is_listener(Some(new)));
+
         match (&old.value, &new.value) {
             (AttributeValue::Text(left), AttributeValue::Text(right)) => left != right,
             (AttributeValue::Float(left), AttributeValue::Float(right)) => left != right,
@@ -265,9 +268,6 @@ impl VNode {
                 !left.as_ref().any_cmp(right.as_ref())
             }
             (AttributeValue::None, AttributeValue::None) => false,
-            // Listener handler values are owned by the VNode and do not require renderer mutations
-            // as long as the listener key remains present.
-            (AttributeValue::Listener(_), AttributeValue::Listener(_)) => false,
             _ => true,
         }
     }
@@ -329,9 +329,8 @@ impl VNode {
 
     fn dynamic_attribute_changed(old: Option<&Attribute>, new: Option<&Attribute>) -> bool {
         match (old, new) {
-            (None, None) => false,
             (Some(left), Some(right)) => Self::attribute_value_changed(left, right),
-            (None, Some(_)) | (Some(_), None) => true,
+            (old, new) => old.is_some() != new.is_some(),
         }
     }
 

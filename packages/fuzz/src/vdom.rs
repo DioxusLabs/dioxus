@@ -79,7 +79,29 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     let wake_mutation = props.wake_mutation;
     let wake_applied = props.wake_applied;
     let suspense_ancestors = props.suspense_ancestors;
-    let child = props.child;
+    let child_spec = props.child;
+
+    if vnode_contains_suspense(&child_spec) {
+        return rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "suspense-fallback" },
+                GeneratedSuspenseChild {
+                    id,
+                    ready_generation,
+                    required_ready_wake_count,
+                    mode,
+                    wake_mutation,
+                    wake_applied,
+                    suspense_ancestors,
+                    child: child_spec,
+                }
+            }
+        };
+    }
+
+    let mut child_suspense_ancestors = suspense_ancestors.clone();
+    child_suspense_ancestors.push(id);
+    let child = build_suspense_child_vnode(&child_spec, &child_suspense_ancestors, wake_mutation, wake_applied);
     rsx! {
         SuspenseBoundary {
             fallback: |_| rsx! { "suspense-fallback" },
@@ -88,11 +110,12 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
                 ready_generation,
                 required_ready_wake_count,
                 mode,
-                wake_mutation,
-                wake_applied,
+                wake_mutation: WakeMutationSpec::None,
+                wake_applied: false,
                 suspense_ancestors,
-                child,
+                child: VNodeSpec::minimal(),
             }
+            {child}
         }
     }
 }
@@ -250,6 +273,18 @@ fn build_suspense_child_vnode(
     )
 }
 
+fn vnode_contains_suspense(spec: &VNodeSpec) -> bool { spec.template.roots.iter().any(template_node_contains_suspense) }
+
+fn template_node_contains_suspense(spec: &TemplateNodeSpec) -> bool {
+    match spec {
+        TemplateNodeSpec::Element { children, .. } => children.iter().any(template_node_contains_suspense),
+        TemplateNodeSpec::Dynamic(DynamicSpec::Fragment(nodes)) => nodes.iter().any(vnode_contains_suspense),
+        TemplateNodeSpec::Dynamic(DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component)) => vnode_contains_suspense(&component.child),
+        TemplateNodeSpec::Dynamic(DynamicSpec::Suspense(_)) => true,
+        TemplateNodeSpec::Text(_) | TemplateNodeSpec::Dynamic(_) => false,
+    }
+}
+
 fn build_vnode(spec: &VNodeSpec) -> VNode {
     build_vnode_with_suspense(spec, &[])
 }
@@ -355,31 +390,41 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
     let namespace = spec.namespace.map(namespace_name);
     match spec.value {
         AttrValueSpec::Text(value) => Attribute::new(
-            attr_name(spec.name),
+            dynamic_attr_name(slot, spec.name),
             format!("attr-value-{value}"),
             namespace,
             spec.volatile,
         ),
         AttrValueSpec::Float(value) => Attribute::new(
-            attr_name(spec.name),
+            dynamic_attr_name(slot, spec.name),
             f64::from(value) / 10.0,
             namespace,
             spec.volatile,
         ),
         AttrValueSpec::Int(value) => {
-            Attribute::new(attr_name(spec.name), value as i64, namespace, spec.volatile)
+            Attribute::new(
+                dynamic_attr_name(slot, spec.name),
+                value as i64,
+                namespace,
+                spec.volatile,
+            )
         }
         AttrValueSpec::Bool(value) => {
-            Attribute::new(attr_name(spec.name), value, namespace, spec.volatile)
+            Attribute::new(
+                dynamic_attr_name(slot, spec.name),
+                value,
+                namespace,
+                spec.volatile,
+            )
         }
         AttrValueSpec::Any(value) => Attribute::new(
-            attr_name(spec.name),
+            dynamic_attr_name(slot, spec.name),
             AttributeValue::any_value(value),
             namespace,
             spec.volatile,
         ),
         AttrValueSpec::None => Attribute::new(
-            attr_name(spec.name),
+            dynamic_attr_name(slot, spec.name),
             AttributeValue::None,
             namespace,
             spec.volatile,
@@ -909,6 +954,14 @@ fn namespace_name(value: u8) -> &'static str {
 
 fn attr_name(value: u8) -> &'static str {
     leak_str(format!("attr{value}"))
+}
+
+fn dynamic_attr_name(slot: usize, value: u8) -> &'static str {
+    if value & 0x80 == 0 {
+        attr_name(value)
+    } else {
+        listener_name(slot, value & 0x7f)
+    }
 }
 
 fn listener_name(slot: usize, value: u8) -> &'static str {

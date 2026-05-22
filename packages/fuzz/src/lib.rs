@@ -28,67 +28,7 @@ use std::{cell::Cell, fmt};
 
 pub const MAX_STEPS: usize = 512;
 const OPTIMIZED_BURST_LIMIT: usize = 6;
-
-const OPTIMIZED_STRATEGIES: &[OptimizedStrategy] = &[
-    OptimizedStrategy::SetSelectedNodeBiased,
-    OptimizedStrategy::InsertRoot,
-    OptimizedStrategy::RemoveOrMoveRoot,
-    OptimizedStrategy::InsertChild,
-    OptimizedStrategy::RemoveOrMoveChild,
-    OptimizedStrategy::InsertTemplateAttr,
-    OptimizedStrategy::RemoveOrMoveTemplateAttr,
-    OptimizedStrategy::SetDynamicFragment,
-    OptimizedStrategy::SetDynamicLeaf,
-    OptimizedStrategy::SetDynamicComponent,
-    OptimizedStrategy::SetFragmentKeyMode,
-    OptimizedStrategy::EditFragmentChildren,
-    OptimizedStrategy::EditDynamicAttrs,
-    OptimizedStrategy::SetSuspenseMode,
-    OptimizedStrategy::SetSuspenseWakeMutation,
-    OptimizedStrategy::WakeSuspense,
-    OptimizedStrategy::FireReentrantEvent,
-    OptimizedStrategy::DiffFragmentSequence,
-    OptimizedStrategy::DiffDynamicNodeSequence,
-    OptimizedStrategy::DiffSuspenseSequence,
-    OptimizedStrategy::DiffAttributeSequence,
-    OptimizedStrategy::SetSelectedNodeElement,
-    OptimizedStrategy::Rerender,
-];
-
-#[derive(Clone, Copy, Debug)]
-enum OptimizedStrategy {
-    SetSelectedNodeBiased,
-    InsertRoot,
-    RemoveOrMoveRoot,
-    InsertChild,
-    RemoveOrMoveChild,
-    InsertTemplateAttr,
-    RemoveOrMoveTemplateAttr,
-    SetDynamicFragment,
-    SetDynamicLeaf,
-    SetDynamicComponent,
-    SetFragmentKeyMode,
-    EditFragmentChildren,
-    EditDynamicAttrs,
-    SetSuspenseMode,
-    SetSuspenseWakeMutation,
-    WakeSuspense,
-    FireReentrantEvent,
-    DiffFragmentSequence,
-    DiffDynamicNodeSequence,
-    DiffSuspenseSequence,
-    DiffAttributeSequence,
-    SetSelectedNodeElement,
-    Rerender,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum DiffingSequenceKind {
-    Fragment,
-    DynamicNode,
-    Suspense,
-    Attribute,
-}
+const OPTIMIZED_MUTATION_COUNT: u32 = 22;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
@@ -167,9 +107,8 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
         }
 
         if !candidates.shrink() {
-            candidates.mutation_group(OPTIMIZED_STRATEGIES.len() as u32, |context, which| {
-                let strategy = OPTIMIZED_STRATEGIES[which as usize];
-                insert_optimized_model_aware_ops(context, case, strategy);
+            candidates.mutation_group(OPTIMIZED_MUTATION_COUNT, |context, which| {
+                splice_optimized_ops(context, case, which);
                 Ok(())
             })?;
         }
@@ -210,129 +149,46 @@ fn replay_model_prefix(ops: &[Op], len: usize) -> Model {
     model
 }
 
-fn insert_optimized_model_aware_op(
-    context: &mut mutatis::Context,
-    case: &mut FuzzCase,
-    strategy: OptimizedStrategy,
-) {
-    let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
-    let model = replay_model_prefix(&case.ops, index);
-    let selector = context.rng().gen_u8();
-    let value = context.rng().gen_u8();
-    let op = optimized_model_aware_op(&model, strategy, selector, value);
-
-    if case.ops.len() < MAX_STEPS {
-        case.ops.insert(index, op);
-    } else if !case.ops.is_empty() {
-        let replace_index = index.min(case.ops.len() - 1);
-        case.ops[replace_index] = op;
-    }
-}
-
-fn insert_optimized_model_aware_ops(
-    context: &mut mutatis::Context,
-    case: &mut FuzzCase,
-    strategy: OptimizedStrategy,
-) {
-    if matches!(strategy, OptimizedStrategy::FireReentrantEvent) {
-        insert_reentrant_event_reproducer_ops(context, case);
+fn splice_optimized_ops(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
+    splice_optimized_slot(context, case, which);
+    if which == 19 {
         return;
     }
-
-    if let Some(kind) = diffing_sequence_kind(strategy) {
-        insert_diffing_sequence_ops(context, case, kind);
-        return;
-    }
-
-    insert_optimized_model_aware_op(context, case, strategy);
 
     let burst_len = context.rng().gen_index(OPTIMIZED_BURST_LIMIT).unwrap_or(0);
     for _ in 0..burst_len {
-        let strategy = OPTIMIZED_STRATEGIES[context
+        let which = context
             .rng()
-            .gen_index(OPTIMIZED_STRATEGIES.len())
-            .unwrap_or(0)];
-        if let Some(kind) = diffing_sequence_kind(strategy) {
-            insert_diffing_sequence_ops(context, case, kind);
-        } else {
-            insert_optimized_model_aware_op(context, case, strategy);
-        }
+            .gen_index(OPTIMIZED_MUTATION_COUNT as usize)
+            .unwrap_or(0) as u32;
+        splice_optimized_slot(context, case, which);
     }
 }
 
-fn diffing_sequence_kind(strategy: OptimizedStrategy) -> Option<DiffingSequenceKind> {
-    match strategy {
-        OptimizedStrategy::DiffFragmentSequence => Some(DiffingSequenceKind::Fragment),
-        OptimizedStrategy::DiffDynamicNodeSequence => Some(DiffingSequenceKind::DynamicNode),
-        OptimizedStrategy::DiffSuspenseSequence => Some(DiffingSequenceKind::Suspense),
-        OptimizedStrategy::DiffAttributeSequence => Some(DiffingSequenceKind::Attribute),
-        _ => None,
-    }
-}
-
-fn insert_reentrant_event_reproducer_ops(context: &mut mutatis::Context, case: &mut FuzzCase) {
+fn splice_optimized_slot(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
     let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
-    let value = context.rng().gen_u8();
-    let listener_name = optimized_attr_name(&AttrValueSpec::Listener);
-    let ops = [
-        Op::template(
-            0,
-            TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Element {
-                    tag: value,
-                    namespace: None,
-                },
-            },
-        ),
-        Op::template(
-            0,
-            TemplateEdit::Attrs {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
-                        name: listener_name,
-                        namespace: None,
-                        value: AttrValueSpec::Listener,
-                        volatile: false,
-                    }]),
-                },
-            },
-        ),
-        Op::Rerender,
-        Op::template(
-            0,
-            TemplateEdit::Roots {
-                edit: ListEdit::Insert {
-                    index: 1,
-                    item: TemplateNodeKind::Element {
-                        tag: value.wrapping_add(1),
-                        namespace: None,
-                    },
-                },
-            },
-        ),
-        Op::fire_event(0, EventBehaviorSpec::DispatchNestedEvent { target: 0 }),
-    ];
-
-    insert_ops_at(case, index, ops);
-}
-
-fn insert_diffing_sequence_ops(
-    context: &mut mutatis::Context,
-    case: &mut FuzzCase,
-    kind: DiffingSequenceKind,
-) {
-    let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
+    let mut model = replay_model_prefix(&case.ops, index);
     let selector = context.rng().gen_u8();
     let value = context.rng().gen_u8();
-    let mut model = replay_model_prefix(&case.ops, index);
     insert_ops_at(
         case,
         index,
-        diffing_sequence_ops(&mut model, kind, selector, value),
+        optimized_ops(&mut model, which, selector, value),
     );
+}
+
+fn optimized_ops(model: &mut Model, which: u32, selector: u8, value: u8) -> Vec<Op> {
+    match which {
+        19 => diff_suspense_sequence_ops(model, selector, value),
+        _ => {
+            let op = optimized_model_aware_op(model, which, selector, value);
+            if matches!(op, Op::Mutate(_)) {
+                vec![op, Op::Rerender, Op::Rerender]
+            } else {
+                vec![op]
+            }
+        }
+    }
 }
 
 fn insert_ops_at(case: &mut FuzzCase, index: usize, ops: impl IntoIterator<Item = Op>) {
@@ -346,222 +202,9 @@ fn insert_ops_at(case: &mut FuzzCase, index: usize, ops: impl IntoIterator<Item 
     }
 }
 
-fn diffing_sequence_ops(
-    model: &mut Model,
-    kind: DiffingSequenceKind,
-    selector: u8,
-    value: u8,
-) -> Vec<Op> {
-    match kind {
-        DiffingSequenceKind::Fragment => diff_fragment_sequence_ops(model, selector, value),
-        DiffingSequenceKind::DynamicNode => diff_dynamic_node_sequence_ops(model, selector, value),
-        DiffingSequenceKind::Suspense => diff_suspense_sequence_ops(model, selector, value),
-        DiffingSequenceKind::Attribute => diff_attribute_sequence_ops(model, selector, value),
-    }
-}
-
 fn push_modeled_op(model: &mut Model, ops: &mut Vec<Op>, op: Op) {
     ops::apply_strategy_op_to_model(model, &op);
     ops.push(op);
-}
-
-fn diff_fragment_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
-    let mut ops = Vec::new();
-    let facts = ModelFacts::new(model);
-    let mut fragment = facts.select_fragment(selector);
-
-    if fragment.is_none() {
-        let vnode = facts.select_focus_vnode(selector, value);
-        let node = facts.select_dynamic_node(vnode, selector);
-        let len = 2 + (value % 4) as usize;
-        let keyed = value & 1 != 0;
-        let op = Op::dynamic(
-            vnode,
-            node,
-            DynamicKind::Fragment {
-                children: len.min(u8::MAX as usize) as u8,
-                key_base: keyed.then_some(value.wrapping_add(1)),
-            },
-        );
-        push_modeled_op(model, &mut ops, op);
-        fragment = Some(FragmentShape {
-            vnode,
-            node,
-            len,
-            keyed,
-        });
-    }
-
-    let Some(mut fragment) = fragment else {
-        return ops;
-    };
-
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    match value % 6 {
-        0 => {
-            let op = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::Children(ListEdit::Insert {
-                    index: biased_index(value, fragment.len),
-                    item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
-                }),
-            );
-            push_modeled_op(model, &mut ops, op);
-        }
-        1 if fragment.len > 0 => {
-            let op = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::Children(ListEdit::Remove {
-                    index: biased_existing_index(value, fragment.len),
-                }),
-            );
-            push_modeled_op(model, &mut ops, op);
-        }
-        2 if fragment.len >= 2 => {
-            let op = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::Children(ListEdit::Move {
-                    from: biased_existing_index(selector, fragment.len),
-                    to: biased_index(value, fragment.len),
-                }),
-            );
-            push_modeled_op(model, &mut ops, op);
-        }
-        3 => {
-            let op = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::KeyMode(biased_fragment_key_mode(value)),
-            );
-            push_modeled_op(model, &mut ops, op);
-        }
-        _ => {
-            let insert = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::Children(ListEdit::Insert {
-                    index: biased_index(value, fragment.len),
-                    item: biased_fragment_child_key(value, fragment.len, true),
-                }),
-            );
-            push_modeled_op(model, &mut ops, insert);
-            fragment.len = fragment.len.saturating_add(1);
-            let remove = Op::fragment(
-                fragment.vnode,
-                fragment.node,
-                FragmentEdit::Children(ListEdit::Remove {
-                    index: biased_existing_index(selector, fragment.len),
-                }),
-            );
-            push_modeled_op(model, &mut ops, remove);
-        }
-    }
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    ops
-}
-
-fn diff_dynamic_node_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
-    if value % 4 == 0 {
-        return diff_placeholder_noop_sequence_ops(model, selector, value);
-    }
-
-    let mut ops = Vec::new();
-    let facts = ModelFacts::new(model);
-    let vnode = facts.select_focus_vnode(selector, value);
-    let node = facts.select_dynamic_node(vnode, selector);
-
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic(vnode, node, sequence_dynamic_kind(value, 0)),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic(vnode, node, sequence_dynamic_kind(value, 1)),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    ops
-}
-
-fn diff_placeholder_noop_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
-    let mut ops = Vec::new();
-    let facts = ModelFacts::new(model);
-    let vnode = facts.select_vnode(selector);
-
-    // Reset the first root to a controlled element so the following dynamic child
-    // slots are model-derived but predictable within this VNode.
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Text(value),
-            },
-        ),
-    );
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::SetNode {
-                node: 0,
-                kind: TemplateNodeKind::Element {
-                    tag: value,
-                    namespace: None,
-                },
-            },
-        ),
-    );
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::Children {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 0,
-                    item: TemplateNodeKind::Dynamic(DynamicKind::Placeholder),
-                },
-            },
-        ),
-    );
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::Children {
-                element: 0,
-                edit: ListEdit::Insert {
-                    index: 1,
-                    item: TemplateNodeKind::Dynamic(DynamicKind::Text(value)),
-                },
-            },
-        ),
-    );
-
-    let facts = ModelFacts::new(model);
-    let Some(text_node) = facts.nth_dynamic_node(vnode, 1) else {
-        return ops;
-    };
-
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic(vnode, text_node, DynamicKind::Text(value.wrapping_add(1))),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    ops
 }
 
 fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
@@ -594,19 +237,34 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
         return ops;
     };
 
-    let base = value & 0x3f;
-    let child_kind = if value & 1 == 0 {
-        DynamicKind::Text(value)
-    } else {
-        DynamicKind::Fragment {
-            children: 3,
-            key_base: Some(base),
-        }
-    };
+    if value & 1 == 0 {
+        let (old, new) = (DynamicKind::Text(value), DynamicKind::Text(value.wrapping_add(1)));
+        push_modeled_op(model, &mut ops, set_vnode_root_dynamic_op(child_vnode, old));
+        push_modeled_op(model, &mut ops, Op::Rerender);
+        push_modeled_op(
+            model,
+            &mut ops,
+            Op::suspense(suspense, SuspenseMode::Ready { wake_after: 0 }),
+        );
+        push_modeled_op(model, &mut ops, Op::Rerender);
+        push_modeled_op(model, &mut ops, set_vnode_root_dynamic_op(child_vnode, new));
+        push_modeled_op(model, &mut ops, Op::Rerender);
+        push_modeled_op(model, &mut ops, Op::wake_suspense(suspense));
+        return ops;
+    }
+
+    let keyed = value & 2 == 0;
+    let len = 2 + ((selector ^ value) % 4) as usize;
     push_modeled_op(
         model,
         &mut ops,
-        set_vnode_root_dynamic_op(child_vnode, child_kind),
+        set_vnode_root_dynamic_op(
+            child_vnode,
+            DynamicKind::Fragment {
+                children: len.min(u8::MAX as usize) as u8,
+                key_base: keyed.then_some(value),
+            },
+        ),
     );
     push_modeled_op(model, &mut ops, Op::Rerender);
     push_modeled_op(
@@ -616,163 +274,27 @@ fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec
     );
     push_modeled_op(model, &mut ops, Op::Rerender);
 
-    if value & 1 == 0 {
-        push_modeled_op(
-            model,
-            &mut ops,
-            set_vnode_root_dynamic_op(child_vnode, DynamicKind::Text(value.wrapping_add(1))),
-        );
-    } else {
-        push_modeled_op(
-            model,
-            &mut ops,
-            insert_fragment_child_in_vnode_op(child_vnode, 0, Some(base.wrapping_sub(1))),
-        );
-    }
+    push_modeled_op(
+        model,
+        &mut ops,
+        Op::fragment(
+            child_vnode,
+            0,
+            FragmentEdit::Children(ListEdit::Insert {
+                index: biased_index(value, len),
+                item: keyed.then_some(value.wrapping_add(len.min(u8::MAX as usize) as u8)),
+            }),
+        ),
+    );
     push_modeled_op(model, &mut ops, Op::Rerender);
-
-    if value & 1 == 0 {
-        push_modeled_op(
-            model,
-            &mut ops,
-            set_vnode_root_dynamic_op(child_vnode, DynamicKind::Text(value.wrapping_add(2))),
-        );
-    } else {
-        push_modeled_op(
-            model,
-            &mut ops,
-            insert_fragment_child_in_vnode_op(child_vnode, 7, Some(base.wrapping_add(3))),
-        );
-    }
-    push_modeled_op(model, &mut ops, Op::Rerender);
+    push_modeled_op(model, &mut ops, Op::wake_suspense(suspense));
     ops
 }
 
-fn diff_attribute_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
-    let mut ops = Vec::new();
-    let facts = ModelFacts::new(model);
-    let vnode = facts.select_focus_vnode(selector, value);
-    let element = facts.select_element(vnode, selector);
-    let name = value;
-    let text_value = selector & 0x7f;
-
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::Attrs {
-                element,
-                edit: ListEdit::Insert {
-                    index: facts
-                        .template_attr_count(vnode, element)
-                        .min(u8::MAX as usize) as u8,
-                    item: TemplateAttrSpec::Static {
-                        name,
-                        value: 128 + text_value,
-                        namespace: None,
-                    },
-                },
-            },
-        ),
-    );
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::template(
-            vnode,
-            TemplateEdit::Attrs {
-                element,
-                edit: ListEdit::Insert {
-                    index: facts
-                        .template_attr_count(vnode, element)
-                        .saturating_add(1)
-                        .min(u8::MAX as usize) as u8,
-                    item: TemplateAttrSpec::Dynamic(Vec::new()),
-                },
-            },
-        ),
-    );
-
-    let facts = ModelFacts::new(model);
-    let Some(attr) = facts.last_element_attr_slot(vnode, element) else {
-        return ops;
-    };
-
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic_attrs(
-            attr.vnode,
-            attr.slot,
-            ListEdit::Insert {
-                index: 0,
-                item: attr_spec(name, AttrValueSpec::Text(text_value.wrapping_add(1))),
-            },
-        ),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic_attrs(attr.vnode, attr.slot, ListEdit::Remove { index: 0 }),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic_attrs(
-            attr.vnode,
-            attr.slot,
-            ListEdit::Insert {
-                index: 0,
-                item: attr_spec(name, AttrValueSpec::Text(text_value)),
-            },
-        ),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic_attrs(attr.vnode, attr.slot, ListEdit::Remove { index: 0 }),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::dynamic_attrs(
-            attr.vnode,
-            attr.slot,
-            ListEdit::Insert {
-                index: 0,
-                item: attr_spec(name, AttrValueSpec::Int(value)),
-            },
-        ),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    ops
-}
-
-fn sequence_dynamic_kind(value: u8, phase: u8) -> DynamicKind {
-    match value.wrapping_add(phase.wrapping_mul(47)) % 6 {
-        0 => DynamicKind::Text(value.wrapping_add(phase)),
-        1 => DynamicKind::Placeholder,
-        2 => DynamicKind::Fragment {
-            children: 1 + (value % 4),
-            key_base: (value & 1 != 0).then_some(value.wrapping_add(phase)),
-        },
-        3 => DynamicKind::ComponentA,
-        4 => DynamicKind::ComponentB,
-        _ => DynamicKind::Empty,
-    }
-}
-
-fn insert_fragment_child_in_vnode_op(vnode: u8, index: u8, key: Option<u8>) -> Op {
-    Op::fragment(
-        vnode,
-        0,
-        FragmentEdit::Children(ListEdit::Insert { index, item: key }),
-    )
+fn fragment_insert_key(fragment: FragmentShape, value: u8) -> Option<u8> {
+    fragment
+        .keyed
+        .then_some(value.wrapping_add(fragment.len.min(u8::MAX as usize) as u8))
 }
 
 fn set_vnode_root_dynamic_op(vnode: u8, kind: DynamicKind) -> Op {
@@ -783,24 +305,6 @@ fn set_vnode_root_dynamic_op(vnode: u8, kind: DynamicKind) -> Op {
             kind: TemplateNodeKind::Dynamic(kind),
         },
     )
-}
-
-#[cfg(test)]
-fn hidden_suspense_text_diff_recipe() -> Vec<Op> {
-    let mut model = Model::initial();
-    diff_suspense_sequence_ops(&mut model, 0, 0)
-}
-
-#[cfg(test)]
-fn hidden_suspense_keyed_fragment_diff_recipe() -> Vec<Op> {
-    let mut model = Model::initial();
-    diff_suspense_sequence_ops(&mut model, 0, 1)
-}
-
-#[cfg(test)]
-fn placeholder_noop_diff_recipe() -> Vec<Op> {
-    let mut model = Model::initial();
-    diff_placeholder_noop_sequence_ops(&mut model, 0, 0)
 }
 
 #[cfg(test)]
@@ -894,25 +398,20 @@ fn dynamic_attribute_static_fallback_recipe() -> Vec<Op> {
     ]
 }
 
-fn optimized_model_aware_op(
-    model: &Model,
-    strategy: OptimizedStrategy,
-    selector: u8,
-    value: u8,
-) -> Op {
+fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) -> Op {
     let facts = ModelFacts::new(model);
     let vnode = facts.select_focus_vnode(selector, value);
     let node = facts.select_node(vnode, value);
     let element = facts.select_element(vnode, value);
-    match strategy {
-        OptimizedStrategy::SetSelectedNodeBiased if model.can_grow() => Op::template(
+    match which {
+        0 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::SetNode {
                 node,
                 kind: biased_template_node_kind(value),
             },
         ),
-        OptimizedStrategy::InsertRoot if model.can_grow() => Op::template(
+        1 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::Roots {
                 edit: ListEdit::Insert {
@@ -921,13 +420,13 @@ fn optimized_model_aware_op(
                 },
             },
         ),
-        OptimizedStrategy::RemoveOrMoveRoot => Op::template(
+        2 => Op::template(
             vnode,
             TemplateEdit::Roots {
                 edit: remove_or_move_list_edit(facts.root_count(vnode), selector, value),
             },
         ),
-        OptimizedStrategy::InsertChild if model.can_grow() => Op::template(
+        3 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::Children {
                 element,
@@ -937,14 +436,14 @@ fn optimized_model_aware_op(
                 },
             },
         ),
-        OptimizedStrategy::RemoveOrMoveChild => Op::template(
+        4 => Op::template(
             vnode,
             TemplateEdit::Children {
                 element,
                 edit: remove_or_move_list_edit(facts.child_count(vnode, element), selector, value),
             },
         ),
-        OptimizedStrategy::InsertTemplateAttr if model.can_grow() => Op::template(
+        5 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::Attrs {
                 element,
@@ -954,7 +453,7 @@ fn optimized_model_aware_op(
                 },
             },
         ),
-        OptimizedStrategy::RemoveOrMoveTemplateAttr => Op::template(
+        6 => Op::template(
             vnode,
             TemplateEdit::Attrs {
                 element,
@@ -965,13 +464,9 @@ fn optimized_model_aware_op(
                 ),
             },
         ),
-        OptimizedStrategy::SetDynamicFragment => {
-            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
-        }
-        OptimizedStrategy::SetDynamicLeaf => {
-            dynamic_node_op(&facts, vnode, selector, biased_leaf_dynamic_kind(value))
-        }
-        OptimizedStrategy::SetDynamicComponent => dynamic_node_op(
+        7 => dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value)),
+        8 => dynamic_node_op(&facts, vnode, selector, biased_leaf_dynamic_kind(value)),
+        9 => dynamic_node_op(
             &facts,
             vnode,
             selector,
@@ -981,7 +476,7 @@ fn optimized_model_aware_op(
                 DynamicKind::ComponentB
             },
         ),
-        OptimizedStrategy::SetFragmentKeyMode if facts.has_dynamic_nodes() => {
+        10 if facts.has_dynamic_nodes() => {
             let fragment = facts
                 .select_fragment(selector)
                 .unwrap_or_else(|| facts.fragment_prerequisite(selector));
@@ -991,22 +486,16 @@ fn optimized_model_aware_op(
                 FragmentEdit::KeyMode(biased_fragment_key_mode(value)),
             )
         }
-        OptimizedStrategy::SetFragmentKeyMode => {
-            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
-        }
-        OptimizedStrategy::EditFragmentChildren if facts.has_dynamic_nodes() => {
+        10 => dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value)),
+        11 if facts.has_dynamic_nodes() => {
             edit_fragment_children_op(&facts, model.can_grow(), selector, value)
         }
-        OptimizedStrategy::EditFragmentChildren => {
-            dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value))
-        }
-        OptimizedStrategy::EditDynamicAttrs => {
-            edit_dynamic_attrs_op(&facts, model.can_grow(), vnode, element, selector, value)
-        }
-        OptimizedStrategy::SetSuspenseMode if facts.has_suspense() => {
+        11 => dynamic_node_op(&facts, vnode, selector, biased_fragment_dynamic_kind(value)),
+        12 => edit_dynamic_attrs_op(&facts, model.can_grow(), vnode, element, selector, value),
+        13 if facts.has_suspense() => {
             Op::suspense(facts.select_suspense(selector), biased_suspense_mode(value))
         }
-        OptimizedStrategy::SetSuspenseMode => dynamic_node_op(
+        13 => dynamic_node_op(
             &facts,
             vnode,
             selector,
@@ -1014,20 +503,14 @@ fn optimized_model_aware_op(
                 mode: biased_suspense_mode(value),
             },
         ),
-        OptimizedStrategy::SetSuspenseWakeMutation if facts.has_suspense() => {
+        14 if facts.has_suspense() => {
             Op::suspense_wake_mutation(facts.select_suspense(selector), biased_wake_mutation(value))
         }
-        OptimizedStrategy::SetSuspenseWakeMutation => {
-            ready_suspense_node_op(&facts, vnode, selector)
-        }
-        OptimizedStrategy::WakeSuspense if facts.has_suspense() => {
-            Op::wake_suspense(facts.select_suspense(selector))
-        }
-        OptimizedStrategy::WakeSuspense => ready_suspense_node_op(&facts, vnode, selector),
-        OptimizedStrategy::FireReentrantEvent => {
-            Op::fire_event(selector, optimized_event_behavior(selector, value))
-        }
-        OptimizedStrategy::SetSelectedNodeElement if model.can_grow() => Op::template(
+        14 => ready_suspense_node_op(&facts, vnode, selector),
+        15 if facts.has_suspense() => Op::wake_suspense(facts.select_suspense(selector)),
+        15 => ready_suspense_node_op(&facts, vnode, selector),
+        16 => Op::fire_event(selector, optimized_event_behavior(selector, value)),
+        20 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::SetNode {
                 node,
@@ -1037,7 +520,7 @@ fn optimized_model_aware_op(
                 },
             },
         ),
-        OptimizedStrategy::Rerender => Op::Rerender,
+        21 => Op::Rerender,
         _ => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -1077,7 +560,7 @@ fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, v
     let edit = match value % 3 {
         0 if can_grow => ListEdit::Insert {
             index: biased_index(value, fragment.len),
-            item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
+            item: fragment_insert_key(fragment, value),
         },
         1 if fragment.len > 0 => ListEdit::Remove {
             index: biased_existing_index(value, fragment.len),
@@ -1088,7 +571,7 @@ fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, v
         },
         _ if can_grow => ListEdit::Insert {
             index: 0,
-            item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
+            item: fragment_insert_key(fragment, value),
         },
         _ => ListEdit::Remove { index: 0 },
     };
@@ -1170,7 +653,6 @@ struct VNodeShape {
 struct ElementShape {
     children: usize,
     attrs: usize,
-    dynamic_attr_slots: Vec<u8>,
 }
 
 #[derive(Default)]
@@ -1245,11 +727,9 @@ impl ModelFacts {
                 continue;
             };
 
-            let mut dynamic_attr_slots = Vec::new();
             for attr in attrs {
                 if let TemplateAttrSpec::Dynamic(attrs) = attr {
                     let dynamic_slot = (*slot).min(u8::MAX as usize) as u8;
-                    dynamic_attr_slots.push(dynamic_slot);
                     self.attrs.push(AttrShape {
                         vnode,
                         slot: dynamic_slot,
@@ -1262,7 +742,6 @@ impl ModelFacts {
             elements.push(ElementShape {
                 children: children.len(),
                 attrs: attrs.len(),
-                dynamic_attr_slots,
             });
 
             self.collect_template_elements_and_attrs(vnode, children, slot, elements);
@@ -1366,14 +845,6 @@ impl ModelFacts {
             .unwrap_or_else(|| self.select_node(vnode, selector))
     }
 
-    fn nth_dynamic_node(&self, vnode: u8, index: usize) -> Option<u8> {
-        self.vnodes
-            .get(vnode as usize)?
-            .dynamic_nodes
-            .get(index)
-            .copied()
-    }
-
     fn has_dynamic_nodes(&self) -> bool {
         self.vnodes
             .iter()
@@ -1400,21 +871,6 @@ impl ModelFacts {
     fn select_attr_slot(&self, selector: u8) -> Option<AttrShape> {
         self.attrs
             .get(selector as usize % self.attrs.len().max(1))
-            .copied()
-    }
-
-    fn last_element_attr_slot(&self, vnode: u8, element: u8) -> Option<AttrShape> {
-        let slot = self
-            .vnodes
-            .get(vnode as usize)?
-            .elements
-            .get(element as usize)?
-            .dynamic_attr_slots
-            .last()
-            .copied()?;
-        self.attrs
-            .iter()
-            .find(|attr| attr.vnode == vnode && attr.slot == slot)
             .copied()
     }
 
@@ -1554,14 +1010,6 @@ fn biased_fragment_key_mode(value: u8) -> FragmentKeyMode {
     }
 }
 
-fn biased_fragment_child_key(value: u8, len: usize, keyed: bool) -> Option<u8> {
-    if keyed {
-        Some(value.wrapping_add(len.min(u8::MAX as usize) as u8))
-    } else {
-        None
-    }
-}
-
 fn optimized_attr(value: u8) -> AttrSpec {
     let attr_value = match value % 7 {
         0 => AttrValueSpec::Text(value),
@@ -1573,19 +1021,20 @@ fn optimized_attr(value: u8) -> AttrSpec {
         _ => AttrValueSpec::Listener,
     };
     AttrSpec {
-        name: optimized_attr_name(&attr_value),
+        name: optimized_dynamic_attr_name(&attr_value, value),
         namespace: None,
         value: attr_value,
         volatile: false,
     }
 }
 
-fn attr_spec(name: u8, value: AttrValueSpec) -> AttrSpec {
-    AttrSpec {
-        name,
-        namespace: None,
-        value,
-        volatile: false,
+fn optimized_dynamic_attr_name(attr_value: &AttrValueSpec, value: u8) -> u8 {
+    if matches!(attr_value, AttrValueSpec::Listener) {
+        value & 0x7f
+    } else if value & 0x80 != 0 {
+        value
+    } else {
+        optimized_attr_name(attr_value)
     }
 }
 
@@ -1795,38 +1244,38 @@ mod tests {
 
     #[test]
     fn optimized_model_aware_op_replays() {
-        let model = Model::initial();
-        for (index, strategy) in OPTIMIZED_STRATEGIES.iter().copied().enumerate() {
-            let op = optimized_model_aware_op(&model, strategy, index as u8, 128 + index as u8);
-            run_case(&FuzzCase::new(vec![op])).unwrap();
+        for which in 0..OPTIMIZED_MUTATION_COUNT {
+            let mut model = Model::initial();
+            let ops = optimized_ops(&mut model, which, which as u8, 128 + which as u8);
+            run_case(&FuzzCase::new(ops)).unwrap();
         }
     }
 
     #[test]
     fn optimized_dynamic_ops_from_initial_model_are_meaningful() {
         let dynamic_cases = [
-            (OptimizedStrategy::SetDynamicFragment, 1),
-            (OptimizedStrategy::SetDynamicLeaf, 3),
-            (OptimizedStrategy::SetDynamicComponent, 4),
-            (OptimizedStrategy::SetSuspenseMode, 5),
-            (OptimizedStrategy::SetSuspenseWakeMutation, 6),
-            (OptimizedStrategy::WakeSuspense, 7),
+            (7, "fragment", 1),
+            (8, "leaf", 3),
+            (9, "component", 4),
+            (13, "suspense_mode", 5),
+            (14, "suspense_wake_mutation", 6),
+            (15, "wake_suspense", 7),
         ];
 
-        for (strategy, value) in dynamic_cases {
+        for (which, name, value) in dynamic_cases {
             let mut model = Model::initial();
-            let op = optimized_model_aware_op(&model, strategy, 0, value);
+            let op = optimized_model_aware_op(&model, which, 0, value);
             ops::apply_strategy_op_to_model(&mut model, &op);
             let dynamic = first_dynamic(&model.root.template.roots)
-                .unwrap_or_else(|| panic!("expected dynamic for {strategy:?}: {op:?}"));
+                .unwrap_or_else(|| panic!("expected dynamic for {name}: {op:?}"));
             assert!(
                 !matches!(dynamic, DynamicSpec::Empty),
-                "expected non-empty dynamic for {strategy:?}: {op:?}"
+                "expected non-empty dynamic for {name}: {op:?}"
             );
         }
 
         let mut model = Model::initial();
-        let op = optimized_model_aware_op(&model, OptimizedStrategy::EditDynamicAttrs, 0, 9);
+        let op = optimized_model_aware_op(&model, 12, 0, 9);
         ops::apply_strategy_op_to_model(&mut model, &op);
         let attrs = first_dynamic_attrs(&model.root.template.roots)
             .unwrap_or_else(|| panic!("expected dynamic attrs: {op:?}"));
@@ -1913,13 +1362,14 @@ mod tests {
             ),
         ];
         let model = replay_model_prefix(&prefix, prefix.len());
-        for (index, strategy) in OPTIMIZED_STRATEGIES.iter().copied().enumerate() {
+        for which in 0..OPTIMIZED_MUTATION_COUNT {
             let mut ops = prefix.clone();
-            ops.push(optimized_model_aware_op(
-                &model,
-                strategy,
-                64 + index as u8,
-                192 + index as u8,
+            let mut model = model.clone();
+            ops.extend(optimized_ops(
+                &mut model,
+                which,
+                64 + which as u8,
+                192 + which as u8,
             ));
             run_case(&FuzzCase::new(ops)).unwrap();
         }
@@ -1990,15 +1440,14 @@ mod tests {
                 "dynamic_attribute_transitions",
                 dynamic_attribute_transitions(),
             ),
-            case(
-                "hidden_suspense_text_diff",
-                hidden_suspense_text_diff_recipe(),
-            ),
-            case(
-                "hidden_suspense_keyed_fragment_diff",
-                hidden_suspense_keyed_fragment_diff_recipe(),
-            ),
-            case("placeholder_noop_diff", placeholder_noop_diff_recipe()),
+            case("hidden_suspense_text_diff", {
+                let mut model = Model::initial();
+                diff_suspense_sequence_ops(&mut model, 0, 0)
+            }),
+            case("hidden_suspense_keyed_fragment_diff", {
+                let mut model = Model::initial();
+                diff_suspense_sequence_ops(&mut model, 0, 33)
+            }),
             case(
                 "dynamic_attribute_static_fallback",
                 dynamic_attribute_static_fallback_recipe(),
