@@ -122,7 +122,11 @@ jobs:
 
           target_triple="$(rustc +${{ env.rust_nightly }} -vV | sed -n 's/^host: //p')"
           llvm_cov="$(rustc +${{ env.rust_nightly }} --print sysroot)/lib/rustlib/$target_triple/bin/llvm-cov"
-          coverage_binary="$FUZZ_DIR/target/$target_triple/coverage/$target_triple/release/$FUZZ_TARGET"
+          # cargo-fuzz's coverage mode overrides --target-dir to
+          # `<cwd>/target/<triple>/coverage` (see project.rs::target_dir),
+          # so the binary lands in the workspace-root `target/`, not in
+          # `$FUZZ_DIR/target/`.
+          coverage_binary="target/$target_triple/coverage/$target_triple/release/$FUZZ_TARGET"
           coverage_profile="$FUZZ_DIR/coverage/$FUZZ_TARGET/coverage.profdata"
           coverage_lcov="$RUNNER_TEMP/fuzz.lcov"
           coverage_report="$RUNNER_TEMP/fuzz-coverage.txt"
