@@ -6,7 +6,6 @@ use crate::{
     },
     ops::{
         EventBehaviorSpec, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit,
-        VNodeEdit,
     },
     run_case,
 };
@@ -408,7 +407,7 @@ fn simplified_model_edit_ops(edit: &ModelEdit, out: &mut HashSet<Op>) {
     }
 }
 
-fn simplified_vnode_edit_ops(vnode: u8, edit: &VNodeEdit, out: &mut HashSet<Op>) {
+fn simplified_vnode_edit_ops(vnode: u8, edit: &TemplateEdit, out: &mut HashSet<Op>) {
     for simpler_vnode in simpler_u8_values(vnode) {
         out.insert(Op::Mutate(ModelEdit::VNode {
             vnode: simpler_vnode,
@@ -416,12 +415,8 @@ fn simplified_vnode_edit_ops(vnode: u8, edit: &VNodeEdit, out: &mut HashSet<Op>)
         }));
     }
 
-    match edit {
-        VNodeEdit::Template(edit) => {
-            for edit in simplified_template_edits(edit) {
-                out.insert(Op::template(vnode, edit));
-            }
-        }
+    for edit in simplified_template_edits(edit) {
+        out.insert(Op::template(vnode, edit));
     }
 }
 
@@ -439,10 +434,10 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     let Op::Mutate(ModelEdit::VNode {
         vnode,
         edit:
-            VNodeEdit::Template(TemplateEdit::Fragment {
+            TemplateEdit::Fragment {
                 node,
                 edit: FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base }),
-            }),
+            },
     }) = &case.ops[index]
     else {
         return;
@@ -451,10 +446,10 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     let Op::Mutate(ModelEdit::VNode {
         vnode: previous_vnode,
         edit:
-            VNodeEdit::Template(TemplateEdit::Fragment {
+            TemplateEdit::Fragment {
                 node: previous_node,
                 edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
-            }),
+            },
     }) = &case.ops[index - 1]
     else {
         return;
@@ -467,10 +462,10 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
     let mut candidate = case.clone();
     let Op::Mutate(ModelEdit::VNode {
         edit:
-            VNodeEdit::Template(TemplateEdit::Fragment {
+            TemplateEdit::Fragment {
                 edit: FragmentEdit::Children(ListEdit::Insert { item, .. }),
                 ..
-            }),
+            },
         ..
     }) = &mut candidate.ops[index - 1]
     else {

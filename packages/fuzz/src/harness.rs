@@ -1,3 +1,4 @@
+use crate::diagnostics::panic_message;
 use crate::{
     context::HarnessContext,
     lifecycle::{LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
@@ -8,11 +9,8 @@ use crate::{
 use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
-use crate::diagnostics::panic_message;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use std::{any::Any, cell::RefCell, collections::BTreeSet, fmt, panic, rc::Rc};
-
-// ---------- Harness -------------------------------------------------------------------------
 
 type TargetSnapshots = Vec<SnapshotNode>;
 
@@ -1274,22 +1272,26 @@ mod tests {
         apply_op(&mut harness, &Op::Rerender).unwrap();
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(harness
-            .context
-            .read_model()
-            .selected_ready_suspense_key(0)
-            .is_some());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_some()
+        );
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Ready { wake_after: 1 }, 1))
         );
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(harness
-            .context
-            .read_model()
-            .selected_ready_suspense_key(0)
-            .is_none());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_none()
+        );
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Resolved, 2))

@@ -8,8 +8,6 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-// ---------- Model operations -----------------------------------------------------------------
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum Op {
     Rerender,
@@ -33,33 +31,30 @@ impl Op {
     }
 
     pub(crate) fn template(vnode: u8, edit: TemplateEdit) -> Self {
-        Self::Mutate(ModelEdit::VNode {
-            vnode,
-            edit: VNodeEdit::Template(edit),
-        })
+        Self::Mutate(ModelEdit::VNode { vnode, edit })
     }
 
     pub(crate) fn dynamic(vnode: u8, node: u8, kind: DynamicKind) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::Template(TemplateEdit::SetNode {
+            edit: TemplateEdit::SetNode {
                 node,
                 kind: TemplateNodeKind::Dynamic(kind),
-            }),
+            },
         })
     }
 
     pub(crate) fn dynamic_attrs(vnode: u8, attr: u8, edit: ListEdit<AttrSpec>) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::Template(TemplateEdit::DynamicAttrs { attr, edit }),
+            edit: TemplateEdit::DynamicAttrs { attr, edit },
         })
     }
 
     pub(crate) fn fragment(vnode: u8, node: u8, edit: FragmentEdit) -> Self {
         Self::Mutate(ModelEdit::VNode {
             vnode,
-            edit: VNodeEdit::Template(TemplateEdit::Fragment { node, edit }),
+            edit: TemplateEdit::Fragment { node, edit },
         })
     }
 
@@ -86,13 +81,8 @@ pub(crate) enum EventBehaviorSpec {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
 pub(crate) enum ModelEdit {
-    VNode { vnode: u8, edit: VNodeEdit },
+    VNode { vnode: u8, edit: TemplateEdit },
     Suspense { suspense: u8, edit: SuspenseEdit },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
-pub(crate) enum VNodeEdit {
-    Template(TemplateEdit),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
@@ -431,26 +421,22 @@ fn apply_model_edit(model: &mut Model, edit: &ModelEdit, can_grow: bool) {
     }
 }
 
-fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bool) {
-    match edit {
-        VNodeEdit::Template(edit) => {
-            let mut next_suspense_id = model.next_suspense_id;
-            let mut next_component_id = model.next_component_id;
-            {
-                let vnode = model.selected_vnode_mut(vnode);
-                apply_template_edit(
-                    vnode,
-                    edit,
-                    can_grow,
-                    &mut next_suspense_id,
-                    &mut next_component_id,
-                );
-                vnode.normalize_in_place();
-            }
-            model.next_suspense_id = next_suspense_id;
-            model.next_component_id = next_component_id;
-        }
+fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &TemplateEdit, can_grow: bool) {
+    let mut next_suspense_id = model.next_suspense_id;
+    let mut next_component_id = model.next_component_id;
+    {
+        let vnode = model.selected_vnode_mut(vnode);
+        apply_template_edit(
+            vnode,
+            edit,
+            can_grow,
+            &mut next_suspense_id,
+            &mut next_component_id,
+        );
+        vnode.normalize_in_place();
     }
+    model.next_suspense_id = next_suspense_id;
+    model.next_component_id = next_component_id;
 }
 
 fn apply_template_edit(

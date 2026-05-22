@@ -8,9 +8,6 @@ pub(crate) const MAX_DYNAMIC_ATTRS: usize = 8;
 pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 8;
 pub(crate) const MAX_MODEL_COST: u64 = 256;
 pub(crate) const MAX_READY_WAKE_COUNT: u8 = 4;
-
-// ---------- Spec model ----------------------------------------------------------------------
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Model {
     pub(crate) root: VNodeSpec,

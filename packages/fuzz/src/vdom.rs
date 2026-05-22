@@ -15,8 +15,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-// ---------- VNode construction --------------------------------------------------------------
-
 pub(crate) fn App(context: HarnessContext) -> Element {
     let model = context.read_model();
     Ok(build_vnode(&context, &model.root))
