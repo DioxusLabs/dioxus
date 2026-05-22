@@ -1,3 +1,6 @@
+// See note in `ops.rs`: `Mutate` derive emits a wide `new` ctor.
+#![allow(clippy::too_many_arguments)]
+
 use mutatis::Mutate;
 use serde::{Deserialize, Serialize};
 

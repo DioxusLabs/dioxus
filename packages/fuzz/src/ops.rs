@@ -1,3 +1,7 @@
+// `Mutate` derive expands to a `new` ctor with one param per generic mutator
+// field, which exceeds clippy's default for enums with many variants.
+#![allow(clippy::too_many_arguments)]
+
 use crate::{context::HarnessContext, model::*};
 use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
 use serde::{Deserialize, Serialize};
