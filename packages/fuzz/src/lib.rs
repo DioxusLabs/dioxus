@@ -27,8 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::{cell::Cell, fmt};
 
 pub const MAX_STEPS: usize = 512;
-const OPTIMIZED_BURST_LIMIT: usize = 6;
-const OPTIMIZED_MUTATION_COUNT: u32 = 22;
+const OPTIMIZED_MUTATION_COUNT: u32 = 19;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
@@ -150,44 +149,19 @@ fn replay_model_prefix(ops: &[Op], len: usize) -> Model {
 }
 
 fn splice_optimized_ops(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
-    splice_optimized_slot(context, case, which);
-    if which == 19 {
-        return;
-    }
-
-    let burst_len = context.rng().gen_index(OPTIMIZED_BURST_LIMIT).unwrap_or(0);
-    for _ in 0..burst_len {
-        let which = context
-            .rng()
-            .gen_index(OPTIMIZED_MUTATION_COUNT as usize)
-            .unwrap_or(0) as u32;
-        splice_optimized_slot(context, case, which);
-    }
-}
-
-fn splice_optimized_slot(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
     let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
-    let mut model = replay_model_prefix(&case.ops, index);
+    let model = replay_model_prefix(&case.ops, index);
     let selector = context.rng().gen_u8();
     let value = context.rng().gen_u8();
-    insert_ops_at(
-        case,
-        index,
-        optimized_ops(&mut model, which, selector, value),
-    );
+    insert_ops_at(case, index, optimized_ops(&model, which, selector, value));
 }
 
-fn optimized_ops(model: &mut Model, which: u32, selector: u8, value: u8) -> Vec<Op> {
-    match which {
-        19 => diff_suspense_sequence_ops(model, selector, value),
-        _ => {
-            let op = optimized_model_aware_op(model, which, selector, value);
-            if matches!(op, Op::Mutate(_)) {
-                vec![op, Op::Rerender, Op::Rerender]
-            } else {
-                vec![op]
-            }
-        }
+fn optimized_ops(model: &Model, which: u32, selector: u8, value: u8) -> Vec<Op> {
+    let op = optimized_model_aware_op(model, which, selector, value);
+    if matches!(op, Op::Mutate(_)) {
+        vec![op, Op::Rerender, Op::Rerender]
+    } else {
+        vec![op]
     }
 }
 
@@ -202,109 +176,10 @@ fn insert_ops_at(case: &mut FuzzCase, index: usize, ops: impl IntoIterator<Item 
     }
 }
 
-fn push_modeled_op(model: &mut Model, ops: &mut Vec<Op>, op: Op) {
-    ops::apply_strategy_op_to_model(model, &op);
-    ops.push(op);
-}
-
-fn diff_suspense_sequence_ops(model: &mut Model, selector: u8, value: u8) -> Vec<Op> {
-    let mut ops = Vec::new();
-    let mut facts = ModelFacts::new(model);
-
-    if !facts.has_suspense() {
-        let vnode = facts.select_focus_vnode(selector, value);
-        let node = facts.select_dynamic_node(vnode, selector);
-        push_modeled_op(
-            model,
-            &mut ops,
-            Op::dynamic(
-                vnode,
-                node,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Resolved,
-                },
-            ),
-        );
-        facts = ModelFacts::new(model);
-    }
-
-    let suspense = facts.select_suspense(selector);
-    let Some(child_vnode) = facts
-        .suspense_child_vnodes
-        .get(suspense as usize % facts.suspense_child_vnodes.len().max(1))
-        .copied()
-    else {
-        return ops;
-    };
-
-    if value & 1 == 0 {
-        let (old, new) = (DynamicKind::Text(value), DynamicKind::Text(value.wrapping_add(1)));
-        push_modeled_op(model, &mut ops, set_vnode_root_dynamic_op(child_vnode, old));
-        push_modeled_op(model, &mut ops, Op::Rerender);
-        push_modeled_op(
-            model,
-            &mut ops,
-            Op::suspense(suspense, SuspenseMode::Ready { wake_after: 0 }),
-        );
-        push_modeled_op(model, &mut ops, Op::Rerender);
-        push_modeled_op(model, &mut ops, set_vnode_root_dynamic_op(child_vnode, new));
-        push_modeled_op(model, &mut ops, Op::Rerender);
-        push_modeled_op(model, &mut ops, Op::wake_suspense(suspense));
-        return ops;
-    }
-
-    let keyed = value & 2 == 0;
-    let len = 2 + ((selector ^ value) % 4) as usize;
-    push_modeled_op(
-        model,
-        &mut ops,
-        set_vnode_root_dynamic_op(
-            child_vnode,
-            DynamicKind::Fragment {
-                children: len.min(u8::MAX as usize) as u8,
-                key_base: keyed.then_some(value),
-            },
-        ),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::suspense(suspense, SuspenseMode::Ready { wake_after: 0 }),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-
-    push_modeled_op(
-        model,
-        &mut ops,
-        Op::fragment(
-            child_vnode,
-            0,
-            FragmentEdit::Children(ListEdit::Insert {
-                index: biased_index(value, len),
-                item: keyed.then_some(value.wrapping_add(len.min(u8::MAX as usize) as u8)),
-            }),
-        ),
-    );
-    push_modeled_op(model, &mut ops, Op::Rerender);
-    push_modeled_op(model, &mut ops, Op::wake_suspense(suspense));
-    ops
-}
-
 fn fragment_insert_key(fragment: FragmentShape, value: u8) -> Option<u8> {
     fragment
         .keyed
         .then_some(value.wrapping_add(fragment.len.min(u8::MAX as usize) as u8))
-}
-
-fn set_vnode_root_dynamic_op(vnode: u8, kind: DynamicKind) -> Op {
-    Op::template(
-        vnode,
-        TemplateEdit::SetNode {
-            node: 0,
-            kind: TemplateNodeKind::Dynamic(kind),
-        },
-    )
 }
 
 #[cfg(test)]
@@ -499,9 +374,7 @@ fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) 
             &facts,
             vnode,
             selector,
-            DynamicKind::Suspense {
-                mode: biased_suspense_mode(value),
-            },
+            suspense_kind(biased_suspense_mode(value)),
         ),
         14 if facts.has_suspense() => {
             Op::suspense_wake_mutation(facts.select_suspense(selector), biased_wake_mutation(value))
@@ -509,8 +382,15 @@ fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) 
         14 => ready_suspense_node_op(&facts, vnode, selector),
         15 if facts.has_suspense() => Op::wake_suspense(facts.select_suspense(selector)),
         15 => ready_suspense_node_op(&facts, vnode, selector),
-        16 => Op::fire_event(selector, optimized_event_behavior(selector, value)),
-        20 if model.can_grow() => Op::template(
+        16 => Op::fire_event(
+            selector,
+            if value & 1 == 0 {
+                EventBehaviorSpec::Noop
+            } else {
+                EventBehaviorSpec::DispatchNestedEvent { target: selector }
+            },
+        ),
+        17 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::SetNode {
                 node,
@@ -520,7 +400,7 @@ fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) 
                 },
             },
         ),
-        21 => Op::Rerender,
+        18 => Op::Rerender,
         _ => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -540,17 +420,8 @@ fn ready_suspense_node_op(facts: &ModelFacts, vnode: u8, selector: u8) -> Op {
         facts,
         vnode,
         selector,
-        DynamicKind::Suspense {
-            mode: SuspenseMode::Ready { wake_after: 0 },
-        },
+        suspense_kind(SuspenseMode::Ready { wake_after: 0 }),
     )
-}
-
-fn optimized_event_behavior(selector: u8, value: u8) -> EventBehaviorSpec {
-    match value & 1 {
-        0 => EventBehaviorSpec::Noop,
-        _ => EventBehaviorSpec::DispatchNestedEvent { target: selector },
-    }
 }
 
 fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, value: u8) -> Op {
@@ -962,9 +833,7 @@ fn biased_dynamic_kind(value: u8) -> DynamicKind {
         1 => biased_fragment_dynamic_kind(value),
         2 => DynamicKind::ComponentA,
         3 => DynamicKind::ComponentB,
-        4 => DynamicKind::Suspense {
-            mode: biased_suspense_mode(value),
-        },
+        4 => suspense_kind(biased_suspense_mode(value)),
         _ => DynamicKind::Placeholder,
     }
 }
@@ -975,6 +844,10 @@ fn biased_leaf_dynamic_kind(value: u8) -> DynamicKind {
         1 => DynamicKind::Placeholder,
         _ => DynamicKind::Empty,
     }
+}
+
+fn suspense_kind(mode: SuspenseMode) -> DynamicKind {
+    DynamicKind::Suspense { mode }
 }
 
 fn biased_fragment_dynamic_kind(value: u8) -> DynamicKind {
@@ -1021,20 +894,14 @@ fn optimized_attr(value: u8) -> AttrSpec {
         _ => AttrValueSpec::Listener,
     };
     AttrSpec {
-        name: optimized_dynamic_attr_name(&attr_value, value),
+        name: if matches!(attr_value, AttrValueSpec::Listener) {
+            value & 0x7f
+        } else {
+            optimized_attr_name(&attr_value)
+        },
         namespace: None,
         value: attr_value,
         volatile: false,
-    }
-}
-
-fn optimized_dynamic_attr_name(attr_value: &AttrValueSpec, value: u8) -> u8 {
-    if matches!(attr_value, AttrValueSpec::Listener) {
-        value & 0x7f
-    } else if value & 0x80 != 0 {
-        value
-    } else {
-        optimized_attr_name(attr_value)
     }
 }
 
@@ -1245,8 +1112,8 @@ mod tests {
     #[test]
     fn optimized_model_aware_op_replays() {
         for which in 0..OPTIMIZED_MUTATION_COUNT {
-            let mut model = Model::initial();
-            let ops = optimized_ops(&mut model, which, which as u8, 128 + which as u8);
+            let model = Model::initial();
+            let ops = optimized_ops(&model, which, which as u8, 128 + which as u8);
             run_case(&FuzzCase::new(ops)).unwrap();
         }
     }
@@ -1353,20 +1220,13 @@ mod tests {
                     },
                 },
             ),
-            Op::dynamic(
-                1,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wake_after: 0 },
-                },
-            ),
+            Op::dynamic(1, 0, suspense_kind(SuspenseMode::Ready { wake_after: 0 })),
         ];
         let model = replay_model_prefix(&prefix, prefix.len());
         for which in 0..OPTIMIZED_MUTATION_COUNT {
             let mut ops = prefix.clone();
-            let mut model = model.clone();
             ops.extend(optimized_ops(
-                &mut model,
+                &model,
                 which,
                 64 + which as u8,
                 192 + which as u8,
@@ -1441,12 +1301,34 @@ mod tests {
                 dynamic_attribute_transitions(),
             ),
             case("hidden_suspense_text_diff", {
-                let mut model = Model::initial();
-                diff_suspense_sequence_ops(&mut model, 0, 0)
+                vec![
+                    Op::dynamic(0, 0, suspense_kind(SuspenseMode::Resolved)),
+                    set_vnode_root_dynamic(1, DynamicKind::Text(0)),
+                    Op::Rerender,
+                    Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
+                    Op::Rerender,
+                    set_vnode_root_dynamic(1, DynamicKind::Text(1)),
+                    Op::Rerender,
+                    Op::wake_suspense(0),
+                ]
             }),
             case("hidden_suspense_keyed_fragment_diff", {
-                let mut model = Model::initial();
-                diff_suspense_sequence_ops(&mut model, 0, 33)
+                vec![
+                    Op::dynamic(0, 0, suspense_kind(SuspenseMode::Resolved)),
+                    set_vnode_root_dynamic(
+                        1,
+                        DynamicKind::Fragment {
+                            children: 3,
+                            key_base: Some(33),
+                        },
+                    ),
+                    Op::Rerender,
+                    Op::suspense(0, SuspenseMode::Ready { wake_after: 0 }),
+                    Op::Rerender,
+                    insert_fragment_child(2, Some(36)),
+                    Op::Rerender,
+                    Op::wake_suspense(0),
+                ]
             }),
             case(
                 "dynamic_attribute_static_fallback",
@@ -1613,13 +1495,7 @@ mod tests {
     fn hidden_suspense_component_removal() -> Vec<Op> {
         vec![
             set_root_dynamic(),
-            Op::dynamic(
-                0,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Resolved,
-                },
-            ),
+            Op::dynamic(0, 0, suspense_kind(SuspenseMode::Resolved)),
             Op::template(
                 1,
                 TemplateEdit::Children {
@@ -1640,13 +1516,7 @@ mod tests {
                     },
                 },
             ),
-            Op::dynamic(
-                1,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Pending,
-                },
-            ),
+            Op::dynamic(1, 0, suspense_kind(SuspenseMode::Pending)),
             Op::dynamic(1, 1, DynamicKind::ComponentA),
             Op::Rerender,
             Op::template(
@@ -1663,13 +1533,7 @@ mod tests {
     fn suspense_clear_and_reclaim() -> Vec<Op> {
         vec![
             set_root_dynamic(),
-            Op::dynamic(
-                0,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wake_after: 0 },
-                },
-            ),
+            Op::dynamic(0, 0, suspense_kind(SuspenseMode::Ready { wake_after: 0 })),
             set_vnode_root_dynamic(1, DynamicKind::Empty),
             Op::Rerender,
             Op::wake_suspense(0),

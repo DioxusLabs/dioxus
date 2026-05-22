@@ -255,23 +255,6 @@ impl VNode {
         (attribute.name, attribute.namespace)
     }
 
-    fn attribute_value_changed(old: &Attribute, new: &Attribute) -> bool {
-        debug_assert!(!Self::attribute_is_listener(Some(old)));
-        debug_assert!(!Self::attribute_is_listener(Some(new)));
-
-        match (&old.value, &new.value) {
-            (AttributeValue::Text(left), AttributeValue::Text(right)) => left != right,
-            (AttributeValue::Float(left), AttributeValue::Float(right)) => left != right,
-            (AttributeValue::Int(left), AttributeValue::Int(right)) => left != right,
-            (AttributeValue::Bool(left), AttributeValue::Bool(right)) => left != right,
-            (AttributeValue::Any(left), AttributeValue::Any(right)) => {
-                !left.as_ref().any_cmp(right.as_ref())
-            }
-            (AttributeValue::None, AttributeValue::None) => false,
-            _ => true,
-        }
-    }
-
     /// Apply one effective attribute diff to the renderer.
     ///
     /// Event listeners have distinct create/remove mutations, so transitions between listener and
@@ -320,18 +303,14 @@ impl VNode {
     fn attribute_should_update(old: Option<&Attribute>, new: Option<&Attribute>) -> bool {
         Self::attribute_volatile(old)
             || Self::attribute_volatile(new)
-            || Self::dynamic_attribute_changed(old, new)
+            || match (old, new) {
+                (Some(left), Some(right)) => left.value != right.value,
+                (old, new) => old.is_some() != new.is_some(),
+            }
     }
 
     fn attribute_volatile(attribute: Option<&Attribute>) -> bool {
         attribute.is_some_and(|attribute| attribute.volatile)
-    }
-
-    fn dynamic_attribute_changed(old: Option<&Attribute>, new: Option<&Attribute>) -> bool {
-        match (old, new) {
-            (Some(left), Some(right)) => Self::attribute_value_changed(left, right),
-            (old, new) => old.is_some() != new.is_some(),
-        }
     }
 
     /// Remove the old dynamic representation for a key.
