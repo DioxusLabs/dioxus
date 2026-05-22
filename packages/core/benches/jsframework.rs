@@ -355,7 +355,8 @@ impl RowGenerator {
 fn js_framework_app(props: AppProps) -> Element {
     let mut rows = use_signal(Vec::<RowData>::new);
     let selected_row: Signal<Option<usize>> = use_signal(|| None);
-    let compare_selected = use_set_compare(&selected_row);
+    #[allow(clippy::redundant_closure)]
+    let compare_selected = use_set_compare(move || selected_row());
 
     *props.controls.borrow_mut() = Some(Controls { rows, selected_row });
 
