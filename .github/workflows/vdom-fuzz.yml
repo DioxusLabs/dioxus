@@ -194,14 +194,6 @@ jobs:
               output.write("\nEOF\n")
           PY
 
-      - name: Comment fuzz coverage on PR
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3
-        with:
-          pr-number: ${{ github.event.pull_request.number }}
-          message: ${{ steps.coverage.outputs.comment }}
-          comment-tag: fuzz-coverage
-
       - name: Upload fuzz coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
