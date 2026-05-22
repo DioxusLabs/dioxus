@@ -27,6 +27,12 @@ impl Default for HarnessContext {
     }
 }
 
+impl PartialEq for HarnessContext {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.model, &other.model)
+    }
+}
+
 impl HarnessContext {
     pub(crate) fn new() -> Self {
         Self::default()

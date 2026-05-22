@@ -1,25 +1,24 @@
-use core::{cmp::Ordering, iter::Peekable};
+use core::cmp::Ordering;
 
 /// Consume one non-decreasing run from a peekable iterator.
 ///
-/// The first item that would make the run decrease is left in the iterator so the next call can
-/// start a new range at that item.
-fn non_decreasing_run<I, F>(iter: &mut Peekable<I>, mut predicate: F) -> usize
+/// The first item that would make the run decrease starts the next range.
+fn non_decreasing_run<T, F>(items: &[T], mut predicate: F) -> usize
 where
-    I: Iterator<Item: Copy>,
-    F: FnMut(I::Item, I::Item) -> Ordering,
+    F: FnMut(&T, &T) -> Ordering,
 {
-    let mut last: Option<<I as Iterator>::Item> = None;
-    std::iter::from_fn(move || {
-        iter.next_if(|item| {
-            let non_decreasing = last
-                .as_ref()
-                .is_none_or(|last| !matches!(predicate(*last, *item), Ordering::Greater));
-            last = Some(*item);
-            non_decreasing
-        })
-    })
-    .count()
+    if items.is_empty() {
+        return 0;
+    }
+
+    let mut len = 1;
+    while let Some(next) = items.get(len) {
+        if matches!(predicate(&items[len - 1], next), Ordering::Greater) {
+            break;
+        }
+        len += 1;
+    }
+    len
 }
 
 /// A flattened attribute list split into locally sorted ranges.
@@ -28,89 +27,108 @@ where
 /// concatenating those chunks can still make the whole list unsorted. This helper finds the sorted
 /// runs and lazily merges them instead of allocating and sorting a second copy of the attribute
 /// list. Splitting at decreases also tolerates runtime spreads that are only partially sorted.
-pub(super) struct SortedRanges<'a, T> {
-    ranges: Box<[&'a [T]]>,
+pub(super) struct SortedRanges<'items, 'scratch, T> {
+    ranges: &'scratch [&'items [T]],
 }
 
-impl<'a, T> SortedRanges<'a, T> {
-    pub(super) fn new(attributes: &'a [T], sort_by: impl Fn(&T, &T) -> Ordering + Copy) -> Self {
-        let mut iter = attributes.iter().peekable();
-        let mut remaining = attributes;
-        let mut ranges = Vec::new();
+impl<'items, 'scratch, T> SortedRanges<'items, 'scratch, T> {
+    pub(super) fn new(
+        attribute_slots: impl IntoIterator<Item = &'items [T]>,
+        ranges: &'scratch mut Vec<&'items [T]>,
+        sort_by: impl Fn(&T, &T) -> Ordering + Copy,
+    ) -> Self {
+        ranges.clear();
 
-        loop {
-            let run = non_decreasing_run(&mut iter, sort_by);
-            let (run, rest) = remaining.split_at(run);
-            if run.is_empty() {
-                break;
+        for mut remaining in attribute_slots {
+            while !remaining.is_empty() {
+                let run = non_decreasing_run(remaining, sort_by);
+                let (run, rest) = remaining.split_at(run);
+                ranges.push(run);
+                remaining = rest;
             }
-            ranges.push(run);
-            remaining = rest;
         }
 
         Self {
-            ranges: ranges.into_boxed_slice(),
+            ranges: ranges.as_slice(),
         }
     }
 
-    pub(super) fn iter_sorted_last_wins(
-        &'a self,
-        sort_by: impl Fn(&T, &T) -> Ordering + Copy + 'a,
-    ) -> impl Iterator<Item = &'a T> + 'a {
-        let mut iters = self
-            .ranges
-            .iter()
-            .map(|range| range.iter().peekable())
-            .collect::<Box<[_]>>();
+    pub(super) fn iter_sorted_last_wins<'iter, F>(
+        &'iter self,
+        offsets: &'iter mut Vec<usize>,
+        sort_by: F,
+    ) -> SortedRangeIter<'items, 'iter, T, F>
+    where
+        F: Fn(&T, &T) -> Ordering + Copy,
+    {
+        offsets.clear();
+        offsets.resize(self.ranges.len(), 0);
 
-        std::iter::from_fn(move || {
-            let mut min = Vec::new();
-            let mut min_value = None;
+        SortedRangeIter {
+            ranges: self.ranges,
+            offsets,
+            sort_by,
+        }
+    }
+}
 
-            // Find every range currently pointing at the smallest key. Equal keys must be drained
-            // together so duplicate attributes collapse into one effective value.
-            for (item, iter) in iters
-                .iter_mut()
-                .filter_map(|iter| iter.peek().copied().map(|item| (item, iter)))
-            {
-                match min_value.map(|min_value| sort_by(item, min_value)) {
-                    None | Some(Ordering::Less) => {
-                        min.clear();
-                        min.push(iter);
-                        min_value = Some(item);
-                    }
-                    Some(Ordering::Equal) => min.push(iter),
-                    Some(Ordering::Greater) => {}
+pub(super) struct SortedRangeIter<'items, 'scratch, T, F> {
+    ranges: &'scratch [&'items [T]],
+    offsets: &'scratch mut Vec<usize>,
+    sort_by: F,
+}
+
+impl<'items, T, F> Iterator for SortedRangeIter<'items, '_, T, F>
+where
+    F: Fn(&T, &T) -> Ordering + Copy,
+{
+    type Item = &'items T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut min_value = None;
+
+        // Find the smallest key currently visible across every range.
+        for (range, offset) in self.ranges.iter().zip(self.offsets.iter()) {
+            if let Some(item) = range.get(*offset) {
+                match min_value.map(|min_value| (self.sort_by)(item, min_value)) {
+                    None | Some(Ordering::Less) => min_value = Some(item),
+                    Some(Ordering::Equal | Ordering::Greater) => {}
                 }
             }
+        }
 
-            let min_value = min_value?;
-            // Drain all attributes with this key from the matching ranges. The last attribute in
-            // RSX source order is the one that would have been written last during creation, so it
-            // is the only value the rest of the diff should see.
-            min.into_iter()
-                .flat_map(|iter| {
-                    std::iter::from_fn(|| {
-                        iter.next_if(|item| matches!(sort_by(*item, min_value), Ordering::Equal))
-                    })
-                })
-                .last()
-        })
+        let min_value = min_value?;
+        let mut last = None;
+
+        // Drain that key from every matching range. Later ranges come later in RSX source order,
+        // so the final item we see is the effective last-write-wins value.
+        for (range_idx, range) in self.ranges.iter().enumerate() {
+            while let Some(item) = range.get(self.offsets[range_idx]) {
+                if !matches!((self.sort_by)(item, min_value), Ordering::Equal) {
+                    break;
+                }
+                last = Some(item);
+                self.offsets[range_idx] += 1;
+            }
+        }
+
+        last
     }
 }
 
 #[test]
 fn test_non_decreasing_run() {
-    let mut iter = [1, 2, 3, 2, 4, 4].iter().peekable();
-    assert_eq!(non_decreasing_run(&mut iter, |a, b| a.cmp(b)), 3);
-    assert_eq!(non_decreasing_run(&mut iter, |a, b| a.cmp(b)), 3);
-    assert_eq!(non_decreasing_run(&mut iter, |a, b| a.cmp(b)), 0);
+    let data = [1, 2, 3, 2, 4, 4];
+    assert_eq!(non_decreasing_run(&data, |a, b| a.cmp(b)), 3);
+    assert_eq!(non_decreasing_run(&data[3..], |a, b| a.cmp(b)), 3);
+    assert_eq!(non_decreasing_run(&[], |a: &i32, b| a.cmp(b)), 0);
 }
 
 #[test]
 fn test_sorted_ranges() {
     let runs = [1, 2, 3, 2, 4, 1, 1];
-    let sorted = SortedRanges::new(&runs, |a, b| a.cmp(b));
+    let mut ranges = Vec::new();
+    let sorted = SortedRanges::new([runs.as_slice()], &mut ranges, |a, b| a.cmp(b));
     assert_eq!(sorted.ranges.len(), 3);
     assert_eq!(sorted.ranges[0], &[runs[0], runs[1], runs[2]]);
     assert_eq!(sorted.ranges[1], &[runs[3], runs[4]]);
@@ -138,8 +156,10 @@ fn test_sorted_ranges_iter() {
         Item { value: 1, id: 5 },
         Item { value: 1, id: 6 },
     ];
-    let sorted = SortedRanges::new(&runs, Item::cmp);
-    let mut iter = sorted.iter_sorted_last_wins(Item::cmp);
+    let mut ranges = Vec::new();
+    let mut offsets = Vec::new();
+    let sorted = SortedRanges::new([runs.as_slice()], &mut ranges, Item::cmp);
+    let mut iter = sorted.iter_sorted_last_wins(&mut offsets, Item::cmp);
     assert_eq!(*iter.next().unwrap(), Item { value: 1, id: 6 });
     assert_eq!(*iter.next().unwrap(), Item { value: 2, id: 3 });
     assert_eq!(*iter.next().unwrap(), Item { value: 3, id: 2 });

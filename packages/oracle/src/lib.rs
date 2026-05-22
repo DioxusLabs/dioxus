@@ -10,7 +10,7 @@ mod snapshot;
 mod vdom_snapshot;
 
 pub use diagnostics::panic_message;
-pub use renderer::{EditSummary, EventListenerTarget, OracleNodeId, RendererOracle};
+pub use renderer::{EditSummary, OracleNodeId, RendererOracle};
 pub use snapshot::{SnapshotAttr, SnapshotNode};
 
 #[cfg(test)]

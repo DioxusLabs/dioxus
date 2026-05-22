@@ -15,8 +15,8 @@ mod ops;
 mod reducer;
 mod vdom;
 
-use harness::{Harness, apply_step, print_ssr_diff_trace};
 use dioxus_renderer_oracle::panic_message;
+use harness::{Harness, apply_step, print_ssr_diff_trace};
 use model::{
     AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, Model, SuspenseMode,
     TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec, WakeMutationSpec,
@@ -1016,22 +1016,26 @@ pub fn encode_case_vec(case: &FuzzCase) -> Option<Vec<u8>> {
 }
 
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
-    let mut state = panic::catch_unwind(AssertUnwindSafe(Harness::fresh)).map_err(|payload| {
-        FuzzFailure {
+    let mut state =
+        panic::catch_unwind(AssertUnwindSafe(Harness::fresh)).map_err(|payload| FuzzFailure {
             step: 0,
             op: "<initial rebuild>".to_string(),
-            message: format!("panic before applying operation: {}", panic_message(&payload)),
-        }
-    })?;
+            message: format!(
+                "panic before applying operation: {}",
+                panic_message(&payload)
+            ),
+        })?;
 
     for (step, op) in case.ops.iter().enumerate() {
-        let applied = panic::catch_unwind(AssertUnwindSafe(|| apply_step(&mut state, op))).map_err(
-            |payload| FuzzFailure {
+        let applied = panic::catch_unwind(AssertUnwindSafe(|| apply_step(&mut state, op)))
+            .map_err(|payload| FuzzFailure {
                 step,
                 op: format!("{op:?}"),
-                message: format!("panic while applying operation: {}", panic_message(&payload)),
-            },
-        )?;
+                message: format!(
+                    "panic while applying operation: {}",
+                    panic_message(&payload)
+                ),
+            })?;
 
         applied.map_err(|message| FuzzFailure {
             step,

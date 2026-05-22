@@ -110,8 +110,13 @@ impl VirtualDom {
         scope_id: ScopeId,
         replace_with: Option<usize>,
     ) {
-        // If this is a suspense boundary, remove the suspended nodes as well
-        SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
+        // If this is a suspense boundary being destroyed, remove its retained
+        // suspended nodes as well. When moving rendered children into a parent
+        // suspense background, keep nested suspended nodes attached to their
+        // boundary so a later real unmount can still destroy their scopes.
+        if destroy_component_state {
+            SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, true);
+        }
 
         // Remove the component from the dom
         let node = self.scopes[scope_id.0]

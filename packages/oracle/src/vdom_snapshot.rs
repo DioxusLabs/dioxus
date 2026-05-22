@@ -1,6 +1,9 @@
 #[cfg(test)]
 use crate::renderer::RendererOracle;
-use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
+use crate::snapshot::{
+    attr_to_string, remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr,
+    snapshot_attrs, snapshot_listeners, SnapshotAttrs, SnapshotListeners, SnapshotNode,
+};
 #[cfg(test)]
 use dioxus_core::Element;
 use dioxus_core::{
@@ -60,8 +63,8 @@ fn template_node_snapshot(
             attrs,
             children,
         } => {
-            let mut element_attrs = Vec::new();
-            let mut listeners = Vec::new();
+            let mut element_attrs = SnapshotAttrs::default();
+            let mut listeners = SnapshotListeners::default();
 
             for attr in *attrs {
                 if let TemplateAttribute::Static {
@@ -98,8 +101,8 @@ fn template_node_snapshot(
             vec![SnapshotNode::Element {
                 tag: (*tag).to_string(),
                 namespace: namespace.map(ToString::to_string),
-                attrs: element_attrs,
-                listeners,
+                attrs: snapshot_attrs(&element_attrs),
+                listeners: snapshot_listeners(&listeners),
                 children: rendered_children,
             }]
         }
@@ -129,8 +132,8 @@ fn dynamic_node_snapshot(vdom: &VirtualDom, owner: &VNode, id: usize) -> Vec<Sna
 }
 
 fn apply_dynamic_attr(
-    attrs: &mut Vec<SnapshotAttr>,
-    listeners: &mut Vec<String>,
+    attrs: &mut SnapshotAttrs,
+    listeners: &mut SnapshotListeners,
     attr: &Attribute,
 ) {
     match &attr.value {
@@ -140,10 +143,7 @@ fn apply_dynamic_attr(
                 .strip_prefix("on")
                 .unwrap_or(attr.name)
                 .to_string();
-            match listeners.binary_search(&name) {
-                Ok(_) => {}
-                Err(index) => listeners.insert(index, name),
-            }
+            listeners.insert(name);
         }
         value => match attr_to_string(value) {
             Some(value) => set_snapshot_attr(
@@ -154,31 +154,5 @@ fn apply_dynamic_attr(
             ),
             None => remove_snapshot_attr(attrs, attr.name, attr.namespace),
         },
-    }
-}
-
-fn set_snapshot_attr(
-    attrs: &mut Vec<SnapshotAttr>,
-    name: String,
-    namespace: Option<String>,
-    value: String,
-) {
-    match attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name.as_str(), namespace.as_deref())))
-    {
-        Ok(index) => attrs[index].value = value,
-        Err(index) => attrs.insert(
-            index,
-            SnapshotAttr {
-                name,
-                namespace,
-                value,
-            },
-        ),
-    }
-}
-
-fn remove_snapshot_attr(attrs: &mut Vec<SnapshotAttr>, name: &str, namespace: Option<&str>) {
-    if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
-        attrs.remove(index);
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::vdom_snapshot::{assert_no_mutations, fresh_snapshot};
 use dioxus::prelude::*;
-use dioxus_core::{ScopeId, VirtualDom, generation};
+use dioxus_core::{generation, ScopeId, VirtualDom};
 
 fn simple_app() -> Element {
     rsx! {
@@ -65,72 +65,6 @@ fn tracks_event_listeners() {
         [SnapshotNode::Element { listeners, .. }] => assert_eq!(listeners, &["click"]),
         other => panic!("unexpected snapshot: {other:#?}"),
     }
-}
-
-#[test]
-fn records_historical_event_listener_targets() {
-    let seen_id = std::rc::Rc::new(std::cell::Cell::new(None));
-
-    fn app() -> Element {
-        match generation() {
-            0 => rsx! {
-                button { onclick: move |_| {}, "go" }
-            },
-            _ => rsx! {
-                button { "go" }
-            },
-        }
-    }
-
-    let mut vdom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut vdom);
-
-    let id = oracle.element_id_by_tag("button");
-    seen_id.set(Some(id));
-    assert_eq!(
-        oracle.historical_event_listener_targets(),
-        &[EventListenerTarget { name: "click", id }]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut vdom);
-
-    let id = seen_id.get().expect("listener id should be captured");
-    assert_eq!(
-        oracle.historical_event_listener_targets(),
-        &[EventListenerTarget { name: "click", id }]
-    );
-}
-
-#[test]
-fn keeps_historical_event_listener_targets_after_node_removal() {
-    let seen_id = std::rc::Rc::new(std::cell::Cell::new(None));
-
-    fn app() -> Element {
-        match generation() {
-            0 => rsx! {
-                button { onclick: move |_| {}, "go" }
-            },
-            _ => rsx! {
-                div { "gone" }
-            },
-        }
-    }
-
-    let mut vdom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut vdom);
-    seen_id.set(Some(oracle.element_id_by_tag("button")));
-
-    vdom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut vdom);
-
-    let id = seen_id.get().expect("listener id should be captured");
-    assert_eq!(
-        oracle.historical_event_listener_targets(),
-        &[EventListenerTarget { name: "click", id }]
-    );
 }
 
 #[test]

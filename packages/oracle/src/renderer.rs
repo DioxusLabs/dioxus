@@ -1,4 +1,7 @@
-use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
+use crate::snapshot::{
+    attr_to_string, remove_attr as remove_snapshot_attr, set_attr as set_snapshot_attr,
+    snapshot_attrs, snapshot_listeners, SnapshotAttrs, SnapshotListeners, SnapshotNode,
+};
 use crate::vdom_snapshot::vdom_snapshot;
 use dioxus_core::{
     AttributeValue, Element, ElementId, Template, TemplateAttribute, TemplateNode, VirtualDom,
@@ -7,6 +10,7 @@ use dioxus_core::{
 use std::fmt;
 
 type NodeId = usize;
+const ROOT: NodeId = 0;
 
 /// A stable identity token for a node in the oracle's arena. The same node retains
 /// the same token across renders, which lets tests verify that the renderer moved a
@@ -29,68 +33,42 @@ enum NodeKind {
 #[derive(Clone, Debug)]
 struct Node {
     kind: NodeKind,
-    attrs: Vec<SnapshotAttr>,
-    listeners: Vec<String>,
+    attrs: SnapshotAttrs,
+    listeners: SnapshotListeners,
     children: Vec<NodeId>,
     parent: Option<NodeId>,
 }
 
 /// A category-level summary of edits applied to the renderer in one render pass.
 ///
-/// Counts edits by *kind* (load template, create text, move, set attribute, ...)
+/// Counts edits by *kind* (load template, remove, replace, set attribute, ...)
 /// without exposing any specific `ElementId` or edit ordering. Tests use this to
 /// assert structural properties of the diff that final-DOM snapshots cannot
-/// observe — e.g. "this keyed reorder moved at most one node," "this rerender
-/// patched text in place without recreating elements," "exactly two attributes
-/// changed."
+/// observe — e.g. "this rerender patched text in place without recreating
+/// elements," "exactly two attributes changed."
 ///
-/// The summary captures only the most recent render call. It is reset at the
-/// start of every `rebuild` / `render` / `wait_and_render`.
+/// The summary is returned by [`RendererOracle::rebuild`] and
+/// [`RendererOracle::render`].
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EditSummary {
     /// `load_template` calls — a fresh element subtree was created from a template.
     pub loads: usize,
-    /// `create_text_node` calls.
-    pub create_texts: usize,
     /// `remove_node` calls.
     pub removes: usize,
     /// `replace_node_with` calls.
     pub replaces: usize,
-    /// All four `insert_*` / `append_children` calls — placing nodes into the tree.
-    pub inserts: usize,
-    /// `push_root` calls — proxy for "an existing live node was brought onto the
-    /// stack to be moved." A keyed reorder that moves N survivors emits N pushes.
-    pub pushes: usize,
     /// `set_attribute` calls.
     pub set_attrs: usize,
     /// `set_node_text` calls — in-place text patches.
     pub set_texts: usize,
 }
 
-impl EditSummary {
-    /// Total node-creation operations (`loads + create_texts`).
-    pub fn creates(&self) -> usize {
-        self.loads + self.create_texts
-    }
-}
-
-/// An event listener target that has been attached during this renderer's lifetime.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct EventListenerTarget {
-    pub name: &'static str,
-    pub id: ElementId,
-}
-
 /// A fast mock renderer that applies Dioxus mutations into an in-memory tree.
 pub struct RendererOracle {
     arena: Vec<Option<Node>>,
     element_to_node: Vec<Option<NodeId>>,
-    node_to_elements: Vec<Vec<ElementId>>,
     stack: Vec<NodeId>,
-    popped_nodes: Vec<NodeId>,
-    root: NodeId,
     edit_counters: EditSummary,
-    historical_event_listener_targets: Vec<EventListenerTarget>,
 }
 
 impl Default for RendererOracle {
@@ -102,34 +80,18 @@ impl Default for RendererOracle {
 impl RendererOracle {
     /// Create an empty document with `ElementId(0)` mapped to the document root.
     pub fn new() -> Self {
-        let root = 0;
         Self {
             arena: vec![Some(Node {
                 kind: NodeKind::Document,
-                attrs: Vec::new(),
-                listeners: Vec::new(),
+                attrs: SnapshotAttrs::default(),
+                listeners: SnapshotListeners::default(),
                 children: Vec::new(),
                 parent: None,
             })],
-            element_to_node: vec![Some(root)],
-            node_to_elements: vec![vec![ElementId(0)]],
-            stack: vec![root],
-            popped_nodes: Vec::new(),
-            root,
+            element_to_node: vec![Some(ROOT)],
+            stack: vec![ROOT],
             edit_counters: EditSummary::default(),
-            historical_event_listener_targets: Vec::new(),
         }
-    }
-
-    /// Return a category-level summary of the edits applied during the most
-    /// recent `rebuild` / `render` / `wait_and_render` call. See [`EditSummary`].
-    pub fn last_edit_summary(&self) -> EditSummary {
-        self.edit_counters
-    }
-
-    /// Return every event listener target attached since the last clear/rebuild.
-    pub fn historical_event_listener_targets(&self) -> &[EventListenerTarget] {
-        &self.historical_event_listener_targets
     }
 
     /// Remove all nodes and reset the renderer to an empty document.
@@ -139,7 +101,7 @@ impl RendererOracle {
 
     /// Return a stable snapshot of the document root's children.
     pub fn snapshot(&self) -> Vec<SnapshotNode> {
-        self.node(self.root)
+        self.node(ROOT)
             .children
             .iter()
             .filter_map(|&child| self.snapshot_node(child))
@@ -151,7 +113,7 @@ impl RendererOracle {
     /// This is equivalent to comparing [`RendererOracle::snapshot`] output, but it
     /// avoids allocating and cloning the full snapshot on the success path.
     pub fn snapshot_eq(&self, other: &Self) -> bool {
-        self.visible_children_eq(self.root, other, other.root)
+        self.visible_children_eq(ROOT, other, ROOT)
     }
 
     /// Return the number of non-document nodes currently left on the mutation stack.
@@ -161,7 +123,7 @@ impl RendererOracle {
 
     /// Return true when no mutation-created nodes are left on the stack.
     fn is_stack_clean(&self) -> bool {
-        self.stack == [self.root]
+        self.stack == [ROOT]
     }
 
     /// Assert that the mutation stack only contains the document root.
@@ -201,12 +163,6 @@ impl RendererOracle {
         self.edit_counters
     }
 
-    /// Await pending work on `vdom`, then drain it into this renderer.
-    pub async fn wait_and_render(&mut self, vdom: &mut VirtualDom) -> EditSummary {
-        vdom.wait_for_work().await;
-        self.render(vdom)
-    }
-
     /// Find the live [`ElementId`] of the unique element whose tag matches
     /// `tag` (default namespace). Panics if zero or more than one element
     /// matches — tests should make the target unambiguous (add an `id` attr
@@ -219,7 +175,15 @@ impl RendererOracle {
     /// `vdom.runtime().handle_event(...)`.
     pub fn element_id_by_tag(&self, tag: &str) -> ElementId {
         let mut hits = Vec::new();
-        self.collect_element_ids_by_tag(self.root, tag, &mut hits);
+        self.visit_elements(ROOT, &mut |node, node_data| {
+            if let NodeKind::Element { tag: current, .. } = &node_data.kind {
+                if current == tag {
+                    if let Some(id) = self.element_id_for_node(node) {
+                        hits.push(id);
+                    }
+                }
+            }
+        });
         match hits.as_slice() {
             [id] => *id,
             [] => panic!("no live element with tag `{tag}` found in the oracle DOM"),
@@ -235,7 +199,18 @@ impl RendererOracle {
     /// Panics if zero or more than one element matches.
     pub fn element_id_by_attr(&self, attr_name: &str, attr_value: &str) -> ElementId {
         let mut hits = Vec::new();
-        self.collect_element_ids_by_attr(self.root, attr_name, attr_value, &mut hits);
+        let key = (attr_name.to_string(), None);
+        self.visit_elements(ROOT, &mut |node, node_data| {
+            if node_data
+                .attrs
+                .get(&key)
+                .is_some_and(|value| value == attr_value)
+            {
+                if let Some(id) = self.element_id_for_node(node) {
+                    hits.push(id);
+                }
+            }
+        });
         match hits.as_slice() {
             [id] => *id,
             [] => panic!("no live element with `{attr_name}={attr_value}` found in the oracle DOM"),
@@ -243,43 +218,6 @@ impl RendererOracle {
                 "`{attr_name}={attr_value}` is ambiguous: {} matching elements",
                 many.len(),
             ),
-        }
-    }
-
-    fn collect_element_ids_by_tag(&self, node: NodeId, tag: &str, out: &mut Vec<ElementId>) {
-        let n = self.node(node);
-        if let NodeKind::Element { tag: t, .. } = &n.kind {
-            if t == tag {
-                if let Some(id) = self.element_id_for_node(node) {
-                    out.push(id);
-                }
-            }
-        }
-        for &child in &n.children {
-            self.collect_element_ids_by_tag(child, tag, out);
-        }
-    }
-
-    fn collect_element_ids_by_attr(
-        &self,
-        node: NodeId,
-        attr_name: &str,
-        attr_value: &str,
-        out: &mut Vec<ElementId>,
-    ) {
-        let n = self.node(node);
-        if let NodeKind::Element { .. } = &n.kind {
-            for attr in &n.attrs {
-                if attr.name == attr_name && attr.namespace.is_none() && attr.value == attr_value {
-                    if let Some(id) = self.element_id_for_node(node) {
-                        out.push(id);
-                    }
-                    break;
-                }
-            }
-        }
-        for &child in &n.children {
-            self.collect_element_ids_by_attr(child, attr_name, attr_value, out);
         }
     }
 
@@ -292,6 +230,16 @@ impl RendererOracle {
         None
     }
 
+    fn visit_elements(&self, node: NodeId, visit: &mut impl FnMut(NodeId, &Node)) {
+        let node_data = self.node(node);
+        if matches!(node_data.kind, NodeKind::Element { .. }) {
+            visit(node, node_data);
+        }
+        for &child in &node_data.children {
+            self.visit_elements(child, visit);
+        }
+    }
+
     /// Walk the DOM and return `(attr_value, identity)` pairs for every element
     /// carrying an attribute named `attr_name` in the default namespace.
     ///
@@ -301,28 +249,14 @@ impl RendererOracle {
     /// of dropping and re-allocating them.
     pub fn identities_by_attr(&self, attr_name: &str) -> Vec<(String, OracleNodeId)> {
         let mut out = Vec::new();
-        self.collect_identities_by_attr(self.root, attr_name, &mut out);
+        let key = (attr_name.to_string(), None);
+        self.visit_elements(ROOT, &mut |node, node_data| {
+            if let Some(value) = node_data.attrs.get(&key) {
+                out.push((value.clone(), OracleNodeId(node)));
+            }
+        });
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
-    }
-
-    fn collect_identities_by_attr(
-        &self,
-        node: NodeId,
-        attr_name: &str,
-        out: &mut Vec<(String, OracleNodeId)>,
-    ) {
-        let n = self.node(node);
-        if let NodeKind::Element { .. } = &n.kind {
-            for attr in &n.attrs {
-                if attr.name == attr_name && attr.namespace.is_none() {
-                    out.push((attr.value.clone(), OracleNodeId(node)));
-                }
-            }
-        }
-        for &child in &n.children {
-            self.collect_identities_by_attr(child, attr_name, out);
-        }
     }
 
     /// Assert that this renderer's mock DOM matches the DOM described by an `rsx!` block.
@@ -347,12 +281,11 @@ impl RendererOracle {
         let id = self.arena.len();
         self.arena.push(Some(Node {
             kind,
-            attrs: Vec::new(),
-            listeners: Vec::new(),
+            attrs: SnapshotAttrs::default(),
+            listeners: SnapshotListeners::default(),
             children: Vec::new(),
             parent: None,
         }));
-        self.node_to_elements.push(Vec::new());
         id
     }
 
@@ -392,21 +325,7 @@ impl RendererOracle {
                 }
             }
         }
-        self.clear_element_mapping(id);
         self.element_to_node[id.0] = Some(node);
-        self.node_to_elements[node].push(id);
-    }
-
-    fn clear_element_mapping(&mut self, id: ElementId) {
-        let Some(mapped) = self.element_to_node.get_mut(id.0).and_then(Option::take) else {
-            return;
-        };
-        let Some(elements) = self.node_to_elements.get_mut(mapped) else {
-            return;
-        };
-        if let Some(index) = elements.iter().position(|&element| element == id) {
-            elements.swap_remove(index);
-        }
     }
 
     fn lookup(&self, id: ElementId) -> NodeId {
@@ -489,15 +408,7 @@ impl RendererOracle {
             );
         }
         let split = self.stack.len() - m;
-        let mut nodes = std::mem::take(&mut self.popped_nodes);
-        nodes.clear();
-        nodes.extend(self.stack.drain(split..));
-        nodes
-    }
-
-    fn recycle_popped_nodes(&mut self, mut nodes: Vec<NodeId>) {
-        nodes.clear();
-        self.popped_nodes = nodes;
+        self.stack.split_off(split)
     }
 
     fn position_in_parent(&self, node: NodeId) -> (NodeId, usize) {
@@ -534,7 +445,7 @@ impl RendererOracle {
         }
     }
 
-    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: &mut Vec<NodeId>) {
+    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: Vec<NodeId>) {
         if index > self.node(parent).children.len() {
             panic!(
                 "renderer insertion index {index} out of bounds for parent {parent} with {} children",
@@ -545,32 +456,25 @@ impl RendererOracle {
             self.node_mut(node).parent = Some(parent);
         }
         let parent_node = self.node_mut(parent);
-        for (offset, node) in nodes.drain(..).enumerate() {
+        for (offset, node) in nodes.into_iter().enumerate() {
             parent_node.children.insert(index + offset, node);
         }
     }
 
-    fn append_detached(&mut self, parent: NodeId, nodes: &mut Vec<NodeId>) {
+    fn append_detached(&mut self, parent: NodeId, nodes: Vec<NodeId>) {
         for &node in nodes.iter() {
             self.node_mut(node).parent = Some(parent);
         }
-        self.node_mut(parent).children.extend(nodes.drain(..));
+        self.node_mut(parent).children.extend(nodes);
     }
 
     fn drop_subtree(&mut self, node: NodeId) {
-        if node == self.root {
+        if node == ROOT {
             panic!("renderer cannot drop document root");
         }
         let node_data = self.arena[node]
             .take()
             .unwrap_or_else(|| panic!("renderer tried to drop already-dead node {node}"));
-        for id in self.node_to_elements[node].drain(..) {
-            if let Some(mapped) = self.element_to_node.get_mut(id.0) {
-                if *mapped == Some(node) {
-                    *mapped = None;
-                }
-            }
-        }
         for child in node_data.children {
             // Children of a dropped subtree are still attached (in the dead node's
             // `children`), so just recurse — no need to detach them first.
@@ -593,28 +497,12 @@ impl RendererOracle {
 
     fn set_attr(&mut self, node: NodeId, name: String, namespace: Option<String>, value: String) {
         self.assert_element(node, "set_attribute");
-        let attrs = &mut self.node_mut(node).attrs;
-        match attrs
-            .binary_search_by(|attr| attr_key(attr).cmp(&(name.as_str(), namespace.as_deref())))
-        {
-            Ok(index) => attrs[index].value = value,
-            Err(index) => attrs.insert(
-                index,
-                SnapshotAttr {
-                    name,
-                    namespace,
-                    value,
-                },
-            ),
-        }
+        set_snapshot_attr(&mut self.node_mut(node).attrs, name, namespace, value);
     }
 
     fn remove_attr(&mut self, node: NodeId, name: &str, namespace: Option<&str>) {
         self.assert_element(node, "remove_attribute");
-        let attrs = &mut self.node_mut(node).attrs;
-        if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
-            attrs.remove(index);
-        }
+        remove_snapshot_attr(&mut self.node_mut(node).attrs, name, namespace);
     }
 
     fn snapshot_node_eq(&self, node: NodeId, other: &Self, other_node: NodeId) -> bool {
@@ -677,8 +565,8 @@ impl RendererOracle {
             NodeKind::Element { tag, namespace } => Some(SnapshotNode::Element {
                 tag: tag.clone(),
                 namespace: namespace.clone(),
-                attrs: node_data.attrs.clone(),
-                listeners: node_data.listeners.clone(),
+                attrs: snapshot_attrs(&node_data.attrs),
+                listeners: snapshot_listeners(&node_data.listeners),
                 children: node_data
                     .children
                     .iter()
@@ -693,11 +581,9 @@ impl RendererOracle {
 
 impl WriteMutations for RendererOracle {
     fn append_children(&mut self, id: ElementId, m: usize) {
-        self.edit_counters.inserts += 1;
-        let mut nodes = self.pop_nodes(m);
+        let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
-        self.append_detached(self.lookup(id), &mut nodes);
-        self.recycle_popped_nodes(nodes);
+        self.append_detached(self.lookup(id), nodes);
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
@@ -716,7 +602,6 @@ impl WriteMutations for RendererOracle {
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.edit_counters.create_texts += 1;
         let node = self.alloc(NodeKind::Text(value.to_string()));
         self.set_element_mapping(id, node);
         self.stack.push(node);
@@ -735,20 +620,18 @@ impl WriteMutations for RendererOracle {
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
         self.edit_counters.replaces += 1;
-        let mut nodes = self.pop_nodes(m);
+        let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let target = self.lookup(id);
         let (parent, index) = self.detach(target);
         self.drop_subtree(target);
-        self.insert_detached(parent, index, &mut nodes);
-        self.recycle_popped_nodes(nodes);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        self.edit_counters.inserts += 1;
         // Order matters: pop the stack first, then walk_path reads from the top.
         // Mirrors `native-dom`'s `replace_placeholder_with_nodes` (mutation_writer.rs).
-        let mut nodes = self.pop_nodes(m);
+        let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let top = *self
             .stack
@@ -757,28 +640,23 @@ impl WriteMutations for RendererOracle {
         let anchor = self.walk_path(top, path);
         let (parent, index) = self.detach(anchor);
         self.drop_subtree(anchor);
-        self.insert_detached(parent, index, &mut nodes);
-        self.recycle_popped_nodes(nodes);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.edit_counters.inserts += 1;
-        let mut nodes = self.pop_nodes(m);
+        let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        self.insert_detached(parent, index + 1, &mut nodes);
-        self.recycle_popped_nodes(nodes);
+        self.insert_detached(parent, index + 1, nodes);
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.edit_counters.inserts += 1;
-        let mut nodes = self.pop_nodes(m);
+        let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        self.insert_detached(parent, index, &mut nodes);
-        self.recycle_popped_nodes(nodes);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn set_attribute(
@@ -810,28 +688,16 @@ impl WriteMutations for RendererOracle {
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
         let node = self.lookup(id);
         self.assert_element(node, "create_event_listener");
-        let target = EventListenerTarget { name, id };
-        if !self.historical_event_listener_targets.contains(&target) {
-            self.historical_event_listener_targets.push(target);
-        }
         let listeners = &mut self.node_mut(node).listeners;
-        let name = name.to_string();
-        match listeners.binary_search(&name) {
-            Ok(_) => {}
-            Err(index) => listeners.insert(index, name),
-        }
+        listeners.insert(name.to_string());
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
         let node = self.lookup(id);
         self.assert_element(node, "remove_event_listener");
         let listeners = &mut self.node_mut(node).listeners;
-        let name = name.to_string();
-        match listeners.binary_search(&name) {
-            Ok(index) => {
-                listeners.remove(index);
-            }
-            Err(_) => panic!("renderer removed missing event listener {name:?}"),
+        if !listeners.remove(name) {
+            panic!("renderer removed missing event listener {name:?}");
         }
     }
 
@@ -846,7 +712,6 @@ impl WriteMutations for RendererOracle {
     }
 
     fn push_root(&mut self, id: ElementId) {
-        self.edit_counters.pushes += 1;
         if id.0 == 0 {
             panic!("dioxus emitted PushRoot {{ id: ElementId(0) }}");
         }

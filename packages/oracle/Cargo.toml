@@ -5,6 +5,7 @@ authors = ["Dioxus Labs"]
 edition = "2024"
 description = "A fast oracle renderer for validating Dioxus VirtualDom mutations."
 license = "MIT OR Apache-2.0"
+publish = false
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 rust-version = "1.85.0"

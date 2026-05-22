@@ -1,10 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    cache::InternSet,
-    context::HarnessContext,
-    lifecycle::LifecycleRole,
-    model::*,
+    cache::InternSet, context::HarnessContext, lifecycle::LifecycleRole, model::*,
     ops::SuspenseReadyFuture,
 };
 use dioxus::prelude::*;
@@ -20,14 +17,14 @@ use std::{
 
 // ---------- VNode construction --------------------------------------------------------------
 
-pub(crate) fn App() -> Element {
-    let context = consume_context::<HarnessContext>();
+pub(crate) fn App(context: HarnessContext) -> Element {
     let model = context.read_model();
     Ok(build_vnode(&context, &model.root))
 }
 
 #[derive(Clone, PartialEq, Props)]
 struct GeneratedProps {
+    context: HarnessContext,
     id: u64,
     suspense_ancestors: Vec<u64>,
     node: VNodeSpec,
@@ -35,6 +32,7 @@ struct GeneratedProps {
 
 #[derive(Clone, PartialEq, Props)]
 struct GeneratedSuspenseProps {
+    context: HarnessContext,
     id: u64,
     ready_generation: u64,
     required_ready_wake_count: usize,
@@ -46,7 +44,7 @@ struct GeneratedSuspenseProps {
 }
 
 fn GeneratedComponent(props: GeneratedProps) -> Element {
-    let context = consume_context::<HarnessContext>();
+    let context = props.context;
     track_lifecycle(
         &context,
         LifecycleRole::ComponentA,
@@ -61,7 +59,7 @@ fn GeneratedComponent(props: GeneratedProps) -> Element {
 }
 
 fn OtherGeneratedComponent(props: GeneratedProps) -> Element {
-    let context = consume_context::<HarnessContext>();
+    let context = props.context;
     track_lifecycle(
         &context,
         LifecycleRole::ComponentB,
@@ -76,7 +74,7 @@ fn OtherGeneratedComponent(props: GeneratedProps) -> Element {
 }
 
 fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
-    let context = consume_context::<HarnessContext>();
+    let context = props.context;
     track_lifecycle(
         &context,
         LifecycleRole::SuspenseBoundary,
@@ -97,6 +95,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
             SuspenseBoundary {
                 fallback: |_| rsx! { "suspense-fallback" },
                 GeneratedSuspenseChild {
+                    context,
                     id,
                     ready_generation,
                     required_ready_wake_count,
@@ -123,6 +122,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
         SuspenseBoundary {
             fallback: |_| rsx! { "suspense-fallback" },
             GeneratedSuspenseChild {
+                context: context.clone(),
                 id,
                 ready_generation,
                 required_ready_wake_count,
@@ -138,7 +138,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
 }
 
 fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
-    let context = consume_context::<HarnessContext>();
+    let context = props.context;
     track_lifecycle(
         &context,
         LifecycleRole::SuspenseChild,
@@ -218,7 +218,8 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
                             required_wakes,
                         }
                         .await;
-                        let wake_mutation = task_context.read_model().wake_mutation_for_ready_key(key);
+                        let wake_mutation =
+                            task_context.read_model().wake_mutation_for_ready_key(key);
                         if wake_mutation != WakeMutationSpec::None {
                             applied_wake_mutation.set(wake_mutation);
                         }
@@ -407,6 +408,7 @@ fn build_dynamic(
         DynamicSpec::ComponentA(component) => DynamicNode::Component(VComponent::new(
             GeneratedComponent,
             GeneratedProps {
+                context: context.clone(),
                 id: component.id,
                 suspense_ancestors: suspense_ancestors.to_vec(),
                 node: component.child.as_ref().clone(),
@@ -416,6 +418,7 @@ fn build_dynamic(
         DynamicSpec::ComponentB(component) => DynamicNode::Component(VComponent::new(
             OtherGeneratedComponent,
             GeneratedProps {
+                context: context.clone(),
                 id: component.id,
                 suspense_ancestors: suspense_ancestors.to_vec(),
                 node: component.child.as_ref().clone(),
@@ -425,6 +428,7 @@ fn build_dynamic(
         DynamicSpec::Suspense(spec) => DynamicNode::Component(VComponent::new(
             GeneratedSuspenseBoundary,
             GeneratedSuspenseProps {
+                context: context.clone(),
                 id: spec.id,
                 ready_generation: spec.ready_generation,
                 required_ready_wake_count: spec.mode.required_ready_wake_count().unwrap_or(1)
