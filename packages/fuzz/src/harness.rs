@@ -8,7 +8,8 @@ use crate::{
 use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
-use dioxus_renderer_oracle::{panic_message, RendererOracle, SnapshotNode};
+use crate::diagnostics::panic_message;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use std::{any::Any, cell::RefCell, collections::BTreeSet, fmt, panic, rc::Rc};
 
 // ---------- Harness -------------------------------------------------------------------------

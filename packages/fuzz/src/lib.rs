@@ -7,6 +7,7 @@
 
 mod cache;
 mod context;
+mod diagnostics;
 mod event;
 mod harness;
 mod lifecycle;
@@ -15,7 +16,7 @@ mod ops;
 mod reducer;
 mod vdom;
 
-use dioxus_renderer_oracle::panic_message;
+use diagnostics::panic_message;
 use harness::{Harness, apply_step, print_ssr_diff_trace};
 use model::{
     AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, Model, SuspenseMode,
