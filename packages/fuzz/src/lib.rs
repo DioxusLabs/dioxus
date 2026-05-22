@@ -439,8 +439,7 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
 fn collision_aliasing_sequence(model: &Model, selector: u8, value: u8) -> Option<Vec<Op>> {
     let mut candidates: Vec<CollisionCandidate> = Vec::new();
     collect_collision_candidates(&model.root, 0, &mut 0u8, &mut candidates);
-    let pick = *candidates
-        .get(selector as usize % candidates.len().max(1))?;
+    let pick = *candidates.get(selector as usize % candidates.len().max(1))?;
     let alias = Op::template(
         pick.vnode,
         TemplateEdit::Attrs {
@@ -464,11 +463,8 @@ fn collision_aliasing_sequence(model: &Model, selector: u8, value: u8) -> Option
     // already injects `Rerender` ops on its own; chaining alias+drop without
     // explicit rerenders keeps the case short so other diff paths still get
     // op budget.
-    let drop_dynamic = Op::dynamic_attrs(
-        pick.vnode,
-        pick.dynamic_slot,
-        ListEdit::Remove { index: 0 },
-    );
+    let drop_dynamic =
+        Op::dynamic_attrs(pick.vnode, pick.dynamic_slot, ListEdit::Remove { index: 0 });
     Some(vec![alias, drop_dynamic])
 }
 
