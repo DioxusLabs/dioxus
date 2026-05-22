@@ -1,4 +1,3 @@
-use crate::fiber::FiberId;
 use crate::scopes::ScopeId;
 
 /// The scheduler priority for an update.
@@ -85,82 +84,6 @@ pub struct SuspenseRenderStats {
     pub resolved_scopes: Vec<ScopeId>,
 }
 
-/// Information available to a renderer at a concurrent render checkpoint.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RenderCheckpoint {
-    /// The priority of the work unit that just completed.
-    pub priority: UpdatePriority,
-
-    /// Owning component scope when the work maps to a scope.
-    pub scope: Option<ScopeId>,
-
-    /// The number of work units completed since the last cooperative yield.
-    pub work_units_since_yield: usize,
-
-    /// Number of buffered mutation operations waiting for commit.
-    pub pending_mutations: usize,
-
-    /// Whether more urgent work is waiting behind the current work.
-    pub has_higher_priority_work: bool,
-}
-
-/// Description of a commit performed by the concurrent render driver.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RenderCommit {
-    /// Highest-priority work included in this commit.
-    pub priority: UpdatePriority,
-
-    /// Number of scheduler work units included in this commit.
-    pub work_count: usize,
-
-    /// Number of buffered mutation operations included in this commit.
-    pub mutation_count: usize,
-
-    /// Commit generation assigned by the driver.
-    pub generation: u64,
-}
-
-/// The action a renderer wants to take at a concurrent render checkpoint.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderSchedulerDecision {
-    /// Keep rendering without yielding.
-    Continue,
-
-    /// Flush renderer mutations without yielding.
-    Commit,
-
-    /// Yield without flushing renderer mutations.
-    Yield,
-
-    /// Flush renderer mutations, then yield.
-    CommitAndYield,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FiberPhase {
-    RunScope,
-    Diff,
-    PollTask,
-    Effect,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FiberInfo {
-    pub(crate) id: Option<FiberId>,
-    pub(crate) scope: Option<ScopeId>,
-    pub(crate) priority: UpdatePriority,
-    pub(crate) phase: FiberPhase,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FiberCheckpoint {
-    pub(crate) work: FiberInfo,
-    pub(crate) work_count: usize,
-    pub(crate) pending_mutations: usize,
-    pub(crate) has_higher_priority_work: bool,
-    pub(crate) must_commit_before_next: bool,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FiberCommit {
     pub(crate) priority: UpdatePriority,
@@ -169,19 +92,8 @@ pub(crate) struct FiberCommit {
     pub(crate) generation: u64,
 }
 
-impl From<FiberCommit> for RenderCommit {
-    fn from(commit: FiberCommit) -> Self {
-        Self {
-            priority: commit.priority,
-            work_count: commit.work_count,
-            mutation_count: commit.mutation_count,
-            generation: commit.generation,
-        }
-    }
-}
-
 pub(crate) enum FiberStep {
-    Ran(FiberCheckpoint),
+    Ran,
     MustCommit,
     Idle(RenderStats),
 }

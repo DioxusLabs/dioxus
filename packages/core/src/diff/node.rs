@@ -829,11 +829,9 @@ impl VNode {
             let mut mounts = state.dom.runtime.fibers.borrow_mut();
             let entry = mounts.vacant_entry();
             let mount = MountId(entry.key());
-            let fiber_id = state.dom.runtime.next_fiber_id();
             self.mount.set(mount);
             tracing::trace!(?self, ?mount, "creating template");
             entry.insert(Fiber::new(
-                fiber_id,
                 self.clone(),
                 render_parent,
                 logical_parent,

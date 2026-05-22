@@ -66,7 +66,9 @@ impl DirtyFiber {
         dom.render_deferred_priority = dom
             .dirty_fibers
             .deferred_priority_for_scope(self.scope, priority);
-        dom.run_and_diff_scope(to, self.scope);
+        dom.runtime
+            .clone()
+            .with_update_priority(priority, || dom.run_and_diff_scope(to, self.scope));
         dom.render_priority = previous;
         dom.render_deferred_priority = previous_deferred_priority;
     }

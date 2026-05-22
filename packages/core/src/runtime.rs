@@ -1,4 +1,4 @@
-use crate::fiber::{Fiber, FiberId};
+use crate::fiber::Fiber;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{AttributeValue, ElementId, Event, RenderTargetId};
@@ -75,8 +75,6 @@ pub struct Runtime {
     // Each fiber is associated with a whole rsx block. [`Runtime::elements`]
     // link to a specific node in that block.
     pub(crate) fibers: RefCell<Slab<Fiber>>,
-
-    next_fiber_id: Cell<u64>,
 }
 
 struct ScopeStackGuard<'a> {
@@ -148,14 +146,7 @@ impl Runtime {
             dirty_tasks: Default::default(),
             render_targets: RefCell::new(render_targets),
             fibers: Default::default(),
-            next_fiber_id: Cell::new(1),
         })
-    }
-
-    pub(crate) fn next_fiber_id(&self) -> FiberId {
-        let id = self.next_fiber_id.get();
-        self.next_fiber_id.set(id.wrapping_add(1).max(1));
-        FiberId(id)
     }
 
     /// Get the current runtime

@@ -8,9 +8,9 @@ use crate::{
     ComponentFunction, Element, Mutations, RenderTargetId, TargetedMutations,
     arena::ElementId,
     innerlude::{
-        ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderCheckpoint,
-        RenderCommit, RenderSchedulerDecision, RenderStats, SchedulerFairness, SchedulerMsg,
-        ScopeOrder, ScopeState, SuspenseRenderStats, UpdatePriority, VProps, WriteMutations,
+        ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderStats,
+        SchedulerFairness, SchedulerMsg, ScopeOrder, ScopeState, SuspenseRenderStats,
+        UpdatePriority, VProps, WriteMutations,
     },
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
@@ -20,7 +20,6 @@ use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeMap;
-use std::future::Future;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -709,93 +708,31 @@ impl VirtualDom {
         mutations.into_edits()
     }
 
-    /// Render pending work into a renderer mutation queue.
+    /// Render pending work into a renderer until idle.
     ///
-    /// Commits and yields after every fiber checkpoint, leaving rescheduling
-    /// to the async executor. Callers that want renderer-controlled cadence
-    /// (frame timing, custom batching) should use
-    /// [`Self::render_concurrent_with_scheduler`].
+    /// Commits buffered mutations and yields to the async runtime after every
+    /// completed work unit. Cancel-safe: dropping the returned future stops
+    /// rendering cleanly, with the renderer in sync with the virtual DOM (no
+    /// uncommitted work is held inside the driver across an `.await`).
     #[instrument(
         skip(self, to),
         level = "trace",
         name = "VirtualDom::render_concurrent"
     )]
     pub async fn render_concurrent(&mut self, to: &mut impl WriteMutations) -> RenderStats {
-        self.render_concurrent_with_scheduler(
-            to,
-            |_, _| RenderSchedulerDecision::CommitAndYield,
-            |_, _| {},
-            |_| yield_now(),
-        )
-        .await
-    }
-
-    /// Render pending work with renderer-controlled cooperative scheduling.
-    ///
-    /// The renderer receives a checkpoint after every completed scheduler work
-    /// unit. This lets browser renderers tie commits and yields to frame timing
-    /// instead of a fixed amount of virtual DOM work.
-    #[doc(hidden)]
-    #[instrument(
-        skip(self, to, scheduler, commit, wait_for_scheduler),
-        level = "trace",
-        name = "VirtualDom::render_concurrent_with_scheduler"
-    )]
-    pub async fn render_concurrent_with_scheduler<M, S, C, W, F>(
-        &mut self,
-        to: &mut M,
-        mut scheduler: S,
-        mut commit: C,
-        mut wait_for_scheduler: W,
-    ) -> RenderStats
-    where
-        M: WriteMutations,
-        S: FnMut(RenderCheckpoint, &M) -> RenderSchedulerDecision,
-        C: FnMut(&mut M, RenderCommit),
-        W: FnMut(Option<UpdatePriority>) -> F,
-        F: Future<Output = ()>,
-    {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let mut driver = self.fiber_driver();
         loop {
             match driver.next_fiber() {
-                FiberStep::Ran(checkpoint) => {
-                    let render_checkpoint = RenderCheckpoint {
-                        priority: checkpoint.work.priority,
-                        scope: checkpoint.work.scope,
-                        work_units_since_yield: checkpoint.work_count,
-                        pending_mutations: checkpoint.pending_mutations,
-                        has_higher_priority_work: checkpoint.has_higher_priority_work,
-                    };
-
-                    match scheduler(render_checkpoint, to) {
-                        RenderSchedulerDecision::Continue => {}
-                        RenderSchedulerDecision::Commit => {
-                            if let Some(fiber_commit) = driver.commit(to) {
-                                commit(to, fiber_commit.into());
-                            }
-                        }
-                        RenderSchedulerDecision::Yield => {
-                            driver.yield_now();
-                            wait_for_scheduler(None).await;
-                        }
-                        RenderSchedulerDecision::CommitAndYield => {
-                            if let Some(fiber_commit) = driver.commit(to) {
-                                let priority = fiber_commit.priority;
-                                commit(to, fiber_commit.into());
-                                driver.yield_now();
-                                wait_for_scheduler(Some(priority)).await;
-                            } else {
-                                driver.yield_now();
-                                wait_for_scheduler(None).await;
-                            }
-                        }
-                    }
+                FiberStep::Ran => {
+                    driver.commit(to);
+                    driver.yield_now();
+                    yield_now().await;
                 }
                 FiberStep::MustCommit => {
-                    if let Some(fiber_commit) = driver.commit(to) {
-                        commit(to, fiber_commit.into());
-                    }
+                    driver.commit(to);
+                    driver.yield_now();
+                    yield_now().await;
                 }
                 FiberStep::Idle(stats) => return stats,
             }

@@ -63,7 +63,6 @@ pub(crate) mod innerlude {
     pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
-    pub use crate::fiber::FiberId;
     pub use crate::fragment::*;
     pub use crate::generational_box::*;
     pub use crate::global_context::*;
@@ -101,10 +100,10 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
-    EventHandler, FiberId, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
+    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
     ListenerCallback, MarkerWrapper, Mutation, MutationCounter, Mutations, NoOpMutations,
-    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderCheckpoint,
-    RenderCommit, RenderError, RenderSchedulerDecision, RenderStats, RenderTargetId, Result,
+    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
+    RenderStats, RenderTargetId, Result,
     Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
     SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
     SuspenseContext, SuspenseRenderStats, TargetedMutations, Task, Template, TemplateAttribute,

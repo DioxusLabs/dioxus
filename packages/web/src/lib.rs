@@ -6,9 +6,7 @@
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::{
-    RenderCheckpoint, RenderCommit, RenderSchedulerDecision, UpdatePriority, VirtualDom,
-};
+use dioxus_core::VirtualDom;
 use dom::WebsysDom;
 use futures_util::{FutureExt, StreamExt, pin_mut, select};
 use std::{cell::Cell, cell::RefCell, rc::Rc};
@@ -46,87 +44,54 @@ pub use hydration::*;
 
 const HOST_YIELD_INTERVAL_MS: f64 = 5.0;
 
-#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-export function publishSchedulerStats(workCount, commitCount, yieldCount) {
-    if (typeof window === "undefined") {
-        return;
-    }
-
-    const detail = {
-        workCount,
-        commitCount,
-        yieldCount,
-        timestamp: performance.now(),
-    };
-
-    window.__dioxusFiberStats = detail;
-    window.dispatchEvent(new CustomEvent("dioxus-fiber-stats", { detail }));
-}
-"#)]
-extern "C" {
-    #[wasm_bindgen(js_name = publishSchedulerStats)]
-    fn publish_scheduler_stats(work_count: u32, commit_count: u32, yield_count: u32);
-}
-
-fn publish_commit_stats(commit: RenderCommit) {
-    publish_scheduler_stats(commit.work_count as u32, 1, 0);
-}
-
-#[derive(Clone)]
+/// Tracks the per-frame budget the browser renderer races concurrent rendering
+/// against. The driver inside `render_concurrent` yields after every committed
+/// work unit; this scheduler decides when to drop the render future entirely so
+/// the renderer can flush edits to the DOM and let the browser dispatch events.
 struct BrowserHostScheduler {
-    next_yield: Rc<Cell<f64>>,
-    pending_input: Rc<Cell<bool>>,
+    deadline: Cell<f64>,
+    pending_input: Cell<bool>,
 }
 
 impl BrowserHostScheduler {
     fn new() -> Self {
         Self {
-            next_yield: Rc::new(Cell::new(performance_now() + HOST_YIELD_INTERVAL_MS)),
-            pending_input: Rc::new(Cell::new(false)),
+            deadline: Cell::new(performance_now() + HOST_YIELD_INTERVAL_MS),
+            pending_input: Cell::new(false),
         }
     }
 
-    fn checkpoint(&self, checkpoint: RenderCheckpoint) -> RenderSchedulerDecision {
-        let input_pending = is_input_pending();
-        self.pending_input.set(input_pending);
+    fn reset_deadline(&self) {
+        self.deadline
+            .set(performance_now() + HOST_YIELD_INTERVAL_MS);
+    }
 
-        if input_pending {
-            return RenderSchedulerDecision::CommitAndYield;
-        }
-
-        if checkpoint.has_higher_priority_work {
-            return RenderSchedulerDecision::CommitAndYield;
-        }
-
-        if checkpoint.priority <= UpdatePriority::ContinuousInput
-            && checkpoint.pending_mutations > 0
-        {
-            return RenderSchedulerDecision::Commit;
-        }
-
-        if performance_now() >= self.next_yield.get() {
-            RenderSchedulerDecision::CommitAndYield
-        } else {
-            RenderSchedulerDecision::Continue
+    /// Resolves when the current frame budget has expired or the browser has a
+    /// pending input event waiting to be dispatched. Cancel-safe.
+    async fn frame_budget_expired(&self) {
+        loop {
+            if is_input_pending() {
+                self.pending_input.set(true);
+                return;
+            }
+            let now = performance_now();
+            let remaining = self.deadline.get() - now;
+            if remaining <= 0.0 {
+                return;
+            }
+            // Wake at least every millisecond so input polling stays responsive
+            // without busy-looping.
+            let sleep_ms = remaining.min(1.0).max(1.0) as u32;
+            gloo_timers::future::TimeoutFuture::new(sleep_ms).await;
         }
     }
 
     async fn yield_to_host(&self) {
-        self.yield_to_host_after_priority(UpdatePriority::Default)
-            .await;
-    }
-
-    async fn yield_to_host_after_priority(&self, priority: UpdatePriority) {
-        if self.pending_input.replace(false) || priority == UpdatePriority::SyncInput {
+        if self.pending_input.replace(false) {
             request_animation_frame().await;
         }
         gloo_timers::future::TimeoutFuture::new(0).await;
-        self.reset_yield_deadline();
-    }
-
-    fn reset_yield_deadline(&self) {
-        self.next_yield
-            .set(performance_now() + HOST_YIELD_INTERVAL_MS);
+        self.reset_deadline();
     }
 }
 
@@ -403,28 +368,24 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         let scheduler = BrowserHostScheduler::new();
-        virtual_dom
-            .render_concurrent_with_scheduler(
-                &mut websys_dom,
-                |checkpoint, _| scheduler.checkpoint(checkpoint),
-                |websys_dom, commit| {
-                    publish_commit_stats(commit);
-                    websys_dom.flush_edits();
-                    scheduler.reset_yield_deadline();
-                },
-                |priority| {
-                    let scheduler = scheduler.clone();
-                    async move {
-                        publish_scheduler_stats(0, 0, 1);
-                        match priority {
-                            Some(priority) => {
-                                scheduler.yield_to_host_after_priority(priority).await
-                            }
-                            None => scheduler.yield_to_host().await,
-                        }
-                    }
-                },
-            )
-            .await;
+        loop {
+            let render_completed = {
+                let render = virtual_dom.render_concurrent(&mut websys_dom).fuse();
+                let budget = scheduler.frame_budget_expired().fuse();
+                pin_mut!(render, budget);
+                select! {
+                    _ = render => true,
+                    _ = budget => false,
+                }
+            };
+
+            websys_dom.flush_edits();
+
+            if render_completed {
+                break;
+            }
+
+            scheduler.yield_to_host().await;
+        }
     }
 }

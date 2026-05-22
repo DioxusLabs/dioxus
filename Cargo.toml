@@ -100,6 +100,7 @@ members = [
     "examples/01-app-demos/file-explorer",
     "examples/01-app-demos/hotdog",
     "examples/01-app-demos/geolocation-native-plugin",
+    "examples/01-app-demos/concurrent-scheduler",
 
     # Fullstack examples
     "examples/07-fullstack/hello-world",

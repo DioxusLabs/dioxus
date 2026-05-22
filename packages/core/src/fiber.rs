@@ -3,15 +3,6 @@ use crate::{
     innerlude::{ElementRef, MountId},
 };
 
-/// Opaque identity for one mounted virtual-DOM fiber.
-///
-/// A `FiberId` is stable for the lifetime of a mounted fiber, but it must not
-/// be interpreted as an arena index. It is exposed so renderers and diagnostics
-/// can correlate cooperative scheduler checkpoints without depending on
-/// internal mount bookkeeping.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FiberId(pub(crate) u64);
-
 /// Whether a fiber is allowed to write renderer mutations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FiberMode {
@@ -26,9 +17,6 @@ pub(crate) enum FiberMode {
 /// inspection, and the next render pass.
 #[derive(Debug)]
 pub(crate) struct Fiber {
-    /// Stable opaque identity for diagnostics and cooperative scheduling.
-    pub(crate) id: FiberId,
-
     /// The physical parent used for renderer placement and anchors.
     pub(crate) render_parent: Option<ElementRef>,
 
@@ -49,14 +37,12 @@ pub(crate) struct Fiber {
 
 impl Fiber {
     pub(crate) fn new(
-        id: FiberId,
         node: VNode,
         render_parent: Option<ElementRef>,
         logical_parent: Option<ElementRef>,
         target_id: RenderTargetId,
     ) -> Self {
         Self {
-            id,
             render_parent,
             logical_parent,
             target_id,

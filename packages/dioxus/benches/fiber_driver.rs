@@ -2,7 +2,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
-use dioxus_core::{NoOpMutations, RenderSchedulerDecision, RuntimeGuard, UpdatePriority};
+use dioxus_core::{NoOpMutations, RuntimeGuard, UpdatePriority};
 use futures_util::{FutureExt, pin_mut};
 use std::cell::RefCell;
 use std::task::{Context, Poll, Waker};
@@ -15,25 +15,14 @@ criterion_group!(benches, fiber_driver_large_prop_wave);
 criterion_main!(benches);
 
 fn fiber_driver_large_prop_wave(c: &mut Criterion) {
-    c.bench_function("fiber driver large prop wave commit at end", |b| {
+    c.bench_function("fiber driver large prop wave", |b| {
         let mut dom = VirtualDom::new(app);
         dom.rebuild(&mut NoOpMutations);
         let runtime = dom.runtime();
 
         b.iter(|| {
             bump_round(runtime.clone());
-            drive_fibers(&mut dom, false);
-        });
-    });
-
-    c.bench_function("fiber driver large prop wave commit each unit", |b| {
-        let mut dom = VirtualDom::new(app);
-        dom.rebuild(&mut NoOpMutations);
-        let runtime = dom.runtime();
-
-        b.iter(|| {
-            bump_round(runtime.clone());
-            drive_fibers(&mut dom, true);
+            drive_fibers(&mut dom);
         });
     });
 }
@@ -48,19 +37,9 @@ fn bump_round(runtime: std::rc::Rc<dioxus_core::Runtime>) {
     });
 }
 
-fn drive_fibers(dom: &mut VirtualDom, commit_each_unit: bool) {
+fn drive_fibers(dom: &mut VirtualDom) {
     let mut mutations = NoOpMutations;
-    let decision = if commit_each_unit {
-        RenderSchedulerDecision::CommitAndYield
-    } else {
-        RenderSchedulerDecision::Continue
-    };
-    let fut = dom.render_concurrent_with_scheduler(
-        &mut mutations,
-        move |_, _| decision,
-        |_, _| {},
-        |_| std::future::ready(()),
-    );
+    let fut = dom.render_concurrent(&mut mutations);
     pin_mut!(fut);
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);

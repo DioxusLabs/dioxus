@@ -1,11 +1,6 @@
-use super::{
-    FiberCheckpoint, FiberCommit, FiberInfo, FiberPhase, FiberStep, RenderStats, UpdatePriority,
-    Work,
-};
+use super::{FiberCommit, FiberStep, RenderStats, UpdatePriority};
 use crate::arena::ElementId;
-use crate::fiber::FiberId;
 use crate::runtime::{Runtime, RuntimeGuard};
-use crate::scopes::ScopeId;
 use crate::{AttributeValue, RenderTargetId, Template, VirtualDom, WriteMutations};
 use std::rc::Rc;
 
@@ -338,29 +333,20 @@ impl<'a> FiberDriver<'a> {
             };
 
             let requires_commit = work.requires_commit();
-            let info = self.dom.fiber_info_for_work(&work);
             let priority = self.dom.render_work_into(&mut self.buffer, work);
             self.job.record_work(priority, requires_commit);
 
             self.dom.queue_events();
-            let next_priority = self.dom.next_work_priority();
-            let has_higher_priority_work =
-                next_priority.is_some_and(|next_priority| next_priority < priority);
-            let must_commit_before_next = next_priority
+            let must_commit_before_next = self
+                .dom
+                .next_work_priority()
                 .is_some_and(|next_priority| next_priority != self.job.commit_priority);
-            let checkpoint = FiberCheckpoint {
-                work: info,
-                work_count: self.job.work_done,
-                pending_mutations: self.buffer.len(),
-                has_higher_priority_work,
-                must_commit_before_next,
-            };
 
             if must_commit_before_next {
                 self.must_commit = self.pending_commit();
             }
 
-            return FiberStep::Ran(checkpoint);
+            return FiberStep::Ran;
         }
     }
 
@@ -381,6 +367,14 @@ impl<'a> FiberDriver<'a> {
     }
 }
 
+impl<'a> Drop for FiberDriver<'a> {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.dom.runtime.finish_render();
+        }
+    }
+}
+
 impl VirtualDom {
     pub(crate) fn fiber_driver(&mut self) -> FiberDriver<'_> {
         let runtime = self.runtime.clone();
@@ -392,54 +386,5 @@ impl VirtualDom {
             must_commit: None,
             finished: false,
         }
-    }
-
-    fn fiber_info_for_work(&self, work: &Work) -> FiberInfo {
-        match work {
-            Work::DiffFiber(fiber) => FiberInfo {
-                id: self.fiber_id_for_scope(fiber.scope),
-                scope: Some(fiber.scope),
-                priority: fiber.order.priority,
-                phase: FiberPhase::RunScope,
-            },
-            Work::DiffComponentProps(diff) => {
-                let scope = diff.updates.first().map(|update| update.scope);
-                FiberInfo {
-                    id: scope.and_then(|scope| self.fiber_id_for_scope(scope)),
-                    scope,
-                    priority: diff.priority,
-                    phase: FiberPhase::Diff,
-                }
-            }
-            Work::PollTask(task) => {
-                let scope = self.runtime.task_scope(*task);
-                FiberInfo {
-                    id: scope.and_then(|scope| self.fiber_id_for_scope(scope)),
-                    scope,
-                    priority: UpdatePriority::Default,
-                    phase: FiberPhase::PollTask,
-                }
-            }
-            Work::RunEffect(effect) => FiberInfo {
-                id: self.fiber_id_for_scope(effect.order.id),
-                scope: Some(effect.order.id),
-                priority: UpdatePriority::Idle,
-                phase: FiberPhase::Effect,
-            },
-        }
-    }
-
-    fn fiber_id_for_scope(&self, scope: ScopeId) -> Option<FiberId> {
-        let mount = self
-            .scopes
-            .get(scope.0)
-            .and_then(|scope| scope.last_rendered_node.as_ref())
-            .and_then(|node| node.mount.get().as_usize())?;
-
-        self.runtime
-            .fibers
-            .borrow()
-            .get(mount)
-            .map(|fiber| fiber.id)
     }
 }
