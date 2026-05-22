@@ -5,6 +5,7 @@ use quote::{ToTokens, TokenStreamExt, quote};
 use std::fmt::{Display, Formatter};
 use syn::{
     Ident, LitStr, Result, Token,
+    ext::IdentExt,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -126,7 +127,10 @@ impl ToTokens for Element {
                 continue;
             };
 
-            let sort_key = name.to_string();
+            let sort_key = match name {
+                AttributeName::BuiltIn(name) => name.unraw().to_string(),
+                _ => name.to_string(),
+            };
 
             let ns = match name {
                 AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
