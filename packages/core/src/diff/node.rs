@@ -1,5 +1,4 @@
 use crate::{
-    Attribute, AttributeValue,
     DynamicNode::*,
     TemplateNode, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
