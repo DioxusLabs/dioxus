@@ -3,33 +3,41 @@
 //! Prove that the dom works normally through virtualdom methods.
 
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn test_original_diff() {
-    Sequence::new()
-        .render(rsx! { div { div { "Hello, world!" } } })
-        .run();
+    fn app() -> Element {
+        rsx! { div { div { "Hello, world!" } } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
 fn create() {
-    Sequence::new()
-        .render({
-            rsx! {
+    fn app() -> Element {
+        rsx! {
+            div {
                 div {
+                    "Hello, world!"
                     div {
-                        "Hello, world!"
                         div {
-                            div {
-                                Fragment { "hello" "world" }
-                            }
+                            Fragment { "hello" "world" }
                         }
                     }
                 }
             }
-        })
-        .run();
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
@@ -38,23 +46,30 @@ fn create_list() {
         rsx! {{(0..3).map(|_| rsx!( div { "hello" } ))}}
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                div { "hello" }
-                div { "hello" }
-                div { "hello" }
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            div { "hello" }
+            div { "hello" }
+            div { "hello" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
 fn create_simple() {
-    Sequence::new()
-        .render(rsx! { div {} div {} div {} div {} })
-        .run();
+    fn app() -> Element {
+        rsx! { div {} div {} div {} div {} }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
@@ -80,22 +95,24 @@ fn create_components() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                h1 {}
-                div { "abc1" }
-                p {}
-                h1 {}
-                div { "abc2" }
-                p {}
-                h1 {}
-                div { "abc3" }
-                p {}
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            h1 {}
+            div { "abc1" }
+            p {}
+            h1 {}
+            div { "abc2" }
+            p {}
+            h1 {}
+            div { "abc3" }
+            p {}
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
@@ -111,19 +128,16 @@ fn anchors() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                if true {
-                     div { "hello" }
-                }
-                if false {
-                    div { "goodbye" }
-                }
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            div { "hello" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]

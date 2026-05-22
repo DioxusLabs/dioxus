@@ -79,10 +79,20 @@ impl VirtualDom {
         elements.try_remove(el.0).is_some()
     }
 
-    // Drop a scope whose rendered nodes have already been removed.
+    // Drop a scope without dropping its children.
+    //
+    // Note: This will not remove any ids from the arena.
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        self.finish_scope_output_removed(id);
-        self.drop_scope_state(id);
+        let height = {
+            let scope = self.scopes.remove(id.0);
+            let context = scope.state();
+            context.height
+        };
+
+        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
+
+        // If this scope was a suspense boundary, remove it from the resolved scopes
+        self.resolved_scopes.retain(|s| s != &id);
     }
 
     pub(crate) fn remove_scope_rendered_output_without_mutations(
@@ -104,51 +114,8 @@ impl VirtualDom {
             .flatten();
 
         old.remove_node_inner(self, None::<&mut NoOpMutations>, true, None);
-        self.finish_scope_output_removed(id);
 
         Some(parent)
-    }
-
-    fn drop_scope_state(&mut self, id: ScopeId) {
-        let height = {
-            let scope = self.scopes.remove(id.0);
-            let context = scope.state();
-            context.height
-        };
-
-        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
-
-        // If this scope was a suspense boundary, remove it from the resolved scopes
-        self.resolved_scopes.retain(|s| s != &id);
-    }
-
-    fn finish_scope_output_removed(&mut self, parent: ScopeId) {
-        // Parent rendered output can be removed before every child scope has
-        // been dropped. Clean those children without emitting more DOM edits.
-        let children = self
-            .scopes
-            .iter()
-            .filter_map(|(idx, _)| {
-                let scope = ScopeId(idx);
-                let parent_id = self
-                    .runtime
-                    .try_get_state(scope)
-                    .and_then(|scope| scope.parent_id());
-                (parent_id == Some(parent)).then_some(scope)
-            })
-            .collect::<Vec<_>>();
-
-        for child in children {
-            if !self.scopes.contains(child.0) {
-                continue;
-            }
-
-            if self.scopes[child.0].last_rendered_node.is_some() {
-                self.remove_component_node(None::<&mut NoOpMutations>, true, child, None);
-            } else {
-                self.drop_scope(child);
-            }
-        }
     }
 }
 

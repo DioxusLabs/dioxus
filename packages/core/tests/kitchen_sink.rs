@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_renderer_oracle::RendererOracle;
 
 fn basic_syntax_is_a_template() -> Element {
     let asd = 123;
@@ -32,8 +32,10 @@ fn basic_syntax_is_a_template() -> Element {
 
 #[test]
 fn dual_stream() {
-    Sequence::new()
-        .render_with(basic_syntax_is_a_template)
-        .assert_edit_summary(0, |s| assert_eq!(s.set_attrs, 1))
-        .run();
+    let mut dom = VirtualDom::new(basic_syntax_is_a_template);
+    let mut oracle = RendererOracle::new();
+    let summary = oracle.rebuild(&mut dom);
+
+    oracle.assert_matches(basic_syntax_is_a_template);
+    assert_eq!(summary.set_attrs, 1);
 }

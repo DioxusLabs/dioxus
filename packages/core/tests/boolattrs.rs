@@ -1,7 +1,14 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn bool_test() {
-    Sequence::new().render(rsx! { div { hidden: false } }).run();
+    fn app() -> Element {
+        rsx! { div { hidden: false } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }

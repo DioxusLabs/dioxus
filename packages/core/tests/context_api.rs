@@ -49,13 +49,13 @@ fn state_shares() {
     });
 
     dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
-    oracle.render(&mut dom);
+    let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_2);
-    assert_eq!(oracle.last_edit_summary().set_texts, 1);
+    assert_eq!(summary.set_texts, 1);
 
     dom.mark_dirty(ScopeId::APP);
     dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
-    oracle.render(&mut dom);
+    let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_3);
-    assert_eq!(oracle.last_edit_summary().set_texts, 1);
+    assert_eq!(summary.set_texts, 1);
 }

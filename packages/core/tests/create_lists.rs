@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_renderer_oracle::RendererOracle;
 
 // A real-world usecase of templates at peak performance
 // In react, this would be a lot of node creation.
@@ -22,25 +22,27 @@ fn app() -> Element {
 
 #[test]
 fn list_renders() {
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
+    fn expected() -> Element {
+        rsx! {
+            div {
                 div {
-                    div {
-                        h1 { "hello world! " }
-                        p { "0" }
-                    }
-                    div {
-                        h1 { "hello world! " }
-                        p { "1" }
-                    }
-                    div {
-                        h1 { "hello world! " }
-                        p { "2" }
-                    }
+                    h1 { "hello world! " }
+                    p { "0" }
                 }
-            },
-        )
-        .run();
+                div {
+                    h1 { "hello world! " }
+                    p { "1" }
+                }
+                div {
+                    h1 { "hello world! " }
+                    p { "2" }
+                }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }

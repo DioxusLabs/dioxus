@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::ScopeId;
+use dioxus_renderer_oracle::{OracleNodeId, RendererOracle};
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -93,11 +94,32 @@ fn component_swap() {
         }
     }
 
-    Sequence::new()
-        .track_identity_by("id")
-        .render_with_expected(app, expected_results())
-        .render_with_expected(app, expected_dashboard())
-        .render_with_expected(app, expected_results())
-        .render_with_expected(app, expected_dashboard())
-        .run();
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_results);
+    let nav_identity = identity_by_attr(&oracle, "id", "nav");
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_dashboard);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_results);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_dashboard);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
+}
+
+fn identity_by_attr(oracle: &RendererOracle, attr: &str, value: &str) -> OracleNodeId {
+    oracle
+        .identities_by_attr(attr)
+        .into_iter()
+        .find_map(|(current_value, id)| (current_value == value).then_some(id))
+        .unwrap_or_else(|| panic!("no live element with `{attr}={value}` found in the oracle DOM"))
 }

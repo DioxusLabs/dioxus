@@ -6,6 +6,7 @@
 #![deny(unsafe_code)]
 
 mod cache;
+mod context;
 mod event;
 mod harness;
 mod lifecycle;
@@ -15,6 +16,7 @@ mod reducer;
 mod vdom;
 
 use harness::{Harness, apply_step, print_ssr_diff_trace};
+use dioxus_renderer_oracle::panic_message;
 use model::{
     AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, Model, SuspenseMode,
     TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec, WakeMutationSpec,
@@ -24,7 +26,10 @@ use ops::{EventBehaviorSpec, FragmentEdit, ListEdit, Op, TemplateEdit};
 pub use reducer::{ReduceError, ReductionOptions, ReductionReport, ReductionStats, reduce_case};
 use reducer::{random_multistep_shrink_case, simplified_ops};
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, fmt};
+use std::{
+    fmt,
+    panic::{self, AssertUnwindSafe},
+};
 
 pub const MAX_STEPS: usize = 512;
 const PRIMITIVE_MUTATION_COUNT: u32 = 19;
@@ -49,33 +54,6 @@ impl Default for FuzzCase {
     fn default() -> Self {
         Self::new(Vec::new())
     }
-}
-
-thread_local! {
-    static ACTIVE_RUN_STEP: Cell<Option<usize>> = const { Cell::new(None) };
-}
-
-struct ActiveRunStepGuard;
-
-impl ActiveRunStepGuard {
-    fn new() -> Self {
-        ACTIVE_RUN_STEP.with(|step| step.set(None));
-        Self
-    }
-
-    fn set(&self, next_step: usize) {
-        ACTIVE_RUN_STEP.with(|step| step.set(Some(next_step)));
-    }
-}
-
-impl Drop for ActiveRunStepGuard {
-    fn drop(&mut self) {
-        ACTIVE_RUN_STEP.with(|step| step.set(None));
-    }
-}
-
-pub fn active_run_step() -> Option<usize> {
-    ACTIVE_RUN_STEP.with(Cell::get)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1021,27 +999,6 @@ pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
     report
 }
 
-pub fn format_panic_failure_report(
-    case: &FuzzCase,
-    active_step: Option<usize>,
-    panic_message: &str,
-) -> String {
-    let step = active_step
-        .filter(|step| *step < case.ops.len())
-        .unwrap_or_else(|| case.ops.len().saturating_sub(1));
-    let op = case
-        .ops
-        .get(step)
-        .map_or_else(|| "<unknown>".to_string(), |op| format!("{op:?}"));
-    let failure = FuzzFailure {
-        step,
-        op,
-        message: format!("panic while applying operation: {panic_message}"),
-    };
-
-    format_failure_report(case, &failure)
-}
-
 pub fn decode_case(data: &[u8]) -> Option<FuzzCase> {
     let mut case = postcard::from_bytes::<FuzzCase>(data).ok()?;
     case.normalize();
@@ -1059,11 +1016,24 @@ pub fn encode_case_vec(case: &FuzzCase) -> Option<Vec<u8>> {
 }
 
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
-    let mut state = Harness::fresh();
-    let active_step = ActiveRunStepGuard::new();
+    let mut state = panic::catch_unwind(AssertUnwindSafe(Harness::fresh)).map_err(|payload| {
+        FuzzFailure {
+            step: 0,
+            op: "<initial rebuild>".to_string(),
+            message: format!("panic before applying operation: {}", panic_message(&payload)),
+        }
+    })?;
+
     for (step, op) in case.ops.iter().enumerate() {
-        active_step.set(step);
-        apply_step(&mut state, op).map_err(|message| FuzzFailure {
+        let applied = panic::catch_unwind(AssertUnwindSafe(|| apply_step(&mut state, op))).map_err(
+            |payload| FuzzFailure {
+                step,
+                op: format!("{op:?}"),
+                message: format!("panic while applying operation: {}", panic_message(&payload)),
+            },
+        )?;
+
+        applied.map_err(|message| FuzzFailure {
             step,
             op: format!("{op:?}"),
             message,

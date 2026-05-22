@@ -1,7 +1,7 @@
 //! Do we create fragments properly across complex boundaries?
 
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn empty_fragment_creates_nothing() {
@@ -9,19 +9,25 @@ fn empty_fragment_creates_nothing() {
         rsx!({})
     }
 
-    Sequence::new().render_with_expected(app, rsx!({})).run();
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
 fn root_fragments_work() {
-    Sequence::new()
-        .render({
-            rsx! {
-                div { "hello" }
-                div { "goodbye" }
-            }
-        })
-        .run();
+    fn app() -> Element {
+        rsx! {
+            div { "hello" }
+            div { "goodbye" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
@@ -45,21 +51,23 @@ fn fragments_nested() {
         )
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                div { "hello" }
-                div { "goodbye" }
-                div { "hello" }
-                div { "goodbye" }
-                div { "hello" }
-                div { "goodbye" }
-                div { "hello" }
-                div { "goodbye" }
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            div { "hello" }
+            div { "goodbye" }
+            div { "hello" }
+            div { "goodbye" }
+            div { "hello" }
+            div { "goodbye" }
+            div { "hello" }
+            div { "goodbye" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
@@ -78,21 +86,23 @@ fn fragments_across_components() {
         rsx! { "hellO!" {world} }
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                "hellO!"
-                "world"
-                "hellO!"
-                "world"
-                "hellO!"
-                "world"
-                "hellO!"
-                "world"
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            "hellO!"
+            "world"
+            "hellO!"
+            "world"
+            "hellO!"
+            "world"
+            "hellO!"
+            "world"
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
@@ -104,18 +114,20 @@ fn list_fragments() {
         )
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! {
-                h1 { "hello" }
-                span { "0" }
-                span { "1" }
-                span { "2" }
-                span { "3" }
-                span { "4" }
-                span { "5" }
-            },
-        )
-        .run();
+    fn expected() -> Element {
+        rsx! {
+            h1 { "hello" }
+            span { "0" }
+            span { "1" }
+            span { "2" }
+            span { "3" }
+            span { "4" }
+            span { "5" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }

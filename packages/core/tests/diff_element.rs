@@ -1,7 +1,7 @@
 use dioxus::dioxus_core::AttributeValue;
 use dioxus::prelude::*;
-use dioxus_core::generation;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::{EditSummary, RendererOracle};
 
 #[test]
 fn text_diff() {
@@ -10,15 +10,26 @@ fn text_diff() {
         rsx!( h1 { "hello {g}" } )
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx!( h1 { "hello 0" } ))
-        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
-        .render_with_expected(app, rsx!( h1 { "hello 2" } ))
-        .render_with_expected(app, rsx!( h1 { "hello 3" } ))
-        .assert_edit_summary(1, |s| assert_eq!(s.set_texts, 1))
-        .assert_edit_summary(2, |s| assert_eq!(s.set_texts, 1))
-        .assert_edit_summary(3, |s| assert_eq!(s.set_texts, 1))
-        .run();
+    fn expected_0() -> Element {
+        rsx!( h1 { "hello 0" } )
+    }
+
+    fn expected_1() -> Element {
+        rsx!( h1 { "hello 1" } )
+    }
+
+    fn expected_2() -> Element {
+        rsx!( h1 { "hello 2" } )
+    }
+
+    fn expected_3() -> Element {
+        rsx!( h1 { "hello 3" } )
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_0);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_1).set_texts, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_2).set_texts, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_3).set_texts, 1);
 }
 
 #[test]
@@ -33,17 +44,19 @@ fn element_swap() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
-        .render_with_expected(app, rsx!( h2 { "hello 2" } ))
-        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
-        .render_with_expected(app, rsx!( h2 { "hello 2" } ))
-        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
-        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(3, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(4, |s| assert_eq!(s.replaces, 1))
-        .run();
+    fn expected_h1() -> Element {
+        rsx!( h1 { "hello 1" } )
+    }
+
+    fn expected_h2() -> Element {
+        rsx!( h2 { "hello 2" } )
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_h1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
 }
 
 #[test]
@@ -106,15 +119,10 @@ fn attribute_diff() {
         rsx!( div { ..vec![attr("d", "world")], "hello" } )
     }
 
-    Sequence::new()
-        .render_with_expected(app, expected_0())
-        .render_with_expected(app, expected_1())
-        .render_with_expected(app, expected_2())
-        .render_with_expected(app, expected_3())
-        .assert_edit_summary(1, |s| assert_eq!(s.set_attrs, 2))
-        .assert_edit_summary(2, |s| assert_eq!(s.set_attrs, 4))
-        .assert_edit_summary(3, |s| assert_eq!(s.set_attrs, 3))
-        .run();
+    let (mut dom, mut oracle, _) = rebuild(app, expected_0);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_1).set_attrs, 2);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_2).set_attrs, 4);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_3).set_attrs, 3);
 }
 
 #[test]
@@ -138,11 +146,17 @@ fn dynamic_attr_override_restores_static_attr() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { div { class: "active" } })
-        .render_with_expected(app, rsx! { div { class: "base" } })
-        .render_with_expected(app, rsx! { div { class: "active" } })
-        .run();
+    fn expected_active() -> Element {
+        rsx! { div { class: "active" } }
+    }
+
+    fn expected_base() -> Element {
+        rsx! { div { class: "base" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_active);
+    rerender(&mut dom, &mut oracle, expected_base);
+    rerender(&mut dom, &mut oracle, expected_active);
 }
 
 #[test]
@@ -167,11 +181,17 @@ fn dynamic_attr_override_restores_raw_static_attr() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "script" } })
-        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "style" } })
-        .render_with_expected(app, rsx! { link { href: "/style.css", r#as: "script" } })
-        .run();
+    fn expected_script() -> Element {
+        rsx! { link { href: "/style.css", r#as: "script" } }
+    }
+
+    fn expected_style() -> Element {
+        rsx! { link { href: "/style.css", r#as: "style" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_script);
+    rerender(&mut dom, &mut oracle, expected_style);
+    rerender(&mut dom, &mut oracle, expected_script);
 }
 
 #[test]
@@ -196,20 +216,17 @@ fn dynamic_attr_override_restores_aliased_static_attr() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(
-            app,
-            rsx! { meta { "http.z": "custom", http_equiv: "refresh" } },
-        )
-        .render_with_expected(
-            app,
-            rsx! { meta { "http.z": "custom", http_equiv: "content-type" } },
-        )
-        .render_with_expected(
-            app,
-            rsx! { meta { "http.z": "custom", http_equiv: "refresh" } },
-        )
-        .run();
+    fn expected_refresh() -> Element {
+        rsx! { meta { "http.z": "custom", http_equiv: "refresh" } }
+    }
+
+    fn expected_content_type() -> Element {
+        rsx! { meta { "http.z": "custom", http_equiv: "content-type" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_refresh);
+    rerender(&mut dom, &mut oracle, expected_content_type);
+    rerender(&mut dom, &mut oracle, expected_refresh);
 }
 
 #[test]
@@ -229,11 +246,17 @@ fn dynamic_attr_none_removes_static_attr() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { div {} })
-        .render_with_expected(app, rsx! { div { class: "base" } })
-        .render_with_expected(app, rsx! { div {} })
-        .run();
+    fn expected_empty() -> Element {
+        rsx! { div {} }
+    }
+
+    fn expected_base() -> Element {
+        rsx! { div { class: "base" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_empty);
+    rerender(&mut dom, &mut oracle, expected_base);
+    rerender(&mut dom, &mut oracle, expected_empty);
 }
 
 #[test]
@@ -261,12 +284,22 @@ fn duplicate_dynamic_attr_slots_use_final_effective_attr() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { div { class: "second" } })
-        .render_with_expected(app, rsx! { div { class: "second" } })
-        .render_with_expected(app, rsx! { div { class: "first" } })
-        .render_with_expected(app, rsx! { div {} })
-        .run();
+    fn expected_second() -> Element {
+        rsx! { div { class: "second" } }
+    }
+
+    fn expected_first() -> Element {
+        rsx! { div { class: "first" } }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! { div {} }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_second);
+    rerender(&mut dom, &mut oracle, expected_second);
+    rerender(&mut dom, &mut oracle, expected_first);
+    rerender(&mut dom, &mut oracle, expected_empty);
 }
 
 #[test]
@@ -279,9 +312,36 @@ fn diff_empty() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { div { "hello" } })
-        .render_with_expected(app, rsx! {})
-        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
-        .run();
+    fn expected_div() -> Element {
+        rsx! { div { "hello" } }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! {}
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_div);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_empty).replaces, 1);
+}
+
+fn rebuild(
+    app: fn() -> Element,
+    expected: fn() -> Element,
+) -> (VirtualDom, RendererOracle, EditSummary) {
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    let summary = oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
+    (dom, oracle, summary)
+}
+
+fn rerender(
+    dom: &mut VirtualDom,
+    oracle: &mut RendererOracle,
+    expected: fn() -> Element,
+) -> EditSummary {
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(dom);
+    oracle.assert_matches(expected);
+    summary
 }

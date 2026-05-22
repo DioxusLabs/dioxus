@@ -1,12 +1,8 @@
 use crate::{
-    event,
-    lifecycle::{self, LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
+    context::HarnessContext,
+    lifecycle::{LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
     model::*,
-    ops::{
-        EventBehaviorSpec, Op, apply_to_model, clear_suspense_ready_tasks, read_model,
-        release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
-        without_suspense_ready_registration,
-    },
+    ops::{EventBehaviorSpec, Op},
     vdom::App,
 };
 use dioxus_core::{
@@ -22,6 +18,7 @@ type TargetSnapshots = Vec<SnapshotNode>;
 pub(crate) struct Harness {
     vdom: Rc<RefCell<VirtualDom>>,
     incremental: Rc<RefCell<TargetedRendererOracle>>,
+    context: HarnessContext,
     strict_renderer_errors: bool,
     strict_lifecycle_errors: bool,
 }
@@ -45,24 +42,28 @@ impl Harness {
         strict_renderer_errors: bool,
         strict_lifecycle_errors: bool,
     ) -> Self {
-        clear_suspense_ready_tasks();
-        lifecycle::reset_all();
-        with_model(|model| *model = Model::initial());
-        let vdom = Rc::new(RefCell::new(VirtualDom::new(App)));
+        let context = HarnessContext::new();
+        context.clear_suspense_ready_tasks();
+        context.lifecycle.reset_all();
+        context.with_model(|model| *model = Model::initial());
+        let vdom = Rc::new(RefCell::new(
+            VirtualDom::new(App).with_root_context(context.clone()),
+        ));
         let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
-        lifecycle::with_run(LifecycleRun::Incremental, || {
+        context.lifecycle.with_run(LifecycleRun::Incremental, || {
             vdom.borrow_mut().rebuild(&mut *incremental.borrow_mut())
         });
         incremental.borrow().assert_stack_clean();
         let state = Self {
             vdom,
             incremental,
+            context,
             strict_renderer_errors,
             strict_lifecycle_errors,
         };
         if strict_lifecycle_errors {
-            let (_, fresh_lifecycle) = build_fresh_check().unwrap();
-            check_lifecycle_matches_fresh_snapshot(&fresh_lifecycle).unwrap();
+            let (_, fresh_lifecycle) = build_fresh_check(&state.context).unwrap();
+            check_lifecycle_matches_fresh_snapshot(&state.context, &fresh_lifecycle).unwrap();
         }
         state
     }
@@ -316,11 +317,11 @@ where
     panic::catch_unwind(panic::AssertUnwindSafe(f))
 }
 
-fn render_model_with_ssr(model: &Model) -> Result<String, String> {
+fn render_model_with_ssr(context: &HarnessContext, model: &Model) -> Result<String, String> {
     catch_unwind_result(|| {
-        without_suspense_ready_registration(|| {
-            with_model(|global| *global = model.clone());
-            let mut vdom = VirtualDom::new(App);
+        context.without_suspense_ready_registration(|| {
+            context.with_model(|global| *global = model.clone());
+            let mut vdom = VirtualDom::new(App).with_root_context(context.clone());
             vdom.rebuild_in_place();
             dioxus_ssr::render(&vdom)
         })
@@ -390,7 +391,7 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
 
     let mut state = Harness::fresh();
     let mut current_model = Model::initial();
-    let mut current_html = render_model_with_ssr(&current_model);
+    let mut current_html = render_model_with_ssr(&state.context, &current_model);
     let (trace_start, trace_end) = trace_bounds(ops.len(), failing_step);
 
     if trace_start == 0 {
@@ -402,7 +403,9 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
 
     let mut reproduced_error = None;
     for (index, op) in ops.iter().enumerate() {
-        with_model(|global| *global = current_model.clone());
+        state
+            .context
+            .with_model(|global| *global = current_model.clone());
         let should_log = index >= trace_start && index < trace_end;
 
         if should_log {
@@ -412,10 +415,17 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
             print_html_line("before:", &current_html);
         }
 
-        match apply_op(&mut state, op) {
+        let applied = catch_unwind_result(|| apply_op(&mut state, op)).unwrap_or_else(|payload| {
+            Err(format!(
+                "panic while replaying operation: {}",
+                panic_message(&payload)
+            ))
+        });
+
+        match applied {
             Ok(()) => {
-                let next_model = read_model();
-                let next_html = render_model_with_ssr(&next_model);
+                let next_model = state.context.read_model();
+                let next_html = render_model_with_ssr(&state.context, &next_model);
                 if should_log {
                     print_html_line("after:", &next_html);
                     println!("    status: ok");
@@ -424,8 +434,8 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
                 current_html = next_html;
             }
             Err(err) => {
-                let next_model = read_model();
-                let next_html = render_model_with_ssr(&next_model);
+                let next_model = state.context.read_model();
+                let next_html = render_model_with_ssr(&state.context, &next_model);
                 print_html_line("after:", &next_html);
                 println!("    error:  {}", first_line(&err));
                 println!();
@@ -453,11 +463,14 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
     match op {
         Op::Rerender => render_app_and_assert(state),
         Op::WakeSuspense { suspense } => {
-            let Some(key) = selected_registered_ready_suspense_key(*suspense) else {
+            let Some(key) = state
+                .context
+                .selected_registered_ready_suspense_key(*suspense)
+            else {
                 return Ok(());
             };
-            release_suspense_ready_task(key);
-            with_model(|model| model.wake_ready_suspense(key));
+            state.context.release_suspense_ready_task(key);
+            state.context.with_model(|model| model.wake_ready_suspense(key));
             state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
             render_dirty_and_assert(state)
         }
@@ -465,7 +478,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             fire_selected_event_listener(state, *target, *behavior)
         }
         Op::Mutate(_) => {
-            apply_to_model(op);
+            state.context.apply_to_model(op);
             state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
             Ok(())
         }
@@ -511,6 +524,8 @@ fn fire_selected_event_listener(
     let runtime = state.vdom.borrow().runtime();
     let nested_runtime = runtime.clone();
     let nested_targets = targets.clone();
+    let events = state.context.events.clone();
+    let nested_events = events.clone();
     let listener_driver = Rc::new(move |behavior| match behavior {
         EventBehaviorSpec::Noop => {}
         EventBehaviorSpec::DispatchNestedEvent { target } => {
@@ -521,13 +536,15 @@ fn fire_selected_event_listener(
                 Rc::new(String::from("fuzzer nested event")) as Rc<dyn Any>,
                 true,
             );
-            event::with_listener_driver(EventBehaviorSpec::Noop, Rc::new(|_| {}), || {
-                nested_runtime.handle_event(target.name, event, target.id)
-            });
+            nested_events.with_listener_driver(
+                EventBehaviorSpec::Noop,
+                Rc::new(|_| {}),
+                || nested_runtime.handle_event(target.name, event, target.id),
+            );
         }
     });
 
-    event::with_listener_driver(behavior, listener_driver, || {
+    events.with_listener_driver(behavior, listener_driver, || {
         let event = Event::new(
             Rc::new(String::from("fuzzer explicit event")) as Rc<dyn Any>,
             true,
@@ -540,7 +557,7 @@ fn fire_selected_event_listener(
 
 fn render_once(state: &mut Harness, assert_lifecycle_matches_fresh: bool) -> Result<(), String> {
     fire_historical_event_listeners(state)?;
-    lifecycle::with_run(LifecycleRun::Incremental, || {
+    state.context.lifecycle.with_run(LifecycleRun::Incremental, || {
         state
             .vdom
             .borrow_mut()
@@ -561,10 +578,10 @@ fn check_incremental_state(
         let recent_mutations = incremental.recent_mutations_text();
         format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
     })?;
-    let (fresh_renderer, fresh_lifecycle) = build_fresh_check()?;
+    let (fresh_renderer, fresh_lifecycle) = build_fresh_check(&state.context)?;
     incremental.check_matches_fresh(&fresh_renderer)?;
     if assert_lifecycle_matches_fresh {
-        check_lifecycle_matches_fresh_snapshot(&fresh_lifecycle).map_err(|err| {
+        check_lifecycle_matches_fresh_snapshot(&state.context, &fresh_lifecycle).map_err(|err| {
             let last_mutation = incremental
                 .last_mutation
                 .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
@@ -588,31 +605,37 @@ fn render_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
     render_result_to_fuzz_failure(state, result)
 }
 
-fn build_fresh_check() -> Result<(RendererOracle, LifecycleSnapshot), String> {
-    lifecycle::reset_run(LifecycleRun::Fresh);
-    let mut fresh_vdom = VirtualDom::new(App);
+fn build_fresh_check(context: &HarnessContext) -> Result<(RendererOracle, LifecycleSnapshot), String> {
+    context.lifecycle.reset_run(LifecycleRun::Fresh);
+    let mut fresh_vdom = VirtualDom::new(App).with_root_context(context.clone());
     let mut renderer = RendererOracle::new();
-    without_suspense_ready_registration(|| {
-        lifecycle::with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild(&mut renderer));
+    context.without_suspense_ready_registration(|| {
+        context
+            .lifecycle
+            .with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild(&mut renderer));
     });
     renderer.check_stack_clean()?;
 
-    Ok((renderer, lifecycle::snapshot(LifecycleRun::Fresh)))
+    Ok((renderer, context.lifecycle.snapshot(LifecycleRun::Fresh)))
 }
 
-fn check_lifecycle_matches_fresh_snapshot(fresh: &LifecycleSnapshot) -> Result<(), String> {
-    let incremental = lifecycle::snapshot(LifecycleRun::Incremental);
-    let model = expected_model_lifecycle_snapshot();
-    if lifecycle_is_within_expected_bounds(&incremental, fresh, &model) {
+fn check_lifecycle_matches_fresh_snapshot(
+    context: &HarnessContext,
+    fresh: &LifecycleSnapshot,
+) -> Result<(), String> {
+    let incremental = context.lifecycle.snapshot(LifecycleRun::Incremental);
+    let model = expected_model_lifecycle_snapshot(context);
+    if lifecycle_is_within_expected_bounds(context, &incremental, fresh, &model) {
         return Ok(());
     }
 
-    let retaining_suspense_ids = retaining_suspense_ids(&incremental, fresh, &model);
-    let retained_suspended = lifecycle::snapshot_with_suspense_ancestor(
+    let retaining_suspense_ids = retaining_suspense_ids(context, &incremental, fresh, &model);
+    let retained_suspended = context.lifecycle.snapshot_with_suspense_ancestor(
         LifecycleRun::Incremental,
         &retaining_suspense_ids,
     );
-    let model_suspended = model_lifecycle_with_suspense_ancestor_snapshot(&retaining_suspense_ids);
+    let model_suspended =
+        model_lifecycle_with_suspense_ancestor_snapshot(context, &retaining_suspense_ids);
     Err(lifecycle_mismatch_error(
         &incremental,
         fresh,
@@ -623,17 +646,18 @@ fn check_lifecycle_matches_fresh_snapshot(fresh: &LifecycleSnapshot) -> Result<(
 }
 
 fn lifecycle_is_within_expected_bounds(
+    context: &HarnessContext,
     incremental: &LifecycleSnapshot,
     fresh: &LifecycleSnapshot,
     model: &LifecycleSnapshot,
 ) -> bool {
-    let retaining_suspense_ids = retaining_suspense_ids(incremental, fresh, model);
-    let retained_suspended_subtree_lifecycle = lifecycle::snapshot_with_suspense_ancestor(
+    let retaining_suspense_ids = retaining_suspense_ids(context, incremental, fresh, model);
+    let retained_suspended_subtree_lifecycle = context.lifecycle.snapshot_with_suspense_ancestor(
         LifecycleRun::Incremental,
         &retaining_suspense_ids,
     );
     let model_suspended_subtree_lifecycle =
-        model_lifecycle_with_suspense_ancestor_snapshot(&retaining_suspense_ids);
+        model_lifecycle_with_suspense_ancestor_snapshot(context, &retaining_suspense_ids);
     let has_all_visible_fresh_components = fresh
         .iter()
         .filter(|(key, _)| lifecycle_role_is_strict(**key))
@@ -668,19 +692,20 @@ fn lifecycle_role_is_strict(key: LifecycleKey) -> bool {
     )
 }
 
-fn expected_model_lifecycle_snapshot() -> LifecycleSnapshot {
-    let model = read_model();
+fn expected_model_lifecycle_snapshot(context: &HarnessContext) -> LifecycleSnapshot {
+    let model = context.read_model();
     let mut out = LifecycleSnapshot::new();
     collect_vnode_lifecycle(&model.root, &mut out);
     out
 }
 
 fn retaining_suspense_ids(
+    context: &HarnessContext,
     incremental: &LifecycleSnapshot,
     fresh: &LifecycleSnapshot,
     model: &LifecycleSnapshot,
 ) -> BTreeSet<u64> {
-    let current_model = read_model();
+    let current_model = context.read_model();
     let mut out = BTreeSet::new();
     // Core suspense can retain previous child state while a reused boundary
     // moves between fallback and resolved output, even if the model suspense is
@@ -703,9 +728,10 @@ fn retaining_suspense_ids(
 }
 
 fn model_lifecycle_with_suspense_ancestor_snapshot(
+    context: &HarnessContext,
     suspense_ids: &BTreeSet<u64>,
 ) -> LifecycleSnapshot {
-    let model = read_model();
+    let model = context.read_model();
     let mut out = LifecycleSnapshot::new();
     collect_model_lifecycle_with_suspense_ancestor(&model.root, false, suspense_ids, &mut out);
     out
@@ -934,8 +960,10 @@ mod tests {
         }
     }
 
-    fn first_suspense_mode_and_wake_count() -> Option<(SuspenseMode, u8)> {
-        let model = read_model();
+    fn first_suspense_mode_and_wake_count(
+        context: &HarnessContext,
+    ) -> Option<(SuspenseMode, u8)> {
+        let model = context.read_model();
         let DynamicSpec::Suspense(spec) = first_dynamic(&model.root.template.roots)? else {
             return None;
         };
@@ -957,16 +985,16 @@ mod tests {
         None
     }
 
-    fn set_pending_suspense_model() {
-        with_model(|model| *model = Model::initial());
-        apply_to_model(&Op::template(
+    fn set_pending_suspense_model(context: &HarnessContext) {
+        context.with_model(|model| *model = Model::initial());
+        context.apply_to_model(&Op::template(
             0,
             TemplateEdit::SetNode {
                 node: 0,
                 kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
             },
         ));
-        apply_to_model(&Op::dynamic(
+        context.apply_to_model(&Op::dynamic(
             0,
             0,
             DynamicKind::Suspense {
@@ -1216,18 +1244,59 @@ mod tests {
         apply_op(&mut harness, &Op::Rerender).unwrap();
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(read_model().selected_ready_suspense_key(0).is_some());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_some()
+        );
         assert_eq!(
-            first_suspense_mode_and_wake_count(),
+            first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Ready { wake_after: 1 }, 1))
         );
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(read_model().selected_ready_suspense_key(0).is_none());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_none()
+        );
         assert_eq!(
-            first_suspense_mode_and_wake_count(),
+            first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Resolved, 2))
         );
+    }
+
+    #[test]
+    fn waking_hidden_nested_suspense_keeps_renderer_stack_balanced() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Resolved,
+                    }),
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                            mode: SuspenseMode::Ready { wake_after: 0 },
+                        }),
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::suspense(2, SuspenseMode::Pending),
+            Op::wake_suspense(4),
+        ]);
     }
 
     #[test]
@@ -1256,8 +1325,9 @@ mod tests {
 
     #[test]
     fn lifecycle_oracle_rejects_stale_component_outside_unresolved_suspense() {
-        lifecycle::reset_all();
-        set_pending_suspense_model();
+        let context = HarnessContext::new();
+        context.lifecycle.reset_all();
+        set_pending_suspense_model(&context);
 
         let stale_key = LifecycleKey {
             role: LifecycleRole::ComponentA,
@@ -1265,9 +1335,10 @@ mod tests {
         };
         let incremental = LifecycleSnapshot::from([(stale_key, 1)]);
         let fresh = LifecycleSnapshot::new();
-        let model = expected_model_lifecycle_snapshot();
+        let model = expected_model_lifecycle_snapshot(&context);
 
         assert!(!lifecycle_is_within_expected_bounds(
+            &context,
             &incremental,
             &fresh,
             &model
@@ -1276,17 +1347,21 @@ mod tests {
 
     #[test]
     fn lifecycle_oracle_allows_stale_component_inside_unresolved_suspense() {
-        lifecycle::reset_all();
-        set_pending_suspense_model();
+        let context = HarnessContext::new();
+        context.lifecycle.reset_all();
+        set_pending_suspense_model(&context);
 
-        let _guard = lifecycle::with_run(LifecycleRun::Incremental, || {
-            lifecycle::track(LifecycleRole::ComponentA, 99, &[0])
+        let _guard = context.lifecycle.with_run(LifecycleRun::Incremental, || {
+            context
+                .lifecycle
+                .track(LifecycleRole::ComponentA, 99, &[0])
         });
-        let incremental = lifecycle::snapshot(LifecycleRun::Incremental);
+        let incremental = context.lifecycle.snapshot(LifecycleRun::Incremental);
         let fresh = LifecycleSnapshot::new();
-        let model = expected_model_lifecycle_snapshot();
+        let model = expected_model_lifecycle_snapshot(&context);
 
         assert!(lifecycle_is_within_expected_bounds(
+            &context,
             &incremental,
             &fresh,
             &model

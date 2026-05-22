@@ -13,7 +13,7 @@ type NodeId = usize;
 /// DOM node (preserving its browser-side state — animations, focus, selection) instead
 /// of dropping and re-creating it. Recreated nodes get a fresh `OracleNodeId`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct OracleNodeId(usize);
+pub struct OracleNodeId(usize);
 
 #[derive(Clone, Debug)]
 enum NodeKind {
@@ -46,18 +46,18 @@ struct Node {
 ///
 /// The summary captures only the most recent render call. It is reset at the
 /// start of every `rebuild` / `render` / `wait_and_render`.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EditSummary {
     /// `load_template` calls — a fresh element subtree was created from a template.
     pub loads: usize,
     /// `create_text_node` calls.
-    create_texts: usize,
+    pub create_texts: usize,
     /// `remove_node` calls.
     pub removes: usize,
     /// `replace_node_with` calls.
     pub replaces: usize,
     /// All four `insert_*` / `append_children` calls — placing nodes into the tree.
-    inserts: usize,
+    pub inserts: usize,
     /// `push_root` calls — proxy for "an existing live node was brought onto the
     /// stack to be moved." A keyed reorder that moves N survivors emits N pushes.
     pub pushes: usize,
@@ -124,7 +124,7 @@ impl RendererOracle {
     /// Return a category-level summary of the edits applied during the most
     /// recent `rebuild` / `render` / `wait_and_render` call. See [`EditSummary`].
     pub fn last_edit_summary(&self) -> EditSummary {
-        self.edit_counters.clone()
+        self.edit_counters
     }
 
     /// Return every event listener target attached since the last clear/rebuild.
@@ -183,24 +183,28 @@ impl RendererOracle {
         }
     }
 
-    /// Rebuild `vdom` into this renderer and assert the renderer stack is clean.
-    pub fn rebuild(&mut self, vdom: &mut VirtualDom) {
+    /// Rebuild `vdom` into this renderer, assert the renderer stack is clean, and
+    /// return the edit summary for the rebuild.
+    pub fn rebuild(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.clear();
         vdom.rebuild(self);
         self.assert_stack_clean();
+        self.edit_counters
     }
 
-    /// Drain pending immediate work from `vdom` into this renderer and assert the stack is clean.
-    pub fn render(&mut self, vdom: &mut VirtualDom) {
+    /// Drain pending immediate work from `vdom` into this renderer, assert the
+    /// stack is clean, and return the edit summary for the render.
+    pub fn render(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.edit_counters = EditSummary::default();
         vdom.render_immediate(self);
         self.assert_stack_clean();
+        self.edit_counters
     }
 
     /// Await pending work on `vdom`, then drain it into this renderer.
-    pub async fn wait_and_render(&mut self, vdom: &mut VirtualDom) {
+    pub async fn wait_and_render(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         vdom.wait_for_work().await;
-        self.render(vdom);
+        self.render(vdom)
     }
 
     /// Find the live [`ElementId`] of the unique element whose tag matches
@@ -295,7 +299,7 @@ impl RendererOracle {
     /// across two snapshots is *the same DOM node*, not a structurally equivalent
     /// re-creation. This is how tests assert that a keyed diff moved nodes instead
     /// of dropping and re-allocating them.
-    pub(crate) fn identities_by_attr(&self, attr_name: &str) -> Vec<(String, OracleNodeId)> {
+    pub fn identities_by_attr(&self, attr_name: &str) -> Vec<(String, OracleNodeId)> {
         let mut out = Vec::new();
         self.collect_identities_by_attr(self.root, attr_name, &mut out);
         out.sort_by(|a, b| a.0.cmp(&b.0));

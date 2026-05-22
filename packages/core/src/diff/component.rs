@@ -18,16 +18,28 @@ use crate::{
 impl VirtualDom {
     pub(crate) fn run_and_diff_scope<M: WriteMutations>(
         &mut self,
-        to: Option<&mut M>,
+        mut to: Option<&mut M>,
         scope_id: ScopeId,
     ) {
-        let scope = &mut self.scopes[scope_id.0];
-        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
+        to = self.scope_render_target(scope_id, to);
+        let is_suspense_boundary = {
+            let scope = &mut self.scopes[scope_id.0];
+            SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some()
+        };
+        if is_suspense_boundary {
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
             let new_nodes = self.run_scope(scope_id);
             self.diff_scope(to, scope_id, new_nodes);
         }
+    }
+
+    pub(crate) fn scope_render_target<'a, M: WriteMutations>(
+        &self,
+        scope: ScopeId,
+        to: Option<&'a mut M>,
+    ) -> Option<&'a mut M> {
+        to.filter(|_| self.runtime.scope_should_render(scope))
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
@@ -49,7 +61,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
+            let mut render_to = to;
             old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
             self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
@@ -75,7 +87,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
+            let mut render_to = self.scope_render_target(scope, to);
 
             // Create the node
             let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::ScopeId;
+use dioxus_renderer_oracle::RendererOracle;
 use std::{any::Any, rc::Rc, sync::Mutex};
 
 static CLICKS: Mutex<usize> = Mutex::new(0);
@@ -14,6 +15,7 @@ fn click_event() -> Event<dyn Any> {
 #[test]
 fn events_propagate() {
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    *CLICKS.lock().unwrap() = 0;
 
     fn app() -> Element {
         rsx! {
@@ -44,30 +46,31 @@ fn events_propagate() {
         }
     }
 
-    Sequence::new()
-        // Initial render. The DOM doesn't change across steps; what changes is
-        // the internal CLICKS counter that the click handlers mutate.
-        .render_with(app)
-        // 1. A click on the top-level div fires the outer handler, so CLICKS = 1.
-        .then(|dom, oracle| {
-            let target = oracle.element_id_by_tag("div");
-            dom.runtime().handle_event("click", click_event(), target);
-            assert_eq!(*CLICKS.lock().unwrap(), 1);
-        })
-        .render_with(app)
-        // 2. A click on the inner button propagates to the outer div, so CLICKS = 3.
-        .then(|dom, oracle| {
-            let target = oracle.element_id_by_tag("button");
-            dom.runtime().handle_event("click", click_event(), target);
-            assert_eq!(*CLICKS.lock().unwrap(), 3);
-        })
-        .render_with(app)
-        // 3. Stop-propagation in the button blocks the outer handler, so CLICKS stays at 3.
-        .then(|dom, oracle| {
-            let target = oracle.element_id_by_tag("button");
-            dom.runtime().handle_event("click", click_event(), target);
-            assert_eq!(*CLICKS.lock().unwrap(), 3);
-        })
-        .render_with(app)
-        .run();
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    // 1. A click on the top-level div fires the outer handler, so CLICKS = 1.
+    let target = oracle.element_id_by_tag("div");
+    dom.runtime().handle_event("click", click_event(), target);
+    assert_eq!(*CLICKS.lock().unwrap(), 1);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+
+    // 2. A click on the inner button propagates to the outer div, so CLICKS = 3.
+    let target = oracle.element_id_by_tag("button");
+    dom.runtime().handle_event("click", click_event(), target);
+    assert_eq!(*CLICKS.lock().unwrap(), 3);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+
+    // 3. Stop-propagation in the button blocks the outer handler, so CLICKS stays at 3.
+    let target = oracle.element_id_by_tag("button");
+    dom.runtime().handle_event("click", click_event(), target);
+    assert_eq!(*CLICKS.lock().unwrap(), 3);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
 }

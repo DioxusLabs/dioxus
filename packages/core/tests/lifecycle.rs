@@ -67,6 +67,6 @@ fn events_generate() {
     dom.runtime().handle_event("click", event, target);
 
     dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    assert_eq!(oracle.last_edit_summary().replaces, 1);
+    let summary = oracle.render(&mut dom);
+    assert_eq!(summary.replaces, 1);
 }

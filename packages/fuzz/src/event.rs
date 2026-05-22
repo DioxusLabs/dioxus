@@ -1,7 +1,7 @@
 use crate::ops::EventBehaviorSpec;
 use std::{cell::RefCell, rc::Rc};
 
-type ListenerDriver = Rc<dyn Fn(EventBehaviorSpec)>;
+pub(crate) type ListenerDriver = Rc<dyn Fn(EventBehaviorSpec)>;
 
 #[derive(Clone)]
 struct ListenerDriverState {
@@ -18,44 +18,48 @@ impl Default for ListenerDriverState {
     }
 }
 
-thread_local! {
-    static LISTENER_DRIVER: RefCell<ListenerDriverState> = RefCell::new(ListenerDriverState::default());
+#[derive(Clone, Default)]
+pub(crate) struct EventState {
+    current: Rc<RefCell<ListenerDriverState>>,
 }
 
-pub(crate) fn with_listener_driver<R>(
-    behavior: EventBehaviorSpec,
-    driver: ListenerDriver,
-    f: impl FnOnce() -> R,
-) -> R {
-    let previous = LISTENER_DRIVER.with(|current| {
-        current.replace(ListenerDriverState {
+impl EventState {
+    pub(crate) fn with_listener_driver<R>(
+        &self,
+        behavior: EventBehaviorSpec,
+        driver: ListenerDriver,
+        f: impl FnOnce() -> R,
+    ) -> R {
+        let previous = self.current.replace(ListenerDriverState {
             behavior,
             driver: Some(driver),
-        })
-    });
-    let _guard = ListenerDriverGuard { previous };
-    f()
-}
-
-pub(crate) fn handle_listener_event() {
-    let state = LISTENER_DRIVER.with(|current| current.borrow().clone());
-    if state.behavior == EventBehaviorSpec::Noop {
-        return;
+        });
+        let _guard = ListenerDriverGuard {
+            state: self.clone(),
+            previous,
+        };
+        f()
     }
 
-    if let Some(driver) = state.driver {
-        driver(state.behavior);
+    pub(crate) fn handle_listener_event(&self) {
+        let state = self.current.borrow().clone();
+        if state.behavior == EventBehaviorSpec::Noop {
+            return;
+        }
+
+        if let Some(driver) = state.driver {
+            driver(state.behavior);
+        }
     }
 }
 
 struct ListenerDriverGuard {
+    state: EventState,
     previous: ListenerDriverState,
 }
 
 impl Drop for ListenerDriverGuard {
     fn drop(&mut self) {
-        LISTENER_DRIVER.with(|current| {
-            current.replace(self.previous.clone());
-        });
+        self.state.current.replace(self.previous.clone());
     }
 }

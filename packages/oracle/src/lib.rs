@@ -6,13 +6,11 @@
 
 mod diagnostics;
 mod renderer;
-mod sequence;
 mod snapshot;
 mod vdom_snapshot;
 
 pub use diagnostics::panic_message;
-pub use renderer::{EditSummary, EventListenerTarget, RendererOracle};
-pub use sequence::Sequence;
+pub use renderer::{EditSummary, EventListenerTarget, OracleNodeId, RendererOracle};
 pub use snapshot::{SnapshotAttr, SnapshotNode};
 
 #[cfg(test)]

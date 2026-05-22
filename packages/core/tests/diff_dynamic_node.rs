@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_core::generation;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn toggle_option_text() {
@@ -13,13 +13,31 @@ fn toggle_option_text() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(empty, rsx! { div {} })
-        .render(rsx! { div { "hello" } })
-        .render_with_expected(empty, rsx! { div {} })
-        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
-        .run();
+    fn app() -> Element {
+        match generation() {
+            1 => rsx! { div { "hello" } },
+            _ => empty(),
+        }
+    }
+
+    fn expected_hello() -> Element {
+        rsx! { div { "hello" } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(empty);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_hello);
+    assert_eq!(summary.replaces, 1);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(empty);
+    assert_eq!(summary.replaces, 1);
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2815
@@ -46,15 +64,27 @@ fn toggle_template() {
         }
     }
 
-    Sequence::new()
-        .render_with_expected(app, rsx! { "true" })
-        .render_with_expected(app, rsx!({}))
-        .render_with_expected(app, rsx! { "true" })
-        .render_with_expected(app, rsx!({}))
-        .render_with_expected(app, rsx! { "true" })
-        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(3, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(4, |s| assert_eq!(s.replaces, 1))
-        .run();
+    fn expected_true() -> Element {
+        rsx! { "true" }
+    }
+
+    fn expected_empty() -> Element {
+        rsx!({})
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_true);
+
+    for step in 1..=4 {
+        dom.mark_dirty(ScopeId::APP);
+        let summary = oracle.render(&mut dom);
+        if step % 2 == 0 {
+            oracle.assert_matches(expected_true);
+        } else {
+            oracle.assert_matches(expected_empty);
+        }
+        assert_eq!(summary.replaces, 1);
+    }
 }

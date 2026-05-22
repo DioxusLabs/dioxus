@@ -1,8 +1,7 @@
-use crate::model::*;
+use crate::{context::HarnessContext, model::*};
 use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::{Cell, RefCell},
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -247,7 +246,7 @@ where
 }
 
 #[derive(Default)]
-struct SuspenseReadyRegistry {
+pub(crate) struct SuspenseReadyRegistry {
     wake_counts: Vec<(SuspenseReadyKey, usize)>,
     wakers: Vec<(SuspenseReadyKey, Waker)>,
 }
@@ -302,70 +301,84 @@ impl SuspenseReadyRegistry {
     }
 }
 
-thread_local! {
-    static MODEL: RefCell<Model> = RefCell::new(Model::initial());
-    static SUSPENSE_READY: RefCell<SuspenseReadyRegistry> = RefCell::new(SuspenseReadyRegistry::default());
-    static REGISTER_SUSPENSE_READY_WAKERS: Cell<bool> = Cell::new(true);
-}
-
-pub(crate) fn read_model() -> Model {
-    MODEL.with(|m| m.borrow().clone())
-}
-
-pub(crate) fn with_model<R>(f: impl FnOnce(&mut Model) -> R) -> R {
-    MODEL.with(|m| f(&mut m.borrow_mut()))
-}
-
-fn suspense_ready_released(key: SuspenseReadyKey, required_wakes: usize) -> bool {
-    REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
-        enabled.get() && SUSPENSE_READY.with(|ready| ready.borrow().released(key, required_wakes))
-    })
-}
-
-fn register_suspense_ready_waker(key: SuspenseReadyKey, waker: Waker) {
-    REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
-        if enabled.get() {
-            SUSPENSE_READY.with(|ready| ready.borrow_mut().register_waker(key, waker));
-        }
-    });
-}
-
-pub(crate) fn release_suspense_ready_task(key: SuspenseReadyKey) {
-    SUSPENSE_READY.with(|ready| ready.borrow_mut().release(key));
-}
-
-pub(crate) fn selected_registered_ready_suspense_key(selector: u8) -> Option<SuspenseReadyKey> {
-    let registered = SUSPENSE_READY.with(|ready| ready.borrow().registered_keys());
-
-    let mut ready = Vec::new();
-    read_model().root.collect_ready_suspense_keys(&mut ready);
-    ready.retain(|key| registered.contains(key));
-    select(ready, selector)
-}
-
-pub(crate) fn clear_suspense_ready_tasks() {
-    SUSPENSE_READY.with(|ready| ready.borrow_mut().clear());
-}
-
 struct SuspenseReadyRegistrationGuard {
+    context: HarnessContext,
     previous: bool,
 }
 
 impl Drop for SuspenseReadyRegistrationGuard {
     fn drop(&mut self) {
-        REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| enabled.set(self.previous));
+        self.context
+            .register_suspense_ready_wakers
+            .set(self.previous);
     }
 }
 
-pub(crate) fn without_suspense_ready_registration<R>(f: impl FnOnce() -> R) -> R {
-    let _guard = REGISTER_SUSPENSE_READY_WAKERS.with(|enabled| {
-        let previous = enabled.replace(false);
-        SuspenseReadyRegistrationGuard { previous }
-    });
-    f()
+impl HarnessContext {
+    pub(crate) fn read_model(&self) -> Model {
+        self.model.borrow().clone()
+    }
+
+    pub(crate) fn with_model<R>(&self, f: impl FnOnce(&mut Model) -> R) -> R {
+        f(&mut self.model.borrow_mut())
+    }
+
+    fn suspense_ready_released(&self, key: SuspenseReadyKey, required_wakes: usize) -> bool {
+        self.register_suspense_ready_wakers.get()
+            && self.suspense_ready.borrow().released(key, required_wakes)
+    }
+
+    fn register_suspense_ready_waker(&self, key: SuspenseReadyKey, waker: Waker) {
+        if self.register_suspense_ready_wakers.get() {
+            self.suspense_ready.borrow_mut().register_waker(key, waker);
+        }
+    }
+
+    pub(crate) fn release_suspense_ready_task(&self, key: SuspenseReadyKey) {
+        self.suspense_ready.borrow_mut().release(key);
+    }
+
+    pub(crate) fn selected_registered_ready_suspense_key(
+        &self,
+        selector: u8,
+    ) -> Option<SuspenseReadyKey> {
+        let registered = self.suspense_ready.borrow().registered_keys();
+
+        let mut ready = Vec::new();
+        self.read_model()
+            .root
+            .collect_ready_suspense_keys(&mut ready);
+        ready.retain(|key| registered.contains(key));
+        select(ready, selector)
+    }
+
+    pub(crate) fn clear_suspense_ready_tasks(&self) {
+        self.suspense_ready.borrow_mut().clear();
+    }
+
+    pub(crate) fn without_suspense_ready_registration<R>(&self, f: impl FnOnce() -> R) -> R {
+        let previous = self.register_suspense_ready_wakers.replace(false);
+        let _guard = SuspenseReadyRegistrationGuard {
+            context: self.clone(),
+            previous,
+        };
+        f()
+    }
+
+    pub(crate) fn apply_to_model(&self, op: &Op) {
+        let Op::Mutate(edit) = op else {
+            return;
+        };
+
+        self.with_model(|model| {
+            let can_grow = model.can_grow();
+            apply_model_edit(model, edit, can_grow);
+        });
+    }
 }
 
 pub(crate) struct SuspenseReadyFuture {
+    pub(crate) context: HarnessContext,
     pub(crate) key: SuspenseReadyKey,
     pub(crate) required_wakes: usize,
 }
@@ -375,10 +388,14 @@ impl Future for SuspenseReadyFuture {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let key = self.key;
-        if suspense_ready_released(key, self.required_wakes) {
+        if self
+            .context
+            .suspense_ready_released(key, self.required_wakes)
+        {
             Poll::Ready(())
         } else {
-            register_suspense_ready_waker(key, cx.waker().clone());
+            self.context
+                .register_suspense_ready_waker(key, cx.waker().clone());
             Poll::Pending
         }
     }
@@ -400,17 +417,6 @@ pub(crate) fn apply_strategy_op_to_model(model: &mut Model, op: &Op) {
         }
         Op::Mutate(edit) => apply_model_edit(model, edit, can_grow),
     }
-}
-
-pub(crate) fn apply_to_model(op: &Op) {
-    let Op::Mutate(edit) = op else {
-        return;
-    };
-
-    with_model(|model| {
-        let can_grow = model.can_grow();
-        apply_model_edit(model, edit, can_grow);
-    });
 }
 
 fn apply_model_edit(model: &mut Model, edit: &ModelEdit, can_grow: bool) {

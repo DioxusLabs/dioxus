@@ -1,25 +1,25 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::RendererOracle;
 
 /// As we clean up old templates, the ID for the node should cycle
 #[test]
 fn cycling_elements() {
-    Sequence::new()
-        .render(rsx! { div { "wasd" } })
-        .render(rsx! { div { "abcd" } })
-        .render(rsx! { div { "wasd" } })
-        .render(rsx! { div { "abcd" } })
-        .assert_edit_summary(1, |s| {
-            assert_eq!(s.loads, 1);
-            assert_eq!(s.replaces, 1);
-        })
-        .assert_edit_summary(2, |s| {
-            assert_eq!(s.loads, 1);
-            assert_eq!(s.replaces, 1);
-        })
-        .assert_edit_summary(3, |s| {
-            assert_eq!(s.loads, 1);
-            assert_eq!(s.replaces, 1);
-        })
-        .run();
+    fn app() -> Element {
+        match generation() % 2 {
+            0 => rsx! { div { "wasd" } },
+            _ => rsx! { div { "abcd" } },
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    for _ in 1..=3 {
+        dom.mark_dirty(ScopeId::APP);
+        let summary = oracle.render(&mut dom);
+        assert_eq!(summary.loads, 1);
+        assert_eq!(summary.replaces, 1);
+    }
 }

@@ -2,9 +2,10 @@
 
 use crate::{
     cache::InternSet,
-    lifecycle::{self, LifecycleRole},
+    context::HarnessContext,
+    lifecycle::LifecycleRole,
     model::*,
-    ops::{SuspenseReadyFuture, read_model},
+    ops::SuspenseReadyFuture,
 };
 use dioxus::prelude::*;
 use dioxus_core::{
@@ -20,7 +21,9 @@ use std::{
 // ---------- VNode construction --------------------------------------------------------------
 
 pub(crate) fn App() -> Element {
-    Ok(build_vnode(&read_model().root))
+    let context = consume_context::<HarnessContext>();
+    let model = context.read_model();
+    Ok(build_vnode(&context, &model.root))
 }
 
 #[derive(Clone, PartialEq, Props)]
@@ -43,31 +46,39 @@ struct GeneratedSuspenseProps {
 }
 
 fn GeneratedComponent(props: GeneratedProps) -> Element {
+    let context = consume_context::<HarnessContext>();
     track_lifecycle(
+        &context,
         LifecycleRole::ComponentA,
         props.id,
         &props.suspense_ancestors,
     );
     Ok(build_vnode_with_suspense(
+        &context,
         &props.node,
         &props.suspense_ancestors,
     ))
 }
 
 fn OtherGeneratedComponent(props: GeneratedProps) -> Element {
+    let context = consume_context::<HarnessContext>();
     track_lifecycle(
+        &context,
         LifecycleRole::ComponentB,
         props.id,
         &props.suspense_ancestors,
     );
     Ok(build_vnode_with_suspense(
+        &context,
         &props.node,
         &props.suspense_ancestors,
     ))
 }
 
 fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
+    let context = consume_context::<HarnessContext>();
     track_lifecycle(
+        &context,
         LifecycleRole::SuspenseBoundary,
         props.id,
         &props.suspense_ancestors,
@@ -102,6 +113,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     let mut child_suspense_ancestors = suspense_ancestors.clone();
     child_suspense_ancestors.push(id);
     let child = build_suspense_child_vnode(
+        &context,
         &child_spec,
         &child_suspense_ancestors,
         wake_mutation,
@@ -126,7 +138,9 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
 }
 
 fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
+    let context = consume_context::<HarnessContext>();
     track_lifecycle(
+        &context,
         LifecycleRole::SuspenseChild,
         props.id,
         &props.suspense_ancestors,
@@ -196,13 +210,15 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
                         unreachable!();
                     };
                     let required_wakes = props.required_ready_wake_count;
+                    let task_context = context.clone();
                     let new_task = spawn(async move {
                         SuspenseReadyFuture {
+                            context: task_context.clone(),
                             key,
                             required_wakes,
                         }
                         .await;
-                        let wake_mutation = read_model().wake_mutation_for_ready_key(key);
+                        let wake_mutation = task_context.read_model().wake_mutation_for_ready_key(key);
                         if wake_mutation != WakeMutationSpec::None {
                             applied_wake_mutation.set(wake_mutation);
                         }
@@ -227,6 +243,7 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
     let mut child_suspense_ancestors = props.suspense_ancestors.clone();
     child_suspense_ancestors.push(props.id);
     Ok(build_suspense_child_vnode(
+        &context,
         &props.child,
         &child_suspense_ancestors,
         wake_mutation,
@@ -234,22 +251,30 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
     ))
 }
 
-fn track_lifecycle(role: LifecycleRole, id: u64, suspense_ancestors: &[u64]) {
+fn track_lifecycle(
+    context: &HarnessContext,
+    role: LifecycleRole,
+    id: u64,
+    suspense_ancestors: &[u64],
+) {
     let suspense_ancestors = suspense_ancestors.to_vec();
+    let context = context.clone();
     let guard = use_hook({
         let suspense_ancestors = suspense_ancestors.clone();
-        move || lifecycle::track(role, id, &suspense_ancestors)
+        let context = context.clone();
+        move || context.lifecycle.track(role, id, &suspense_ancestors)
     });
     guard.update(role, id, &suspense_ancestors);
 }
 
 fn build_suspense_child_vnode(
+    context: &HarnessContext,
     child: &VNodeSpec,
     suspense_ancestors: &[u64],
     wake_mutation: WakeMutationSpec,
     wake_applied: bool,
 ) -> VNode {
-    let child = build_vnode_with_suspense(child, suspense_ancestors);
+    let child = build_vnode_with_suspense(context, child, suspense_ancestors);
     let WakeMutationSpec::PrependStaticRoot { tag } = wake_mutation else {
         return child;
     };
@@ -301,11 +326,15 @@ fn template_node_contains_suspense(spec: &TemplateNodeSpec) -> bool {
     }
 }
 
-fn build_vnode(spec: &VNodeSpec) -> VNode {
-    build_vnode_with_suspense(spec, &[])
+fn build_vnode(context: &HarnessContext, spec: &VNodeSpec) -> VNode {
+    build_vnode_with_suspense(context, spec, &[])
 }
 
-fn build_vnode_with_suspense(spec: &VNodeSpec, suspense_ancestors: &[u64]) -> VNode {
+fn build_vnode_with_suspense(
+    context: &HarnessContext,
+    spec: &VNodeSpec,
+    suspense_ancestors: &[u64],
+) -> VNode {
     let spec = spec.clone().normalize();
     let mut dynamics = Vec::new();
     collect_dynamic_specs(&spec.template.roots, &mut dynamics);
@@ -316,12 +345,17 @@ fn build_vnode_with_suspense(spec: &VNodeSpec, suspense_ancestors: &[u64]) -> VN
         compile_template(&spec.template),
         dynamics
             .iter()
-            .map(|dynamic| build_dynamic(dynamic, suspense_ancestors))
+            .map(|dynamic| build_dynamic(context, dynamic, suspense_ancestors))
             .collect(),
         attrs
             .iter()
             .enumerate()
-            .map(|(slot, attrs)| attrs.iter().map(|attr| build_attr(slot, attr)).collect())
+            .map(|(slot, attrs)| {
+                attrs
+                    .iter()
+                    .map(|attr| build_attr(context, slot, attr))
+                    .collect()
+            })
             .collect(),
     )
 }
@@ -355,7 +389,11 @@ fn collect_dynamic_attr_specs<'a>(nodes: &'a [TemplateNodeSpec], out: &mut Vec<&
     }
 }
 
-fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode {
+fn build_dynamic(
+    context: &HarnessContext,
+    spec: &DynamicSpec,
+    suspense_ancestors: &[u64],
+) -> DynamicNode {
     match spec {
         DynamicSpec::Empty => DynamicNode::Fragment(Vec::new()),
         DynamicSpec::Text(value) => DynamicNode::Text(VText::new(format!("text-{value}"))),
@@ -363,7 +401,7 @@ fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode 
         DynamicSpec::Fragment(nodes) => DynamicNode::Fragment(
             nodes
                 .iter()
-                .map(|node| build_vnode_with_suspense(node, suspense_ancestors))
+                .map(|node| build_vnode_with_suspense(context, node, suspense_ancestors))
                 .collect(),
         ),
         DynamicSpec::ComponentA(component) => DynamicNode::Component(VComponent::new(
@@ -402,7 +440,7 @@ fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode 
     }
 }
 
-fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
+fn build_attr(context: &HarnessContext, slot: usize, spec: &AttrSpec) -> Attribute {
     let namespace = spec.namespace.map(namespace_name);
     match spec.value {
         AttrValueSpec::Text(value) => Attribute::new(
@@ -441,12 +479,15 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
             namespace,
             spec.volatile,
         ),
-        AttrValueSpec::Listener => Attribute::new(
-            listener_name(slot, spec.name),
-            AttributeValue::listener(|_: Event<String>| crate::event::handle_listener_event()),
-            None,
-            spec.volatile,
-        ),
+        AttrValueSpec::Listener => {
+            let events = context.events.clone();
+            Attribute::new(
+                listener_name(slot, spec.name),
+                AttributeValue::listener(move |_: Event<String>| events.handle_listener_event()),
+                None,
+                spec.volatile,
+            )
+        }
     }
 }
 

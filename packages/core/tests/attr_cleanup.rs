@@ -3,39 +3,58 @@
 //! This tests to ensure we clean it up
 
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::Sequence;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn attrs_cycle() {
     tracing_subscriber::fmt::init();
 
-    Sequence::new()
-        .render(rsx! { div {} })
-        .render_with_expected(
-            || {
+    fn app() -> Element {
+        match generation() {
+            1 => {
                 let id = 1;
                 rsx! { div { h1 { class: "{id}", id: "{id}" } } }
-            },
-            rsx! { div { h1 { class: "1", id: "1" } } },
-        )
-        .render(rsx! { div {} })
-        .render_with_expected(
-            || {
+            }
+            3 => {
                 let id = 3;
                 rsx! { div { h1 { class: "{id}", id: "{id}" } } }
-            },
-            rsx! { div { h1 { class: "3", id: "3" } } },
-        )
-        .render(rsx! { div {} })
-        .assert_edit_summary(1, |s| {
-            assert_eq!(s.set_attrs, 2);
-            assert_eq!(s.replaces, 1);
-        })
-        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
-        .assert_edit_summary(3, |s| {
-            assert_eq!(s.set_attrs, 2);
-            assert_eq!(s.replaces, 1);
-        })
-        .assert_edit_summary(4, |s| assert_eq!(s.replaces, 1))
-        .run();
+            }
+            _ => rsx! { div {} },
+        }
+    }
+
+    fn expected_1() -> Element {
+        rsx! { div { h1 { class: "1", id: "1" } } }
+    }
+
+    fn expected_3() -> Element {
+        rsx! { div { h1 { class: "3", id: "3" } } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_1);
+    assert_eq!(summary.set_attrs, 2);
+    assert_eq!(summary.replaces, 1);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(app);
+    assert_eq!(summary.replaces, 1);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_3);
+    assert_eq!(summary.set_attrs, 2);
+    assert_eq!(summary.replaces, 1);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(app);
+    assert_eq!(summary.replaces, 1);
 }

@@ -8,8 +8,6 @@ use tracing_subscriber::{Registry, layer::SubscriberExt};
 
 // This test asserts on tracing events emitted by `VirtualDom::new` and
 // `VirtualDom::rebuild`; it requires those calls to happen *exactly once*.
-// `Sequence` constructs a throwaway expected-side VDom per step, which would
-// inflate those counters and break the test. So we drive it manually.
 #[test]
 fn basic_tracing() {
     let assertion_registry = AssertionRegistry::default();
