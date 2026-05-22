@@ -5,9 +5,14 @@
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
-    ComponentFunction, Element, Mutations,
+    ComponentFunction, Element, Mutations, RenderTargetId, TargetedMutations,
     arena::ElementId,
-    innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
+    innerlude::{
+        ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderCheckpoint,
+        RenderCommit, RenderSchedulerDecision, RenderStats, SchedulerFairness, SchedulerMsg,
+        ScopeOrder, ScopeState, SuspenseRenderStats, UpdatePriority, VProps, WriteMutations,
+        YieldPolicy,
+    },
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
 };
@@ -15,7 +20,8 @@ use crate::{Task, VComponent};
 use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -82,8 +88,8 @@ use tracing::instrument;
 /// }
 /// ```
 ///
-/// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
-/// draw the UI.
+/// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] with your renderer's mutation writer
+/// to queue the initial mutations required to draw the UI.
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
@@ -91,7 +97,9 @@ use tracing::instrument;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
-/// let edits = vdom.rebuild_to_vec();
+/// let mut mutations = Mutations::default();
+/// vdom.rebuild(&mut mutations);
+/// assert!(!mutations.edits.is_empty());
 /// ```
 ///
 /// To call listeners inside the VirtualDom, call [`Runtime::handle_event`] with the appropriate event data.
@@ -118,37 +126,37 @@ use tracing::instrument;
 /// });
 /// ```
 ///
-/// Once work is ready, call [`VirtualDom::render_immediate`] to compute the differences between the previous and
-/// current UI trees. This will write edits to a [`WriteMutations`] object you pass in that contains with edits that need to be
-/// handled by the renderer.
+/// Once work is ready, call [`VirtualDom::render_concurrent`] to compute the differences between the previous
+/// and current UI trees. This writes into the renderer's mutation queue without an intermediate copy.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// let mut mutations = Mutations::default();
-///
-/// vdom.render_immediate(&mut mutations);
+/// # let mut mutations = Mutations::default();
+/// tokio::runtime::Runtime::new().unwrap().block_on(async {
+///     vdom.render_concurrent(&mut mutations).await;
+/// });
 /// ```
-///
-/// To not wait for suspense while diffing the VirtualDom, call [`VirtualDom::render_immediate`].
-///
-///
 /// ## Building an event loop around Dioxus:
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
-/// # struct RealDom;
+/// # struct RealDom {
+/// #     mutations: Mutations,
+/// # }
 /// # struct Event {}
 /// # impl RealDom {
 /// #     fn new() -> Self {
-/// #         Self {}
+/// #         Self { mutations: Mutations::default() }
 /// #     }
-/// #     fn apply(&mut self) -> Mutations {
-/// #         unimplemented!()
+/// #     fn apply(&mut self) -> &mut Mutations {
+/// #         &mut self.mutations
+/// #     }
+/// #     fn commit(&mut self) {
 /// #     }
 /// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
 /// #         unimplemented!()
@@ -167,7 +175,8 @@ use tracing::instrument;
 ///
 /// let mut dom = VirtualDom::new(app);
 ///
-/// dom.rebuild(&mut real_dom.apply());
+/// dom.rebuild(real_dom.apply());
+/// real_dom.commit();
 ///
 /// loop {
 ///     tokio::select! {
@@ -178,7 +187,8 @@ use tracing::instrument;
 ///         },
 ///     }
 ///
-///     dom.render_immediate(&mut real_dom.apply());
+///     dom.render_concurrent(real_dom.apply()).await;
+///     real_dom.commit();
 /// }
 /// # });
 /// ```
@@ -205,17 +215,57 @@ use tracing::instrument;
 pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
-    pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
+    pub(crate) dirty_fibers: DirtyFiberQueue,
+
+    pub(crate) component_props_work: std::collections::VecDeque<ComponentPropsDiff>,
 
     pub(crate) runtime: Rc<Runtime>,
 
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
 
+    pub(crate) render_priority: UpdatePriority,
+
+    pub(crate) render_deferred_priority: Option<UpdatePriority>,
+
+    pub(crate) scheduler_fairness: SchedulerFairness,
+
+    pub(crate) commit_generation: u64,
+
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
 impl VirtualDom {
+    /// Validate internal fiber bookkeeping against each scope's committed root node.
+    #[doc(hidden)]
+    pub fn check_fiber_invariants(&self) -> std::result::Result<(), String> {
+        let fibers = self.runtime.fibers.borrow();
+        for (_, scope) in &self.scopes {
+            let Some(root) = scope.try_root_node() else {
+                continue;
+            };
+            let mount = root.mount.get();
+            let Some(mount_idx) = mount.as_usize() else {
+                continue;
+            };
+            let Some(fiber) = fibers.get(mount_idx) else {
+                return Err(format!(
+                    "scope {:?} root uses missing fiber {:?}",
+                    scope.id(),
+                    mount
+                ));
+            };
+            if fiber.node != *root {
+                return Err(format!(
+                    "scope {:?} root fiber {:?} has stale committed vnode",
+                    scope.id(),
+                    mount
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Create a new VirtualDom with a component that does not have special props.
     ///
     /// # Description
@@ -312,8 +362,13 @@ impl VirtualDom {
             rx,
             runtime: Runtime::new(tx),
             scopes: Default::default(),
-            dirty_scopes: Default::default(),
+            dirty_fibers: Default::default(),
+            component_props_work: Default::default(),
             resolved_scopes: Default::default(),
+            render_priority: UpdatePriority::Default,
+            render_deferred_priority: None,
+            scheduler_fairness: Default::default(),
+            commit_generation: 0,
         };
 
         let root = VProps::new(
@@ -393,12 +448,17 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
+        self.mark_dirty_with_priority(id, UpdatePriority::Default);
+    }
+
+    /// Manually mark a scope as requiring a re-render at a specific priority.
+    pub fn mark_dirty_with_priority(&mut self, id: ScopeId, priority: UpdatePriority) {
         let Some(scope) = self.runtime.try_get_state(id) else {
             return;
         };
 
         tracing::event!(tracing::Level::TRACE, "Marking scope {:?} as dirty", id);
-        let order = ScopeOrder::new(scope.height(), id);
+        let order = ScopeOrder::with_priority(scope.height(), id, priority);
         drop(scope);
         self.queue_scope(order);
     }
@@ -448,8 +508,8 @@ impl VirtualDom {
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.process_events();
 
-            // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-            if self.has_dirty_scopes() {
+            // Now that we have collected all queued work, check whether any fibers need diffing.
+            if self.has_dirty_fibers() {
                 return;
             }
 
@@ -465,7 +525,7 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_event")]
     async fn wait_for_event(&mut self) {
         match self.rx.next().await.expect("channel should never close") {
-            SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+            SchedulerMsg::Immediate(id, priority) => self.mark_dirty_with_priority(id, priority),
             SchedulerMsg::TaskNotified(id) => {
                 // Instead of running the task immediately, we insert it into the runtime's task queue.
                 // The task may be marked dirty at the same time as the scope that owns the task is dropped.
@@ -477,11 +537,13 @@ impl VirtualDom {
     }
 
     /// Queue any pending events
-    fn queue_events(&mut self) {
+    pub(crate) fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+                SchedulerMsg::Immediate(id, priority) => {
+                    self.mark_dirty_with_priority(id, priority)
+                }
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
                 SchedulerMsg::AllDirty => self.mark_all_dirty(),
@@ -494,8 +556,8 @@ impl VirtualDom {
     pub fn process_events(&mut self) {
         self.queue_events();
 
-        // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-        if self.has_dirty_scopes() {
+        // Now that we have collected all queued work, check whether any fibers need diffing.
+        if self.has_dirty_fibers() {
             return;
         }
 
@@ -508,31 +570,26 @@ impl VirtualDom {
         // Make sure we set the runtime since we're running user code
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-        // Keep polling tasks until there are no more effects or tasks to run
-        // Or until we have no more dirty scopes
-        while !self.runtime.dirty_tasks.borrow().is_empty()
-            || !self.runtime.pending_effects.borrow().is_empty()
-        {
-            // Next, run any queued tasks
-            // We choose not to poll the deadline since we complete pretty quickly anyways
-            while let Some(task) = self.pop_task() {
-                let _ = self.runtime.handle_task_wakeup(task);
+        while !self.has_dirty_fibers() {
+            let Some(work) = self.pop_work() else {
+                break;
+            };
 
-                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                self.queue_events();
-                if self.has_dirty_scopes() {
+            match work {
+                Work::PollTask(task) => {
+                    _ = self.runtime.handle_task_wakeup(task);
+                }
+                Work::RunEffect(effect) => {
+                    effect.run();
+                }
+                Work::DiffFiber(_) | Work::DiffComponentProps(_) => {
                     return;
                 }
             }
 
-            // At this point, we have finished running all tasks that are pending and we haven't found any scopes to rerun. This means it is safe to run our lowest priority work: effects
-            while let Some(effect) = self.pop_effect() {
-                effect.run();
-                // Check if any new scopes are queued for rerun
-                self.queue_events();
-                if self.has_dirty_scopes() {
-                    return;
-                }
+            self.queue_events();
+            if self.has_dirty_fibers() {
+                return;
             }
         }
     }
@@ -541,11 +598,13 @@ impl VirtualDom {
     ///
     /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
     /// handling any of its mutations.
+    #[doc(hidden)]
     pub fn rebuild_in_place(&mut self) {
         self.rebuild(&mut NoOpMutations);
     }
 
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
+    #[doc(hidden)]
     pub fn rebuild_to_vec(&mut self) -> Mutations {
         let mut mutations = Mutations::default();
         self.rebuild(&mut mutations);
@@ -575,6 +634,7 @@ impl VirtualDom {
     /// let mut mutations = Mutations::default();
     /// dom.rebuild(&mut mutations);
     /// ```
+    #[doc(hidden)]
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
@@ -590,11 +650,12 @@ impl VirtualDom {
         // Rebuilding implies we append the created elements to the root
         let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
 
-        to.append_children(ElementId(0), m);
+        to.append_children(ElementId::ROOT, m);
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
+    #[doc(hidden)]
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         // Process any events that might be pending in the queue
@@ -602,7 +663,7 @@ impl VirtualDom {
         // This also processes futures which might progress into immediately rerunning a scope
         self.process_events();
 
-        // Next, diff any dirty scopes
+        // Next, diff any dirty fibers.
         // We choose not to poll the deadline since we complete pretty quickly anyways
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         while let Some(work) = self.pop_work() {
@@ -612,11 +673,20 @@ impl VirtualDom {
                     // Make sure we process any new events
                     self.queue_events();
                 }
-                Work::RerunScope(scope) => {
-                    // If the scope is dirty, run the scope and get the mutations
+                Work::DiffFiber(fiber) => {
+                    // If the fiber is dirty, run the scope and get the mutations.
+                    let priority = fiber.order.priority;
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(to), scope.id);
+                        fiber.diff_into(self, Some(to), priority);
                     });
+                }
+                Work::DiffComponentProps(diff) => {
+                    self.runtime.clone().while_rendering(|| {
+                        self.diff_component_props_work(diff);
+                    });
+                }
+                Work::RunEffect(effect) => {
+                    effect.run();
                 }
             }
         }
@@ -625,12 +695,214 @@ impl VirtualDom {
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
+    #[doc(hidden)]
     pub fn render_immediate_to_vec(&mut self) -> Mutations {
         let mut mutations = Mutations::default();
         self.render_immediate(&mut mutations);
         mutations
     }
 
+    /// [`Self::render_immediate`] grouped into isolated mutation streams per render target.
+    #[doc(hidden)]
+    pub fn render_immediate_to_targeted_vec(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
+        let mut mutations = TargetedMutations::new(self.runtime.clone());
+        self.render_immediate(&mut mutations);
+        mutations.into_edits()
+    }
+
+    /// Render pending work into a renderer mutation queue.
+    #[instrument(
+        skip(self, to),
+        level = "trace",
+        name = "VirtualDom::render_concurrent"
+    )]
+    pub async fn render_concurrent(&mut self, to: &mut impl WriteMutations) -> RenderStats {
+        self.render_concurrent_with_policy(YieldPolicy::default(), to, |_, _| {})
+            .await
+    }
+
+    /// Render pending work with a custom yield policy.
+    ///
+    /// Mutations are written directly into `to`. The `commit` callback is
+    /// called after queued work should be made visible, which lets renderers
+    /// flush their own optimized mutation queue before Dioxus yields.
+    #[instrument(
+        skip(self, to, commit),
+        level = "trace",
+        name = "VirtualDom::render_concurrent_with_policy"
+    )]
+    pub async fn render_concurrent_with_policy<M: WriteMutations>(
+        &mut self,
+        yield_policy: YieldPolicy,
+        to: &mut M,
+        mut commit: impl FnMut(&mut M, UpdatePriority),
+    ) -> RenderStats {
+        self.render_concurrent_with_scheduler(
+            to,
+            |checkpoint, _| {
+                if checkpoint.has_higher_priority_work
+                    || yield_policy.should_yield_after(checkpoint.work_units_since_yield)
+                {
+                    RenderSchedulerDecision::CommitAndYield
+                } else {
+                    RenderSchedulerDecision::Continue
+                }
+            },
+            |to, render_commit| commit(to, render_commit.priority),
+            |_| yield_now(),
+        )
+        .await
+    }
+
+    /// Render pending work with renderer-controlled cooperative scheduling.
+    ///
+    /// The renderer receives a checkpoint after every completed scheduler work
+    /// unit. This lets browser renderers tie commits and yields to frame timing
+    /// instead of a fixed amount of virtual DOM work.
+    #[doc(hidden)]
+    #[instrument(
+        skip(self, to, scheduler, commit, wait_for_scheduler),
+        level = "trace",
+        name = "VirtualDom::render_concurrent_with_scheduler"
+    )]
+    pub async fn render_concurrent_with_scheduler<M, S, C, W, F>(
+        &mut self,
+        to: &mut M,
+        mut scheduler: S,
+        mut commit: C,
+        mut wait_for_scheduler: W,
+    ) -> RenderStats
+    where
+        M: WriteMutations,
+        S: FnMut(RenderCheckpoint, &M) -> RenderSchedulerDecision,
+        C: FnMut(&mut M, RenderCommit),
+        W: FnMut(Option<UpdatePriority>) -> F,
+        F: Future<Output = ()>,
+    {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        let mut driver = self.fiber_driver();
+        loop {
+            match driver.next_fiber() {
+                FiberStep::Ran(checkpoint) => {
+                    let render_checkpoint = RenderCheckpoint {
+                        priority: checkpoint.work.priority,
+                        scope: checkpoint.work.scope,
+                        work_units_since_yield: checkpoint.work_count,
+                        pending_mutations: checkpoint.pending_mutations,
+                        has_higher_priority_work: checkpoint.has_higher_priority_work,
+                    };
+
+                    match scheduler(render_checkpoint, to) {
+                        RenderSchedulerDecision::Continue => {}
+                        RenderSchedulerDecision::Commit => {
+                            if let Some(fiber_commit) = driver.commit(to) {
+                                commit(to, fiber_commit.into());
+                            }
+                        }
+                        RenderSchedulerDecision::Yield => {
+                            driver.yield_now();
+                            wait_for_scheduler(None).await;
+                        }
+                        RenderSchedulerDecision::CommitAndYield => {
+                            if let Some(fiber_commit) = driver.commit(to) {
+                                let priority = fiber_commit.priority;
+                                commit(to, fiber_commit.into());
+                                driver.yield_now();
+                                wait_for_scheduler(Some(priority)).await;
+                            } else {
+                                driver.yield_now();
+                                wait_for_scheduler(None).await;
+                            }
+                        }
+                    }
+                }
+                FiberStep::MustCommit => {
+                    if let Some(fiber_commit) = driver.commit(to) {
+                        commit(to, fiber_commit.into());
+                    }
+                }
+                FiberStep::Idle(stats) => return stats,
+            }
+        }
+    }
+
+    pub(crate) fn render_work_into(
+        &mut self,
+        to: &mut impl WriteMutations,
+        work: Work,
+    ) -> UpdatePriority {
+        let priority = work.priority();
+        match work {
+            Work::PollTask(task) => {
+                _ = self.runtime.handle_task_wakeup(task);
+            }
+            Work::DiffFiber(fiber) => {
+                self.runtime.clone().while_rendering(|| {
+                    fiber.diff_into(self, Some(to), priority);
+                });
+            }
+            Work::DiffComponentProps(diff) => {
+                self.runtime.clone().while_rendering(|| {
+                    self.diff_component_props_work(diff);
+                });
+            }
+            Work::RunEffect(effect) => {
+                effect.run();
+            }
+        }
+        priority
+    }
+
+    #[allow(dead_code)]
+    fn render_work_into_direct(
+        &mut self,
+        to: &mut impl WriteMutations,
+        work: Work,
+    ) -> UpdatePriority {
+        let priority = work.priority();
+        match work {
+            Work::PollTask(task) => {
+                _ = self.runtime.handle_task_wakeup(task);
+            }
+            Work::DiffFiber(fiber) => {
+                self.runtime.clone().while_rendering(|| {
+                    fiber.diff_into(self, Some(to), priority);
+                });
+            }
+            Work::DiffComponentProps(diff) => {
+                self.runtime.clone().while_rendering(|| {
+                    self.diff_component_props_work(diff);
+                });
+            }
+            Work::RunEffect(effect) => {
+                effect.run();
+            }
+        }
+        priority
+    }
+
+    fn diff_component_props_work(&mut self, diff: ComponentPropsDiff) {
+        for update in diff.updates {
+            let Some(scope_state) = self.runtime.try_get_state(update.scope) else {
+                continue;
+            };
+            let height = scope_state.height;
+            drop(scope_state);
+
+            let scope_order = ScopeOrder::new(height, update.scope);
+            let scope_dirty = self.dirty_fibers.contains(&scope_order);
+            let old_props = &mut *self.scopes[update.scope.0].props;
+            if old_props.memoize(update.props.props()) && !scope_dirty {
+                continue;
+            }
+
+            self.queue_scope(ScopeOrder::with_priority(
+                height,
+                update.scope,
+                diff.priority,
+            ));
+        }
+    }
     /// Render the virtual dom, waiting for all suspense to be finished
     ///
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
@@ -642,13 +914,14 @@ impl VirtualDom {
         loop {
             self.queue_events();
 
-            if !self.suspended_tasks_remaining() && !self.has_dirty_scopes() {
+            if !self.suspended_tasks_remaining() && !self.has_dirty_fibers() {
                 break;
             }
 
             self.wait_for_suspense_work().await;
 
-            self.render_suspense_immediate().await;
+            self.render_suspense_concurrent(YieldPolicy::default())
+                .await;
         }
     }
 
@@ -658,6 +931,7 @@ impl VirtualDom {
     }
 
     /// Wait for the scheduler to have any work that should be run during suspense.
+    #[doc(hidden)]
     pub async fn wait_for_suspense_work(&mut self) {
         // Wait for a work to be ready (IE new suspense leaves to pop up)
         loop {
@@ -665,8 +939,8 @@ impl VirtualDom {
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.queue_events();
 
-            // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-            if self.has_dirty_scopes() {
+            // Now that we have collected all queued work, check whether any fibers need diffing.
+            if self.has_dirty_fibers() {
                 break;
             }
 
@@ -679,9 +953,9 @@ impl VirtualDom {
                 while let Some(task) = self.pop_task() {
                     if self.runtime.task_runs_during_suspense(task) {
                         let _ = self.runtime.handle_task_wakeup(task);
-                        // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                        // Running that task may mark a higher fiber as dirty. If it does, return early.
                         self.queue_events();
-                        if self.has_dirty_scopes() {
+                        if self.has_dirty_fibers() {
                             return;
                         }
                     }
@@ -698,9 +972,22 @@ impl VirtualDom {
         }
     }
 
-    /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
-    /// Returns a list of suspense boundaries that were resolved
+    /// Render suspense work synchronously and return the list of suspense boundaries that resolved.
+    ///
+    /// Equivalent to [`render_suspense_concurrent`] with the default yield policy, but returns the
+    /// resolved scope list directly. Used by tests and callers that want to drive suspense without
+    /// caring about render stats.
     pub async fn render_suspense_immediate(&mut self) -> Vec<ScopeId> {
+        self.render_suspense_concurrent(YieldPolicy::default())
+            .await
+            .resolved_scopes
+    }
+
+    /// Render any suspense-ready dirty fibers without writing renderer mutations.
+    pub async fn render_suspense_concurrent(
+        &mut self,
+        yield_policy: YieldPolicy,
+    ) -> SuspenseRenderStats {
         // Queue any new events before we start working
         self.queue_events();
 
@@ -708,7 +995,9 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let mut work_done = 0;
+        let mut stats = RenderStats::default();
         while let Some(work) = self.pop_work() {
+            let priority = work.priority();
             match work {
                 Work::PollTask(task) => {
                     // During suspense, we only want to run tasks that are suspended
@@ -716,17 +1005,18 @@ impl VirtualDom {
                         let _ = self.runtime.handle_task_wakeup(task);
                     }
                 }
-                Work::RerunScope(scope) => {
-                    let scope_id: ScopeId = scope.id;
+                Work::DiffFiber(fiber) => {
+                    let scope_id: ScopeId = fiber.scope;
                     let run_scope = self
                         .runtime
-                        .try_get_state(scope.id)
+                        .try_get_state(scope_id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
                     if run_scope {
-                        // If the scope is dirty, run the scope and get the mutations
+                        // If the fiber is dirty, run the scope and diff it without writing mutations.
+                        let priority = fiber.order.priority;
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            fiber.diff_into(self, None::<&mut NoOpMutations>, priority);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
@@ -737,14 +1027,25 @@ impl VirtualDom {
                         );
                     }
                 }
+                Work::DiffComponentProps(diff) => {
+                    self.runtime.clone().while_rendering(|| {
+                        self.diff_component_props_work(diff);
+                    });
+                }
+                Work::RunEffect(effect) => {
+                    effect.run();
+                }
             }
 
             // Queue any new events
             self.queue_events();
+            stats.priority = stats.priority.min(priority);
+            stats.work_count += 1;
             work_done += 1;
 
             // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
-            if work_done > 32 {
+            if yield_policy.should_yield_after(work_done) {
+                stats.yield_count += 1;
                 yield_now().await;
                 work_done = 0;
             }
@@ -752,7 +1053,10 @@ impl VirtualDom {
 
         self.resolved_scopes
             .sort_by_key(|&id| self.runtime.get_state(id).height);
-        std::mem::take(&mut self.resolved_scopes)
+        SuspenseRenderStats {
+            render: stats,
+            resolved_scopes: std::mem::take(&mut self.resolved_scopes),
+        }
     }
 
     /// Get the current runtime
@@ -785,14 +1089,16 @@ impl Drop for VirtualDom {
             drop(scope);
         }
 
-        // Drop the mounts, tasks, and effects, releasing any `Rc<Runtime>` references
+        // Drop the fibers, tasks, and effects, releasing any `Rc<Runtime>` references
         self.runtime.pending_effects.borrow_mut().clear();
         self.runtime.tasks.borrow_mut().clear();
-        self.runtime.mounts.borrow_mut().clear();
+        self.runtime.fibers.borrow_mut().clear();
+        self.component_props_work.clear();
     }
 }
 
 /// Yield control back to the async scheduler. This is used to give the scheduler a chance to run other pending work. Or cancel the task if the client has disconnected.
+#[cfg(not(target_arch = "wasm32"))]
 async fn yield_now() {
     let mut yielded = false;
     std::future::poll_fn::<(), _>(move |cx| {
@@ -805,4 +1111,9 @@ async fn yield_now() {
         }
     })
     .await;
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn yield_now() {
+    gloo_timers::future::TimeoutFuture::new(0).await;
 }

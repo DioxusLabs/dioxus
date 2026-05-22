@@ -1,5 +1,5 @@
 use crate::{
-    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps, arena::UNMOUNTED,
+    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps,
     reactive_context::ReactiveContext, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
@@ -60,7 +60,7 @@ impl ScopeId {
     // ScopeId(0) is the root scope wrapper
     pub const ROOT: ScopeId = ScopeId(0);
 
-    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(UNMOUNTED);
+    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
 
     pub(crate) fn is_placeholder(&self) -> bool {
         *self == Self::PLACEHOLDER
@@ -140,7 +140,10 @@ impl LastRenderedNode {
     pub fn new(node: Element) -> Self {
         match node {
             Ok(vnode) => LastRenderedNode::Real(vnode),
-            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
+            // Use an empty-text anchor so the parent slot keeps a 1-node DOM presence to diff
+            // against until the error/suspension resolves. A pure-empty placeholder would
+            // collapse to zero nodes, breaking ReplaceWith-based transitions used by suspense.
+            Err(err) => LastRenderedNode::Placeholder(VNode::error_anchor(), err),
         }
     }
 

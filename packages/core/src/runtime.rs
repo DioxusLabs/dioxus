@@ -1,15 +1,18 @@
-use crate::nodes::VNodeMount;
+use crate::fiber::{Fiber, FiberId};
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{AttributeValue, ElementId, Event};
-use crate::{CapturedError, arena::ElementRef};
+use crate::{AttributeValue, ElementId, Event, RenderTargetId};
+use crate::{
+    CapturedError,
+    arena::{ElementRef, RenderTargetKind, RenderTargetState},
+};
 use crate::{
     SuspenseContext,
     innerlude::{DirtyTasks, Effect},
 };
 use crate::{
     Task,
-    innerlude::{LocalTask, SchedulerMsg},
+    innerlude::{LocalTask, SchedulerMsg, UpdatePriority},
     scope_context::Scope,
     scopes::ScopeId,
 };
@@ -38,6 +41,9 @@ pub struct Runtime {
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
     suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
+    // The renderer target inherited by newly-created scopes.
+    target_stack: RefCell<Vec<RenderTargetId>>,
+
     // A hand-rolled slab of scope states
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
@@ -52,6 +58,8 @@ pub struct Runtime {
 
     pub(crate) rendering: Cell<bool>,
 
+    pub(crate) update_priority: Cell<UpdatePriority>,
+
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     // The effects that need to be run after the next render
@@ -60,36 +68,94 @@ pub struct Runtime {
     // Tasks that are waiting to be polled
     pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
 
-    // The element ids that are used in the renderer
-    // These mark a specific place in a whole rsx block
-    pub(crate) elements: RefCell<Slab<Option<ElementRef>>>,
+    // The renderer targets and their element id arenas.
+    pub(crate) render_targets: RefCell<Slab<RenderTargetState>>,
 
-    // Once nodes are mounted, the information about where they are mounted is stored here
-    // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
-    // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
-    pub(crate) mounts: RefCell<Slab<VNodeMount>>,
+    // Once nodes are mounted, their persistent fiber identity is stored here.
+    // Each fiber is associated with a whole rsx block. [`Runtime::elements`]
+    // link to a specific node in that block.
+    pub(crate) fibers: RefCell<Slab<Fiber>>,
+
+    next_fiber_id: Cell<u64>,
+}
+
+struct ScopeStackGuard<'a> {
+    runtime: &'a Runtime,
+}
+
+impl Drop for ScopeStackGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.pop_scope();
+    }
+}
+
+struct SuspenseLocationGuard<'a> {
+    runtime: &'a Runtime,
+}
+
+impl Drop for SuspenseLocationGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.suspense_stack.borrow_mut().pop();
+    }
+}
+
+struct RenderTargetGuard<'a> {
+    runtime: &'a Runtime,
+}
+
+impl Drop for RenderTargetGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.target_stack.borrow_mut().pop();
+    }
+}
+
+struct UpdatePriorityGuard<'a> {
+    runtime: &'a Runtime,
+    previous: UpdatePriority,
+}
+
+impl<'a> UpdatePriorityGuard<'a> {
+    fn new(runtime: &'a Runtime, priority: UpdatePriority) -> Self {
+        let previous = runtime.update_priority.replace(priority);
+        Self { runtime, previous }
+    }
+}
+
+impl Drop for UpdatePriorityGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.update_priority.set(self.previous);
+    }
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        let mut elements = Slab::default();
-        // the root element is always given element ID 0 since it's the container for the entire tree
-        elements.insert(None);
+        let mut render_targets = Slab::default();
+        let root = render_targets.insert(RenderTargetState::new(RenderTargetKind::Real));
+        debug_assert_eq!(root, RenderTargetId::ROOT.0);
 
         Rc::new(Self {
             sender,
             rendering: Cell::new(false),
+            update_priority: Cell::new(UpdatePriority::Default),
             scope_states: Default::default(),
             scope_stack: Default::default(),
             suspense_stack: Default::default(),
+            target_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
             dirty_tasks: Default::default(),
-            elements: RefCell::new(elements),
-            mounts: Default::default(),
+            render_targets: RefCell::new(render_targets),
+            fibers: Default::default(),
+            next_fiber_id: Cell::new(1),
         })
+    }
+
+    pub(crate) fn next_fiber_id(&self) -> FiberId {
+        let id = self.next_fiber_id.get();
+        self.next_fiber_id.set(id.wrapping_add(1).max(1));
+        FiberId(id)
     }
 
     /// Get the current runtime
@@ -166,6 +232,76 @@ fn MyComponent() -> Element {{
         result
     }
 
+    /// Run a closure with the given update priority as the ambient priority
+    /// for any scope invalidations created by that closure.
+    pub fn with_update_priority<T>(&self, priority: UpdatePriority, f: impl FnOnce() -> T) -> T {
+        let _priority = UpdatePriorityGuard::new(self, priority);
+        f()
+    }
+
+    /// Get the ambient priority for updates scheduled by the current runtime.
+    pub fn current_update_priority(&self) -> UpdatePriority {
+        self.update_priority.get()
+    }
+
+    pub(crate) fn current_render_target(&self) -> Option<RenderTargetId> {
+        self.target_stack.borrow().last().copied()
+    }
+
+    /// Get the render target currently receiving renderer mutations.
+    ///
+    /// This falls back to the active scope's target and then the root target
+    /// when rendering code is not inside an explicit target stack frame.
+    pub fn current_render_target_id(&self) -> RenderTargetId {
+        self.current_render_target()
+            .or_else(|| {
+                self.try_current_scope_id()
+                    .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
+            })
+            .unwrap_or(RenderTargetId::ROOT)
+    }
+
+    /// Create a new real renderer target with an isolated [`ElementId`](crate::ElementId) arena.
+    pub fn create_render_target(&self) -> RenderTargetId {
+        let mut targets = self.render_targets.borrow_mut();
+        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Real)))
+    }
+
+    /// Create a new no-op renderer target.
+    ///
+    /// Scopes rendered into this target can keep logical state alive, but they
+    /// will not materialize renderer nodes or run mount effects.
+    pub fn create_noop_render_target(&self) -> RenderTargetId {
+        let mut targets = self.render_targets.borrow_mut();
+        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Noop)))
+    }
+
+    /// Mark a real render target as dropped.
+    ///
+    /// The target arena is kept so existing mounted fibers can be cleaned up by
+    /// the normal diff path, but future renders into the target will not emit
+    /// mutations or mount effects.
+    pub fn drop_render_target(&self, target_id: RenderTargetId) {
+        if target_id == RenderTargetId::ROOT {
+            return;
+        }
+
+        if let Some(target) = self.render_targets.borrow_mut().get_mut(target_id.0) {
+            target.kind = RenderTargetKind::Noop;
+        }
+    }
+
+    /// Run a callback with a render target at the top of the stack.
+    pub(crate) fn with_render_target<T>(
+        &self,
+        target_id: RenderTargetId,
+        f: impl FnOnce() -> T,
+    ) -> T {
+        self.target_stack.borrow_mut().push(target_id);
+        let _guard = RenderTargetGuard { runtime: self };
+        f()
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
@@ -232,14 +368,7 @@ fn MyComponent() -> Element {{
     #[track_caller]
     pub fn in_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
         let _runtime_guard = RuntimeGuard::new(self.clone());
-        {
-            self.push_scope(id);
-        }
-        let o = f();
-        {
-            self.pop_scope();
-        }
-        o
+        self.with_scope_on_stack(id, f)
     }
 
     /// Get the current suspense location
@@ -254,17 +383,15 @@ fn MyComponent() -> Element {{
         f: impl FnOnce() -> O,
     ) -> O {
         self.suspense_stack.borrow_mut().push(suspense_location);
-        let o = f();
-        self.suspense_stack.borrow_mut().pop();
-        o
+        let _guard = SuspenseLocationGuard { runtime: self };
+        f()
     }
 
     /// Run a callback with the current scope at the top of the stack
     pub(crate) fn with_scope_on_stack<O>(&self, scope: ScopeId, f: impl FnOnce() -> O) -> O {
         self.push_scope(scope);
-        let o = f();
-        self.pop_scope();
-        o
+        let _guard = ScopeStackGuard { runtime: self };
+        f()
     }
 
     /// Push a scope onto the stack
@@ -345,15 +472,16 @@ fn MyComponent() -> Element {{
 
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
-        // If there are no suspended futures, we know the scope is not  and we can skip context checks
-        if self.suspended_tasks.get() == 0 {
-            return true;
-        }
-
-        // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+        let location = scope.suspense_location();
+        if self.suspended_tasks.get() == 0 {
+            return !matches!(
+                location,
+                SuspenseLocation::UnderSuspense { boundary, .. } if boundary.is_suspended()
+            );
+        }
+        location.should_write()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -367,10 +495,83 @@ fn MyComponent() -> Element {{
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
-        let _runtime = RuntimeGuard::new(self.clone());
-        let elements = self.elements.borrow();
+        self.handle_event_for_target(RenderTargetId::ROOT, name, event, element);
+    }
 
-        if let Some(Some(parent_path)) = elements.get(element.0).copied() {
+    /// Call a listener inside the root render target with a specific update
+    /// priority for invalidations caused by the listener.
+    #[instrument(
+        skip(self, event),
+        level = "trace",
+        name = "Runtime::handle_event_with_priority"
+    )]
+    pub fn handle_event_with_priority(
+        self: &Rc<Self>,
+        priority: UpdatePriority,
+        name: &str,
+        event: Event<dyn Any>,
+        element: ElementId,
+    ) {
+        self.handle_event_for_target_with_priority(
+            RenderTargetId::ROOT,
+            priority,
+            name,
+            event,
+            element,
+        );
+    }
+
+    /// Call a listener inside the VirtualDom with data from a specific render target.
+    ///
+    /// `ElementId`s are renderer-local, so multi-target renderers should use this
+    /// method instead of [`Self::handle_event`].
+    #[instrument(
+        skip(self, event),
+        level = "trace",
+        name = "Runtime::handle_event_for_target"
+    )]
+    pub fn handle_event_for_target(
+        self: &Rc<Self>,
+        target_id: RenderTargetId,
+        name: &str,
+        event: Event<dyn Any>,
+        element: ElementId,
+    ) {
+        self.handle_event_for_target_with_priority(
+            target_id,
+            UpdatePriority::from_event_name(name),
+            name,
+            event,
+            element,
+        );
+    }
+
+    /// Call a listener inside a specific render target with a specific update
+    /// priority for invalidations caused by the listener.
+    #[instrument(
+        skip(self, event),
+        level = "trace",
+        name = "Runtime::handle_event_for_target_with_priority"
+    )]
+    pub fn handle_event_for_target_with_priority(
+        self: &Rc<Self>,
+        target_id: RenderTargetId,
+        priority: UpdatePriority,
+        name: &str,
+        event: Event<dyn Any>,
+        element: ElementId,
+    ) {
+        let _runtime = RuntimeGuard::new(self.clone());
+        let targets = self.render_targets.borrow();
+        let Some(target) = targets.get(target_id.0) else {
+            return;
+        };
+
+        let parent_path = target.elements.get(element.0).copied().flatten();
+        drop(targets);
+
+        if let Some(parent_path) = parent_path {
+            let _priority = UpdatePriorityGuard::new(self, priority);
             if event.propagates() {
                 self.handle_bubbling_event(parent_path, name, event);
             } else {
@@ -413,9 +614,9 @@ fn MyComponent() -> Element {{
             let mut listeners = vec![];
             let mount_id;
 
-            // We do this in its own block to prevent mounts from staying open while we call user code
+            // We do this in its own block to prevent fiber borrows from staying open while we call user code
             {
-                let mounts = self.mounts.borrow();
+                let mounts = self.fibers.borrow();
                 let Some(mount) = mounts.get(path.mount.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
@@ -465,7 +666,12 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            parent = mount_id.and_then(|id| self.mounts.borrow().get(id).and_then(|el| el.parent));
+            parent = mount_id.and_then(|id| {
+                self.fibers
+                    .borrow()
+                    .get(id)
+                    .and_then(|el| el.logical_parent)
+            });
         }
     }
 
@@ -476,7 +682,7 @@ fn MyComponent() -> Element {{
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
+        let mounts = self.fibers.borrow();
         let Some(mount) = mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event
             return;
@@ -650,5 +856,46 @@ impl RuntimeGuard {
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
         Runtime::pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn runtime() -> Rc<Runtime> {
+        let (sender, _receiver) = futures_channel::mpsc::unbounded();
+        Runtime::new(sender)
+    }
+
+    fn catch_expected_panic(f: impl FnOnce()) {
+        let panic_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        std::panic::set_hook(panic_hook);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn with_scope_on_stack_restores_after_panic() {
+        let runtime = runtime();
+
+        catch_expected_panic(|| {
+            runtime.with_scope_on_stack(ScopeId(7), || panic!("forced panic"));
+        });
+
+        assert_eq!(runtime.try_current_scope_id(), None);
+        assert!(runtime.current_suspense_location().is_none());
+    }
+
+    #[test]
+    fn with_suspense_location_restores_after_panic() {
+        let runtime = runtime();
+
+        catch_expected_panic(|| {
+            runtime.with_suspense_location(SuspenseLocation::default(), || panic!("forced panic"));
+        });
+
+        assert!(runtime.current_suspense_location().is_none());
     }
 }

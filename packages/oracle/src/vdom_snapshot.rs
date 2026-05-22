@@ -128,7 +128,6 @@ fn dynamic_node_snapshot(vdom: &VirtualDom, owner: &VNode, id: usize) -> Vec<Sna
             });
             vnode_snapshot(vdom, scope.root_node())
         }
-        DynamicNode::Placeholder(_) => Vec::new(),
     }
 }
 

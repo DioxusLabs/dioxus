@@ -1,6 +1,6 @@
 use crate::{ipc::UserWindowEvent, window};
 use slab::Slab;
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 use tao::{event::Event, event_loop::EventLoopWindowTarget, window::WindowId};
 
 /// The unique identifier of a window event handler. This can be used to later remove the handler.
@@ -25,6 +25,51 @@ struct WryWindowEventHandlerInner {
     #[allow(clippy::type_complexity)]
     handler:
         Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>,
+}
+
+/// The unique identifier of a window close handler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct WindowCloseHandler(pub(crate) usize);
+
+#[derive(Default)]
+pub(crate) struct WindowCloseHandlers {
+    handlers: RefCell<Slab<WindowCloseHandlerInner>>,
+}
+
+struct WindowCloseHandlerInner {
+    window_id: WindowId,
+    handler: Rc<dyn Fn() + 'static>,
+}
+
+impl WindowCloseHandlers {
+    pub(crate) fn add(
+        &self,
+        window_id: WindowId,
+        handler: impl Fn() + 'static,
+    ) -> WindowCloseHandler {
+        WindowCloseHandler(self.handlers.borrow_mut().insert(WindowCloseHandlerInner {
+            window_id,
+            handler: Rc::new(handler),
+        }))
+    }
+
+    pub(crate) fn remove(&self, id: WindowCloseHandler) {
+        self.handlers.borrow_mut().try_remove(id.0);
+    }
+
+    pub(crate) fn notify(&self, window_id: WindowId) {
+        let handlers: Vec<_> = self
+            .handlers
+            .borrow()
+            .iter()
+            .filter(|(_, handler)| handler.window_id == window_id)
+            .map(|(_, handler)| handler.handler.clone())
+            .collect();
+
+        for handler in handlers {
+            handler();
+        }
+    }
 }
 
 impl WindowEventHandlers {

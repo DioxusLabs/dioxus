@@ -26,7 +26,7 @@
 //! </script>
 //! ```
 
-use dioxus_fullstack_core::SerializedHydrationData;
+use dioxus_fullstack_core::{HYDRATION_INJECT_MARKER, SerializedHydrationData};
 use futures_channel::mpsc::Sender;
 
 use std::{
@@ -128,7 +128,7 @@ impl<E> StreamingRenderer<E> {
         // 4. (in debug mode) The locations of the serialized data
         write!(
             into,
-            r#"</div><script>window.dx_hydrate([{id}], "{}""#,
+            r#"</div><script {HYDRATION_INJECT_MARKER}>window.dx_hydrate([{id}], "{}""#,
             resolved_data.data
         )?;
         #[cfg(debug_assertions)]

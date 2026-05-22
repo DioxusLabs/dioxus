@@ -1,4 +1,4 @@
-use crate::{Runtime, ScopeId, current_scope_id, scope_context::Scope, tasks::SchedulerMsg};
+use crate::{Runtime, ScopeId, current_scope_id, scheduler::SchedulerMsg, scope_context::Scope};
 use futures_channel::mpsc::UnboundedReceiver;
 use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
 use std::{
@@ -104,7 +104,10 @@ impl ReactiveContext {
         let id = scope.id;
         let sender = runtime.sender.clone();
         let update_scope = move || {
-            _ = sender.unbounded_send(SchedulerMsg::Immediate(id));
+            let priority = Runtime::try_current()
+                .map(|runtime| runtime.current_update_priority())
+                .unwrap_or_default();
+            _ = sender.unbounded_send(SchedulerMsg::Immediate(id, priority));
         };
 
         // Otherwise, create a new context at the current scope

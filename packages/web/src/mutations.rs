@@ -8,7 +8,13 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
 impl WebsysDom {
-    pub(crate) fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
+    /// Build the cloneable DOM tree for one root of a template, *omitting*
+    /// `TemplateNode::Dynamic` positions entirely. Returns `None` for a
+    /// Dynamic slot — the caller must NOT append it as a child; instead the
+    /// slot's position is recorded out-of-band in the slot-anchor table sent
+    /// to JS at `save_template` time, and the JS-side `loadChild` learns to
+    /// reinterpret byte paths that count the slot's logical position.
+    pub(crate) fn create_template_node(&self, v: &TemplateNode) -> Option<web_sys::Node> {
         use TemplateNode::*;
         match v {
             Element {
@@ -38,15 +44,14 @@ impl WebsysDom {
                     }
                 }
                 for child in *children {
-                    let _ = el.append_child(&self.create_template_node(child));
+                    if let Some(child_node) = self.create_template_node(child) {
+                        let _ = el.append_child(&child_node);
+                    }
                 }
-                el.dyn_into().unwrap()
+                Some(el.dyn_into().unwrap())
             }
-            Text { text } => self.document.create_text_node(text).dyn_into().unwrap(),
-            Dynamic { .. } => {
-                let placeholder = self.document.create_comment("placeholder");
-                placeholder.dyn_into().unwrap()
-            }
+            Text { text } => Some(self.document.create_text_node(text).dyn_into().unwrap()),
+            Dynamic { .. } => None,
         }
     }
 
@@ -109,13 +114,6 @@ impl WriteMutations for WebsysDom {
             .assign_id(path.as_ptr() as u32, path.len() as u8, id.0 as u32)
     }
 
-    fn create_placeholder(&mut self, id: ElementId) {
-        if self.skip_mutations() {
-            return;
-        }
-        self.interpreter.create_placeholder(id.0 as u32)
-    }
-
     fn create_text_node(&mut self, value: &str, id: ElementId) {
         if self.skip_mutations() {
             return;
@@ -128,13 +126,44 @@ impl WriteMutations for WebsysDom {
             return;
         }
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
-            let mut roots = vec![];
+            // Build one DOM root per `template.roots()` entry. A root that
+            // is itself a `Dynamic { .. }` has no DOM representation; we
+            // emit `JsValue::NULL` in its place so the JS `templates[id]`
+            // array stays aligned with the root index. The JS side never
+            // clones a null entry — root-level Dynamic slots are routed
+            // through `create_dynamic_node` directly by the core diff.
+            let roots = js_sys::Array::new();
             for root in template.roots() {
-                roots.push(self.create_template_node(root))
+                match self.create_template_node(root) {
+                    Some(node) => {
+                        roots.push(node.as_ref());
+                    }
+                    None => {
+                        // Root-level `TemplateNode::Dynamic`: never cloned;
+                        // `create_dynamic_node` runs directly from the core
+                        // diff. Send `null` so JS keeps root indices dense
+                        // without allocating a phantom DOM node.
+                        roots.push(&JsValue::NULL);
+                    }
+                }
             }
             let id = self.templates.len() as u16;
             self.templates.insert(template, id);
-            self.interpreter.base().save_template(roots, id);
+
+            // Build the slot-path table. The `node_paths` from the template
+            // describe every Dynamic slot as `[root_idx, child0, child1, ...]`.
+            // Group them by root index so JS can attach per-root slot maps to
+            // each `templates[id][root_idx]` entry.
+            let slot_paths = js_sys::Array::new();
+            for path in template.node_paths() {
+                // Each path becomes a Uint8Array. Include the root_idx prefix
+                // so JS can dispatch into the right root's slot map.
+                let arr = js_sys::Uint8Array::new_with_length(path.len() as u32);
+                arr.copy_from(path);
+                slot_paths.push(&arr);
+            }
+
+            self.interpreter.base().save_template(roots, id, slot_paths);
             id
         });
 
@@ -149,7 +178,7 @@ impl WriteMutations for WebsysDom {
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
         if self.skip_mutations() {
             return;
         }
@@ -258,5 +287,12 @@ impl WriteMutations for WebsysDom {
             return;
         }
         self.interpreter.push_root(id.0 as u32)
+    }
+
+    fn pop_root(&mut self) {
+        if self.skip_mutations() {
+            return;
+        }
+        self.interpreter.pop_root()
     }
 }

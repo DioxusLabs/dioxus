@@ -26,6 +26,7 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+mod window_component;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -58,4 +59,5 @@ pub use desktop_context::{
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};
+pub use window_component::{Window, WindowProps};
 pub use wry::RequestAsyncResponder;

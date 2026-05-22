@@ -28,6 +28,11 @@
 //!     }
 //! };
 //!```
+//!
+//! The output HTML carries no hydration markers — no `data-node-hydration` attributes,
+//! no placeholder comments, no text-boundary comments. The web hydrator instead walks
+//! the rebuilt VDOM in lockstep with the existing DOM, generating a byte-coded walk
+//! script that maps each `ElementId` to a DOM node by position.
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
 use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
@@ -41,29 +46,11 @@ pub(crate) struct StringCache {
 #[derive(Default)]
 pub struct StringChain {
     // If we should add new static text to the last segment
-    // This will be true if the last segment is a static text and the last text isn't part of a hydration only boundary
     add_text_to_last_segment: bool,
     segments: Vec<Segment>,
 }
 
 impl StringChain {
-    /// Add segments but only when hydration is enabled
-    fn if_hydration_enabled<O>(
-        &mut self,
-        during_prerender: impl FnOnce(&mut StringChain) -> O,
-    ) -> O {
-        // Insert a placeholder jump to the end of the hydration only segments
-        let jump_index = self.segments.len();
-        *self += Segment::HydrationOnlySection(0);
-        let out = during_prerender(self);
-        // Go back and fill in where the placeholder jump should skip to
-        let after_hydration_only_section = self.segments.len();
-        // Don't add any text to static text in the hydration only section. This would cause the text to be skipped during non-hydration renders
-        self.add_text_to_last_segment = false;
-        self.segments[jump_index] = Segment::HydrationOnlySection(after_hydration_only_section);
-        out
-    }
-
     /// Add a new segment
     pub fn push(&mut self, segment: Segment) {
         self.add_text_to_last_segment = matches!(segment, Segment::PreRendered(_));
@@ -123,8 +110,6 @@ pub(crate) enum Segment {
         /// Only render this text if the escaped value is this
         renderer_if_escaped: bool,
     },
-    /// Anything between this and the segments at the index is only required for hydration. If you don't need to hydrate, you can safely skip to the section at the given index
-    HydrationOnlySection(usize),
     /// A marker for where to insert a dynamic styles
     StyleMarker {
         // If the marker is inside a style tag or not
@@ -133,10 +118,6 @@ pub(crate) enum Segment {
     },
     /// A marker for where to insert a dynamic inner html
     InnerHtmlMarker,
-    /// A marker for where to insert a node id for an attribute
-    AttributeNodeMarker,
-    /// A marker for where to insert a node id for a root node
-    RootNodeMarker,
 }
 
 impl std::fmt::Write for StringChain {
@@ -157,21 +138,12 @@ impl std::fmt::Write for StringChain {
 }
 
 impl StringCache {
-    /// Create a new string cache from a template. This intentionally does not include any settings about the render mode (hydration or not) so that we can reuse the cache for both hydration and non-hydration renders.
+    /// Create a new string cache from a template.
     pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
-        let mut cur_path = vec![];
-
-        for (root_idx, root) in template.template.roots().iter().enumerate() {
-            from_template_recursive(
-                root,
-                &mut cur_path,
-                root_idx,
-                true,
-                EscapeText::ParentEscape,
-                &mut chain,
-            )?;
+        for root in template.template.roots().iter() {
+            from_template_recursive(root, EscapeText::ParentEscape, &mut chain)?;
         }
 
         Ok(Self {
@@ -182,9 +154,6 @@ impl StringCache {
 
 fn from_template_recursive(
     root: &TemplateNode,
-    cur_path: &mut Vec<usize>,
-    root_idx: usize,
-    is_root: bool,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
@@ -195,7 +164,6 @@ fn from_template_recursive(
             children,
             ..
         } => {
-            cur_path.push(root_idx);
             write!(chain, "<{tag}")?;
             // we need to collect the styles and write them at the end
             let mut styles = Vec::new();
@@ -258,20 +226,6 @@ fn from_template_recursive(
                 };
             }
 
-            // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
-            if has_dyn_attrs || is_root {
-                chain.if_hydration_enabled(|chain| {
-                    write!(chain, " data-node-hydration=\"")?;
-                    if has_dyn_attrs {
-                        *chain += Segment::AttributeNodeMarker;
-                    } else if is_root {
-                        *chain += Segment::RootNodeMarker;
-                    }
-                    write!(chain, "\"")?;
-                    std::fmt::Result::Ok(())
-                })?;
-            }
-
             if children.is_empty() && tag_is_self_closing(tag) {
                 write!(chain, "/>")?;
             } else {
@@ -291,55 +245,37 @@ fn from_template_recursive(
                 };
 
                 for child in *children {
-                    from_template_recursive(child, cur_path, root_idx, false, escape_text, chain)?;
+                    from_template_recursive(child, escape_text, chain)?;
                 }
                 write!(chain, "</{tag}>")?;
             }
-            cur_path.pop();
         }
-        TemplateNode::Text { text } => {
-            // write the id if we are prerendering and this is a root node that may need to be removed in the future
-            if is_root {
-                chain.if_hydration_enabled(|chain| {
-                    write!(chain, "<!--node-id")?;
-                    *chain += Segment::RootNodeMarker;
-                    write!(chain, "-->")?;
-                    std::fmt::Result::Ok(())
-                })?;
+        TemplateNode::Text { text } => match escape_text {
+            // If we know this is statically escaped we can just write it out
+            EscapeText::Escape => {
+                write!(
+                    chain,
+                    "{}",
+                    askama_escape::escape(text, askama_escape::Html)
+                )?;
             }
-            match escape_text {
-                // If we know this is statically escaped we can just write it out
-                // rsx! { div { "hello" } }
-                EscapeText::Escape => {
-                    write!(
-                        chain,
-                        "{}",
-                        askama_escape::escape(text, askama_escape::Html)
-                    )?;
-                }
-                // If we know this is statically not escaped we can just write it out
-                // rsx! { script { "console.log('hello')" } }
-                EscapeText::NoEscape => {
-                    write!(chain, "{}", text)?;
-                }
-                // Otherwise, write out both versions and let the renderer decide which one to use
-                // at runtime
-                // rsx! { "console.log('hello')" }
-                EscapeText::ParentEscape => {
-                    *chain += Segment::PreRenderedMaybeEscaped {
-                        value: text.to_string(),
-                        renderer_if_escaped: false,
-                    };
-                    *chain += Segment::PreRenderedMaybeEscaped {
-                        value: askama_escape::escape(text, askama_escape::Html).to_string(),
-                        renderer_if_escaped: true,
-                    };
-                }
+            // If we know this is statically not escaped we can just write it out
+            EscapeText::NoEscape => {
+                write!(chain, "{}", text)?;
             }
-            if is_root {
-                chain.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
+            // Otherwise, write out both versions and let the renderer decide which one to use
+            // at runtime
+            EscapeText::ParentEscape => {
+                *chain += Segment::PreRenderedMaybeEscaped {
+                    value: text.to_string(),
+                    renderer_if_escaped: false,
+                };
+                *chain += Segment::PreRenderedMaybeEscaped {
+                    value: askama_escape::escape(text, askama_escape::Html).to_string(),
+                    renderer_if_escaped: true,
+                };
             }
-        }
+        },
         TemplateNode::Dynamic { id: idx } => {
             *chain += Segment::Node {
                 index: *idx,

@@ -596,12 +596,6 @@ impl WriteMutations for RendererOracle {
         self.set_element_mapping(id, node);
     }
 
-    fn create_placeholder(&mut self, id: ElementId) {
-        let node = self.alloc(NodeKind::Placeholder);
-        self.set_element_mapping(id, node);
-        self.stack.push(node);
-    }
-
     fn create_text_node(&mut self, value: &str, id: ElementId) {
         let node = self.alloc(NodeKind::Text(value.to_string()));
         self.set_element_mapping(id, node);
@@ -629,15 +623,15 @@ impl WriteMutations for RendererOracle {
         self.insert_detached(parent, index, nodes);
     }
 
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
         // Order matters: pop the stack first, then walk_path reads from the top.
-        // Mirrors `native-dom`'s `replace_placeholder_with_nodes` (mutation_writer.rs).
+        // Mirrors `native-dom`'s `insert_children_at_path` (mutation_writer.rs).
         let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let top = *self
             .stack
             .last()
-            .expect("renderer stack unexpectedly empty during replace_placeholder_with_nodes");
+            .expect("renderer stack unexpectedly empty during insert_children_at_path");
         let anchor = self.walk_path(top, path);
         let (parent, index) = self.detach(anchor);
         self.drop_subtree(anchor);
@@ -721,6 +715,12 @@ impl WriteMutations for RendererOracle {
         }
         let node = self.lookup(id);
         self.stack.push(node);
+    }
+
+    fn pop_root(&mut self) {
+        self.stack
+            .pop()
+            .expect("renderer stack unexpectedly empty during pop_root");
     }
 }
 

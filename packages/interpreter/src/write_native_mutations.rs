@@ -86,10 +86,6 @@ impl WriteMutations for MutationState {
         self.channel.assign_id_ref(path, id.0 as u32);
     }
 
-    fn create_placeholder(&mut self, id: dioxus_core::ElementId) {
-        self.channel.create_placeholder(id.0 as u32);
-    }
-
     fn create_text_node(&mut self, value: &str, id: dioxus_core::ElementId) {
         self.channel.create_text_node(value, id.0 as u32);
     }
@@ -118,7 +114,7 @@ impl WriteMutations for MutationState {
         self.channel.replace_with(id.0 as u32, m as u16);
     }
 
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
         self.channel.replace_placeholder_ref(path, m as u16);
     }
 
@@ -190,5 +186,9 @@ impl WriteMutations for MutationState {
 
     fn push_root(&mut self, id: dioxus_core::ElementId) {
         self.channel.push_root(id.0 as _);
+    }
+
+    fn pop_root(&mut self) {
+        self.channel.pop_root();
     }
 }

@@ -396,7 +396,7 @@ fn build_dynamic(
     match spec {
         DynamicSpec::Empty => DynamicNode::Fragment(Vec::new()),
         DynamicSpec::Text(value) => DynamicNode::Text(VText::new(format!("text-{value}"))),
-        DynamicSpec::Placeholder => DynamicNode::Placeholder(Default::default()),
+        DynamicSpec::Placeholder => DynamicNode::Fragment(Vec::new()),
         DynamicSpec::Fragment(nodes) => DynamicNode::Fragment(
             nodes
                 .iter()

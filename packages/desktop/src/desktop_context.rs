@@ -8,7 +8,7 @@ use crate::{
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
 };
-use dioxus_core::{Callback, VirtualDom};
+use dioxus_core::{Callback, RenderTargetId, VirtualDom};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -144,6 +144,23 @@ impl DesktopService {
     // - https://github.com/DioxusLabs/dioxus/issues/3080
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
         let (window, context) = PendingWebview::new(dom, cfg);
+
+        self.shared
+            .proxy
+            .send_event(UserWindowEvent::NewWindow)
+            .unwrap();
+
+        self.shared.pending_webviews.borrow_mut().push(window);
+
+        context
+    }
+
+    pub(crate) fn new_window_for_target(
+        &self,
+        target_id: RenderTargetId,
+        cfg: Config,
+    ) -> PendingDesktopContext {
+        let (window, context) = PendingWebview::new_shared(target_id, cfg);
 
         self.shared
             .proxy

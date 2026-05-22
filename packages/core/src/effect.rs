@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 /// Effects will always run after all changes to the DOM have been applied.
 ///
 /// Effects are the lowest priority task in the scheduler.
-/// They are run after all other dirty scopes and futures have been resolved. Other dirty scopes and futures may cause the component this effect is attached to to rerun, which would update the DOM.
+/// They are run after all dirty fibers and futures have been resolved. Other dirty fibers and futures may cause the component this effect is attached to to rerun, which would update the DOM.
 pub(crate) struct Effect {
     // The scope that the effect is attached to
     pub(crate) order: ScopeOrder,
@@ -33,6 +33,14 @@ impl Effect {
         while let Some(f) = effect.pop_front() {
             f();
         }
+    }
+}
+
+impl std::fmt::Debug for Effect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Effect")
+            .field("order", &self.order)
+            .finish_non_exhaustive()
     }
 }
 

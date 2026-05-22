@@ -15,17 +15,11 @@ type ComponentRenderCallback = Arc<
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
 pub struct Renderer {
-    /// Choose to write ElementIDs into elements so the page can be re-hydrated later on
-    pub pre_render: bool,
-
     /// A callback used to render components. You can set this callback to control what components are rendered and add wrappers around components that are not present in CSR
     render_components: Option<ComponentRenderCallback>,
 
     /// A cache of templates that have been rendered
     template_cache: FxHashMap<Template, Arc<StringCache>>,
-
-    /// The current dynamic node id for hydration
-    dynamic_node_id: usize,
 }
 
 impl Renderer {
@@ -44,10 +38,9 @@ impl Renderer {
         self.render_components = Some(Arc::new(callback));
     }
 
-    /// Completely clear the renderer cache and reset the dynamic node id
+    /// Completely clear the renderer cache.
     pub fn clear(&mut self) {
         self.template_cache.clear();
-        self.dynamic_node_id = 0;
         self.render_components = None;
     }
 
@@ -67,7 +60,6 @@ impl Renderer {
         buf: &mut W,
         dom: &VirtualDom,
     ) -> std::fmt::Result {
-        self.reset_hydration();
         self.render_scope(buf, dom, ScopeId::ROOT)
     }
 
@@ -90,11 +82,6 @@ impl Renderer {
         let mut dom = VirtualDom::new_with_props(lazy_app, element);
         dom.rebuild_in_place();
         self.render_to(buf, &dom)
-    }
-
-    /// Reset the renderer hydration state
-    pub fn reset_hydration(&mut self) {
-        self.dynamic_node_id = 0;
     }
 
     pub fn render_scope<W: Write + ?Sized>(
@@ -127,22 +114,8 @@ impl Renderer {
         // We need to keep track of the dynamic styles so we can insert them into the right place
         let mut accumulated_dynamic_styles = Vec::new();
 
-        // We need to keep track of the listeners so we can insert them into the right place
-        let mut accumulated_listeners = Vec::new();
-
-        // We keep track of the index we are on manually so that we can jump forward to a new section quickly without iterating every item
-        let mut index = 0;
-
-        while let Some(segment) = entry.segments.get(index) {
+        for segment in entry.segments.iter() {
             match segment {
-                Segment::HydrationOnlySection(jump_to) => {
-                    // If we are not prerendering, we don't need to write the content of the hydration only section
-                    // Instead we can jump to the next section
-                    if !self.pre_render {
-                        index = *jump_to;
-                        continue;
-                    }
-                }
                 Segment::Attr(idx) => {
                     let attrs = &*template.dynamic_attrs[*idx];
                     for attr in attrs {
@@ -154,17 +127,10 @@ impl Renderer {
                             if truthy(&attr.value) {
                                 write_attribute(buf, attr)?;
                             }
-                        } else {
+                        } else if !matches!(attr.value, AttributeValue::Listener(_)) {
+                            // Listeners aren't rendered into HTML; with markerless hydration
+                            // they're attached client-side via the walk script.
                             write_attribute(buf, attr)?;
-                        }
-
-                        if self.pre_render
-                            && let AttributeValue::Listener(_) = &attr.value
-                        {
-                            // The onmounted event doesn't need a DOM listener
-                            if attr.name != "onmounted" {
-                                accumulated_listeners.push(attr.name);
-                            }
                         }
                     }
                 }
@@ -184,12 +150,6 @@ impl Renderer {
                             }
                         }
                         DynamicNode::Text(text) => {
-                            // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
-                            if self.pre_render {
-                                write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
-                                self.dynamic_node_id += 1;
-                            }
-
                             if escaped {
                                 write!(
                                     buf,
@@ -199,21 +159,12 @@ impl Renderer {
                             } else {
                                 write!(buf, "{}", text.value)?;
                             }
-
-                            if self.pre_render {
-                                write!(buf, "<!--#-->")?;
-                            }
                         }
                         DynamicNode::Fragment(nodes) => {
+                            // An empty fragment contributes no HTML — the web hydrator handles
+                            // the position via the markerless walk script.
                             for child in nodes {
                                 self.render_template(buf, dom, child, escaped)?;
-                            }
-                        }
-
-                        DynamicNode::Placeholder(_) => {
-                            if self.pre_render {
-                                write!(buf, "<!--placeholder{}-->", self.dynamic_node_id)?;
-                                self.dynamic_node_id += 1;
                             }
                         }
                     }
@@ -261,29 +212,7 @@ impl Renderer {
                         }
                     }
                 }
-
-                Segment::AttributeNodeMarker => {
-                    // first write the id
-                    write!(buf, "{}", self.dynamic_node_id)?;
-                    self.dynamic_node_id += 1;
-                    // then write any listeners
-                    for name in accumulated_listeners.drain(..) {
-                        write!(buf, ",{}:", &name[2..])?;
-                        write!(
-                            buf,
-                            "{}",
-                            dioxus_core_types::event_bubbles(&name[2..]) as u8
-                        )?;
-                    }
-                }
-
-                Segment::RootNodeMarker => {
-                    write!(buf, "{}", self.dynamic_node_id)?;
-                    self.dynamic_node_id += 1
-                }
             }
-
-            index += 1;
         }
 
         Ok(())
@@ -292,7 +221,6 @@ impl Renderer {
 
 #[test]
 fn to_string_works() {
-    use crate::cache::EscapeText;
     use dioxus::prelude::*;
 
     fn app() -> Element {
@@ -321,47 +249,6 @@ fn to_string_works() {
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
 
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 10 {
-            assert_eq!(
-                item.1.segments,
-                vec![
-                    PreRendered("<div class=\"asdasdasd asdasdasd\"".to_string()),
-                    Attr(0),
-                    StyleMarker {
-                        inside_style_tag: false
-                    },
-                    HydrationOnlySection(7), // jump to `>` if we don't need to hydrate
-                    PreRendered(" data-node-hydration=\"".to_string()),
-                    AttributeNodeMarker,
-                    PreRendered("\"".to_string()),
-                    PreRendered(">".to_string()),
-                    InnerHtmlMarker,
-                    PreRendered("Hello world 1 --&#62;".to_string()),
-                    Node {
-                        index: 0,
-                        escape_text: EscapeText::Escape
-                    },
-                    PreRendered(
-                        "&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>"
-                            .to_string()
-                    ),
-                    Node {
-                        index: 1,
-                        escape_text: EscapeText::Escape
-                    },
-                    Node {
-                        index: 2,
-                        escape_text: EscapeText::Escape
-                    },
-                    PreRendered("</div>".to_string())
-                ]
-            );
-        }
-    }
-
-    use Segment::*;
-
     assert_eq!(
         out,
         "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&#62;123&#60;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&#60;/diiiiiiiiv&#62;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>"
@@ -370,7 +257,6 @@ fn to_string_works() {
 
 #[test]
 fn empty_for_loop_works() {
-    use crate::cache::EscapeText;
     use dioxus::prelude::*;
 
     fn app() -> Element {
@@ -389,29 +275,6 @@ fn empty_for_loop_works() {
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
 
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 5 {
-            assert_eq!(
-                item.1.segments,
-                vec![
-                    PreRendered("<div class=\"asdasdasd\"".to_string()),
-                    HydrationOnlySection(5), // jump to `>` if we don't need to hydrate
-                    PreRendered(" data-node-hydration=\"".to_string()),
-                    RootNodeMarker,
-                    PreRendered("\"".to_string()),
-                    PreRendered(">".to_string()),
-                    Node {
-                        index: 0,
-                        escape_text: EscapeText::Escape
-                    },
-                    PreRendered("</div>".to_string())
-                ]
-            );
-        }
-    }
-
-    use Segment::*;
-
     assert_eq!(out, "<div class=\"asdasdasd\"></div>");
 }
 
@@ -428,12 +291,6 @@ fn empty_render_works() {
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
-
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 5 {
-            assert_eq!(item.1.segments, vec![]);
-        }
-    }
     assert_eq!(out, "");
 }
 

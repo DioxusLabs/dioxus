@@ -1,0 +1,18 @@
+[package]
+name = "concurrent-scheduler-legacy"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+async-std = "1.13.1"
+dioxus = { version = "0.6.3", default-features = false }
+wasm-bindgen = { version = "0.2.100", optional = true }
+web-time = "1.1.0"
+
+[features]
+default = ["web"]
+desktop = ["dioxus/desktop", "dioxus/minimal"]
+web = ["dioxus/web", "dioxus/minimal", "dep:wasm-bindgen"]

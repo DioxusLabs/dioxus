@@ -8,11 +8,11 @@ use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
     DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
-    consume_context, has_context, try_consume_context,
+    YieldPolicy, consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
+use dioxus_fullstack_core::{HYDRATION_INJECT_MARKER, HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
-use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
@@ -53,7 +53,7 @@ pub(crate) struct SsrRendererPool {
 
 impl SsrRendererPool {
     pub(crate) fn new(initial_size: usize, incremental: Option<IncrementalRendererConfig>) -> Self {
-        let renderers = RwLock::new((0..initial_size).map(|_| Self::pre_renderer()).collect());
+        let renderers = RwLock::new((0..initial_size).map(|_| Renderer::default()).collect());
         Self {
             renderers,
             incremental_cache: incremental.map(|cache| RwLock::new(cache.build())),
@@ -164,12 +164,7 @@ impl SsrRendererPool {
             ));
         }
 
-        let mut renderer = self
-            .renderers
-            .write()
-            .unwrap()
-            .pop()
-            .unwrap_or_else(Self::pre_renderer);
+        let mut renderer = self.renderers.write().unwrap().pop().unwrap_or_default();
 
         let myself = self.clone();
         let streaming_mode = cfg.streaming_mode;
@@ -232,7 +227,9 @@ impl SsrRendererPool {
                     virtual_dom.wait_for_suspense_work().await;
 
                     // Do that async work
-                    virtual_dom.render_suspense_immediate().await;
+                    virtual_dom
+                        .render_suspense_concurrent(YieldPolicy::default())
+                        .await;
                 }
             }
 
@@ -311,7 +308,6 @@ impl SsrRendererPool {
             let stream = Arc::new(StreamingRenderer::new(pre_body, into));
             let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
 
-            renderer.pre_render = true;
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
@@ -340,7 +336,10 @@ impl SsrRendererPool {
             // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
                 virtual_dom.wait_for_suspense_work().await;
-                let resolved_suspense_nodes = virtual_dom.render_suspense_immediate().await;
+                let resolved_suspense_nodes = virtual_dom
+                    .render_suspense_concurrent(YieldPolicy::default())
+                    .await
+                    .resolved_scopes;
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {
@@ -352,10 +351,8 @@ impl SsrRendererPool {
                     if let Some(pending_suspense_boundary) = pending_suspense_boundary {
                         let mut resolved_chunk = String::new();
                         // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-                        let render_suspense = |into: &mut String| {
-                            renderer.reset_hydration();
-                            renderer.render_scope(into, &virtual_dom, scope)
-                        };
+                        let render_suspense =
+                            |into: &mut String| renderer.render_scope(into, &virtual_dom, scope);
                         let resolved_data = Self::serialize_server_data(&virtual_dom, scope);
                         if let Err(err) = stream.replace_placeholder(
                             pending_suspense_boundary.mount,
@@ -400,7 +397,6 @@ impl SsrRendererPool {
                 if let Err(err) = Self::render_head(&cfg, &mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
-                renderer.reset_hydration();
                 if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
                     throw_error!(IncrementalRendererError::RenderError(err));
                 }
@@ -437,12 +433,6 @@ impl SsrRendererPool {
                 cancel_task: Some(join_handle),
             },
         ))
-    }
-
-    fn pre_renderer() -> Renderer {
-        let mut renderer = Renderer::default();
-        renderer.pre_render = true;
-        renderer
     }
 
     /// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
@@ -713,7 +703,13 @@ impl SsrRendererPool {
         // // #[cfg(feature = "document")]
         // {
         use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        // Marker lets the client's hydration walker skip this script (and any
+        // other dx-injected ones) without filtering user-authored `<script>`
+        // elements that happen to be top-level roots.
+        write!(
+            to,
+            "<script {HYDRATION_INJECT_MARKER}>{INITIALIZE_STREAMING_JS}</script>"
+        )?;
         // }
 
         Ok(())
@@ -732,7 +728,7 @@ impl SsrRendererPool {
         let raw_data = resolved_data.data;
         write!(
             to,
-            r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
+            r#"<script {HYDRATION_INJECT_MARKER}>window.initial_dioxus_hydration_data="{raw_data}";"#,
         )?;
         #[cfg(debug_assertions)]
         {

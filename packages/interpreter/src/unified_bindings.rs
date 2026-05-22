@@ -12,10 +12,24 @@ extern "C" {
     pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys::Function);
 
     #[wasm_bindgen(method, js_name = "saveTemplate")]
-    pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
-
-    #[wasm_bindgen(method)]
-    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>, under: Vec<Node>);
+    pub fn save_template(
+        this: &BaseInterpreter,
+        /// `js_sys::Array` of root entries. Each entry is either a DOM
+        /// `Node` (the cloneable root for non-Dynamic template roots) or
+        /// `null` for a root-level `TemplateNode::Dynamic` (those are
+        /// never cloned — `create_dynamic_node` is invoked directly by the
+        /// core diff). Sending `null` keeps the root-index dense without
+        /// allocating a never-used placeholder DOM node.
+        nodes: js_sys::Array,
+        tmpl_id: u16,
+        /// Per-template slot paths: a `js_sys::Array` of `Uint8Array`, one
+        /// entry per `Template::node_paths()` slot. Each path is
+        /// `[root_idx, child0, child1, ...]`. JS groups them per-root and
+        /// uses them in `loadChild` to reinterpret byte paths that target
+        /// (or pass through) a Dynamic slot. The real cloned DOM no longer
+        /// has empty-text markers at those positions.
+        slot_paths: js_sys::Array,
+    );
 
     #[wasm_bindgen(method, js_name = "getNode")]
     pub fn get_node(this: &BaseInterpreter, id: u32) -> Node;
@@ -24,8 +38,8 @@ extern "C" {
     pub fn push_root(this: &BaseInterpreter, node: Node);
 }
 
-// Note that this impl is for the sledgehammer interpreter to allow us dropping down to the base interpreter
-// During hydration and initialization we need to the base interpreter methods
+// Note that this impl is for the sledgehammer interpreter to allow us to
+// access base interpreter methods from web setup and external helper modules.
 #[cfg(feature = "webonly")]
 impl Interpreter {
     /// Convert the interpreter to its baseclass, giving
@@ -54,16 +68,16 @@ mod js {
         "{this.stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
-        "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...els);}"
+        "{this.replaceWithChunk($id$,$n$);}"
     }
     fn insert_after(id: u32, n: u16) {
-        "{let node = this.nodes[$id$];node.after(...this.stack.splice(this.stack.length-$n$));}"
+        "{this.insertChunkAfter($id$,$n$);}"
     }
     fn insert_before(id: u32, n: u16) {
-        "{let node = this.nodes[$id$];node.before(...this.stack.splice(this.stack.length-$n$));}"
+        "{this.insertChunkBefore($id$,$n$);}"
     }
     fn remove(id: u32) {
-        "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.removeAllNonBubblingListeners(node); } node.remove(); }}"
+        "{this.removeNode($id$);}"
     }
     fn create_raw_text(text: &str) {
         "{this.stack.push(document.createTextNode($text$));}"
@@ -71,10 +85,6 @@ mod js {
     fn create_text_node(text: &str, id: u32) {
         "{let node = document.createTextNode($text$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
-    fn create_placeholder(id: u32) {
-        "{let node = document.createComment('placeholder'); this.stack.push(node); this.nodes[$id$] = node;}"
-    }
-
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
         r#"
             const node = this.nodes[id];
@@ -87,7 +97,7 @@ mod js {
         "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.removeListener(node, $event_name$, $bubbles$);}"
     }
     fn set_text(id: u32, text: &str) {
-        "{this.nodes[$id$].textContent = $text$;}"
+        "{this.setNodeText($id$,$text$);}"
     }
     fn set_attribute(id: u32, field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
         "{let node = this.nodes[$id$]; this.setAttributeInner(node, $field$, $value$, $ns$);}"
@@ -122,24 +132,36 @@ mod js {
         }"#
     }
     fn assign_id(ptr: u32, len: u8, id: u32) {
+        // Map the byte path to its live DOM node (or virtual slot anchor) and
+        // record it in the node table. Attribute paths always terminate at a
+        // real element; node-slot paths terminate at a pre-built virtual
+        // sentinel from `prepareTemplateClone`. `loadChild` handles both.
         "{this.nodes[$id$] = this.loadChild($ptr$, $len$);}"
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
+        "{this.replacePlaceholderPath($ptr$,$len$,$n$);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
-        "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
+        // Clone the saved template root and prepare it for slot-aware path
+        // resolution. The template no longer carries empty-text baseline
+        // markers for `Dynamic { .. }` positions; instead the saved root
+        // carries a `__dxSlotMap` / `__dxSlotPaths` pair (see `saveTemplate`)
+        // that `prepareTemplateClone` translates into a per-clone
+        // `__dxSlotAnchors` map of pre-built virtual placeholder sentinels —
+        // one per slot, chained right-to-left within each parent so
+        // reverse-order `replace_placeholder` calls resolve to the correct
+        // live position even when adjacent slots share an end-of-parent
+        // anchor.
+        "{let node = this.prepareTemplateClone($tmpl_id$, $index$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
 
     #[cfg(feature = "binary-protocol")]
     fn append_children_to_top(many: u16) {
-        "{
-            let root = this.stack[this.stack.length-many-1];
-            let els = this.stack.splice(this.stack.length-many);
-            for (let k = 0; k < many; k++) {
-                root.appendChild(els[k]);
-            }
-        }"
+        // Slot sentinels pushed by `add_placeholder` are recorded as local
+        // template-slot positions on the parent (in template-tree order)
+        // instead of being inserted as real DOM children. `applyChunk` then
+        // skips them; only real nodes hit the DOM.
+        "{let top = this.stack[this.stack.length-$many$-1]; let els = this.stack.splice(this.stack.length-$many$); this.recordTemplateSlots(top, els); this.applyChunk(els, top, null);}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -149,7 +171,11 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn add_placeholder() {
-        "{let node = document.createComment('placeholder'); this.stack.push(node);}"
+        // Push a slot-anchor sentinel onto the build stack — NOT a real DOM
+        // node. `append_children_to_top` records its position relative to
+        // template-tree order on the parent element; `add_templates`
+        // finalizes per-root slot maps for `loadChild` consumption.
+        "{this.stack.push({__dxTemplateSlot: true});}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -164,7 +190,13 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn add_templates(tmpl_id: u16, len: u16) {
-        "{this.templates[$tmpl_id$] = this.stack.splice(this.stack.length-$len$);}"
+        // Save each root and compute per-root `__dxSlotMap` / `__dxSlotPaths`
+        // from the local `__dxLocalSlots` annotations attached during
+        // `recordTemplateSlots`. Roots that happen to be slot sentinels
+        // themselves are stored as `null` — they are never cloned (the core
+        // diff routes root-level Dynamic slots through `create_dynamic_node`
+        // directly).
+        "{this.templates[$tmpl_id$] = this.finalizeTemplateRoots(this.stack.splice(this.stack.length-$len$));}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -200,11 +232,11 @@ mod js {
     /// Assign the ID
     #[cfg(feature = "binary-protocol")]
     fn assign_id_ref(array: &[u8], id: u32) {
-        "{this.nodes[$id$] = this.loadChild($array$);}"
+        "{this.nodes[$id$] = this.loadChildBytes($array$);}"
     }
 
     #[cfg(feature = "binary-protocol")]
     fn replace_placeholder_ref(array: &[u8], n: u16) {
-        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); node.replaceWith(...els);}"
+        "{this.replacePlaceholderPathBytes($array$, $n$);}"
     }
 }

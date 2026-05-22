@@ -197,6 +197,11 @@ pub mod prelude {
         global_attributes, keyboard_types, svg_attributes, traits::*,
     };
 
+    #[cfg(feature = "desktop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
+    #[doc(inline)]
+    pub use dioxus_desktop::{Window, WindowProps};
+
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
@@ -241,9 +246,10 @@ pub mod prelude {
     #[doc(inline)]
     pub use dioxus_core::{
         AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
-        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, Result, ScopeId,
-        SuspenseBoundary, SuspenseContext, VNode, VirtualDom, consume_context, provide_context,
-        spawn, suspend, try_consume_context, use_drop, use_hook,
+        EventHandler, Fragment, HasAttributes, IntoDynNode, Portal, PortalProps, RenderError,
+        RenderTargetId, Result, ScopeId, SuspenseBoundary, SuspenseContext, TargetedMutations,
+        UpdatePriority, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
+        try_consume_context, use_drop, use_hook, with_update_priority,
     };
 
     #[cfg(feature = "logger")]

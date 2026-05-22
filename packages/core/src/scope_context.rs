@@ -1,5 +1,5 @@
 use crate::{
-    Runtime, ScopeId, Task,
+    RenderTargetId, Runtime, ScopeId, Task,
     innerlude::{SchedulerMsg, SuspenseContext},
 };
 use generational_box::{AnyStorage, Owner};
@@ -23,18 +23,54 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
-    SuspenseBoundary(SuspenseContext),
-    UnderSuspense(SuspenseContext),
-    InSuspensePlaceholder(SuspenseContext),
+    UnderSuspense {
+        boundary: SuspenseContext,
+        hidden_by: Vec<SuspenseContext>,
+    },
+    InSuspensePlaceholder {
+        boundary: SuspenseContext,
+        hidden_by: Vec<SuspenseContext>,
+    },
 }
 
 impl SuspenseLocation {
     pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
         match self {
-            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
-            SuspenseLocation::UnderSuspense(context) => Some(context),
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
+            SuspenseLocation::InSuspensePlaceholder { boundary, .. } => Some(boundary),
+            SuspenseLocation::UnderSuspense { boundary, .. } => Some(boundary),
             _ => None,
+        }
+    }
+
+    pub(crate) fn inherited_contexts(&self) -> Vec<SuspenseContext> {
+        match self {
+            SuspenseLocation::UnderSuspense {
+                boundary,
+                hidden_by,
+            }
+            | SuspenseLocation::InSuspensePlaceholder {
+                boundary,
+                hidden_by,
+            } => {
+                let mut contexts = Vec::with_capacity(hidden_by.len() + 1);
+                contexts.push(boundary.clone());
+                contexts.extend(hidden_by.iter().cloned());
+                contexts
+            }
+            SuspenseLocation::NotSuspended => Vec::new(),
+        }
+    }
+
+    pub(crate) fn should_write(&self) -> bool {
+        match self {
+            SuspenseLocation::NotSuspended => true,
+            SuspenseLocation::UnderSuspense {
+                boundary,
+                hidden_by,
+            } => !boundary.is_suspended() && !hidden_by.iter().any(SuspenseContext::is_suspended),
+            SuspenseLocation::InSuspensePlaceholder { hidden_by, .. } => {
+                !hidden_by.iter().any(SuspenseContext::is_suspended)
+            }
         }
     }
 }
@@ -46,6 +82,7 @@ pub(crate) struct Scope {
     pub(crate) name: &'static str,
     pub(crate) id: ScopeId,
     pub(crate) parent_id: Option<ScopeId>,
+    pub(crate) target_id: RenderTargetId,
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
 
@@ -57,8 +94,11 @@ pub(crate) struct Scope {
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
-    /// The suspense boundary that this scope is currently in (if any)
-    suspense_boundary: SuspenseLocation,
+    /// The suspense boundary location this scope is rendered under, if any.
+    suspense_location: SuspenseLocation,
+
+    /// The suspense context owned by this scope when this scope is a boundary.
+    suspense_boundary: RefCell<Option<SuspenseContext>>,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -68,13 +108,15 @@ impl Scope {
         name: &'static str,
         id: ScopeId,
         parent_id: Option<ScopeId>,
+        target_id: RenderTargetId,
         height: u32,
-        suspense_boundary: SuspenseLocation,
+        suspense_location: SuspenseLocation,
     ) -> Self {
         Self {
             name,
             id,
             parent_id,
+            target_id,
             height,
             render_count: Cell::new(0),
             shared_contexts: RefCell::new(vec![]),
@@ -86,12 +128,21 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_boundary,
+            suspense_location,
+            suspense_boundary: RefCell::new(None),
         }
     }
 
     pub fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
+    }
+
+    pub(crate) fn target_id(&self) -> RenderTargetId {
+        self.target_id
+    }
+
+    pub(crate) fn set_target_id(&mut self, target_id: RenderTargetId) {
+        self.target_id = target_id;
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
@@ -111,20 +162,21 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_boundary.clone()
+        self.suspense_location.clone()
+    }
+
+    pub(crate) fn set_suspense_boundary(&self, context: SuspenseContext) {
+        self.suspense_boundary.replace(Some(context));
     }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        match self.suspense_location() {
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
-            _ => None,
-        }
+        self.suspense_boundary.borrow().clone()
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_boundary.suspense_context() else {
+        let Some(context) = self.suspense_location.suspense_context() else {
             return false;
         };
 
@@ -139,7 +191,12 @@ impl Scope {
     /// Mark this scope as dirty, and schedule a render for it.
     pub(crate) fn needs_update_any(&self, id: ScopeId) {
         self.sender()
-            .unbounded_send(SchedulerMsg::Immediate(id))
+            .unbounded_send(SchedulerMsg::Immediate(
+                id,
+                Runtime::try_current()
+                    .map(|runtime| runtime.current_update_priority())
+                    .unwrap_or_default(),
+            ))
             .expect("Scheduler to exist if scope exists");
     }
 
@@ -152,7 +209,12 @@ impl Scope {
     /// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub(crate) fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.sender(), self.id);
-        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
+        Arc::new(move || {
+            let priority = Runtime::try_current()
+                .map(|runtime| runtime.current_update_priority())
+                .unwrap_or_default();
+            drop(chan.unbounded_send(SchedulerMsg::Immediate(id, priority)))
+        })
     }
 
     /// Schedule an update for any component given its [`ScopeId`].
@@ -166,7 +228,10 @@ impl Scope {
     pub(crate) fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
-            _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
+            let priority = Runtime::try_current()
+                .map(|runtime| runtime.current_update_priority())
+                .unwrap_or_default();
+            _ = chan.unbounded_send(SchedulerMsg::Immediate(id, priority));
         })
     }
 

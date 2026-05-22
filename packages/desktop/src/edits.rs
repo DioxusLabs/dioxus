@@ -18,12 +18,13 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
+use dioxus_core::{AttributeValue, ElementId, RenderTargetId, Runtime, Template, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
@@ -40,6 +41,105 @@ use tokio::sync::Notify;
 #[derive(Clone)]
 pub(crate) struct WryQueue {
     inner: Rc<RefCell<WryQueueInner>>,
+}
+
+/// A mutation writer that sends each edit to the webview queue for the current render target.
+pub(crate) struct DesktopTargetedMutations {
+    runtime: Rc<Runtime>,
+    queues: HashMap<RenderTargetId, WryQueue>,
+    touched: BTreeSet<RenderTargetId>,
+}
+
+impl DesktopTargetedMutations {
+    pub(crate) fn new(runtime: Rc<Runtime>, queues: HashMap<RenderTargetId, WryQueue>) -> Self {
+        Self {
+            runtime,
+            queues,
+            touched: BTreeSet::new(),
+        }
+    }
+
+    pub(crate) fn into_touched(self) -> BTreeSet<RenderTargetId> {
+        self.touched
+    }
+
+    fn with_current_queue(&mut self, f: impl FnOnce(&mut MutationState)) {
+        let target = self.runtime.current_render_target_id();
+        let Some(queue) = self.queues.get(&target).cloned() else {
+            return;
+        };
+
+        self.touched.insert(target);
+        queue.with_mutation_state_mut(f);
+    }
+}
+
+impl WriteMutations for DesktopTargetedMutations {
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        self.with_current_queue(|state| state.append_children(id, m));
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        self.with_current_queue(|state| state.assign_node_id(path, id));
+    }
+
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        self.with_current_queue(|state| state.create_text_node(value, id));
+    }
+
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.with_current_queue(|state| state.load_template(template, index, id));
+    }
+
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        self.with_current_queue(|state| state.replace_node_with(id, m));
+    }
+
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+        self.with_current_queue(|state| state.insert_children_at_path(path, m));
+    }
+
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        self.with_current_queue(|state| state.insert_nodes_after(id, m));
+    }
+
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        self.with_current_queue(|state| state.insert_nodes_before(id, m));
+    }
+
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        self.with_current_queue(|state| state.set_attribute(name, ns, value, id));
+    }
+
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        self.with_current_queue(|state| state.set_node_text(value, id));
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.with_current_queue(|state| state.create_event_listener(name, id));
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.with_current_queue(|state| state.remove_event_listener(name, id));
+    }
+
+    fn remove_node(&mut self, id: ElementId) {
+        self.with_current_queue(|state| state.remove_node(id));
+    }
+
+    fn push_root(&mut self, id: ElementId) {
+        self.with_current_queue(|state| state.push_root(id));
+    }
+
+    fn pop_root(&mut self) {
+        self.with_current_queue(|state| state.pop_root());
+    }
 }
 
 impl WryQueue {
@@ -67,7 +167,13 @@ impl WryQueue {
     ) -> std::task::Poll<()> {
         let mut self_mut = self.inner.borrow_mut();
         if let Some(receiver) = self_mut.edits_in_progress.as_mut() {
-            receiver.poll_unpin(cx).map(|_| ())
+            match receiver.poll_unpin(cx) {
+                std::task::Poll::Ready(_) => {
+                    self_mut.edits_in_progress = None;
+                    std::task::Poll::Ready(())
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            }
         } else {
             std::task::Poll::Ready(())
         }
@@ -332,9 +438,7 @@ impl EditWebsocket {
                 let msg = queued_message.take().expect("Message should be set here");
 
                 // Notify that the edits have been applied
-                if msg.response.send(()).is_err() {
-                    tracing::error!("Error sending edits applied notification");
-                }
+                _ = msg.response.send(());
             }
             tracing::trace!("Webview {} closed the connection", location.webview_id);
             let mut connection = WebviewConnectionState::default();

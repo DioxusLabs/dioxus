@@ -11,7 +11,6 @@ use dioxus::{
     desktop::{Config, tao::window::WindowBuilder, use_wry_event_handler, window},
 };
 use std::sync::Arc;
-use wgpu::CurrentSurfaceTexture;
 
 fn main() {
     let config = Config::new()
@@ -209,23 +208,12 @@ fn fs_main() -> @location(0) vec4<f32> {
             device,
             pipeline,
             queue,
-            config,
+            ..
         } = self;
 
-        let frame = match surface.get_current_texture() {
-            CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            CurrentSurfaceTexture::Lost
-            | CurrentSurfaceTexture::Outdated
-            | CurrentSurfaceTexture::Suboptimal(_) => {
-                surface.configure(device, config);
-                return;
-            }
-            CurrentSurfaceTexture::Occluded | CurrentSurfaceTexture::Timeout => {
-                return;
-            }
-            CurrentSurfaceTexture::Validation => panic!("Current surface texture is invalid"),
-        };
-
+        let frame = surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture");
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

@@ -4,7 +4,6 @@ use crate::{
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
-use dioxus_document::eval;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -60,32 +59,25 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            eval("window.interpreter.handleWindowsDragDrop();");
-                        });
+                        _ = webview
+                            .desktop_context
+                            .webview
+                            .evaluate_script("window.interpreter.handleWindowsDragDrop();");
                     }
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            eval("window.interpreter.handleWindowsDragLeave();");
-                        });
+                        _ = webview
+                            .desktop_context
+                            .webview
+                            .evaluate_script("window.interpreter.handleWindowsDragLeave();");
                     }
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            let e = eval(
-                                r#"
-                                    const xPos = await dioxus.recv();
-                                    const yPos = await dioxus.recv();
-                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
-                                    "#,
-                            );
-
-                            _ = e.send(x_pos);
-                            _ = e.send(y_pos);
-                        });
+                        _ = webview.desktop_context.webview.evaluate_script(&format!(
+                            "window.interpreter.handleWindowsDragOver({x_pos}, {y_pos});"
+                        ));
                     }
                 }
 

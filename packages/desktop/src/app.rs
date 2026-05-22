@@ -1,16 +1,17 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    edits::EditWebsocket,
-    event_handlers::WindowEventHandlers,
+    edits::{DesktopTargetedMutations, EditWebsocket},
+    event_handlers::{WindowCloseHandlers, WindowEventHandlers},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::VirtualDom;
+use dioxus_core::{RenderStats, RenderTargetId, VirtualDom, YieldPolicy};
+use futures_util::{FutureExt, pin_mut};
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     rc::Rc,
     time::Duration,
 };
@@ -23,10 +24,11 @@ use tao::{
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
-    // move the props into a cell so we can pop it out later to create the first window
+    // move the config into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
+    pub(crate) dom: VirtualDom,
+    pub(crate) dom_rebuilt: bool,
 
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
@@ -47,6 +49,7 @@ pub(crate) struct App {
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
+    pub(crate) window_close_handlers: WindowCloseHandlers,
     pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
@@ -69,13 +72,15 @@ impl App {
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            unmounted_dom: Cell::new(Some(virtual_dom)),
+            dom: virtual_dom,
+            dom_rebuilt: false,
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
+                window_close_handlers: Default::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
@@ -185,7 +190,7 @@ impl App {
 
     pub fn handle_new_window(&mut self) {
         for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let window = pending_webview.create_window(&self.shared);
+            let window = pending_webview.create_window(&mut self.dom, &self.shared);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -193,15 +198,25 @@ impl App {
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        let Some(window) = self.webviews.get(&id) else {
+        let Some((close_behaviour, is_shared_dom, target_id)) =
+            self.webviews.get(&id).map(|window| {
+                (
+                    window.desktop_context.close_behaviour.get(),
+                    window.dom.is_none(),
+                    window.target_id,
+                )
+            })
+        else {
             // If the window is not found, we can just return
             return;
         };
 
-        match window.desktop_context.close_behaviour.get() {
+        match close_behaviour {
             // If the window is just set to hide when closed, we can just hide it
             WindowCloseBehaviour::WindowHides => {
-                window.desktop_context.window.set_visible(false);
+                if let Some(window) = self.webviews.get(&id) {
+                    window.desktop_context.window.set_visible(false);
+                }
             }
 
             // If the window is set to close, we can remove it from the list of webviews
@@ -210,7 +225,21 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
+                if self.exit_on_last_window_close
+                    && is_shared_dom
+                    && target_id == RenderTargetId::ROOT
+                {
+                    self.control_flow = ControlFlow::Exit;
+                    return;
+                }
+
+                self.notify_close_handlers(id);
+
                 self.webviews.remove(&id);
+
+                if is_shared_dom {
+                    self.render_shared_dom_after_webview_removed();
+                }
 
                 if self.exit_on_last_window_close && self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
@@ -220,11 +249,34 @@ impl App {
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
+        let Some((is_shared_dom, target_id)) = self
+            .webviews
+            .get(&id)
+            .map(|window| (window.dom.is_none(), window.target_id))
+        else {
+            return;
+        };
+
+        if self.exit_on_last_window_close && is_shared_dom && target_id == RenderTargetId::ROOT {
+            self.control_flow = ControlFlow::Exit;
+            return;
+        }
+
+        self.notify_close_handlers(id);
+
         self.webviews.remove(&id);
+
+        if is_shared_dom {
+            self.render_shared_dom_after_webview_removed();
+        }
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
+    }
+
+    fn notify_close_handlers(&self, id: WindowId) {
+        self.shared.window_close_handlers.notify(id);
     }
 
     pub fn resize_window(&self, id: WindowId, size: PhysicalSize<u32>) {
@@ -245,10 +297,6 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let virtual_dom = self
-            .unmounted_dom
-            .take()
-            .expect("Virtualdom should be set before initialization");
         #[allow(unused_mut)]
         let mut cfg = self
             .cfg
@@ -263,7 +311,13 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
+        let webview = WebviewInstance::new_shared(
+            cfg,
+            RenderTargetId::ROOT,
+            &mut self.dom,
+            self.shared.clone(),
+            true,
+        );
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -288,19 +342,37 @@ impl App {
     ///
     /// Let's rebuild it and then start polling it
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let view = self.webviews.get_mut(&id).unwrap();
+        let Some(target_id) = self.webviews.get(&id).map(|view| view.target_id) else {
+            return;
+        };
 
-        view.edits
-            .wry_queue
-            .with_mutation_state_mut(|f| view.dom.rebuild(f));
+        let initialized_owned_dom = {
+            let view = self.webviews.get_mut(&id).unwrap();
+            if let Some(dom) = view.dom.as_mut() {
+                view.edits
+                    .wry_queue
+                    .with_mutation_state_mut(|f| dom.rebuild(f));
+                view.edits.wry_queue.send_edits();
+                true
+            } else {
+                false
+            }
+        };
 
-        view.edits.wry_queue.send_edits();
+        if !initialized_owned_dom && !self.dom_rebuilt {
+            let touched = self.rebuild_shared_dom();
+            self.send_edits_to_targets(&touched);
+        }
 
         #[cfg(not(target_os = "linux"))]
         {
-            view.desktop_context
-                .window
-                .set_visible(self.is_visible_before_start);
+            if target_id == RenderTargetId::ROOT {
+                if let Some(view) = self.webviews.get(&id) {
+                    view.desktop_context
+                        .window
+                        .set_visible(self.is_visible_before_start);
+                }
+            }
         }
 
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -331,15 +403,32 @@ impl App {
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
+                    if let Some(dom) = webview.dom.as_ref() {
+                        // This is a place where wry says it's threadsafe but it's actually not.
+                        // If we're patching the app, we want to make sure it's not going to progress in the interim.
+                        #[cfg(target_os = "android")]
+                        let _lock = crate::android_sync_lock::android_runtime_lock();
+
+                        dioxus_devtools::apply_changes(dom, &hr_msg);
+                        webview.poll_vdom();
+                    }
+                }
+
+                if let Some(id) = self
+                    .webviews
+                    .iter()
+                    .find_map(|(id, webview)| webview.dom.is_none().then_some(*id))
+                {
                     {
                         // This is a place where wry says it's threadsafe but it's actually not.
                         // If we're patching the app, we want to make sure it's not going to progress in the interim.
                         #[cfg(target_os = "android")]
                         let _lock = crate::android_sync_lock::android_runtime_lock();
-                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+
+                        dioxus_devtools::apply_changes(&self.dom, &hr_msg);
                     }
 
-                    webview.poll_vdom();
+                    self.poll_vdom(id);
                 }
 
                 if !hr_msg.assets.is_empty() {
@@ -417,11 +506,147 @@ impl App {
     ///
     /// All IO is done on the tokio runtime we started earlier
     pub fn poll_vdom(&mut self, id: WindowId) {
-        let Some(view) = self.webviews.get_mut(&id) else {
+        let Some(is_owned) = self.webviews.get(&id).map(|view| view.dom.is_some()) else {
             return;
         };
 
-        view.poll_vdom();
+        if is_owned {
+            if let Some(view) = self.webviews.get_mut(&id) {
+                view.poll_vdom();
+            }
+        } else {
+            self.poll_shared_vdom(id);
+        }
+    }
+
+    fn shared_queues(&self) -> HashMap<RenderTargetId, crate::edits::WryQueue> {
+        self.webviews
+            .values()
+            .filter(|webview| webview.dom.is_none())
+            .map(|webview| (webview.target_id, webview.edits.wry_queue.clone()))
+            .collect()
+    }
+
+    fn rebuild_shared_dom(&mut self) -> BTreeSet<RenderTargetId> {
+        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
+        self.dom.rebuild(&mut mutations);
+        self.dom_rebuilt = true;
+        mutations.into_touched()
+    }
+
+    fn render_shared_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
+        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
+        self.dom.render_immediate(&mut mutations);
+        mutations.into_touched()
+    }
+
+    fn render_shared_dom_concurrent(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> (BTreeSet<RenderTargetId>, std::task::Poll<RenderStats>) {
+        let mut mutations = DesktopTargetedMutations::new(self.dom.runtime(), self.shared_queues());
+        let poll = {
+            let fut = self.dom.render_concurrent_with_policy(
+                YieldPolicy {
+                    work_units_per_yield: 4,
+                },
+                &mut mutations,
+                |_, _| {},
+            );
+            pin_mut!(fut);
+            fut.poll_unpin(cx)
+        };
+        (mutations.into_touched(), poll)
+    }
+
+    fn render_shared_dom_after_webview_removed(&mut self) {
+        let touched = self.render_shared_dom_immediate();
+        self.send_edits_to_targets(&touched);
+        self.poll_next_shared_webview();
+    }
+
+    fn send_edits_to_targets(&self, targets: &BTreeSet<RenderTargetId>) {
+        for webview in self.webviews.values() {
+            if webview.dom.is_none() && targets.contains(&webview.target_id) {
+                webview.edits.wry_queue.send_edits();
+            }
+        }
+    }
+
+    fn poll_next_shared_webview(&mut self) {
+        let next_shared_webview = self
+            .webviews
+            .iter()
+            .find_map(|(id, webview)| webview.dom.is_none().then_some(*id));
+
+        if let Some(id) = next_shared_webview {
+            self.poll_shared_vdom(id);
+        }
+    }
+
+    fn poll_shared_vdom(&mut self, id: WindowId) {
+        let Some(waker) = self.webviews.get(&id).map(|webview| webview.waker.clone()) else {
+            return;
+        };
+        let mut cx = std::task::Context::from_waker(&waker);
+
+        loop {
+            if self.poll_shared_webview_queues(&mut cx) {
+                return;
+            }
+
+            if !self.dom.has_dirty_scopes() {
+                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
+                let _lock = crate::android_sync_lock::android_runtime_lock();
+                let fut = self.dom.wait_for_work();
+                pin_mut!(fut);
+
+                match fut.poll_unpin(&mut cx) {
+                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Pending => return,
+                }
+            }
+
+            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+
+            let (touched, poll) = self.render_shared_dom_concurrent(&mut cx);
+            self.send_edits_to_targets(&touched);
+            if poll.is_pending() {
+                return;
+            }
+        }
+    }
+
+    fn poll_shared_webview_queues(&self, cx: &mut std::task::Context<'_>) -> bool {
+        let mut has_pending_edits = false;
+
+        for webview in self
+            .webviews
+            .values()
+            .filter(|webview| webview.dom.is_none())
+        {
+            if webview
+                .edits
+                .wry_queue
+                .poll_new_edits_location(cx)
+                .is_ready()
+            {
+                _ = webview.desktop_context.webview.evaluate_script(&format!(
+                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+                    edits_path = webview.edits.wry_queue.edits_path(),
+                    expected_key = webview.edits.wry_queue.required_server_key()
+                ));
+            }
+
+            if webview.edits.wry_queue.poll_edits_flushed(cx).is_pending() {
+                has_pending_edits = true;
+            }
+        }
+
+        has_pending_edits
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

@@ -116,51 +116,46 @@ impl ToTokens for Element {
             ElementName::Custom(_) => quote! { None },
         };
 
-        let mut static_attrs = Vec::new();
-        let mut dynamic_attrs = Vec::new();
-        for attr in &el.merged_attributes {
-            // Rendering static attributes requires a bit more work than just a dynamic attrs
-            let Some((name, value)) = attr.as_static_str_literal() else {
-                let id = attr.dyn_idx.get();
-                dynamic_attrs.push(quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } });
-                continue;
-            };
+        let static_attrs = el
+            .merged_attributes
+            .iter()
+            .map(|attr| {
+                // Rendering static attributes requires a bit more work than just a dynamic attrs
+                // Early return for dynamic attributes
+                let Some((name, value)) = attr.as_static_str_literal() else {
+                    let id = attr.dyn_idx.get();
+                    return quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } };
+                };
 
-            let ns = match name {
-                AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
-                AttributeName::Custom(_) => quote!(None),
-                AttributeName::Spread(_) => {
-                    unreachable!("spread attributes should not be static")
-                }
-            };
+                let ns = match name {
+                    AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
+                    AttributeName::Custom(_) => quote!(None),
+                    AttributeName::Spread(_) => {
+                        unreachable!("spread attributes should not be static")
+                    }
+                };
 
-            let name = match (el_name, name) {
-                (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                    quote! { dioxus_elements::#el_name::#name.0 }
-                }
-                //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
-                _ => {
-                    let as_string = name.to_string();
-                    quote! { #as_string }
-                }
-            };
+                let name = match (el_name, name) {
+                    (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
+                        quote! { dioxus_elements::#el_name::#name.0 }
+                    }
+                    //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
+                    _ => {
+                        let as_string = name.to_string();
+                        quote! { #as_string }
+                    }
+                };
 
-            let value = value.to_static().unwrap();
+                let value = value.to_static().unwrap();
 
-            static_attrs.push(quote! {
+                quote! {
                     dioxus_core::TemplateAttribute::Static {
                         name: #name,
                         namespace: #ns,
                         value: #value,
                     }
-            });
-        }
-        // Dynamic attrs must stay ordered by their dynamic id, but static attrs need to be
-        // searchable by the emitted DOM name. Let core sort the fully expanded names so raw
-        // identifiers and RSX aliases do not use their Rust spelling as the sort key.
-        let template_attrs = static_attrs
-            .into_iter()
-            .chain(dynamic_attrs)
+                }
+            })
             .collect::<Vec<_>>();
 
         // Render either the child
@@ -207,7 +202,7 @@ impl ToTokens for Element {
                 dioxus_core::TemplateNode::Element {
                     tag: #el_name,
                     namespace: #ns,
-                    attrs: &dioxus_core::internal::sort_template_attributes([ #(#template_attrs),* ]),
+                    attrs: &[ #(#static_attrs),* ],
                     children: &[ #(#children),* ],
                 }
             }

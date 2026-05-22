@@ -1,0 +1,340 @@
+use crate::{
+    Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
+};
+use dioxus_core::{
+    DynamicNode, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime, SuperInto,
+    Template, TemplateNode, VComponent, VNode, fc_to_builder, provide_context, schedule_update,
+    spawn, use_hook, use_hook_with_cleanup,
+};
+use dioxus_document::Document;
+use dioxus_history::{History, MemoryHistory};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
+
+/// Properties for the [`Window()`] component.
+#[derive(Clone)]
+pub struct WindowProps {
+    config: Rc<RefCell<Option<Config>>>,
+    onclose: Option<EventHandler<()>>,
+    children: Element,
+}
+
+impl Properties for WindowProps {
+    type Builder = WindowPropsBuilder<()>;
+
+    fn builder() -> Self::Builder {
+        WindowPropsBuilder {
+            config: None,
+            onclose: None,
+            children: (),
+        }
+    }
+
+    fn memoize(&mut self, new: &Self) -> bool {
+        self.onclose = new.onclose;
+        self.children = new.children.clone();
+        false
+    }
+}
+
+#[doc(hidden)]
+#[allow(missing_docs)]
+pub struct WindowPropsBuilder<Children> {
+    config: Option<Config>,
+    onclose: Option<EventHandler<()>>,
+    children: Children,
+}
+
+#[allow(missing_docs)]
+impl<Children> WindowPropsBuilder<Children> {
+    pub fn config(mut self, config: Config) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn onclose<Marker>(
+        mut self,
+        onclose: impl SuperInto<Option<EventHandler<()>>, Marker>,
+    ) -> Self {
+        self.onclose = onclose.super_into();
+        self
+    }
+}
+
+#[allow(missing_docs)]
+impl WindowPropsBuilder<()> {
+    pub fn children(self, children: Element) -> WindowPropsBuilder<Element> {
+        WindowPropsBuilder {
+            config: self.config,
+            onclose: self.onclose,
+            children,
+        }
+    }
+
+    pub fn build(self) -> WindowProps {
+        WindowProps {
+            config: Rc::new(RefCell::new(self.config)),
+            onclose: self.onclose,
+            children: VNode::empty(),
+        }
+    }
+}
+
+#[allow(missing_docs)]
+impl WindowPropsBuilder<Element> {
+    pub fn children(mut self, children: Element) -> Self {
+        self.children = children;
+        self
+    }
+
+    pub fn build(self) -> WindowProps {
+        WindowProps {
+            config: Rc::new(RefCell::new(self.config)),
+            onclose: self.onclose,
+            children: self.children,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct WindowProviders {
+    context: DesktopContext,
+    document: Rc<dyn Document>,
+    history: Rc<dyn History>,
+}
+
+#[derive(Clone)]
+struct WindowState {
+    target_id: RenderTargetId,
+    runtime: Rc<Runtime>,
+    providers: Rc<RefCell<Option<WindowProviders>>>,
+    closed: Rc<Cell<bool>>,
+    onclose: Rc<RefCell<Option<EventHandler<()>>>>,
+    close_handler: Rc<RefCell<Option<WindowCloseHandler>>>,
+}
+
+impl WindowState {
+    fn drop_render_target(&self) {
+        self.runtime.drop_render_target(self.target_id);
+    }
+
+    fn remove_close_handler(&self) {
+        let Some(handler) = self.close_handler.borrow_mut().take() else {
+            return;
+        };
+        if let Some(providers) = self.providers.borrow().as_ref() {
+            providers
+                .context
+                .shared
+                .window_close_handlers
+                .remove(handler);
+        }
+    }
+
+    fn close_window(&self) {
+        self.remove_close_handler();
+        if let Some(providers) = self.providers.borrow_mut().take() {
+            if !self.closed.get() {
+                providers.context.close();
+            }
+        }
+        self.drop_render_target();
+    }
+
+    fn release_closed_window(&self) {
+        self.remove_close_handler();
+        self.providers.borrow_mut().take();
+        self.drop_render_target();
+    }
+}
+
+/// Render children into a separate desktop window while keeping them in the same logical Dioxus tree.
+#[allow(non_snake_case)]
+pub fn Window(props: WindowProps) -> Element {
+    let schedule_update = schedule_update();
+    let state = {
+        let config = props.config.clone();
+        use_hook(move || {
+            let runtime = Runtime::current();
+            let target_id = runtime.create_render_target();
+            let providers = Rc::new(RefCell::new(None));
+            let closed = Rc::new(Cell::new(false));
+            let onclose = Rc::new(RefCell::new(None::<EventHandler<()>>));
+            let close_handler = Rc::new(RefCell::new(None));
+            let pending = window()
+                .new_window_for_target(target_id, config.borrow_mut().take().unwrap_or_default());
+            let providers_for_task = providers.clone();
+            let closed_for_task = closed.clone();
+            let onclose_for_task = onclose.clone();
+            let close_handler_for_task = close_handler.clone();
+
+            spawn(async move {
+                let resolved_context = pending.await;
+                let window_id = resolved_context.window.id();
+                let closed_for_close_handler = closed_for_task.clone();
+                let schedule_update_for_close_handler = schedule_update.clone();
+                let close_handler =
+                    resolved_context
+                        .shared
+                        .window_close_handlers
+                        .add(window_id, move || {
+                            let was_closed = closed_for_close_handler.replace(true);
+                            if !was_closed {
+                                if let Some(onclose) = *onclose_for_task.borrow() {
+                                    onclose.call(());
+                                }
+                                schedule_update_for_close_handler();
+                            }
+                        });
+
+                close_handler_for_task.borrow_mut().replace(close_handler);
+                providers_for_task.borrow_mut().replace(WindowProviders {
+                    document: Rc::new(DesktopDocument::new(resolved_context.clone())),
+                    history: Rc::new(MemoryHistory::default()),
+                    context: resolved_context,
+                });
+                schedule_update();
+            });
+
+            WindowState {
+                target_id,
+                runtime,
+                providers,
+                closed,
+                onclose,
+                close_handler,
+            }
+        })
+    };
+    state.onclose.replace(props.onclose);
+
+    use_hook_with_cleanup(
+        {
+            let state = state.clone();
+            move || state
+        },
+        |state| {
+            state.close_window();
+        },
+    );
+
+    if state.closed.get() {
+        state.release_closed_window();
+        return VNode::empty();
+    }
+
+    let Some(providers) = state.providers.borrow().clone() else {
+        return VNode::empty();
+    };
+
+    portal_element(
+        state.target_id,
+        context_provider_element(providers, props.children.clone()),
+    )
+}
+
+#[derive(Clone)]
+struct WindowContextProviderProps {
+    providers: WindowProviders,
+    children: Element,
+}
+
+impl Properties for WindowContextProviderProps {
+    type Builder = WindowContextProviderPropsBuilder<((), ())>;
+
+    fn builder() -> Self::Builder {
+        WindowContextProviderPropsBuilder {
+            fields: ((), ()),
+            _phantom: (),
+        }
+    }
+
+    fn memoize(&mut self, new: &Self) -> bool {
+        self.providers = new.providers.clone();
+        self.children = new.children.clone();
+        false
+    }
+}
+
+#[doc(hidden)]
+struct WindowContextProviderPropsBuilder<TypedBuilderFields> {
+    fields: TypedBuilderFields,
+    _phantom: (),
+}
+
+impl<Children> WindowContextProviderPropsBuilder<((), Children)> {
+    fn providers(
+        self,
+        providers: WindowProviders,
+    ) -> WindowContextProviderPropsBuilder<((WindowProviders,), Children)> {
+        let (_, children) = self.fields;
+        WindowContextProviderPropsBuilder {
+            fields: ((providers,), children),
+            _phantom: self._phantom,
+        }
+    }
+}
+
+impl<Providers> WindowContextProviderPropsBuilder<(Providers, ())> {
+    fn children(
+        self,
+        children: Element,
+    ) -> WindowContextProviderPropsBuilder<(Providers, (Element,))> {
+        let (providers, _) = self.fields;
+        WindowContextProviderPropsBuilder {
+            fields: (providers, (children,)),
+            _phantom: self._phantom,
+        }
+    }
+}
+
+impl WindowContextProviderPropsBuilder<((WindowProviders,), (Element,))> {
+    fn build(self) -> WindowContextProviderProps {
+        let (providers, children) = self.fields;
+        WindowContextProviderProps {
+            providers: providers.0,
+            children: children.0,
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+fn WindowContextProvider(props: WindowContextProviderProps) -> Element {
+    provide_context(props.providers.context);
+    provide_context(props.providers.document);
+    provide_context(props.providers.history);
+    props.children
+}
+
+fn context_provider_element(providers: WindowProviders, children: Element) -> Element {
+    component_element(
+        fc_to_builder(WindowContextProvider)
+            .providers(providers)
+            .children(children)
+            .build()
+            .into_vcomponent(WindowContextProvider),
+    )
+}
+
+fn portal_element(target: RenderTargetId, children: Element) -> Element {
+    component_element(
+        fc_to_builder(Portal)
+            .target(target)
+            .children(children)
+            .build()
+            .into_vcomponent(Portal),
+    )
+}
+
+fn component_element(component: VComponent) -> Element {
+    static TEMPLATE: Template = Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]);
+
+    Ok(VNode::new(
+        None,
+        TEMPLATE,
+        Box::new([DynamicNode::Component(component)]),
+        Box::new([]),
+    ))
+}

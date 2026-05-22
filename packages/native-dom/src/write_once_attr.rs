@@ -1,22 +1,7 @@
 use std::{cell::RefCell, rc::Rc, sync::atomic::AtomicUsize};
 
-use blitz_dom::{BaseDocument, PlainDocument, Widget};
+use blitz_dom::Widget;
 use dioxus_core::{AttributeValue, IntoAttributeValue};
-
-#[derive(Clone, PartialEq)]
-pub struct SubDocumentAttr(WriteOnceAttr<Box<PlainDocument>>);
-
-impl SubDocumentAttr {
-    pub fn new(doc: BaseDocument) -> Self {
-        Self(WriteOnceAttr::new(doc.id(), Box::new(PlainDocument(doc))))
-    }
-}
-
-impl IntoAttributeValue for SubDocumentAttr {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Any(Rc::new(self.0))
-    }
-}
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 

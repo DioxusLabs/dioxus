@@ -6,9 +6,13 @@
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_core::{
+    RenderCheckpoint, RenderCommit, RenderSchedulerDecision, UpdatePriority, VirtualDom,
+};
 use dom::WebsysDom;
 use futures_util::{FutureExt, StreamExt, pin_mut, select};
+use std::{cell::Cell, cell::RefCell, rc::Rc};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 
 mod cfg;
 mod dom;
@@ -40,6 +44,160 @@ mod hydration;
 #[allow(unused)]
 pub use hydration::*;
 
+const HOST_YIELD_INTERVAL_MS: f64 = 5.0;
+
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+export function publishSchedulerStats(workCount, commitCount, yieldCount) {
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    const detail = {
+        workCount,
+        commitCount,
+        yieldCount,
+        timestamp: performance.now(),
+    };
+
+    window.__dioxusFiberStats = detail;
+    window.dispatchEvent(new CustomEvent("dioxus-fiber-stats", { detail }));
+}
+"#)]
+extern "C" {
+    #[wasm_bindgen(js_name = publishSchedulerStats)]
+    fn publish_scheduler_stats(work_count: u32, commit_count: u32, yield_count: u32);
+}
+
+fn publish_commit_stats(commit: RenderCommit) {
+    publish_scheduler_stats(commit.work_count as u32, 1, 0);
+}
+
+#[derive(Clone)]
+struct BrowserHostScheduler {
+    next_yield: Rc<Cell<f64>>,
+    pending_input: Rc<Cell<bool>>,
+}
+
+impl BrowserHostScheduler {
+    fn new() -> Self {
+        Self {
+            next_yield: Rc::new(Cell::new(performance_now() + HOST_YIELD_INTERVAL_MS)),
+            pending_input: Rc::new(Cell::new(false)),
+        }
+    }
+
+    fn checkpoint(&self, checkpoint: RenderCheckpoint) -> RenderSchedulerDecision {
+        let input_pending = is_input_pending();
+        self.pending_input.set(input_pending);
+
+        if input_pending {
+            return RenderSchedulerDecision::CommitAndYield;
+        }
+
+        if checkpoint.has_higher_priority_work {
+            return RenderSchedulerDecision::CommitAndYield;
+        }
+
+        if checkpoint.priority <= UpdatePriority::ContinuousInput
+            && checkpoint.pending_mutations > 0
+        {
+            return RenderSchedulerDecision::Commit;
+        }
+
+        if performance_now() >= self.next_yield.get() {
+            RenderSchedulerDecision::CommitAndYield
+        } else {
+            RenderSchedulerDecision::Continue
+        }
+    }
+
+    async fn yield_to_host(&self) {
+        self.yield_to_host_after_priority(UpdatePriority::Default)
+            .await;
+    }
+
+    async fn yield_to_host_after_priority(&self, priority: UpdatePriority) {
+        if self.pending_input.replace(false) || priority == UpdatePriority::SyncInput {
+            request_animation_frame().await;
+        }
+        gloo_timers::future::TimeoutFuture::new(0).await;
+        self.reset_yield_deadline();
+    }
+
+    fn reset_yield_deadline(&self) {
+        self.next_yield
+            .set(performance_now() + HOST_YIELD_INTERVAL_MS);
+    }
+}
+
+fn performance_now() -> f64 {
+    web_sys::window()
+        .and_then(|window| window.performance())
+        .map(|performance| performance.now())
+        .unwrap_or_default()
+}
+
+fn is_input_pending() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+
+    let navigator = window.navigator();
+    let Ok(scheduling) = js_sys::Reflect::get(navigator.as_ref(), &JsValue::from_str("scheduling"))
+    else {
+        return false;
+    };
+    if scheduling.is_null() || scheduling.is_undefined() {
+        return false;
+    }
+
+    let Ok(is_input_pending) =
+        js_sys::Reflect::get(&scheduling, &JsValue::from_str("isInputPending"))
+    else {
+        return false;
+    };
+    let Some(is_input_pending) = is_input_pending.dyn_ref::<js_sys::Function>() else {
+        return false;
+    };
+
+    is_input_pending
+        .call0(&scheduling)
+        .ok()
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+async fn request_animation_frame() {
+    let Some(window) = web_sys::window() else {
+        gloo_timers::future::TimeoutFuture::new(0).await;
+        return;
+    };
+
+    let (sender, receiver) = futures_channel::oneshot::channel();
+    let sender = Rc::new(RefCell::new(Some(sender)));
+    let callback_slot: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>> = Rc::new(RefCell::new(None));
+
+    let sender_for_callback = sender.clone();
+    let callback_slot_for_callback = callback_slot.clone();
+    let callback = Closure::wrap(Box::new(move |_| {
+        if let Some(sender) = sender_for_callback.borrow_mut().take() {
+            _ = sender.send(());
+        }
+        callback_slot_for_callback.borrow_mut().take();
+    }) as Box<dyn FnMut(f64)>);
+
+    if window
+        .request_animation_frame(callback.as_ref().unchecked_ref())
+        .is_err()
+    {
+        gloo_timers::future::TimeoutFuture::new(0).await;
+        return;
+    }
+
+    *callback_slot.borrow_mut() = Some(callback);
+    _ = receiver.await;
+}
+
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
 /// Polls futures internal to the VirtualDOM, hence the async nature of this function.
@@ -56,7 +214,9 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
-        virtual_dom.in_scope(ScopeId::ROOT, || dioxus_core::provide_context(history));
+        virtual_dom.in_scope(dioxus_core::ScopeId::ROOT, || {
+            dioxus_core::provide_context(history)
+        });
     }
 
     #[cfg(feature = "document")]
@@ -131,10 +291,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error_entry().get().ok().flatten() {
-                virtual_dom.in_runtime(|| virtual_dom.runtime().throw_error(ScopeId::APP, error));
+                virtual_dom.in_runtime(|| virtual_dom.runtime().throw_error(dioxus_core::ScopeId::APP, error));
             }
             server_data.in_context(|| {
-                virtual_dom.in_scope(ScopeId::ROOT, || {
+                virtual_dom.in_scope(dioxus_core::ScopeId::ROOT, || {
                     // Provide a hydration compatible create error boundary method
                     dioxus_core::provide_create_error_boundary(
                         dioxus_fullstack_core::init_error_boundary,
@@ -161,7 +321,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
     } else {
         virtual_dom.rebuild(&mut websys_dom);
-
         websys_dom.flush_edits();
     }
 
@@ -243,23 +402,29 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
-        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
-        // Jank free rendering
-        //
-        // 1. wait for the browser to give us "idle" time
-        // 2. During idle time, diff the dom
-        // 3. Stop diffing if the deadline is exceeded
-        // 4. Wait for the animation frame to patch the dom
-
-        // wait for the mainthread to schedule us in
-        // let deadline = work_loop.wait_for_idle_time().await;
-
-        // run the virtualdom work phase until the frame deadline is reached
-        virtual_dom.render_immediate(&mut websys_dom);
-
-        // wait for the animation frame to fire so we can apply our changes
-        // work_loop.wait_for_raf().await;
-
-        websys_dom.flush_edits();
+        let scheduler = BrowserHostScheduler::new();
+        virtual_dom
+            .render_concurrent_with_scheduler(
+                &mut websys_dom,
+                |checkpoint, _| scheduler.checkpoint(checkpoint),
+                |websys_dom, commit| {
+                    publish_commit_stats(commit);
+                    websys_dom.flush_edits();
+                    scheduler.reset_yield_deadline();
+                },
+                |priority| {
+                    let scheduler = scheduler.clone();
+                    async move {
+                        publish_scheduler_stats(0, 0, 1);
+                        match priority {
+                            Some(priority) => {
+                                scheduler.yield_to_host_after_priority(priority).await
+                            }
+                            None => scheduler.yield_to_host().await,
+                        }
+                    }
+                },
+            )
+            .await;
     }
 }

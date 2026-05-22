@@ -7,7 +7,9 @@
 use dioxus_core::{VirtualDom, Event, Element, Mutations, VNode, ElementId};
 
 let mut vdom = VirtualDom::new(app);
-let real_dom = SomeRenderer::new();
+let mut real_dom = SomeRenderer::new();
+vdom.rebuild(real_dom.apply());
+real_dom.commit();
 
 loop {
     tokio::select! {
@@ -17,11 +19,12 @@ loop {
         },
         _ = vdom.wait_for_work() => {}
     }
-    vdom.render_immediate(&mut real_dom.apply())
+    vdom.render_concurrent(real_dom.apply()).await;
+    real_dom.commit();
 }
 
 # fn app() -> Element { VNode::empty() }
-# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&self) -> Mutations { Mutations::default() } }
+# struct SomeRenderer { mutations: Mutations } impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer { mutations: Mutations::default() } } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&mut self) -> &mut Mutations { &mut self.mutations } fn commit(&mut self) {} }
 # });
 ```
 
@@ -59,7 +62,7 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 First, start with your app:
 
 ```rust
-# use dioxus::dioxus_core::{Mutations, VirtualDom};
+# use dioxus::dioxus_core::VirtualDom;
 use dioxus::prelude::*;
 
 // First, declare a root component
@@ -73,8 +76,9 @@ fn main() {
     // Next, create a new VirtualDom using this app as the root component.
     let mut dom = VirtualDom::new(app);
 
-    // The initial render of the dom will generate a stream of edits for the real dom to apply
-    let mutations = dom.rebuild_to_vec();
+    // The initial render of the dom will generate mutations for the real dom to apply.
+    let mut mutations = dioxus_core::Mutations::default();
+    dom.rebuild(&mut mutations);
 }
 ```
 

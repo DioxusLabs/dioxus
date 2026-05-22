@@ -14,10 +14,10 @@ impl VirtualDom {
         name: &'static str,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.try_current_scope_id();
-        let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
-            Some(parent) => parent.height() + 1,
-            None => 0,
-        };
+        let height = parent_id
+            .and_then(|id| self.runtime.try_get_state(id))
+            .map_or(0, |parent| parent.height() + 1);
+        let target_id = self.runtime.current_render_target_id();
         let suspense_boundary = self
             .runtime
             .current_suspense_location()
@@ -25,7 +25,7 @@ impl VirtualDom {
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
-        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let scope_runtime = Scope::new(name, id, parent_id, target_id, height, suspense_boundary);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {
@@ -97,9 +97,10 @@ impl VirtualDom {
                 post_run();
             }
 
-            // remove this scope from dirty scopes
-            self.dirty_scopes
-                .remove(&ScopeOrder::new(scope_state.height, scope_id));
+            // remove this scope from dirty fibers
+            let order =
+                ScopeOrder::with_priority(scope_state.height, scope_id, self.render_priority);
+            self.dirty_fibers.remove_exact(&order);
             output
         })
     }
@@ -125,7 +126,7 @@ impl VirtualDom {
                 if !already_suspended {
                     tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
                     // Add this task to the suspended tasks list of the boundary
-                    if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
+                    if let SuspenseLocation::UnderSuspense { boundary, .. } = &boundary {
                         boundary.add_suspended_task(e.clone());
                     }
                     self.runtime

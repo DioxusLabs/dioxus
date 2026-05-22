@@ -63,6 +63,7 @@ impl ServeConfig {
                 IndexHtml::new(&index_html, "main")
                     .expect("Failed to parse index.html from public directory")
             } else {
+                tracing::warn!("No index.html found in public directory, using default index.html");
                 IndexHtml::ssr_only()
             }
         } else {
