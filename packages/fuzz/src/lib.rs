@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::{cell::Cell, fmt};
 
 pub const MAX_STEPS: usize = 512;
-const OPTIMIZED_MUTATION_COUNT: u32 = 19;
+const PRIMITIVE_MUTATION_COUNT: u32 = 19;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
@@ -95,7 +95,7 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
             return shrink_case(candidates, case);
         }
 
-        if !candidates.shrink() && case.ops.len() < MAX_STEPS {
+        if case.ops.len() < MAX_STEPS {
             candidates.mutation(|context| {
                 let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
                 let mut op_mutator = mutatis::mutators::default::<Op>();
@@ -105,12 +105,10 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
             })?;
         }
 
-        if !candidates.shrink() {
-            candidates.mutation_group(OPTIMIZED_MUTATION_COUNT, |context, which| {
-                splice_optimized_ops(context, case, which);
-                Ok(())
-            })?;
-        }
+        candidates.mutation_group(PRIMITIVE_MUTATION_COUNT, |context, which| {
+            splice_primitive_op(context, case, which);
+            Ok(())
+        })?;
 
         if !case.ops.is_empty() {
             candidates.mutation(|context| {
@@ -148,31 +146,17 @@ fn replay_model_prefix(ops: &[Op], len: usize) -> Model {
     model
 }
 
-fn splice_optimized_ops(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
+fn splice_primitive_op(context: &mut mutatis::Context, case: &mut FuzzCase, which: u32) {
     let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
     let model = replay_model_prefix(&case.ops, index);
     let selector = context.rng().gen_u8();
     let value = context.rng().gen_u8();
-    insert_ops_at(case, index, optimized_ops(&model, which, selector, value));
-}
-
-fn optimized_ops(model: &Model, which: u32, selector: u8, value: u8) -> Vec<Op> {
-    let op = optimized_model_aware_op(model, which, selector, value);
-    if matches!(op, Op::Mutate(_)) {
-        vec![op, Op::Rerender, Op::Rerender]
+    let op = biased_primitive_op(&model, which, selector, value);
+    if case.ops.len() < MAX_STEPS {
+        case.ops.insert(index, op);
     } else {
-        vec![op]
-    }
-}
-
-fn insert_ops_at(case: &mut FuzzCase, index: usize, ops: impl IntoIterator<Item = Op>) {
-    for (offset, op) in ops.into_iter().enumerate() {
-        if case.ops.len() < MAX_STEPS {
-            case.ops.insert((index + offset).min(case.ops.len()), op);
-        } else if !case.ops.is_empty() {
-            let replace = (index + offset).min(case.ops.len() - 1);
-            case.ops[replace] = op;
-        }
+        let replace = index.min(case.ops.len() - 1);
+        case.ops[replace] = op;
     }
 }
 
@@ -273,7 +257,7 @@ fn dynamic_attribute_static_fallback_recipe() -> Vec<Op> {
     ]
 }
 
-fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) -> Op {
+fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op {
     let facts = ModelFacts::new(model);
     let vnode = facts.select_focus_vnode(selector, value);
     let node = facts.select_node(vnode, value);
@@ -465,7 +449,7 @@ fn edit_dynamic_attrs_op(
     let edit = match value % 3 {
         0 => ListEdit::Insert {
             index: biased_index(value, attr.len),
-            item: optimized_attr(value),
+            item: biased_attr(value),
         },
         1 if attr.len > 0 => ListEdit::Remove {
             index: biased_existing_index(value, attr.len),
@@ -476,7 +460,7 @@ fn edit_dynamic_attrs_op(
         },
         _ if can_grow => ListEdit::Insert {
             index: biased_index(value, attr.len),
-            item: optimized_attr(value),
+            item: biased_attr(value),
         },
         _ => ListEdit::Remove { index: 0 },
     };
@@ -491,7 +475,7 @@ fn prerequisite_dynamic_attr_op(facts: &ModelFacts, vnode: u8, element: u8, valu
             element,
             edit: ListEdit::Insert {
                 index: biased_index(value, facts.template_attr_count(vnode, element)),
-                item: TemplateAttrSpec::Dynamic(vec![optimized_attr(value)]),
+                item: TemplateAttrSpec::Dynamic(vec![biased_attr(value)]),
             },
         },
     )
@@ -817,7 +801,7 @@ fn biased_template_node_kind(value: u8) -> TemplateNodeKind {
 
 fn biased_template_attr(value: u8) -> TemplateAttrSpec {
     if value & 1 == 0 {
-        TemplateAttrSpec::Dynamic(vec![optimized_attr(value)])
+        TemplateAttrSpec::Dynamic(vec![biased_attr(value)])
     } else {
         TemplateAttrSpec::Static {
             name: value,
@@ -883,7 +867,7 @@ fn biased_fragment_key_mode(value: u8) -> FragmentKeyMode {
     }
 }
 
-fn optimized_attr(value: u8) -> AttrSpec {
+fn biased_attr(value: u8) -> AttrSpec {
     let attr_value = match value % 7 {
         0 => AttrValueSpec::Text(value),
         1 => AttrValueSpec::Float(value),
@@ -894,26 +878,23 @@ fn optimized_attr(value: u8) -> AttrSpec {
         _ => AttrValueSpec::Listener,
     };
     AttrSpec {
-        name: if matches!(attr_value, AttrValueSpec::Listener) {
-            value & 0x7f
-        } else {
-            optimized_attr_name(&attr_value)
-        },
+        name: biased_dynamic_attr_name(&attr_value, value),
         namespace: None,
         value: attr_value,
         volatile: false,
     }
 }
 
-fn optimized_attr_name(value: &AttrValueSpec) -> u8 {
+fn biased_dynamic_attr_name(value: &AttrValueSpec, seed: u8) -> u8 {
     match value {
+        AttrValueSpec::Listener => seed & 0x7f,
+        _ if seed & 0x80 != 0 => seed,
         AttrValueSpec::Text(value)
         | AttrValueSpec::Float(value)
         | AttrValueSpec::Int(value)
         | AttrValueSpec::Any(value) => *value,
         AttrValueSpec::Bool(value) => u8::from(*value),
         AttrValueSpec::None => 0,
-        AttrValueSpec::Listener => 1,
     }
 }
 
@@ -1110,16 +1091,16 @@ mod tests {
     }
 
     #[test]
-    fn optimized_model_aware_op_replays() {
-        for which in 0..OPTIMIZED_MUTATION_COUNT {
+    fn biased_primitive_op_replays() {
+        for which in 0..PRIMITIVE_MUTATION_COUNT {
             let model = Model::initial();
-            let ops = optimized_ops(&model, which, which as u8, 128 + which as u8);
-            run_case(&FuzzCase::new(ops)).unwrap();
+            let op = biased_primitive_op(&model, which, which as u8, 128 + which as u8);
+            run_case(&FuzzCase::new(vec![op])).unwrap();
         }
     }
 
     #[test]
-    fn optimized_dynamic_ops_from_initial_model_are_meaningful() {
+    fn primitive_dynamic_ops_from_initial_model_are_meaningful() {
         let dynamic_cases = [
             (7, "fragment", 1),
             (8, "leaf", 3),
@@ -1131,7 +1112,7 @@ mod tests {
 
         for (which, name, value) in dynamic_cases {
             let mut model = Model::initial();
-            let op = optimized_model_aware_op(&model, which, 0, value);
+            let op = biased_primitive_op(&model, which, 0, value);
             ops::apply_strategy_op_to_model(&mut model, &op);
             let dynamic = first_dynamic(&model.root.template.roots)
                 .unwrap_or_else(|| panic!("expected dynamic for {name}: {op:?}"));
@@ -1142,7 +1123,7 @@ mod tests {
         }
 
         let mut model = Model::initial();
-        let op = optimized_model_aware_op(&model, 12, 0, 9);
+        let op = biased_primitive_op(&model, 12, 0, 9);
         ops::apply_strategy_op_to_model(&mut model, &op);
         let attrs = first_dynamic_attrs(&model.root.template.roots)
             .unwrap_or_else(|| panic!("expected dynamic attrs: {op:?}"));
@@ -1190,7 +1171,7 @@ mod tests {
     }
 
     #[test]
-    fn optimized_model_aware_op_replays_after_prefix() {
+    fn biased_primitive_op_replays_after_prefix() {
         let prefix = vec![
             Op::template(
                 0,
@@ -1223,9 +1204,9 @@ mod tests {
             Op::dynamic(1, 0, suspense_kind(SuspenseMode::Ready { wake_after: 0 })),
         ];
         let model = replay_model_prefix(&prefix, prefix.len());
-        for which in 0..OPTIMIZED_MUTATION_COUNT {
+        for which in 0..PRIMITIVE_MUTATION_COUNT {
             let mut ops = prefix.clone();
-            ops.extend(optimized_ops(
+            ops.push(biased_primitive_op(
                 &model,
                 which,
                 64 + which as u8,
@@ -1241,21 +1222,6 @@ mod tests {
             run_case(&case).unwrap_or_else(|failure| {
                 panic!("targeted diff coverage case {name:?} failed: {failure}")
             });
-        }
-    }
-
-    #[test]
-    #[ignore = "writes targeted fuzz corpus inputs; set DIFF_COVERAGE_CORPUS_DIR"]
-    fn write_targeted_diff_coverage_corpus() {
-        let dir = std::env::var_os("DIFF_COVERAGE_CORPUS_DIR")
-            .expect("DIFF_COVERAGE_CORPUS_DIR must point at the vdom_ops corpus directory");
-        let dir = std::path::PathBuf::from(dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        for (index, (name, case)) in targeted_diff_coverage_cases().into_iter().enumerate() {
-            let encoded = encode_case_vec(&case).expect("targeted coverage case should encode");
-            let path = dir.join(format!("{index:03}-diff-{name}"));
-            std::fs::write(path, encoded).unwrap();
         }
     }
 

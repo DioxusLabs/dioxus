@@ -1122,6 +1122,7 @@ pub(crate) fn sort_attrs(slot: usize, attrs: &mut Vec<AttrSpec>) {
 fn attr_sort_key(slot: usize, attr: &AttrSpec) -> String {
     match attr.value {
         AttrValueSpec::Listener => format!("onevent{slot}_{}", attr.name),
+        _ if attr.name & 0x80 != 0 => format!("onevent{slot}_{}", attr.name & 0x7f),
         _ => format!("attr{}", attr.name),
     }
 }

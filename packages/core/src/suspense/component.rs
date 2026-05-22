@@ -633,19 +633,15 @@ fn remove_stale_background_nodes<M: WriteMutations>(
     }
 }
 
-fn store_suspense_children(scope_id: ScopeId, dom: &mut VirtualDom, children: LastRenderedNode) {
-    let scope = &mut dom.scopes[scope_id.0];
-    let props = SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).unwrap();
-    props.children = children;
-}
-
 fn store_rendered_suspense_children(
     scope_id: ScopeId,
     dom: &mut VirtualDom,
     children: LastRenderedNode,
 ) {
-    store_suspense_children(scope_id, dom, children.clone());
-    dom.scopes[scope_id.0].last_rendered_node = Some(children);
+    let scope = &mut dom.scopes[scope_id.0];
+    let props = SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).unwrap();
+    props.children = children.clone();
+    scope.last_rendered_node = Some(children);
 }
 
 fn store_suspense_children_from_background(
@@ -656,11 +652,9 @@ fn store_suspense_children_from_background(
     suspended_nodes: VNode,
 ) {
     suspense_context.set_suspended_nodes(suspended_nodes.clone());
-    store_suspense_children(
-        scope_id,
-        dom,
-        children_with_background_nodes(children, suspended_nodes),
-    );
+    let scope = &mut dom.scopes[scope_id.0];
+    let props = SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).unwrap();
+    props.children = children_with_background_nodes(children, suspended_nodes);
 }
 
 fn children_with_background_nodes(children: &LastRenderedNode, nodes: VNode) -> LastRenderedNode {

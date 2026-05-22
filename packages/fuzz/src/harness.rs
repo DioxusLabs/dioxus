@@ -61,7 +61,8 @@ impl Harness {
             strict_lifecycle_errors,
         };
         if strict_lifecycle_errors {
-            check_lifecycle_matches_fresh().unwrap();
+            let (_, fresh_lifecycle) = build_fresh_check().unwrap();
+            check_lifecycle_matches_fresh_snapshot(&fresh_lifecycle).unwrap();
         }
         state
     }
@@ -194,12 +195,8 @@ impl TargetedRendererOracle {
         self.renderer.check_stack_clean()
     }
 
-    fn check_matches_vdom(&self, _vdom: &VirtualDom) -> Result<(), String> {
-        let mut fresh_vdom = VirtualDom::new(App);
-        let mut fresh = RendererOracle::new();
-        without_suspense_ready_registration(|| fresh_vdom.rebuild(&mut fresh));
-        fresh.check_stack_clean()?;
-        if self.renderer.snapshot_eq(&fresh) {
+    fn check_matches_fresh(&self, fresh: &RendererOracle) -> Result<(), String> {
+        if self.renderer.snapshot_eq(fresh) {
             return Ok(());
         }
 
@@ -564,10 +561,10 @@ fn check_incremental_state(
         let recent_mutations = incremental.recent_mutations_text();
         format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
     })?;
-    let vdom = state.vdom.borrow();
-    incremental.check_matches_vdom(&vdom)?;
+    let (fresh_renderer, fresh_lifecycle) = build_fresh_check()?;
+    incremental.check_matches_fresh(&fresh_renderer)?;
     if assert_lifecycle_matches_fresh {
-        check_lifecycle_matches_fresh().map_err(|err| {
+        check_lifecycle_matches_fresh_snapshot(&fresh_lifecycle).map_err(|err| {
             let last_mutation = incremental
                 .last_mutation
                 .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
@@ -591,25 +588,26 @@ fn render_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
     render_result_to_fuzz_failure(state, result)
 }
 
-fn check_lifecycle_matches_fresh() -> Result<(), String> {
+fn build_fresh_check() -> Result<(RendererOracle, LifecycleSnapshot), String> {
     lifecycle::reset_run(LifecycleRun::Fresh);
     let mut fresh_vdom = VirtualDom::new(App);
-    let mut fresh_renderer = RendererOracle::new();
+    let mut renderer = RendererOracle::new();
     without_suspense_ready_registration(|| {
-        lifecycle::with_run(LifecycleRun::Fresh, || {
-            fresh_vdom.rebuild(&mut fresh_renderer)
-        });
+        lifecycle::with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild(&mut renderer));
     });
-    fresh_renderer.check_stack_clean()?;
+    renderer.check_stack_clean()?;
 
+    Ok((renderer, lifecycle::snapshot(LifecycleRun::Fresh)))
+}
+
+fn check_lifecycle_matches_fresh_snapshot(fresh: &LifecycleSnapshot) -> Result<(), String> {
     let incremental = lifecycle::snapshot(LifecycleRun::Incremental);
-    let fresh = lifecycle::snapshot(LifecycleRun::Fresh);
     let model = expected_model_lifecycle_snapshot();
-    if lifecycle_is_within_expected_bounds(&incremental, &fresh, &model) {
+    if lifecycle_is_within_expected_bounds(&incremental, fresh, &model) {
         return Ok(());
     }
 
-    let retaining_suspense_ids = retaining_suspense_ids(&incremental, &fresh, &model);
+    let retaining_suspense_ids = retaining_suspense_ids(&incremental, fresh, &model);
     let retained_suspended = lifecycle::snapshot_with_suspense_ancestor(
         LifecycleRun::Incremental,
         &retaining_suspense_ids,
@@ -617,7 +615,7 @@ fn check_lifecycle_matches_fresh() -> Result<(), String> {
     let model_suspended = model_lifecycle_with_suspense_ancestor_snapshot(&retaining_suspense_ids);
     Err(lifecycle_mismatch_error(
         &incremental,
-        &fresh,
+        fresh,
         &model,
         &retained_suspended,
         &model_suspended,
