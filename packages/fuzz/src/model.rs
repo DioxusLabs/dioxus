@@ -1,8 +1,10 @@
 // See note in `ops.rs`: `Mutate` derive emits a wide `new` ctor.
 #![allow(clippy::too_many_arguments)]
 
-use mutatis::Mutate;
+use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
 use serde::{Deserialize, Serialize};
+
+use crate::ATTR_NAME_POOL_MASK;
 
 pub(crate) const MAX_ROOTS: usize = 8;
 pub(crate) const MAX_CHILDREN: usize = 8;
@@ -629,7 +631,10 @@ pub(crate) enum TemplateNodeKind {
     Dynamic(DynamicKind),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
+// `Mutate` is hand-written below (see `BiasedTemplateAttrSpecMutator`) so the
+// `name` byte gets folded into the shared name pool every time it's mutated,
+// not just when a new attribute is first generated.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) enum TemplateAttrSpec {
     Static {
         name: u8,
@@ -1087,7 +1092,9 @@ pub(crate) enum FragmentKeyMode {
     Keyed { base: u8 },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
+// `Mutate` is hand-written below (see `BiasedAttrSpecMutator`) so the `name`
+// byte gets folded into the shared name pool on every in-place mutation.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct AttrSpec {
     pub(crate) name: u8,
     pub(crate) namespace: Option<u8>,
@@ -1125,4 +1132,142 @@ fn attr_sort_key(slot: usize, attr: &AttrSpec) -> String {
         _ if attr.name & 0x80 != 0 => format!("onevent{slot}_{}", attr.name & 0x7f),
         _ => format!("attr{}", attr.name),
     }
+}
+
+// --- Pool-biased mutators for attribute names -------------------------------
+//
+// The derived `Mutate` impl mutates `u8` fields uniformly across 0..=255,
+// which makes static/dynamic name collisions on the same element vanishingly
+// rare. These hand-written mutators fold the `name` byte into the shared
+// `ATTR_NAME_POOL_MASK` pool on every in-place mutation, while keeping the
+// other fields' mutations identical to the derive's behaviour. A rare
+// out-of-pool escape preserves coverage of the "no static collides" path.
+
+/// Mutate a `u8` name field. Half the time we fold the byte into the shared
+/// pool so static/dynamic collisions on the same element become probable;
+/// the other half we keep a uniform byte so the diff merge's "extra on one
+/// side" arms (and other diversity-sensitive paths) keep getting exercised.
+fn pool_mutate_name(ctx: &mut mutatis::Context, name: &mut u8) {
+    let r = ctx.rng().gen_u8();
+    *name = if r & 0x80 == 0 {
+        r & ATTR_NAME_POOL_MASK
+    } else {
+        r
+    };
+}
+
+fn pool_generate_name(ctx: &mut mutatis::Context) -> u8 {
+    let r = ctx.rng().gen_u8();
+    if r & 0x80 == 0 {
+        r & ATTR_NAME_POOL_MASK
+    } else {
+        r
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct BiasedAttrSpecMutator {
+    namespace: <Option<u8> as DefaultMutate>::DefaultMutate,
+    value: <AttrValueSpec as DefaultMutate>::DefaultMutate,
+    volatile: <bool as DefaultMutate>::DefaultMutate,
+}
+
+impl Mutate<AttrSpec> for BiasedAttrSpecMutator {
+    fn mutate(
+        &mut self,
+        candidates: &mut Candidates<'_>,
+        value: &mut AttrSpec,
+    ) -> MutatisResult<()> {
+        candidates.mutation(|ctx| {
+            pool_mutate_name(ctx, &mut value.name);
+            Ok(())
+        })?;
+        self.namespace.mutate(candidates, &mut value.namespace)?;
+        self.value.mutate(candidates, &mut value.value)?;
+        self.volatile.mutate(candidates, &mut value.volatile)?;
+        Ok(())
+    }
+}
+
+impl Generate<AttrSpec> for BiasedAttrSpecMutator {
+    fn generate(&mut self, ctx: &mut mutatis::Context) -> MutatisResult<AttrSpec> {
+        Ok(AttrSpec {
+            name: pool_generate_name(ctx),
+            namespace: self.namespace.generate(ctx)?,
+            value: self.value.generate(ctx)?,
+            volatile: self.volatile.generate(ctx)?,
+        })
+    }
+}
+
+impl DefaultMutate for AttrSpec {
+    type DefaultMutate = BiasedAttrSpecMutator;
+}
+
+#[derive(Default)]
+pub(crate) struct BiasedTemplateAttrSpecMutator {
+    static_value: <u8 as DefaultMutate>::DefaultMutate,
+    static_namespace: <Option<u8> as DefaultMutate>::DefaultMutate,
+    dynamic_attrs: <Vec<AttrSpec> as DefaultMutate>::DefaultMutate,
+}
+
+impl Mutate<TemplateAttrSpec> for BiasedTemplateAttrSpecMutator {
+    fn mutate(
+        &mut self,
+        candidates: &mut Candidates<'_>,
+        value: &mut TemplateAttrSpec,
+    ) -> MutatisResult<()> {
+        // Variant-switching candidate: flip between the two variants.
+        let current_is_static = matches!(value, TemplateAttrSpec::Static { .. });
+        candidates.mutation_group(1, |ctx, _which| {
+            *value = if current_is_static {
+                TemplateAttrSpec::Dynamic(self.dynamic_attrs.generate(ctx)?)
+            } else {
+                TemplateAttrSpec::Static {
+                    name: pool_generate_name(ctx),
+                    value: self.static_value.generate(ctx)?,
+                    namespace: self.static_namespace.generate(ctx)?,
+                }
+            };
+            Ok(())
+        })?;
+
+        match value {
+            TemplateAttrSpec::Static {
+                name,
+                value,
+                namespace,
+            } => {
+                candidates.mutation(|ctx| {
+                    pool_mutate_name(ctx, name);
+                    Ok(())
+                })?;
+                self.static_value.mutate(candidates, value)?;
+                self.static_namespace.mutate(candidates, namespace)?;
+            }
+            TemplateAttrSpec::Dynamic(attrs) => {
+                self.dynamic_attrs.mutate(candidates, attrs)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Generate<TemplateAttrSpec> for BiasedTemplateAttrSpecMutator {
+    fn generate(&mut self, ctx: &mut mutatis::Context) -> MutatisResult<TemplateAttrSpec> {
+        Ok(if ctx.rng().gen_index(2).unwrap_or(0) == 0 {
+            TemplateAttrSpec::Static {
+                name: pool_generate_name(ctx),
+                value: self.static_value.generate(ctx)?,
+                namespace: self.static_namespace.generate(ctx)?,
+            }
+        } else {
+            TemplateAttrSpec::Dynamic(self.dynamic_attrs.generate(ctx)?)
+        })
+    }
+}
+
+impl DefaultMutate for TemplateAttrSpec {
+    type DefaultMutate = BiasedTemplateAttrSpecMutator;
 }
