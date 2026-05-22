@@ -40,12 +40,24 @@ pub(crate) fn resolve_native_asset_path(path: &str) -> Result<PathBuf, AssetPath
 fn resolve_asset_path_from_filesystem(path: &str) -> Option<PathBuf> {
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
     // The path is the first part of the URI, so we need to trim the leading slash.
-    let mut uri_path = PathBuf::from(
-        percent_encoding::percent_decode_str(path)
-            .decode_utf8()
-            .expect("expected URL to be UTF-8 encoded")
-            .as_ref(),
-    );
+    let decoded = percent_encoding::percent_decode_str(path)
+        .decode_utf8()
+        .expect("expected URL to be UTF-8 encoded");
+    let decoded = decoded.as_ref();
+
+    let mut uri_path = PathBuf::from(decoded);
+
+    // On Windows, non-bundled asset paths arrive as URL paths like `/C:/Users/.../file.css`.
+    // Strip the leading `/` before the drive letter so it resolves as a valid Windows path.
+    #[cfg(windows)]
+    if !uri_path.exists() {
+        if let Some(stripped) = decoded.strip_prefix('/') {
+            let candidate = PathBuf::from(stripped);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
 
     // If the asset doesn't exist, or starts with `/assets/`, then we'll try to serve out of the bundle
     // This lets us handle both absolute and relative paths without being too "special"
