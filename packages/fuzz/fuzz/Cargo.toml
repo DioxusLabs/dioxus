@@ -4,8 +4,15 @@ version = "0.0.0"
 publish = false
 edition = "2024"
 
+# Standalone workspace so `cargo test --workspace` in the parent doesn't pick
+# up this libFuzzer binary as a unit test (which would loop until OOM).
+[workspace]
+
 [package.metadata]
 cargo-fuzz = true
+
+[profile.dev]
+opt-level = 3
 
 [dependencies]
 dioxus-vdom-fuzz = { path = ".." }
