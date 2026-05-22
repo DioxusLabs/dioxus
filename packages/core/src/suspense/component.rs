@@ -296,7 +296,6 @@ impl SuspenseBoundaryProps {
             // Store the scope id for the next render
             dom.set_mounted_dyn_node(mount, idx, scope_id.0);
         }
-        let mut to = dom.scope_render_target(scope_id, to);
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope_state = &mut dom.scopes[scope_id.0];
             let suspense_context = scope_state.state().suspense_boundary().unwrap();
@@ -323,8 +322,7 @@ impl SuspenseBoundaryProps {
                         suspense_context.set_suspended_nodes(children.as_vnode().clone());
                         let suspense_placeholder =
                             LastRenderedNode::new(fallback.call(suspense_context.clone()));
-                        let nodes_created =
-                            suspense_placeholder.create(dom, parent, to.as_deref_mut());
+                        let nodes_created = suspense_placeholder.create(dom, parent, to);
                         (suspense_placeholder, nodes_created)
                     });
 
@@ -342,9 +340,7 @@ impl SuspenseBoundaryProps {
                 // mutations, leaving the caller's stack accounting off by that count.
                 remove_stale_background_nodes::<M>(&suspense_context, dom, &children);
                 let nodes_created = suspense_context
-                    .under_suspense_boundary(&dom.runtime(), || {
-                        children.create(dom, parent, to.as_deref_mut())
-                    });
+                    .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
                 let scope_state = &mut dom.scopes[scope_id.0];
                 scope_state.last_rendered_node = children.into();
                 mark_suspense_resolved(&suspense_context, dom, scope_id);

@@ -166,6 +166,26 @@ impl VNode {
                 *node = DynamicNode::Placeholder(Default::default());
             }
         }
+        // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
+        // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
+        // and the only realistic source of violations.
+        #[cfg(debug_assertions)]
+        for slot in &dynamic_attrs {
+            for pair in slot.windows(2) {
+                let left = (pair[0].name, pair[0].namespace);
+                let right = (pair[1].name, pair[1].namespace);
+                if left > right {
+                    tracing::warn!(
+                        "spread attributes in `rsx!` must be sorted by (name, namespace); \
+                         found {:?} before {:?}. The diff assumes sorted input and may produce \
+                         incorrect updates otherwise.",
+                        left,
+                        right,
+                    );
+                    break;
+                }
+            }
+        }
         Self {
             vnode: Rc::new(VNodeInner {
                 key,

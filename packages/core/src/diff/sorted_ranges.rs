@@ -1,32 +1,13 @@
 use core::cmp::Ordering;
 
-/// Consume one non-decreasing run from a peekable iterator.
+/// A k-way merge view over a set of attribute slots that are each individually sorted by key.
 ///
-/// The first item that would make the run decrease starts the next range.
-fn non_decreasing_run<T, F>(items: &[T], mut predicate: F) -> usize
-where
-    F: FnMut(&T, &T) -> Ordering,
-{
-    if items.is_empty() {
-        return 0;
-    }
-
-    let mut len = 1;
-    while let Some(next) = items.get(len) {
-        if matches!(predicate(&items[len - 1], next), Ordering::Greater) {
-            break;
-        }
-        len += 1;
-    }
-    len
-}
-
-/// A flattened attribute list split into locally sorted ranges.
+/// Every dynamic attribute slot is required to be sorted by `(name, namespace)`:
+/// - named attributes occupy a slot of length 1 (trivially sorted), and
+/// - spread attributes are user-provided lists that the rsx macro routes through
+///   `dioxus_core::internal::debug_check_spread_sorted` to surface violations in debug builds.
 ///
-/// Named dynamic attributes and well-formed spreads are usually already sorted by key, but
-/// concatenating those chunks can still make the whole list unsorted. This helper finds the sorted
-/// runs and lazily merges them instead of allocating and sorting a second copy of the attribute
-/// list. Splitting at decreases also tolerates runtime spreads that are only partially sorted.
+/// This type assumes that invariant and only merges across slots.
 pub(super) struct SortedRanges<'items, 'scratch, T> {
     ranges: &'scratch [&'items [T]],
 }
@@ -35,19 +16,9 @@ impl<'items, 'scratch, T> SortedRanges<'items, 'scratch, T> {
     pub(super) fn new(
         attribute_slots: impl IntoIterator<Item = &'items [T]>,
         ranges: &'scratch mut Vec<&'items [T]>,
-        sort_by: impl Fn(&T, &T) -> Ordering + Copy,
     ) -> Self {
         ranges.clear();
-
-        for mut remaining in attribute_slots {
-            while !remaining.is_empty() {
-                let run = non_decreasing_run(remaining, sort_by);
-                let (run, rest) = remaining.split_at(run);
-                ranges.push(run);
-                remaining = rest;
-            }
-        }
-
+        ranges.extend(attribute_slots);
         Self {
             ranges: ranges.as_slice(),
         }
@@ -117,25 +88,6 @@ where
 }
 
 #[test]
-fn test_non_decreasing_run() {
-    let data = [1, 2, 3, 2, 4, 4];
-    assert_eq!(non_decreasing_run(&data, |a, b| a.cmp(b)), 3);
-    assert_eq!(non_decreasing_run(&data[3..], |a, b| a.cmp(b)), 3);
-    assert_eq!(non_decreasing_run(&[], |a: &i32, b| a.cmp(b)), 0);
-}
-
-#[test]
-fn test_sorted_ranges() {
-    let runs = [1, 2, 3, 2, 4, 1, 1];
-    let mut ranges = Vec::new();
-    let sorted = SortedRanges::new([runs.as_slice()], &mut ranges, |a, b| a.cmp(b));
-    assert_eq!(sorted.ranges.len(), 3);
-    assert_eq!(sorted.ranges[0], &[runs[0], runs[1], runs[2]]);
-    assert_eq!(sorted.ranges[1], &[runs[3], runs[4]]);
-    assert_eq!(sorted.ranges[2], &[runs[5], runs[6]]);
-}
-
-#[test]
 fn test_sorted_ranges_iter() {
     #[derive(Debug, PartialEq)]
     struct Item {
@@ -147,20 +99,22 @@ fn test_sorted_ranges_iter() {
             self.value.cmp(&other.value)
         }
     }
-    let runs = [
+    // Two sorted slots that share a key. The slot listed second is the override winner.
+    let slot_a = [
         Item { value: 1, id: 0 },
         Item { value: 2, id: 1 },
         Item { value: 3, id: 2 },
+    ];
+    let slot_b = [
+        Item { value: 1, id: 5 },
         Item { value: 2, id: 3 },
         Item { value: 4, id: 4 },
-        Item { value: 1, id: 5 },
-        Item { value: 1, id: 6 },
     ];
     let mut ranges = Vec::new();
     let mut offsets = Vec::new();
-    let sorted = SortedRanges::new([runs.as_slice()], &mut ranges, Item::cmp);
+    let sorted = SortedRanges::new([slot_a.as_slice(), slot_b.as_slice()], &mut ranges);
     let mut iter = sorted.iter_sorted_last_wins(&mut offsets, Item::cmp);
-    assert_eq!(*iter.next().unwrap(), Item { value: 1, id: 6 });
+    assert_eq!(*iter.next().unwrap(), Item { value: 1, id: 5 });
     assert_eq!(*iter.next().unwrap(), Item { value: 2, id: 3 });
     assert_eq!(*iter.next().unwrap(), Item { value: 3, id: 2 });
     assert_eq!(*iter.next().unwrap(), Item { value: 4, id: 4 });

@@ -103,14 +103,12 @@ impl VNode {
                 .iter()
                 .map(|attributes| attributes.as_ref()),
             old_ranges,
-            sort_by,
         );
         let sorted_to = SortedRanges::new(
             new.dynamic_attrs[attr_group]
                 .iter()
                 .map(|attributes| attributes.as_ref()),
             new_ranges,
-            sort_by,
         );
 
         let mut from_iter = sorted_from

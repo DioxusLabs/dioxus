@@ -18,15 +18,11 @@ use crate::{
 impl VirtualDom {
     pub(crate) fn run_and_diff_scope<M: WriteMutations>(
         &mut self,
-        mut to: Option<&mut M>,
+        to: Option<&mut M>,
         scope_id: ScopeId,
     ) {
-        to = self.scope_render_target(scope_id, to);
-        let is_suspense_boundary = {
-            let scope = &mut self.scopes[scope_id.0];
-            SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some()
-        };
-        if is_suspense_boundary {
+        let scope = &mut self.scopes[scope_id.0];
+        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
             let new_nodes = self.run_scope(scope_id);
@@ -61,7 +57,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = to;
+            let mut render_to = self.scope_render_target(scope, to);
             old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
             self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
@@ -149,12 +145,12 @@ impl VNode {
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
-        parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
     ) {
         // Replace components that have different render fns
         if old.render_fn != new.render_fn {
+            let parent = Some(self.reference_to_dynamic_node(mount, idx));
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 

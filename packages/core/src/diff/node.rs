@@ -28,16 +28,11 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
-        let mount_id = mounted_mount(self, dom);
+        let mount_id = self.mount.get();
 
         // The node we are diffing from should always be mounted
-        debug_assert!(
-            dom.runtime
-                .mounts
-                .borrow()
-                .get(self.mount.get().0)
-                .is_some()
-        );
+        debug_assert!(mount_id.mounted());
+        debug_assert!(dom.runtime.mounts.borrow().get(mount_id.0).is_some());
 
         // If the templates are different, we need to replace the entire template
         if self.template != new.template {
@@ -56,7 +51,9 @@ impl VNode {
         // Start with the attributes
         // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
         if let Some(to) = to.as_deref_mut() {
-            self.diff_attributes(new, dom, to);
+            if !self.template.attr_paths().is_empty() {
+                self.diff_attributes(new, dom, to);
+            }
         }
 
         // Now diff the dynamic nodes
@@ -111,16 +108,7 @@ impl VNode {
             ),
             (Component(old), Component(new)) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                self.diff_vcomponent(
-                    mount,
-                    idx,
-                    new,
-                    old,
-                    scope_id,
-                    Some(self.reference_to_dynamic_node(mount, idx)),
-                    dom,
-                    to,
-                )
+                self.diff_vcomponent(mount, idx, new, old, scope_id, dom, to)
             }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id
@@ -547,7 +535,11 @@ impl VNode {
 
 impl VNode {
     /// Get a reference back into a dynamic node
-    fn reference_to_dynamic_node(&self, mount: MountId, dynamic_node_id: usize) -> ElementRef {
+    pub(super) fn reference_to_dynamic_node(
+        &self,
+        mount: MountId,
+        dynamic_node_id: usize,
+    ) -> ElementRef {
         ElementRef {
             path: ElementPath {
                 path: self.template.node_paths()[dynamic_node_id],
