@@ -110,6 +110,13 @@ jobs:
 
       - name: Generate fuzz coverage
         id: coverage
+        env:
+          # Smoke test already runs LSan; the coverage build is purely for
+          # llvm-cov instrumentation. With leak detection on, cargo-fuzz's
+          # MERGE-mode child exits non-zero even when every leak is
+          # suppressed, which fails the step despite the profdata being
+          # written successfully.
+          ASAN_OPTIONS: detect_leaks=0
         run: |
           cargo +${{ env.rust_nightly }} fuzz coverage --fuzz-dir "$FUZZ_DIR" "$FUZZ_TARGET" "$RUNNER_TEMP/fuzz-corpus" -- -runs=0
 
