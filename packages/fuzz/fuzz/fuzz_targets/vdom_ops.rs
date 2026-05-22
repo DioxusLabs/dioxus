@@ -1,11 +1,10 @@
 #![no_main]
 
 use dioxus_vdom_fuzz::{
-    FuzzCase, ReductionOptions, decode_case, encode_case, encode_case_vec, format_failure_report,
-    print_case_trace, reduce_case, run_case,
+    FuzzCase, ReductionOptions, decode_case, encode_case, format_failure_report, mutate_case,
+    print_case_trace, reduce_case_to_encoded_vec, run_case,
 };
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
-use mutatis::Session;
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
@@ -47,23 +46,20 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
         }
     }
 
-    let mut session = Session::new()
-        .seed(seed.into())
-        .shrink(minimizing || max_size <= size);
-
-    if session.mutate(&mut case).is_err() {
+    let additional_mutations = if minimizing {
+        extra_minimization_mutations(seed)
+    } else {
+        0
+    };
+    if !mutate_case(
+        &mut case,
+        seed,
+        minimizing || max_size <= size,
+        additional_mutations,
+    ) {
         return fuzzer_mutate(data, size, max_size);
     }
 
-    if minimizing {
-        for _ in 0..extra_minimization_mutations(seed) {
-            if session.mutate(&mut case).is_err() {
-                break;
-            }
-        }
-    }
-
-    case.normalize();
     encode_case(&case, data, max_size).unwrap_or_else(|| fuzzer_mutate(data, size, max_size))
 });
 
@@ -162,12 +158,7 @@ fn cached_semantic_reduction(
         return cached;
     }
 
-    let reduction = reduce_case(case.clone(), options).ok().and_then(|report| {
-        let encoded = encode_case_vec(&report.case)?;
-        let reduced_ops = report.stats.reduced_ops < report.stats.original_ops;
-        let reduced_bytes = encoded.len() < encoded_case.len();
-        (encoded.len() <= max_size && (reduced_ops || reduced_bytes)).then_some(encoded)
-    });
+    let reduction = reduce_case_to_encoded_vec(case, encoded_case.len(), max_size, options);
 
     cache.lock().unwrap().insert(key, reduction.clone());
     reduction

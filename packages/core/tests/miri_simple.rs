@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::generation;
+use dioxus_renderer_oracle::RendererOracle;
 
 // The tests in this file are intended to be run with Miri, and contain no assertions. If they
 // complete under Miri, they have passed.
@@ -115,11 +116,26 @@ fn diffing_drops_old() {
         rsx! {"Goodbye {name}"}
     }
 
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    fn expected_first() -> Element {
+        rsx! {
+            div { "Hello asdasd" }
+        }
+    }
 
-    _ = dom.render_immediate_to_vec();
+    fn expected_second() -> Element {
+        rsx! {
+            div { "Goodbye asdasd" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_first);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_second);
 }
 
 #[test]

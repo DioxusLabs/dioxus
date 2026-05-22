@@ -30,6 +30,16 @@ use crate::{
 /// changes do.
 type AttributeKey = (&'static str, Option<&'static str>);
 
+/// Reusable scratch for the two k-way merges in `diff_attribute_list`. Allocated once per
+/// `diff_attributes` call and cleared on every merge.
+#[derive(Default)]
+struct AttributeDiffScratch<'a> {
+    old_ranges: Vec<&'a [Attribute]>,
+    old_offsets: Vec<usize>,
+    new_ranges: Vec<&'a [Attribute]>,
+    new_offsets: Vec<usize>,
+}
+
 impl VNode {
     pub(super) fn diff_attributes(
         &self,
@@ -41,10 +51,7 @@ impl VNode {
         let attr_paths = self.template.attr_paths();
 
         let mut idx = 0;
-        let mut old_ranges = Vec::new();
-        let mut new_ranges = Vec::new();
-        let mut old_offsets = Vec::new();
-        let mut new_offsets = Vec::new();
+        let mut scratch = AttributeDiffScratch::default();
 
         while idx < attr_paths.len() {
             let path = attr_paths[idx];
@@ -60,10 +67,7 @@ impl VNode {
                 attribute_id,
                 mount_id,
                 attr_group.clone(),
-                &mut old_ranges,
-                &mut new_ranges,
-                &mut old_offsets,
-                &mut new_offsets,
+                &mut scratch,
                 dom,
                 to,
             );
@@ -85,13 +89,16 @@ impl VNode {
         id: ElementId,
         mount: MountId,
         attr_group: Range<usize>,
-        old_ranges: &mut Vec<&'a [Attribute]>,
-        new_ranges: &mut Vec<&'a [Attribute]>,
-        old_offsets: &mut Vec<usize>,
-        new_offsets: &mut Vec<usize>,
+        scratch: &mut AttributeDiffScratch<'a>,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
+        let AttributeDiffScratch {
+            old_ranges,
+            old_offsets,
+            new_ranges,
+            new_offsets,
+        } = scratch;
         let sort_by = Self::compare_attribute_keys;
         let mut from_iter = iter_sorted_last_wins(
             self.dynamic_attrs[attr_group.clone()]

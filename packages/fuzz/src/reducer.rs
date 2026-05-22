@@ -1,35 +1,26 @@
 use crate::{
-    FuzzCase, FuzzFailure,
+    FuzzCase, FuzzFailure, encode_case_vec,
     model::{
         AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
         TemplateNodeKind, WakeMutationSpec,
     },
-    ops::{
-        EventBehaviorSpec, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit,
-    },
+    ops::{EventBehaviorSpec, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit},
     run_case,
 };
 use std::{
     collections::HashSet,
-    fmt,
     hash::Hash,
     panic::{self, AssertUnwindSafe},
     sync::Mutex,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ReductionOptions {
-    preserve_failure: bool,
     random_multi_attempts: usize,
     max_attempts: Option<usize>,
 }
 
 impl ReductionOptions {
-    pub fn preserve_failure(mut self, preserve_failure: bool) -> Self {
-        self.preserve_failure = preserve_failure;
-        self
-    }
-
     pub fn random_multi_attempts(mut self, attempts: usize) -> Self {
         self.random_multi_attempts = attempts;
         self
@@ -44,43 +35,11 @@ impl ReductionOptions {
 impl Default for ReductionOptions {
     fn default() -> Self {
         Self {
-            preserve_failure: true,
             random_multi_attempts: 2048,
             max_attempts: None,
         }
     }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ReductionStats {
-    pub original_ops: usize,
-    pub reduced_ops: usize,
-    pub attempts: usize,
-    pub accepted: usize,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ReductionReport {
-    pub case: FuzzCase,
-    pub original_failure: FuzzFailure,
-    pub reduced_failure: FuzzFailure,
-    pub stats: ReductionStats,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReduceError {
-    NotFailing,
-}
-
-impl fmt::Display for ReduceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NotFailing => write!(f, "input does not reproduce a fuzz failure"),
-        }
-    }
-}
-
-impl std::error::Error for ReduceError {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct FailureSignature {
@@ -102,10 +61,9 @@ impl FailureSignature {
 struct Reducer {
     options: ReductionOptions,
     signature: FailureSignature,
-    current_failure: FuzzFailure,
+    failing_step: usize,
     rng: ReductionRng,
     attempts: usize,
-    accepted: usize,
 }
 
 enum ReductionRun {
@@ -114,25 +72,26 @@ enum ReductionRun {
     Panicked,
 }
 
-pub fn reduce_case(
-    case: FuzzCase,
+pub(crate) fn reduce_case_to_encoded_vec(
+    case: &FuzzCase,
+    encoded_len: usize,
+    max_size: usize,
     options: ReductionOptions,
-) -> Result<ReductionReport, ReduceError> {
-    let original_failure = match run_case_for_reduction(&case) {
+) -> Option<Vec<u8>> {
+    let original_failure = match run_case_for_reduction(case) {
         ReductionRun::Failed(failure) => failure,
-        ReductionRun::Passed | ReductionRun::Panicked => return Err(ReduceError::NotFailing),
+        ReductionRun::Passed | ReductionRun::Panicked => return None,
     };
     let original_ops = case.ops.len();
     let signature = FailureSignature::new(&original_failure);
     let mut reducer = Reducer {
         options,
         signature,
-        current_failure: original_failure.clone(),
-        rng: ReductionRng::new(seed_from_case(&case)),
+        failing_step: original_failure.step,
+        rng: ReductionRng::new(seed_from_case(case)),
         attempts: 0,
-        accepted: 0,
     };
-    let mut case = case;
+    let mut case = case.clone_case();
 
     reducer.truncate_after_failure(&mut case);
     reducer.reduce_to_local_minimum(&mut case);
@@ -141,17 +100,11 @@ pub fn reduce_case(
     reducer.reduce_by_random_multistep(&mut case);
     reducer.reduce_to_local_minimum(&mut case);
 
-    Ok(ReductionReport {
-        stats: ReductionStats {
-            original_ops,
-            reduced_ops: case.ops.len(),
-            attempts: reducer.attempts,
-            accepted: reducer.accepted,
-        },
-        case,
-        original_failure,
-        reduced_failure: reducer.current_failure,
-    })
+    let encoded = encode_case_vec(&case)?;
+    let reduced_ops = case.ops.len() < original_ops;
+    let reduced_bytes = encoded.len() < encoded_len;
+
+    (encoded.len() <= max_size && (reduced_ops || reduced_bytes)).then_some(encoded)
 }
 
 impl Reducer {
@@ -175,7 +128,7 @@ impl Reducer {
         let ReductionRun::Failed(failure) = run_case_for_reduction(case) else {
             return None;
         };
-        if !self.options.preserve_failure || self.signature.matches(&failure) {
+        if self.signature.matches(&failure) {
             Some(failure)
         } else {
             None
@@ -186,20 +139,19 @@ impl Reducer {
         let Some(failure) = self.accepts(&candidate) else {
             return false;
         };
-        candidate.ops.truncate(failure.step() + 1);
+        candidate.ops.truncate(failure.step + 1);
         *case = candidate;
-        self.current_failure = failure;
-        self.accepted += 1;
+        self.failing_step = failure.step;
         true
     }
 
     fn truncate_after_failure(&mut self, case: &mut FuzzCase) {
-        let needed_len = self.current_failure.step() + 1;
+        let needed_len = self.failing_step + 1;
         if needed_len >= case.ops.len() {
             return;
         }
 
-        let mut candidate = case.clone();
+        let mut candidate = case.clone_case();
         candidate.ops.truncate(needed_len);
         self.try_replace(case, candidate);
     }
@@ -262,7 +214,7 @@ impl Reducer {
             let candidates = simplified_ops(&case.ops[index]);
             let mut changed = false;
             for replacement in candidates {
-                let mut candidate = case.clone();
+                let mut candidate = case.clone_case();
                 candidate.ops[index] = replacement;
                 if self.try_replace(case, candidate) {
                     changed = true;
@@ -303,7 +255,7 @@ impl Reducer {
                 return;
             }
 
-            let mut candidate = case.clone();
+            let mut candidate = case.clone_case();
             let changed =
                 random_multistep_shrink_case_with(&mut candidate, |len| self.rng.index(len));
 
@@ -333,11 +285,7 @@ fn run_case_for_reduction(case: &FuzzCase) -> ReductionRun {
 }
 
 fn failure_summary(failure: &FuzzFailure) -> &str {
-    failure
-        .message()
-        .lines()
-        .next()
-        .unwrap_or(failure.message())
+    failure.message.lines().next().unwrap_or(&failure.message)
 }
 
 pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
@@ -459,7 +407,7 @@ fn fold_key_mode_into_previous_insert(case: &FuzzCase, index: usize, out: &mut V
         return;
     }
 
-    let mut candidate = case.clone();
+    let mut candidate = case.clone_case();
     let Op::Mutate(ModelEdit::VNode {
         edit:
             TemplateEdit::Fragment {
@@ -563,7 +511,7 @@ fn random_peephole(random_index: &mut impl FnMut(usize) -> usize, case: &mut Fuz
             continue;
         }
 
-        *case = candidates[random_index(candidates.len())].clone();
+        *case = candidates[random_index(candidates.len())].clone_case();
         return true;
     }
     false
@@ -571,7 +519,7 @@ fn random_peephole(random_index: &mut impl FnMut(usize) -> usize, case: &mut Fuz
 
 fn seed_from_case(case: &FuzzCase) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in format!("{case:?}").bytes() {
+    for byte in format!("{:?}", case.ops).bytes() {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
@@ -1045,9 +993,9 @@ mod tests {
     #[test]
     fn passing_case_is_not_reduced() {
         let case = FuzzCase::default();
-        assert_eq!(
-            reduce_case(case, ReductionOptions::default()).unwrap_err(),
-            ReduceError::NotFailing
+        assert!(
+            reduce_case_to_encoded_vec(&case, usize::MAX, usize::MAX, ReductionOptions::default())
+                .is_none()
         );
     }
 

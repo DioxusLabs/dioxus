@@ -61,12 +61,11 @@ cargo +nightly fuzz coverage vdom_ops
 `fuzz/fuzz_targets/vdom_ops.rs` decodes the raw libFuzzer bytes as a postcard
 encoded `FuzzCase`. Invalid raw inputs are ignored by the target. The custom
 `fuzz_mutator!` hook decodes the current case, falls back to a valid iterator
-branch-sweep seed when decoding fails, mutates the structured case with
-`mutatis::Session::new().seed(seed.into())`, and writes the encoded case back to
-libFuzzer's input buffer.
+branch-sweep seed when decoding fails, calls this crate's structured mutator,
+and writes the encoded case back to libFuzzer's input buffer.
 
-Cases are capped at `MAX_STEPS` operations so mutated corpus inputs cannot
-produce unbounded replay work.
+Cases are capped at the crate-internal step limit so mutated corpus inputs
+cannot produce unbounded replay work.
 
 ## Failures
 

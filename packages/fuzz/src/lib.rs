@@ -22,9 +22,9 @@ use model::{
     AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, Model, SuspenseMode,
     TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec, WakeMutationSpec,
 };
-use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
+use mutatis::{Candidates, Generate, Mutate, Result as MutatisResult, Session};
 use ops::{EventBehaviorSpec, FragmentEdit, ListEdit, Op, TemplateEdit};
-pub use reducer::{ReduceError, ReductionOptions, ReductionReport, ReductionStats, reduce_case};
+pub use reducer::ReductionOptions;
 use reducer::{random_multistep_shrink_case, simplified_ops};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,10 +32,9 @@ use std::{
     panic::{self, AssertUnwindSafe},
 };
 
-pub const MAX_STEPS: usize = 512;
+const MAX_STEPS: usize = 512;
 const PRIMITIVE_MUTATION_COUNT: u32 = 19;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
     ops: Vec<Op>,
 }
@@ -46,8 +45,14 @@ impl FuzzCase {
         Self { ops }
     }
 
-    pub fn normalize(&mut self) {
+    fn normalize(&mut self) {
         self.ops.truncate(MAX_STEPS);
+    }
+
+    fn clone_case(&self) -> Self {
+        Self {
+            ops: self.ops.clone(),
+        }
     }
 }
 
@@ -58,11 +63,7 @@ impl Default for FuzzCase {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FuzzCaseMutator;
-
-impl DefaultMutate for FuzzCase {
-    type DefaultMutate = FuzzCaseMutator;
-}
+struct FuzzCaseMutator;
 
 impl Mutate<FuzzCase> for FuzzCaseMutator {
     fn mutate(
@@ -115,6 +116,29 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
 
         Ok(())
     }
+}
+
+pub fn mutate_case(
+    case: &mut FuzzCase,
+    seed: u32,
+    shrink: bool,
+    additional_mutations: usize,
+) -> bool {
+    let mut session = Session::new().seed(seed.into()).shrink(shrink);
+    let mut mutator = FuzzCaseMutator;
+
+    if session.mutate_with(&mut mutator, case).is_err() {
+        return false;
+    }
+
+    for _ in 0..additional_mutations {
+        if session.mutate_with(&mut mutator, case).is_err() {
+            break;
+        }
+    }
+
+    case.normalize();
+    true
 }
 
 fn replay_model_prefix(ops: &[Op], len: usize) -> Model {
@@ -943,25 +967,11 @@ fn chunk_delete_sizes(len: usize) -> Vec<usize> {
     sizes
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub struct FuzzFailure {
     step: usize,
     op: String,
     message: String,
-}
-
-impl FuzzFailure {
-    pub fn step(&self) -> usize {
-        self.step
-    }
-
-    pub fn op(&self) -> &str {
-        &self.op
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
 }
 
 impl fmt::Display for FuzzFailure {
@@ -1000,20 +1010,41 @@ pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
     report
 }
 
+#[derive(Serialize)]
+struct EncodedFuzzCase<'a> {
+    ops: &'a [Op],
+}
+
+#[derive(Deserialize)]
+struct DecodedFuzzCase {
+    ops: Vec<Op>,
+}
+
 pub fn decode_case(data: &[u8]) -> Option<FuzzCase> {
-    let mut case = postcard::from_bytes::<FuzzCase>(data).ok()?;
+    let decoded = postcard::from_bytes::<DecodedFuzzCase>(data).ok()?;
+    let mut case = FuzzCase::new(decoded.ops);
     case.normalize();
     Some(case)
 }
 
 pub fn encode_case(case: &FuzzCase, data: &mut [u8], max_size: usize) -> Option<usize> {
     let size = max_size.min(data.len());
-    let encoded = postcard::to_slice(case, &mut data[..size]).ok()?;
+    let encoded =
+        postcard::to_slice(&EncodedFuzzCase { ops: &case.ops }, &mut data[..size]).ok()?;
     Some(encoded.len())
 }
 
-pub fn encode_case_vec(case: &FuzzCase) -> Option<Vec<u8>> {
-    postcard::to_allocvec(case).ok()
+fn encode_case_vec(case: &FuzzCase) -> Option<Vec<u8>> {
+    postcard::to_allocvec(&EncodedFuzzCase { ops: &case.ops }).ok()
+}
+
+pub fn reduce_case_to_encoded_vec(
+    case: &FuzzCase,
+    encoded_len: usize,
+    max_size: usize,
+    options: ReductionOptions,
+) -> Option<Vec<u8>> {
+    reducer::reduce_case_to_encoded_vec(case, encoded_len, max_size, options)
 }
 
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
@@ -1061,7 +1092,7 @@ mod tests {
         let mut bytes = [0; 4096];
         let size = encode_case(&case, &mut bytes, 4096).unwrap();
         let decoded = decode_case(&bytes[..size]).unwrap();
-        assert_eq!(case, decoded);
+        assert_eq!(encode_case_vec(&case), encode_case_vec(&decoded));
         run_case(&decoded).unwrap();
     }
 

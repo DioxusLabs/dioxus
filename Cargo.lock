@@ -3748,7 +3748,6 @@ version = "0.0.0"
 dependencies = [
  "dioxus-vdom-fuzz",
  "libfuzzer-sys",
- "mutatis",
 ]
 
 [[package]]
