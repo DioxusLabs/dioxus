@@ -567,6 +567,47 @@ impl VNode {
             mount: Default::default(),
         }
     }
+
+    /// Deep-clone the tree while preserving every per-node `MountId`. Each
+    /// `VNodeInner` is freshly allocated so the resulting tree's per-node
+    /// `Cell<MountId>` slots are independent from this one — diffing against
+    /// the clone won't mutate this tree's mount state via the shared `Rc`.
+    ///
+    /// Used by `SuspenseBranch::root` to hand out a fresh tree per diff pass
+    /// without losing the mount info the diff needs to talk to the renderer.
+    pub(crate) fn deep_clone_preserving_mounts(&self) -> Self {
+        Self {
+            vnode: Rc::new(VNodeInner {
+                key: self.vnode.key.clone(),
+                template: self.vnode.template,
+                dynamic_nodes: self
+                    .vnode
+                    .dynamic_nodes
+                    .iter()
+                    .map(|node| match node {
+                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
+                            nodes
+                                .iter()
+                                .map(|node| node.deep_clone_preserving_mounts())
+                                .collect(),
+                        ),
+                        other => other.clone(),
+                    })
+                    .collect(),
+                dynamic_attrs: self
+                    .vnode
+                    .dynamic_attrs
+                    .iter()
+                    .map(|attr| {
+                        attr.iter()
+                            .map(|attribute| attribute.deep_clone())
+                            .collect()
+                    })
+                    .collect(),
+            }),
+            mount: Cell::new(self.mount.get()),
+        }
+    }
 }
 
 type StaticStr = &'static str;

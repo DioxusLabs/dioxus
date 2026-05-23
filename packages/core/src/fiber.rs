@@ -71,11 +71,19 @@ impl SuspenseBranch {
             root_fiber.mounted(),
             "suspense branches must have a mounted root fiber"
         );
+        // Deep-clone on the way in so the stored root has its own
+        // `VNodeInner`. Subsequent diffs against this branch can take per-slot
+        // mounts via `claim_fiber_mount` without modifying any `Cell<MountId>`
+        // shared with the parent's props or `last_rendered_node`.
+        let root = root.deep_clone_preserving_mounts();
         Self { root, root_fiber }
     }
 
     pub(crate) fn root(&self) -> VNode {
-        self.root.clone()
+        // And one more deep-clone on the way out, so each diff pass that
+        // reads the branch gets a fresh tree to consume rather than mutating
+        // the stored copy across renders.
+        self.root.deep_clone_preserving_mounts()
     }
 
     pub(crate) fn root_fiber(&self) -> MountId {

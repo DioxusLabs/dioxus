@@ -224,6 +224,7 @@ impl<'a> DiffFrame<'a> {
     pub(crate) fn diff_into<M: WriteMutations>(self, state: &mut DiffState<'_, M>) {
         let old = self.old;
         let new = self.new;
+
         // The node we are diffing from should always be mounted
         debug_assert!(
             state
@@ -570,6 +571,7 @@ impl VNode {
     ) {
         let own_mounts: Vec<MountId> = right.iter().map(|v| v.mount.get()).collect();
         if self.should_reclaim_without_replacement(
+            right,
             state.dom,
             state.to.is_some(),
             destroy_component_state,
@@ -584,14 +586,42 @@ impl VNode {
 
     fn should_reclaim_without_replacement(
         &self,
+        right: &[VNode],
         dom: &VirtualDom,
         writing_mutations: bool,
         destroy_component_state: bool,
     ) -> bool {
+        // The short path drops the old subtree without creating the new one.
+        // That's only safe when the new subtree has nothing observable to
+        // mount — otherwise component scopes that siblings rely on
+        // (lifecycle hooks, suspense resume targets) never run.
+        if right.iter().any(|v| v.needs_mounting()) {
+            return false;
+        }
         destroy_component_state
             && !self.has_live_dom(dom)
             && ((!writing_mutations && self.has_reclaimable_root(false))
                 || current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root(true))
+    }
+
+    /// `true` when this subtree has at least one component / fragment / text
+    /// slot that the diff must create before the slot is observable from the
+    /// outside — i.e. cases where the short-circuit "remove old, skip new"
+    /// path of [`Self::replace_inner`] would lose work.
+    fn needs_mounting(&self) -> bool {
+        use crate::nodes::DynamicNode::*;
+        for dynamic in &self.dynamic_nodes {
+            match dynamic {
+                Component(_) => return true,
+                Fragment(nodes) => {
+                    if nodes.iter().any(VNode::needs_mounting) {
+                        return true;
+                    }
+                }
+                Text(_) => {}
+            }
+        }
+        false
     }
 
     fn has_reclaimable_root(&self, empty_text_only: bool) -> bool {
