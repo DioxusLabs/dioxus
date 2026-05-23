@@ -1214,6 +1214,11 @@ builder_constructors! {
     source None {
         src: Uri DEFAULT,
         r#type: Mime "type",
+        srcset: String DEFAULT,
+        media: String DEFAULT,
+        sizes: String DEFAULT,
+        width: usize DEFAULT,
+        height: usize DEFAULT,
     };
 
 

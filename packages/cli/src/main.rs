@@ -3,6 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::doc_overindented_list_items)]
+#![allow(clippy::collapsible_if)]
 
 mod build;
 mod bundler;

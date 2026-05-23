@@ -8,8 +8,6 @@ publish = false
 [dependencies]
 anyhow = { workspace = true, optional = true }
 
-
 [features]
 web=["dep:anyhow"]
 server=[]
-

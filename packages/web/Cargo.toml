@@ -42,7 +42,7 @@ send_wrapper = { workspace = true, features = ["futures"] }
 wasm-streams = "0.4.2"
 
 [dependencies.web-sys]
-version = "0.3.77"
+workspace = true
 features = [
     "AnimationEvent",
     "ClipboardEvent",
@@ -75,6 +75,7 @@ features = [
     "ResizeObserverSize",
     "ScrollRestoration",
     "ScrollToOptions",
+    "Selection",
     "Text",
     "Touch",
     "TouchEvent",
@@ -117,7 +118,7 @@ document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }
-wasm-bindgen-test = "0.3.50"
+wasm-bindgen-test = { workspace = true }
 dioxus-ssr = { workspace = true, default-features = false }
 gloo-dialogs = { workspace = true }
 dioxus-web = { path = ".", features = ["hydrate"] }

@@ -13,7 +13,7 @@ dioxus = { features = ["fullstack"], workspace = true }
 axum = { workspace = true, optional = true, features = ["macros"]}
 tokio = { workspace = true, features = ["full"], optional = true }
 tower-http = { workspace = true, features = ["auth"], optional = true }
-async-trait = { version = "0.1.88", optional = true }
+async-trait = { version = "0.1.89", optional = true }
 sqlx = { version = "0.8.6", features = [
     "macros",
     "migrate",

@@ -293,11 +293,7 @@ pub(crate) struct BuildRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuildMode {
     /// A normal build generated using `cargo rustc`
-    ///
-    /// "run" indicates whether this build is intended to be run immediately after building.
-    /// This means we try to capture the build environment, saving vars like `CARGO_MANIFEST_DIR`
-    /// for the running executable.
-    Base { run: bool },
+    Base,
 
     /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
     Fat,
@@ -691,7 +687,7 @@ impl BuildRequest {
 
         // The triple will be the triple passed or the host if using dioxus.
         let triple = if using_dioxus_explicitly {
-            triple.context("Could not automatically detect target triple")?
+            triple.context("Could not automatically detect target triple. Make sure to specify the platform (ie --web or --desktop) or the triple directly.")?
         } else {
             triple.unwrap_or(Triple::host())
         };
@@ -744,6 +740,20 @@ impl BuildRequest {
         let cargo_config = cargo_config2::Config::load().unwrap();
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
+
+        // Remove "rust-lld" as a custom linker on Windows, since that is already the linker we
+        // default to.
+        if let Some(linker) = custom_linker.as_ref() {
+            if (linker == "rust-lld" || linker == "rust-lld.exe") && cfg!(windows) {
+                // When using "rust-lld.exe" as linker on windows, it still needs to have a flavor
+                // given to it. rustc appears to be passing `-flavor "link"` when none is set by the
+                // user. If no flavor is given, it fails with 'lld is a generic driver'.
+                // We already use the existing lld-link by default on windows, so we can simply set the
+                // `custom_linker` to `None` in these cases, since we end up using "lld-link" anyway
+                // which is the same as "rust-lld.exe -flavor link".
+                custom_linker = None;
+            }
+        }
 
         // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
         for env in [
@@ -965,7 +975,7 @@ impl BuildRequest {
             BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
 
             // In base/fat mode, we do the full chain with a root `cargo rustc`
-            BuildMode::Base { .. } | BuildMode::Fat => {
+            BuildMode::Base | BuildMode::Fat => {
                 let mut artifacts = self.cargo_build(&ctx).await?;
 
                 ctx.profile_phase("Post-processing executable");
@@ -1169,7 +1179,26 @@ impl BuildRequest {
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
+
+        // Rustc writes dep-info paths relative to its cwd. Modern cargo invokes rustc from the
+        // workspace root (not the crate manifest dir), so we can't just guess — use the cwd the
+        // rustcwrapper captured at interception time. For Thin mode we also explicitly spawn
+        // rustc with that same cwd, so this stays consistent. Fall back to workspace_dir if the
+        // tip's args weren't captured (shouldn't happen in practice, but be defensive).
+        let dep_info_cwd = workspace_rustc_args
+            .rustc_args
+            .get(&format!("{}.bin", self.tip_crate_name()))
+            .map(|args| args.cwd.clone())
+            .filter(|cwd| !cwd.as_os_str().is_empty())
+            .unwrap_or_else(|| self.workspace_dir());
+
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d"))
+            .unwrap_or_default()
+            .canonicalize(dep_info_cwd);
+
+        // Stream the tip's source-file list so the runner can extend its filemap / watch set
+        // before this build is even bundled.
+        ctx.status_dep_info_discovered(depinfo.files.clone());
 
         Ok(BuildArtifacts {
             time_end,
@@ -1421,7 +1450,7 @@ impl BuildRequest {
         let mut manifest = extract_symbols_from_file(exe).await?;
 
         if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            && matches!(ctx.mode, BuildMode::Base | BuildMode::Fat)
         {
             if let Some(dir) = self.user_public_dir() {
                 for entry in walkdir::WalkDir::new(&dir)
@@ -1580,7 +1609,7 @@ impl BuildRequest {
                     .context("Missing rustc args for tip crate")?;
 
                 let mut cmd = Command::new("rustc");
-                cmd.current_dir(self.workspace_dir());
+                cmd.current_dir(&rustc_args.cwd);
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");

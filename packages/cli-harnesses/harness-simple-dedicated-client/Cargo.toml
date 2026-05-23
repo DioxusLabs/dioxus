@@ -8,6 +8,4 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["web"] }
 
-
 [features]
-

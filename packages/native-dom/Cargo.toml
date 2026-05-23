@@ -23,7 +23,7 @@ autofocus = ["blitz-dom/autofocus"]
 
 [dependencies]
 # Blitz dependencies
-blitz-dom = { workspace = true, default-features = false }
+blitz-dom = { workspace = true, default-features = false, features = ["custom-widget"] }
 blitz-traits = { workspace = true }
 
 # DioxusLabs dependencies

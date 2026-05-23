@@ -66,7 +66,6 @@ pub(crate) struct AppBuilder {
 
     /// The list of patches applied to the app, used to know which ones to reapply and/or iterate from.
     pub patches: Vec<JumpTable>,
-    pub patch_cache: Option<HotpatchModuleCache>,
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
@@ -165,7 +164,6 @@ impl AppBuilder {
             spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
-            patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
             profile_spans: Vec::new(),
@@ -335,6 +333,7 @@ impl AppBuilder {
                 }
             }
             BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::DepInfoDiscovered { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
@@ -459,7 +458,6 @@ impl AppBuilder {
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
         self.artifacts.take();
-        self.patch_cache.take();
 
         // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
         self.modified_crates.clear();
@@ -547,6 +545,7 @@ impl AppBuilder {
                     return Err(err);
                 }
                 BuilderUpdate::ProfilePhase { .. } => {}
+                BuilderUpdate::DepInfoDiscovered { .. } => {}
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
@@ -1971,7 +1970,7 @@ impl AppBuilder {
                 "event": "build_and_bundle_complete",
                 "time_taken": time_taken,
                 "mode": match bundle.mode {
-                    BuildMode::Base { .. } => "base",
+                    BuildMode::Base => "base",
                     BuildMode::Fat => "fat",
                     BuildMode::Thin { .. } => "thin",
                 },
@@ -2006,7 +2005,7 @@ impl AppBuilder {
         let mut flamegraph = format!(
             "Flamegraph for {} - time taken: {}ms",
             match bundle.mode {
-                BuildMode::Base { .. } => "base",
+                BuildMode::Base => "base",
                 BuildMode::Fat => "fat",
                 BuildMode::Thin { .. } => "thin",
             },
@@ -2099,7 +2098,15 @@ impl AppBuilder {
         let address = &address;
         let port = &port;
 
-        tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
+        let protocol = if self.build.config.web.https.enabled.unwrap_or_default() {
+            "https"
+        } else {
+            "http"
+        };
+        let server_url = format!("{protocol}://{address}:{port}");
+
+        tracing::info!("Running SSG at {server_url} for {server_exe:?}");
+        let server_url = &server_url;
 
         let vars = self.child_environment_variables(
             devserver_ip,
@@ -2117,8 +2124,11 @@ impl AppBuilder {
             .kill_on_drop(true)
             .spawn()?;
 
-        // Borrow reqwest_client so we only move the reference into the futures
-        let reqwest_client = reqwest::Client::new();
+        // SSG only talks to the local server process we just spawned. Accepting invalid certs
+        // here keeps self-signed local HTTPS usable without weakening user-facing requests.
+        let reqwest_client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(protocol == "https")
+            .build()?;
         let reqwest_client = &reqwest_client;
 
         // Get the routes from the `/static_routes` endpoint
@@ -2132,7 +2142,7 @@ impl AppBuilder {
             );
 
             let request = reqwest_client
-                .post(format!("http://{address}:{port}/api/static_routes"))
+                .post(format!("{server_url}/api/static_routes"))
                 .body("{}".to_string())
                 .send()
                 .await;
@@ -2168,7 +2178,7 @@ impl AppBuilder {
 
                 // For each route, ping the server to force it to cache the response for ssg
                 let request = reqwest_client
-                    .get(format!("http://{address}:{port}{route}"))
+                    .get(format!("{server_url}{route}"))
                     .header("Accept", "text/html")
                     .send()
                     .await?;

@@ -27,7 +27,10 @@
             ];
           };
           lib = pkgs.lib;
-          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          # Keep in sync with `rust_stable` in .github/workflows/main.yml
+          # (the workspace also declares rust-version = "1.93.0", so anything
+          # below 1.93 will fail to build).
+          rustToolchain = pkgs.rust-bin.stable."1.94.0".default.override {
             extensions = [
               "rust-src"
               "rust-analyzer"
@@ -70,7 +73,7 @@
             // {
               src = cargoSrc;
               pname = "dioxus-deps";
-              version = cargoToml.package.version;
+              version = cargoToml.workspace.package.version;
             }
           );
 
@@ -84,7 +87,7 @@
               commonArgs
               // {
                 pname = package;
-                version = cargoToml.package.version;
+                version = cargoToml.workspace.package.version;
                 inherit cargoArtifacts;
                 cargoExtraArgs = "--locked --package ${package} ${
                   lib.concatStringsSep " " (map (f: "--features ${f}") features)
@@ -98,12 +101,19 @@
             );
         in
         {
-          packages.dioxus-cli = (
-            rustPackage "dioxus-cli" {
+          packages.dioxus-cli =
+            (rustPackage "dioxus-cli" {
               binary = "dx";
               features = [ "no-downloads" ];
-            }
-          );
+            }).overrideAttrs
+              (_: {
+                # The nix sandbox has no .git and no .cargo_vcs_info.json, so
+                # build.rs has nothing to derive the commit from. Pass the
+                # flake's own input rev through the env-var override path.
+                # `self.rev` is set on a clean tree; `dirtyRev` on a dirty one
+                # (and includes a `-dirty` suffix, which build.rs accepts).
+                DIOXUS_CLI_GIT_SHA = inputs.self.rev or inputs.self.dirtyRev or "";
+              });
           packages.default = self'.packages.dioxus-cli;
           checks.dioxus-cli = self'.packages.dioxus-cli;
 

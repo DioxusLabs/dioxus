@@ -36,8 +36,6 @@ pub(crate) enum Config {
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
 pub(crate) enum Setting {
-    /// Set the value of the always-hot-reload setting.
-    AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
     AlwaysOpenBrowser { value: BoolValue },
     /// Set the value of the always-on-top desktop setting.
@@ -53,7 +51,6 @@ pub(crate) enum Setting {
 impl Display for Setting {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AlwaysHotReload { value: _ } => write!(f, "always-hot-reload"),
             Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
@@ -113,9 +110,6 @@ impl Config {
             Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
                     Setting::AlwaysOnTop { value } => settings.always_on_top = Some(value.into()),
-                    Setting::AlwaysHotReload { value } => {
-                        settings.always_hot_reload = Some(value.into())
-                    }
                     Setting::AlwaysOpenBrowser { value } => {
                         settings.always_open_browser = Some(value.into())
                     }
