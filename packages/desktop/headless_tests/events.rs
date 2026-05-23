@@ -48,6 +48,9 @@ fn app() -> Element {
             test_form_submit {}
             test_select_multiple_options {}
             test_unicode {}
+            test_before_input {}
+            test_before_input_composing {}
+            test_before_input_contenteditable {}
         }
     }
 }
@@ -624,6 +627,94 @@ fn test_unicode() -> Element {
             oninput: move |event| {
                 println!("{:?}", event.data);
                 assert_eq!(event.data.value(), "🦀");
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
+        }
+    }
+}
+
+fn test_before_input() -> Element {
+    // Set the element's value *before* dispatching so the handler observes the
+    // pre-change value (semantically what `beforeinput` exposes).
+    utils::mock_event_with_extra(
+        "before_input",
+        r#"new InputEvent("beforeinput", {
+            inputType: 'insertText',
+            data: 'x',
+            bubbles: true,
+            cancelable: true,
+            isComposing: false,
+        })"#,
+        r#"
+            element.value = "hello";
+        "#,
+    );
+
+    rsx! {
+        input {
+            id: "before_input",
+            onbeforeinput: move |event| {
+                println!("{:?}", event.data);
+                assert_eq!(event.data.input_type(), "insertText");
+                assert_eq!(event.data.data().as_deref(), Some("x"));
+                assert!(!event.data.is_composing());
+                assert_eq!(event.data.value(), "hello");
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
+        }
+    }
+}
+
+fn test_before_input_composing() -> Element {
+    utils::mock_event(
+        "before_input_composing",
+        r#"new InputEvent("beforeinput", {
+            inputType: 'insertCompositionText',
+            data: 'あ',
+            bubbles: true,
+            cancelable: true,
+            isComposing: true,
+        })"#,
+    );
+
+    rsx! {
+        input {
+            id: "before_input_composing",
+            onbeforeinput: move |event| {
+                assert_eq!(event.data.input_type(), "insertCompositionText");
+                assert_eq!(event.data.data().as_deref(), Some("あ"));
+                assert!(event.data.is_composing());
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
+        }
+    }
+}
+
+fn test_before_input_contenteditable() -> Element {
+    // Contenteditable elements have no `value` property; the JS serializer should
+    // fall back to `textContent` so desktop matches the wasm renderer.
+    utils::mock_event_with_extra(
+        "before_input_contenteditable",
+        r#"new InputEvent("beforeinput", {
+            inputType: 'insertText',
+            data: 'z',
+            bubbles: true,
+            cancelable: true,
+            isComposing: false,
+        })"#,
+        r#"
+            element.textContent = "draft";
+        "#,
+    );
+
+    rsx! {
+        div {
+            id: "before_input_contenteditable",
+            contenteditable: "true",
+            onbeforeinput: move |event| {
+                assert_eq!(event.data.input_type(), "insertText");
+                assert_eq!(event.data.data().as_deref(), Some("z"));
+                assert_eq!(event.data.value(), "draft");
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             }
         }

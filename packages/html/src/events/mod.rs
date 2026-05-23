@@ -111,6 +111,7 @@ impl PlatformEventData {
 mod generated;
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -133,6 +134,7 @@ mod visible;
 mod wheel;
 
 pub use animation::*;
+pub use before_input::*;
 pub use cancel::*;
 pub use clipboard::*;
 pub use composition::*;

@@ -1,10 +1,14 @@
-use dioxus_html::{DragData, FormData, HtmlEventConverter, ImageData, PlatformEventData};
+use before_input::WebBeforeInputData;
+use dioxus_html::{
+    BeforeInputData, DragData, FormData, HtmlEventConverter, ImageData, PlatformEventData,
+};
 use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, Event};
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -54,6 +58,13 @@ macro_rules! with_web_event_converters {
     ($macro:ident) => {
         $macro! {
             convert_animation_data(AnimationData) => web_sys::AnimationEvent;
+            convert_before_input_data(BeforeInputData) => web_sys::InputEvent => |event| {
+                let event = downcast_event(event);
+                BeforeInputData::new(WebBeforeInputData::new(
+                    event.element.clone(),
+                    event.raw.clone().unchecked_into::<web_sys::InputEvent>(),
+                ))
+            };
             convert_cancel_data(CancelData) => web_sys::Event;
             convert_clipboard_data(ClipboardData) => web_sys::Event;
             convert_composition_data(CompositionData) => web_sys::CompositionEvent;

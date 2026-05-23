@@ -14,6 +14,41 @@ macro_rules! with_html_event_groups {
                 ]]
                 Animation(AnimationData),
 
+                #[convert = convert_before_input_data]
+                #[events = [
+                    /// The `beforeinput` event fires before an editable element (an `<input>`,
+                    /// `<textarea>`, or any element with `contenteditable="true"`) is about to
+                    /// be modified. Unlike `oninput`, this event is cancellable — calling
+                    /// `event.prevent_default()` from the handler blocks the change.
+                    ///
+                    /// Use [`BeforeInputData::input_type`] to identify the kind of mutation
+                    /// (e.g. `"insertText"`, `"deleteContentBackward"`, `"insertFromPaste"`)
+                    /// and [`BeforeInputData::data`] to read the text being inserted.
+                    ///
+                    /// ```rust
+                    /// use dioxus::prelude::*;
+                    ///
+                    /// fn App() -> Element {
+                    ///     rsx! {
+                    ///         input {
+                    ///             onbeforeinput: move |event| {
+                    ///                 // Block any attempt to insert a digit
+                    ///                 if event.data.input_type() == "insertText"
+                    ///                     && event.data.data().is_some_and(|d| d.chars().any(|c| c.is_ascii_digit()))
+                    ///                 {
+                    ///                     event.prevent_default();
+                    ///                 }
+                    ///             }
+                    ///         }
+                    ///     }
+                    /// }
+                    /// ```
+                    ///
+                    /// See <https://developer.mozilla.org/en-US/docs/Web/API/Element/beforeinput_event>.
+                    onbeforeinput => beforeinput,
+                ]]
+                BeforeInput(BeforeInputData),
+
                 #[convert = convert_cancel_data]
                 #[events = [
                     oncancel => cancel,
