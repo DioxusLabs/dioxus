@@ -389,7 +389,7 @@ impl<'a> BundleContext<'a> {
         if let Some(bins) = &self.build.config.bundle.external_bin {
             let target = self.target();
             for bin in bins {
-                let src = PathBuf::from(format!("{bin}-{target}"));
+                let src = external_bin_src_path(bin, &target);
                 if src.exists() {
                     let dest_name = src
                         .file_name()
@@ -855,9 +855,100 @@ pub(crate) fn zip_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Build the on-disk path for an `external_bin` sidecar.
+///
+/// Sidecars are staged using the convention `{bin}-{target-triple}{ext}`,
+/// where `ext` is `.exe` on Windows targets and empty elsewhere — matching
+/// tauri's bundler. Without the `.exe` suffix, `src.exists()` is always
+/// `false` on Windows, so the sidecar is silently dropped from the bundle
+/// (see #5578).
+fn external_bin_src_path(bin: &str, target: &str) -> PathBuf {
+    let exe_suffix = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    PathBuf::from(format!("{bin}-{target}{exe_suffix}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::zip_dir_recursive;
+    use super::{external_bin_src_path, zip_dir_recursive};
+    use std::path::PathBuf;
+
+    #[test]
+    fn external_bin_src_path_appends_exe_on_windows_targets() {
+        // GH-5578: without `.exe`, `src.exists()` is always false on
+        // Windows and the sidecar is silently skipped at bundle time.
+        assert_eq!(
+            external_bin_src_path("staging/backend", "x86_64-pc-windows-msvc"),
+            PathBuf::from("staging/backend-x86_64-pc-windows-msvc.exe"),
+        );
+        assert_eq!(
+            external_bin_src_path("staging/backend", "aarch64-pc-windows-msvc"),
+            PathBuf::from("staging/backend-aarch64-pc-windows-msvc.exe"),
+        );
+        assert_eq!(
+            external_bin_src_path("staging/backend", "x86_64-pc-windows-gnu"),
+            PathBuf::from("staging/backend-x86_64-pc-windows-gnu.exe"),
+        );
+    }
+
+    #[test]
+    fn external_bin_src_path_no_extension_on_non_windows_targets() {
+        for target in [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-musl",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "wasm32-unknown-unknown",
+        ] {
+            assert_eq!(
+                external_bin_src_path("staging/backend", target),
+                PathBuf::from(format!("staging/backend-{target}")),
+                "target {target} should not get an executable suffix",
+            );
+        }
+    }
+
+    #[test]
+    fn external_bin_src_path_finds_staged_windows_binary() {
+        // End-to-end repro for #5578: stage the sidecar file that real users
+        // produce (with `.exe`), resolve the path through our helper, and
+        // run the exact filesystem ops `copy_external_binaries` performs.
+        // Before the fix the constructed path omitted `.exe`, so
+        // `src.exists()` was always false and the file was silently skipped.
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("staging");
+        let dest = temp.path().join("dest");
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let bin_no_suffix = staging.join("my_backend").to_string_lossy().into_owned();
+        let staged = staging.join("my_backend-x86_64-pc-windows-msvc.exe");
+        std::fs::write(&staged, b"stub-payload").unwrap();
+
+        let target = "x86_64-pc-windows-msvc";
+        let src = external_bin_src_path(&bin_no_suffix, target);
+        assert!(
+            src.exists(),
+            "expected resolved src `{}` to exist after staging the Windows sidecar",
+            src.display()
+        );
+
+        // Mirror the rest of `copy_external_binaries`: strip the target
+        // triple from the file name (the `.exe` should survive) and copy.
+        let dest_name = src
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .replace(&format!("-{target}"), "");
+        assert_eq!(dest_name, "my_backend.exe");
+        let dest_path = dest.join(&dest_name);
+        std::fs::copy(&src, &dest_path).unwrap();
+        assert!(dest_path.exists(), "sidecar should be present in dest");
+        assert_eq!(std::fs::read(&dest_path).unwrap(), b"stub-payload");
+    }
 
     #[test]
     fn zip_dir_preserves_layout_and_permissions() {
