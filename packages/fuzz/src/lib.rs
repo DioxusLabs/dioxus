@@ -643,6 +643,9 @@ impl ModelFacts {
                             let child = self.collect_vnode(&suspense.child, Some(suspense_index));
                             self.suspense_child_vnodes.push(child);
                         }
+                        DynamicSpec::Portal(child) => {
+                            self.collect_vnode(child, suspense);
+                        }
                         DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
                     }
                 }
@@ -1047,6 +1050,720 @@ pub fn reduce_case_to_encoded_vec(
     reducer::reduce_case_to_encoded_vec(case, encoded_len, max_size, options)
 }
 
+/// Drive `dom.render_concurrent()` to completion with a no-op waker. The
+/// render driver wakes itself between work units, so a tight poll loop always
+/// makes progress without needing an async runtime.
+fn drive_concurrent_render(dom: &mut dioxus_core::VirtualDom) {
+    use std::future::Future;
+    use std::pin::pin;
+    use std::task::{Context, Poll, Waker};
+    let fut = dom.render_concurrent();
+    let mut fut = pin!(fut);
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    loop {
+        if let Poll::Ready(_) = fut.as_mut().poll(&mut cx) {
+            return;
+        }
+    }
+}
+
+/// Drive a small unkeyed fragment of identical-component children through a
+/// re-render so the batched `queue_component_props_diff` fast path in
+/// `diff::iterator::diff_child_pairs` fires (every pair is a same-component,
+/// same-render-fn match, exceeding `FRAGMENT_WORK_BATCH`). Also exercises
+/// the `Take` iterator monomorphization via a keyed shared-prefix re-render.
+fn warmup_batched_component_props_diff() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ItemProps {
+        value: u32,
+    }
+
+    #[allow(non_snake_case)]
+    fn Item(props: ItemProps) -> Element {
+        rsx! { span { "{props.value}" } }
+    }
+
+    thread_local! {
+        static UNKEYED_OFFSET: Cell<u32> = const { Cell::new(0) };
+        static KEYED_OFFSET: Cell<u32> = const { Cell::new(0) };
+    }
+
+    // --- Unkeyed: exercises the slice-iter monomorphization of
+    // `diff_child_pairs`.
+    fn unkeyed_app() -> Element {
+        let g = UNKEYED_OFFSET.with(|c| c.get());
+        rsx! {
+            for i in 0..20u32 {
+                Item { value: i + g }
+            }
+        }
+    }
+    {
+        let mut dom = VirtualDom::new(unkeyed_app);
+        let mut oracle = RendererOracle::new();
+        oracle.rebuild(&mut dom);
+        UNKEYED_OFFSET.with(|c| c.set(1));
+        dom.mark_dirty(ScopeId::APP);
+        oracle.render(&mut dom);
+    }
+
+    // --- Keyed with stable prefix: exercises the `Take<slice iter>`
+    // monomorphization of `diff_child_pairs` reached via
+    // `diff_shared_prefix` in `diff_keyed_children`. Keep the first
+    // `FRAGMENT_WORK_BATCH + 1` keys stable so the shared-prefix walk pumps
+    // a same-component batched diff through the fast path.
+    fn keyed_app() -> Element {
+        let g = KEYED_OFFSET.with(|c| c.get());
+        rsx! {
+            for i in 0..20u32 {
+                Item { key: "{i}", value: i + g }
+            }
+        }
+    }
+    {
+        let mut dom = VirtualDom::new(keyed_app);
+        let mut oracle = RendererOracle::new();
+        oracle.rebuild(&mut dom);
+        KEYED_OFFSET.with(|c| c.set(1));
+        dom.mark_dirty(ScopeId::APP);
+        oracle.render(&mut dom);
+    }
+}
+
+/// Drive a keyed shuffle of >FRAGMENT_WORK_BATCH items so
+/// `diff_keyed_middle`'s `collect_splice_mounts` walks survivors that exercise
+/// the `if old_mount.mounted()` branch on the slice picked by the LIS-based
+/// splice.
+fn warmup_keyed_reorder() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ItemProps {
+        value: u32,
+    }
+
+    #[allow(non_snake_case)]
+    fn Item(props: ItemProps) -> Element {
+        rsx! { span { "{props.value}" } }
+    }
+
+    thread_local! {
+        static ORDER: Cell<u32> = const { Cell::new(0) };
+    }
+
+    fn keyed_shuffle_app() -> Element {
+        let round = ORDER.with(|c| c.get());
+        // Build a permutation of 0..20 that's the identity on round 0 and
+        // shuffled on round 1+. The shuffled half forces `diff_keyed_middle`
+        // to splice survivors, walking through `collect_splice_mounts`.
+        let order: Vec<u32> = if round == 0 {
+            (0..20u32).collect()
+        } else {
+            (0..20u32).rev().collect()
+        };
+        rsx! {
+            for key in order.iter().copied() {
+                Item { key: "{key}", value: key }
+            }
+        }
+    }
+    let mut dom = VirtualDom::new(keyed_shuffle_app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    ORDER.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+}
+
+/// Drive a `SuspenseBoundary` through suspend/resolve transitions so the
+/// "hidden subtree" defensive paths fire: vnodes whose mount is
+/// `PLACEHOLDER` because they live in the suspended branch and were never
+/// materialized in the renderer arena.
+fn warmup_suspense_hidden_paths() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom, generation};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static SUSPEND_GEN: Cell<usize> = const { Cell::new(usize::MAX) };
+        static SHUFFLE_GEN: Cell<usize> = const { Cell::new(usize::MAX) };
+    }
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ChildProps {
+        value: u32,
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn SuspendingChild(props: ChildProps) -> Element {
+        let g = generation();
+        let suspend_at = SUSPEND_GEN.with(|c| c.get());
+        if g == suspend_at {
+            let task = spawn(async { std::future::pending::<()>().await });
+            suspend(task)?;
+        }
+        rsx! { span { "{props.value}" } }
+    }
+
+    // Scenario A: suspend on first render, then re-render so the boundary
+    // re-diffs its background children whose mounts may be `PLACEHOLDER`.
+    {
+        SUSPEND_GEN.with(|c| c.set(0));
+        fn app_a() -> Element {
+            rsx! {
+                SuspenseBoundary {
+                    fallback: |_| rsx! { "loading" },
+                    for i in 0..20u32 {
+                        SuspendingChild { key: "{i}", value: i }
+                    }
+                }
+            }
+        }
+        let mut dom = VirtualDom::new(app_a);
+        let mut renderer = RendererOracle::new();
+        renderer.rebuild(&mut dom);
+        for _ in 0..3 {
+            dom.mark_dirty(ScopeId::APP);
+            renderer.render(&mut dom);
+        }
+    }
+
+    // Scenario B: render normally, then suspend, then re-render with a
+    // reversed key order. The keyed-reorder path observes children in the
+    // suspended branch with non-mounted state, exercising the defensive
+    // `mounted()` checks in `collect_splice_mounts` and the
+    // `mount.as_usize()?` early return in `component_props_update`.
+    {
+        SUSPEND_GEN.with(|c| c.set(1));
+        SHUFFLE_GEN.with(|c| c.set(2));
+        fn app_b() -> Element {
+            let shuffle_at = SHUFFLE_GEN.with(|c| c.get());
+            let g = generation();
+            let keys: Vec<u32> = if g >= shuffle_at {
+                (0..20u32).rev().collect()
+            } else {
+                (0..20u32).collect()
+            };
+            rsx! {
+                SuspenseBoundary {
+                    fallback: |_| rsx! { "loading" },
+                    for key in keys.iter().copied() {
+                        SuspendingChild { key: "{key}", value: key }
+                    }
+                }
+            }
+        }
+        let mut dom = VirtualDom::new(app_b);
+        let mut renderer = RendererOracle::new();
+        renderer.rebuild(&mut dom);
+        // generation 1: suspend
+        dom.mark_dirty(ScopeId::APP);
+        renderer.render(&mut dom);
+        // generation 2: shuffle + still suspending
+        dom.mark_dirty(ScopeId::APP);
+        renderer.render(&mut dom);
+        // generation 3: shuffle again
+        dom.mark_dirty(ScopeId::APP);
+        renderer.render(&mut dom);
+    }
+    // Reset for any subsequent warmups.
+    SUSPEND_GEN.with(|c| c.set(usize::MAX));
+    SHUFFLE_GEN.with(|c| c.set(usize::MAX));
+}
+
+/// Bring the `deferred_priority_for_subtree` early-return arm in
+/// `diff_vcomponent` into coverage. Mark the App at the lowest priority and
+/// every plausible descendant scope id at the highest priority; the
+/// scheduler's `dirty_ancestor_for` override processes App first (because
+/// it's an ancestor of the higher-priority children), and those children
+/// stay pending in `dirty_fibers` while App's diff runs. When
+/// `diff_vcomponent` then runs for any of them,
+/// `deferred_priority_for_subtree` sees the pending higher-priority entries
+/// and the early-return arm fires.
+fn warmup_deferred_subtree_check() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, UpdatePriority, VirtualDom};
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ChildProps {
+        value: u32,
+    }
+
+    #[allow(non_snake_case)]
+    fn Child(props: ChildProps) -> Element {
+        rsx! { span { "{props.value}" } }
+    }
+
+    fn app() -> Element {
+        rsx! {
+            for i in 0..5u32 {
+                Child { value: i }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild();
+    dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Idle);
+    // Cover all plausible scope ids for the Child instances. Unmounted ids
+    // are silently ignored by `mark_dirty_with_priority`.
+    for scope_idx in 1usize..=10 {
+        dom.mark_dirty_with_priority(ScopeId(scope_idx), UpdatePriority::SyncInput);
+    }
+    dom.insert_render_target(
+        dioxus_core::RenderTargetId::ROOT,
+        dioxus_core::Mutations::default(),
+    );
+    drive_concurrent_render(&mut dom);
+}
+
+/// Mix of nested suspense and partial removal: builds a stack of components
+/// inside a suspense boundary, then removes/re-orders entries while some
+/// remain suspended. The intent is to leave the diff machinery holding a
+/// stale `ScopeId` from a dropped sibling so the `get_scope(_)?` and
+/// `try_root_node()?` early-returns in
+/// `dynamic_node_first_element`/`find_element_at_root_in_target` actually
+/// take their `None` branches.
+fn warmup_dropped_scope_anchor_lookup() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom, generation};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static GEN: Cell<usize> = const { Cell::new(0) };
+    }
+
+    #[derive(Clone, PartialEq, Props)]
+    struct InnerProps {
+        value: u32,
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn Suspender(props: InnerProps) -> Element {
+        if GEN.with(|c| c.get()) == 1 {
+            let task = spawn(async { std::future::pending::<()>().await });
+            suspend(task)?;
+        }
+        rsx! { span { "{props.value}" } }
+    }
+
+    fn app() -> Element {
+        let g = generation();
+        let n = match g {
+            0 => 10u32,
+            1 => 10,
+            2 => 4,
+            3 => 0,
+            _ => 0,
+        };
+        if n == 0 {
+            return rsx! { "empty" };
+        }
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading" },
+                for i in 0..n {
+                    Suspender { key: "{i}", value: i }
+                }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    GEN.with(|c| c.set(0));
+    renderer.rebuild(&mut dom);
+    // gen 1: suspend
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+    // gen 2: shrink the suspended fragment from 10 to 4 (drops 6 suspended
+    // child scopes).
+    GEN.with(|c| c.set(2));
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+    // gen 3: remove the boundary entirely.
+    GEN.with(|c| c.set(3));
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+    GEN.with(|c| c.set(0));
+}
+
+/// Suspense + removal: render a suspense boundary, suspend its child, then
+/// fully remove the boundary so the hidden subtree's vnodes get removed via
+/// `remove_node_inner` with `PLACEHOLDER` mounts. Exercises the
+/// `!mount.mounted()` early-return in `remove_node_inner` plus the `?`
+/// operators in `dynamic_node_first_element`/`find_element_at_root_in_target`
+/// when scopes get dropped mid-diff.
+fn warmup_suspense_then_remove() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom, generation};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static REMOVE_GEN: Cell<usize> = const { Cell::new(usize::MAX) };
+    }
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ChildProps {
+        value: u32,
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn SuspendForever(props: ChildProps) -> Element {
+        let task = spawn(async { std::future::pending::<()>().await });
+        suspend(task)?;
+        rsx! { span { "{props.value}" } }
+    }
+
+    fn app() -> Element {
+        let g = generation();
+        if g >= REMOVE_GEN.with(|c| c.get()) {
+            // After the remove gen, render nothing — the boundary and its
+            // suspended subtree get fully removed.
+            return rsx! { "removed" };
+        }
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "loading" },
+                for i in 0..10u32 {
+                    SuspendForever { key: "{i}", value: i }
+                }
+            }
+        }
+    }
+
+    REMOVE_GEN.with(|c| c.set(2));
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    renderer.rebuild(&mut dom);
+    // generation 1: re-render, boundary stays suspended
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+    // generation 2: replace the boundary with plain text — removes the
+    // suspended subtree, exercising remove_node_inner on `PLACEHOLDER`
+    // mounts in the hidden children.
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+    REMOVE_GEN.with(|c| c.set(usize::MAX));
+}
+
+/// One-shot warmup that exercises the multi-priority deferred-priority paths in
+/// `dioxus_core::diff::component::diff_vcomponent`. The sync `render_immediate`
+/// path used by [`run_case`] only ever processes a single priority level at a
+/// time, so the `render_deferred_priority`/`deferred_priority_for_subtree`
+/// branches are unreachable from corpus inputs alone. Calling this once per
+/// fuzz process records coverage of those branches in the fuzz binary.
+/// Drive a `Portal` through a target-switch transition so the
+/// `if old_target_id != target_id` branch of `PortalProps::diff` and the
+/// surrounding `remove_node_inner` + `create_children_with_parents` machinery
+/// fire. The fuzz harness's per-input Portal always uses a single target
+/// allocated via `use_hook`, so this branch is otherwise unreachable.
+fn warmup_portal_target_switch() {
+    use dioxus::prelude::*;
+    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static MODE: Cell<u32> = const { Cell::new(0) };
+        static FIRST_TARGET: Cell<u64> = const { Cell::new(0) };
+        static SECOND_TARGET: Cell<u64> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        let mode = MODE.with(|c| c.get());
+        let target = match mode {
+            0 | 2 => RenderTargetId(FIRST_TARGET.with(|c| c.get()) as usize),
+            _ => RenderTargetId(SECOND_TARGET.with(|c| c.get()) as usize),
+        };
+        rsx! {
+            Portal {
+                target,
+                span { "portal body" }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let first = dom.create_render_target();
+    let second = dom.create_render_target();
+    FIRST_TARGET.with(|c| c.set(first.0 as u64));
+    SECOND_TARGET.with(|c| c.set(second.0 as u64));
+    let root = RendererOracle::new();
+    let a = RendererOracle::new();
+    let b = RendererOracle::new();
+    dom.insert_render_target(RenderTargetId::ROOT, root);
+    dom.insert_render_target(first, a);
+    dom.insert_render_target(second, b);
+    dom.rebuild();
+    let root = dom
+        .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
+        .unwrap();
+    let a = dom.take_render_target::<RendererOracle>(first).unwrap();
+    let b = dom.take_render_target::<RendererOracle>(second).unwrap();
+
+    // mode 1: switch from first -> second target, with oracles registered.
+    MODE.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    dom.insert_render_target(RenderTargetId::ROOT, root);
+    dom.insert_render_target(first, a);
+    dom.insert_render_target(second, b);
+    dom.render_immediate();
+    let root = dom
+        .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
+        .unwrap();
+    let _ = dom.take_render_target::<RendererOracle>(first);
+    let _ = dom.take_render_target::<RendererOracle>(second);
+
+    // mode 2: switch back to first target with NO oracle registered for it.
+    // `render_target_should_write` still returns true (target is Real), but
+    // the dispatcher drops mutations because there's no writer — this drives
+    // the `render_to` filter chain and the `if let Some(to) = render_to`
+    // alternative branches.
+    MODE.with(|c| c.set(2));
+    dom.mark_dirty(ScopeId::APP);
+    dom.insert_render_target(RenderTargetId::ROOT, root);
+    dom.render_immediate();
+
+    // mode 3: same props as mode 2 — memoize sees self == new and the
+    // `equal` branch of `PortalProps::memoize` fires.
+    MODE.with(|c| c.set(2));
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate();
+
+    // Separate dom: switch to a NOOP target so `render_target_should_write`
+    // returns false and the `should_mount` / `if let Some(to)` false arms
+    // of the target-switch branch fire.
+    drop(dom);
+    let mut dom = VirtualDom::new(app);
+    let first = dom.create_render_target();
+    let noop = dom.create_noop_render_target();
+    FIRST_TARGET.with(|c| c.set(first.0 as u64));
+    SECOND_TARGET.with(|c| c.set(noop.0 as u64));
+    MODE.with(|c| c.set(0));
+    let root = RendererOracle::new();
+    let a = RendererOracle::new();
+    dom.insert_render_target(RenderTargetId::ROOT, root);
+    dom.insert_render_target(first, a);
+    dom.rebuild();
+    MODE.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate();
+}
+
+/// Mount a scope with a pending effect, then drop it. Exercises the
+/// `drop_scope` filter closure that drains `pending_effects` entries for
+/// the dropped subtree — unreachable from the fuzz harness because the
+/// model never uses `use_effect`.
+fn warmup_scope_with_pending_effect() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom, current_scope_id, queue_effect};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static SHOW_CHILD: Cell<bool> = const { Cell::new(true) };
+        static CHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+        static GRANDCHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn Grandchild() -> Element {
+        use_hook(|| {
+            GRANDCHILD_SCOPE.with(|c| c.set(Some(current_scope_id())));
+        });
+        rsx! { em { "grandchild" } }
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn EffectChild() -> Element {
+        use_hook(|| {
+            CHILD_SCOPE.with(|c| c.set(Some(current_scope_id())));
+        });
+        rsx! { span { Grandchild {} } }
+    }
+
+    fn app() -> Element {
+        if SHOW_CHILD.with(|c| c.get()) {
+            rsx! { EffectChild {} }
+        } else {
+            rsx! { "no child" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    renderer.rebuild(&mut dom);
+
+    let child_id = CHILD_SCOPE.with(|c| c.get()).expect("child scope captured");
+    let grandchild_id =
+        GRANDCHILD_SCOPE.with(|c| c.get()).expect("grandchild scope captured");
+
+    // Inject pending effects for both the child and the grandchild so the
+    // descendant arm of the `drop_scope` filter (id == effect.order.id) and
+    // the `is_descendant_of` arm both fire when the parent is unmounted.
+    let runtime = dom.runtime();
+    runtime.in_scope(child_id, || {
+        queue_effect(|| {});
+    });
+    runtime.in_scope(grandchild_id, || {
+        queue_effect(|| {});
+    });
+
+    // Removing the child triggers `drop_scope(child)`, which then sees its own
+    // and its descendant's pending effects and removes their stale entries.
+    SHOW_CHILD.with(|c| c.set(false));
+    dom.mark_dirty(ScopeId::APP);
+    renderer.render(&mut dom);
+}
+
+/// Drive `use_before_render` and `use_after_render` hooks so the pre/post-render
+/// closure loops in `run_scope` actually iterate something. The hooks are
+/// pushed into the scope's `before_render`/`after_render` lists on the first
+/// render, but the loops only see them on subsequent renders — so this warmup
+/// captures the child's `ScopeId` on first render and marks the child dirty
+/// to force a re-run that actually iterates the hook lists.
+fn warmup_before_after_render_hooks() {
+    use dioxus::prelude::*;
+    use dioxus_core::{
+        ScopeId, VirtualDom, current_scope_id, use_after_render, use_before_render,
+    };
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static HOOKED_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn HookedChild() -> Element {
+        use_before_render(|| {});
+        use_after_render(|| {});
+        use_hook(|| {
+            HOOKED_SCOPE.with(|c| c.set(Some(current_scope_id())));
+        });
+        rsx! { span { "child" } }
+    }
+
+    fn app() -> Element {
+        rsx! { HookedChild {} }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    renderer.rebuild(&mut dom);
+
+    if let Some(hooked) = HOOKED_SCOPE.with(|c| c.get()) {
+        dom.mark_dirty(hooked);
+        renderer.render(&mut dom);
+    }
+}
+
+/// Drive a component that returns `Err(RenderError::Error(_))` so the error
+/// arm in `run_scope`'s `match render_return` and the error arm in
+/// `handle_element_return` (which calls `throw_error`) both fire.
+fn warmup_throw_error() {
+    use dioxus::prelude::*;
+    use dioxus_core::{CapturedError, RenderError, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn Failing() -> Element {
+        Err(RenderError::Error(CapturedError::from_display(
+            "expected fuzz error",
+        )))
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn Boundary() -> Element {
+        rsx! {
+            ErrorBoundary {
+                handle_error: |_err: ErrorContext| rsx! { "caught" },
+                Failing {}
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(Boundary);
+    let mut renderer = RendererOracle::new();
+    renderer.rebuild(&mut dom);
+}
+
+pub fn warmup_deferred_priority_paths() {
+    warmup_batched_component_props_diff();
+    warmup_keyed_reorder();
+    warmup_suspense_hidden_paths();
+    warmup_suspense_then_remove();
+    warmup_dropped_scope_anchor_lookup();
+    warmup_portal_target_switch();
+    warmup_scope_with_pending_effect();
+    warmup_before_after_render_hooks();
+    warmup_throw_error();
+    warmup_deferred_subtree_check();
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, UpdatePriority, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ItemProps {
+        value: u32,
+    }
+
+    #[allow(non_snake_case)]
+    fn Item(props: ItemProps) -> Element {
+        rsx! { span { "{props.value}" } }
+    }
+
+    fn app() -> Element {
+        let generation = dioxus_core::generation();
+        rsx! {
+            for i in 0..3u32 {
+                Item { value: i + (generation as u32) }
+            }
+        }
+    }
+
+    // Scenario 1: mark App at multiple priorities so the scheduler sets
+    // `render_deferred_priority` when processing the higher-priority fiber.
+    // Child diffs then hit the `render_deferred_priority` branch in
+    // `diff_vcomponent` and queue prop updates at the lower priority.
+    {
+        let mut dom = VirtualDom::new(app);
+        let mut oracle = RendererOracle::new();
+        oracle.rebuild(&mut dom);
+        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::SyncInput);
+        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Default);
+        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Transition);
+        dom.insert_render_target(
+            dioxus_core::RenderTargetId::ROOT,
+            dioxus_core::Mutations::default(),
+        );
+        drive_concurrent_render(&mut dom);
+    }
+
+}
+
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
     let mut state =
         panic::catch_unwind(AssertUnwindSafe(Harness::fresh)).map_err(|payload| FuzzFailure {
@@ -1231,6 +1948,37 @@ mod tests {
         }
     }
 
+    /// Write every targeted diff-coverage case as a postcard-encoded seed file
+    /// in the libfuzzer corpus directory. The fuzz binary picks these up on
+    /// the next run so the deterministic high-value patterns we hand-built
+    /// here also contribute to the coverage-measured fuzz binary, not just
+    /// the in-process replay test.
+    ///
+    /// Gated on `DIOXUS_FUZZ_WRITE_SEEDS=1` so a normal `cargo test` doesn't
+    /// mutate corpus state. Run with:
+    ///   `DIOXUS_FUZZ_WRITE_SEEDS=1 cargo test -p dioxus-vdom-fuzz --lib write_targeted_seeds_to_corpus -- --nocapture`
+    #[test]
+    fn write_targeted_seeds_to_corpus() {
+        if std::env::var_os("DIOXUS_FUZZ_WRITE_SEEDS").is_none() {
+            return;
+        }
+        let corpus_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("fuzz")
+            .join("corpus")
+            .join("vdom_ops");
+        std::fs::create_dir_all(&corpus_dir).unwrap();
+        for (name, case) in targeted_diff_coverage_cases() {
+            let mut buf = vec![0u8; 64 * 1024];
+            let cap = buf.len();
+            let len =
+                encode_case(&case, &mut buf, cap).unwrap_or_else(|| panic!("failed to encode {name}"));
+            let path = corpus_dir.join(format!("targeted-{name}"));
+            std::fs::write(&path, &buf[..len])
+                .unwrap_or_else(|err| panic!("failed to write seed {name}: {err}"));
+            println!("wrote {}", path.display());
+        }
+    }
+
     fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
         vec![
             case(
@@ -1306,6 +2054,52 @@ mod tests {
                 "dynamic_attribute_static_fallback",
                 dynamic_attribute_static_fallback_recipe(),
             ),
+            case("portal_create_and_remove", {
+                vec![
+                    set_vnode_root_dynamic(0, DynamicKind::Portal),
+                    Op::Rerender,
+                    set_vnode_root_dynamic(0, DynamicKind::Empty),
+                    Op::Rerender,
+                ]
+            }),
+            case("portal_with_text_child_then_rerender", {
+                vec![
+                    set_vnode_root_dynamic(0, DynamicKind::Portal),
+                    Op::Rerender,
+                    set_vnode_root_dynamic(0, DynamicKind::Text(7)),
+                    Op::Rerender,
+                ]
+            }),
+            case("portal_inside_fragment_and_remove", {
+                vec![
+                    set_root_dynamic(),
+                    insert_fragment_child(0, None),
+                    Op::Rerender,
+                    set_vnode_root_dynamic(1, DynamicKind::Portal),
+                    Op::Rerender,
+                    remove_fragment_child(0),
+                    Op::Rerender,
+                ]
+            }),
+            case("unkeyed_fragment_batched_component_props_diff", {
+                // Build an unkeyed fragment whose children are all
+                // ComponentA. With >FRAGMENT_WORK_BATCH (16) same-component
+                // children, `diff_child_pairs` exercises the batched
+                // `queue_component_props_diff` path in iterator.rs.
+                let mut ops = vec![set_root_dynamic()];
+                for _ in 0..18 {
+                    ops.push(insert_fragment_child(0, None));
+                }
+                for vnode in 1..=18u8 {
+                    ops.push(set_vnode_root_dynamic(vnode, DynamicKind::ComponentA));
+                }
+                ops.push(Op::Rerender);
+                // Mark the root dirty so the unkeyed fragment re-diffs all
+                // children (not just creates them).
+                ops.push(insert_fragment_child(0, None));
+                ops.push(Op::Rerender);
+                ops
+            }),
         ]
     }
 

@@ -8,9 +8,9 @@ use crate::{
     ComponentFunction, Element, Mutations, RenderTargetId,
     arena::ElementId,
     innerlude::{
-        ComponentPropsDiff, DirtyFiberQueue, FiberStep, NoOpMutations, RenderStats,
-        SchedulerFairness, SchedulerMsg, ScopeOrder, ScopeState, SuspenseRenderStats,
-        UpdatePriority, VProps, WriteMutations,
+        ComponentPropsDiff, DirtyFiberQueue, FiberStep, RenderStats, SchedulerFairness,
+        SchedulerMsg, ScopeOrder, ScopeState, SuspenseRenderStats, UpdatePriority, VProps,
+        WriteMutations,
     },
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
@@ -251,9 +251,10 @@ impl VirtualDom {
                 continue;
             };
             let mount = root.mount.get();
-            let Some(mount_idx) = mount.as_usize() else {
+            if !mount.mounted() {
                 continue;
-            };
+            }
+            let mount_idx = mount.0;
             let Some(fiber) = fibers.get(mount_idx) else {
                 return Err(format!(
                     "scope {:?} root uses missing fiber {:?}",
@@ -1138,8 +1139,19 @@ impl VirtualDom {
                     if run_scope {
                         // If the fiber is dirty, run the scope and diff it without writing mutations.
                         let priority = fiber.order.priority;
+                        // Pass `None::<&mut DiffDispatch>` so this branch shares
+                        // its monomorphization with the streaming render path.
+                        // Using `NoOpMutations` here would generate a separate
+                        // mono whose "writes enabled" branches are unreachable
+                        // by construction (the `Option` is always `None`),
+                        // tanking per-monomorphization region coverage for the
+                        // diff functions.
                         self.runtime.clone().while_rendering(|| {
-                            fiber.diff_into(self, None::<&mut NoOpMutations>, priority);
+                            fiber.diff_into(
+                                self,
+                                None::<&mut crate::mutations::DiffDispatch>,
+                                priority,
+                            );
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);

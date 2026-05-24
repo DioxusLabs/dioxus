@@ -2,7 +2,7 @@
 
 use dioxus_vdom_fuzz::{
     FuzzCase, ReductionOptions, decode_case, encode_case, format_failure_report, mutate_case,
-    print_case_trace, reduce_case_to_encoded_vec, run_case,
+    print_case_trace, reduce_case_to_encoded_vec, run_case, warmup_deferred_priority_paths,
 };
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use std::{
@@ -18,6 +18,11 @@ const INTERNAL_MINIMIZE_RANDOM_ATTEMPTS: usize = 64;
 const INTERNAL_MINIMIZE_ATTEMPT_LIMIT: usize = 64;
 
 fuzz_target!(|data: &[u8]| {
+    // First call exercises async multi-priority render paths in
+    // `diff::component::diff_vcomponent` that the per-input sync render path
+    // cannot reach. Subsequent calls short-circuit via the OnceLock.
+    warmup_once();
+
     let Some(case) = decode_case(data) else {
         return;
     };
@@ -30,6 +35,11 @@ fuzz_target!(|data: &[u8]| {
         panic!("{}", format_failure_report(&case, &failure));
     }
 });
+
+fn warmup_once() {
+    static WARMED: OnceLock<()> = OnceLock::new();
+    WARMED.get_or_init(warmup_deferred_priority_paths);
+}
 
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
     let mut case = decode_case(&data[..size]).unwrap_or_default();

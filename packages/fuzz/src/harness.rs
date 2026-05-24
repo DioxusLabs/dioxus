@@ -806,6 +806,9 @@ fn collect_dynamic_current_suspense_ids(dynamic: &DynamicSpec, out: &mut BTreeSe
             out.insert(spec.id);
             collect_current_suspense_ids(&spec.child, out);
         }
+        DynamicSpec::Portal(child) => {
+            collect_current_suspense_ids(child, out);
+        }
         DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
     }
 }
@@ -900,6 +903,14 @@ fn collect_model_dynamic_lifecycle_with_suspense_ancestor(
                 out,
             );
         }
+        DynamicSpec::Portal(child) => {
+            collect_model_lifecycle_with_suspense_ancestor(
+                child,
+                within_retaining_suspense,
+                suspense_ids,
+                out,
+            );
+        }
         DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
     }
 }
@@ -939,6 +950,9 @@ fn collect_dynamic_lifecycle(dynamic: &DynamicSpec, out: &mut LifecycleSnapshot)
             add_lifecycle_key(out, LifecycleRole::SuspenseBoundary, spec.id);
             add_lifecycle_key(out, LifecycleRole::SuspenseChild, spec.id);
             collect_vnode_lifecycle(&spec.child, out);
+        }
+        DynamicSpec::Portal(child) => {
+            collect_vnode_lifecycle(child, out);
         }
         DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
     }

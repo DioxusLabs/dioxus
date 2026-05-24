@@ -110,21 +110,24 @@ impl VirtualDom {
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
         let fibers = self.runtime.fibers.borrow();
-        fibers.get(mount.0).map(|fiber| fiber.node.clone())
+        // Hand out a deep clone so anchor lookups that descend into the
+        // returned tree can't observe descendant mount cells being mutated
+        // by a sibling diff's `claim_fiber_mount`.
+        fibers
+            .get(mount.0)
+            .map(|fiber| fiber.node.deep_clone_preserving_mounts())
     }
 
     pub(crate) fn set_fiber_mode(&self, mount: MountId, mode: FiberMode) {
-        if mount.mounted()
-            && let Some(fiber) = self.runtime.fibers.borrow_mut().get_mut(mount.0)
-        {
-            fiber.mode = mode;
-        }
+        debug_assert!(mount.mounted(), "set_fiber_mode requires a mounted MountId");
+        self.runtime.fibers.borrow_mut()[mount.0].mode = mode;
     }
 
     pub(crate) fn fiber_should_render(&self, mount: MountId) -> bool {
-        if !mount.mounted() {
-            return true;
-        }
+        // For an unmounted `mount` (`mount.0 == usize::MAX`),
+        // `fibers.get(mount.0)` returns `None` and the `is_none_or` predicate
+        // short-circuits to `true` — same answer as an explicit early return,
+        // so the explicit branch isn't needed.
         self.runtime
             .fibers
             .borrow()
@@ -139,11 +142,19 @@ impl VirtualDom {
     }
 
     pub(crate) fn commit_fiber_work(&self, mount: MountId, node: &VNode) {
-        if mount.mounted()
-            && let Some(fiber) = self.runtime.fibers.borrow_mut().get_mut(mount.0)
-        {
-            fiber.node = node.clone();
-        }
+        // Every caller commits work on a `mount` that's just been claimed via
+        // `claim_fiber_mount` or freshly allocated in `create_with_parents` —
+        // both produce live `MountId`s, never `PLACEHOLDER`.
+        debug_assert!(
+            mount.mounted(),
+            "commit_fiber_work requires a live MountId"
+        );
+        // Deep-clone so the committed snapshot owns its own per-vnode
+        // `Cell<MountId>` slots. A subsequent diff that calls
+        // `claim_fiber_mount` on descendant `old` vnodes would otherwise
+        // mutate the shared `Rc<VNodeInner>` here too, and anchor lookups
+        // that walk `fiber.node` would see those descendants as unmounted.
+        self.runtime.fibers.borrow_mut()[mount.0].node = node.deep_clone_preserving_mounts();
     }
 
     /// Remove these nodes from the dom

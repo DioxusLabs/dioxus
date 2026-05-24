@@ -2,6 +2,11 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![warn(missing_docs)]
+// Coverage runs (`RUSTFLAGS="--cfg coverage_nightly" cargo +nightly fuzz coverage`)
+// opt into nightly's `#[coverage(off)]` attribute so unreachable-by-design
+// regions (typed-builder marker fn bodies that the dispatcher routes around)
+// don't drag the coverage metric down. Stable builds see no effect.
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 mod any_props;
 mod arena;

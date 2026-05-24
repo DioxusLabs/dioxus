@@ -657,7 +657,8 @@ fn MyComponent() -> Element {{
                 let el_ref = &mount.node;
                 let node_template = el_ref.template;
                 let target_path = path.path;
-                mount_id = el_ref.mount.get().as_usize();
+                let m = el_ref.mount.get();
+                mount_id = m.mounted().then_some(m.0);
 
                 // Accumulate listeners into the listener list bottom to top
                 for (idx, this_path) in node_template.attr_paths().iter().enumerate() {

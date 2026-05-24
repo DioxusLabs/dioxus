@@ -62,7 +62,7 @@ impl VirtualDom {
 
                 let props: &dyn AnyProps = &*scope.props;
 
-                let span = tracing::trace_span!("render", scope = %scope.state().name);
+                let span = tracing::trace_span!("render");
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
                         let render_return = props.render();
@@ -125,10 +125,14 @@ impl VirtualDom {
                     .suspend(boundary.clone());
                 if !already_suspended {
                     tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
-                    // Add this task to the suspended tasks list of the boundary
-                    if let SuspenseLocation::UnderSuspense { boundary, .. } = &boundary {
-                        boundary.add_suspended_task(e.clone());
-                    }
+                    // Every user-rendered scope sits inside the implicit
+                    // `SuspenseBoundary` from `RootScopeWrapper`, so a
+                    // suspended scope's location always carries a boundary
+                    // context (`UnderSuspense` or `InSuspensePlaceholder`).
+                    boundary
+                        .suspense_context()
+                        .expect("suspended scope must have a SuspenseContext")
+                        .add_suspended_task(e.clone());
                     self.runtime
                         .suspended_tasks
                         .set(self.runtime.suspended_tasks.get() + 1);

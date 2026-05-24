@@ -8,7 +8,9 @@ pub(crate) const MAX_ROOTS: usize = 8;
 pub(crate) const MAX_CHILDREN: usize = 8;
 pub(crate) const MAX_TEMPLATE_ATTRS: usize = 12;
 pub(crate) const MAX_DYNAMIC_ATTRS: usize = 8;
-pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 8;
+// Larger than `dioxus_core::diff::iterator::FRAGMENT_WORK_BATCH` so the
+// fuzz can drive the batched `component_props_update` code path.
+pub(crate) const MAX_FRAGMENT_CHILDREN: usize = 24;
 pub(crate) const MAX_MODEL_COST: u64 = 256;
 pub(crate) const MAX_READY_WAKE_COUNT: u8 = 4;
 #[derive(Clone, Debug, PartialEq)]
@@ -724,6 +726,10 @@ pub(crate) enum DynamicSpec {
     ComponentA(ComponentSpec),
     ComponentB(ComponentSpec),
     Suspense(SuspenseSpec),
+    /// A `Portal` that renders its `child` into a render target owned by the
+    /// portal mount. Each fresh portal mount creates its own target via a
+    /// `use_hook`, so this exercises the cross-render-target diff paths.
+    Portal(Box<VNodeSpec>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -823,6 +829,9 @@ impl DynamicSpec {
             Self::Suspense(spec) => {
                 spec.child.normalize_in_place();
             }
+            Self::Portal(child) => {
+                child.normalize_in_place();
+            }
             Self::Empty | Self::Text(_) | Self::Placeholder => {}
         }
     }
@@ -882,6 +891,11 @@ impl DynamicSpec {
                     *self = Self::Suspense(SuspenseSpec::new(id, *mode));
                 }
             },
+            DynamicKind::Portal => {
+                if !matches!(self, Self::Portal(_)) {
+                    *self = Self::Portal(Box::new(VNodeSpec::minimal()));
+                }
+            }
         }
     }
 
@@ -893,6 +907,7 @@ impl DynamicSpec {
                 component.child.vnode_count()
             }
             Self::Suspense(spec) => spec.child.vnode_count(),
+            Self::Portal(child) => child.vnode_count(),
         }
     }
 
@@ -911,6 +926,7 @@ impl DynamicSpec {
                 component.child.nth_vnode_mut(index)
             }
             Self::Suspense(spec) => spec.child.nth_vnode_mut(index),
+            Self::Portal(child) => child.nth_vnode_mut(index),
         }
     }
 
@@ -925,6 +941,7 @@ impl DynamicSpec {
                 let wake_roots = if spec.wake_mutation.adds_root() { 1 } else { 0 };
                 1 + wake_roots + spec.child.node_count()
             }
+            Self::Portal(child) => 1 + child.node_count(),
         }
     }
 
@@ -936,6 +953,7 @@ impl DynamicSpec {
                 component.child.suspense_count()
             }
             Self::Suspense(spec) => 1 + spec.child.suspense_count(),
+            Self::Portal(child) => child.suspense_count(),
         }
     }
 
@@ -960,6 +978,7 @@ impl DynamicSpec {
                 *index -= 1;
                 spec.child.nth_suspense_mut(index)
             }
+            Self::Portal(child) => child.nth_suspense_mut(index),
         }
     }
 
@@ -980,6 +999,7 @@ impl DynamicSpec {
                 }
                 spec.child.collect_ready_suspense_keys(out);
             }
+            Self::Portal(child) => child.collect_ready_suspense_keys(out),
         }
     }
 
@@ -1000,6 +1020,7 @@ impl DynamicSpec {
                 }
                 spec.child.wake_ready_suspense(key);
             }
+            Self::Portal(child) => child.wake_ready_suspense(key),
         }
     }
 
@@ -1022,6 +1043,7 @@ impl DynamicSpec {
                     spec.child.wake_mutation_for_ready_key(key)
                 }
             }
+            Self::Portal(child) => child.wake_mutation_for_ready_key(key),
         }
     }
 }
@@ -1035,6 +1057,7 @@ pub(crate) enum DynamicKind {
     ComponentB,
     Suspense { mode: SuspenseMode },
     Placeholder,
+    Portal,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]

@@ -8,7 +8,7 @@ use crate::{
         context::{DiffContext, DiffFrame, DiffState},
     },
     innerlude::{
-        ComponentPropsUpdate, ElementRef, MountId, NoOpMutations, PortalProps, ScopeOrder,
+        ComponentPropsUpdate, ElementRef, MountId, PortalProps, ScopeOrder,
         SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
     },
     nodes::VNode,
@@ -139,25 +139,14 @@ impl ComponentLifecycle for NormalComponentLifecycle {
             state.dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
         }
 
+        // If our scope landed in `dirty_fibers` during its initial render
+        // (e.g. a hook synchronously queued an update for itself), drain the
+        // entry now so we don't re-process the same scope after creation.
         let height = state.dom.runtime.get_state(scope_id).height;
-        if state
+        state
             .dom
             .dirty_fibers
-            .remove(&ScopeOrder::new(height, scope_id))
-        {
-            let mounted = state.dom.scopes[scope_id.0]
-                .last_rendered_node
-                .as_ref()
-                .is_some_and(|node| node.mount.get().mounted());
-            if mounted {
-                state
-                    .dom
-                    .run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
-            } else {
-                let new = state.dom.run_scope(scope_id);
-                state.dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
-            }
-        }
+            .remove(&ScopeOrder::new(height, scope_id));
 
         let new_node = state.dom.scopes[scope_id.0]
             .last_rendered_node
@@ -284,10 +273,16 @@ fn remove_rendered_scope_node<M: WriteMutations>(
     state: &mut DiffState<'_, M>,
     destroy_component_state: bool,
 ) {
-    // Remove the component from the dom
-    if let Some(node) = state.dom.scopes[scope_id.0].last_rendered_node.clone() {
-        node.remove_node_inner(state.dom, state.to.as_deref_mut(), destroy_component_state)
-    };
+    // Both callers (`NormalComponentLifecycle::remove` and
+    // `SuspenseLifecycle::remove`) only fire after the scope has rendered at
+    // least once via the lifecycle `create` hook, which sets
+    // `last_rendered_node` to `Some`. A scope that never rendered is dropped
+    // without going through this path.
+    let node = state.dom.scopes[scope_id.0]
+        .last_rendered_node
+        .clone()
+        .expect("scope being removed should have last_rendered_node set");
+    node.remove_node_inner(state.dom, state.to.as_deref_mut(), destroy_component_state);
 
     if destroy_component_state {
         // Now drop all the resources

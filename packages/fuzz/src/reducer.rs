@@ -772,6 +772,13 @@ fn simplified_dynamic_kinds(kind: &DynamicKind) -> Vec<DynamicKind> {
             });
             out.insert(DynamicKind::Empty);
         }
+        DynamicKind::Portal => {
+            out.insert(DynamicKind::Fragment {
+                children: 0,
+                key_base: None,
+            });
+            out.insert(DynamicKind::Empty);
+        }
     }
     out.into_iter().collect()
 }

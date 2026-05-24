@@ -73,6 +73,16 @@ impl SuspenseLocation {
             }
         }
     }
+
+    /// Outer suspense boundaries currently rendering their fallback. Empty when
+    /// the scope is not transitively hidden by any suspended ancestor.
+    pub(crate) fn hidden_by(&self) -> &[SuspenseContext] {
+        match self {
+            SuspenseLocation::NotSuspended => &[],
+            SuspenseLocation::UnderSuspense { hidden_by, .. }
+            | SuspenseLocation::InSuspensePlaceholder { hidden_by, .. } => hidden_by,
+        }
+    }
 }
 
 /// A component's state separate from its props.

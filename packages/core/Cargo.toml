@@ -1,3 +1,10 @@
+[lints.rust]
+# Allow `#[cfg(coverage_nightly)]` to gate nightly-only coverage attributes
+# (`#![feature(coverage_attribute)]` and `#[coverage(off)]`) on
+# unreachable-by-design code. Stable builds see no effect; coverage runs
+# enable the cfg via `RUSTFLAGS="--cfg coverage_nightly"`.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+
 [package]
 name = "dioxus-core"
 version = { workspace = true }

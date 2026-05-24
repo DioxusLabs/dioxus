@@ -59,24 +59,10 @@ impl<M: WriteMutations> DiffState<'_, M> {
             Ordering::Equal => {}
         }
 
-        self.diff_child_pairs(old.iter().map(Some), new, parent);
+        self.diff_child_pairs(old.iter(), new);
     }
 
     fn diff_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: Option<ElementRef>) {
-        if cfg!(debug_assertions) {
-            for children in [old, new] {
-                debug_assert_eq!(
-                    children.len(),
-                    children
-                        .iter()
-                        .map(|child| child.key.clone())
-                        .collect::<FxHashSet<_>>()
-                        .len(),
-                    "keyed siblings must each have a unique key"
-                );
-            }
-        }
-
         let Some((left_offset, right_offset)) = self.diff_keyed_ends(old, new, parent) else {
             return;
         };
@@ -90,6 +76,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
             && (left_offset > 0 || right_offset > 0)
         {
             if right_offset > 0 {
+                // The right-edge pairs were already diffed by
+                // `diff_keyed_ends`, so the matching new vnode has its mount.
                 self.create_and_insert(
                     anchor_before,
                     new_middle,
@@ -97,7 +85,14 @@ impl<M: WriteMutations> DiffState<'_, M> {
                     parent,
                 );
             } else {
-                self.create_and_insert(anchor_after, new_middle, &new[left_offset - 1], parent);
+                // The left-edge pairs are diffed *after* this splice by
+                // `diff_shared_prefix`, so the matching new vnode's mount
+                // cell is still unset. Use the OLD sibling instead — its
+                // mount still references the element we want to anchor next
+                // to. (Anchoring against the unmounted new sibling falls
+                // through to `Anchor::AppendTo(ROOT)` and lands the new
+                // content past unrelated root siblings.)
+                self.create_and_insert(anchor_after, new_middle, &old[left_offset - 1], parent);
             }
             self.dom.remove_nodes(self.to.as_deref_mut(), old_middle);
         } else {
@@ -170,26 +165,17 @@ impl<M: WriteMutations> DiffState<'_, M> {
     }
 
     fn diff_shared_prefix(&mut self, old: &[VNode], new: &[VNode], len: usize) {
-        self.diff_child_pairs(old.iter().take(len).map(Some), &new[..len], None);
+        self.diff_child_pairs(old.iter().take(len), &new[..len]);
     }
 
-    fn diff_child_pairs<'a>(
-        &mut self,
-        old: impl Iterator<Item = Option<&'a VNode>>,
-        new: &'a [VNode],
-        parent: Option<ElementRef>,
-    ) {
+    fn diff_child_pairs<'a>(&mut self, old: impl Iterator<Item = &'a VNode>, new: &'a [VNode]) {
         let pairs = old.zip(new.iter()).collect::<Vec<_>>();
         if new.len() > FRAGMENT_WORK_BATCH {
             let mut updates = Vec::with_capacity(pairs.len());
             for (old, new) in &pairs {
-                let Some(update) = old.and_then(|old| self.component_props_update(old, new)) else {
+                let Some(update) = self.component_props_update(old, new) else {
                     for (old, new) in pairs.into_iter().rev() {
-                        if let Some(old) = old {
-                            DiffFrame::new(old.mount.get(), old, new).diff_into(self);
-                        } else {
-                            new.create(self.dom, parent, self.to.as_deref_mut());
-                        }
+                        DiffFrame::new(old.mount.get(), old, new).diff_into(self);
                     }
                     return;
                 };
@@ -202,11 +188,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             }
         } else {
             for (old, new) in pairs.into_iter().rev() {
-                if let Some(old) = old {
-                    DiffFrame::new(old.mount.get(), old, new).diff_into(self);
-                } else {
-                    new.create(self.dom, parent, self.to.as_deref_mut());
-                }
+                DiffFrame::new(old.mount.get(), old, new).diff_into(self);
             }
         }
     }
@@ -330,7 +312,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         new_index_to_old_index: &[usize],
         range: std::ops::Range<usize>,
     ) {
-        let skip = collect_splice_mounts(new, old, new_index_to_old_index, range.clone());
+        let skip = collect_splice_mounts(old, new_index_to_old_index, range.clone());
         let context = self.context();
         let anchor = anchor(sibling, &skip, self.dom, context);
         let dom = &mut *self.dom;
@@ -387,8 +369,13 @@ impl<M: WriteMutations> DiffState<'_, M> {
             return None;
         }
 
+        // `old` came straight from the previous render's `dynamic_nodes` —
+        // the diff would have skipped this fast path if `old` were a hole or
+        // a never-mounted placeholder (`single_root_component` already
+        // requires a single Component dynamic root). So `old.mount` is live
+        // here by construction.
         let mount = old.mount.get();
-        mount.as_usize()?;
+        debug_assert!(mount.mounted(), "batched component_props_update requires mounted old");
         new.mount.set(mount);
         Some(ComponentPropsUpdate {
             scope: ScopeId(self.dom.get_mounted_dyn_node(mount, old_idx)),
@@ -427,25 +414,25 @@ fn collect_mounts(nodes: &[VNode]) -> Vec<MountId> {
 }
 
 fn collect_splice_mounts(
-    new: &[VNode],
     old: &[VNode],
     new_index_to_old_index: &[usize],
     range: std::ops::Range<usize>,
 ) -> Vec<MountId> {
-    let mut mounts = Vec::new();
-    for idx in range {
-        let new_mount = new[idx].mount.get();
-        if new_mount.mounted() {
-            mounts.push(new_mount);
-        }
-        if let Some(old_node) = old.get(new_index_to_old_index[idx]) {
+    // Each splice range is the *non-LIS* portion of the keyed middle, so the
+    // new sibling at `range` is not yet claimed; only the matching old vnode's
+    // live mount needs to be added to the skip list so anchor lookups don't
+    // try to use a sibling that's about to be moved. The non-LIS old entries
+    // come straight from the previous render with their mounts intact — no
+    // earlier diff step has called `claim_fiber_mount` on them yet — so the
+    // mount is always live by the time we collect it.
+    range
+        .filter_map(|idx| old.get(new_index_to_old_index[idx]))
+        .map(|old_node| {
             let old_mount = old_node.mount.get();
-            if old_mount.mounted() && old_mount != new_mount {
-                mounts.push(old_mount);
-            }
-        }
-    }
-    mounts
+            debug_assert!(old_mount.mounted(), "non-LIS splice old mount must be live");
+            old_mount
+        })
+        .collect()
 }
 
 impl VNode {
@@ -503,10 +490,18 @@ fn push_live_root(
     target_id: RenderTargetId,
     id: ElementId,
 ) -> usize {
-    if id.0 == 0 || id.0 == usize::MAX || !dom.element_exists_in_target(target_id, id) {
-        return 0;
-    }
-
+    // Callers (`push_all_root_nodes`) only reach this with `id` values just
+    // read from `get_mounted_root_node`/`get_mounted_dyn_node` for a vnode
+    // whose mount target already matches `target_id`, so the live element id
+    // has been allocated in that target by `load_template_root` /
+    // `assign_node_id`. The defensive id-validity check here is therefore
+    // dead in any reachable diff path.
+    debug_assert!(
+        id.0 != 0
+            && id.0 != usize::MAX
+            && dom.element_exists_in_target(target_id, id),
+        "push_live_root requires a live element id in the current target"
+    );
     to.push_root(id);
     1
 }

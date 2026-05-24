@@ -506,7 +506,9 @@ impl VNode {
         dom: &VirtualDom,
     ) -> Option<ElementId> {
         let mount = self.mount.get();
-        mount.as_usize()?;
+        if !mount.mounted() {
+            return None;
+        }
 
         match &self.dynamic_nodes[dynamic_node_idx] {
             DynamicNode::Text(_) => {
@@ -519,7 +521,9 @@ impl VNode {
     /// Get the mounted id for a root node index
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mount.get();
-        mount.as_usize()?;
+        if !mount.mounted() {
+            return None;
+        }
 
         Some(dom.get_mounted_root_node(mount, root_idx))
     }
@@ -531,7 +535,9 @@ impl VNode {
         dom: &VirtualDom,
     ) -> Option<ElementId> {
         let mount = self.mount.get();
-        mount.as_usize()?;
+        if !mount.mounted() {
+            return None;
+        }
 
         Some(dom.get_mounted_dyn_attr(mount, dynamic_attribute_idx))
     }
@@ -1119,7 +1125,9 @@ impl VComponent {
         dom: &VirtualDom,
     ) -> Option<ScopeId> {
         let mount = vnode.mount.get();
-        mount.as_usize()?;
+        if !mount.mounted() {
+            return None;
+        }
 
         let scope_id = dom.get_mounted_dyn_node(mount, dynamic_node_index);
 
@@ -1138,7 +1146,9 @@ impl VComponent {
         dom: &'a VirtualDom,
     ) -> Option<&'a ScopeState> {
         let mount = vnode.mount.get();
-        mount.as_usize()?;
+        if !mount.mounted() {
+            return None;
+        }
 
         let scope_id = dom.get_mounted_dyn_node(mount, dynamic_node_index);
 

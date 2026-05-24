@@ -6,8 +6,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Task, Template, TemplateAttribute, TemplateNode,
-    VComponent, VNode, VText,
+    Attribute, AttributeValue, DynamicNode, Portal, Runtime, Task, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VText,
 };
 use std::{
     borrow::Borrow,
@@ -39,6 +39,36 @@ struct GeneratedSuspenseProps {
     wake_applied: bool,
     suspense_ancestors: Vec<u64>,
     child: VNodeSpec,
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct GeneratedPortalProps {
+    context: HarnessContext,
+    suspense_ancestors: Vec<u64>,
+    child: VNodeSpec,
+}
+
+fn GeneratedPortal(props: GeneratedPortalProps) -> Element {
+    // Each generated portal scope allocates its own real render target. We
+    // intentionally never register a `WriteMutations` writer for that target
+    // in the harness — the diff dispatcher silently drops mutations destined
+    // for a target with no writer. This exercises the "writes enabled"
+    // branches of `Portal::{create,diff,remove}` and the generic diff helpers
+    // (`at_anchor`, `create_at_anchor_with_parents`, `create_with_parents`
+    // with `state.to = Some(_)`) without interleaving the portal body's edits
+    // into the outer ROOT oracle and diverging from the fresh-render
+    // comparison.
+    let target = use_hook(|| Runtime::current().create_render_target());
+    let context = props.context.clone();
+    let suspense_ancestors = props.suspense_ancestors.clone();
+    let child_spec = props.child.clone();
+    let child = build_vnode_with_suspense(&context, &child_spec, &suspense_ancestors);
+    rsx! {
+        Portal {
+            target: target,
+            {child}
+        }
+    }
 }
 
 fn GeneratedComponent(props: GeneratedProps) -> Element {
@@ -321,6 +351,7 @@ fn template_node_contains_suspense(spec: &TemplateNodeSpec) -> bool {
             DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component),
         ) => vnode_contains_suspense(&component.child),
         TemplateNodeSpec::Dynamic(DynamicSpec::Suspense(_)) => true,
+        TemplateNodeSpec::Dynamic(DynamicSpec::Portal(child)) => vnode_contains_suspense(child),
         TemplateNodeSpec::Text(_) | TemplateNodeSpec::Dynamic(_) => false,
     }
 }
@@ -439,6 +470,22 @@ fn build_dynamic(
             },
             "GeneratedSuspenseBoundary",
         )),
+        DynamicSpec::Portal(child) => {
+            // All generated portals share the ROOT render target so the harness'
+            // single oracle observes mutations from both the outer tree and the
+            // portal bodies. The portal scope still flows through
+            // `PortalLifecycle::{create,diff,remove}` regardless of whether the
+            // target ultimately differs.
+            DynamicNode::Component(VComponent::new(
+                GeneratedPortal,
+                GeneratedPortalProps {
+                    context: context.clone(),
+                    suspense_ancestors: suspense_ancestors.to_vec(),
+                    child: child.as_ref().clone(),
+                },
+                "GeneratedPortal",
+            ))
+        }
     }
 }
 

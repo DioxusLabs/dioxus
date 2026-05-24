@@ -104,9 +104,14 @@ impl RenderTargetState {
     }
 
     pub(crate) fn remove_mounted_fiber(&mut self, mount: MountId) {
-        if let Some(fiber) = self.mounted_fibers.get_mut(mount.0) {
-            fiber.take();
-        }
+        // Removal only happens for `mount` values just produced by the
+        // fiber-create path that allocated the slot, so the index is in
+        // bounds by construction.
+        debug_assert!(
+            self.mounted_fibers.get(mount.0).is_some(),
+            "remove_mounted_fiber called with unallocated mount",
+        );
+        self.mounted_fibers[mount.0].take();
     }
 }
 
@@ -126,10 +131,6 @@ impl Default for MountId {
 
 impl MountId {
     pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
-
-    pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.mounted() { Some(self.0) } else { None }
-    }
 
     #[allow(unused)]
     pub(crate) fn mounted(self) -> bool {
@@ -157,16 +158,51 @@ impl VirtualDom {
     }
 
     pub(crate) fn mount_target_id(&self, mount: MountId) -> RenderTargetId {
-        if !mount.mounted() {
-            return self.current_render_target_id();
-        }
-
+        // Every caller has a live `mount` — either freshly allocated via
+        // `next_element_for_mount` / fiber creation, or the result of
+        // `claim_fiber_mount` on a previously-mounted vnode. A PLACEHOLDER
+        // here would indicate a stray ref the diff never produces.
+        debug_assert!(mount.mounted(), "mount_target_id requires a live MountId");
         self.runtime
             .fibers
             .borrow()
             .get(mount.0)
             .map(|fiber| fiber.target_id)
             .unwrap_or(RenderTargetId::ROOT)
+    }
+
+    /// Number of template roots this `mount`'s fiber was created with.
+    /// Anchor lookups that walk a view's `template.roots()` may iterate
+    /// beyond what the fiber actually has — e.g. when the view was a clone
+    /// whose template grew between renders — and the underlying
+    /// `MountedFiberState::root_ids` would panic on out-of-range indexing.
+    pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
+        debug_assert!(mount.mounted(), "mounted_root_count requires a live MountId");
+        let target_id = self.mount_target_id(mount);
+        self.runtime
+            .render_targets
+            .borrow()
+            .get(target_id.0)
+            .and_then(|target| target.mounted_fibers.get(mount.0))
+            .and_then(|fiber| fiber.as_ref())
+            .map(|fiber| fiber.root_ids.len())
+            .unwrap_or(0)
+    }
+
+    /// Number of dynamic-node slots this `mount`'s fiber was created with.
+    /// Same guard rail as [`Self::mounted_root_count`], but for
+    /// `MountedFiberState::mounted_dynamic_nodes`.
+    pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
+        debug_assert!(mount.mounted(), "mounted_dyn_node_count requires a live MountId");
+        let target_id = self.mount_target_id(mount);
+        self.runtime
+            .render_targets
+            .borrow()
+            .get(target_id.0)
+            .and_then(|target| target.mounted_fibers.get(mount.0))
+            .and_then(|fiber| fiber.as_ref())
+            .map(|fiber| fiber.mounted_dynamic_nodes.len())
+            .unwrap_or(0)
     }
 
     pub(crate) fn render_target_should_write(&self, target_id: RenderTargetId) -> bool {
@@ -207,9 +243,7 @@ impl VirtualDom {
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: ElementId) {
         let target_id = self.mount_target_id(mount);
-        if !self.try_reclaim_in_target(target_id, el) {
-            tracing::error!("cannot reclaim {:?} in target {:?}", el, target_id);
-        }
+        self.try_reclaim_in_target(target_id, el);
     }
 
     pub(crate) fn try_reclaim_in_target(
@@ -217,15 +251,18 @@ impl VirtualDom {
         target_id: RenderTargetId,
         el: ElementId,
     ) -> bool {
-        // We never reclaim the unmounted elements or the root element
-        if el.0 == 0 || el.0 == usize::MAX {
-            return true;
-        }
+        // Callers (`reclaim_for_mount` from diff/node.rs and the recursive
+        // remove path) always pre-filter `ElementId::default()` and only fire
+        // on real, allocated element ids. PLACEHOLDER ids are never reclaimed.
+        debug_assert!(
+            el.0 != 0 && el.0 != usize::MAX,
+            "try_reclaim_in_target should never see ROOT or PLACEHOLDER ids",
+        );
 
         let mut targets = self.runtime.render_targets.borrow_mut();
-        let Some(target) = targets.get_mut(target_id.0) else {
-            return false;
-        };
+        let target = targets
+            .get_mut(target_id.0)
+            .expect("reclaim target must still be registered");
         target.elements.try_remove(el.0).is_some()
     }
 
@@ -238,9 +275,9 @@ impl VirtualDom {
         target_id: RenderTargetId,
         el: ElementId,
     ) -> bool {
-        if el.0 == 0 {
-            return true;
-        }
+        // Callers in diff/anchor.rs and diff/node.rs always pre-filter
+        // `ElementId::default()` (ROOT) before calling, so we never see id 0.
+        debug_assert!(el.0 != 0, "element_exists_in_target should never see ROOT");
 
         self.runtime
             .render_targets

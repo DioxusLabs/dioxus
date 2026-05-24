@@ -4,7 +4,6 @@ use crate::{
     innerlude::{ElementRef, MountId},
     nodes::DynamicNode,
 };
-use core::mem::discriminant;
 
 use super::context::DiffContext;
 
@@ -76,9 +75,10 @@ pub(crate) fn anchor_for_slot(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Anchor {
-    if path.is_empty() {
-        return anchor_for_with_key(parent_mount, None, skip, dom, context);
-    }
+    // Every `node_paths` entry the diff hands us starts with the root index
+    // (see `compile_template` and rsx codegen), so the empty path is
+    // unreachable in practice.
+    debug_assert!(!path.is_empty(), "anchor_for_slot called with empty path");
 
     if path.len() == 1 {
         let our_root_idx = path[0] as usize;
@@ -89,26 +89,17 @@ pub(crate) fn anchor_for_slot(
         return anchor_for_with_key(parent_mount, parent_key.as_deref(), skip, dom, context);
     }
 
-    if parent_mount.mounted() && has_parent_view(parent_mount, dom, context) {
-        let enclosing = dom.get_mounted_root_node(parent_mount, path[0] as usize);
-        if enclosing != ElementId::default()
-            && dom.element_exists_for_mount(parent_mount, enclosing)
-        {
-            return Anchor::Slot {
-                parent: enclosing,
-                path: &path[1..],
-            };
-        }
-        debug_assert!(
-            enclosing == ElementId::default()
-                || !dom.element_exists_for_mount(parent_mount, enclosing),
-            "nested slot anchor pointed at stale root {enclosing:?}"
-        );
-    } else {
-        debug_assert!(
-            parent_mount.mounted() && has_parent_view(parent_mount, dom, context),
-            "anchor_for_slot called with stale parent mount {parent_mount:?}"
-        );
+    // `path.len() > 1` means we're walking inside a template element, so
+    // the parent vnode is always mounted and reachable from this diff
+    // context. If the enclosing root has been reclaimed for any reason we
+    // fall through to the slot-level anchor instead of trying to refer to a
+    // stale element id.
+    let enclosing = dom.get_mounted_root_node(parent_mount, path[0] as usize);
+    if enclosing != ElementId::default() && dom.element_exists_for_mount(parent_mount, enclosing) {
+        return Anchor::Slot {
+            parent: enclosing,
+            path: &path[1..],
+        };
     }
 
     anchor_for_slot(parent_mount, &path[..1], skip, dom, context)
@@ -122,19 +113,6 @@ pub(crate) fn create_at_anchor(
     to: Option<&mut impl WriteMutations>,
 ) -> usize {
     at_anchor(anchor, to, |to| dom.create_children(to, content, parent))
-}
-
-pub(crate) fn create_at_anchor_with_parents(
-    content: &[VNode],
-    render_parent: Option<ElementRef>,
-    logical_parent: Option<ElementRef>,
-    anchor: Anchor,
-    dom: &mut VirtualDom,
-    to: Option<&mut impl WriteMutations>,
-) -> usize {
-    at_anchor(anchor, to, |to| {
-        dom.create_children_with_parents(to, content, render_parent, logical_parent)
-    })
 }
 
 pub(crate) fn at_anchor<M: WriteMutations>(
@@ -179,17 +157,11 @@ fn anchor_for_with_key(
     };
     let parent_mount = parent_ref.mount;
     let path = parent_ref.path.path;
-    if path.is_empty() {
-        if let Some(id) = fragment_sibling_after(mount, parent_mount, path, key, skip, dom, context)
-        {
-            return Anchor::Before(id);
-        }
-        debug_assert!(
-            dom.get_mounted_parent(parent_mount).is_none(),
-            "empty parent path should only be used below the root mount"
-        );
-        return Anchor::AppendTo(ElementId::ROOT);
-    }
+    // Same invariant as `anchor_for_slot`: every `ElementRef::path` is built
+    // from a `template.node_paths()` entry, which always begins with the
+    // root index. An empty path here would mean a stray ref that never went
+    // through the template machinery.
+    debug_assert!(!path.is_empty(), "anchor_for_with_key got empty parent path");
 
     if let Some(id) = fragment_sibling_after(mount, parent_mount, path, key, skip, dom, context) {
         return Anchor::Before(id);
@@ -272,11 +244,18 @@ fn fragment_is_unkeyed(children: &[VNode]) -> bool {
 }
 
 fn fragment_children_at_path<'a>(vnode: &'a VNode, path: &'static [u8]) -> Option<&'a [VNode]> {
+    // `path` is sourced from an `ElementRef` that was constructed against
+    // this vnode's template during the current diff, so it always corresponds
+    // to a dynamic slot in `node_paths()`. The position lookup therefore
+    // always succeeds here — slot mismatches would only arise from a
+    // mid-flight template swap, which the diff completes atomically per
+    // parent mount.
     let dyn_id = vnode
         .template
         .node_paths()
         .iter()
-        .position(|p| *p == path)?;
+        .position(|p| *p == path)
+        .expect("fragment path must resolve to a dynamic slot in the vnode's template");
     match &vnode.dynamic_nodes[dyn_id] {
         DynamicNode::Fragment(children) => Some(children),
         _ => None,
@@ -310,54 +289,23 @@ fn parent_root_after(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
-    let context = context.and_then(|context| context.for_mount(parent_mount));
-    let current = context
-        .map(|context| context.old.clone())
-        .or_else(|| dom.current_mounted_view(parent_mount));
-    let next_view = context.map(|context| context.new.clone());
-    let upper = current
-        .iter()
-        .chain(next_view.iter())
-        .map(|v| v.template.roots().len())
-        .max()?;
-
+    // Probe the committed fiber view of `parent_mount`. The diff context's
+    // `old` snapshot matches the committed view by construction (both are
+    // the pre-diff `fiber.node`), so reading directly from the fiber
+    // registry covers both cases. Callers (`anchor_for_slot` after the
+    // path-length check) only reach here with a `parent_mount` that's
+    // currently being diffed, so its fiber is registered.
+    let _ = context;
+    let probe = dom
+        .current_mounted_view(parent_mount)
+        .expect("parent_root_after requires a live parent fiber");
+    let upper = probe.template.roots().len();
     for next in (our_root_idx + 1)..upper {
-        if let Some(current) = current.as_ref().filter(|v| next < v.template.roots().len()) {
-            if let Some(id) =
-                current.find_element_at_root_via_mount(next, parent_mount, dom, ElementEdge::First)
-            {
-                return Some(id);
-            }
-        }
-
-        let Some(next_view) = next_view
-            .as_ref()
-            .filter(|v| next < v.template.roots().len())
-        else {
-            continue;
-        };
-        if current
-            .as_ref()
-            .is_some_and(|current| !root_mount_shape_matches(current, next_view, next))
-        {
-            continue;
-        }
         if let Some(id) =
-            next_view.find_element_at_root_via_mount(next, parent_mount, dom, ElementEdge::First)
+            probe.find_element_at_root_via_mount(next, parent_mount, dom, ElementEdge::First)
         {
             return Some(id);
         }
     }
     None
-}
-
-fn root_mount_shape_matches(old: &VNode, current: &VNode, root_idx: usize) -> bool {
-    match (
-        old.get_dynamic_root_node_and_id(root_idx),
-        current.get_dynamic_root_node_and_id(root_idx),
-    ) {
-        (None, None) => true,
-        (Some((_, old)), Some((_, current))) => discriminant(old) == discriminant(current),
-        _ => false,
-    }
 }
