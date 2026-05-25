@@ -4231,7 +4231,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-test"
-version = "0.7.6"
+version = "0.8.0-alpha.0"
 dependencies = [
  "blitz-dom",
  "dioxus",
