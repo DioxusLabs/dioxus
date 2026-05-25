@@ -39,161 +39,102 @@ use crate::Result;
 use crate::opt::AppManifest;
 use anyhow::{Context, bail};
 use const_serialize::{ConstVec, deserialize_const, serialize_const};
-use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
+use manganis::BundledAsset;
 use manganis_core::SymbolData;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
-#[derive(Copy, Clone)]
-enum ManganisVersion {
-    /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
-    Legacy,
+/// Buffer size used for the `__ASSETS__` linker sections emitted by the manganis macro.
+///
+/// Matches `manganis::macro_helpers::serialize_asset`, which always pads to 4096 bytes so
+/// every entry is fixed-width and can be located by symbol offset alone.
+const MANGANIS_SECTION_SIZE: usize = 4096;
 
-    /// The new version of the manganis format 0.7.2 onward
-    /// This now includes both assets (old BundledAsset format) and permissions (SymbolData format)
-    New,
+/// Deserialize a `__ASSETS__` payload.
+///
+/// The manganis macro emits a raw `BundledAsset`; FFI helper macros emit `SymbolData` (which
+/// wraps assets, Android artifacts, Swift packages, etc.). We try `SymbolData` first because
+/// it carries the variant tag and falls back to the bare `BundledAsset` form for the
+/// asset-only path.
+fn deserialize_manganis_payload(data: &[u8]) -> Option<SymbolDataOrAsset> {
+    if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
+        // Accept any trailing zero padding — the linker section is padded to MANGANIS_SECTION_SIZE.
+        let is_valid = remaining.is_empty()
+            || remaining.iter().all(|&b| b == 0)
+            || remaining.len() <= data.len();
+
+        if is_valid {
+            return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
+        } else {
+            tracing::debug!(
+                "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
+                remaining.len(),
+                data.len(),
+                &data[..data.len().min(32)]
+            );
+        }
+    } else {
+        tracing::debug!(
+            "Failed to deserialize as SymbolData. Data length: {}, first few bytes: {:?}",
+            data.len(),
+            &data[..data.len().min(32)]
+        );
+    }
+
+    if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
+        let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
+
+        if is_valid {
+            tracing::debug!(
+                "Successfully deserialized BundledAsset, remaining padding: {} bytes",
+                remaining.len()
+            );
+            return Some(SymbolDataOrAsset::Asset(asset));
+        } else {
+            tracing::warn!(
+                "BundledAsset deserialized but remaining bytes are not all zeros: {} remaining bytes, first few: {:?}",
+                remaining.len(),
+                &remaining[..remaining.len().min(16)]
+            );
+        }
+    } else {
+        tracing::warn!(
+            "Failed to deserialize as BundledAsset. Data length: {}, first 32 bytes: {:?}",
+            data.len(),
+            &data[..data.len().min(32)]
+        );
+    }
+
+    None
 }
 
-impl ManganisVersion {
-    fn size(&self) -> usize {
-        match self {
-            ManganisVersion::Legacy => {
-                <manganis_core_07::BundledAsset as const_serialize_07::SerializeConst>::MEMORY_LAYOUT.size()
-            }
-            // For new format, we use a larger buffer size to accommodate variable-length CBOR
-            // The actual size will be determined by CBOR deserialization
-            ManganisVersion::New => 4096,
-        }
+fn serialize_bundled_asset(asset: &BundledAsset) -> Vec<u8> {
+    let buffer = serialize_const(asset, ConstVec::new());
+    let mut data = buffer.as_ref().to_vec();
+    if data.len() < MANGANIS_SECTION_SIZE {
+        data.resize(MANGANIS_SECTION_SIZE, 0);
     }
-
-    /// Deserialize data, trying multiple formats for backward compatibility
-    ///
-    /// Tries in order:
-    /// 1. SymbolData (new unified format) - can contain Asset or Permission
-    /// 2. BundledAsset (old asset format) - for backward compatibility
-    fn deserialize(&self, data: &[u8]) -> Option<SymbolDataOrAsset> {
-        match self {
-            ManganisVersion::Legacy => {
-                let buffer = const_serialize_07::ConstReadBuffer::new(data);
-
-                let (_, legacy_asset) =
-                    const_serialize_07::deserialize_const!(manganis_core_07::BundledAsset, buffer)?;
-
-                Some(SymbolDataOrAsset::Asset(legacy_asset_to_modern_asset(
-                    &legacy_asset,
-                )))
-            }
-            ManganisVersion::New => {
-                // First try SymbolData (new format with enum variant)
-                // const-serialize deserialization returns (remaining_bytes, value)
-                // We accept if remaining is empty or contains only padding (zeros)
-                if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
-                    // Check if remaining bytes are all zeros (padding) or empty
-                    // This handles the case where the linker section is larger than the actual data
-                    // Be very lenient with padding - as long as we successfully deserialized, accept it
-                    // The padding is just zeros added to fill the buffer size
-                    let is_valid = remaining.is_empty()
-                        || remaining.iter().all(|&b| b == 0)
-                        || remaining.len() <= data.len(); // Allow any amount of padding as long as it's not larger than data
-
-                    if is_valid {
-                        return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
-                    } else {
-                        tracing::debug!(
-                            "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
-                            remaining.len(),
-                            data.len(),
-                            &data[..data.len().min(32)]
-                        );
-                    }
-                } else {
-                    tracing::debug!(
-                        "Failed to deserialize as SymbolData. Data length: {}, first few bytes: {:?}",
-                        data.len(),
-                        &data[..data.len().min(32)]
-                    );
-                }
-
-                // Fallback: try BundledAsset (direct format - assets are now serialized this way)
-                // This handles assets that were serialized directly as BundledAsset (not wrapped in SymbolData)
-                if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
-                    // Check if remaining bytes are all zeros (padding) or empty
-                    // Accept any amount of padding as long as it's all zeros (which is what we pad with)
-                    let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
-
-                    if is_valid {
-                        tracing::debug!(
-                            "Successfully deserialized BundledAsset, remaining padding: {} bytes",
-                            remaining.len()
-                        );
-                        return Some(SymbolDataOrAsset::Asset(asset));
-                    } else {
-                        tracing::warn!(
-                            "BundledAsset deserialized but remaining bytes are not all zeros: {} remaining bytes, first few: {:?}",
-                            remaining.len(),
-                            &remaining[..remaining.len().min(16)]
-                        );
-                    }
-                } else {
-                    tracing::warn!(
-                        "Failed to deserialize as BundledAsset. Data length: {}, first 32 bytes: {:?}",
-                        data.len(),
-                        &data[..data.len().min(32)]
-                    );
-                }
-
-                None
-            }
-        }
-    }
-
-    fn serialize_asset(&self, asset: &BundledAsset) -> Vec<u8> {
-        match self {
-            ManganisVersion::Legacy => {
-                let legacy_asset = modern_asset_to_legacy_asset(asset);
-                let buffer = const_serialize_07::serialize_const(
-                    &legacy_asset,
-                    const_serialize_07::ConstVec::new(),
-                );
-                buffer.as_ref().to_vec()
-            }
-            ManganisVersion::New => {
-                // New format: serialize as BundledAsset directly (backward compatible)
-                // Pad to 4096 bytes to match the linker output size
-                let buffer = serialize_const(asset, ConstVec::new());
-                let mut data = buffer.as_ref().to_vec();
-                if data.len() < 4096 {
-                    data.resize(4096, 0);
-                }
-                data
-            }
-        }
-    }
-
-    fn serialize_symbol_data(&self, data: &SymbolData) -> Option<Vec<u8>> {
-        match self {
-            ManganisVersion::Legacy => None,
-            ManganisVersion::New => {
-                let buffer = serialize_const(data, ConstVec::new());
-                let mut bytes = buffer.as_ref().to_vec();
-                if bytes.len() < 4096 {
-                    bytes.resize(4096, 0);
-                }
-                Some(bytes)
-            }
-        }
-    }
+    data
 }
 
-/// Result of deserializing a symbol - can be either SymbolData or legacy Asset
+fn serialize_symbol_data(data: &SymbolData) -> Vec<u8> {
+    let buffer = serialize_const(data, ConstVec::new());
+    let mut bytes = buffer.as_ref().to_vec();
+    if bytes.len() < MANGANIS_SECTION_SIZE {
+        bytes.resize(MANGANIS_SECTION_SIZE, 0);
+    }
+    bytes
+}
+
+/// Result of deserializing a manganis symbol payload.
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 enum SymbolDataOrAsset {
-    /// New unified format (can contain Asset or Permission)
+    /// Wrapped enum format emitted by FFI/widget macros (carries assets or plugin metadata).
     SymbolData(Box<SymbolData>),
 
-    /// Old asset format (backward compatibility)
+    /// Bare `BundledAsset` emitted directly by the `asset!()` macro.
     Asset(BundledAsset),
 }
 
@@ -226,144 +167,19 @@ enum AssetRepresentation {
     SymbolData,
 }
 
-fn legacy_asset_to_modern_asset(
-    legacy_asset: &manganis_core_07::BundledAsset,
-) -> manganis_core::BundledAsset {
-    let bundled_path = legacy_asset.bundled_path();
-    let absolute_path = legacy_asset.absolute_source_path();
-    let legacy_options = legacy_asset.options();
-    let add_hash = legacy_options.hash_suffix();
-    let options = match legacy_options.variant() {
-        manganis_core_07::AssetVariant::Image(image) => {
-            let format = match image.format() {
-                manganis_core_07::ImageFormat::Png => ImageFormat::Png,
-                manganis_core_07::ImageFormat::Jpg => ImageFormat::Jpg,
-                manganis_core_07::ImageFormat::Webp => ImageFormat::Webp,
-                manganis_core_07::ImageFormat::Avif => ImageFormat::Avif,
-                manganis_core_07::ImageFormat::Unknown => ImageFormat::Unknown,
-            };
-            let size = match image.size() {
-                manganis_core_07::ImageSize::Automatic => ImageSize::Automatic,
-                manganis_core_07::ImageSize::Manual { width, height } => {
-                    ImageSize::Manual { width, height }
-                }
-            };
-            let preload = image.preloaded();
-
-            AssetOptions::image()
-                .with_format(format)
-                .with_size(size)
-                .with_preload(preload)
-                .with_hash_suffix(add_hash)
-                .into_asset_options()
-        }
-        manganis_core_07::AssetVariant::Folder(_) => AssetOptions::folder()
-            .with_hash_suffix(add_hash)
-            .into_asset_options(),
-        manganis_core_07::AssetVariant::Css(css) => AssetOptions::css()
-            .with_hash_suffix(add_hash)
-            .with_minify(css.minified())
-            .with_preload(css.preloaded())
-            .with_static_head(css.static_head())
-            .into_asset_options(),
-        manganis_core_07::AssetVariant::CssModule(css_module) => AssetOptions::css_module()
-            .with_hash_suffix(add_hash)
-            .with_minify(css_module.minified())
-            .with_preload(css_module.preloaded())
-            .into_asset_options(),
-        manganis_core_07::AssetVariant::Js(js) => AssetOptions::js()
-            .with_hash_suffix(add_hash)
-            .with_minify(js.minified())
-            .with_preload(js.preloaded())
-            .with_static_head(js.static_head())
-            // Legacy 0.7 manganis has no module concept; default to classic script.
-            .with_module(false)
-            .into_asset_options(),
-        _ => AssetOptions::builder()
-            .with_hash_suffix(add_hash)
-            .into_asset_options(),
-    };
-
-    BundledAsset::new(absolute_path, bundled_path, options)
-}
-
-fn modern_asset_to_legacy_asset(modern_asset: &BundledAsset) -> manganis_core_07::BundledAsset {
-    let bundled_path = modern_asset.bundled_path();
-    let absolute_path = modern_asset.absolute_source_path();
-    let legacy_options = modern_asset.options();
-    let add_hash = legacy_options.hash_suffix();
-    let options = match legacy_options.variant() {
-        AssetVariant::Image(image) => {
-            let format = match image.format() {
-                ImageFormat::Png => manganis_core_07::ImageFormat::Png,
-                ImageFormat::Jpg => manganis_core_07::ImageFormat::Jpg,
-                ImageFormat::Webp => manganis_core_07::ImageFormat::Webp,
-                ImageFormat::Avif => manganis_core_07::ImageFormat::Avif,
-                ImageFormat::Unknown => manganis_core_07::ImageFormat::Unknown,
-            };
-            let size = match image.size() {
-                ImageSize::Automatic => manganis_core_07::ImageSize::Automatic,
-                ImageSize::Manual { width, height } => {
-                    manganis_core_07::ImageSize::Manual { width, height }
-                }
-            };
-            let preload = image.preloaded();
-
-            manganis_core_07::AssetOptions::image()
-                .with_format(format)
-                .with_size(size)
-                .with_preload(preload)
-                .with_hash_suffix(add_hash)
-                .into_asset_options()
-        }
-        AssetVariant::Folder(_) => manganis_core_07::AssetOptions::folder()
-            .with_hash_suffix(add_hash)
-            .into_asset_options(),
-        AssetVariant::Css(css) => manganis_core_07::AssetOptions::css()
-            .with_hash_suffix(add_hash)
-            .with_minify(css.minified())
-            .with_preload(css.preloaded())
-            .with_static_head(css.static_head())
-            .into_asset_options(),
-        AssetVariant::CssModule(css_module) => manganis_core_07::AssetOptions::css_module()
-            .with_hash_suffix(add_hash)
-            .with_minify(css_module.minified())
-            .with_preload(css_module.preloaded())
-            .into_asset_options(),
-        AssetVariant::Js(js) => manganis_core_07::AssetOptions::js()
-            .with_hash_suffix(add_hash)
-            .with_minify(js.minified())
-            .with_preload(js.preloaded())
-            .with_static_head(js.static_head())
-            .into_asset_options(),
-        _ => manganis_core_07::AssetOptions::builder()
-            .with_hash_suffix(add_hash)
-            .into_asset_options(),
-    };
-
-    manganis_core_07::BundledAsset::new(absolute_path, bundled_path, options)
-}
-
-fn looks_like_manganis_symbol(name: &str) -> Option<ManganisVersion> {
-    if name.contains("__MANGANIS__") {
-        Some(ManganisVersion::Legacy)
-    } else if name.contains("__ASSETS__") {
-        Some(ManganisVersion::New)
-    } else {
-        None
-    }
+fn is_manganis_symbol(name: &str) -> bool {
+    name.contains("__ASSETS__")
 }
 
 /// An asset offset in the binary
 #[derive(Clone, Copy)]
 struct ManganisSymbolOffset {
-    version: ManganisVersion,
     offset: u64,
 }
 
 impl ManganisSymbolOffset {
-    fn new(version: ManganisVersion, offset: u64) -> Self {
-        Self { version, offset }
+    fn new(offset: u64) -> Self {
+        Self { offset }
     }
 }
 
@@ -444,13 +260,12 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<ManganisSymbolOffset>>
         };
 
         let name = data.name.to_string();
-        if let Some(version) = looks_like_manganis_symbol(&name) {
+        if is_manganis_symbol(&name) {
             let section = sections
                 .get(rva.section as usize - 1)
                 .expect("Section index out of bounds");
 
             addresses.push(ManganisSymbolOffset::new(
-                version,
                 (section.pointer_to_raw_data + rva.offset) as u64,
             ));
         }
@@ -463,7 +278,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
     file: &File<'a, R>,
 ) -> Result<Vec<ManganisSymbolOffset>> {
     let mut offsets = Vec::new();
-    for (version, symbol, section) in manganis_symbols(file) {
+    for (symbol, section) in manganis_symbols(file) {
         let virtual_address = symbol.address();
 
         let Some((section_range_start, _)) = section.file_range() else {
@@ -479,7 +294,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
             .try_into()
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = section_range_start + section_relative_address;
-        offsets.push(ManganisSymbolOffset::new(version, file_offset));
+        offsets.push(ManganisSymbolOffset::new(file_offset));
     }
 
     Ok(offsets)
@@ -625,9 +440,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let mut offsets = Vec::new();
 
     for export in module.exports.iter() {
-        let Some(version) = looks_like_manganis_symbol(&export.name) else {
+        if !is_manganis_symbol(&export.name) {
             continue;
-        };
+        }
 
         let walrus::ExportItem::Global(global) = export.item else {
             continue;
@@ -682,7 +497,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        offsets.push(ManganisSymbolOffset::new(version, file_offset));
+        offsets.push(ManganisSymbolOffset::new(file_offset));
     }
 
     Ok(offsets)
@@ -715,14 +530,12 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 
     // Read each symbol from the data section using the offsets
     for symbol in offsets.iter().copied() {
-        let version = symbol.version;
         let offset = symbol.offset;
 
         // Read data from file_contents (already loaded into memory)
         // Use a large buffer for variable length data, but don't exceed file size
-        let buffer_size = version
-            .size()
-            .min(file_contents.len().saturating_sub(offset as usize));
+        let buffer_size =
+            MANGANIS_SECTION_SIZE.min(file_contents.len().saturating_sub(offset as usize));
         if buffer_size == 0 {
             tracing::warn!("Symbol at offset {offset} is beyond file size");
             continue;
@@ -736,7 +549,7 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 
         // Try to deserialize - const-serialize will handle variable-length data correctly
         // The deserialization should work even with padding (zeros) at the end
-        if let Some(result) = version.deserialize(data_in_range) {
+        if let Some(result) = deserialize_manganis_payload(data_in_range) {
             match result {
                 SymbolDataOrAsset::SymbolData(symbol_data) => match *symbol_data {
                     SymbolData::Asset(asset) => {
@@ -797,49 +610,34 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 
     // Write back only assets to the binary file (permissions are not modified)
     for entry in write_entries {
-        let version = entry.symbol.version;
         let offset = entry.symbol.offset;
         let asset = assets
             .get(entry.asset_index)
             .copied()
             .expect("asset index collected from symbol scan");
 
-        match entry.representation {
+        let new_data = match entry.representation {
             AssetRepresentation::RawBundled => {
                 tracing::debug!(
                     "Writing asset to offset {offset}: {:?} - {:?}",
                     asset.absolute_source_path(),
                     asset.bundled_path()
                 );
-                let new_data = version.serialize_asset(&asset);
-                if new_data.len() > version.size() {
-                    tracing::warn!(
-                        "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
-                        new_data.len(),
-                        version.size()
-                    );
-                }
-                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
+                serialize_bundled_asset(&asset)
             }
             AssetRepresentation::SymbolData => {
                 tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
-                let Some(new_data) = version.serialize_symbol_data(&SymbolData::Asset(asset))
-                else {
-                    tracing::warn!(
-                        "Symbol at offset {offset} was stored as SymbolData but the binary format only supports raw assets"
-                    );
-                    continue;
-                };
-                if new_data.len() > version.size() {
-                    tracing::warn!(
-                        "SymbolData asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
-                        new_data.len(),
-                        version.size()
-                    );
-                }
-                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
+                serialize_symbol_data(&SymbolData::Asset(asset))
             }
+        };
+        if new_data.len() > MANGANIS_SECTION_SIZE {
+            tracing::warn!(
+                "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
+                new_data.len(),
+                MANGANIS_SECTION_SIZE
+            );
         }
+        write_serialized_bytes(&mut file, offset, &new_data, MANGANIS_SECTION_SIZE)?;
     }
 
     // Ensure the file is flushed to disk
@@ -929,12 +727,14 @@ fn write_serialized_bytes(
 /// Extract all manganis symbols and their sections from the given object file.
 fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
     file: &'b File<'a, R>,
-) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+) -> impl Iterator<Item = (Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
     file.symbols().filter_map(move |symbol| {
         let name = symbol.name().ok()?;
-        let version = looks_like_manganis_symbol(name)?;
+        if !is_manganis_symbol(name) {
+            return None;
+        }
         let section_index = symbol.section_index()?;
         let section = file.section_by_index(section_index).ok()?;
-        Some((version, symbol, section))
+        Some((symbol, section))
     })
 }
