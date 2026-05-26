@@ -379,18 +379,23 @@ impl BuildRequest {
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
-                "Failed to automatically provision signing name for Apple codesigning.",
-            )?);
+            app_dev_name = Some(
+                Self::auto_provision_signing_name(self.appstore)
+                    .await
+                    .context(
+                        "Failed to automatically provision signing name for Apple codesigning.",
+                    )?,
+            );
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         let mut provisioning_profile_path = None;
         if entitlements_file.is_none() {
             let bundle_id = self.bundle_identifier();
-            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(&bundle_id)
-                .await
-                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
+            let (entitlements_xml, profile_path) =
+                Self::auto_provision_entitlements(&bundle_id, self.appstore)
+                    .await
+                    .context("Failed to auto-provision entitlements for Apple codesigning.")?;
 
             // Enrich with entitlements from Dioxus.toml config
             let entitlements_xml = self.enrich_entitlements_from_config(entitlements_xml)?;
@@ -423,13 +428,51 @@ impl BuildRequest {
             _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
         };
 
-        // iOS devices require the provisioning profile to be embedded in the .app bundle
+        // iOS bundles need several pre-codesign passes so Apple App Store
+        // validation accepts the output. All bundle-content modifications
+        // (icon catalog, PrivacyInfo, widget Info.plist patching) must happen
+        // BEFORE any codesign call — codesign hashes the bundle and any later
+        // change invalidates the signature.
         if self.bundle == BundleFormat::Ios {
+            let deployment_target = self
+                .config
+                .ios
+                .deployment_target
+                .clone()
+                .unwrap_or_else(|| "15.0".to_string());
+            let ios_dt = collect_ios_dt_metadata(&deployment_target);
+            let crate_dir = self.crate_dir();
+
+            // Compile AppIcon.xcassets via actool and merge the resulting
+            // CFBundleIcons keys into Info.plist. Apple rejects App Store
+            // uploads without a 120x120 iPhone icon present in the bundle.
+            Self::inject_ios_app_icon(&crate_dir, &target_exe, &deployment_target).await?;
+
+            // PrivacyInfo.xcprivacy is mandatory for App Store submissions
+            // since 2024. Auto-copy from `ios/PrivacyInfo.xcprivacy` if the
+            // user provides one at the conventional location.
+            Self::copy_ios_privacy_info(&crate_dir, &target_exe)?;
+
+            // App extensions get their own Info.plist with the same DT*,
+            // LSRequiresIPhoneOS, CFBundleSupportedPlatforms,
+            // UIRequiredDeviceCapabilities, and version strings the main
+            // bundle carries. Apple App Store requires version parity between
+            // an app and its extensions (CFBundleVersion +
+            // CFBundleShortVersionString) and rejects uploads when they
+            // diverge.
+            Self::sync_widget_info_plists(&target_exe, &ios_dt, &self.crate_version())?;
+
             if let Some(profile_path) = &provisioning_profile_path {
                 let dest = target_exe.join("embedded.mobileprovision");
                 std::fs::copy(profile_path, &dest)
                     .context("Failed to embed provisioning profile into .app bundle")?;
             }
+
+            // iOS app extensions live under .app/PlugIns/*.appex and must be
+            // signed BEFORE the parent .app (codesign computes the parent
+            // signature over the nested bundle hashes — sign children last
+            // and the parent signature is invalidated).
+            Self::sign_ios_app_extensions(&target_exe, app_dev_name, self.appstore).await?;
         }
 
         // codesign the app
@@ -456,7 +499,280 @@ impl BuildRequest {
         Ok(())
     }
 
-    async fn auto_provision_signing_name() -> Result<String> {
+    /// Compile `AppIcon.xcassets` (at the crate root) into the .app bundle
+    /// and merge the resulting CFBundleIcons keys into Info.plist.
+    ///
+    /// No-op when no `AppIcon.xcassets` is found — the build still produces a
+    /// `.app`, just one Apple App Store will reject for missing icons.
+    async fn inject_ios_app_icon(
+        crate_dir: &Path,
+        app_root: &Path,
+        deployment_target: &str,
+    ) -> Result<()> {
+        let xcassets = crate_dir.join("AppIcon.xcassets");
+        if !xcassets.exists() {
+            return Ok(());
+        }
+
+        let tmpdir = tempfile::tempdir()?;
+        let partial_plist = tmpdir.path().join("appicon-partial.plist");
+
+        let output = Command::new("xcrun")
+            .args(["actool", "--compile"])
+            .arg(app_root)
+            .args([
+                "--platform",
+                "iphoneos",
+                "--minimum-deployment-target",
+                deployment_target,
+                "--app-icon",
+                "AppIcon",
+                "--output-partial-info-plist",
+            ])
+            .arg(&partial_plist)
+            .arg(&xcassets)
+            .output()
+            .await
+            .context("Failed to run `xcrun actool` — install Xcode command line tools")?;
+
+        if !output.status.success() {
+            bail!(
+                "actool failed to compile AppIcon.xcassets: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        if !partial_plist.exists() {
+            // actool exited successfully but produced no partial plist
+            // (xcassets had no AppIcon entry). Nothing to merge.
+            return Ok(());
+        }
+
+        let main_plist_path = app_root.join("Info.plist");
+        let mut main = plist::Value::from_file(&main_plist_path)
+            .with_context(|| format!("Failed to read {}", main_plist_path.display()))?;
+        let partial = plist::Value::from_file(&partial_plist)
+            .with_context(|| format!("Failed to read {}", partial_plist.display()))?;
+
+        let main_dict = main
+            .as_dictionary_mut()
+            .context("Main Info.plist root is not a dictionary")?;
+
+        // actool may emit CFBundleIcons~ipad variants the bundle doesn't
+        // actually ship. Drop them first so the merge stays consistent.
+        main_dict.remove("CFBundleIcons");
+        main_dict.remove("CFBundleIcons~ipad");
+
+        if let Some(partial_dict) = partial.as_dictionary() {
+            for (k, v) in partial_dict {
+                main_dict.insert(k.clone(), v.clone());
+            }
+        }
+
+        plist::to_file_xml(&main_plist_path, &main).with_context(|| {
+            format!(
+                "Failed to write merged Info.plist at {}",
+                main_plist_path.display()
+            )
+        })?;
+
+        Ok(())
+    }
+
+    /// Copy `ios/PrivacyInfo.xcprivacy` (at the crate root) into the .app
+    /// bundle. Apple has required a PrivacyInfo manifest in App Store
+    /// submissions since 2024. No-op if the file isn't present.
+    fn copy_ios_privacy_info(crate_dir: &Path, app_root: &Path) -> Result<()> {
+        let src = crate_dir.join("ios").join("PrivacyInfo.xcprivacy");
+        if !src.exists() {
+            return Ok(());
+        }
+        let dest = app_root.join("PrivacyInfo.xcprivacy");
+        std::fs::copy(&src, &dest).with_context(|| {
+            format!(
+                "Failed to copy PrivacyInfo.xcprivacy from {} to {}",
+                src.display(),
+                dest.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    /// Patch each `PlugIns/*.appex` Info.plist with the same iOS bundle
+    /// metadata the main app carries (DT* keys, LSRequiresIPhoneOS,
+    /// CFBundleSupportedPlatforms, UIRequiredDeviceCapabilities). Apple
+    /// validates app extension Info.plists independently and rejects
+    /// uploads where these keys are missing or mismatched.
+    fn sync_widget_info_plists(
+        app_root: &Path,
+        ios_dt: &IosDtMetadata,
+        version: &str,
+    ) -> Result<()> {
+        let plugins_dir = app_root.join("PlugIns");
+        if !plugins_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(&plugins_dir)?.flatten() {
+            let appex_path = entry.path();
+            let is_appex = appex_path
+                .extension()
+                .map(|e| e == "appex")
+                .unwrap_or(false);
+            if !is_appex {
+                continue;
+            }
+
+            let plist_path = appex_path.join("Info.plist");
+            let mut value = plist::Value::from_file(&plist_path)
+                .with_context(|| format!("Failed to read {}", plist_path.display()))?;
+
+            let dict = value
+                .as_dictionary_mut()
+                .with_context(|| format!("{} root is not a dictionary", plist_path.display()))?;
+
+            // Required device family / OS markers
+            dict.insert(
+                "LSRequiresIPhoneOS".to_string(),
+                plist::Value::Boolean(true),
+            );
+            dict.insert(
+                "CFBundleSupportedPlatforms".to_string(),
+                plist::Value::Array(vec![plist::Value::String("iPhoneOS".to_string())]),
+            );
+            dict.insert(
+                "UIRequiredDeviceCapabilities".to_string(),
+                plist::Value::Array(vec![plist::Value::String("arm64".to_string())]),
+            );
+
+            // Version parity with main bundle (App Store requirement)
+            dict.insert(
+                "CFBundleVersion".to_string(),
+                plist::Value::String(version.to_string()),
+            );
+            dict.insert(
+                "CFBundleShortVersionString".to_string(),
+                plist::Value::String(version.to_string()),
+            );
+
+            // DT* / SDK metadata mirroring the main bundle. Skip empties so
+            // we don't pollute the plist with blank entries on machines
+            // missing parts of the Xcode toolchain.
+            let dt_entries: [(&str, &str); 9] = [
+                ("DTPlatformName", &ios_dt.dt_platform_name),
+                ("DTPlatformVersion", &ios_dt.dt_platform_version),
+                ("DTPlatformBuild", &ios_dt.dt_platform_build),
+                ("DTSDKName", &ios_dt.dt_sdk_name),
+                ("DTSDKBuild", &ios_dt.dt_sdk_build),
+                ("DTXcode", &ios_dt.dt_xcode),
+                ("DTXcodeBuild", &ios_dt.dt_xcode_build),
+                ("DTCompiler", &ios_dt.dt_compiler),
+                ("BuildMachineOSBuild", &ios_dt.build_machine_os_build),
+            ];
+            for (k, v) in dt_entries {
+                if !v.is_empty() {
+                    dict.insert(k.to_string(), plist::Value::String(v.to_string()));
+                }
+            }
+
+            plist::to_file_xml(&plist_path, &value)
+                .with_context(|| format!("Failed to write patched {}", plist_path.display()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Sign every `.appex` bundle under `<app>/PlugIns/` so the parent .app
+    /// signature is valid and App Store upload accepts the nested extensions.
+    ///
+    /// Each extension gets its own provisioning profile matched by its
+    /// CFBundleIdentifier and is signed with the same signing identity as the
+    /// parent app.
+    async fn sign_ios_app_extensions(
+        app_root: &Path,
+        dev_name: &str,
+        appstore: bool,
+    ) -> Result<()> {
+        let plugins_dir = app_root.join("PlugIns");
+        if !plugins_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(&plugins_dir)?.flatten() {
+            let appex_path = entry.path();
+            let is_appex = appex_path
+                .extension()
+                .map(|e| e == "appex")
+                .unwrap_or(false);
+            if !is_appex {
+                continue;
+            }
+
+            let info_plist = appex_path.join("Info.plist");
+            let appex_bundle_id = plist::Value::from_file(&info_plist)
+                .with_context(|| format!("Failed to read {}", info_plist.display()))?
+                .as_dictionary()
+                .and_then(|d| d.get("CFBundleIdentifier"))
+                .and_then(|v| v.as_string())
+                .map(|s| s.to_string())
+                .with_context(|| {
+                    format!(
+                        "Missing CFBundleIdentifier in app extension {}",
+                        info_plist.display()
+                    )
+                })?;
+
+            tracing::debug!(
+                "Signing app extension {} (bundle id: {appex_bundle_id})",
+                appex_path.display()
+            );
+
+            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(
+                &appex_bundle_id,
+                appstore,
+            )
+            .await
+            .with_context(|| {
+                format!("Failed to auto-provision entitlements for app extension {appex_bundle_id}")
+            })?;
+
+            let dest_profile = appex_path.join("embedded.mobileprovision");
+            std::fs::copy(&profile_path, &dest_profile).with_context(|| {
+                format!(
+                    "Failed to embed provisioning profile into {}",
+                    appex_path.display()
+                )
+            })?;
+
+            let entitlements_tmp = tempfile::NamedTempFile::new()?;
+            std::fs::write(entitlements_tmp.path(), entitlements_xml)?;
+
+            let output = Command::new("codesign")
+                .args([
+                    "--force",
+                    "--entitlements",
+                    entitlements_tmp.path().to_str().unwrap(),
+                    "--sign",
+                    dev_name,
+                ])
+                .arg(&appex_path)
+                .output()
+                .await
+                .context("Failed to codesign app extension - is `codesign` in your path?")?;
+
+            if !output.status.success() {
+                bail!(
+                    "Failed to codesign app extension {}: {}",
+                    appex_path.display(),
+                    String::from_utf8(output.stderr).unwrap_or_default()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn auto_provision_signing_name(appstore: bool) -> Result<String> {
         let identities = Command::new("security")
             .args(["find-identity", "-v", "-p", "codesigning"])
             .output()
@@ -467,16 +783,23 @@ impl BuildRequest {
                     .context("Failed to parse `security find-identity -v -p codesigning`")
             })??;
 
-        // Parsing this:
-        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
-        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+        // App Store distribution requires an "Apple Distribution" certificate
+        // (issued by the paid Apple Developer Program). Otherwise we look for
+        // the standard "Apple Development" identity used for device builds.
+        let (label, pattern) = if appstore {
+            ("Apple Distribution", r#""Apple Distribution: (.+)""#)
+        } else {
+            ("Apple Development", r#""Apple Development: (.+)""#)
+        };
+
+        let app_dev_name = regex::Regex::new(pattern)
             .unwrap()
             .captures(&identities)
             .and_then(|caps| caps.get(1))
             .map(|m| m.as_str())
-            .context(
-                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
-            )?;
+            .with_context(|| {
+                format!("Failed to find {label} in `security find-identity -v -p codesigning`")
+            })?;
 
         Ok(app_dev_name.to_string())
     }
@@ -707,7 +1030,10 @@ impl BuildRequest {
         }
     }
 
-    async fn auto_provision_entitlements(bundle_id: &str) -> Result<(String, PathBuf)> {
+    async fn auto_provision_entitlements(
+        bundle_id: &str,
+        appstore: bool,
+    ) -> Result<(String, PathBuf)> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
 - Accepted the Apple Developer Program License Agreement
@@ -843,6 +1169,19 @@ We checked the folders:
                 continue;
             }
 
+            // App Store distribution profiles have no ProvisionedDevices entry
+            // (they're not tied to a specific device list). Filter out dev /
+            // ad-hoc profiles here so the auto-discovery picks a profile that
+            // Apple will accept for App Store upload.
+            if appstore && !profile.provisioned_devices.is_empty() {
+                tracing::debug!(
+                    "Skipping profile {} ({} provisioned devices — not an App Store profile)",
+                    path.display(),
+                    profile.provisioned_devices.len()
+                );
+                continue;
+            }
+
             let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
             let num_devices = profile.provisioned_devices.len();
 
@@ -897,6 +1236,11 @@ We checked the folders:
             }
         };
 
+        // App Store binaries must ship with `get-task-allow=false` (or the key
+        // omitted). Apple rejects the upload otherwise. Dev / device builds
+        // keep `get-task-allow=true` so the debugger can attach.
+        let get_task_allow = if appstore { "false" } else { "true" };
+
         let entitlements_xml = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -908,13 +1252,14 @@ We checked the folders:
         <string>{APP_ID_ACCESS_GROUP}.*</string>
     </array>
     <key>get-task-allow</key>
-    <true/>
+    <{GET_TASK_ALLOW}/>
     <key>com.apple.developer.team-identifier</key>
     <string>{TEAM_IDENTIFIER}</string>
 </dict></plist>
         "#,
             APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
+            GET_TASK_ALLOW = get_task_allow,
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         );
 
