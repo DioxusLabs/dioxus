@@ -43,6 +43,81 @@ use std::{
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
+/// iOS-only Info.plist metadata probed from the local Xcode/SDK install.
+///
+/// Apple Transporter rejects App Store IPAs that don't carry these keys
+/// (DTPlatformName, DTSDKName, etc.). Xcode injects them automatically;
+/// `dx` reproduces the same set so device + App Store bundles match what
+/// the App Store expects.
+#[derive(Serialize, Default, Clone)]
+pub struct IosDtMetadata {
+    pub dt_platform_name: String,
+    pub dt_platform_version: String,
+    pub dt_platform_build: String,
+    pub dt_sdk_name: String,
+    pub dt_sdk_build: String,
+    pub dt_xcode: String,
+    pub dt_xcode_build: String,
+    pub dt_compiler: String,
+    pub build_machine_os_build: String,
+    pub minimum_os_version: String,
+    pub cf_bundle_package_type: String,
+}
+
+/// Probe the local Xcode toolchain for iOS bundle metadata.
+///
+/// Each probe is best-effort: a failure leaves the corresponding field empty
+/// (which keeps the build working on machines without a full Xcode install,
+/// just without App Store-grade Info.plist output).
+fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
+    fn run(cmd: &str, args: &[&str]) -> String {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    }
+
+    let sdk_version = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-version"]);
+    let sdk_build = run("xcrun", &["--sdk", "iphoneos", "--show-sdk-build-version"]);
+    let xcode = run(
+        "defaults",
+        &["read", "/Applications/Xcode.app/Contents/Info", "DTXcode"],
+    );
+    let xcode_build = run(
+        "defaults",
+        &[
+            "read",
+            "/Applications/Xcode.app/Contents/Info",
+            "DTXcodeBuild",
+        ],
+    );
+    let os_build = run("sw_vers", &["-buildVersion"]);
+
+    let dt_sdk_name = if sdk_version.is_empty() {
+        String::new()
+    } else {
+        format!("iphoneos{sdk_version}")
+    };
+
+    IosDtMetadata {
+        dt_platform_name: "iphoneos".to_string(),
+        dt_platform_version: sdk_version.clone(),
+        dt_platform_build: sdk_build.clone(),
+        dt_sdk_name,
+        dt_sdk_build: sdk_build,
+        dt_xcode: xcode,
+        dt_xcode_build: xcode_build,
+        dt_compiler: "com.apple.compilers.llvm.clang.1_0".to_string(),
+        build_machine_os_build: os_build,
+        minimum_os_version: deployment_target.to_string(),
+        cf_bundle_package_type: "APPL".to_string(),
+    }
+}
+
 impl BuildRequest {
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
     ///
@@ -172,6 +247,9 @@ impl BuildRequest {
             pub url_schemes: Vec<String>,
             /// iOS UIBackgroundModes
             pub background_modes: Vec<String>,
+            /// iOS-only DT metadata (xcrun / Xcode probe). Empty struct on macOS.
+            #[serde(flatten)]
+            pub ios_dt: IosDtMetadata,
         }
 
         // Attempt to use the user's manually specified
@@ -237,6 +315,7 @@ impl BuildRequest {
                             minimum_system_version,
                             url_schemes: mapper.macos_url_schemes.clone(),
                             background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
+                            ios_dt: IosDtMetadata::default(),
                         },
                     )
                     .map_err(|e| e.into())
@@ -256,6 +335,18 @@ impl BuildRequest {
                 let plist_entries = generate_plist_entries(&self.config.ios.plist);
                 let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
 
+                // Probe Xcode toolchain for the DT* / SDK metadata Apple Transporter
+                // requires (DTPlatformName, DTPlatformVersion, DTSDKName, DTXcode, etc.).
+                // Falls back to empty strings if probes fail — the build still produces
+                // a valid .app, just one that won't pass App Store validation.
+                let deployment_target = self
+                    .config
+                    .ios
+                    .deployment_target
+                    .clone()
+                    .unwrap_or_else(|| "15.0".to_string());
+                let ios_dt = collect_ios_dt_metadata(&deployment_target);
+
                 handlebars::Handlebars::new()
                     .render_template(
                         include_str!("../../assets/ios/ios.plist.hbs"),
@@ -271,6 +362,7 @@ impl BuildRequest {
                             minimum_system_version: String::new(), // Not used for iOS
                             url_schemes: mapper.ios_url_schemes.clone(),
                             background_modes: mapper.ios_background_modes.clone(),
+                            ios_dt,
                         },
                     )
                     .map_err(|e| e.into())
