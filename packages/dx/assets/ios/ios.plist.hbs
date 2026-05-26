@@ -20,10 +20,19 @@
 	<string>{{ version }}</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en_US</string>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<!-- Modern (iOS 14+) launch screen declaration. An empty dictionary uses
+	     the system default (solid background, no storyboard file required).
+	     Apps targeting iOS < 14 must ship a LaunchScreen.storyboard and
+	     reference it via UILaunchStoryboardName instead. -->
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Declares the app uses no non-exempt encryption. Avoids the App Store
+	     "export compliance" prompt on every upload. Apps that DO use such
+	     encryption should override via Dioxus.toml [ios.plist] section. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UISupportsTrueScreenSizeOnMac</key>
 	<true/>
 	<key>UIRequiredDeviceCapabilities</key>
@@ -39,8 +48,53 @@
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
 		<string>iPhoneOS</string>
-		<string>iPadOS</string>
 	</array>
+
+	<!-- iOS bundle / Xcode toolchain metadata (Apple Transporter requirement) -->
+	{{#if cf_bundle_package_type}}
+	<key>CFBundlePackageType</key>
+	<string>{{ cf_bundle_package_type }}</string>
+	{{/if}}
+	{{#if minimum_os_version}}
+	<key>MinimumOSVersion</key>
+	<string>{{ minimum_os_version }}</string>
+	{{/if}}
+	{{#if dt_platform_name}}
+	<key>DTPlatformName</key>
+	<string>{{ dt_platform_name }}</string>
+	{{/if}}
+	{{#if dt_platform_version}}
+	<key>DTPlatformVersion</key>
+	<string>{{ dt_platform_version }}</string>
+	{{/if}}
+	{{#if dt_platform_build}}
+	<key>DTPlatformBuild</key>
+	<string>{{ dt_platform_build }}</string>
+	{{/if}}
+	{{#if dt_sdk_name}}
+	<key>DTSDKName</key>
+	<string>{{ dt_sdk_name }}</string>
+	{{/if}}
+	{{#if dt_sdk_build}}
+	<key>DTSDKBuild</key>
+	<string>{{ dt_sdk_build }}</string>
+	{{/if}}
+	{{#if dt_xcode}}
+	<key>DTXcode</key>
+	<string>{{ dt_xcode }}</string>
+	{{/if}}
+	{{#if dt_xcode_build}}
+	<key>DTXcodeBuild</key>
+	<string>{{ dt_xcode_build }}</string>
+	{{/if}}
+	{{#if dt_compiler}}
+	<key>DTCompiler</key>
+	<string>{{ dt_compiler }}</string>
+	{{/if}}
+	{{#if build_machine_os_build}}
+	<key>BuildMachineOSBuild</key>
+	<string>{{ build_machine_os_build }}</string>
+	{{/if}}
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
