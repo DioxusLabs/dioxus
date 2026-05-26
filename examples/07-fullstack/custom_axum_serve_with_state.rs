@@ -3,9 +3,45 @@
  * but now I've figured it out. So I'm going to share what I learned.
  */
 
+
+#[cfg(feature = "server")]
+use {
+    axum::{
+        extract::State,
+        routing::{get, post},
+        Json, Router,
+    },
+    dioxus_cli_config::fullstack_address_or_localhost,
+    anyhow::Result,
+    dioxus::server::router,
+    sqlx::{sqlite::SqlitePoolOptions, SqlitePool},
+    tokio::net::TcpListener,
+};
+
+use dioxus::prelude::*;
+
+#[cfg(feature = "server")]
+#[derive(Clone)]
+struct AppState {
+    pool: SqlitePool,
+}
+
+#[cfg(feature = "server")]
+async fn login_handler(State(_state): State<AppState>) -> &'static str {
+    "Login endpoint"
+}
+
+
+fn App() -> Element {
+    rsx! {
+        p {"App"}
+    }
+}
+
+
 #[cfg(feature = "server")]
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> Result<()> {
     let pool = SqlitePoolOptions::new()
         .connect("sqlite:app.db?mode=rwc")
         .await?;
@@ -22,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let api_router = axum::Router::new()
         .route("/health", get(|| async { "OK" }))
-        .route("/login", post(login_handler))
+        .route("/login", post(|| async { "Login" }))
         .with_state(app_state.clone());
 
     let router = dioxus::server::router(App)
