@@ -412,6 +412,10 @@ impl WebviewInstance {
             webview = webview.with_background_color(color);
         }
 
+        if let Some(policy) = cfg.background_throttling.clone() {
+            webview = webview.with_background_throttling(policy);
+        }
+
         for (name, handler) in cfg.protocols.drain(..) {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
