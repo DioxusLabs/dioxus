@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
     let router = dioxus::server::router(App)
         .nest("/api", api_router);
     // You can use `.nest()` to mount an Axum router inside the Dioxus router
-
+    // You can mount other routers there too, for example /admin/.
     let addr = dioxus_cli_config::fullstack_address_or_localhost();
     // You should use dioxus_cli_config to handle the address
 
