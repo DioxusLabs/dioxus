@@ -724,6 +724,7 @@ name = "chaining_resource"
 path = "examples/05-using-async/chaining_resource.rs"
 doc-scrape-examples = true
 
+[[example]]
 name = "use_effect"
 path = "examples/04-managing-state/use_effect.rs"
 doc-scrape-examples = true
