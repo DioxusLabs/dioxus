@@ -1,5 +1,5 @@
 #[cfg(feature = "webonly")]
-use web_sys_x::Node;
+use web_sys::Node;
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
@@ -9,7 +9,7 @@ extern "C" {
     pub type BaseInterpreter;
 
     #[wasm_bindgen(method)]
-    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys_x::Function);
+    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys::Function);
 
     #[wasm_bindgen(method, js_name = "saveTemplate")]
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);

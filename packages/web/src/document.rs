@@ -1,6 +1,6 @@
 use dioxus_core::ScopeId;
 use dioxus_core::queue_effect;
-use dioxus_core::{provide_context, Runtime};
+use dioxus_core::{Runtime, provide_context};
 use dioxus_document::{Document, Eval, LinkProps, MetaProps, ScriptProps, StyleProps};
 use dioxus_history::History;
 use dioxus_web_eval::WebEvaluator;
@@ -111,7 +111,7 @@ fn append_element_to_head(
     attributes: &Vec<(&'static str, String)>,
     text_content: Option<&str>,
 ) -> Result<(), JsValue> {
-    let window = web_sys_x::window().expect("no global `window` exists");
+    let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
     let head = document.head().expect("document should have a head");
 

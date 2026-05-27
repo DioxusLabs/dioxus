@@ -2307,7 +2307,7 @@ name = "const-serialize"
 version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize-macro",
- "rand 0.9.4",
+ "rand 0.9.2",
  "serde",
 ]
 
@@ -3203,7 +3203,7 @@ dependencies = [
  "http",
  "infer",
  "jni 0.21.1",
- "js-sys",
+ "js-sys-x",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -3212,7 +3212,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "wasm-bindgen-futures",
- "web-sys",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -3432,7 +3432,7 @@ dependencies = [
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
- "web-sys",
+ "web-sys-x",
  "xxhash-rust",
 ]
 
@@ -3667,7 +3667,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "inventory",
- "js-sys",
+ "js-sys-x",
  "mime",
  "pin-project",
  "postcard",
@@ -3693,7 +3693,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-streams",
- "web-sys",
+ "web-sys-x",
  "xxhash-rust",
 ]
 
@@ -3765,7 +3765,7 @@ dependencies = [
  "slab",
  "tokio",
  "tracing",
- "web-sys",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -3787,7 +3787,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "js-sys",
+ "js-sys-x",
  "keyboard-types 0.7.0",
  "lazy-js-bundle 0.8.0-alpha.0",
  "manganis",
@@ -4022,7 +4022,7 @@ dependencies = [
  "tracing",
  "tracing-wasm",
  "wasm-bindgen",
- "web-sys",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -12532,7 +12532,7 @@ dependencies = [
 name = "subsecond"
 version = "0.8.0-alpha.0"
 dependencies = [
- "js-sys",
+ "js-sys-x",
  "libc",
  "libloading 0.8.9",
  "memfd",
@@ -12542,7 +12542,7 @@ dependencies = [
  "thiserror 2.0.18",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -14254,11 +14254,11 @@ dependencies = [
  "dioxus-router",
  "futures",
  "getrandom 0.3.4",
- "js-sys",
+ "js-sys-x",
  "reqwest 0.12.28",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
+ "web-sys-x",
 ]
 
 [[package]]

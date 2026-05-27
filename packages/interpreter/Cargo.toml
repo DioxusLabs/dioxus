@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 wasm-bindgen = { version = "0.2.106-alpha.1", package = "wasm-bindgen-x", optional = true }
 wasm-bindgen-futures = { version = "0.4.56-alpha.1", package = "wasm-bindgen-futures-x", optional = true }
-js-sys-x = { workspace = true, optional = true }
-web-sys-x = { workspace = true, optional = true, features = [
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "Element",
     "Node",
 ] }
@@ -38,8 +38,8 @@ webonly = [
     "sledgehammer",
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
-    "dep:js-sys-x",
-    "dep:web-sys-x",
+    "dep:js-sys",
+    "dep:web-sys",
     "sledgehammer_bindgen/web",
 ]
 binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types", "dep:dioxus-html"]

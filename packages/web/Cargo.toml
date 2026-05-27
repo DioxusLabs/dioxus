@@ -27,7 +27,7 @@ dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true 
 dioxus-web-sys-events = { workspace = true }
 generational-box = { workspace = true }
 
-js-sys-x = { workspace = true }
+js-sys = { workspace = true }
 wasm-bindgen = { version = "0.2.106-alpha.1", package = "wasm-bindgen-x" }
 wasm-bindgen-futures = { version = "0.4.56-alpha.1", package = "wasm-bindgen-futures-x" }
 tracing = { workspace = true }
@@ -38,7 +38,7 @@ serde_json = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
 
-[dependencies.web-sys-x]
+[dependencies.web-sys]
 workspace = true
 features = [
     "AnimationEvent",
@@ -89,20 +89,20 @@ features = [
 
 [features]
 default = ["mounted", "devtools", "document"]
-hydrate = ["web-sys-x/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
     "dioxus-web-sys-events/mounted",
-    "web-sys-x/Element",
-    "web-sys-x/DomRect",
-    "web-sys-x/ScrollIntoViewOptions",
-    "web-sys-x/ScrollLogicalPosition",
-    "web-sys-x/ScrollBehavior",
-    "web-sys-x/HtmlElement",
+    "web-sys/Element",
+    "web-sys/DomRect",
+    "web-sys/ScrollIntoViewOptions",
+    "web-sys/ScrollLogicalPosition",
+    "web-sys/ScrollBehavior",
+    "web-sys/HtmlElement",
 ]
 devtools = [
-  "web-sys-x/MessageEvent",
-  "web-sys-x/WebSocket",
-  "web-sys-x/Location",
+  "web-sys/MessageEvent",
+  "web-sys/WebSocket",
+  "web-sys/Location",
   "dep:serde_json",
   "dep:serde",
   "dioxus-core/serialize",
