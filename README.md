@@ -7,7 +7,7 @@
       </a> -->
       <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
       <img src="./notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
-      <img src="./notes/image-splash.avif">
+      <!-- <img src="./notes/image-splash.avif"> -->
       <br>
     </p>
 </p>
@@ -51,21 +51,21 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/tr-tr"> Türkçe </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
-<p align="center">
+<!-- <p align="center">
   <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0">✨ Dioxus 0.7 is out!!! ✨</a>
-</p>
+</p> -->
 <br>
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hot-reloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
@@ -133,7 +133,7 @@ Render using web-sys, webview, server-side-rendering, liveview, or even with our
 Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
 
 <div align="center">
-  <img src="./notes/primitive-components.avif" width="700">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/dioxus-components.webp" width="700">
 </div>
 
 ## First-class Android and iOS support
@@ -163,15 +163,6 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
   <img src="./notes/docs.avif">
 </div>
 
-
-## Modular and Customizable
-
-Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev). Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
-
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
-</div>
 
 ## Community
 
@@ -257,10 +248,10 @@ cargo run --example <example>
 However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
 
 ```sh
-cargo binstall dioxus-cli@0.7.0 --force
+curl -fsSL https://dioxuslabs.com/install.sh | bash
 ```
 
-If this CLI is out-of-date, you can install it directly from git
+If this CLI is out-of-date, you can install it directly from git or cargo-binstall
 
 ```sh
 cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked

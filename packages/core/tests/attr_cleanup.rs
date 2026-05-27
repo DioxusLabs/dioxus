@@ -3,7 +3,7 @@
 //! This tests to ensure we clean it up
 
 use dioxus::prelude::*;
-use dioxus_core::{generation, ElementId, IntoAttributeValue, Mutation::*};
+use dioxus_core::{ElementId, IntoAttributeValue, Mutation::*, generation};
 
 #[test]
 fn attrs_cycle() {

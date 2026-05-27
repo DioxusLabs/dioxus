@@ -1,21 +1,57 @@
-/// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.
-/// We hardcode these to have a single trampoline for host Java code to call into.
+/// Expose the `Java_dev_dioxus_main_Rust_*` JNI trampolines that wry's Kotlin layer calls into.
+/// We hardcode the package to `dev.dioxus.main` so host Java/Kotlin always has a single set of
+/// symbols to bind against, without having to plumb the top-level package name down into this crate.
 ///
-/// This saves us from having to plumb the top-level package name all the way down into
-/// this file. This is better for modularity (ie just call dioxus' main to run the app) as
-/// well as cache thrashing since this crate doesn't rely on external env vars.
+/// As of wry 0.55 the Kotlin lifecycle methods (create/start/stop/...) live on a `Rust` object
+/// rather than `WryActivity`'s companion object, so the third arg to `tao::android_binding!` is
+/// `Rust` — passing `WryActivity` would emit the wrong JNI symbol names and crash at startup with
+/// `UnsatisfiedLinkError`.
 ///
 /// The CLI is expecting to find `dev.dioxus.main` in the final library. If you find a need to
 /// change this, you'll need to change the CLI as well.
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[inline(never)]
 pub extern "C" fn start_app() {
     use crate::Config;
     use dioxus_core::{Element, VirtualDom};
     use std::any::Any;
 
-    tao::android_binding!(dev_dioxus, main, WryActivity, wry::android_setup, root, tao);
+    // tao 0.35 dropped its automatic `ndk_context::initialize_android_context` call
+    // (see https://github.com/tauri-apps/tao/issues/1220). Many android-aware crates —
+    // including parts of wry itself — call `ndk_context::android_context()` and panic if
+    // it's uninitialized, which then poisons wry's static mutexes and turns the original
+    // panic into a confusing `PoisonError` at the next JNI callback. Initialize it here
+    // before handing off to wry's own setup.
+    //
+    // Guarded by `Once` because `WryActivity.onCreate` (and therefore this setup) runs
+    // again on activity re-creation — rotation, theme changes, back/foreground cycles —
+    // and `ndk_context::initialize_android_context` asserts `previous.is_none()`, which
+    // would abort the process on every re-entry. The global only needs the JavaVM + an
+    // activity-like Context pointer for consumers to attach a JNI thread; we don't need
+    // to refresh it per-activity.
+    unsafe fn android_setup(
+        package: &str,
+        env: ::wry::prelude::JNIEnv<'_>,
+        looper: &::ndk::looper::ThreadLooper,
+        activity: ::wry::prelude::GlobalRef,
+    ) {
+        static NDK_CONTEXT_INIT: std::sync::Once = std::sync::Once::new();
+        NDK_CONTEXT_INIT.call_once(|| {
+            let vm = env.get_java_vm().unwrap();
+            unsafe {
+                ::ndk_context::initialize_android_context(
+                    vm.get_java_vm_pointer() as *mut _,
+                    activity.as_obj().as_raw() as *mut _,
+                );
+            }
+        });
+        unsafe {
+            wry::android_setup(package, env, looper, activity);
+        }
+    }
+
+    tao::android_binding!(dev_dioxus, main, Rust, android_setup, root, tao);
     wry::android_binding!(dev_dioxus, main, wry);
 
     #[cfg(target_os = "android")]

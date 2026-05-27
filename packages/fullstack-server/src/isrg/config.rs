@@ -3,8 +3,8 @@
 #[cfg(not(target_arch = "wasm32"))]
 use crate::isrg::fs_cache::PathMapFn;
 
-use crate::isrg::memory_cache::InMemoryCache;
 use crate::IncrementalRenderer;
+use crate::isrg::memory_cache::InMemoryCache;
 
 use std::{
     path::{Path, PathBuf},

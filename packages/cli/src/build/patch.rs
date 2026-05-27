@@ -1,15 +1,16 @@
 use anyhow::Context;
 use itertools::Itertools;
 use object::{
+    Endianness, Object, ObjectSection, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
     macho::{self},
     read::File,
     write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::{Deref, Range},
+    io::Read,
+    ops::Range,
     path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -32,7 +33,9 @@ pub enum PatchError {
     #[error("Failed to read file: {0}")]
     ReadFs(#[from] std::io::Error),
 
-    #[error("No debug symbols in the patch output. Check your profile's `opt-level` and debug symbols config.")]
+    #[error(
+        "No debug symbols in the patch output. Check your profile's `opt-level` and debug symbols config."
+    )]
     MissingSymbols,
 
     #[error("Failed to parse wasm section: {0}")]
@@ -76,6 +79,16 @@ pub struct HotpatchModuleCache {
 
     // ... native stuff
     pub symbol_table: HashMap<String, CachedSymbol>,
+
+    /// Contents of the .tdata section from the original binary (TLS initialization image).
+    /// Used to provide correct init data for TLS symbol stubs instead of garbage addresses.
+    pub tls_init_data: Vec<u8>,
+
+    /// Map from `$tlv$init` symbol name to (offset_in_tdata, computed_size).
+    /// On macOS, Mach-O nlist doesn't carry symbol sizes, so we compute them from
+    /// adjacent symbol addresses in the `__thread_data` section. This lets us provide
+    /// correctly-sized TLS init data in stubs instead of defaulting to pointer_width.
+    pub tls_init_sizes: HashMap<String, (u64, u64)>,
 }
 
 pub struct CachedSymbol {
@@ -198,7 +211,7 @@ impl HotpatchModuleCache {
                     return Err(PatchError::MissingSymbols);
                 }
 
-                let name_to_ifunc_old = collect_func_ifuncs(&module);
+                let direct_name_to_ifunc = collect_func_ifuncs(&module);
 
                 // These are the "real" bindings for functions in the module
                 // Basically a map between a function's index and its real name
@@ -211,21 +224,33 @@ impl HotpatchModuleCache {
                     })
                     .collect::<HashMap<usize, &str>>();
 
-                // Find the corresponding function that shares the same index, but in the ifunc table
-                let name_to_ifunc_old: HashMap<_, _> = symbols
+                // Find the corresponding function that shares the same index, but in the ifunc table.
+                // This indirection through `code_symbol_map` is what lets us resolve symbols that
+                // were merged together at high opt-levels — multiple symbol names can share one
+                // wasm function index, so we map symbol-name → function-index → unified-name →
+                // ifunc-offset.
+                let mut symbol_ifunc_map: HashMap<String, i32> = symbols
                     .code_symbol_map
                     .par_iter()
                     .filter_map(|(name, idx)| {
                         let new_modules_unified_function = func_to_index.get(idx)?;
-                        let offset = name_to_ifunc_old.get(new_modules_unified_function)?;
-                        Some((*name, *offset))
+                        let offset = direct_name_to_ifunc.get(new_modules_unified_function)?;
+                        Some((name.to_string(), *offset))
                     })
                     .collect();
 
-                let symbol_ifunc_map = name_to_ifunc_old
-                    .par_iter()
-                    .map(|(name, idx)| (name.to_string(), *idx))
-                    .collect::<HashMap<_, _>>();
+                // Also expose any function whose `Function::name` matches an ifunc entry but
+                // doesn't appear in the linking section's symbol table. This covers ifunc-table
+                // entries we synthesize in `prepare_wasm_base_module` (env-import trap stubs)
+                // whose original symbol record in the linking section refers to the (now-deleted)
+                // import slot rather than a defined function. Existing entries take precedence —
+                // the merged-function indirection above is strictly more informative when it
+                // applies.
+                for (name, offset) in &direct_name_to_ifunc {
+                    symbol_ifunc_map
+                        .entry((*name).to_string())
+                        .or_insert(*offset);
+                }
 
                 let old_exports = module
                     .exports
@@ -277,10 +302,55 @@ impl HotpatchModuleCache {
                         ))
                     })
                     .collect::<HashMap<_, _>>();
+
+                // Extract TLS initialization data and section metadata.
+                // This is used to correctly initialize TLS symbols in the stub
+                // instead of writing bogus absolute addresses into .tdata.
+                let tls_section = obj
+                    .sections()
+                    .find(|s| matches!(s.name(), Ok(".tdata" | "__thread_data")));
+
+                let tls_init_data = tls_section
+                    .as_ref()
+                    .and_then(|s| s.data().ok())
+                    .unwrap_or(&[])
+                    .to_vec();
+
+                // Build TLS init size map for macOS. Mach-O nlist doesn't carry symbol
+                // sizes, so we compute them from adjacent symbols in __thread_data.
+                // LLVM/rustc names init data symbols as `FOO$tlv$init` in __thread_data.
+                let tls_data_addr = tls_section.as_ref().map(|s| s.address()).unwrap_or(0);
+                let tls_data_size = tls_section.as_ref().map(|s| s.size()).unwrap_or(0);
+                let tls_section_index = tls_section.as_ref().map(|s| s.index());
+
+                let mut tls_init_syms: Vec<(u64, String)> = Vec::new();
+                for sym in obj.symbols() {
+                    if let (Some(section_idx), Ok(sname)) = (sym.section_index(), sym.name()) {
+                        if Some(section_idx) == tls_section_index {
+                            let offset = sym.address().saturating_sub(tls_data_addr);
+                            tls_init_syms.push((offset, sname.to_string()));
+                        }
+                    }
+                }
+                tls_init_syms.sort_by_key(|(addr, _)| *addr);
+                tls_init_syms.dedup_by_key(|(addr, _)| *addr);
+
+                let mut tls_init_sizes: HashMap<String, (u64, u64)> = HashMap::new();
+                for (i, (offset, sname)) in tls_init_syms.iter().enumerate() {
+                    let size = if i + 1 < tls_init_syms.len() {
+                        tls_init_syms[i + 1].0 - offset
+                    } else {
+                        tls_data_size.saturating_sub(*offset)
+                    };
+                    tls_init_sizes.insert(sname.clone(), (*offset, size));
+                }
+
                 HotpatchModuleCache {
                     symbol_table,
                     path: original.to_path_buf(),
                     old_bytes,
+                    tls_init_data,
+                    tls_init_sizes,
                     ..Default::default()
                 }
             }
@@ -661,6 +731,21 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // Clear the start function from the patch - we don't want any code automatically running!
     new.start = None;
 
+    // Export __wasm_apply_global_relocs if it exists. wasm-ld generates this synthetic
+    // function to relocate GOT.func.internal globals by __table_base, but refuses to
+    // export it via --export or --export-if-defined since it's not a linker symbol.
+    // Without this export, the runtime can't call it, leaving GOT.func.internal globals
+    // unrelocated — they contain element-segment-relative offsets instead of absolute
+    // table indices, causing call_indirect type mismatches in PIC-compiled workspace code.
+    const APPLY_RELOCS: &str = "__wasm_apply_global_relocs";
+    if let Some(func) = new
+        .funcs
+        .iter()
+        .find(|f| f.name.as_deref() == Some(APPLY_RELOCS))
+    {
+        new.exports.add(APPLY_RELOCS, func.id());
+    }
+
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
     std::fs::write(&lib, new.emit_wasm())?;
@@ -791,15 +876,7 @@ pub fn create_undefined_symbol_stub(
     let mut defined_symbols = HashSet::new();
 
     for path in sorted {
-        let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
-        let file = File::parse(bytes.deref() as &[u8])?;
-        for symbol in file.symbols() {
-            if symbol.is_undefined() {
-                undefined_symbols.insert(symbol.name()?.to_string());
-            } else if symbol.is_global() {
-                defined_symbols.insert(symbol.name()?.to_string());
-            }
-        }
+        collect_stub_symbols_from_path(path, &mut undefined_symbols, &mut defined_symbols)?;
     }
     let undefined_symbols: Vec<_> = undefined_symbols
         .difference(&defined_symbols)
@@ -867,10 +944,9 @@ pub fn create_undefined_symbol_stub(
         .address;
 
     if aslr_reference < aslr_ref_address {
-        return Err(PatchError::InvalidModule(
-            format!(
-            "ASLR reference is less than the main module's address - is there a `main`?. {aslr_reference:x} < {aslr_ref_address:x}" )
-        ));
+        return Err(PatchError::InvalidModule(format!(
+            "ASLR reference is less than the main module's address - is there a `main`?. {aslr_reference:x} < {aslr_ref_address:x}"
+        )));
     }
 
     let aslr_offset = aslr_reference - aslr_ref_address;
@@ -1022,7 +1098,7 @@ pub fn create_undefined_symbol_stub(
                             // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
                             // Then the 64-bit absolute address
                             let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
-                                                                                     // Append the 64-bit address
+                            // Append the 64-bit address
                             code.extend_from_slice(&abs_addr.to_le_bytes());
                             code
                         }
@@ -1106,36 +1182,61 @@ pub fn create_undefined_symbol_stub(
                     PointerWidth::U64 => 8,
                 };
 
-                let size = if sym.size == 0 {
-                    pointer_width
-                } else {
-                    sym.size
-                };
+                // Resolve the TLS init data offset and size.
+                //
+                // On ELF: sym.address IS the TLS offset and sym.size is the data size.
+                // On Mach-O: sym.address points to __thread_vars (TLV descriptor), NOT
+                // __thread_data. Mach-O nlist has no size field (always 0). We look up
+                // the corresponding $tlv$init symbol (LLVM convention) to get the real
+                // offset and size within __thread_data.
+                //
+                // Note: each patch gets its own TLS copy (not shared with the main exe).
+                // TLS variables reset to their initial value on patch.
+                // Use the full name (with Mach-O `_` prefix) since tls_init_sizes
+                // keys come from the same symbol table and include the prefix.
+                let init_key = format!("{}$tlv$init", name);
+                let (tls_offset, size) =
+                    if let Some(&(offset, size)) = cache.tls_init_sizes.get(&init_key) {
+                        // macOS: found the $tlv$init symbol with correct offset and size
+                        (offset, size)
+                    } else if sym.size > 0 {
+                        // ELF: sym.address is the TLS offset, sym.size is the data size
+                        (sym.address, sym.size)
+                    } else if !cache.tls_init_sizes.is_empty() {
+                        // macOS fallback: $tlv$init not found but map isn't empty (binary
+                        // might be partially stripped). Use entire tdata as upper bound.
+                        (0, cache.tls_init_data.len() as u64)
+                    } else {
+                        // Last resort (ELF with size=0): use pointer width
+                        (sym.address, pointer_width)
+                    };
 
                 let align = size.min(pointer_width).next_power_of_two();
-                let mut init = vec![0u8; size as usize];
 
-                // write the contents of the symbol to the init vec
-                init.iter_mut()
-                    .zip(match triple.endianness() {
-                        Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
-                        Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
-                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
-                    })
-                    .for_each(|(b, v)| *b = v);
+                let start = tls_offset as usize;
+                let end = start + size as usize;
+                let init = if end <= cache.tls_init_data.len() {
+                    cache.tls_init_data[start..end].to_vec()
+                } else {
+                    // Beyond .tdata bounds (.tbss) or Mach-O fallback: zero-init
+                    vec![0u8; size as usize]
+                };
 
-                let offset = obj.append_section_data(tls_section, &init, align);
-
-                obj.add_symbol(Symbol {
+                // Use add_symbol_data() so the object crate's Mach-O writer auto-creates
+                // __thread_vars TLV descriptors (via macho_add_thread_var). Without this,
+                // the symbol stays in __thread_data and the runtime misinterprets raw init
+                // bytes as a TLV descriptor — first 8 bytes become the thunk pointer.
+                let sym_id = obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
-                    value: offset, // offset inside .tdata
-                    size,
+                    value: 0,
+                    size: 0,
                     scope: SymbolScope::Linkage,
                     kind: SymbolKind::Tls,
                     weak: false,
-                    section: SymbolSection::Section(tls_section),
-                    flags: SymbolFlags::None, // ignore for these stubs
+                    section: SymbolSection::Undefined,
+                    flags: SymbolFlags::None,
                 });
+                obj.add_symbol_data(sym_id, tls_section, &init, align);
             }
 
             // We just assume all non-text symbols are data (globals, statics, etc)
@@ -1169,6 +1270,54 @@ pub fn create_undefined_symbol_stub(
     }
 
     Ok(obj.write()?)
+}
+
+fn collect_stub_symbols_from_path(
+    path: &Path,
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
+
+    if path
+        .extension()
+        .is_some_and(|ext| matches!(ext.to_str(), Some("rlib" | "a")))
+    {
+        let mut archive = ar::Archive::new(std::io::Cursor::new(bytes));
+        while let Some(entry) = archive.next_entry() {
+            let mut entry = entry?;
+            let name = std::str::from_utf8(entry.header().identifier()).unwrap_or_default();
+
+            if name.ends_with(".rmeta") || !(name.ends_with(".o") || name.ends_with(".obj")) {
+                continue;
+            }
+
+            let mut entry_bytes = Vec::with_capacity(entry.header().size() as usize);
+            entry.read_to_end(&mut entry_bytes)?;
+            collect_stub_symbols_from_bytes(&entry_bytes, undefined_symbols, defined_symbols)?;
+        }
+
+        return Ok(());
+    }
+
+    collect_stub_symbols_from_bytes(&bytes, undefined_symbols, defined_symbols)
+}
+
+fn collect_stub_symbols_from_bytes(
+    bytes: &[u8],
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let file = File::parse(bytes)?;
+    for symbol in file.symbols() {
+        if symbol.is_undefined() {
+            undefined_symbols.insert(symbol.name()?.to_string());
+        } else if symbol.is_global() {
+            defined_symbols.insert(symbol.name()?.to_string());
+        }
+    }
+
+    Ok(())
 }
 
 /// Prepares the base module before running wasm-bindgen.
@@ -1216,11 +1365,16 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // However, wasm-bindgen will run a GC pass on the module, removing any unused imports.
     let mut make_indirect = vec![];
     for (imported_func, importid) in imported_funcs {
-        let import = module.imports.get(importid);
+        // Pull out the import's metadata so the `&module.imports` borrow is released before
+        // any `&mut module` calls below (`replace_imported_func` takes `&mut self`).
+        let (import_module, import_name) = {
+            let import = module.imports.get(importid);
+            (import.module.to_string(), import.name.to_string())
+        };
         let name_is_wbg =
-            import.name.starts_with("__wbindgen") || import.name.starts_with("__wbg_");
+            import_name.starts_with("__wbindgen") || import_name.starts_with("__wbg_");
 
-        if name_is_wbg && !name_is_bindgen_symbol(import.name.as_str()) {
+        if name_is_wbg && !name_is_bindgen_symbol(&import_name) {
             let func = module.funcs.get(imported_func);
 
             let ty = module.types.get(func.ty());
@@ -1229,7 +1383,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
             let mut body = builder
-                .name(format!("__saved_wbg_{}", import.name))
+                .name(format!("__saved_wbg_{}", import_name))
                 .func_body();
 
             let locals = params
@@ -1245,12 +1399,42 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let new_func_id = module.funcs.add_local(builder.local_func(locals));
 
-            let saved_name = format!("__saved_wbg_{}", import.name);
+            let saved_name = format!("__saved_wbg_{}", import_name);
             if exported.insert(saved_name.clone()) {
                 module.exports.add(&saved_name, new_func_id);
             }
 
             make_indirect.push(new_func_id);
+        } else if import_module == "env" && !name_is_wbg {
+            // We also stub out any stray non-wbg `env` imports here. The fat build links with
+            // `--no-gc-sections` so every symbol survives for future hot patches, which means any
+            // unresolved C dep (e.g. `isprint` pulled in by a `cc`-compiled tree-sitter) stays in the
+            // module as `(import "env" <name>)`. wasm-bindgen, which runs after this, doesn't own the
+            // `env` namespace — it forwards the import verbatim as `import * as importN from "env"` in
+            // the JS loader, and the browser then rejects it with `TypeError: Module name, 'env' does
+            // not resolve to a valid URL`. Cold (Base) builds dodge this because default wasm-ld
+            // dead-strips the unreachable C call sites and never emits the import. We mirror that
+            // effect at the module level: replace the import with a local function whose body is a
+            // single `unreachable`, and register it in the ifunc table so a thin patch's later env
+            // reference resolves through `name_to_ifunc_old` in `create_wasm_jump_table`.
+            //
+            // Walrus parses the wasm name section into `Function::name`, so the imported
+            // function already carries its original name (e.g. "isprint"). Save it before
+            // replacement so we can put it back on the new local function — `collect_func_ifuncs`
+            // and the cache's `symbol_ifunc_map` both key off `Function::name`, and a patch's
+            // `env` import will look the symbol up by that exact name.
+            let original_name = module.funcs.get(imported_func).name.clone();
+            let new_fid = module
+                .replace_imported_func(imported_func, |(body, _args)| {
+                    body.unreachable();
+                })
+                .map_err(|e| {
+                    PatchError::InvalidModule(format!(
+                        "Failed to stub env import {import_name}: {e}"
+                    ))
+                })?;
+            module.funcs.get_mut(new_fid).name = original_name;
+            make_indirect.push(new_fid);
         }
     }
 
@@ -1340,8 +1524,25 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
-        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
-        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || (name.contains("wasm_bindgen..closure..WasmClosure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
+}
+
+// Test for bindgen symbols. As we find more bad symbols, add them here
+#[test]
+fn bindgen_symbol_catch() {
+    let symbol = "_ZN12wasm_bindgen7convert8closures1_142_$LT$impl$u20$wasm_bindgen..closure..WasmClosure$u20$for$u20$dyn$u20$core..ops..function..FnMut$LT$$LP$$RP$$GT$$u2b$Output$u20$$u3d$$u20$R$GT$15describe_invoke17h4373f8b6570333dcE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // matches_legacy_wasm_bindgen_closure_describe_symbols
+    let symbol = "_ZN12wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe17h1234567890abcdefE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // does_not_match_saved_runtime_exports
+    assert!(!name_is_bindgen_symbol("__wbindgen_malloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_realloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_free"));
 }
 
 /// Manually parse the data section from a wasm module

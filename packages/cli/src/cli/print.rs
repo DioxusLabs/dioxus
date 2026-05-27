@@ -62,7 +62,7 @@ impl Print {
         match self {
             Self::ClientArgs(opts) => {
                 let targets = opts.args.into_targets().await?;
-                let mode = BuildMode::Base { run: false };
+                let mode = BuildMode::Base;
                 let args = targets.client.cargo_build_arguments(&mode);
                 let env = targets.client.cargo_build_env_vars(&mode)?;
                 Self::print_as_unified_command(&env, &args, &opts.style);
@@ -76,7 +76,7 @@ impl Print {
             }
             Self::ServerArgs(print_cargo_args) => {
                 let targets = print_cargo_args.args.into_targets().await?;
-                let mode = BuildMode::Base { run: false };
+                let mode = BuildMode::Base;
                 let server = targets
                     .server
                     .context("No server target found, cannot print server args")?;
@@ -178,8 +178,6 @@ impl Print {
     ///
     /// This function comes from shell-escape
     fn escape_windows(s: Cow<str>) -> Cow<str> {
-        use std::iter::repeat;
-
         let mut needs_escape = s.is_empty();
         for ch in s.chars() {
             match ch {
@@ -202,15 +200,15 @@ impl Print {
 
             match chars.next() {
                 Some('"') => {
-                    es.extend(repeat('\\').take(nslashes * 2 + 1));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2 + 1));
                     es.push('"');
                 }
                 Some(c) => {
-                    es.extend(repeat('\\').take(nslashes));
+                    es.extend(std::iter::repeat_n('\\', nslashes));
                     es.push(c);
                 }
                 None => {
-                    es.extend(repeat('\\').take(nslashes * 2));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2));
                     break;
                 }
             }

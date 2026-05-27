@@ -1,7 +1,7 @@
 [package]
 name = "wgpu-texture"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 publish = false
 
@@ -14,8 +14,12 @@ tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 [dependencies]
 dioxus-native = { workspace = true }
 dioxus = { workspace = true }
+anyrender = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+peniko = { workspace = true }
 wgpu = { workspace = true }
-winit = "0.30"
-bytemuck = "1"
-color = "0.3"
+winit = { workspace = true }
+bytemuck = "1.25"
+color = "0.3.3"
 tracing-subscriber = { workspace = true, optional = true }

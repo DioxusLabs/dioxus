@@ -17,16 +17,16 @@
 use super::literal::HotLiteral;
 use crate::{innerlude::*, partial_closure::PartialClosure};
 
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::fmt::Display;
 use syn::{
+    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
+    Stmt, Token,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     parse_quote,
     spanned::Spanned,
-    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
-    Stmt, Token,
 };
 
 /// A property value in the from of a `name: value` pair with an optional comma.
@@ -173,7 +173,7 @@ impl Attribute {
             let AttributeValue::AttrExpr(expr) = &self.value else {
                 unreachable!("Spread attributes should always be expressions")
             };
-            return quote! { {#expr}.into_boxed_slice() };
+            return quote_spanned! { expr.span() => {#expr}.into_boxed_slice() };
         }
 
         let el_name = self
@@ -289,8 +289,9 @@ impl Attribute {
             }
         };
 
+        let attr_span = attribute.span();
         let completion_hints = self.completion_hints();
-        quote! {
+        quote_spanned! { attr_span =>
             Box::new([
                 {
                     #completion_hints
@@ -310,12 +311,10 @@ impl Attribute {
         // Or if it is a builtin attribute with a single ident value
         if let (AttributeName::BuiltIn(name), AttributeValue::AttrExpr(expr)) =
             (&self.name, &self.value)
+            && let Ok(Expr::Path(path)) = expr.as_expr()
+            && path.path.get_ident() == Some(name)
         {
-            if let Ok(Expr::Path(path)) = expr.as_expr() {
-                if path.path.get_ident() == Some(name) {
-                    return true;
-                }
-            }
+            return true;
         }
 
         false
@@ -531,6 +530,7 @@ impl AttributeValue {
 /// A if else chain attribute value
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfAttributeValue {
+    pub if_expr: ExprIf,
     pub condition: Expr,
     pub then_value: Box<AttributeValue>,
     pub else_value: Option<Box<AttributeValue>>,
@@ -560,7 +560,7 @@ impl IfAttributeValue {
                 return non_string_diagnostic(current_if_value.span());
             };
 
-            let condition = &current_if_value.condition;
+            let condition = &current_if_value.if_expr.cond;
             expression.extend(quote! {
                 if #condition {
                     #new.to_string()
@@ -599,8 +599,8 @@ impl IfAttributeValue {
         }
     }
 
-    fn span(&self) -> proc_macro2::Span {
-        self.then_value.span()
+    fn span(&self) -> Span {
+        self.if_expr.span()
     }
 
     fn is_terminated(&self) -> bool {
@@ -646,7 +646,7 @@ impl IfAttributeValue {
         match stmt {
             syn::Stmt::Expr(exp, None) => {
                 // Try parsing the statement as an IfmtInput by passing it through tokens
-                let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
+                let value: Result<HotLiteral, syn::Error> = syn::parse2(exp.to_token_stream());
                 Ok(match value {
                     Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
                     Err(_) => Box::new(AttributeValue::AttrExpr(PartialExpr::from_expr(exp))),
@@ -663,9 +663,10 @@ impl IfAttributeValue {
         contains_expression: bool,
     ) {
         let IfAttributeValue {
-            condition,
+            if_expr,
             then_value,
             else_value,
+            ..
         } = self;
 
         // Quote an attribute value and convert the value to a string if it is formatted
@@ -712,21 +713,20 @@ impl IfAttributeValue {
             Some(other) => {
                 let other = quote_attribute_value_string(other, contains_expression);
                 if terminated {
-                    quote! { #other }
+                    other
                 } else {
-                    quote! { Some(#other) }
+                    quote_spanned! { other.span() => Some(#other) }
                 }
             }
             None => quote! { None },
         };
 
-        tokens.append_all(quote! {
-            {
-                if #condition {
-                    #then_value
-                } else {
-                    #else_value
-                }
+        let condition = &if_expr.cond;
+        tokens.append_all(quote_spanned! { if_expr.span()=>
+            if #condition {
+                #then_value
+            } else {
+                #else_value
             }
         });
     }
@@ -756,7 +756,7 @@ impl Parse for IfAttributeValue {
                     // If it is a block, then the else is terminated
                     Expr::Block(block) => Self::parse_attribute_value_from_block(&block.block)?,
                     // Otherwise try to parse it as an if expression
-                    _ => Box::new(syn::parse2(quote! { #else_branch })?),
+                    _ => Box::new(syn::parse2(else_branch.to_token_stream())?),
                 };
                 Some(attribute_value)
             }
@@ -764,7 +764,8 @@ impl Parse for IfAttributeValue {
         };
 
         Ok(Self {
-            condition: *if_expr.cond,
+            condition: *if_expr.cond.clone(),
+            if_expr,
             then_value,
             else_value,
         })
@@ -877,31 +878,35 @@ mod tests {
     fn call_with_explicit_closure() {
         let mut a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let a = 1; |e| {} } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let b = 2; { |e| { b } } } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let r = |e| { b }; r } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(!a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            !a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
     }
 
     /// Make sure reserved keywords are parsed as attributes

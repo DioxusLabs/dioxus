@@ -1,7 +1,7 @@
 use crate::{BuildTargets, BundleFormat, Cli, Commands, Workspace};
 use anyhow::Result;
 use clap::Parser;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::{
     collections::HashSet,
     fmt::Write,
@@ -10,7 +10,7 @@ use std::{
     prelude::rust_2024::Future,
 };
 use target_lexicon::Triple;
-use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, prelude::*, util::SubscriberInitExt};
 
 #[tokio::test]
 async fn run_harness() {
@@ -100,16 +100,27 @@ async fn test_harnesses() {
                 assert_eq!(t.client.bundle, BundleFormat::host());
             })
             .asrt(r#"dx build --ios"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    // iOS builds require Xcode toolchain, only available on macOS
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
                 assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
             })
             .asrt(r#"dx build --ios --device"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    return;
+                }
                 let targets = targets.unwrap();
                 assert_eq!(targets.client.bundle, BundleFormat::Ios);
                 assert_eq!(targets.client.triple, "aarch64-apple-ios".parse().unwrap());
             })
             .asrt(r#"dx build --android --device"#, |targets| async move {
+                if crate::AndroidTools::current().is_none() {
+                    // Skip when Android NDK/SDK is not installed
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Android);
                 assert_eq!(t.client.triple, "aarch64-linux-android".parse().unwrap());
@@ -131,6 +142,10 @@ async fn test_harnesses() {
                 assert_eq!(server.triple, Triple::host());
             })
             .asrt(r#"dx build --ios"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    // iOS builds require Xcode toolchain, only available on macOS
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
                 assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
@@ -231,16 +246,19 @@ async fn test_harnesses() {
             .asrt(
                 r#"dx build --ios"#,
                 |targets| async move {
+                    if cfg!(not(target_os = "macos")) {
+                        // iOS builds require Xcode toolchain, only available on macOS
+                        return;
+                    }
                     let t = targets.unwrap();
                     assert!(t.server.is_none());
                     assert_eq!(t.client.bundle, BundleFormat::Ios);
                     assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
-                    assert!(t.client.no_default_features);
                 },
             ),
         TestHarnessBuilder::new("harness-fullstack-with-optional-tokio")
             .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
-            .deps(r#"serde = "1.0.219""#)
+            .deps(r#"serde = { workspace = true }"#)
             .deps(r#"tokio = { workspace = true, features = ["full"], optional = true }"#)
             .fetr(r#"default = []"#)
             .fetr(r#"server = ["dioxus/server", "dep:tokio"]"#)
@@ -255,7 +273,27 @@ async fn test_harnesses() {
                 let server = t.server.unwrap();
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
-            })
+            }),
+        TestHarnessBuilder::new("harness-web-with-no-default-features")
+            .deps(r#"dioxus = { workspace = true }"#)
+            .fetr(r#"default=["other"]"#)
+            .fetr(r#"other=[]"#)
+            .asrt(r#"dx build --no-default-features --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.features, vec!["dioxus/web"]);
+                assert!(t.server.is_none());
+            }),
+        TestHarnessBuilder::new("harness-web-with-default-features")
+            .deps(r#"dioxus = { workspace = true }"#)
+            .fetr(r#"default=["other"]"#)
+            .fetr(r#"other=[]"#)
+            .asrt(r#"dx build --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.features.iter().map(|s| s.as_str()).collect::<HashSet<_>>(), ["dioxus/web", "other"].into_iter().collect::<HashSet<_>>());
+                assert!(t.server.is_none());
+            }),
     ])
     .await;
 }
@@ -324,20 +362,22 @@ impl TestHarnessBuilder {
         std::fs::create_dir_all(&test_dir).unwrap();
         std::fs::create_dir_all(test_dir.join("src")).unwrap();
 
+        // `dependencies` and `features` already end with `\n` (writeln! appends one), so closing
+        // the raw string immediately after `{features}` keeps the generated file at a single
+        // trailing newline. The previous form put 4 spaces and `"#` on their own line, which
+        // landed inside the string and produced "    " (no newline) at EOF — pure diff noise.
         let cargo_toml = format!(
             r#"[package]
 name = "{name}"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
 {dependencies}
-
 [features]
-{features}
-    "#,
+{features}"#,
             name = name,
             dependencies = dependencies,
             features = features

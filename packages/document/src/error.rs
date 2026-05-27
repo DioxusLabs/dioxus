@@ -24,11 +24,23 @@ pub enum EvalError {
 impl Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvalError::Unsupported => write!(f, "EvalError::Unsupported - eval is not supported on the current platform"),
+            EvalError::Unsupported => write!(
+                f,
+                "EvalError::Unsupported - eval is not supported on the current platform"
+            ),
             EvalError::Finished => write!(f, "EvalError::Finished - eval has already ran"),
-            EvalError::InvalidJs(_) => write!(f, "EvalError::InvalidJs - the provided javascript is invalid"),
-            EvalError::Communication(_) => write!(f, "EvalError::Communication - there was an error trying to communicate with between javascript and rust"),
-            EvalError::Serialization(_) => write!(f, "EvalError::Serialization - there was an error trying to serialize or deserialize the result of an eval"),
+            EvalError::InvalidJs(_) => write!(
+                f,
+                "EvalError::InvalidJs - the provided javascript is invalid"
+            ),
+            EvalError::Communication(_) => write!(
+                f,
+                "EvalError::Communication - there was an error trying to communicate with between javascript and rust"
+            ),
+            EvalError::Serialization(_) => write!(
+                f,
+                "EvalError::Serialization - there was an error trying to serialize or deserialize the result of an eval"
+            ),
         }
     }
 }

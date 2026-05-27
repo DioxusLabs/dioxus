@@ -2,7 +2,7 @@
 
 use crate::error::EvalError;
 use generational_box::GenerationalBox;
-use std::future::{poll_fn, Future, IntoFuture};
+use std::future::{Future, IntoFuture, poll_fn};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 

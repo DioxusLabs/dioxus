@@ -44,7 +44,7 @@ fn app() -> Element {
                 // You can pass initial data to the eval function by formatting it into the JavaScript code.
                 const LOOP_COUNT: usize = 10;
                 let eval = document::eval(&format!(r#"for(let i = 0; i < {LOOP_COUNT}; i++) {{
-                    // You can receive values asynchronously with the the `await dioxus.recv()` method.
+                    // You can receive values asynchronously with the `await dioxus.recv()` method.
                     let value = await dioxus.recv();
                     console.log("Received", value);
                 }}"#));

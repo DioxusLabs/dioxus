@@ -245,7 +245,7 @@ pub fn base_path() -> Option<String> {
             return selector.content;
         }
     "#)]
-extern "C" {
+unsafe extern "C" {
     #[wasm_bindgen(js_name = getMetaContents)]
     pub fn get_meta_contents(selector: &str) -> Option<String>;
 }

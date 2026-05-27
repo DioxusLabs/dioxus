@@ -1,6 +1,6 @@
 use super::{check::collect_rs_files, *};
 use crate::Workspace;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
 use std::{borrow::Cow, fs, path::Path};

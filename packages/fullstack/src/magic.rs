@@ -46,7 +46,7 @@ use dioxus_fullstack_core::RequestError;
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::fmt::Display;
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 
@@ -87,12 +87,12 @@ pub enum RestEndpointPayload<T, E> {
 /// The error payload structure for REST API errors.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ErrorPayload<E> {
-    message: String,
+    pub(crate) message: String,
 
-    code: u16,
+    pub(crate) code: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<E>,
+    pub(crate) data: Option<E>,
 }
 
 /// Convert a `RequestError` into a `ServerFnError`.

@@ -1,6 +1,6 @@
 use crate::{
-    platform_override::CommandWithPlatformOverrides, AppBuilder, BuildArgs, BuildId, BuildMode,
-    HotpatchModuleCache, Result, StructuredOutput,
+    AppBuilder, BuildArgs, BuildId, BuildMode, HotpatchModuleCache, Result, StructuredOutput,
+    WorkspaceRustcArgs, platform_override::CommandWithPlatformOverrides,
 };
 use anyhow::Context;
 use clap::Parser;
@@ -63,6 +63,7 @@ impl HotpatchTip {
             rustc_args,
             rustc_envs,
             link_args,
+            cwd,
             ..
         } = structured_build_artifacts;
 
@@ -70,13 +71,21 @@ impl HotpatchTip {
         //       consider a shared-mem approach or a binary serializer? something like arrow / parquet / bincode?
         let cache = Arc::new(HotpatchModuleCache::new(&exe, &request.triple)?);
 
-        let mode = BuildMode::Thin {
-            rustc_args: crate::RustcArgs {
+        let tip_crate_name = request.main_target.replace('-', "_");
+        let mut workspace_rustc_args = WorkspaceRustcArgs::new(link_args);
+        workspace_rustc_args.rustc_args.insert(
+            format!("{tip_crate_name}.bin"),
+            crate::RustcArgs {
                 args: rustc_args,
                 envs: rustc_envs,
-                link_args,
+                cwd,
             },
+        );
+
+        let mode = BuildMode::Thin {
+            workspace_rustc_args,
             changed_files: vec![],
+            modified_crates: std::collections::HashSet::new(),
             aslr_reference: self.aslr_reference,
             cache: cache.clone(),
         };

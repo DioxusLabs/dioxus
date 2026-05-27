@@ -1,11 +1,11 @@
-use crate::{literal::HotLiteral, location::DynIdx, HotReloadFormattedSegment, IfmtInput};
+use crate::{HotReloadFormattedSegment, IfmtInput, literal::HotLiteral, location::DynIdx};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
-use quote::{quote, TokenStreamExt};
+use quote::{TokenStreamExt, quote};
 use syn::Result;
 use syn::{
-    parse::{Parse, ParseStream},
     LitStr,
+    parse::{Parse, ParseStream},
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

@@ -1,18 +1,18 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use crate::{server::DioxusRouterExt, FullstackState, ServeConfig};
+use crate::{FullstackState, ServeConfig, server::DioxusRouterExt};
 use anyhow::Context;
 use axum::{
+    Router,
     body::Body,
     extract::{Request, State},
     routing::IntoMakeService,
-    Router,
 };
 use dioxus_cli_config::base_path;
 use dioxus_core::{ComponentFunction, Element};
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use futures_util::{stream::FusedStream, StreamExt};
+use futures_util::{StreamExt, stream::FusedStream};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
 use hyper_util::{

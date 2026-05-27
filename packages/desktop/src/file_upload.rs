@@ -6,14 +6,14 @@ use std::{any::Any, collections::HashMap};
 use tokio::{fs::File, io::AsyncReadExt};
 
 use dioxus_html::{
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
-    SerializedMouseData, SerializedPointInteraction,
 };
 
 use serde::{Deserialize, Serialize};
@@ -305,14 +305,24 @@ impl HasFormData for DesktopFormData {
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
+    paths: Rc<RefCell<Vec<PathBuf>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
+        match event {
+            DragDropEvent::Enter { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            DragDropEvent::Drop { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            _ => {}
+        }
         self.event.borrow_mut().replace(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
         self.event.borrow_mut().clone()
+    }
+
+    pub fn current_paths(&self) -> Vec<PathBuf> {
+        self.paths.borrow_mut().clone()
     }
 }
 

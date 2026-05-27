@@ -1,5 +1,5 @@
 use crate::AssetOptions;
-use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
+use const_serialize::{ConstStr, SerializeConst, deserialize_const};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
@@ -11,8 +11,10 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
+
     /// The bundled path of the asset
     bundled_path: ConstStr,
+
     /// The options for the asset
     options: AssetOptions,
 }
@@ -51,6 +53,8 @@ impl Hash for BundledAsset {
 }
 
 impl BundledAsset {
+    pub const PLACEHOLDER_HASH: &str = "This should be replaced by dx as part of the build process. If you see this error, make sure you are using a matching version of dx and dioxus and you are not stripping symbols from your binary.";
+
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset
@@ -86,7 +90,7 @@ impl BundledAsset {
 /// It should not be read directly with [`std::fs::read`] because the path needs to be resolved
 /// relative to the bundle
 ///
-/// ```rust
+/// ```rust, ignore
 /// # use manganis::{asset, Asset};
 /// # use dioxus::prelude::*;
 /// const ASSET: Asset = asset!("/assets/image.png");
@@ -99,7 +103,7 @@ impl BundledAsset {
 pub struct Asset {
     /// A function that returns a pointer to the bundled asset. This will be resolved after the linker has run and
     /// put into the lazy asset. We use a function instead of using the pointer directly to force the compiler to
-    /// read the static __REFERENCE_TO_LINK_SECTION at runtime which will be offset by the hot reloading engine instead
+    /// read the static __LINK_SECTION at runtime which will be offset by the hot reloading engine instead
     /// of at compile time which can't be offset
     ///
     /// WARNING: Don't read this directly. Reads can get optimized away at compile time before
@@ -127,21 +131,25 @@ impl Asset {
 
     /// Get the bundled asset
     pub fn bundled(&self) -> BundledAsset {
+        // Read the slice using volatile reads to prevent the compiler from optimizing
+        // away the read at compile time
         let bundled = (self.bundled)();
-        let len = bundled.len();
         let ptr = bundled as *const [u8] as *const u8;
+        let len = bundled.len();
         if ptr.is_null() {
-            panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
+            panic!(
+                "Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker"
+            );
         }
-        let mut bytes = ConstVec::new();
+        let mut bytes = Vec::with_capacity(len);
         for byte in 0..len {
             // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
             // since we are reading a u8 there are no alignment requirements
             let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
-            bytes = bytes.push(byte);
+            bytes.push(byte);
         }
-        let read = bytes.read();
-        deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
+
+        deserialize_const!(BundledAsset, bytes.as_slice()).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
     }
 
     /// Return a canonicalized path to the asset

@@ -8,10 +8,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 use walrus::{
-    ir::{self, dfs_in_order, Visitor},
     ConstExpr, DataKind, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder,
     FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, Module, ModuleConfig, RefType,
     TableId, TypeId,
+    ir::{self, Visitor, dfs_in_order},
 };
 use wasmparser::{
     BinaryReader, Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry,
@@ -1335,7 +1335,9 @@ impl<'a> ModuleWithRelocations<'a> {
                 // Previously this was a hard error, but now we just ignore it. It used to mean that the user
                 let Some(res) = func_id else {
                     if !name.contains("__wbindgen_") {
-                        tracing::error!("Could not find function symbol {name:?} in module - was this built with LTO, --emit-relocs, and debug symbols? Ignoring.");
+                        tracing::error!(
+                            "Could not find function symbol {name:?} in module - was this built with LTO, --emit-relocs, and debug symbols? Ignoring."
+                        );
                     }
                     return Ok(None);
                 };

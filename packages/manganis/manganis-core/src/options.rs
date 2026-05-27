@@ -107,7 +107,7 @@ impl AssetOptionsBuilder<()> {
 
 impl<T> AssetOptionsBuilder<T> {
     /// Create a new asset options builder with the given variant
-    pub(crate) const fn variant(variant: T) -> Self {
+    pub const fn variant(variant: T) -> Self {
         Self {
             add_hash: true,
             variant,

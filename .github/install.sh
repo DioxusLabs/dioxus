@@ -93,7 +93,7 @@ else
 fi
 bin_dir="$dx_install/bin"
 exe="$bin_dir/dx"
-cargo_bin_dir="$HOME/.cargo/bin"
+cargo_bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
 cargo_bin_exe="$cargo_bin_dir/dx"
 
 if [ ! -d "$bin_dir" ]; then

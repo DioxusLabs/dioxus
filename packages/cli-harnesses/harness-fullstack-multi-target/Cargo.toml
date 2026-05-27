@@ -1,13 +1,12 @@
 [package]
 name = "harness-fullstack-multi-target"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
-
 
 [features]
 default=["web", "desktop", "mobile", "server"]
@@ -15,5 +14,3 @@ web=["dioxus/web"]
 desktop=["dioxus/desktop"]
 mobile=["dioxus/mobile"]
 server=["dioxus/server"]
-
-    

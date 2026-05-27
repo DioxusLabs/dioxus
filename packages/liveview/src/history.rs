@@ -350,7 +350,7 @@ impl History for LiveviewHistory {
 
 mod routes {
     use serde::de::{MapAccess, Visitor};
-    use serde::{ser::SerializeMap, Deserializer, Serializer};
+    use serde::{Deserializer, Serializer, ser::SerializeMap};
     use std::collections::BTreeMap;
 
     pub fn serialize<S>(routes: &BTreeMap<usize, String>, serializer: S) -> Result<S::Ok, S::Error>

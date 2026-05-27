@@ -23,7 +23,7 @@ corresponds to the feature in their cargo.toml. So,
 - `dx serve --desktop` will enable the `desktop` feature
 
 In this case, we set default-features to false and then add back the default features that
-aren't renderers, and then add the feature for the given renderer (ie web/desktop/mobile).
+aren't renderers, and then add the feature for the given renderer (i.e., web/desktop/mobile).
 We call this "no-default-features-stripped."
 
 There are a few cases where the user doesn't need to pass a platform.

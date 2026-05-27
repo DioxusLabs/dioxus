@@ -40,6 +40,7 @@ env:
   # PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
   RELEASE_TAG: ${{ github.event.inputs.channel }}
   RELEASE_POST: ${{ github.event.inputs.post }}
+  rust_stable: 1.94.0
 
 jobs:
   release-cli:
@@ -54,7 +55,7 @@ jobs:
           - target: aarch64-pc-windows-msvc
             os: windows-latest
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
@@ -70,6 +71,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Build from the tag we're releasing, not the branch the workflow
+          # was dispatched from. Without this the binary's Cargo.toml version
+          # and embedded SHA reflect whatever was on the dispatch branch.
+          ref: refs/tags/${{ github.event.inputs.post }}
+
+      - name: Resolve release commit SHA
+        shell: bash
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "DIOXUS_CLI_GIT_SHA=$sha" >> "$GITHUB_ENV"
+          echo "DIOXUS_CLI_GIT_SHA_SHORT=${sha:0:7}" >> "$GITHUB_ENV"
 
       - name: Install openssl on macos
         if: matrix.platform.os == 'macos-latest'
@@ -84,15 +97,25 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' }}
+        if: ${{ matrix.platform.os == 'ubuntu-24.04' }}
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev musl-tools
+          packages: pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev musl-tools
           version: 1.0
+
+      - name: Install Linux desktop dependencies for ARM
+        if: ${{ matrix.platform.os == 'ubuntu-24.04-arm' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev musl-tools
+
+      - name: Verify GLib pkg-config metadata on ARM Linux
+        if: ${{ matrix.platform.os == 'ubuntu-24.04-arm' }}
+        run: pkg-config --modversion glib-2.0
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.88.0"
+          toolchain: ${{ env.rust_stable }}
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -119,6 +142,7 @@ jobs:
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
           zip: "all"
+          locked: true
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website

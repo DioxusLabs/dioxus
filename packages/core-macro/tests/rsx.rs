@@ -44,6 +44,8 @@ mod test_default_into {
         #[props(default = Some("abc".into()))]
         pub opt_default: Option<String>,
 
+        pub opt_element: Option<Element>,
+
         // Test no default
         #[props(into)]
         pub some_data: bool,

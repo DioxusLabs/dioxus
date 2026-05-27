@@ -5,14 +5,14 @@
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
+    ComponentFunction, Element, Mutations,
     arena::ElementId,
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    ComponentFunction, Element, Mutations,
 };
-use crate::{innerlude::Work, scopes::LastRenderedNode};
 use crate::{Task, VComponent};
+use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
@@ -479,7 +479,7 @@ impl VirtualDom {
     /// Queue any pending events
     fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
-        while let Ok(Some(msg)) = self.rx.try_next() {
+        while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),

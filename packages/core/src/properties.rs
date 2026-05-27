@@ -228,12 +228,12 @@ pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 
 // Closure can be created from FnMut -> async { anything } or FnMut -> Ret
 impl<
-        Function: FnMut(Args) -> Spawn + 'static,
-        Args: 'static,
-        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
-        Ret: 'static,
-        Marker,
-    > SuperFrom<Function, OptionCallbackMarker<Marker>> for Option<Callback<Args, Ret>>
+    Function: FnMut(Args) -> Spawn + 'static,
+    Args: 'static,
+    Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+    Ret: 'static,
+    Marker,
+> SuperFrom<Function, OptionCallbackMarker<Marker>> for Option<Callback<Args, Ret>>
 {
     fn super_from(input: Function) -> Self {
         Some(Callback::new(input))
