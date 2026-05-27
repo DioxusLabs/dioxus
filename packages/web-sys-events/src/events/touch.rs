@@ -1,8 +1,8 @@
 use dioxus_html::{
-    HasTouchPointData, InteractionLocation, Modifiers, ModifiersInteraction, TouchPoint,
     geometry::{ClientPoint, PagePoint, ScreenPoint},
+    HasTouchPointData, InteractionLocation, Modifiers, ModifiersInteraction, TouchPoint,
 };
-use web_sys_x::{Touch, TouchEvent};
+use web_sys::{Touch, TouchEvent};
 
 use super::{Synthetic, WebEventExt};
 
@@ -100,10 +100,10 @@ impl InteractionLocation for Synthetic<Touch> {
 }
 
 impl WebEventExt for dioxus_html::TouchData {
-    type WebEvent = web_sys_x::TouchEvent;
+    type WebEvent = web_sys::TouchEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys_x::TouchEvent> {
-        self.downcast::<web_sys_x::TouchEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys::TouchEvent> {
+        self.downcast::<web_sys::TouchEvent>().cloned()
     }
 }

@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
 use dioxus_html::{
-    Code, HasKeyboardData, Key, Location, Modifiers, ModifiersInteraction,
-    input_data::decode_key_location,
+    input_data::decode_key_location, Code, HasKeyboardData, Key, Location, Modifiers,
+    ModifiersInteraction,
 };
-use web_sys_x::KeyboardEvent;
+use web_sys::KeyboardEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -56,10 +56,10 @@ impl ModifiersInteraction for Synthetic<KeyboardEvent> {
 }
 
 impl WebEventExt for dioxus_html::KeyboardData {
-    type WebEvent = web_sys_x::KeyboardEvent;
+    type WebEvent = web_sys::KeyboardEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys_x::KeyboardEvent> {
-        self.downcast::<web_sys_x::KeyboardEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys::KeyboardEvent> {
+        self.downcast::<web_sys::KeyboardEvent>().cloned()
     }
 }

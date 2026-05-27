@@ -1,5 +1,5 @@
 use dioxus_html::HasTransitionData;
-use web_sys_x::TransitionEvent;
+use web_sys::TransitionEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -22,10 +22,10 @@ impl HasTransitionData for Synthetic<TransitionEvent> {
 }
 
 impl WebEventExt for dioxus_html::TransitionData {
-    type WebEvent = web_sys_x::TransitionEvent;
+    type WebEvent = web_sys::TransitionEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys_x::TransitionEvent> {
-        self.downcast::<web_sys_x::TransitionEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys::TransitionEvent> {
+        self.downcast::<web_sys::TransitionEvent>().cloned()
     }
 }

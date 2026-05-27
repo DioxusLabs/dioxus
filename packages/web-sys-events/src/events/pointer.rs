@@ -1,10 +1,10 @@
 use dioxus_html::{
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{decode_mouse_button_set, MouseButton},
     HasPointerData, InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
-    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
-    input_data::{MouseButton, decode_mouse_button_set},
 };
-use web_sys_x::PointerEvent;
+use web_sys::PointerEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -106,10 +106,10 @@ impl PointerInteraction for Synthetic<PointerEvent> {
 }
 
 impl WebEventExt for dioxus_html::PointerData {
-    type WebEvent = web_sys_x::PointerEvent;
+    type WebEvent = web_sys::PointerEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys_x::PointerEvent> {
-        self.downcast::<web_sys_x::PointerEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys::PointerEvent> {
+        self.downcast::<web_sys::PointerEvent>().cloned()
     }
 }

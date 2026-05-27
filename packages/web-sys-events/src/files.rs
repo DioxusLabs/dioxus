@@ -1,11 +1,11 @@
 use dioxus_core::AnyhowContext;
 use dioxus_html::{bytes::Bytes, FileData, NativeFileData};
 use futures_channel::oneshot;
-use js_sys_x::Uint8Array;
+use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
 use std::{pin::Pin, prelude::rust_2024::Future};
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys_x::{File, FileList, FileReader};
+use web_sys::{File, FileList, FileReader};
 
 /// A file representation for the web platform
 #[derive(Clone)]
@@ -18,7 +18,7 @@ unsafe impl Send for WebFileData {}
 unsafe impl Sync for WebFileData {}
 
 impl WebFileData {
-    /// Create a new WebFileData from a web_sys_x::File
+    /// Create a new WebFileData from a web_sys::File
     pub fn new(file: File, reader: FileReader) -> Self {
         Self { file, reader }
     }
@@ -120,7 +120,7 @@ impl NativeFileData for WebFileData {
                 + Send,
         >,
     > {
-        let file = self.file.dyn_ref::<web_sys_x::Blob>().unwrap().clone();
+        let file = self.file.dyn_ref::<web_sys::Blob>().unwrap().clone();
         Box::pin(SendWrapper::new(futures_util::stream::once(async move {
             let array_buff = wasm_bindgen_futures_x::JsFuture::from(file.array_buffer())
                 .await
@@ -137,7 +137,7 @@ impl NativeFileData for WebFileData {
     fn path(&self) -> std::path::PathBuf {
         let key = wasm_bindgen::JsValue::from_str("webkitRelativePath");
 
-        if let Ok(value) = js_sys_x::Reflect::get(&self.file, &key) {
+        if let Ok(value) = js_sys::Reflect::get(&self.file, &key) {
             if let Some(path_str) = value.as_string() {
                 if !path_str.is_empty() {
                     return std::path::PathBuf::from(path_str);
@@ -191,14 +191,14 @@ impl WebFileEngine {
     }
 }
 
-/// Helper trait for extracting the underlying `web_sys_x::File` from a `FileData`
+/// Helper trait for extracting the underlying `web_sys::File` from a `FileData`
 pub trait WebFileExt {
-    /// returns web_sys_x::File
-    fn get_web_file(&self) -> Option<web_sys_x::File>;
+    /// returns web_sys::File
+    fn get_web_file(&self) -> Option<web_sys::File>;
 }
 
 impl WebFileExt for FileData {
-    fn get_web_file(&self) -> Option<web_sys_x::File> {
-        self.inner().downcast_ref::<web_sys_x::File>().cloned()
+    fn get_web_file(&self) -> Option<web_sys::File> {
+        self.inner().downcast_ref::<web_sys::File>().cloned()
     }
 }

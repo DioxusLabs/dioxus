@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use dioxus_html::HasImageData;
-use web_sys_x::Event;
+use web_sys::Event;
 
 use super::WebEventExt;
 

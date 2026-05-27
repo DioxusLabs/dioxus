@@ -2,13 +2,13 @@ use crate::{WebDataTransfer, WebFileData, WebFileEngine};
 
 use super::{Synthetic, WebEventExt};
 use dioxus_html::{
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{decode_mouse_button_set, MouseButton},
     FileData, HasDataTransferData, HasDragData, HasFileData, HasMouseData,
     InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
-    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
-    input_data::{MouseButton, decode_mouse_button_set},
 };
-use web_sys_x::{DragEvent, FileReader};
+use web_sys::{DragEvent, FileReader};
 
 impl InteractionLocation for Synthetic<DragEvent> {
     fn client_coordinates(&self) -> ClientPoint {
@@ -81,7 +81,7 @@ impl HasDataTransferData for Synthetic<DragEvent> {
         }
 
         // Return an empty DataTransfer if we couldn't get one from the event
-        let web_data_transfer = WebDataTransfer::new(web_sys_x::DataTransfer::new().unwrap());
+        let web_data_transfer = WebDataTransfer::new(web_sys::DataTransfer::new().unwrap());
         dioxus_html::DataTransfer::new(web_data_transfer)
     }
 }
@@ -113,10 +113,10 @@ impl HasFileData for Synthetic<DragEvent> {
 }
 
 impl WebEventExt for dioxus_html::DragData {
-    type WebEvent = web_sys_x::DragEvent;
+    type WebEvent = web_sys::DragEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys_x::DragEvent> {
+    fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
         self.downcast::<DragEvent>().cloned()
     }
 }
