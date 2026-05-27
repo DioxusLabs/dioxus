@@ -25,7 +25,7 @@ use dioxus::prelude::*;
 struct AppState {
     pool: SqlitePool,
 }
-
+//You can change the AppState while developing, for example by adding JWT keys.
 
 
 
