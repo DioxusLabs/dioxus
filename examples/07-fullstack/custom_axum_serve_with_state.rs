@@ -26,10 +26,7 @@ struct AppState {
     pool: SqlitePool,
 }
 
-#[cfg(feature = "server")]
-async fn login_handler(State(_state): State<AppState>) -> &'static str {
-    "Login endpoint"
-}
+
 
 
 fn App() -> Element {
