@@ -1,5 +1,5 @@
-use crate::app::MakeVirtualDom;
 use crate::Config;
+use crate::app::MakeVirtualDom;
 use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
@@ -105,9 +105,12 @@ pub fn launch_virtual_dom_blocking(
                 }
 
                 // Run a closure with DesktopService access on the main thread
-                UserWindowEvent::RunWithDesktopService { id, callback } => {
+                UserWindowEvent::RunWithDesktopService {
+                    window_id,
+                    callback,
+                } => {
                     if let Some(inner) = callback.take() {
-                        if let Some(webview) = app.webviews.get(&id) {
+                        if let Some(webview) = app.webviews.get(&window_id) {
                             let result = (inner.callback)(&webview.desktop_context);
                             let _ = inner.sender.send(result);
                         }

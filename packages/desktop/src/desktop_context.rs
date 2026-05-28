@@ -23,12 +23,12 @@ use tao::{
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     monitor::MonitorHandle,
     window::{
-        CursorIcon, Fullscreen as WryFullscreen, Icon, ProgressBarState, ResizeDirection, Theme,
-        UserAttentionType, Window, WindowId, WindowSizeConstraints, RGBA,
+        CursorIcon, Fullscreen as WryFullscreen, Icon, ProgressBarState, RGBA, ResizeDirection,
+        Theme, UserAttentionType, Window, WindowId, WindowSizeConstraints,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
-use wry::{Rect, RequestAsyncResponder, WebView, RGBA as WebViewRGBA};
+use wry::{RGBA as WebViewRGBA, Rect, RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use objc2::rc::Retained;
@@ -167,7 +167,7 @@ impl DesktopContext {
 
         self.proxy
             .send_event(UserWindowEvent::RunWithDesktopService {
-                id: window_id,
+                window_id,
                 callback: wrapper,
             })
             .expect("Event loop has been dropped");
@@ -515,8 +515,8 @@ impl DesktopContext {
     pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-            + Send
-            + 'static,
+        + Send
+        + 'static,
     ) -> WryEventHandler {
         self.run_with_desktop_service(move |desktop| desktop.create_wry_event_handler(handler))
     }

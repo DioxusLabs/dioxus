@@ -1,7 +1,7 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::sync::{mpsc::SyncSender, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc::SyncSender};
 use tao::window::WindowId;
 use wry_bindgen::runtime::WryBindgenEvent;
 
@@ -95,7 +95,8 @@ pub enum UserWindowEvent {
     /// Run a closure with access to a specific window's DesktopService on the main thread
     RunWithDesktopService {
         /// The window ID to get the DesktopService for
-        id: WindowId,
+        window_id: WindowId,
+
         /// The callback wrapper containing the closure and response channel
         callback: DesktopServiceCallbackWrapper,
     },
