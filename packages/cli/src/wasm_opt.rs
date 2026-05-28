@@ -9,6 +9,11 @@ use tempfile::NamedTempFile;
 /// Pinned binaryen version (contains wasm-opt).
 const BINARYEN_VERSION: &str = "129";
 
+/// Hard upper bound on a single wasm-opt invocation. wasm-opt normally finishes a release-size
+/// app in seconds-to-minutes; anything past this is almost certainly a hang from binaryen's
+/// DWARF emitter choking on a Rust toolchain it doesn't understand.
+const WASM_OPT_TIMEOUT_SECS: u64 = 300;
+
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     std::fs::write(output_path, bytes)?;
@@ -70,7 +75,7 @@ impl WasmOpt {
             args.push("--memory-packing");
         }
 
-        if !self.cfg.debug {
+        if !self.cfg.debug_symbols {
             args.push("--strip-debug");
         } else {
             args.push("--debuginfo");
@@ -110,7 +115,19 @@ impl WasmOpt {
 
     pub async fn optimize(&self) -> Result<()> {
         let mut command = self.build_command();
-        let res = command.output().await?;
+        command.kill_on_drop(true);
+
+        // Run with timeout - some versions of wasm-opt fail to exit properly and might be confusing to users
+        let timeout = std::time::Duration::from_secs(WASM_OPT_TIMEOUT_SECS);
+        let res = match tokio::time::timeout(timeout, command.output()).await {
+            Ok(Ok(out)) => out,
+            Ok(Err(e)) => return Err(e.into()),
+            Err(_) => bail!(
+                "wasm-opt did not finish within {}s. The process may be stuck; try \
+                     re-running the build.",
+                timeout.as_secs()
+            ),
+        };
 
         if !res.status.success() {
             let err = String::from_utf8_lossy(&res.stderr);
@@ -138,17 +155,17 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // Find the platform identifier based on the current OS and architecture
     // hardcoded for now to get around github api rate limits
     if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-windows.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-windows.tar.gz".to_string());
     } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-arm64-windows.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-arm64-windows.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-aarch64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-aarch64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-macos.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-arm64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-arm64-macos.tar.gz".to_string());
     };
 
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";

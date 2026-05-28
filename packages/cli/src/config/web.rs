@@ -57,8 +57,8 @@ pub(crate) struct WasmOptConfig {
     pub(crate) level: WasmOptLevel,
 
     /// Keep debug symbols in the wasm file
-    #[serde(default = "false_bool")]
-    pub(crate) debug: bool,
+    #[serde(default = "false_bool", alias = "debug")]
+    pub(crate) debug_symbols: bool,
 
     /// Keep the wasm name section, useful for profiling and debugging
     ///

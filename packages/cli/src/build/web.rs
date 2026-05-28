@@ -107,7 +107,7 @@ impl BuildRequest {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let keep_debug = self.config.web.wasm_opt.debug
+        let keep_debug = self.config.web.wasm_opt.debug_symbols
             || self.debug_symbols
             || self.wasm_split
             || !self.release
@@ -117,9 +117,13 @@ impl BuildRequest {
             || self.wasm_split
             || ctx.mode == BuildMode::Fat;
         let demangle = false;
+        // wasm-opt's debug behavior must match wasm-bindgen's: if wasm-bindgen kept DWARF in the
+        // module, wasm-opt has to roundtrip it or strip it consistently. Using `keep_debug` here
+        // keeps the two in lockstep, so wasm-split (which requires DWARF) preserves it, and plain
+        // release (which doesn't) strips it.
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
-            debug: self.debug_symbols,
+            debug_symbols: keep_debug,
             ..self.config.web.wasm_opt.clone()
         };
 
