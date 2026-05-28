@@ -3300,6 +3300,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest 0.12.28",
+ "rhai_codegen",
  "rpm",
  "rustls",
  "schemars",

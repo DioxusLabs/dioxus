@@ -83,6 +83,9 @@ which = { version = "8.0.0" }
 # plugin packages
 open = { workspace = true }
 cargo-generate = "=0.23.10"
+# cargo-generate pulls in rhai, whose 1.24.0 release accepts newer incompatible
+# rhai_codegen releases in fresh `cargo install --path .` resolutions.
+rhai_codegen = "=3.1.0"
 toml_edit = "0.22.27"
 
 # formatting
