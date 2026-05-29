@@ -539,7 +539,9 @@ pub mod req_from {
                     .map_err(|e| e.into_response())?;
 
                 let request = Request::from_parts(parts, body);
-                let bytes = Bytes::from_request(request, &()).await.unwrap();
+                let bytes = Bytes::from_request(request, &())
+                    .await
+                    .map_err(|e| ServerFnError::from(e).into_response())?;
                 let as_str = String::from_utf8_lossy(&bytes);
 
                 let bytes = if as_str.is_empty() {
