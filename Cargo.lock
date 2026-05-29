@@ -3878,6 +3878,7 @@ dependencies = [
  "keyboard-types 0.7.0",
  "manganis",
  "rustc-hash 2.1.2",
+ "slab",
  "tokio",
  "tracing",
  "webbrowser",
