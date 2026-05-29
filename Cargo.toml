@@ -230,13 +230,13 @@ rustc-hash = "2.1.1"
 wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.50"
 wasm-bindgen-test = "0.3.71"
-js-sys = { version = "0.3.99-alpha.2", package = "js-sys-x" }
-web-sys = { version = "0.3.99-alpha.2", package = "web-sys-x", default-features = false }
-wry-bindgen = "0.2.122-alpha.2"
-wasm-bindgen-x = "0.2.122-alpha.2"
-wasm-bindgen-futures-x = "0.4.72-alpha.2"
-js-sys-x = { version = "0.3.99-alpha.2" }
-web-sys-x = { version = "0.3.99-alpha.2", default-features = false }
+js-sys = { version = "0.3.99-alpha.3", package = "js-sys-x" }
+web-sys = { version = "0.3.99-alpha.3", package = "web-sys-x", default-features = false }
+wry-bindgen = "0.2.122-alpha.3"
+wasm-bindgen-x = "0.2.122-alpha.3"
+wasm-bindgen-futures-x = "0.4.72-alpha.3"
+js-sys-x = { version = "0.3.99-alpha.3" }
+web-sys-x = { version = "0.3.99-alpha.3", default-features = false }
 html_parser = "0.7.0"
 thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
