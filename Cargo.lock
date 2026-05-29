@@ -3417,6 +3417,7 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "anyhow",
  "const_format",
+ "criterion",
  "dioxus",
  "dioxus-core-types",
  "dioxus-html",
