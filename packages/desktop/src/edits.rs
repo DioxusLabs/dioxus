@@ -135,8 +135,6 @@ impl WriteMutations for WryQueue {
     }
 
     fn commit(&mut self) {}
-
-    fn discard(&mut self) {}
 }
 
 impl WryQueue {

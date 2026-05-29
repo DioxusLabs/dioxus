@@ -1,7 +1,7 @@
 use crate::{
     DynamicNode,
-    fiber::{FiberMode, SuspenseBranch},
     innerlude::*,
+    mount::{RenderMode, SuspenseBranch},
     scope_context::SuspenseLocation,
 };
 
@@ -333,7 +333,7 @@ impl SuspenseBoundaryProps {
             let mount = currently_rendered.mount.get();
             let parent = dom
                 .runtime
-                .fibers
+                .mounts
                 .borrow()
                 .get(mount.0)
                 .expect("suspense placeholder is not mounted")
@@ -421,7 +421,7 @@ impl SuspenseBoundaryProps {
                         // The background diff resolved the suspension. Promote the
                         // background-rendered nodes by replacing the fallback placeholder.
                         suspense_context.take_suspended_branch();
-                        dom.set_fiber_mode(new_suspended_nodes.mount.get(), FiberMode::Foreground);
+                        dom.set_mount_mode(new_suspended_nodes.mount.get(), RenderMode::Foreground);
                         replace_suspense_nodes(
                             &suspense_context,
                             &last_rendered_node,
@@ -474,7 +474,7 @@ impl SuspenseBoundaryProps {
                             );
                         });
 
-                        dom.set_fiber_mode(new_children.mount.get(), FiberMode::Background);
+                        dom.set_mount_mode(new_children.mount.get(), RenderMode::Background);
 
                         let branch = SuspenseBranch::new(new_children);
                         store_suspended_branch(dom, scope_id, &branch);
@@ -505,13 +505,13 @@ impl SuspenseBoundaryProps {
                     });
 
                     // Then diff the new children in the background
-                    dom.set_fiber_mode(old_children.mount.get(), FiberMode::Background);
+                    dom.set_mount_mode(old_children.mount.get(), RenderMode::Background);
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
                         old_children.diff_node(&new_children, dom, to.as_deref_mut());
                     });
 
                     if suspense_context.suspended_futures().is_empty() {
-                        dom.set_fiber_mode(new_children.mount.get(), FiberMode::Foreground);
+                        dom.set_mount_mode(new_children.mount.get(), RenderMode::Foreground);
                         replace_suspense_nodes(
                             &suspense_context,
                             &new_placeholder,
@@ -539,7 +539,7 @@ impl SuspenseBoundaryProps {
                 (Some(_), false) => {
                     // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
                     let old_suspended_branch = suspense_context.take_suspended_branch().unwrap();
-                    dom.set_fiber_mode(old_suspended_branch.root_fiber(), FiberMode::Foreground);
+                    dom.set_mount_mode(old_suspended_branch.root_mount(), RenderMode::Foreground);
                     let old_suspended_nodes = old_suspended_branch.into_root();
 
                     // First diff the two children nodes in the background
@@ -576,8 +576,8 @@ fn set_rendered_children(dom: &mut VirtualDom, scope_id: ScopeId, children: Last
 }
 
 fn store_suspended_branch(dom: &mut VirtualDom, scope_id: ScopeId, branch: &SuspenseBranch) {
-    debug_assert!(branch.root_fiber().mounted());
-    dom.set_fiber_mode(branch.root_fiber(), FiberMode::Background);
+    debug_assert!(branch.root_mount().mounted());
+    dom.set_mount_mode(branch.root_mount(), RenderMode::Background);
     store_suspense_children(dom, scope_id, &LastRenderedNode::Real(branch.root()));
 }
 
@@ -647,7 +647,7 @@ fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom
     if !mount.mounted() {
         return;
     }
-    dom.set_fiber_mode(mount, FiberMode::Foreground);
+    dom.set_mount_mode(mount, RenderMode::Foreground);
 
     for (idx, dynamic) in vnode.dynamic_nodes.iter().enumerate() {
         match dynamic {
@@ -659,7 +659,7 @@ fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom
                     .map(|scope| scope.height)
                 {
                     let order = ScopeOrder::new(height, scope_id);
-                    if dom.dirty_fibers.remove(&order) {
+                    if dom.dirty_scopes.remove(&order) {
                         let mounted = dom.scopes[scope_id.0]
                             .last_rendered_node
                             .as_ref()
@@ -680,7 +680,7 @@ fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom
                     SuspenseBoundaryProps::diff::<M>(scope_id, dom, None);
                     if let Some(branch) = context.suspended_branch() {
                         let root = branch.root();
-                        dom.set_fiber_mode(branch.root_fiber(), FiberMode::Foreground);
+                        dom.set_mount_mode(branch.root_mount(), RenderMode::Foreground);
                         promote_resolved_suspense_descendants::<M>(dom, &root);
                         dom.scopes[scope_id.0].last_rendered_node =
                             Some(LastRenderedNode::Real(root));

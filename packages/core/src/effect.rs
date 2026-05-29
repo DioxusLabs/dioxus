@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 /// Effects will always run after all changes to the DOM have been applied.
 ///
 /// Effects are the lowest priority task in the scheduler.
-/// They are run after all dirty fibers and futures have been resolved. Other dirty fibers and futures may cause the component this effect is attached to to rerun, which would update the DOM.
+/// They are run after all dirty mounts and futures have been resolved. Other dirty mounts and futures may cause the component this effect is attached to to rerun, which would update the DOM.
 pub(crate) struct Effect {
     // The scope that the effect is attached to
     pub(crate) order: ScopeOrder,

@@ -39,7 +39,6 @@ const ALL_SERVERS = [
   { specs: ["nested-suspense-ssg.spec.js"], port: 6060, cwd: "nested-suspense", command: `${dx} run --bin nested-suspense-ssg --force-sequential --web --ssg --addr 127.0.0.1 --port 6060` },
   { specs: ["suspense-carousel.spec.js"], port: 4040, cwd: "suspense-carousel", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 4040` },
   { specs: ["cli-optimization.spec.js"], port: 8989, cwd: "cli-optimization", command: `${dx} run --addr 127.0.0.1 --port 8989` },
-  { specs: ["concurrent-scheduler.spec.js"], port: 9099, cwd: "../../examples/01-app-demos/concurrent-scheduler", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 9099 --release --features web --no-default-features` },
   { specs: ["wasm-split.spec.js"], port: 8001, cwd: "wasm-split-harness", command: `${dx} run --bin wasm-split-harness --web --addr 127.0.0.1 --port 8001 --wasm-split --profile wasm-split-release` },
   { specs: ["default-features-disabled.spec.js"], port: 8002, cwd: "default-features-disabled", command: `${dx} run --force-sequential --addr 127.0.0.1 --port 8002` },
   { specs: ["web-patch.spec.js"], port: 9980, cwd: "web-hot-patch-temp", setup: () => copyToTemp("web-hot-patch", "web-hot-patch-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9980 --hot-patch --exit-on-error` },

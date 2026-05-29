@@ -1,7 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{
-    ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom,
-};
+use dioxus_core::{ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom};
 use std::{
     any::Any,
     rc::Rc,

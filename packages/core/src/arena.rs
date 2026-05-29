@@ -40,9 +40,9 @@ pub(crate) enum RenderTargetKind {
     Noop,
 }
 
-/// Renderer-local mounted state for one logical fiber.
+/// Renderer-local mounted state for one logical mount.
 #[derive(Debug)]
-pub(crate) struct MountedFiberState {
+pub(crate) struct MountedNodeState {
     /// The IDs for the roots of this template, used when moving or removing
     /// roots from the renderer.
     pub(crate) root_ids: Box<[ElementId]>,
@@ -55,7 +55,7 @@ pub(crate) struct MountedFiberState {
     pub(crate) mounted_dynamic_nodes: Box<[usize]>,
 }
 
-impl MountedFiberState {
+impl MountedNodeState {
     pub(crate) fn new(root_count: usize, attr_count: usize, dynamic_count: usize) -> Self {
         Self {
             root_ids: vec![ElementId(0); root_count].into(),
@@ -70,7 +70,7 @@ impl MountedFiberState {
 pub(crate) struct RenderTargetState {
     pub(crate) kind: RenderTargetKind,
     pub(crate) elements: Slab<Option<ElementRef>>,
-    pub(crate) mounted_fibers: Vec<Option<MountedFiberState>>,
+    pub(crate) mounts: Vec<Option<MountedNodeState>>,
 }
 
 impl RenderTargetState {
@@ -82,43 +82,39 @@ impl RenderTargetState {
         Self {
             kind,
             elements,
-            mounted_fibers: Vec::new(),
+            mounts: Vec::new(),
         }
     }
 
-    pub(crate) fn create_mounted_fiber(
+    pub(crate) fn create_mounted_node(
         &mut self,
         mount: MountId,
         root_count: usize,
         attr_count: usize,
         dynamic_count: usize,
     ) {
-        if self.mounted_fibers.len() <= mount.0 {
-            self.mounted_fibers.resize_with(mount.0 + 1, || None);
+        if self.mounts.len() <= mount.0 {
+            self.mounts.resize_with(mount.0 + 1, || None);
         }
-        self.mounted_fibers[mount.0] = Some(MountedFiberState::new(
-            root_count,
-            attr_count,
-            dynamic_count,
-        ));
+        self.mounts[mount.0] = Some(MountedNodeState::new(root_count, attr_count, dynamic_count));
     }
 
-    pub(crate) fn remove_mounted_fiber(&mut self, mount: MountId) {
+    pub(crate) fn remove_mounted_node(&mut self, mount: MountId) {
         // Removal only happens for `mount` values just produced by the
-        // fiber-create path that allocated the slot, so the index is in
+        // mount-create path that allocated the slot, so the index is in
         // bounds by construction.
         debug_assert!(
-            self.mounted_fibers.get(mount.0).is_some(),
-            "remove_mounted_fiber called with unallocated mount",
+            self.mounts.get(mount.0).is_some(),
+            "remove_mounted_node called with unallocated mount",
         );
-        self.mounted_fibers[mount.0].take();
+        self.mounts[mount.0].take();
     }
 }
 
-/// A mounted fiber's unique identifier.
+/// A mounted mount's unique identifier.
 ///
-/// `MountId` is a `usize` that is unique across the current `VirtualDom` - but not unique across time. If a fiber is
-/// unmounted, then the `MountId` may be reused for a new fiber.
+/// `MountId` is a `usize` that is unique across the current `VirtualDom` - but not unique across time. If a mount is
+/// unmounted, then the `MountId` may be reused for a new mount.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MountId(pub(crate) usize);
@@ -159,49 +155,55 @@ impl VirtualDom {
 
     pub(crate) fn mount_target_id(&self, mount: MountId) -> RenderTargetId {
         // Every caller has a live `mount` — either freshly allocated via
-        // `next_element_for_mount` / fiber creation, or the result of
-        // `claim_fiber_mount` on a previously-mounted vnode. A PLACEHOLDER
+        // `next_element_for_mount` / mount creation, or the result of
+        // `claim_mount` on a previously-mounted vnode. A PLACEHOLDER
         // here would indicate a stray ref the diff never produces.
         debug_assert!(mount.mounted(), "mount_target_id requires a live MountId");
         self.runtime
-            .fibers
+            .mounts
             .borrow()
             .get(mount.0)
-            .map(|fiber| fiber.target_id)
+            .map(|mount| mount.target_id)
             .unwrap_or(RenderTargetId::ROOT)
     }
 
-    /// Number of template roots this `mount`'s fiber was created with.
+    /// Number of template roots this `mount`'s mount was created with.
     /// Anchor lookups that walk a view's `template.roots()` may iterate
-    /// beyond what the fiber actually has — e.g. when the view was a clone
+    /// beyond what the mount actually has — e.g. when the view was a clone
     /// whose template grew between renders — and the underlying
-    /// `MountedFiberState::root_ids` would panic on out-of-range indexing.
+    /// `MountedNodeState::root_ids` would panic on out-of-range indexing.
     pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        debug_assert!(mount.mounted(), "mounted_root_count requires a live MountId");
+        debug_assert!(
+            mount.mounted(),
+            "mounted_root_count requires a live MountId"
+        );
         let target_id = self.mount_target_id(mount);
         self.runtime
             .render_targets
             .borrow()
             .get(target_id.0)
-            .and_then(|target| target.mounted_fibers.get(mount.0))
-            .and_then(|fiber| fiber.as_ref())
-            .map(|fiber| fiber.root_ids.len())
+            .and_then(|target| target.mounts.get(mount.0))
+            .and_then(|mount| mount.as_ref())
+            .map(|mount| mount.root_ids.len())
             .unwrap_or(0)
     }
 
-    /// Number of dynamic-node slots this `mount`'s fiber was created with.
+    /// Number of dynamic-node slots this `mount`'s mount was created with.
     /// Same guard rail as [`Self::mounted_root_count`], but for
-    /// `MountedFiberState::mounted_dynamic_nodes`.
+    /// `MountedNodeState::mounted_dynamic_nodes`.
     pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
-        debug_assert!(mount.mounted(), "mounted_dyn_node_count requires a live MountId");
+        debug_assert!(
+            mount.mounted(),
+            "mounted_dyn_node_count requires a live MountId"
+        );
         let target_id = self.mount_target_id(mount);
         self.runtime
             .render_targets
             .borrow()
             .get(target_id.0)
-            .and_then(|target| target.mounted_fibers.get(mount.0))
-            .and_then(|fiber| fiber.as_ref())
-            .map(|fiber| fiber.mounted_dynamic_nodes.len())
+            .and_then(|target| target.mounts.get(mount.0))
+            .and_then(|mount| mount.as_ref())
+            .map(|mount| mount.mounted_dynamic_nodes.len())
             .unwrap_or(0)
     }
 
@@ -290,8 +292,8 @@ impl VirtualDom {
     //
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        let stale_dirty_fibers: Vec<_> = self
-            .dirty_fibers
+        let stale_dirty_scopes: Vec<_> = self
+            .dirty_scopes
             .iter()
             .filter_map(|order| {
                 (order.id == id || self.runtime.is_descendant_of(order.id, id)).then_some(*order)
@@ -324,9 +326,9 @@ impl VirtualDom {
         let context = scope.state();
         let height = context.height;
 
-        self.dirty_fibers.remove(&ScopeOrder::new(height, id));
-        for order in stale_dirty_fibers {
-            self.dirty_fibers.remove(&order);
+        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
+        for order in stale_dirty_scopes {
+            self.dirty_scopes.remove(&order);
         }
         {
             let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();

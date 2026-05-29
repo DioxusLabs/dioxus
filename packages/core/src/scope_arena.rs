@@ -97,10 +97,9 @@ impl VirtualDom {
                 post_run();
             }
 
-            // remove this scope from dirty fibers
-            let order =
-                ScopeOrder::with_priority(scope_state.height, scope_id, self.render_priority);
-            self.dirty_fibers.remove_exact(&order);
+            // remove this scope from the dirty set
+            let order = ScopeOrder::new(scope_state.height, scope_id);
+            self.dirty_scopes.remove_exact(&order);
             output
         })
     }

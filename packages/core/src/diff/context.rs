@@ -1,10 +1,8 @@
-use crate::innerlude::UpdatePriority;
 use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 
 pub(crate) struct DiffState<'a, M: WriteMutations> {
     pub(crate) dom: &'a mut VirtualDom,
     pub(crate) to: Option<&'a mut M>,
-    pub(crate) priority: UpdatePriority,
     pub(crate) context: Option<DiffContext<'a>>,
 }
 
@@ -18,20 +16,13 @@ impl<'a, M: WriteMutations> DiffState<'a, M> {
         to: Option<&'a mut M>,
         context: Option<DiffContext<'a>>,
     ) -> Self {
-        let priority = dom.render_priority;
-        Self {
-            dom,
-            to,
-            priority,
-            context,
-        }
+        Self { dom, to, context }
     }
 
     pub(crate) fn reborrow_with_writes(&mut self, write: bool) -> DiffState<'_, M> {
         DiffState {
             dom: &mut *self.dom,
             to: if write { self.to.as_deref_mut() } else { None },
-            priority: self.priority,
             context: self.context,
         }
     }
@@ -59,7 +50,7 @@ pub(crate) struct DiffFrame<'a> {
 /// Diff-local view of the active vnode and its parent while children are being
 /// reconciled.
 ///
-/// The committed fiber still points at the old vnode until a vnode finishes
+/// The committed mount still points at the old vnode until a vnode finishes
 /// diffing, so anchor resolution needs these temporary old/new pairs to reason
 /// about slots inside the active vnode and sibling order in the active parent.
 #[derive(Clone, Copy, Debug)]

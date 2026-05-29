@@ -26,8 +26,8 @@
 mod component;
 pub use component::*;
 
-use crate::fiber::SuspenseBranch;
 use crate::innerlude::*;
+use crate::mount::SuspenseBranch;
 use std::{
     cell::{Cell, Ref, RefCell},
     fmt::Debug,

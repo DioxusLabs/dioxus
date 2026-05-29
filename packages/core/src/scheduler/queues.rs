@@ -1,38 +1,24 @@
-use super::UpdatePriority;
-use crate::{ScopeId, Task, innerlude::BoxedAnyProps};
+use crate::{ScopeId, Task};
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct ScopeOrder {
-    pub(crate) priority: UpdatePriority,
     pub(crate) height: u32,
     pub(crate) id: ScopeId,
 }
 
 impl ScopeOrder {
     pub fn new(height: u32, id: ScopeId) -> Self {
-        Self {
-            priority: UpdatePriority::Default,
-            height,
-            id,
-        }
-    }
-
-    pub fn with_priority(height: u32, id: ScopeId, priority: UpdatePriority) -> Self {
-        Self {
-            priority,
-            height,
-            id,
-        }
+        Self { height, id }
     }
 }
 
 impl PartialEq for ScopeOrder {
     fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority && self.height == other.height && self.id == other.id
+        self.id == other.id
     }
 }
 
@@ -44,48 +30,44 @@ impl PartialOrd for ScopeOrder {
 
 impl Ord for ScopeOrder {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.priority
-            .cmp(&other.priority)
-            .then(self.id.cmp(&other.id))
-            .then(self.height.cmp(&other.height))
+        self.height.cmp(&other.height).then(self.id.cmp(&other.id))
     }
 }
 
 impl Hash for ScopeOrder {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.priority.hash(state);
-        self.height.hash(state);
         self.id.hash(state);
     }
 }
 
+/// The set of scopes whose mounts are waiting to be diffed, ordered from the
+/// scope closest to the root to the scope furthest from it.
 #[derive(Debug, Default)]
-pub(crate) struct DirtyFiberQueue {
-    scopes: BTreeMap<ScopeId, BTreeMap<UpdatePriority, ScopeOrder>>,
+pub(crate) struct DirtyScopes {
+    scopes: BTreeSet<ScopeOrder>,
 }
 
-impl DirtyFiberQueue {
+impl DirtyScopes {
     pub(crate) fn insert(&mut self, order: ScopeOrder) {
-        self.scopes
-            .entry(order.id)
-            .or_default()
-            .insert(order.priority, order);
+        self.scopes.insert(order);
     }
 
     pub(crate) fn remove(&mut self, order: &ScopeOrder) -> bool {
-        self.remove_scope(order.id)
+        self.scopes.remove(order)
     }
 
-    pub(crate) fn remove_scope(&mut self, id: ScopeId) -> bool {
-        self.scopes.remove(&id).is_some()
+    /// Remove the exact ordered entry. Kept as a distinct name from
+    /// [`Self::remove`] for call sites that build a fresh `ScopeOrder`.
+    pub(crate) fn remove_exact(&mut self, order: &ScopeOrder) -> bool {
+        self.scopes.remove(order)
     }
 
     pub(crate) fn contains(&self, order: &ScopeOrder) -> bool {
-        self.scopes.contains_key(&order.id)
+        self.scopes.contains(order)
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &ScopeOrder> {
-        self.scopes.values().flat_map(|orders| orders.values())
+        self.scopes.iter()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -93,74 +75,11 @@ impl DirtyFiberQueue {
     }
 
     pub(crate) fn first(&self) -> Option<ScopeOrder> {
-        self.iter().min().copied()
+        self.scopes.iter().next().copied()
     }
 
     pub(crate) fn pop_first(&mut self) -> Option<ScopeOrder> {
-        let order = self.first()?;
-        self.remove_exact(&order);
-        Some(order)
-    }
-
-    pub(crate) fn remove_exact(&mut self, order: &ScopeOrder) -> bool {
-        let Some(orders) = self.scopes.get_mut(&order.id) else {
-            return false;
-        };
-
-        let removed = orders.remove(&order.priority).is_some();
-        if orders.is_empty() {
-            self.scopes.remove(&order.id);
-        }
-        removed
-    }
-
-    pub(crate) fn deferred_priority_for_scope(
-        &self,
-        id: ScopeId,
-        current: UpdatePriority,
-    ) -> Option<UpdatePriority> {
-        self.scopes
-            .get(&id)?
-            .keys()
-            .copied()
-            .filter(|priority| *priority > current)
-            .min()
-    }
-}
-
-pub(crate) struct ComponentPropsDiff {
-    pub(crate) priority: UpdatePriority,
-    pub(crate) updates: Vec<ComponentPropsUpdate>,
-}
-
-pub(crate) struct ComponentPropsUpdate {
-    pub(crate) scope: ScopeId,
-    pub(crate) props: BoxedAnyProps,
-}
-
-impl Clone for ComponentPropsUpdate {
-    fn clone(&self) -> Self {
-        Self {
-            scope: self.scope,
-            props: self.props.duplicate(),
-        }
-    }
-}
-
-impl std::fmt::Debug for ComponentPropsDiff {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ComponentPropsDiff")
-            .field("priority", &self.priority)
-            .field("updates", &self.updates.len())
-            .finish()
-    }
-}
-
-impl std::fmt::Debug for ComponentPropsUpdate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ComponentPropsUpdate")
-            .field("scope", &self.scope)
-            .finish_non_exhaustive()
+        self.scopes.pop_first()
     }
 }
 
@@ -182,6 +101,7 @@ impl From<ScopeOrder> for DirtyTasks {
 impl DirtyTasks {
     pub fn queue_task(&self, task: Task) {
         let mut borrow_mut = self.tasks_queued.borrow_mut();
+        // If the task is already queued, we don't need to do anything
         if borrow_mut.contains(&task) {
             return;
         }

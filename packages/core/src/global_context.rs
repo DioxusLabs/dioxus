@@ -1,4 +1,4 @@
-use crate::innerlude::{CapturedError, UpdatePriority};
+use crate::innerlude::CapturedError;
 use crate::{Element, ScopeId, Task, innerlude::SuspendedFuture, runtime::Runtime};
 use std::future::Future;
 use std::rc::Rc;
@@ -315,11 +315,6 @@ pub fn needs_update() {
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update_any(id: ScopeId) {
     Runtime::with_current_scope(|cx| cx.needs_update_any(id));
-}
-
-/// Run a closure with the given priority for any updates scheduled inside it.
-pub fn with_update_priority<T>(priority: UpdatePriority, f: impl FnOnce() -> T) -> T {
-    Runtime::with(|rt| rt.with_update_priority(priority, f))
 }
 
 /// Schedule an update for the current component.

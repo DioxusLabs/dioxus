@@ -51,7 +51,8 @@ impl Harness {
         )));
         let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
         context.lifecycle.with_run(LifecycleRun::Incremental, || {
-            vdom.borrow_mut().rebuild_into(&mut *incremental.borrow_mut())
+            vdom.borrow_mut()
+                .rebuild_into(&mut *incremental.borrow_mut())
         });
         incremental.borrow().assert_stack_clean();
         let state = Self {
@@ -334,10 +335,6 @@ impl WriteMutations for TargetedRendererOracle {
 
     fn commit(&mut self) {
         self.renderer.commit();
-    }
-
-    fn discard(&mut self) {
-        self.renderer.discard();
     }
 }
 
@@ -649,9 +646,9 @@ fn build_fresh_check(
     let mut fresh_vdom = VirtualDom::new_with_props(App, context.clone());
     let mut renderer = RendererOracle::new();
     context.without_suspense_ready_registration(|| {
-        context
-            .lifecycle
-            .with_run(LifecycleRun::Fresh, || fresh_vdom.rebuild_into(&mut renderer));
+        context.lifecycle.with_run(LifecycleRun::Fresh, || {
+            fresh_vdom.rebuild_into(&mut renderer)
+        });
     });
     renderer.check_stack_clean()?;
 

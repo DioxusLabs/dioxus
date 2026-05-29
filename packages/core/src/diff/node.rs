@@ -8,8 +8,8 @@ use crate::{
         },
         context::{DiffFrame, DiffState},
     },
-    fiber::Fiber,
     innerlude::{ElementPath, ElementRef, MountId, ScopeOrder},
+    mount::Mount,
     nodes::DynamicNode,
     scopes::ScopeId,
 };
@@ -102,7 +102,10 @@ impl VNode {
         while let Some((idx, _path)) =
             dynamic_nodes_iter.next_if(|(_, path)| matches!(path, [idx, ..] if *idx == root_idx))
         {
-            debug_assert!(_path.len() > 1, "nested dynamics under an Element root have path.len() > 1");
+            debug_assert!(
+                _path.len() > 1,
+                "nested dynamics under an Element root have path.len() > 1"
+            );
             end = idx;
         }
 
@@ -229,7 +232,7 @@ impl<'a> DiffFrame<'a> {
         let new = self.new;
 
         let current_mount = self.mount;
-        let writes_enabled = state.dom.fiber_should_render(current_mount)
+        let writes_enabled = state.dom.mount_should_render(current_mount)
             && state
                 .dom
                 .render_target_should_write(state.dom.mount_target_id(current_mount));
@@ -241,12 +244,12 @@ impl<'a> DiffFrame<'a> {
             return old.replace_inner(std::slice::from_ref(new), parent, &mut state, true);
         }
 
-        let prev_mount = state.dom.claim_fiber_mount(old, new);
+        let prev_mount = state.dom.claim_mount(old, new);
         state.enter_context(prev_mount, old, new);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
         if old == new && !old.has_dirty_component_descendant(prev_mount, state.dom) {
-            state.dom.commit_fiber_work(prev_mount, new);
+            state.dom.commit_mount(prev_mount, new);
             return;
         }
 
@@ -266,7 +269,7 @@ impl<'a> DiffFrame<'a> {
         {
             old.diff_dynamic_node(mount_id, dyn_node_idx, old_dynamic, new_dynamic, &mut state)
         }
-        state.dom.commit_fiber_work(mount_id, new);
+        state.dom.commit_mount(mount_id, new);
     }
 }
 
@@ -279,7 +282,7 @@ impl VNode {
                 Component(_) => {
                     let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
                     dom.runtime.try_get_state(scope_id).is_some_and(|scope| {
-                        dom.dirty_fibers
+                        dom.dirty_scopes
                             .contains(&ScopeOrder::new(scope.height(), scope_id))
                     })
                 }
@@ -461,40 +464,31 @@ impl VNode {
     ) -> Option<ElementId> {
         match self.get_dynamic_root_node_and_id(root_idx) {
             None if dom.mount_target_id(mount) == target_id => {
-                // `self` may be a view whose template has more roots than the
-                // fiber `mount` was actually created with (clones outlive
-                // template changes); bail before indexing past
-                // `MountedFiberState::root_ids`.
-                if root_idx >= dom.mounted_root_count(mount) {
-                    return None;
-                }
+                debug_assert!(
+                    root_idx < dom.mounted_root_count(mount),
+                    "static root {root_idx} is beyond the roots its mount was created with"
+                );
                 live_element_id(dom.get_mounted_root_node(mount, root_idx).0)
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             None => None,
             Some((idx, Text(_))) if dom.mount_target_id(mount) == target_id => {
-                // Same template-shape guard as the static-root branch above:
-                // `self`'s template may declare more dynamic slots than the
-                // fiber actually has.
-                if idx >= dom.mounted_dyn_node_count(mount) {
-                    return None;
-                }
+                debug_assert!(
+                    idx < dom.mounted_dyn_node_count(mount),
+                    "dynamic text slot {idx} is beyond the slots its mount was created with"
+                );
                 live_element_id(dom.get_mounted_dyn_node(mount, idx))
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             Some((_, Text(_))) => None,
             Some((_, Fragment(children))) => find_fragment_edge(children, dom, target_id, edge),
             Some((id, Component(_))) => {
-                if id >= dom.mounted_dyn_node_count(mount) {
-                    return None;
-                }
+                debug_assert!(
+                    id < dom.mounted_dyn_node_count(mount),
+                    "component slot {id} is beyond the slots its mount was created with"
+                );
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, id));
-                find_node_edge(
-                    live_component_root(dom, scope_id)?,
-                    dom,
-                    target_id,
-                    edge,
-                )
+                find_node_edge(live_component_root(dom, scope_id), dom, target_id, edge)
             }
         }
     }
@@ -516,7 +510,7 @@ impl VNode {
 
     fn root_has_live_dom(&self, root_idx: usize, mount: MountId, dom: &VirtualDom) -> bool {
         // `mounted_root_count` / `mounted_dyn_node_count` are 0 when the
-        // fiber state is gone (stale clone), which keeps the underlying
+        // mount state is gone (stale clone), which keeps the underlying
         // `get_mounted_*` calls in-bounds.
         match self.get_dynamic_root_node_and_id(root_idx) {
             None => {
@@ -549,9 +543,9 @@ impl VNode {
         edge: ElementEdge,
     ) -> Option<ElementId> {
         let mount = self.mount.get();
-        // `find_element_at_root_in_target` is internally bounds-checked
-        // against `mounted_root_count` / `mounted_dyn_node_count`, so it
-        // safely returns `None` if this vnode's mount slot is gone.
+        // The diff only walks the roots of a vnode whose mount matches its
+        // template, so `find_element_at_root_in_target` indexes the mount's
+        // renderer ids directly (its `debug_assert!`s document that invariant).
         roots.find_map(|root_idx| {
             self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge)
         })
@@ -648,16 +642,13 @@ impl VNode {
     ) {
         // Every caller (replace_inner, remove_nodes, Fragment removal,
         // scope cleanup) only reaches here with vnodes that went through
-        // `create_with_parents` and have live mount slots in the fiber
+        // `create_with_parents` and have live mount slots in the mount
         // registry. A PLACEHOLDER `mount` would mean a vnode was built but
         // never mounted, which can't happen mid-diff — `build_vnode` /
-        // `claim_fiber_mount` always assign a live MountId before anything
+        // `claim_mount` always assign a live MountId before anything
         // tries to remove it.
         let mount = self.mount.get();
-        debug_assert!(
-            mount.mounted(),
-            "remove_node_inner requires a live MountId"
-        );
+        debug_assert!(mount.mounted(), "remove_node_inner requires a live MountId");
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
@@ -675,9 +666,9 @@ impl VNode {
         if destroy_component_state {
             let mount = self.mount.take();
             let target_id = dom.mount_target_id(mount);
-            dom.runtime.render_targets.borrow_mut()[target_id.0].remove_mounted_fiber(mount);
+            dom.runtime.render_targets.borrow_mut()[target_id.0].remove_mounted_node(mount);
             // Remove the mount information
-            dom.runtime.fibers.borrow_mut().remove(mount.0);
+            dom.runtime.mounts.borrow_mut().remove(mount.0);
         }
     }
 
@@ -812,8 +803,7 @@ impl VNode {
                 // already returned true. So the scope is live and rendered
                 // by the time we get here.
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                let root = live_component_root(dom, scope_id)
-                    .expect("dynamic_node_first_element runs only when has_live_dom asserted the component scope is live and rendered");
+                let root = live_component_root(dom, scope_id);
                 find_node_edge(root, dom, target_id, ElementEdge::First)
             }
             Text(_) => {
@@ -874,19 +864,19 @@ impl VNode {
             let target_id = render_parent
                 .map(|parent| state.dom.mount_target_id(parent.mount))
                 .unwrap_or_else(|| state.dom.current_render_target_id());
-            let mut mounts = state.dom.runtime.fibers.borrow_mut();
+            let mut mounts = state.dom.runtime.mounts.borrow_mut();
             let entry = mounts.vacant_entry();
             let mount = MountId(entry.key());
             self.mount.set(mount);
             tracing::trace!(?self, ?mount, "creating template");
-            entry.insert(Fiber::new(
+            entry.insert(Mount::new(
                 self.clone(),
                 render_parent,
                 logical_parent,
                 target_id,
             ));
             drop(mounts);
-            state.dom.runtime.render_targets.borrow_mut()[target_id.0].create_mounted_fiber(
+            state.dom.runtime.render_targets.borrow_mut()[target_id.0].create_mounted_node(
                 mount,
                 template.roots().len(),
                 template.attr_paths().len(),
@@ -902,7 +892,7 @@ impl VNode {
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
         let mount = self.mount.get();
-        if !state.dom.fiber_should_render(mount)
+        if !state.dom.mount_should_render(mount)
             || !state
                 .dom
                 .render_target_should_write(state.dom.mount_target_id(mount))
@@ -910,8 +900,8 @@ impl VNode {
             state.to = None;
         }
         debug_assert!(
-            state.dom.runtime.fibers.borrow().contains(mount.0),
-            "Tried to find mount {:?} in dom.fibers, but it wasn't there",
+            state.dom.runtime.mounts.borrow().contains(mount.0),
+            "Tried to find mount {:?} in dom.mounts, but it wasn't there",
             mount
         );
 
@@ -955,11 +945,11 @@ impl VNode {
             })
             .sum();
         // Now that all descendants have been mounted and their `Cell<MountId>`
-        // slots populated, snapshot ourselves into the fiber. Using a
+        // slots populated, snapshot ourselves into the mount. Using a
         // deep-clone here gives the snapshot its own per-vnode cells, so a
-        // later `claim_fiber_mount` against a sibling subtree can't mutate
-        // them out from under anchor lookups that read this fiber.
-        state.dom.commit_fiber_work(mount, self);
+        // later `claim_mount` against a sibling subtree can't mutate
+        // them out from under anchor lookups that read this mount.
+        state.dom.commit_mount(mount, self);
         nodes_created
     }
 }
@@ -971,12 +961,18 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
         .is_some_and(|scope| !scope.suspense_location().hidden_by().is_empty())
 }
 
-/// Look up the rendered root VNode for a component scope, returning `None`
-/// when the scope has been dropped (mid-diff during a sibling removal or
-/// suspense transition) or hasn't rendered yet. Callers walk the returned
-/// root with `find_node_edge` for anchor placement.
-fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> Option<&VNode> {
-    dom.get_scope(scope_id)?.try_root_node()
+/// Look up the rendered root VNode for a component scope, for walking with
+/// `find_node_edge` during anchor placement.
+///
+/// The diff only resolves a component's rendered root once it has established
+/// the component is live and rendered — anchor resolution walks mounted
+/// siblings, and `dynamic_node_first_element` runs under a `has_live_dom`
+/// check — so a missing scope or unbuilt root is a bug, asserted here rather
+/// than papered over with a silent `None`.
+fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> &VNode {
+    dom.get_scope(scope_id)
+        .expect("component scope must be live when resolving its rendered root")
+        .root_node()
 }
 
 fn live_element_id(raw: usize) -> Option<ElementId> {
@@ -1021,4 +1017,3 @@ fn find_node_edge(
         ),
     }
 }
-

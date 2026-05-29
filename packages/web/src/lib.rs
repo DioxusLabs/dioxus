@@ -9,8 +9,6 @@ use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
 use dom::WebsysDom;
 use futures_util::{FutureExt, StreamExt, pin_mut, select};
-use std::{cell::Cell, cell::RefCell, rc::Rc};
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 
 mod cfg;
 mod dom;
@@ -41,127 +39,6 @@ mod devtools;
 mod hydration;
 #[allow(unused)]
 pub use hydration::*;
-
-const HOST_YIELD_INTERVAL_MS: f64 = 5.0;
-
-/// Tracks the per-frame budget the browser renderer races concurrent rendering
-/// against. The driver inside `render_concurrent` yields after every committed
-/// work unit; this scheduler decides when to drop the render future entirely so
-/// the renderer can flush edits to the DOM and let the browser dispatch events.
-struct BrowserHostScheduler {
-    deadline: Cell<f64>,
-    pending_input: Cell<bool>,
-}
-
-impl BrowserHostScheduler {
-    fn new() -> Self {
-        Self {
-            deadline: Cell::new(performance_now() + HOST_YIELD_INTERVAL_MS),
-            pending_input: Cell::new(false),
-        }
-    }
-
-    fn reset_deadline(&self) {
-        self.deadline
-            .set(performance_now() + HOST_YIELD_INTERVAL_MS);
-    }
-
-    /// Resolves when the current frame budget has expired or the browser has a
-    /// pending input event waiting to be dispatched. Cancel-safe.
-    async fn frame_budget_expired(&self) {
-        loop {
-            if is_input_pending() {
-                self.pending_input.set(true);
-                return;
-            }
-            let now = performance_now();
-            let remaining = self.deadline.get() - now;
-            if remaining <= 0.0 {
-                return;
-            }
-            // Wake at least every millisecond so input polling stays responsive
-            // without busy-looping.
-            let sleep_ms = remaining.min(1.0).max(1.0) as u32;
-            gloo_timers::future::TimeoutFuture::new(sleep_ms).await;
-        }
-    }
-
-    async fn yield_to_host(&self) {
-        if self.pending_input.replace(false) {
-            request_animation_frame().await;
-        }
-        gloo_timers::future::TimeoutFuture::new(0).await;
-        self.reset_deadline();
-    }
-}
-
-fn performance_now() -> f64 {
-    web_sys::window()
-        .and_then(|window| window.performance())
-        .map(|performance| performance.now())
-        .unwrap_or_default()
-}
-
-fn is_input_pending() -> bool {
-    let Some(window) = web_sys::window() else {
-        return false;
-    };
-
-    let navigator = window.navigator();
-    let Ok(scheduling) = js_sys::Reflect::get(navigator.as_ref(), &JsValue::from_str("scheduling"))
-    else {
-        return false;
-    };
-    if scheduling.is_null() || scheduling.is_undefined() {
-        return false;
-    }
-
-    let Ok(is_input_pending) =
-        js_sys::Reflect::get(&scheduling, &JsValue::from_str("isInputPending"))
-    else {
-        return false;
-    };
-    let Some(is_input_pending) = is_input_pending.dyn_ref::<js_sys::Function>() else {
-        return false;
-    };
-
-    is_input_pending
-        .call0(&scheduling)
-        .ok()
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-}
-
-async fn request_animation_frame() {
-    let Some(window) = web_sys::window() else {
-        gloo_timers::future::TimeoutFuture::new(0).await;
-        return;
-    };
-
-    let (sender, receiver) = futures_channel::oneshot::channel();
-    let sender = Rc::new(RefCell::new(Some(sender)));
-    let callback_slot: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>> = Rc::new(RefCell::new(None));
-
-    let sender_for_callback = sender.clone();
-    let callback_slot_for_callback = callback_slot.clone();
-    let callback = Closure::wrap(Box::new(move |_| {
-        if let Some(sender) = sender_for_callback.borrow_mut().take() {
-            _ = sender.send(());
-        }
-        callback_slot_for_callback.borrow_mut().take();
-    }) as Box<dyn FnMut(f64)>);
-
-    if window
-        .request_animation_frame(callback.as_ref().unchecked_ref())
-        .is_err()
-    {
-        gloo_timers::future::TimeoutFuture::new(0).await;
-        return;
-    }
-
-    *callback_slot.borrow_mut() = Some(callback);
-    _ = receiver.await;
-}
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -256,7 +133,11 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 HydrationContext::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error_entry().get().ok().flatten() {
-                virtual_dom.in_runtime(|| virtual_dom.runtime().throw_error(dioxus_core::ScopeId::APP, error));
+                virtual_dom.in_runtime(|| {
+                    virtual_dom
+                        .runtime()
+                        .throw_error(dioxus_core::ScopeId::APP, error)
+                });
             }
             server_data.in_context(|| {
                 virtual_dom.in_scope(dioxus_core::ScopeId::ROOT, || {
@@ -367,25 +248,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
-        let scheduler = BrowserHostScheduler::new();
-        loop {
-            let render_completed = {
-                let render = virtual_dom.render_concurrent_into(&mut websys_dom).fuse();
-                let budget = scheduler.frame_budget_expired().fuse();
-                pin_mut!(render, budget);
-                select! {
-                    _ = render => true,
-                    _ = budget => false,
-                }
-            };
-
-            websys_dom.flush_edits();
-
-            if render_completed {
-                break;
-            }
-
-            scheduler.yield_to_host().await;
-        }
+        virtual_dom.render_immediate_into(&mut websys_dom);
+        websys_dom.flush_edits();
     }
 }

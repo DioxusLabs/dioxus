@@ -171,13 +171,16 @@ impl PortalProps {
 
             if old_target_id != target_id {
                 let old_mount = old_children.as_vnode().mount.get();
-                let logical_parent = old_mount.mounted().then_some(old_mount.0).and_then(|mount| {
-                    dom.runtime
-                        .fibers
-                        .borrow()
-                        .get(mount)
-                        .and_then(|fiber| fiber.logical_parent)
-                });
+                let logical_parent = old_mount
+                    .mounted()
+                    .then_some(old_mount.0)
+                    .and_then(|mount| {
+                        dom.runtime
+                            .mounts
+                            .borrow()
+                            .get(mount)
+                            .and_then(|mount| mount.logical_parent)
+                    });
 
                 dom.runtime.clone().with_render_target(old_target_id, || {
                     let render_to = to

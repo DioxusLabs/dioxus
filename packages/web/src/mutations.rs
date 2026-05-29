@@ -297,6 +297,4 @@ impl WriteMutations for WebsysDom {
     }
 
     fn commit(&mut self) {}
-
-    fn discard(&mut self) {}
 }

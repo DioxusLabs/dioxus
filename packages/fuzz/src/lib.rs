@@ -1050,22 +1050,9 @@ pub fn reduce_case_to_encoded_vec(
     reducer::reduce_case_to_encoded_vec(case, encoded_len, max_size, options)
 }
 
-/// Drive `dom.render_concurrent()` to completion with a no-op waker. The
-/// render driver wakes itself between work units, so a tight poll loop always
-/// makes progress without needing an async runtime.
-fn drive_concurrent_render(dom: &mut dioxus_core::VirtualDom) {
-    use std::future::Future;
-    use std::pin::pin;
-    use std::task::{Context, Poll, Waker};
-    let fut = dom.render_concurrent();
-    let mut fut = pin!(fut);
-    let waker = Waker::noop();
-    let mut cx = Context::from_waker(waker);
-    loop {
-        if let Poll::Ready(_) = fut.as_mut().poll(&mut cx) {
-            return;
-        }
-    }
+/// Drive the VirtualDom's pending work to completion synchronously.
+fn drive_render(dom: &mut dioxus_core::VirtualDom) {
+    dom.render_immediate();
 }
 
 /// Drive a small unkeyed fragment of identical-component children through a
@@ -1282,18 +1269,13 @@ fn warmup_suspense_hidden_paths() {
     SHUFFLE_GEN.with(|c| c.set(usize::MAX));
 }
 
-/// Bring the `deferred_priority_for_subtree` early-return arm in
-/// `diff_vcomponent` into coverage. Mark the App at the lowest priority and
-/// every plausible descendant scope id at the highest priority; the
-/// scheduler's `dirty_ancestor_for` override processes App first (because
-/// it's an ancestor of the higher-priority children), and those children
-/// stay pending in `dirty_fibers` while App's diff runs. When
-/// `diff_vcomponent` then runs for any of them,
-/// `deferred_priority_for_subtree` sees the pending higher-priority entries
-/// and the early-return arm fires.
+/// Mark a parent scope and all of its descendant scopes dirty at once, then
+/// drive a render. Exercises the scheduler diffing an ancestor whose children
+/// are also queued, so the descendants are drained as part of the ancestor's
+/// pass instead of being re-run afterwards.
 fn warmup_deferred_subtree_check() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, UpdatePriority, VirtualDom};
+    use dioxus_core::{ScopeId, VirtualDom};
 
     #[derive(Clone, PartialEq, Props)]
     struct ChildProps {
@@ -1315,17 +1297,17 @@ fn warmup_deferred_subtree_check() {
 
     let mut dom = VirtualDom::new(app);
     dom.rebuild();
-    dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Idle);
+    dom.mark_dirty(ScopeId::APP);
     // Cover all plausible scope ids for the Child instances. Unmounted ids
-    // are silently ignored by `mark_dirty_with_priority`.
+    // are silently ignored by `mark_dirty`.
     for scope_idx in 1usize..=10 {
-        dom.mark_dirty_with_priority(ScopeId(scope_idx), UpdatePriority::SyncInput);
+        dom.mark_dirty(ScopeId(scope_idx));
     }
     dom.insert_render_target(
         dioxus_core::RenderTargetId::ROOT,
         dioxus_core::Mutations::default(),
     );
-    drive_concurrent_render(&mut dom);
+    drive_render(&mut dom);
 }
 
 /// Mix of nested suspense and partial removal: builds a stack of components
@@ -1614,8 +1596,9 @@ fn warmup_scope_with_pending_effect() {
     renderer.rebuild(&mut dom);
 
     let child_id = CHILD_SCOPE.with(|c| c.get()).expect("child scope captured");
-    let grandchild_id =
-        GRANDCHILD_SCOPE.with(|c| c.get()).expect("grandchild scope captured");
+    let grandchild_id = GRANDCHILD_SCOPE
+        .with(|c| c.get())
+        .expect("grandchild scope captured");
 
     // Inject pending effects for both the child and the grandchild so the
     // descendant arm of the `drop_scope` filter (id == effect.order.id) and
@@ -1643,9 +1626,7 @@ fn warmup_scope_with_pending_effect() {
 /// to force a re-run that actually iterates the hook lists.
 fn warmup_before_after_render_hooks() {
     use dioxus::prelude::*;
-    use dioxus_core::{
-        ScopeId, VirtualDom, current_scope_id, use_after_render, use_before_render,
-    };
+    use dioxus_core::{ScopeId, VirtualDom, current_scope_id, use_after_render, use_before_render};
     use dioxus_renderer_oracle::RendererOracle;
     use std::cell::Cell;
 
@@ -1710,6 +1691,234 @@ fn warmup_throw_error() {
     renderer.rebuild(&mut dom);
 }
 
+/// Keyed list with a shared left prefix, a fully-replaced middle, and no
+/// shared suffix. Drives `diff_keyed_children`'s left-edge splice branch
+/// (`right_offset == 0`): the new middle is created anchored against the old
+/// left sibling before the old middle is removed.
+fn warmup_keyed_left_prefix_splice() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static GEN: Cell<u32> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        // gen 0: [a, x0, x1, x2]; gen 1: [a, p0, p1, p2].
+        // "a" is a shared left prefix, the middle keys are entirely new, and
+        // the last keys differ so there is no shared suffix.
+        let keys: &[&str] = if GEN.with(|c| c.get()) == 0 {
+            &["a", "x0", "x1", "x2"]
+        } else {
+            &["a", "p0", "p1", "p2"]
+        };
+        rsx! {
+            for k in keys.iter().copied() {
+                div { key: "{k}", "{k}" }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    GEN.with(|c| c.set(0));
+}
+
+/// A spread adds a dynamic attribute that shadows a static template attribute
+/// of the same name, then drops it. Drives the static-template-attribute
+/// fallback in `remove_attribute_or_write_fallback`: the removed dynamic
+/// attribute's static value is restored instead of cleared.
+fn warmup_static_attribute_fallback() {
+    use dioxus::prelude::*;
+    use dioxus_core::{Attribute, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static GEN: Cell<u32> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        // The template carries a static `class="static"`. The spread shadows
+        // it on gen 0, then drops it on gen 1. gen 0 uses a same-namespace
+        // (`None`) dynamic attr so the dropped attr restores the static value
+        // (the namespace-matches arm of the static lookup); gen 2 uses a
+        // *namespaced* dynamic attr so the dropped attr finds the static name
+        // but mismatches its namespace (the namespace-mismatch arm).
+        let extra: Vec<Attribute> = match GEN.with(|c| c.get()) {
+            0 => vec![Attribute::new("class", "dynamic", None, false)],
+            2 => vec![Attribute::new("class", "dynamic", Some("custom"), false)],
+            _ => Vec::new(),
+        };
+        rsx! {
+            div { class: "static", ..extra }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    // gen 1: drop the same-namespace dynamic attr -> restore the static value.
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    // gen 2: add a namespaced dynamic attr, gen 3: drop it -> the static
+    // lookup finds the name but mismatches the namespace.
+    GEN.with(|c| c.set(2));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    GEN.with(|c| c.set(3));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    GEN.with(|c| c.set(0));
+}
+
+/// The same spread attribute slot holds a plain value on gen 0 and a listener
+/// on gen 1. Drives the `(false, true, Some(_))` arm in
+/// `diff_dynamic_attribute`: the old value is explicitly cleared before the
+/// listener is installed (installing a listener doesn't overwrite it).
+fn warmup_attribute_value_to_listener() {
+    use dioxus::prelude::*;
+    use dioxus_core::{Attribute, AttributeValue, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static GEN: Cell<u32> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        let attrs: Vec<Attribute> = if GEN.with(|c| c.get()) == 0 {
+            vec![Attribute::new("data-x", "value", None, false)]
+        } else {
+            vec![Attribute::new(
+                "data-x",
+                AttributeValue::listener(|_: Event<MouseData>| {}),
+                None,
+                false,
+            )]
+        };
+        rsx! {
+            div { ..attrs }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    GEN.with(|c| c.set(0));
+}
+
+/// A keyed list of portals whose body is a single dynamic text node mounted in
+/// a *different* render target. Reordering/growing the list makes
+/// `push_all_root_nodes` recurse into a portal body whose mount target differs
+/// from the list's target, driving the cross-target dynamic-text-root branch.
+fn warmup_portal_dynamic_text_root() {
+    use dioxus::prelude::*;
+    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    thread_local! {
+        static GEN: Cell<u32> = const { Cell::new(0) };
+        static TARGET: Cell<u64> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        let target = RenderTargetId(TARGET.with(|c| c.get()) as usize);
+        // Reverse a fully-keyed list (shared keys, no shared prefix/suffix) so
+        // `diff_keyed_middle` *moves* most entries through its splice. Each
+        // moved entry is re-pushed via `push_all_root_nodes`, which recurses
+        // into the portal body — a dynamic text root mounted in `target`.
+        let keys: &[u32] = if GEN.with(|c| c.get()) == 0 {
+            &[0, 1, 2, 3]
+        } else {
+            &[3, 2, 1, 0]
+        };
+        rsx! {
+            for k in keys.iter().copied() {
+                Portal { key: "{k}", target, "{k}" }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let target = dom.create_render_target();
+    TARGET.with(|c| c.set(target.0 as u64));
+    dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
+    dom.insert_render_target(target, RendererOracle::new());
+    dom.rebuild();
+    let _ = dom.take_render_target::<RendererOracle>(RenderTargetId::ROOT);
+    let _ = dom.take_render_target::<RendererOracle>(target);
+
+    // gen 1: reverse the list, forcing keyed-middle moves whose
+    // `push_all_root_nodes` recurses across the portal's target boundary.
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
+    dom.insert_render_target(target, RendererOracle::new());
+    dom.render_immediate();
+    GEN.with(|c| c.set(0));
+}
+
+/// A keyed list of single-element components that is reordered while some
+/// entries are removed. During the reorder the diff resolves anchors against
+/// component roots whose scopes may already have been dropped, driving the
+/// dropped-scope `?` branch in `find_element_at_root_in_target`'s component arm.
+fn warmup_keyed_component_anchor() {
+    use dioxus::prelude::*;
+    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+    use std::cell::Cell;
+
+    #[derive(Clone, PartialEq, Props)]
+    struct ItemProps {
+        value: u32,
+    }
+
+    #[allow(non_snake_case)]
+    fn Item(props: ItemProps) -> Element {
+        rsx! { span { "{props.value}" } }
+    }
+
+    thread_local! {
+        static GEN: Cell<u32> = const { Cell::new(0) };
+    }
+
+    fn app() -> Element {
+        // gen 0: [a, b, c, d, e]; gen 1: [a, e] — the middle three component
+        // scopes drop while the list keeps a shared prefix/suffix, so anchors
+        // are resolved around components mid-removal.
+        let keys: &[u32] = if GEN.with(|c| c.get()) == 0 {
+            &[0, 1, 2, 3, 4]
+        } else {
+            &[0, 4]
+        };
+        rsx! {
+            for k in keys.iter().copied() {
+                Item { key: "{k}", value: k }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    GEN.with(|c| c.set(1));
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    GEN.with(|c| c.set(0));
+}
+
 pub fn warmup_deferred_priority_paths() {
     warmup_batched_component_props_diff();
     warmup_keyed_reorder();
@@ -1721,8 +1930,13 @@ pub fn warmup_deferred_priority_paths() {
     warmup_before_after_render_hooks();
     warmup_throw_error();
     warmup_deferred_subtree_check();
+    warmup_keyed_left_prefix_splice();
+    warmup_static_attribute_fallback();
+    warmup_attribute_value_to_listener();
+    warmup_portal_dynamic_text_root();
+    warmup_keyed_component_anchor();
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, UpdatePriority, VirtualDom};
+    use dioxus_core::{ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
 
     #[derive(Clone, PartialEq, Props)]
@@ -1744,24 +1958,19 @@ pub fn warmup_deferred_priority_paths() {
         }
     }
 
-    // Scenario 1: mark App at multiple priorities so the scheduler sets
-    // `render_deferred_priority` when processing the higher-priority fiber.
-    // Child diffs then hit the `render_deferred_priority` branch in
-    // `diff_vcomponent` and queue prop updates at the lower priority.
+    // Re-render a parent whose children are also dirty, driving the diff for a
+    // small fragment of identical components.
     {
         let mut dom = VirtualDom::new(app);
         let mut oracle = RendererOracle::new();
         oracle.rebuild(&mut dom);
-        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::SyncInput);
-        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Default);
-        dom.mark_dirty_with_priority(ScopeId::APP, UpdatePriority::Transition);
+        dom.mark_dirty(ScopeId::APP);
         dom.insert_render_target(
             dioxus_core::RenderTargetId::ROOT,
             dioxus_core::Mutations::default(),
         );
-        drive_concurrent_render(&mut dom);
+        drive_render(&mut dom);
     }
-
 }
 
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
@@ -1970,8 +2179,8 @@ mod tests {
         for (name, case) in targeted_diff_coverage_cases() {
             let mut buf = vec![0u8; 64 * 1024];
             let cap = buf.len();
-            let len =
-                encode_case(&case, &mut buf, cap).unwrap_or_else(|| panic!("failed to encode {name}"));
+            let len = encode_case(&case, &mut buf, cap)
+                .unwrap_or_else(|| panic!("failed to encode {name}"));
             let path = corpus_dir.join(format!("targeted-{name}"));
             std::fs::write(&path, &buf[..len])
                 .unwrap_or_else(|err| panic!("failed to write seed {name}: {err}"));

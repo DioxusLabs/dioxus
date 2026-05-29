@@ -227,7 +227,7 @@ impl SsrRendererPool {
                     virtual_dom.wait_for_suspense_work().await;
 
                     // Do that async work
-                    virtual_dom.render_suspense_concurrent().await;
+                    virtual_dom.render_suspense_immediate().await;
                 }
             }
 
@@ -334,10 +334,7 @@ impl SsrRendererPool {
             // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
                 virtual_dom.wait_for_suspense_work().await;
-                let resolved_suspense_nodes = virtual_dom
-                    .render_suspense_concurrent()
-                    .await
-                    .resolved_scopes;
+                let resolved_suspense_nodes = virtual_dom.render_suspense_immediate().await;
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {

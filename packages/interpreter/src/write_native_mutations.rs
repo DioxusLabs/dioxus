@@ -193,6 +193,4 @@ impl WriteMutations for MutationState {
     }
 
     fn commit(&mut self) {}
-
-    fn discard(&mut self) {}
 }

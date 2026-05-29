@@ -7,7 +7,7 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{RenderStats, RenderTargetId, VirtualDom};
+use dioxus_core::{RenderTargetId, VirtualDom};
 use futures_util::{FutureExt, pin_mut};
 use std::{
     cell::{Cell, RefCell},
@@ -566,19 +566,6 @@ impl App {
         self.collect_touched()
     }
 
-    fn render_shared_dom_concurrent(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> (BTreeSet<RenderTargetId>, std::task::Poll<RenderStats>) {
-        self.prepare_shared_targets();
-        let poll = {
-            let fut = self.dom.render_concurrent();
-            pin_mut!(fut);
-            fut.poll_unpin(cx)
-        };
-        (self.collect_touched(), poll)
-    }
-
     fn render_shared_dom_after_webview_removed(&mut self) {
         let touched = self.render_shared_dom_immediate();
         self.send_edits_to_targets(&touched);
@@ -632,11 +619,8 @@ impl App {
             #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
-            let (touched, poll) = self.render_shared_dom_concurrent(&mut cx);
+            let touched = self.render_shared_dom_immediate();
             self.send_edits_to_targets(&touched);
-            if poll.is_pending() {
-                return;
-            }
         }
     }
 

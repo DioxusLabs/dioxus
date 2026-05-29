@@ -22,7 +22,7 @@ loop {
         },
         _ = vdom.wait_for_work() => {}
     }
-    vdom.render_concurrent().await;
+    vdom.render_immediate();
     real_dom.flush(vdom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
 }
 

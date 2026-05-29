@@ -1,17 +1,16 @@
 use crate::{
-    DynamicNode, ElementId, RenderTargetId, ScopeId, VComponent, VirtualDom,
+    DynamicNode, ElementId, RenderTargetId, ScopeId, VirtualDom,
     diff::{
         anchor::{Anchor, anchor_after, anchor_before, at_anchor, create_at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
     },
-    innerlude::{ComponentPropsUpdate, ElementRef, MountId, WriteMutations},
+    innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
 type AnchorFn = for<'a> fn(&VNode, &[MountId], &VirtualDom, Option<DiffContext<'a>>) -> Anchor;
-const FRAGMENT_WORK_BATCH: usize = 16;
 
 impl<M: WriteMutations> DiffState<'_, M> {
     pub(crate) fn diff_non_empty_fragment(
@@ -170,26 +169,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
 
     fn diff_child_pairs<'a>(&mut self, old: impl Iterator<Item = &'a VNode>, new: &'a [VNode]) {
         let pairs = old.zip(new.iter()).collect::<Vec<_>>();
-        if new.len() > FRAGMENT_WORK_BATCH {
-            let mut updates = Vec::with_capacity(pairs.len());
-            for (old, new) in &pairs {
-                let Some(update) = self.component_props_update(old, new) else {
-                    for (old, new) in pairs.into_iter().rev() {
-                        DiffFrame::new(old.mount.get(), old, new).diff_into(self);
-                    }
-                    return;
-                };
-                updates.push(update);
-            }
-
-            for batch in updates.chunks(FRAGMENT_WORK_BATCH) {
-                self.dom
-                    .queue_component_props_diff(self.priority, batch.to_vec());
-            }
-        } else {
-            for (old, new) in pairs.into_iter().rev() {
-                DiffFrame::new(old.mount.get(), old, new).diff_into(self);
-            }
+        for (old, new) in pairs.into_iter().rev() {
+            DiffFrame::new(old.mount.get(), old, new).diff_into(self);
         }
     }
 
@@ -357,42 +338,6 @@ impl<M: WriteMutations> DiffState<'_, M> {
         let anchor = anchor(sibling, &collect_mounts(new), self.dom, self.context());
         create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
     }
-
-    fn component_props_update(&self, old: &VNode, new: &VNode) -> Option<ComponentPropsUpdate> {
-        if old.template != new.template {
-            return None;
-        }
-
-        let (old_idx, old_component) = single_root_component(old)?;
-        let (new_idx, new_component) = single_root_component(new)?;
-        if old_idx != new_idx || old_component.render_fn != new_component.render_fn {
-            return None;
-        }
-
-        // `old` came straight from the previous render's `dynamic_nodes` —
-        // the diff would have skipped this fast path if `old` were a hole or
-        // a never-mounted placeholder (`single_root_component` already
-        // requires a single Component dynamic root). So `old.mount` is live
-        // here by construction.
-        let mount = old.mount.get();
-        debug_assert!(mount.mounted(), "batched component_props_update requires mounted old");
-        new.mount.set(mount);
-        Some(ComponentPropsUpdate {
-            scope: ScopeId(self.dom.get_mounted_dyn_node(mount, old_idx)),
-            props: new_component.props.duplicate(),
-        })
-    }
-}
-
-fn single_root_component(vnode: &VNode) -> Option<(usize, &VComponent)> {
-    if vnode.template.roots().len() != 1 {
-        return None;
-    }
-    let (idx, node) = vnode.get_dynamic_root_node_and_id(0)?;
-    match node {
-        DynamicNode::Component(component) => Some((idx, component)),
-        _ => None,
-    }
 }
 
 fn has_shared_key(old: &[VNode], new: &[VNode]) -> bool {
@@ -423,7 +368,7 @@ fn collect_splice_mounts(
     // live mount needs to be added to the skip list so anchor lookups don't
     // try to use a sibling that's about to be moved. The non-LIS old entries
     // come straight from the previous render with their mounts intact — no
-    // earlier diff step has called `claim_fiber_mount` on them yet — so the
+    // earlier diff step has called `claim_mount` on them yet — so the
     // mount is always live by the time we collect it.
     range
         .filter_map(|idx| old.get(new_index_to_old_index[idx]))
@@ -497,9 +442,7 @@ fn push_live_root(
     // `assign_node_id`. The defensive id-validity check here is therefore
     // dead in any reachable diff path.
     debug_assert!(
-        id.0 != 0
-            && id.0 != usize::MAX
-            && dom.element_exists_in_target(target_id, id),
+        id.0 != 0 && id.0 != usize::MAX && dom.element_exists_in_target(target_id, id),
         "push_live_root requires a live element id in the current target"
     );
     to.push_root(id);

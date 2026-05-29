@@ -931,8 +931,6 @@ impl WriteMutations for RendererOracle {
     }
 
     fn commit(&mut self) {}
-
-    fn discard(&mut self) {}
 }
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so

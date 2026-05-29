@@ -104,10 +104,7 @@ impl ReactiveContext {
         let id = scope.id;
         let sender = runtime.sender.clone();
         let update_scope = move || {
-            let priority = Runtime::try_current()
-                .map(|runtime| runtime.current_update_priority())
-                .unwrap_or_default();
-            _ = sender.unbounded_send(SchedulerMsg::Immediate(id, priority));
+            _ = sender.unbounded_send(SchedulerMsg::Immediate(id));
         };
 
         // Otherwise, create a new context at the current scope

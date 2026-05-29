@@ -14,11 +14,11 @@ mod diff;
 mod effect;
 mod error_boundary;
 mod events;
-mod fiber;
 mod fragment;
 mod generational_box;
 mod global_context;
 mod launch;
+mod mount;
 mod mutations;
 mod nodes;
 mod portal;
@@ -106,19 +106,18 @@ pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
     EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
-    ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, RenderTargetWriter,
-    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
-    RenderStats, RenderTargetId, Result,
-    Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
-    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-    SuspenseContext, SuspenseRenderStats, Task, Template, TemplateAttribute,
-    TemplateNode, UpdatePriority, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations,
-    anyhow, consume_context, consume_context_from_scope, current_owner,
-    current_scope_id, fc_to_builder, generation, has_context, needs_update, needs_update_any,
-    parent_scope, provide_context, provide_create_error_boundary, provide_root_context,
-    queue_effect, remove_future, schedule_update, schedule_update_any, spawn, spawn_forever,
-    spawn_isomorphic, suspend, throw_error, try_consume_context, use_after_render,
-    use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner, with_update_priority,
+    ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
+    Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId,
+    RenderTargetWriter, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
+    consume_context_from_scope, current_owner, current_scope_id, fc_to_builder, generation,
+    has_context, needs_update, needs_update_any, parent_scope, provide_context,
+    provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
+    schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
+    throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
+    use_hook_with_cleanup, with_owner,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

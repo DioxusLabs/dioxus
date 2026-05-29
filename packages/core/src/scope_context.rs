@@ -201,12 +201,7 @@ impl Scope {
     /// Mark this scope as dirty, and schedule a render for it.
     pub(crate) fn needs_update_any(&self, id: ScopeId) {
         self.sender()
-            .unbounded_send(SchedulerMsg::Immediate(
-                id,
-                Runtime::try_current()
-                    .map(|runtime| runtime.current_update_priority())
-                    .unwrap_or_default(),
-            ))
+            .unbounded_send(SchedulerMsg::Immediate(id))
             .expect("Scheduler to exist if scope exists");
     }
 
@@ -219,12 +214,7 @@ impl Scope {
     /// [`subscribe`](crate::reactive_context::ReactiveContext::subscribe) to the [`current`](crate::reactive_context::ReactiveContext::current) [`ReactiveContext`](crate::reactive_context::ReactiveContext) instead.
     pub(crate) fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.sender(), self.id);
-        Arc::new(move || {
-            let priority = Runtime::try_current()
-                .map(|runtime| runtime.current_update_priority())
-                .unwrap_or_default();
-            drop(chan.unbounded_send(SchedulerMsg::Immediate(id, priority)))
-        })
+        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
 
     /// Schedule an update for any component given its [`ScopeId`].
@@ -238,10 +228,7 @@ impl Scope {
     pub(crate) fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.sender();
         Arc::new(move |id| {
-            let priority = Runtime::try_current()
-                .map(|runtime| runtime.current_update_priority())
-                .unwrap_or_default();
-            _ = chan.unbounded_send(SchedulerMsg::Immediate(id, priority));
+            _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
 

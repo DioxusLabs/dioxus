@@ -54,21 +54,11 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
 
     // Spin up the vdom and reserve a second render target before the App
     // gets a chance to read its props.
-    let mut bootstrap = VirtualDom::new_with_props(
-        app,
-        AppProps {
-            target: RenderTargetId::ROOT,
-        },
-    );
+    let mut bootstrap = VirtualDom::new_with_props(app, AppProps { target: RenderTargetId::ROOT });
     let inner_target = bootstrap.create_render_target();
     drop(bootstrap);
 
-    let mut dom = VirtualDom::new_with_props(
-        app,
-        AppProps {
-            target: inner_target,
-        },
-    );
+    let mut dom = VirtualDom::new_with_props(app, AppProps { target: inner_target });
     let _ = dom.create_render_target();
     dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
     dom.insert_render_target(inner_target, RendererOracle::new());
@@ -76,7 +66,9 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
     let mut outer = dom
         .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
         .unwrap();
-    let mut inner = dom.take_render_target::<RendererOracle>(inner_target).unwrap();
+    let mut inner = dom
+        .take_render_target::<RendererOracle>(inner_target)
+        .unwrap();
 
     // Sanity: outer holds the portal placeholders, inner holds the bodies.
     assert!(outer.is_stack_clean());

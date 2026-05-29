@@ -131,10 +131,6 @@ dioxus = { workspace = true }
 name = "jsframework"
 harness = false
 
-[[bench]]
-name = "fiber_driver"
-harness = false
-
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 features = ["router", "ssr", "web", "fullstack", "signals", "hooks", "html", "liveview", "server", "warnings"]

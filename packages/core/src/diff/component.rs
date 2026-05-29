@@ -8,8 +8,8 @@ use crate::{
         context::{DiffContext, DiffFrame, DiffState},
     },
     innerlude::{
-        ComponentPropsUpdate, ElementRef, MountId, PortalProps, ScopeOrder,
-        SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
+        ElementRef, MountId, PortalProps, ScopeOrder, SuspenseBoundaryProps,
+        SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
     },
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
@@ -139,13 +139,13 @@ impl ComponentLifecycle for NormalComponentLifecycle {
             state.dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
         }
 
-        // If our scope landed in `dirty_fibers` during its initial render
+        // If our scope landed in `dirty_scopes` during its initial render
         // (e.g. a hook synchronously queued an update for itself), drain the
         // entry now so we don't re-process the same scope after creation.
         let height = state.dom.runtime.get_state(scope_id).height;
         state
             .dom
-            .dirty_fibers
+            .dirty_scopes
             .remove(&ScopeOrder::new(height, scope_id));
 
         let new_node = state.dom.scopes[scope_id.0]
@@ -420,29 +420,6 @@ impl VNode {
         // This also implicitly drops the new props since they're not used
         let height = state.dom.runtime.get_state(scope_id).height;
 
-        if let Some(deferred_priority) = state
-            .dom
-            .render_deferred_priority
-            .filter(|priority| *priority > state.dom.render_priority)
-        {
-            state.dom.queue_component_props_diff(
-                deferred_priority,
-                vec![ComponentPropsUpdate {
-                    scope: scope_id,
-                    props: new.props.duplicate(),
-                }],
-            );
-            return;
-        }
-
-        if state
-            .dom
-            .deferred_priority_for_subtree(scope_id, state.dom.render_priority)
-            .is_some()
-        {
-            return;
-        }
-
         // copy out the box for both
         let old_props: &mut dyn AnyProps = &mut *state.dom.scopes[scope_id.0].props;
 
@@ -451,9 +428,7 @@ impl VNode {
             return;
         }
 
-        state
-            .dom
-            .queue_scope(ScopeOrder::with_priority(height, scope_id, state.priority));
+        state.dom.queue_scope(ScopeOrder::new(height, scope_id));
     }
 
     fn replace_vcomponent<M: WriteMutations>(

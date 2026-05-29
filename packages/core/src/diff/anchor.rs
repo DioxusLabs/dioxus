@@ -161,7 +161,10 @@ fn anchor_for_with_key(
     // from a `template.node_paths()` entry, which always begins with the
     // root index. An empty path here would mean a stray ref that never went
     // through the template machinery.
-    debug_assert!(!path.is_empty(), "anchor_for_with_key got empty parent path");
+    debug_assert!(
+        !path.is_empty(),
+        "anchor_for_with_key got empty parent path"
+    );
 
     if let Some(id) = fragment_sibling_after(mount, parent_mount, path, key, skip, dom, context) {
         return Anchor::Before(id);
@@ -289,16 +292,16 @@ fn parent_root_after(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
-    // Probe the committed fiber view of `parent_mount`. The diff context's
+    // Probe the committed mount view of `parent_mount`. The diff context's
     // `old` snapshot matches the committed view by construction (both are
-    // the pre-diff `fiber.node`), so reading directly from the fiber
+    // the pre-diff `mount.node`), so reading directly from the mount
     // registry covers both cases. Callers (`anchor_for_slot` after the
     // path-length check) only reach here with a `parent_mount` that's
-    // currently being diffed, so its fiber is registered.
+    // currently being diffed, so its mount is registered.
     let _ = context;
     let probe = dom
         .current_mounted_view(parent_mount)
-        .expect("parent_root_after requires a live parent fiber");
+        .expect("parent_root_after requires a live parent mount");
     let upper = probe.template.roots().len();
     for next in (our_root_idx + 1)..upper {
         if let Some(id) =

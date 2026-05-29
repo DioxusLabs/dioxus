@@ -1,4 +1,4 @@
-use crate::fiber::Fiber;
+use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{AttributeValue, ElementId, Event, RenderTargetId};
@@ -12,7 +12,7 @@ use crate::{
 };
 use crate::{
     Task,
-    innerlude::{LocalTask, SchedulerMsg, UpdatePriority},
+    innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
     scopes::ScopeId,
 };
@@ -58,8 +58,6 @@ pub struct Runtime {
 
     pub(crate) rendering: Cell<bool>,
 
-    pub(crate) update_priority: Cell<UpdatePriority>,
-
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     // The effects that need to be run after the next render
@@ -71,10 +69,10 @@ pub struct Runtime {
     // The renderer targets and their element id arenas.
     pub(crate) render_targets: RefCell<Slab<RenderTargetState>>,
 
-    // Once nodes are mounted, their persistent fiber identity is stored here.
-    // Each fiber is associated with a whole rsx block. [`Runtime::elements`]
+    // Once nodes are mounted, their persistent mount identity is stored here.
+    // Each mount is associated with a whole rsx block. [`Runtime::elements`]
     // link to a specific node in that block.
-    pub(crate) fibers: RefCell<Slab<Fiber>>,
+    pub(crate) mounts: RefCell<Slab<Mount>>,
 }
 
 struct ScopeStackGuard<'a> {
@@ -107,24 +105,6 @@ impl Drop for RenderTargetGuard<'_> {
     }
 }
 
-struct UpdatePriorityGuard<'a> {
-    runtime: &'a Runtime,
-    previous: UpdatePriority,
-}
-
-impl<'a> UpdatePriorityGuard<'a> {
-    fn new(runtime: &'a Runtime, priority: UpdatePriority) -> Self {
-        let previous = runtime.update_priority.replace(priority);
-        Self { runtime, previous }
-    }
-}
-
-impl Drop for UpdatePriorityGuard<'_> {
-    fn drop(&mut self) {
-        self.runtime.update_priority.set(self.previous);
-    }
-}
-
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         let mut render_targets = Slab::default();
@@ -134,7 +114,6 @@ impl Runtime {
         Rc::new(Self {
             sender,
             rendering: Cell::new(false),
-            update_priority: Cell::new(UpdatePriority::Default),
             scope_states: Default::default(),
             scope_stack: Default::default(),
             suspense_stack: Default::default(),
@@ -145,7 +124,7 @@ impl Runtime {
             pending_effects: Default::default(),
             dirty_tasks: Default::default(),
             render_targets: RefCell::new(render_targets),
-            fibers: Default::default(),
+            mounts: Default::default(),
         })
     }
 
@@ -223,18 +202,6 @@ fn MyComponent() -> Element {{
         result
     }
 
-    /// Run a closure with the given update priority as the ambient priority
-    /// for any scope invalidations created by that closure.
-    pub fn with_update_priority<T>(&self, priority: UpdatePriority, f: impl FnOnce() -> T) -> T {
-        let _priority = UpdatePriorityGuard::new(self, priority);
-        f()
-    }
-
-    /// Get the ambient priority for updates scheduled by the current runtime.
-    pub fn current_update_priority(&self) -> UpdatePriority {
-        self.update_priority.get()
-    }
-
     pub(crate) fn current_render_target(&self) -> Option<RenderTargetId> {
         self.target_stack.borrow().last().copied()
     }
@@ -310,7 +277,7 @@ fn MyComponent() -> Element {{
 
     /// Mark a real render target as dropped.
     ///
-    /// The target arena is kept so existing mounted fibers can be cleaned up by
+    /// The target arena is kept so existing mounted mounts can be cleaned up by
     /// the normal diff path, but future renders into the target will not emit
     /// mutations or mount effects.
     pub fn drop_render_target(&self, target_id: RenderTargetId) {
@@ -530,29 +497,6 @@ fn MyComponent() -> Element {{
         self.handle_event_for_target(RenderTargetId::ROOT, name, event, element);
     }
 
-    /// Call a listener inside the root render target with a specific update
-    /// priority for invalidations caused by the listener.
-    #[instrument(
-        skip(self, event),
-        level = "trace",
-        name = "Runtime::handle_event_with_priority"
-    )]
-    pub fn handle_event_with_priority(
-        self: &Rc<Self>,
-        priority: UpdatePriority,
-        name: &str,
-        event: Event<dyn Any>,
-        element: ElementId,
-    ) {
-        self.handle_event_for_target_with_priority(
-            RenderTargetId::ROOT,
-            priority,
-            name,
-            event,
-            element,
-        );
-    }
-
     /// Call a listener inside the VirtualDom with data from a specific render target.
     ///
     /// `ElementId`s are renderer-local, so multi-target renderers should use this
@@ -569,30 +513,6 @@ fn MyComponent() -> Element {{
         event: Event<dyn Any>,
         element: ElementId,
     ) {
-        self.handle_event_for_target_with_priority(
-            target_id,
-            UpdatePriority::from_event_name(name),
-            name,
-            event,
-            element,
-        );
-    }
-
-    /// Call a listener inside a specific render target with a specific update
-    /// priority for invalidations caused by the listener.
-    #[instrument(
-        skip(self, event),
-        level = "trace",
-        name = "Runtime::handle_event_for_target_with_priority"
-    )]
-    pub fn handle_event_for_target_with_priority(
-        self: &Rc<Self>,
-        target_id: RenderTargetId,
-        priority: UpdatePriority,
-        name: &str,
-        event: Event<dyn Any>,
-        element: ElementId,
-    ) {
         let _runtime = RuntimeGuard::new(self.clone());
         let targets = self.render_targets.borrow();
         let Some(target) = targets.get(target_id.0) else {
@@ -603,7 +523,6 @@ fn MyComponent() -> Element {{
         drop(targets);
 
         if let Some(parent_path) = parent_path {
-            let _priority = UpdatePriorityGuard::new(self, priority);
             if event.propagates() {
                 self.handle_bubbling_event(parent_path, name, event);
             } else {
@@ -646,9 +565,9 @@ fn MyComponent() -> Element {{
             let mut listeners = vec![];
             let mount_id;
 
-            // We do this in its own block to prevent fiber borrows from staying open while we call user code
+            // We do this in its own block to prevent mount borrows from staying open while we call user code
             {
-                let mounts = self.fibers.borrow();
+                let mounts = self.mounts.borrow();
                 let Some(mount) = mounts.get(path.mount.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
@@ -700,7 +619,7 @@ fn MyComponent() -> Element {{
             }
 
             parent = mount_id.and_then(|id| {
-                self.fibers
+                self.mounts
                     .borrow()
                     .get(id)
                     .and_then(|el| el.logical_parent)
@@ -715,7 +634,7 @@ fn MyComponent() -> Element {{
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.fibers.borrow();
+        let mounts = self.mounts.borrow();
         let Some(mount) = mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event
             return;

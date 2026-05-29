@@ -1,5 +1,4 @@
 use crate::ScopeId;
-use crate::scheduler::UpdatePriority;
 
 /// The type of message that can be sent to the scheduler.
 ///
@@ -11,7 +10,7 @@ pub(crate) enum SchedulerMsg {
     AllDirty,
 
     /// Immediate updates from components that mark them as dirty.
-    Immediate(ScopeId, UpdatePriority),
+    Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed.
     TaskNotified(slotmap::DefaultKey),
