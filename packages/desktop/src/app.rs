@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    dom_thread::{spawn_dom_thread, DomThreadHandle, VirtualDomEvent},
+    dom_thread::{DomThreadHandle, VirtualDomEvent, spawn_dom_thread},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
@@ -422,7 +422,7 @@ impl App {
     ///
     /// This forwards the event to wry-bindgen for processing, which may execute
     /// JavaScript in the webview or handle callbacks from JavaScript.
-    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::runtime::WryBindgenEvent) {
+    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::wry::WryBindgenEvent) {
         self.shared.wry_bindgen.handle_user_event(event);
     }
 

@@ -311,12 +311,8 @@ pub struct NativeFileHover {
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
         match event {
-            DragDropEvent::Enter { ref paths, .. } => {
-                self.paths.lock().unwrap().clone_from(paths)
-            }
-            DragDropEvent::Drop { ref paths, .. } => {
-                self.paths.lock().unwrap().clone_from(paths)
-            }
+            DragDropEvent::Enter { ref paths, .. } => self.paths.lock().unwrap().clone_from(paths),
+            DragDropEvent::Drop { ref paths, .. } => self.paths.lock().unwrap().clone_from(paths),
             _ => {}
         }
         *self.event.lock().unwrap() = Some(event);
@@ -335,14 +331,14 @@ impl NativeFileHover {
 #[derive(Clone)]
 pub(crate) struct DesktopFileDragEvent {
     /// The inner web-sys drag event
-    inner: Synthetic<web_sys_x::DragEvent>,
+    inner: Synthetic<web_sys::DragEvent>,
     /// Native file paths from wry::DragDropEvent
     native_files: Vec<PathBuf>,
 }
 
 impl DesktopFileDragEvent {
     /// Create a new desktop drag event with native file paths
-    pub fn new(inner: Synthetic<web_sys_x::DragEvent>, native_files: Vec<PathBuf>) -> Self {
+    pub fn new(inner: Synthetic<web_sys::DragEvent>, native_files: Vec<PathBuf>) -> Self {
         Self {
             inner,
             native_files,

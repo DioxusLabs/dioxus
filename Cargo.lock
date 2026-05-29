@@ -3203,7 +3203,7 @@ dependencies = [
  "http",
  "infer",
  "jni 0.21.1",
- "js-sys-x",
+ "js-sys",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -3211,8 +3211,9 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys-x",
+ "web-sys",
 ]
 
 [[package]]
@@ -3667,7 +3668,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "inventory",
- "js-sys-x",
+ "js-sys",
  "mime",
  "pin-project",
  "postcard",
@@ -3693,7 +3694,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-streams",
- "web-sys-x",
+ "web-sys",
  "xxhash-rust",
 ]
 
@@ -4022,7 +4023,7 @@ dependencies = [
  "tracing",
  "tracing-wasm",
  "wasm-bindgen",
- "web-sys-x",
+ "web-sys",
 ]
 
 [[package]]
@@ -7579,10 +7580,12 @@ dependencies = [
 
 [[package]]
 name = "js-sys-x"
-version = "0.3.83-alpha.1"
+version = "0.3.99-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc4596fecc49165ed5d6554c9265cb4db607451a2235b1198fee92d068e5dca1"
+checksum = "ea9e70b24430642b794f5c735779451f46c43d2509fff92611c3e564402648d7"
 dependencies = [
+ "cfg-if",
+ "futures-util",
  "once_cell",
  "wasm-bindgen-x",
 ]
@@ -14114,15 +14117,12 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures-x"
-version = "0.4.56-alpha.1"
+version = "0.4.72-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "244455489d63ea92a1d6269953ecaf83a4f399e93f5d7d4ebc05b03251460a33"
+checksum = "edc1962351736829a0e2cecdad678bc01ddb897a119695a003b5958c22b94431"
 dependencies = [
- "cfg-if",
  "js-sys-x",
- "once_cell",
  "wasm-bindgen-x",
- "web-sys-x",
 ]
 
 [[package]]
@@ -14150,9 +14150,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-x"
-version = "0.2.106-alpha.1"
+version = "0.2.122-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e447f2ddaf7de33e5a01a5f16d3d4a94f6b978ec84cd9801d92c6b8de273a81"
+checksum = "84028f84171cd61e17a0484d18eba9ade71d3570741bc8c87367fb1897e019dc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -14210,11 +14210,10 @@ checksum = "4f4d8ae7ad5440360e9799dfd42857d126454a88441ddf72d288ef83fa47f527"
 
 [[package]]
 name = "wasm-bindgen-x"
-version = "0.2.106-alpha.1"
+version = "0.2.122-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad338d82321ba007c90007a201d5a632ce24908d28bd3e2767e496fd99b3259a"
+checksum = "d8f1fcffb448a834997268ad401a7f3df0696271a8183fbdff2f124b30ce8a5d"
 dependencies = [
- "wasm-bindgen",
  "wasm-bindgen-macro-x",
  "wry-bindgen",
 ]
@@ -14486,9 +14485,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys-x"
-version = "0.3.83-alpha.1"
+version = "0.3.99-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee0ace88a6dbec8e3f9cfae4d79906f4e6dff4a27569cf26961e920c2d31f9b"
+checksum = "d4ad4ede3d6ff688f215bab089f15bbb1afe2c37524be3f5f98c71d6e96067ce"
 dependencies = [
  "js-sys-x",
  "wasm-bindgen-x",
@@ -15737,9 +15736,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen"
-version = "0.2.106-alpha.1"
+version = "0.2.122-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ca56539675e7054a348aa5c27fd899b8e7adac317cff6f3f95216f766660571"
+checksum = "0fdabcc31d141127f061b84f189f39e6471c7ed759eccc13a493de8cd1b0d65a"
 dependencies = [
  "async-channel 2.5.0",
  "base64 0.22.1",
@@ -15758,9 +15757,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen-macro"
-version = "0.2.106-alpha.1"
+version = "0.2.122-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38f160aec4b9a70ee28069bb35c2ee02b17372bd0fc7844779b94d70f19f5e62"
+checksum = "5ecb5f98b682551f43280ce1ea3add1d92ed7b3d612fb758acfc41d96122c379"
 dependencies = [
  "quote",
  "wry-bindgen-macro-support",
@@ -15768,9 +15767,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen-macro-support"
-version = "0.2.106-alpha.1"
+version = "0.2.122-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf92590cc41a4498ac7b8aafa97bdd2348e8a86b2e211c5ef454b8ac63a02d4"
+checksum = "370e6226605f2c8554f7a02649d2af708975fd1bbbebe170afecd73da795355d"
 dependencies = [
  "proc-macro2",
  "quote",

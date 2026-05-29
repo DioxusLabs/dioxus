@@ -122,7 +122,7 @@ impl NativeFileData for WebFileData {
     > {
         let file = self.file.dyn_ref::<web_sys::Blob>().unwrap().clone();
         Box::pin(SendWrapper::new(futures_util::stream::once(async move {
-            let array_buff = wasm_bindgen_futures_x::JsFuture::from(file.array_buffer())
+            let array_buff = wasm_bindgen_futures::JsFuture::from(file.array_buffer())
                 .await
                 .unwrap();
             let as_uint_array = array_buff.dyn_into::<Uint8Array>().unwrap();

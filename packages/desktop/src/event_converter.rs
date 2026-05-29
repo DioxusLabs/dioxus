@@ -8,7 +8,7 @@ use crate::file_upload::{DesktopFileData, DesktopFileDragEvent, DesktopFormData}
 use dioxus_html::{DragData, FileData, FormData, FormValue, HtmlEventConverter, PlatformEventData};
 use dioxus_web_sys_events::{GenericWebSysEvent, WebEventConverter};
 use std::path::PathBuf;
-use web_sys_x::wasm_bindgen::JsCast;
+use web_sys::wasm_bindgen::JsCast;
 
 /// Desktop-specific event converter that wraps WebEventConverter.
 ///
@@ -69,7 +69,7 @@ impl HtmlEventConverter for DesktopEventConverter {
         // Check for web-sys events (from wry-bindgen bridge)
         if let Some(web_event) = event.downcast::<GenericWebSysEvent>() {
             // Check if this is a file input
-            if let Some(input) = web_event.element.dyn_ref::<web_sys_x::HtmlInputElement>() {
+            if let Some(input) = web_event.element.dyn_ref::<web_sys::HtmlInputElement>() {
                 if input.type_() == "file" {
                     // Get files from the input - the filenames contain the native paths
                     if let Some(file_list) = input.files() {

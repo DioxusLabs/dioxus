@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::sync::{Arc, Mutex, mpsc::SyncSender};
 use tao::window::WindowId;
-use wry_bindgen::runtime::WryBindgenEvent;
+use wry_bindgen::wry::WryBindgenEvent;
 
 /// Type alias for the desktop service callback function.
 pub(crate) type DesktopServiceCallback =

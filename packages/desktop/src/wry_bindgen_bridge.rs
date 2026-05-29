@@ -6,7 +6,7 @@
 use crate::file_upload::{DesktopFileDragEvent, NativeFileHover};
 use dioxus_core::{ElementId, Runtime};
 use dioxus_html::PlatformEventData;
-use dioxus_web_sys_events::{virtual_event_from_websys_event, Synthetic};
+use dioxus_web_sys_events::{Synthetic, virtual_event_from_websys_event};
 use std::any::Any;
 use std::rc::Rc;
 use wry_bindgen::prelude::*;
@@ -20,15 +20,15 @@ export function setMountedHandler(handler) {
 }
 "#)]
 extern "C" {
-    fn setEventHandler(handler: Closure<dyn FnMut(web_sys_x::Event, String, u64, bool) -> bool>);
-    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys_x::Element, u64, bool)>);
+    fn setEventHandler(handler: Closure<dyn FnMut(web_sys::Event, String, u64, bool) -> bool>);
+    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys::Element, u64, bool)>);
 }
 
 /// Initialize the event handler closures for the wry-bindgen bridge.
 ///
 /// This should be called once during VirtualDom initialization on the wry-bindgen thread.
 /// The handler receives:
-/// - event: The raw web_sys_x::Event (wry-bindgen's web-sys)
+/// - event: The raw web_sys::Event (wry-bindgen's web-sys)
 /// - name: The event name (e.g., "click", "input")
 /// - element_id: The dioxus element ID
 /// - bubbles: Whether the event bubbles
@@ -37,7 +37,7 @@ extern "C" {
 pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     let runtime_clone = runtime.clone();
     let event_closure = Closure::new(
-        move |event: web_sys_x::Event, name: String, element_id: u64, bubbles: bool| {
+        move |event: web_sys::Event, name: String, element_id: u64, bubbles: bool| {
             handle_event_from_js(
                 &runtime_clone,
                 &file_hover,
@@ -50,7 +50,7 @@ pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     );
 
     let mounted_closure = Closure::new(
-        move |element: web_sys_x::Element, element_id: u64, bubbles: bool| {
+        move |element: web_sys::Element, element_id: u64, bubbles: bool| {
             handle_mounted_from_js(&runtime, element, element_id, bubbles)
         },
     );
@@ -71,7 +71,7 @@ fn is_drag_event(name: &str) -> bool {
 fn handle_event_from_js(
     runtime: &Rc<Runtime>,
     file_hover: &NativeFileHover,
-    event: web_sys_x::Event,
+    event: web_sys::Event,
     name: String,
     element_id: u64,
     bubbles: bool,
@@ -81,7 +81,7 @@ fn handle_event_from_js(
     // Get the target element for the event
     let target = event
         .target()
-        .and_then(|t| t.dyn_into::<web_sys_x::Element>().ok())
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
         .unwrap_or_else(|| {
             dioxus_web_sys_events::load_document()
                 .document_element()
@@ -101,7 +101,7 @@ fn handle_event_from_js(
             .unwrap_or_default();
 
         // Create a DesktopFileDragEvent with native file paths
-        let drag_event: web_sys_x::DragEvent =
+        let drag_event: web_sys::DragEvent =
             event.dyn_into().expect("drag event should be DragEvent");
         let desktop_drag = DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
         PlatformEventData::new(Box::new(desktop_drag))
@@ -121,7 +121,7 @@ fn handle_event_from_js(
 /// Handle a mounted event from JavaScript.
 fn handle_mounted_from_js(
     runtime: &Rc<Runtime>,
-    element: web_sys_x::Element,
+    element: web_sys::Element,
     element_id: u64,
     bubbles: bool,
 ) {
