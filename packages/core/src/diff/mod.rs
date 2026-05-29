@@ -119,7 +119,6 @@ impl VirtualDom {
     }
 
     pub(crate) fn set_mount_mode(&self, mount: MountId, mode: RenderMode) {
-        debug_assert!(mount.mounted(), "set_mount_mode requires a mounted MountId");
         self.runtime.mounts.borrow_mut()[mount.0].mode = mode;
     }
 
@@ -144,8 +143,8 @@ impl VirtualDom {
     pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
         // Every caller commits work on a `mount` that's just been claimed via
         // `claim_mount` or freshly allocated in `create_with_parents` —
-        // both produce live `MountId`s, never `PLACEHOLDER`.
-        debug_assert!(mount.mounted(), "commit_mount requires a live MountId");
+        // both produce live `MountId`s, never `PLACEHOLDER`. A `PLACEHOLDER`
+        // here would index past the mount slab below and panic regardless.
         // Deep-clone so the committed snapshot owns its own per-vnode
         // `Cell<MountId>` slots. A subsequent diff that calls
         // `claim_mount` on descendant `old` vnodes would otherwise

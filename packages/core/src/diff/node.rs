@@ -41,26 +41,15 @@ impl VNode {
             Text(text) => {
                 // If we are diffing suspended nodes and are not outputting mutations, we can skip it
                 if let Some(to) = state.to.as_deref_mut() {
-                    self.create_dynamic_text(mount, idx, text, state.dom, to)
+                    let id = state.dom.next_element_for_mount(mount);
+                    state.dom.set_mounted_dyn_node(mount, idx, id.0);
+                    to.create_text_node(&text.value, id);
+                    1
                 } else {
                     0
                 }
             }
         }
-    }
-
-    fn create_dynamic_text(
-        &self,
-        mount: MountId,
-        idx: usize,
-        text: &crate::innerlude::VText,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) -> usize {
-        let id = dom.next_element_for_mount(mount);
-        dom.set_mounted_dyn_node(mount, idx, id.0);
-        to.create_text_node(&text.value, id);
-        1
     }
 
     /// Mount all dynamic nodes that are descendants of this root template element.
@@ -99,13 +88,9 @@ impl VNode {
         // Dynamic-at-root case is handled by the sibling arm in
         // `create_with_parents`), so the path always has the root index plus
         // at least one child segment — `idx` advances `end` unconditionally.
-        while let Some((idx, _path)) =
+        while let Some((idx, _)) =
             dynamic_nodes_iter.next_if(|(_, path)| matches!(path, [idx, ..] if *idx == root_idx))
         {
-            debug_assert!(
-                _path.len() > 1,
-                "nested dynamics under an Element root have path.len() > 1"
-            );
             end = idx;
         }
 
@@ -302,7 +287,6 @@ impl VNode {
         new_node: &DynamicNode,
         state: &mut DiffState<'_, impl WriteMutations>,
     ) {
-        tracing::trace!("diffing dynamic node from {old_node:?} to {new_node:?}");
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
@@ -464,29 +448,17 @@ impl VNode {
     ) -> Option<ElementId> {
         match self.get_dynamic_root_node_and_id(root_idx) {
             None if dom.mount_target_id(mount) == target_id => {
-                debug_assert!(
-                    root_idx < dom.mounted_root_count(mount),
-                    "static root {root_idx} is beyond the roots its mount was created with"
-                );
                 live_element_id(dom.get_mounted_root_node(mount, root_idx).0)
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             None => None,
             Some((idx, Text(_))) if dom.mount_target_id(mount) == target_id => {
-                debug_assert!(
-                    idx < dom.mounted_dyn_node_count(mount),
-                    "dynamic text slot {idx} is beyond the slots its mount was created with"
-                );
                 live_element_id(dom.get_mounted_dyn_node(mount, idx))
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             Some((_, Text(_))) => None,
             Some((_, Fragment(children))) => find_fragment_edge(children, dom, target_id, edge),
             Some((id, Component(_))) => {
-                debug_assert!(
-                    id < dom.mounted_dyn_node_count(mount),
-                    "component slot {id} is beyond the slots its mount was created with"
-                );
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, id));
                 find_node_edge(live_component_root(dom, scope_id), dom, target_id, edge)
             }
@@ -614,17 +586,16 @@ impl VNode {
         if self.has_live_dom(dom) {
             return false;
         }
-        current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root(true)
+        current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root()
     }
 
-    fn has_reclaimable_root(&self, empty_text_only: bool) -> bool {
+    fn has_reclaimable_root(&self) -> bool {
         self.template.roots().iter().any(|root| match root {
             TemplateNode::Dynamic { id } => match &self.dynamic_nodes[*id] {
-                Component(_) => !empty_text_only,
                 Text(text) => text.value.is_empty(),
                 _ => false,
             },
-            _ => !empty_text_only,
+            _ => false,
         })
     }
 
@@ -648,7 +619,6 @@ impl VNode {
         // `claim_mount` always assign a live MountId before anything
         // tries to remove it.
         let mount = self.mount.get();
-        debug_assert!(mount.mounted(), "remove_node_inner requires a live MountId");
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
@@ -806,15 +776,8 @@ impl VNode {
                 let root = live_component_root(dom, scope_id);
                 find_node_edge(root, dom, target_id, ElementEdge::First)
             }
-            Text(_) => {
-                debug_assert_eq!(
-                    dom.mount_target_id(mount),
-                    target_id,
-                    "Text dynamic node's mount target must match the current render target"
-                );
-                live_element_id(dom.get_mounted_dyn_node(mount, idx))
-                    .filter(|id| dom.element_exists_in_target(target_id, *id))
-            }
+            Text(_) => live_element_id(dom.get_mounted_dyn_node(mount, idx))
+                .filter(|id| dom.element_exists_in_target(target_id, *id)),
             Fragment(nodes) => find_fragment_edge(nodes, dom, target_id, ElementEdge::First),
         }
     }
@@ -868,7 +831,6 @@ impl VNode {
             let entry = mounts.vacant_entry();
             let mount = MountId(entry.key());
             self.mount.set(mount);
-            tracing::trace!(?self, ?mount, "creating template");
             entry.insert(Mount::new(
                 self.clone(),
                 render_parent,
@@ -899,11 +861,6 @@ impl VNode {
         {
             state.to = None;
         }
-        debug_assert!(
-            state.dom.runtime.mounts.borrow().contains(mount.0),
-            "Tried to find mount {:?} in dom.mounts, but it wasn't there",
-            mount
-        );
 
         // Go through each root node and create the node, adding it to the stack.
         // Each node already exists in the template, so we can just clone it from the template

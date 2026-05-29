@@ -240,8 +240,10 @@ impl<W: WriteMutations + 'static> WriteMutations for BorrowedWriter<W> {
 /// `RenderTargetId` (read from the runtime's target stack). Mutations destined
 /// for unregistered targets are dropped.
 ///
-/// `commit` fans out to every registered writer so a render pass can finalize
-/// each target's accumulated edits in a single call.
+/// `commit` is a no-op here; the per-target commit fan-out lives in
+/// `VirtualDom::rebuild`/`render_immediate`, which call `commit` directly on
+/// each registered writer after the diff pass (and after this dispatch's borrow
+/// of the target registry has been released).
 pub(crate) struct DiffDispatch<'a> {
     pub(crate) targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
     pub(crate) runtime: Rc<Runtime>,
@@ -257,11 +259,12 @@ impl<'a> DiffDispatch<'a> {
     pub(crate) fn new(
         targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
         runtime: Rc<Runtime>,
+        auto_create_targets: bool,
     ) -> Self {
         Self {
             targets,
             runtime,
-            auto_create_targets: false,
+            auto_create_targets,
         }
     }
 
@@ -372,11 +375,7 @@ impl WriteMutations for DiffDispatch<'_> {
         }
     }
 
-    fn commit(&mut self) {
-        for w in self.targets.values_mut() {
-            w.commit();
-        }
-    }
+    fn commit(&mut self) {}
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state

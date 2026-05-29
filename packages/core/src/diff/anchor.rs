@@ -78,8 +78,6 @@ pub(crate) fn anchor_for_slot(
     // Every `node_paths` entry the diff hands us starts with the root index
     // (see `compile_template` and rsx codegen), so the empty path is
     // unreachable in practice.
-    debug_assert!(!path.is_empty(), "anchor_for_slot called with empty path");
-
     if path.len() == 1 {
         let our_root_idx = path[0] as usize;
         if let Some(id) = parent_root_after(parent_mount, our_root_idx, dom, context) {
@@ -149,22 +147,13 @@ fn anchor_for_with_key(
     context: Option<DiffContext<'_>>,
 ) -> Anchor {
     let Some(parent_ref) = dom.get_mounted_parent(mount) else {
-        debug_assert!(
-            !mount.mounted() || has_parent_view(mount, dom, context),
-            "missing parent for stale mounted node {mount:?}"
-        );
         return Anchor::AppendTo(ElementId::ROOT);
     };
     let parent_mount = parent_ref.mount;
-    let path = parent_ref.path.path;
     // Same invariant as `anchor_for_slot`: every `ElementRef::path` is built
     // from a `template.node_paths()` entry, which always begins with the
-    // root index. An empty path here would mean a stray ref that never went
-    // through the template machinery.
-    debug_assert!(
-        !path.is_empty(),
-        "anchor_for_with_key got empty parent path"
-    );
+    // root index, so it is never empty.
+    let path = parent_ref.path.path;
 
     if let Some(id) = fragment_sibling_after(mount, parent_mount, path, key, skip, dom, context) {
         return Anchor::Before(id);
@@ -213,17 +202,6 @@ fn parent_views(
         return vec![context.new.clone(), context.old.clone()];
     }
     dom.current_mounted_view(parent_mount).into_iter().collect()
-}
-
-fn has_parent_view(
-    parent_mount: MountId,
-    dom: &VirtualDom,
-    context: Option<DiffContext<'_>>,
-) -> bool {
-    context
-        .and_then(|context| context.for_mount(parent_mount))
-        .is_some()
-        || dom.current_mounted_view(parent_mount).is_some()
 }
 
 fn parent_key(

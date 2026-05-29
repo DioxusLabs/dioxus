@@ -56,12 +56,6 @@ impl DirtyScopes {
         self.scopes.remove(order)
     }
 
-    /// Remove the exact ordered entry. Kept as a distinct name from
-    /// [`Self::remove`] for call sites that build a fresh `ScopeOrder`.
-    pub(crate) fn remove_exact(&mut self, order: &ScopeOrder) -> bool {
-        self.scopes.remove(order)
-    }
-
     pub(crate) fn contains(&self, order: &ScopeOrder) -> bool {
         self.scopes.contains(order)
     }

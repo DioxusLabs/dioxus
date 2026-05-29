@@ -99,7 +99,7 @@ impl VirtualDom {
 
             // remove this scope from the dirty set
             let order = ScopeOrder::new(scope_state.height, scope_id);
-            self.dirty_scopes.remove_exact(&order);
+            self.dirty_scopes.remove(&order);
             output
         })
     }

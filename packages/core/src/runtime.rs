@@ -202,16 +202,15 @@ fn MyComponent() -> Element {{
         result
     }
 
-    pub(crate) fn current_render_target(&self) -> Option<RenderTargetId> {
-        self.target_stack.borrow().last().copied()
-    }
-
     /// Get the render target currently receiving renderer mutations.
     ///
     /// This falls back to the active scope's target and then the root target
     /// when rendering code is not inside an explicit target stack frame.
     pub fn current_render_target_id(&self) -> RenderTargetId {
-        self.current_render_target()
+        self.target_stack
+            .borrow()
+            .last()
+            .copied()
             .or_else(|| {
                 self.try_current_scope_id()
                     .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))

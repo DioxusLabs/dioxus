@@ -432,16 +432,6 @@ impl VirtualDom {
         writer.into_any().downcast::<W>().ok().map(|b| *b)
     }
 
-    /// Test convenience: register `writer` at `ROOT`, run a full rebuild, and
-    /// return the writer back. Used to keep single-target tests compact.
-    #[doc(hidden)]
-    pub fn rebuild_with<W: WriteMutations + 'static>(&mut self, writer: W) -> W {
-        self.insert_render_target(RenderTargetId::ROOT, writer);
-        self.rebuild();
-        self.take_render_target::<W>(RenderTargetId::ROOT)
-            .expect("writer was just registered at ROOT")
-    }
-
     /// Borrow `writer` at `ROOT` for the duration of a rebuild. Convenience
     /// for tests / single-target hosts that don't want to give up ownership.
     ///
@@ -715,8 +705,8 @@ impl VirtualDom {
         // Lend the registry to the diff dispatcher for the rebuild pass.
         let runtime = self.runtime.clone();
         let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch = crate::mutations::DiffDispatch::new(&mut targets, runtime);
-        dispatch.auto_create_targets = self.auto_create_targets;
+        let mut dispatch =
+            crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
 
         let m = self.create_scope(Some(&mut dispatch), ScopeId::ROOT, new_nodes, None);
         dispatch.append_children(ElementId::ROOT, m);
@@ -752,8 +742,8 @@ impl VirtualDom {
 
         let runtime = self.runtime.clone();
         let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch = crate::mutations::DiffDispatch::new(&mut targets, runtime);
-        dispatch.auto_create_targets = self.auto_create_targets;
+        let mut dispatch =
+            crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
 
         while let Some(work) = self.pop_work() {
             match work {

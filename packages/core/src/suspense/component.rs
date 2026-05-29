@@ -432,7 +432,7 @@ impl SuspenseBoundaryProps {
                                 new_suspended_nodes.remove_node_inner(dom, None::<&mut M>, false);
                             },
                         );
-                        set_rendered_vnode(dom, scope_id, new_suspended_nodes);
+                        set_rendered_children(dom, scope_id, LastRenderedNode::Real(new_suspended_nodes));
                         mark_suspense_resolved(&suspense_context, dom, scope_id);
                     }
                 }
@@ -523,7 +523,7 @@ impl SuspenseBoundaryProps {
                             },
                         );
 
-                        set_rendered_vnode(dom, scope_id, new_children);
+                        set_rendered_children(dom, scope_id, LastRenderedNode::Real(new_children));
                         mark_suspense_resolved(&suspense_context, dom, scope_id);
                     } else {
                         let branch = SuspenseBranch::new(new_children);
@@ -579,10 +579,6 @@ fn store_suspended_branch(dom: &mut VirtualDom, scope_id: ScopeId, branch: &Susp
     debug_assert!(branch.root_mount().mounted());
     dom.set_mount_mode(branch.root_mount(), RenderMode::Background);
     store_suspense_children(dom, scope_id, &LastRenderedNode::Real(branch.root()));
-}
-
-fn set_rendered_vnode(dom: &mut VirtualDom, scope_id: ScopeId, children: VNode) {
-    set_rendered_children(dom, scope_id, LastRenderedNode::Real(children));
 }
 
 fn replace_suspense_nodes<M: WriteMutations>(

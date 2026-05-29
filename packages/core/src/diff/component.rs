@@ -16,24 +16,6 @@ use crate::{
     virtual_dom::VirtualDom,
 };
 
-trait ComponentLifecycle {
-    fn create<M: WriteMutations>(
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
-    ) -> usize;
-
-    fn diff<M: WriteMutations>(scope_id: ScopeId, state: &mut DiffState<'_, M>);
-
-    fn remove<M: WriteMutations>(
-        scope_id: ScopeId,
-        state: &mut DiffState<'_, M>,
-        destroy_component_state: bool,
-    );
-}
-
 #[derive(Clone, Copy)]
 enum ComponentDriver {
     Normal,
@@ -111,7 +93,7 @@ impl ComponentDriver {
 
 struct NormalComponentLifecycle;
 
-impl ComponentLifecycle for NormalComponentLifecycle {
+impl NormalComponentLifecycle {
     fn create<M: WriteMutations>(
         mount: MountId,
         idx: usize,
@@ -177,7 +159,7 @@ impl ComponentLifecycle for NormalComponentLifecycle {
 
 struct PortalLifecycle;
 
-impl ComponentLifecycle for PortalLifecycle {
+impl PortalLifecycle {
     fn create<M: WriteMutations>(
         mount: MountId,
         idx: usize,
@@ -215,7 +197,7 @@ impl ComponentLifecycle for PortalLifecycle {
 
 struct SuspenseLifecycle;
 
-impl ComponentLifecycle for SuspenseLifecycle {
+impl SuspenseLifecycle {
     fn create<M: WriteMutations>(
         mount: MountId,
         idx: usize,
@@ -424,7 +406,8 @@ impl VNode {
         let old_props: &mut dyn AnyProps = &mut *state.dom.scopes[scope_id.0].props;
 
         if old_props.memoize(new.props.props()) {
-            tracing::trace!("Memoized props for component {:#?}", scope_id,);
+            // The target ScopeState still references the old props; memoizing
+            // here implicitly drops the new props since they're unused.
             return;
         }
 

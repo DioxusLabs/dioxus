@@ -1,5 +1,5 @@
 use crate::{
-    DynamicNode, ElementId, RenderTargetId, ScopeId, VirtualDom,
+    DynamicNode, ElementId, ScopeId, VirtualDom,
     diff::{
         anchor::{Anchor, anchor_after, anchor_before, at_anchor, create_at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
@@ -21,14 +21,6 @@ impl<M: WriteMutations> DiffState<'_, M> {
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
-        debug_assert!(
-            new.iter().all(|n| n.key.is_some() == new_is_keyed),
-            "all siblings must be keyed or all siblings must be non-keyed"
-        );
-        debug_assert!(
-            old.iter().all(|o| o.key.is_some() == old_is_keyed),
-            "all siblings must be keyed or all siblings must be non-keyed"
-        );
 
         if new_is_keyed && old_is_keyed {
             self.diff_keyed_children(old, new, parent);
@@ -201,10 +193,6 @@ impl<M: WriteMutations> DiffState<'_, M> {
             .collect::<Box<[_]>>();
 
         if shared_keys.is_empty() {
-            debug_assert!(
-                !old.is_empty(),
-                "we should never be appending - just creating N"
-            );
             let first_old = old.first().unwrap();
             let anchor = anchor_before(first_old, &[], self.dom, self.context());
             create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
@@ -372,11 +360,7 @@ fn collect_splice_mounts(
     // mount is always live by the time we collect it.
     range
         .filter_map(|idx| old.get(new_index_to_old_index[idx]))
-        .map(|old_node| {
-            let old_mount = old_node.mount.get();
-            debug_assert!(old_mount.mounted(), "non-LIS splice old mount must be live");
-            old_mount
-        })
+        .map(|old_node| old_node.mount.get())
         .collect()
 }
 
@@ -409,7 +393,7 @@ impl VNode {
                     Some((idx, DynamicNode::Text(_))) => {
                         if dom.mount_target_id(mount) == target_id {
                             let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-                            push_live_root(dom, to, target_id, id)
+                            push_live_root(to, id)
                         } else {
                             0
                         }
@@ -418,7 +402,7 @@ impl VNode {
                     None => {
                         if dom.mount_target_id(mount) == target_id {
                             let id = dom.get_mounted_root_node(mount, root_idx);
-                            push_live_root(dom, to, target_id, id)
+                            push_live_root(to, id)
                         } else {
                             0
                         }
@@ -429,22 +413,12 @@ impl VNode {
     }
 }
 
-fn push_live_root(
-    dom: &VirtualDom,
-    to: &mut impl WriteMutations,
-    target_id: RenderTargetId,
-    id: ElementId,
-) -> usize {
+fn push_live_root(to: &mut impl WriteMutations, id: ElementId) -> usize {
     // Callers (`push_all_root_nodes`) only reach this with `id` values just
     // read from `get_mounted_root_node`/`get_mounted_dyn_node` for a vnode
     // whose mount target already matches `target_id`, so the live element id
     // has been allocated in that target by `load_template_root` /
-    // `assign_node_id`. The defensive id-validity check here is therefore
-    // dead in any reachable diff path.
-    debug_assert!(
-        id.0 != 0 && id.0 != usize::MAX && dom.element_exists_in_target(target_id, id),
-        "push_live_root requires a live element id in the current target"
-    );
+    // `assign_node_id`.
     to.push_root(id);
     1
 }
