@@ -543,7 +543,7 @@ pub mod req_from {
                 let bytes = Bytes::from_request(request, &())
                     .await
                     .map_err(|e| {
-                        let err = ServerFnError::from(anyhow::anyhow!(e));
+                        let err = ServerFnError::from(anyhow!(e));
                         err.into_response()
                     })?;
                 let as_str = String::from_utf8_lossy(&bytes);
