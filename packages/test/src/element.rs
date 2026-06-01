@@ -1,19 +1,18 @@
-use blitz_dom::{DocGuard, Node, Point};
-use dioxus_core::{ElementId, Event, VirtualDom};
+use blitz_dom::{DocGuard, Document as _, Node, Point};
+use dioxus_core::{ElementId, Event};
 use dioxus_html::{
     Modifiers, PlatformEventData,
     geometry::{Coordinates, euclid::Point2D},
 };
-use dioxus_native_dom::synthetic_click_event;
-use std::rc::Rc;
+use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
+use std::{cell::RefMut, rc::Rc};
 
 /// A reference to DOM node managed by a [crate::DocumentTester].
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.
 pub struct ResolvedElement<'doc> {
-    pub(crate) vdom: &'doc VirtualDom,
-    pub(crate) document: DocGuard<'doc>,
+    pub(crate) guard: RefMut<'doc, DioxusDocument>,
     pub(crate) node_id: NodeId,
 }
 
@@ -29,7 +28,7 @@ impl<'doc> ResolvedElement<'doc> {
             "click",
             Event::new(
                 Rc::new(PlatformEventData::new(synthetic_click_event(
-                    self.node_id.resolve(&self.document),
+                    self.node_id.resolve(&self.guard.inner()),
                     Modifiers::empty(),
                 ))),
                 true,
@@ -54,7 +53,7 @@ impl<'doc> ResolvedElement<'doc> {
     /// specific event type. This method panics if the event payload has the wrong type.
     pub fn send_event(&self, name: &str, event: Event<PlatformEventData>) {
         let propagates = event.propagates();
-        self.vdom.runtime().handle_event(
+        self.guard.vdom.runtime().handle_event(
             name,
             Event::new(event.data, propagates),
             self.get_element_id()
@@ -64,7 +63,7 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns a `String` consisting of the HTML of this element and all of its children.
     pub fn outer_html(&self) -> String {
-        self.node_id.resolve(&self.document).outer_html()
+        self.node_id.resolve(&self.guard.inner()).outer_html()
     }
 
     /// Returns a `String` consisting of the HTML of this element's children, not including this
@@ -72,11 +71,12 @@ impl<'doc> ResolvedElement<'doc> {
     pub fn inner_html(&self) -> String {
         let inner_html_parts: Vec<_> = self
             .node_id
-            .resolve(&self.document)
+            .resolve(&self.guard.inner())
             .children
             .iter()
             .filter_map(|child_id| {
-                self.document
+                self.guard
+                    .inner()
                     .get_node(*child_id)
                     .map(|child| child.outer_html())
             })
@@ -98,7 +98,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the upper-left corner of this element.
     pub fn upper_left(&self) -> Coordinates {
-        let node = self.node_id.resolve(&self.document);
+        let document = self.guard.inner();
+        let node = self.node_id.resolve(&document);
         let upper_left = Point {
             x: node.final_layout.location.x,
             y: node.final_layout.location.y,
@@ -113,7 +114,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the upper-right corner of this element.
     pub fn upper_right(&self) -> Coordinates {
-        let node = self.node_id.resolve(&self.document);
+        let document = self.guard.inner();
+        let node = self.node_id.resolve(&document);
         let mut upper_right = Point {
             x: node.final_layout.location.x,
             y: node.final_layout.location.y,
@@ -129,7 +131,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the lower-left corner of this element.
     pub fn lower_left(&self) -> Coordinates {
-        let node = self.node_id.resolve(&self.document);
+        let document = self.guard.inner();
+        let node = self.node_id.resolve(&document);
         let mut lower_left = Point {
             x: node.final_layout.location.x,
             y: node.final_layout.location.y,
@@ -145,7 +148,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the lower-right corner of this element.
     pub fn lower_right(&self) -> Coordinates {
-        let node = self.node_id.resolve(&self.document);
+        let document = self.guard.inner();
+        let node = self.node_id.resolve(&document);
         let mut lower_right = Point {
             x: node.final_layout.location.x,
             y: node.final_layout.location.y,
@@ -166,7 +170,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated size of this element as a tuple (width, height) in screen pixels.
     pub fn size(&self) -> (f32, f32) {
-        let node = self.node_id.resolve(&self.document);
+        let document = self.guard.inner();
+        let node = self.node_id.resolve(&document);
         let height = node.final_layout.content_box_height();
         let width = node.final_layout.content_box_width();
         (width, height)
@@ -174,7 +179,7 @@ impl<'doc> ResolvedElement<'doc> {
 
     fn get_element_id(&self) -> Option<ElementId> {
         self.node_id
-            .resolve(&self.document)
+            .resolve(&self.guard.inner())
             .element_data()?
             .attrs
             .iter()

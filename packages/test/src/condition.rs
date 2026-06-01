@@ -159,15 +159,16 @@ trait Waitable: EventLoopDriver {
 /// }
 /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(should_fail()).err().unwrap();
 /// ```
+#[derive(Clone)]
 pub struct ElementCondition<'vdom> {
-    data: &'vdom mut DocumentTester,
+    data: &'vdom DocumentTester,
     query: SelectorList,
     error: TesterError,
 }
 
 impl<'vdom> ElementCondition<'vdom> {
     pub(crate) fn new(
-        data: &'vdom mut DocumentTester,
+        data: &'vdom DocumentTester,
         query: SelectorList,
         error: TesterError,
     ) -> Self {
@@ -178,15 +179,16 @@ impl<'vdom> ElementCondition<'vdom> {
     ///
     /// This runs the event loop until the element appears, if necessary, up to [MAX_TRIES] times.
     /// It returns `Err` if the element does not appear.
-    pub async fn click(self) -> Result<(), TesterError> {
-        let element = self.into_future().await?;
+    pub async fn click(&self) -> Result<(), TesterError> {
+        let element = self.clone().into_future().await?;
         element.click();
         Ok(())
     }
 
     /// Synonym for [ElementCondition::click].
-    pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
-        self.click()
+    pub async fn tap(&self) -> Result<(), TesterError> {
+        self.click().await?;
+        Ok(())
     }
 
     /// Asserts that the given [Matcher] matches this element, either immediately or in the future.
@@ -339,12 +341,12 @@ impl<'vdom> ElementCondition<'vdom> {
     /// > }
     /// > # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_does_not_change_label_on_click());
     /// > ```
-    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
+    pub fn expect<M>(&self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
         M: for<'a> Matcher<ResolvedElement<'a>>,
     {
         MatcherCondition {
-            element: self,
+            element: self.clone(),
             matcher,
             phantom: Default::default(),
         }
@@ -498,13 +500,14 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 ///
 /// Unlike [ElementCondition], there is no notion of waiting for the matched elements to appear. The
 /// must use [AllElementsCondition::expect] to await a condition on the set of elements.
+#[derive(Clone)]
 pub struct AllElementsCondition<'vdom> {
-    data: &'vdom mut DocumentTester,
+    data: &'vdom DocumentTester,
     query: SelectorList,
 }
 
 impl<'vdom> AllElementsCondition<'vdom> {
-    pub(crate) fn new(data: &'vdom mut DocumentTester, query: SelectorList) -> Self {
+    pub(crate) fn new(data: &'vdom DocumentTester, query: SelectorList) -> Self {
         Self { data, query }
     }
 
@@ -573,12 +576,12 @@ impl<'vdom> AllElementsCondition<'vdom> {
     ///
     /// > Warning! The same warning applies as with [ElementCondition] about awaiting an
     /// > expectation: The test may spuriously pass despite the implementation being wrong.
-    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
+    pub fn expect<M>(&self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
     where
         M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
     {
         MatcherCondition {
-            element: self,
+            element: self.clone(),
             matcher,
             phantom: Default::default(),
         }

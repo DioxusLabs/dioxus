@@ -6,7 +6,7 @@ use crate::{
 use blitz_dom::{Document as _, SelectorList};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
-use std::time::Duration;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 use tokio::time::{error::Elapsed, timeout};
 
 /// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
@@ -21,7 +21,7 @@ pub fn render(element: fn() -> Element) -> DocumentTester {
 
 /// A wrapper which allows querying and interacting with a DOM in Dioxus tests.
 pub struct DocumentTester {
-    document: DioxusDocument,
+    document: Rc<RefCell<DioxusDocument>>,
     now: f64,
     window_size: Option<(u32, u32)>,
 }
@@ -30,13 +30,13 @@ impl DocumentTester {
     /// Constructs a new instance by rendering the given `element`.
     pub fn from_element(element: fn() -> Element) -> Self {
         let virtual_dom = VirtualDom::new(element);
-        let document = DioxusDocument::new(
+        let document = Rc::new(RefCell::new(DioxusDocument::new(
             virtual_dom,
             DocumentConfig {
                 style_threading: blitz_dom::StyleThreading::Sequential,
                 ..Default::default()
             },
-        );
+        )));
         Self {
             document,
             now: 0.0,
@@ -46,13 +46,13 @@ impl DocumentTester {
 
     /// Constructs a new instance from the given [VirtualDom].
     pub fn from_virtual_dom(virtual_dom: VirtualDom) -> Self {
-        let document = DioxusDocument::new(
+        let document = Rc::new(RefCell::new(DioxusDocument::new(
             virtual_dom,
             DocumentConfig {
                 style_threading: blitz_dom::StyleThreading::Sequential,
                 ..Default::default()
             },
-        );
+        )));
         Self {
             document,
             now: 0.0,
@@ -67,7 +67,7 @@ impl DocumentTester {
     /// See [Dioxus documentation](https://dioxuslabs.com/learn/0.7/essentials/basics/context) for
     /// more information on context.
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
-        self.document.vdom.provide_root_context(context);
+        self.document.borrow().vdom.provide_root_context(context);
         self
     }
 
@@ -80,11 +80,12 @@ impl DocumentTester {
     /// Performs a layout and build for the DOM managed by this tester.
     ///
     /// This method must be invoked before querying any elements.
-    pub fn build(mut self) -> Self {
-        self.document.inner_mut().viewport_mut().window_size =
-            self.window_size.unwrap_or((500, 800));
-        self.document.initial_build();
-        self.document.inner_mut().resolve(self.now);
+    pub fn build(self) -> Self {
+        let mut document = self.document.borrow_mut();
+        document.inner_mut().viewport_mut().window_size = self.window_size.unwrap_or((500, 800));
+        document.initial_build();
+        document.inner_mut().resolve(self.now);
+        drop(document);
         self
     }
 
@@ -123,9 +124,15 @@ impl DocumentTester {
     ///
     /// If this method is invoked with no pending asynchronous operations, then it times out after
     /// one second and returns `Err(Elapsed)`.
-    pub async fn pump(&mut self) -> Result<(), Elapsed> {
-        timeout(PUMP_TIMEOUT, self.document.vdom.wait_for_work()).await?;
-        while self.document.poll(None) {}
+    // Carrying the exclusively borrowed reference to DioxusDocument through the await point is
+    // unavoidable. We need an exclusive reference to the VirtualDom to invoke wait_for_work(),
+    // which is precisely the async method. This should be no problem as long as the test doesn't
+    // try multiple concurrent invocations of pump().
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn pump(&self) -> Result<(), Elapsed> {
+        let mut document = self.document.borrow_mut();
+        timeout(PUMP_TIMEOUT, document.vdom.wait_for_work()).await?;
+        while document.poll(None) {}
         Ok(())
     }
 
@@ -134,7 +141,8 @@ impl DocumentTester {
     /// This advances any CSS animations which may be in progress and recalculates the layout.
     pub async fn advance_time(&mut self, duration: Duration) {
         self.now += duration.as_secs_f64();
-        self.document.inner_mut().resolve(self.now);
+        let mut document = self.document.borrow_mut();
+        document.inner_mut().resolve(self.now);
     }
 
     /// Returns an element referencing the root DOM node managed by this tester.
@@ -143,10 +151,9 @@ impl DocumentTester {
     /// for awaiting expectations. If the test must await an expectation on the root element use
     /// [Self::query] with the CSS selector `:root`.
     pub fn root<'vdom>(&'vdom self) -> ResolvedElement<'vdom> {
-        let document = self.document.inner();
+        let guard = self.document.borrow_mut();
         ResolvedElement {
-            vdom: &self.document.vdom,
-            document,
+            guard,
             node_id: NodeId::Root,
         }
     }
@@ -157,14 +164,18 @@ impl DocumentTester {
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub(crate) fn get_element(&self, query: &SelectorList) -> Option<usize> {
-        self.document.inner().query_selector_raw(query)
+        self.document.borrow().inner().query_selector_raw(query)
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given query.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<usize> {
-        self.document.inner().query_selector_all_raw(query).to_vec()
+        self.document
+            .borrow()
+            .inner()
+            .query_selector_all_raw(query)
+            .to_vec()
     }
 
     /// Returns a representation of first element in the DOM satisfying the given query.
@@ -210,9 +221,10 @@ impl DocumentTester {
     ///
     /// Panics if the query contains a syntactically invalid CSS selector.
     pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
+        let document = self.document.borrow_mut();
         let error = query.to_tester_error();
         let selector = query
-            .try_into_selector(&self.document)
+            .try_into_selector(&document)
             .expect("Invalid CSS selector");
         ElementCondition::new(self, selector, error)
     }
@@ -228,17 +240,18 @@ impl DocumentTester {
     /// See [AllElementsCondition] for more.
     ///
     /// Panics if the query contains a syntactically invalid CSS selector.
-    pub fn query_all(&mut self, query: impl TryIntoSelector) -> AllElementsCondition<'_> {
+    pub fn query_all(&self, query: impl TryIntoSelector) -> AllElementsCondition<'_> {
+        let document = self.document.borrow_mut();
         let selector = query
-            .try_into_selector(&self.document)
+            .try_into_selector(&document)
             .expect("Invalid CSS selector");
         AllElementsCondition::new(self, selector)
     }
 
     pub(crate) fn build_resolved_element(&self, id: usize) -> ResolvedElement<'_> {
+        let guard = self.document.borrow_mut();
         ResolvedElement {
-            vdom: &self.document.vdom,
-            document: self.document.inner(),
+            guard,
             node_id: NodeId::Node(id),
         }
     }
