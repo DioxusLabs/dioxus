@@ -30,7 +30,13 @@ impl DocumentTester {
     /// Constructs a new instance by rendering the given `element`.
     pub fn from_element(element: fn() -> Element) -> Self {
         let virtual_dom = VirtualDom::new(element);
-        let document = DioxusDocument::new(virtual_dom, DocumentConfig::default());
+        let document = DioxusDocument::new(
+            virtual_dom,
+            DocumentConfig {
+                style_threading: blitz_dom::StyleThreading::Sequential,
+                ..Default::default()
+            },
+        );
         Self {
             document,
             now: 0.0,
@@ -40,7 +46,13 @@ impl DocumentTester {
 
     /// Constructs a new instance from the given [VirtualDom].
     pub fn from_virtual_dom(virtual_dom: VirtualDom) -> Self {
-        let document = DioxusDocument::new(virtual_dom, DocumentConfig::default());
+        let document = DioxusDocument::new(
+            virtual_dom,
+            DocumentConfig {
+                style_threading: blitz_dom::StyleThreading::Sequential,
+                ..Default::default()
+            },
+        );
         Self {
             document,
             now: 0.0,
