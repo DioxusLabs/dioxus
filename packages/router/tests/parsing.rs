@@ -162,3 +162,47 @@ fn optional_query_segments_parse() {
         route_without_query_and_other
     );
 }
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5280
+// '+' in query strings should be decoded as space per the
+// application/x-www-form-urlencoded spec.
+#[test]
+fn query_plus_decoded_as_space() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[route("/?:query")]
+        Home { query: String },
+    }
+
+    #[component]
+    fn Home(query: String) -> Element {
+        unimplemented!()
+    }
+
+    // '+' in query value should be parsed as space
+    let parsed = "/?query=Shis+Kebap".parse::<Route>().unwrap();
+    assert_eq!(
+        parsed,
+        Route::Home {
+            query: "Shis Kebap".to_string()
+        }
+    );
+
+    // '%20' should still work as space
+    let parsed_pct = "/?query=Shis%20Kebap".parse::<Route>().unwrap();
+    assert_eq!(
+        parsed_pct,
+        Route::Home {
+            query: "Shis Kebap".to_string()
+        }
+    );
+
+    // Multiple '+' signs
+    let parsed_multi = "/?query=hello+world+test".parse::<Route>().unwrap();
+    assert_eq!(
+        parsed_multi,
+        Route::Home {
+            query: "hello world test".to_string()
+        }
+    );
+}

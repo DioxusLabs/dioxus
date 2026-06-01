@@ -532,9 +532,14 @@ impl RouteEnum {
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                    // Replace '+' with space in query strings before percent-decoding.
+                    // Per the application/x-www-form-urlencoded spec, '+' is an
+                    // alternative encoding for space in query strings. Some services
+                    // (e.g. Facebook) rewrite '%20' to '+' when processing URLs.
+                    let query_replaced = query.replace('+', " ");
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(&query_replaced)
                         .decode_utf8()
-                        .unwrap_or(query.into());
+                        .unwrap_or(query_replaced.into());
                     let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
                         .decode_utf8()
                         .unwrap_or(hash.into());
