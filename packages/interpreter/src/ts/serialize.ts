@@ -33,6 +33,13 @@ export function serializeEvent(
 
   if (event instanceof InputEvent) {
     extend(serializeInputEvent(event, target));
+    if (event.type === "beforeinput") {
+      extend({
+        input_type: event.inputType,
+        is_composing: event.isComposing,
+        data: event.data,
+      });
+    }
   }
   if (event instanceof PointerEvent) {
     extend(serializePointerEvent(event));
@@ -207,9 +214,16 @@ function serializeInputEvent(
     contents.value = retrieveSelectValue(event.target).join(",");
   }
 
-  // Ensure the serializer isn't quirky
+  // Contenteditable / generic targets: mirror the wasm renderer, which falls
+  // back to textContent for any HTMLElement that isn't a form control
+  // (see packages/web/src/events/before_input.rs WebBeforeInputData::value
+  // and packages/web/src/events/form.rs WebFormData::value).
   if (contents.value === undefined) {
-    contents.value = "";
+    if (event.target instanceof HTMLElement) {
+      contents.value = event.target.textContent ?? "";
+    } else {
+      contents.value = "";
+    }
   }
 
   return contents;
