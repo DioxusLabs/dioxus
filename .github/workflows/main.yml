@@ -375,6 +375,7 @@ jobs:
           path: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests/playwright-report/
           retention-days: 7
 
+
   playwright:
     needs: rust
     if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
@@ -384,16 +385,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - {
-              os: warp-ubuntu-latest-x64-8x,
-              name: "Linux (stable)",
-              toolchain: "${{ needs.rust.outputs.rust_stable }}",
-            }
-          - {
-              os: warp-ubuntu-latest-x64-8x,
-              name: "Linux (beta)",
-              toolchain: beta,
-            }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ needs.rust.outputs.rust_stable }}" }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
@@ -440,6 +433,8 @@ jobs:
           name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 7
+
+
 
   test:
     needs: rust
