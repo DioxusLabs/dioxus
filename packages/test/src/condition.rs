@@ -1,6 +1,7 @@
-use crate::{DocumentTester, Matcher, TesterError, element::ResolvedElement};
+use crate::{DocumentTester, TesterError, element::ResolvedElement};
 use blitz_dom::SelectorList;
 use std::{marker::PhantomData, ops::ControlFlow, pin::Pin};
+use test_that::{matcher::MatcherResult, prelude::Matcher};
 
 /// The maximum number of attempts [DocumentTester] will make to find a given element or make a
 /// given assertion on the DOM before concluding that the element will not appear.
@@ -414,14 +415,19 @@ where
     fn matches(&self, matcher: &M) -> ControlFlow<()> {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(n) => matcher.matches(self.data.build_resolved_element(n)),
+            ControlFlow::Break(n) => match matcher.matches(&self.data.build_resolved_element(n)) {
+                MatcherResult::Match => ControlFlow::Break(()),
+                MatcherResult::NoMatch => ControlFlow::Continue(()),
+            },
         }
     }
 
     fn explain_match_failure(&self, matcher: &M) -> String {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => self.error.to_string(),
-            ControlFlow::Break(n) => matcher.explain_failure(self.data.build_resolved_element(n)),
+            ControlFlow::Break(n) => matcher
+                .explain_match(&self.data.build_resolved_element(n))
+                .to_string(),
         }
     }
 }
@@ -607,11 +613,14 @@ where
     M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
 {
     fn matches(&self, matcher: &M) -> ControlFlow<()> {
-        matcher.matches(self.immediately())
+        match matcher.matches(&self.immediately()) {
+            MatcherResult::Match => ControlFlow::Break(()),
+            MatcherResult::NoMatch => ControlFlow::Continue(()),
+        }
     }
 
     fn explain_match_failure(&self, matcher: &M) -> String {
-        matcher.explain_failure(self.immediately())
+        matcher.explain_match(&self.immediately()).to_string()
     }
 }
 
@@ -786,8 +795,8 @@ impl<'vdom, M, W> EventLoopDriver for MatcherCondition<'vdom, M, W>
 where
     W: EventLoopDriver,
 {
-    fn pump(&mut self) -> impl Future<Output = ()> {
-        self.element.pump()
+    async fn pump(&mut self) {
+        self.element.pump().await;
     }
 }
 

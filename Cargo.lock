@@ -4239,6 +4239,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-html",
  "dioxus-native-dom",
+ "test-that",
  "tokio",
  "tracing",
 ]
@@ -12828,6 +12829,24 @@ checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix 1.1.4",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "test-that"
+version = "0.99.0"
+dependencies = [
+ "num-traits",
+ "regex",
+ "rustversion",
+ "test-that-macro",
+]
+
+[[package]]
+name = "test-that-macro"
+version = "0.99.0"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
