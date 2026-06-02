@@ -1,5 +1,4 @@
-use dioxus_html::HasBeforeInputData;
-use wasm_bindgen::JsCast;
+use dioxus_html::{HasBeforeInputData, InputType};
 use web_sys::{Element, InputEvent};
 
 use super::WebEventExt;
@@ -16,8 +15,8 @@ impl WebBeforeInputData {
 }
 
 impl HasBeforeInputData for WebBeforeInputData {
-    fn input_type(&self) -> String {
-        self.event.input_type()
+    fn input_type(&self) -> InputType {
+        InputType::from(self.event.input_type().as_str())
     }
 
     fn data(&self) -> Option<String> {
@@ -29,34 +28,7 @@ impl HasBeforeInputData for WebBeforeInputData {
     }
 
     fn value(&self) -> String {
-        let target = &self.element;
-        target
-            .dyn_ref()
-            .map(
-                |input: &web_sys::HtmlInputElement| match input.type_().as_str() {
-                    "checkbox" => match input.checked() {
-                        true => "true".to_string(),
-                        false => "false".to_string(),
-                    },
-                    _ => input.value(),
-                },
-            )
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlSelectElement| input.value())
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref::<web_sys::HtmlElement>()
-                    .and_then(|el| el.text_content())
-            })
-            .unwrap_or_default()
+        super::editable_element_value(&self.element).unwrap_or_default()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

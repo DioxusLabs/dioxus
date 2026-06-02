@@ -22,8 +22,9 @@ macro_rules! with_html_event_groups {
                     /// `event.prevent_default()` from the handler blocks the change.
                     ///
                     /// Use [`BeforeInputData::input_type`] to identify the kind of mutation
-                    /// (e.g. `"insertText"`, `"deleteContentBackward"`, `"insertFromPaste"`)
-                    /// and [`BeforeInputData::data`] to read the text being inserted.
+                    /// (e.g. [`InputType::InsertText`], [`InputType::DeleteContentBackward`],
+                    /// [`InputType::InsertFromPaste`]) and [`BeforeInputData::data`] to read
+                    /// the text being inserted.
                     ///
                     /// ```rust
                     /// use dioxus::prelude::*;
@@ -33,7 +34,7 @@ macro_rules! with_html_event_groups {
                     ///         input {
                     ///             onbeforeinput: move |event| {
                     ///                 // Block any attempt to insert a digit
-                    ///                 if event.data.input_type() == "insertText"
+                    ///                 if event.data.input_type() == InputType::InsertText
                     ///                     && event.data.data().is_some_and(|d| d.chars().any(|c| c.is_ascii_digit()))
                     ///                 {
                     ///                     event.prevent_default();

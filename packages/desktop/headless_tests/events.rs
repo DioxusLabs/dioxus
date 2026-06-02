@@ -655,7 +655,7 @@ fn test_before_input() -> Element {
             id: "before_input",
             onbeforeinput: move |event| {
                 println!("{:?}", event.data);
-                assert_eq!(event.data.input_type(), "insertText");
+                assert_eq!(event.data.input_type(), InputType::InsertText);
                 assert_eq!(event.data.data().as_deref(), Some("x"));
                 assert!(!event.data.is_composing());
                 assert_eq!(event.data.value(), "hello");
@@ -681,7 +681,7 @@ fn test_before_input_composing() -> Element {
         input {
             id: "before_input_composing",
             onbeforeinput: move |event| {
-                assert_eq!(event.data.input_type(), "insertCompositionText");
+                assert_eq!(event.data.input_type(), InputType::InsertCompositionText);
                 assert_eq!(event.data.data().as_deref(), Some("あ"));
                 assert!(event.data.is_composing());
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
@@ -712,7 +712,7 @@ fn test_before_input_contenteditable() -> Element {
             id: "before_input_contenteditable",
             contenteditable: "true",
             onbeforeinput: move |event| {
-                assert_eq!(event.data.input_type(), "insertText");
+                assert_eq!(event.data.input_type(), InputType::InsertText);
                 assert_eq!(event.data.data().as_deref(), Some("z"));
                 assert_eq!(event.data.value(), "draft");
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);

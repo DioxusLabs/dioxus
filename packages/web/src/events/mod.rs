@@ -54,6 +54,44 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
         .expect("event should be a GenericWebSysEvent")
 }
 
+/// Read the textual value of an editable element.
+///
+/// Mirrors what the wasm renderer reports for `value` across the input-shaped events
+/// (`oninput`, `onchange`, `onbeforeinput`, …): the element's `value` for
+/// `<input>`/`<textarea>`/`<select>` (with checkboxes coerced to `"true"`/`"false"`),
+/// falling back to `textContent` for `contenteditable` elements. Returns `None` only
+/// when the target is none of these.
+pub(crate) fn editable_element_value(element: &Element) -> Option<String> {
+    element
+        .dyn_ref()
+        .map(
+            |input: &web_sys::HtmlInputElement| match input.type_().as_str() {
+                // todo: special case more input types
+                "checkbox" => match input.checked() {
+                    true => "true".to_string(),
+                    false => "false".to_string(),
+                },
+                _ => input.value(),
+            },
+        )
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+        })
+        // select elements are NOT input events - because - why woudn't they be??
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlSelectElement| input.value())
+        })
+        .or_else(|| {
+            element
+                .dyn_ref::<web_sys::HtmlElement>()
+                .and_then(|el| el.text_content())
+        })
+}
+
 macro_rules! with_web_event_converters {
     ($macro:ident) => {
         $macro! {
