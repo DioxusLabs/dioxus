@@ -375,7 +375,6 @@ jobs:
           path: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests/playwright-report/
           retention-days: 7
 
-
   playwright:
     needs: rust
     if: github.event.pull_request.draft == false && needs.rust.outputs.rust == 'true'
@@ -385,8 +384,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "${{ needs.rust.outputs.rust_stable }}" }
-          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
+          - {
+              os: warp-ubuntu-latest-x64-8x,
+              name: "Linux (stable)",
+              toolchain: "${{ needs.rust.outputs.rust_stable }}",
+            }
+          - {
+              os: warp-ubuntu-latest-x64-8x,
+              name: "Linux (beta)",
+              toolchain: beta,
+            }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
@@ -433,8 +440,6 @@ jobs:
           name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 7
-
-
 
   test:
     needs: rust
@@ -578,10 +583,6 @@ jobs:
         if: ${{ matrix.platform.cross == true }}
         uses: taiki-e/install-action@cross
 
-      - name: Install mold
-        if: ${{ runner.os == 'Linux' && matrix.platform.cross == false }}
-        uses: rui314/setup-mold@v1
-
       - uses: Swatinem/rust-cache@v2
         with:
           key: "matrix-${{ matrix.platform.target }}"
@@ -592,7 +593,7 @@ jobs:
 
       - name: test
         run: |
-          ${{ runner.os == 'Linux' && matrix.platform.cross == false && 'mold -run' || '' }} ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+          ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
   # Verify that declared minimum dependency versions actually compile.
   # Catches issues like https://github.com/DioxusLabs/dioxus/issues/5433 where
