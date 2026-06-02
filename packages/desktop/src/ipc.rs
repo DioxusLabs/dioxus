@@ -77,9 +77,9 @@ impl UserWindowEvent {
         }
     }
 
-    pub(crate) fn poll(id: WindowId) -> Self {
+    pub(crate) fn reconnect_edits() -> Self {
         Self {
-            variant: UserWindowEventVariant::Poll(id),
+            variant: UserWindowEventVariant::ReconnectEdits,
         }
     }
 
@@ -167,8 +167,9 @@ pub(crate) enum UserWindowEventVariant {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
-    /// Poll the virtualdom
-    Poll(WindowId),
+    /// Re-point every webview's edit websocket after the OS killed the socket
+    /// (e.g. iOS sleep) and the server rebound to a new port.
+    ReconnectEdits,
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
     Ipc {

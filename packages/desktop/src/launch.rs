@@ -96,9 +96,9 @@ pub fn launch_virtual_dom_blocking(
                     IpcMethod::Other(_) => {}
                 },
 
-                // Poll event - process DOM commands for a specific window
-                UserWindowEventVariant::Poll(id) => {
-                    app.poll_window(id);
+                // The edit websocket rebound to a new port; re-point every webview at it.
+                UserWindowEventVariant::ReconnectEdits => {
+                    app.reconnect_all_edits();
                 }
 
                 // wry-bindgen IPC event

@@ -91,8 +91,8 @@ impl App {
                 event_handlers: WindowEventHandlers::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
+                websocket: EditWebsocket::start(proxy.clone()),
                 proxy,
-                websocket: EditWebsocket::start(),
                 wry_bindgen,
                 desktop_thread_handle,
             }),
@@ -206,7 +206,6 @@ impl App {
             let window = pending_webview.create_window(&self.shared, target);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
-            _ = self.shared.proxy.send_event(UserWindowEvent::poll(id));
         }
     }
 
@@ -314,7 +313,8 @@ impl App {
             return;
         };
 
-        // Send Initialize event to VirtualDom thread
+        // Send Initialize event to VirtualDom thread. The VirtualDom thread renders and sends
+        // its edits straight to the webview's websocket, so no further poll is needed here.
         view.dom_handle.send_event(VirtualDomEvent::Initialize);
 
         #[cfg(not(target_os = "linux"))]
@@ -323,8 +323,6 @@ impl App {
                 .window
                 .set_visible(self.is_visible_before_start);
         }
-
-        _ = self.shared.proxy.send_event(UserWindowEvent::poll(id));
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -413,13 +411,14 @@ impl App {
         }
     }
 
-    /// Poll a specific window by its ID.
-    /// Called when the waker sends a Poll event.
-    pub fn poll_window(&mut self, id: tao::window::WindowId) {
-        if let Some(webview) = self.webviews.get_mut(&id) {
-            webview.poll_dom_commands();
-            webview.poll_edits_flushed();
-            webview.poll_new_edits_location();
+    /// Re-point every webview at the edit websocket's current location.
+    ///
+    /// Called when the websocket server rebinds to a new port (e.g. after the OS kills the
+    /// socket on iOS sleep). There is a single server for all webviews, so every webview needs
+    /// to reconnect to the new location.
+    pub fn reconnect_all_edits(&self) {
+        for webview in self.webviews.values() {
+            webview.send_edits_location();
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::PendingDesktopContext;
 use crate::app::MakeVirtualDom;
-use crate::dom_thread::{MainThreadCommand, PendingDomId, VirtualDomEvent, VirtualDomHandle};
+use crate::dom_thread::{PendingDomId, VirtualDomHandle};
 use crate::menubar::DioxusMenu;
 use crate::{
     Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
@@ -9,7 +9,6 @@ use crate::{
 use dioxus_hooks::to_owned;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::task::Waker;
 use std::time::Duration;
 use tao::event_loop::EventLoopWindowTarget;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -35,13 +34,6 @@ pub(crate) struct WebviewInstance {
     pub dom_handle: VirtualDomHandle,
     pub edits: WebviewEdits,
     pub desktop_context: Rc<DesktopService>,
-
-    /// Channel to receive commands from the VirtualDom.
-    /// Uses futures channel for proper async polling with wakers.
-    pub(crate) dom_command_rx: futures_channel::mpsc::UnboundedReceiver<MainThreadCommand>,
-
-    /// Waker that sends Poll events to the event loop when async work completes.
-    waker: Waker,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -88,11 +80,9 @@ impl WebviewInstance {
 
         let proxy = shared.proxy.clone();
 
-        // Create channels for VirtualDom communication
-        // The VirtualDom runs in the wry-bindgen thread, communicating via these channels
+        // Create the event channel for VirtualDom communication. The VirtualDom runs on a
+        // dedicated thread and receives events from the main thread through this channel.
         let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
-        // Use futures channel for proper async polling with wakers on the main thread
-        let (dom_command_tx, dom_command_rx) = futures_channel::mpsc::unbounded();
 
         // Start building the wry bindgen future
         let app_builder = shared.wry_bindgen.app_builder();
@@ -129,6 +119,9 @@ impl WebviewInstance {
             }
         }));
         let edit_queue = shared.websocket.create_queue();
+        // The VirtualDom thread sends its rendered edits straight to this webview's websocket.
+        let webview_id = edit_queue.webview_id();
+        let websocket = shared.websocket.clone();
         let asset_handlers = AssetHandlerRegistry::new();
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
@@ -427,7 +420,8 @@ impl WebviewInstance {
                             make_dom,
                             dom_event_rx,
                             event_tx,
-                            dom_command_tx,
+                            websocket,
+                            webview_id,
                             proxy,
                             window_id,
                             file_hover,
@@ -439,7 +433,8 @@ impl WebviewInstance {
                             pending_dom_id,
                             dom_event_rx,
                             event_tx,
-                            dom_command_tx,
+                            websocket,
+                            webview_id,
                             proxy,
                             window_id,
                             file_hover,
@@ -470,90 +465,27 @@ impl WebviewInstance {
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
-        // Create a waker that sends Poll events to the event loop
-        let waker = crate::waker::tao_waker(shared.proxy.clone(), desktop_context.window.id());
-
         WebviewInstance {
             dom_handle,
             edits,
             desktop_context,
-            dom_command_rx,
-            waker,
             _menu: menu,
             _web_context: web_context,
         }
     }
 
-    /// Send raw mutation bytes to the webview via websocket.
-    pub fn send_edits_raw(&mut self, edits: Vec<u8>) {
-        self.edits.wry_queue.send_edits_raw(edits);
-    }
-
-    /// Check if pending edits have been acknowledged by the webview.
-    /// Returns true if edits were flushed (and sends EditsAcknowledged to VirtualDom).
-    pub fn poll_edits_flushed(&mut self) -> bool {
-        // Use the stored waker which will send Poll events to wake up the event loop
-        let mut cx = std::task::Context::from_waker(&self.waker);
-
-        if self.edits.wry_queue.poll_edits_flushed(&mut cx).is_ready() {
-            self.dom_handle
-                .send_event(VirtualDomEvent::EditsAcknowledged);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Poll for and process commands from the VirtualDom thread.
+    /// Re-point the webview's interpreter at the edit websocket's current location.
     ///
-    /// Uses the webview's waker to register for wake-up when commands arrive.
-    /// This ensures the event loop is woken even if called before commands are ready.
-    pub fn poll_dom_commands(&mut self) {
-        use crate::dom_thread::MainThreadCommand;
-        use futures_util::StreamExt;
-        use std::task::Poll;
-
-        // Collect commands first to avoid borrow conflicts
-        let commands: Vec<MainThreadCommand> = {
-            let mut cx = std::task::Context::from_waker(&self.waker);
-            let rx = &mut self.dom_command_rx;
-            let mut commands = Vec::new();
-
-            while let Poll::Ready(Some(cmd)) = rx.poll_next_unpin(&mut cx) {
-                commands.push(cmd);
-            }
-            commands
-        };
-
-        // Process collected commands
-        for cmd in commands {
-            self.send_edits_raw(cmd.mutations);
-        }
-    }
-
-    /// Poll for and process commands from the VirtualDom thread.
-    ///
-    /// Uses the webview's waker to register for wake-up when commands arrive.
-    /// This ensures the event loop is woken even if called before commands are ready.
-    pub fn poll_new_edits_location(&mut self) {
-        let mut cx = std::task::Context::from_waker(&self.waker);
-        // Check if there is a new edit channel we need to send. On IOS,
-        // the websocket will be killed when the device is put into sleep. If we
-        // find the socket has been closed, we create a new socket and send it to
-        // the webview to continue on
-        // https://github.com/DioxusLabs/dioxus/issues/4374
-        if self
-            .edits
-            .wry_queue
-            .poll_new_edits_location(&mut cx)
-            .is_ready()
-        {
-            _ = self.desktop_context.webview.evaluate_script(&format!(
-                "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                edits_path = self.edits.wry_queue.edits_path(),
-                expected_key = self.edits.wry_queue.required_server_key()
-            ));
-        }
+    /// The socket may be killed by the OS while running. On iOS the websocket is killed when
+    /// the device goes to sleep; when that happens the server rebinds to a new port and key
+    /// and we tell the webview to reconnect to the new location so it keeps receiving edits.
+    /// https://github.com/DioxusLabs/dioxus/issues/4374
+    pub fn send_edits_location(&self) {
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+            edits_path = self.edits.wry_queue.edits_path(),
+            expected_key = self.edits.wry_queue.required_server_key()
+        ));
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]

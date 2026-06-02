@@ -25,7 +25,6 @@ mod menubar;
 mod mobile;
 mod protocol;
 mod shortcut;
-mod waker;
 mod webview;
 mod wry_bindgen_bridge;
 

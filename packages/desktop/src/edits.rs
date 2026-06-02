@@ -18,14 +18,12 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
+use crate::ipc::UserWindowEvent;
 use futures_channel::oneshot;
-use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
-use std::future::Future;
 use std::net::{TcpListener, TcpStream};
-use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
@@ -33,7 +31,7 @@ use std::{
     net::IpAddr,
     sync::{Arc, RwLock},
 };
-use tokio::sync::Notify;
+use tao::event_loop::EventLoopProxy;
 
 /// This handles communication between the requests that the webview makes and the interpreter.
 #[derive(Clone)]
@@ -42,50 +40,9 @@ pub(crate) struct WryQueue {
 }
 
 impl WryQueue {
-    /// Send pre-serialized mutations to the webview.
-    ///
-    /// This is used when mutations are generated on a separate thread and sent
-    /// via channel to the main thread for transmission to the webview.
-    pub(crate) fn send_edits_raw(&self, edits: Vec<u8>) {
-        let mut myself = self.inner.borrow_mut();
-        let webview_id = myself.location.webview_id;
-        let receiver = myself.websocket.send_edits(webview_id, edits);
-        myself.edits_in_progress = Some(receiver);
-    }
-
-    /// Wait until all pending edits have been rendered in the webview
-    pub(crate) fn poll_edits_flushed(
-        &self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<()> {
-        let mut self_mut = self.inner.borrow_mut();
-        if let Some(receiver) = self_mut.edits_in_progress.as_mut() {
-            let poll = receiver.poll_unpin(cx).map(|_| ());
-            if poll.is_ready() {
-                self_mut.edits_in_progress = None;
-            }
-            poll
-        } else {
-            std::task::Poll::Pending
-        }
-    }
-
-    /// Check if there is a new location for the websocket edits server.
-    pub(crate) fn poll_new_edits_location(
-        &self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<()> {
-        let mut self_mut = self.inner.borrow_mut();
-        let poll = self_mut
-            .server_location_changed_future
-            .as_mut()
-            .poll_unpin(cx);
-        if poll.is_ready() {
-            // If the future is ready, we need to reset it to wait for the next change
-            self_mut.server_location_changed_future =
-                owned_notify_future(self_mut.server_location_changed.clone());
-        }
-        poll
+    /// The numeric id the websocket uses to identify this webview's connection.
+    pub(crate) fn webview_id(&self) -> u32 {
+        self.inner.borrow().location.webview_id
     }
 
     /// Get the websocket path that the webview should connect to in order to receive edits
@@ -110,12 +67,6 @@ impl WryQueue {
 
 pub(crate) struct WryQueueInner {
     location: WebviewWebsocketLocation,
-    websocket: EditWebsocket,
-    // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
-    edits_in_progress: Option<oneshot::Receiver<()>>,
-    // The socket may be killed by the OS while running. If it does, this channel will receive the new server location
-    server_location_changed: Arc<Notify>,
-    server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
@@ -160,29 +111,25 @@ pub(crate) struct EditWebsocket {
     current_location: Arc<Mutex<ServerLocation>>,
     max_webview_id: Arc<AtomicU32>,
     connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
-    server_location: Arc<Notify>,
 }
 
 impl EditWebsocket {
-    pub(crate) fn start() -> Self {
+    pub(crate) fn start(proxy: EventLoopProxy<UserWindowEvent>) -> Self {
         let connections = Arc::new(RwLock::new(HashMap::new()));
 
-        let notify = Arc::new(Notify::new());
         let (location, server) = start_server();
         let current_location = Arc::new(Mutex::new(location));
 
         let connections_ = connections.clone();
         let current_location_ = current_location.clone();
-        let notify_ = notify.clone();
         std::thread::spawn(move || {
-            Self::accept_loop(notify_, server, current_location_, connections_)
+            Self::accept_loop(proxy, server, current_location_, connections_)
         });
 
         Self {
             connections,
             max_webview_id: Default::default(),
             current_location,
-            server_location: notify,
         }
     }
 
@@ -191,7 +138,7 @@ impl EditWebsocket {
     /// New sockets are accepted and then put in to a new thread to handle the connection.
     /// This is implemented using traditional sync code to allow us to be independent of the async runtime.
     fn accept_loop(
-        notify: Arc<Notify>,
+        proxy: EventLoopProxy<UserWindowEvent>,
         mut server: TcpListener,
         current_location: Arc<Mutex<ServerLocation>>,
         connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
@@ -209,8 +156,10 @@ impl EditWebsocket {
             // The client may try to reconnect to the old port that is now being used by an attacker who steals the client
             // key and uses it to read the edits from the new port.
             let (location, new_server) = start_server();
-            notify.notify_waiters();
+            // Publish the new location before waking the main thread so every webview reads the
+            // fresh port/keys when it re-points its interpreter at the new socket.
             *current_location.lock().unwrap() = location;
+            _ = proxy.send_event(UserWindowEvent::reconnect_edits());
             server = new_server;
         }
     }
@@ -376,19 +325,16 @@ impl EditWebsocket {
             .max_webview_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let server = self.current_location.clone();
-        let server_location = self.server_location.clone();
         WryQueue {
             inner: Rc::new(RefCell::new(WryQueueInner {
-                server_location_changed: server_location.clone(),
-                server_location_changed_future: owned_notify_future(server_location),
                 location: WebviewWebsocketLocation { webview_id, server },
-                websocket: self.clone(),
-                edits_in_progress: None,
             })),
         }
     }
 
-    fn send_edits(&mut self, webview: u32, edits: Vec<u8>) -> oneshot::Receiver<()> {
+    /// Queue serialized mutations for the given webview. The returned receiver resolves once
+    /// the webview has applied the edits (or is dropped if the connection goes away).
+    pub(crate) fn send_edits(&self, webview: u32, edits: Vec<u8>) -> oneshot::Receiver<()> {
         let mut connections_mut = self.connections.write().unwrap();
         let connection = connections_mut.entry(webview).or_default();
         connection.add_message(edits)
@@ -478,19 +424,4 @@ fn test_key_encoding_length() {
         // The encoded key length should be the same regardless of the value of the key
         assert_eq!(encoded.len(), 344);
     }
-}
-
-// Take an Arc<Notify> and create a future that waits for the notify to be triggered.
-fn owned_notify_future(notify: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()>>> {
-    let mut notify_owned = Box::pin(async move {
-        let notified = notify.notified();
-
-        // The future should be after this statement once it is polled bellow
-        tokio::task::yield_now().await;
-        notified.await;
-    });
-
-    // Start tracking notify before the output future is polled
-    _ = (&mut notify_owned).now_or_never();
-    notify_owned
 }

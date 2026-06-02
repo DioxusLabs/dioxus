@@ -7,6 +7,7 @@
 
 use crate::AssetRequest;
 use crate::desktop_context::DesktopContext;
+use crate::edits::EditWebsocket;
 use crate::document::DesktopDocument;
 use crate::file_upload::NativeFileHover;
 use crate::ipc::UserWindowEvent;
@@ -14,8 +15,9 @@ use crate::shortcut::HotKeyState;
 use dioxus_core::{ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
-use futures_channel::mpsc as futures_mpsc;
+use futures_channel::oneshot;
 use futures_util::FutureExt;
+use futures_util::future::OptionFuture;
 use slab::Slab;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,10 +31,6 @@ use wry::RequestAsyncResponder;
 pub(crate) enum VirtualDomEvent {
     /// Initialize the VirtualDom (perform initial rebuild).
     Initialize,
-
-    /// Previous edits have been acknowledged by the webview.
-    /// The VirtualDom can now render new mutations.
-    EditsAcknowledged,
 
     /// Hot reload message from devtools.
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -211,16 +209,11 @@ impl DomCallbackRegistry {
     }
 }
 
-/// Commands sent from the VirtualDom thread to the main thread.
-pub(crate) struct MainThreadCommand {
-    /// Serialized mutations ready to be sent to the webview.
-    pub(crate) mutations: Vec<u8>,
-}
-
 /// Handle to communicate with a VirtualDom running on a dedicated thread.
 ///
-/// This handle only contains the sender for sending events to the VirtualDom.
-/// Commands from the VirtualDom are received via the shared `dom_command_rx` in `SharedContext`.
+/// This handle only contains the sender for sending events to the VirtualDom. The VirtualDom
+/// thread sends its rendered edits straight to the webview's edit websocket, so there is no
+/// command channel back to the main thread.
 #[derive(Clone)]
 pub(crate) struct VirtualDomHandle {
     /// Send events to the VirtualDom thread.
@@ -247,7 +240,8 @@ pub(crate) async fn run_virtual_dom<F>(
     make_dom: F,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    websocket: EditWebsocket,
+    webview_id: u32,
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
     file_hover: NativeFileHover,
@@ -256,7 +250,7 @@ pub(crate) async fn run_virtual_dom<F>(
 {
     let dom = make_dom();
     run_virtual_dom_with_dom(
-        dom, event_rx, event_tx, command_tx, proxy, window_id, file_hover,
+        dom, event_rx, event_tx, websocket, webview_id, proxy, window_id, file_hover,
     )
     .await;
 }
@@ -265,23 +259,26 @@ pub(crate) async fn run_pending_virtual_dom(
     pending_dom_id: PendingDomId,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    websocket: EditWebsocket,
+    webview_id: u32,
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
     file_hover: NativeFileHover,
 ) {
     let dom = take_pending_dom(pending_dom_id);
     run_virtual_dom_with_dom(
-        dom, event_rx, event_tx, command_tx, proxy, window_id, file_hover,
+        dom, event_rx, event_tx, websocket, webview_id, proxy, window_id, file_hover,
     )
     .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_virtual_dom_with_dom(
     dom: VirtualDom,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    websocket: EditWebsocket,
+    webview_id: u32,
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
     file_hover: NativeFileHover,
@@ -300,18 +297,23 @@ async fn run_virtual_dom_with_dom(
         provide_context(desktop_service_proxy);
         provide_context(callback_registry.clone());
     });
-    run_virtual_dom_loop(dom, event_rx, command_tx, callback_registry).await;
+    run_virtual_dom_loop(dom, event_rx, websocket, webview_id, callback_registry).await;
 }
 
 /// The main event loop for the VirtualDom running on its dedicated thread.
 async fn run_virtual_dom_loop(
     mut dom: VirtualDom,
     mut event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    websocket: EditWebsocket,
+    webview_id: u32,
     callback_registry: SharedCallbackRegistry,
 ) {
     let mut mutations = MutationState::default();
-    let mut waiting_for_edits_ack = false;
+    // The receiver for the edits we are currently waiting on the webview to apply. While this is
+    // `Some`, we hold off rendering new work so effects don't run before the DOM has updated. The
+    // websocket worker resolves it once the webview acks the edits (or drops it if the connection
+    // goes away).
+    let mut pending_flush: Option<oneshot::Receiver<()>> = None;
     let mut initialized = false;
 
     loop {
@@ -332,12 +334,8 @@ async fn run_virtual_dom_loop(
                             // Perform initial rebuild
                             dom.rebuild(&mut mutations);
                             let edits = take_edits(&mut mutations);
-                            let _ = command_tx.unbounded_send(MainThreadCommand { mutations: edits });
-                            waiting_for_edits_ack = true;
+                            pending_flush = Some(websocket.send_edits(webview_id, edits));
                         }
-                    }
-                    VirtualDomEvent::EditsAcknowledged => {
-                        waiting_for_edits_ack = false;
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
@@ -351,13 +349,18 @@ async fn run_virtual_dom_loop(
                 }
             }
 
+            // The webview applied the in-flight edits (Ok) or the connection dropped them (Err).
+            // Either way we are no longer waiting, so rendering can resume.
+            Some(_) = OptionFuture::from(pending_flush.as_mut()) => {
+                pending_flush = None;
+            }
+
             // Wait for the VirtualDom to have work ready
-            _ = dom.wait_for_work(), if initialized && !waiting_for_edits_ack => {
-                // Render and send mutations
+            _ = dom.wait_for_work(), if initialized && pending_flush.is_none() => {
+                // Render and send mutations straight to the webview's edit websocket
                 dom.render_immediate(&mut mutations);
                 let edits = take_edits(&mut mutations);
-                let _ = command_tx.unbounded_send(MainThreadCommand { mutations: edits });
-                waiting_for_edits_ack = true;
+                pending_flush = Some(websocket.send_edits(webview_id, edits));
             }
         }
     }
