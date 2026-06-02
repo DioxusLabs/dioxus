@@ -15,8 +15,24 @@ pub(crate) fn process_image(
         .decode();
 
     if let Ok(image) = &mut image {
-        if let ImageSize::Manual { width, height } = image_options.size() {
-            *image = image.resize_exact(width, height, image::imageops::FilterType::Lanczos3);
+        match image_options.size() {
+            ImageSize::Manual { width, height } => {
+                *image =
+                    image.resize_exact(*width, *height, image::imageops::FilterType::Lanczos3);
+            }
+            ImageSize::WidthOnly { width } => {
+                let ratio = image.height() as f64 / image.width() as f64;
+                let height = (*width as f64 * ratio).round() as u32;
+                *image =
+                    image.resize_exact(*width, height, image::imageops::FilterType::Lanczos3);
+            }
+            ImageSize::HeightOnly { height } => {
+                let ratio = image.width() as f64 / image.height() as f64;
+                let width = (*height as f64 * ratio).round() as u32;
+                *image =
+                    image.resize_exact(width, *height, image::imageops::FilterType::Lanczos3);
+            }
+            ImageSize::Automatic => {}
         }
     }
 
