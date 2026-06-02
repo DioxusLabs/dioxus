@@ -556,6 +556,7 @@ impl DesktopContext {
         let dom_tx = self.dom_tx.clone();
         self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_wry_event_handler(move |event, _target| {
+                struct AssertEventHandlerStaticSync<T: Send + Sync + 'static>(T);
                 // Erase the event's lifetime so it can be captured by the `Send + 'static`
                 // `RunCallback` closure below.
                 struct SendPtr(*const Event<'static, UserWindowEvent>);
@@ -563,6 +564,8 @@ impl DesktopContext {
                 // pointee outlives the read; only a shared reference is taken, on the DOM thread.
                 unsafe impl Send for SendPtr {}
 
+                // Ensure the event handler's event is `Send + Sync + 'static`
+                _ = |_: AssertEventHandlerStaticSync<Event<'static, UserWindowEvent>>| {};
                 let event = SendPtr((event as *const Event<'_, UserWindowEvent>).cast());
                 let (reply_tx, reply_rx) = std::sync::mpsc::channel::<()>();
                 // Forward the borrowed event to the DOM thread and block until the handler has run,
