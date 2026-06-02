@@ -24,7 +24,7 @@ pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::t
         fn wake_by_ref(arc_self: &Arc<Self>) {
             _ = arc_self
                 .proxy
-                .send_event(UserWindowEvent::Poll(arc_self.id));
+                .send_event(UserWindowEvent::poll(arc_self.id));
         }
     }
 

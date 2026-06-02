@@ -35,9 +35,125 @@ impl DesktopServiceCallback {
     }
 }
 
+#[derive(Debug)]
+pub struct UserWindowEvent {
+    variant: UserWindowEventVariant,
+}
+
+impl UserWindowEvent {
+    pub(crate) fn into_variant(self) -> UserWindowEventVariant {
+        self.variant
+    }
+
+    pub(crate) fn variant(&self) -> &UserWindowEventVariant {
+        &self.variant
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn global_hot_key_event(event: global_hotkey::GlobalHotKeyEvent) -> Self {
+        Self {
+            variant: UserWindowEventVariant::GlobalHotKeyEvent(event),
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn muda_menu_event(event: muda::MenuEvent) -> Self {
+        Self {
+            variant: UserWindowEventVariant::MudaMenuEvent(event),
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn tray_icon_event(event: tray_icon::TrayIconEvent) -> Self {
+        Self {
+            variant: UserWindowEventVariant::TrayIconEvent(event),
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn tray_menu_event(event: tray_icon::menu::MenuEvent) -> Self {
+        Self {
+            variant: UserWindowEventVariant::TrayMenuEvent(event),
+        }
+    }
+
+    pub(crate) fn poll(id: WindowId) -> Self {
+        Self {
+            variant: UserWindowEventVariant::Poll(id),
+        }
+    }
+
+    pub(crate) fn ipc(id: WindowId, msg: IpcMessage) -> Self {
+        Self {
+            variant: UserWindowEventVariant::Ipc { id, msg },
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub(crate) fn hot_reload_event(msg: dioxus_devtools::DevserverMsg) -> Self {
+        Self {
+            variant: UserWindowEventVariant::HotReloadEvent(msg),
+        }
+    }
+
+    pub(crate) fn windows_drag_drop(id: WindowId) -> Self {
+        Self {
+            variant: UserWindowEventVariant::WindowsDragDrop(id),
+        }
+    }
+
+    pub(crate) fn windows_drag_over(id: WindowId, x_pos: i32, y_pos: i32) -> Self {
+        Self {
+            variant: UserWindowEventVariant::WindowsDragOver(id, x_pos, y_pos),
+        }
+    }
+
+    pub(crate) fn windows_drag_leave(id: WindowId) -> Self {
+        Self {
+            variant: UserWindowEventVariant::WindowsDragLeave(id),
+        }
+    }
+
+    pub(crate) fn new_window() -> Self {
+        Self {
+            variant: UserWindowEventVariant::NewWindow,
+        }
+    }
+
+    pub(crate) fn close_window(id: WindowId) -> Self {
+        Self {
+            variant: UserWindowEventVariant::CloseWindow(id),
+        }
+    }
+
+    pub(crate) fn shutdown() -> Self {
+        Self {
+            variant: UserWindowEventVariant::Shutdown,
+        }
+    }
+
+    pub(crate) fn wry_bindgen_event(event: WryBindgenEvent) -> Self {
+        Self {
+            variant: UserWindowEventVariant::WryBindgenEvent(event),
+        }
+    }
+
+    pub(crate) fn run_with_desktop_service(
+        window_id: WindowId,
+        callback: DesktopServiceCallback,
+    ) -> Self {
+        Self {
+            variant: UserWindowEventVariant::RunWithDesktopService {
+                window_id,
+                callback,
+            },
+        }
+    }
+}
+
 #[non_exhaustive]
 #[derive(Debug)]
-pub enum UserWindowEvent {
+pub(crate) enum UserWindowEventVariant {
     /// A global hotkey event
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),

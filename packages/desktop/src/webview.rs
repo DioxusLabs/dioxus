@@ -180,7 +180,7 @@ impl WebviewInstance {
                 let protocol_name = "dioxus";
                 let proxy = shared.proxy.clone();
                 let send_app_event = move |event| {
-                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(event));
+                    let _ = proxy.send_event(UserWindowEvent::wry_bindgen_event(event));
                 };
                 let response =
                     protocol.handle_request(protocol_name, send_app_event, &request, responder);
@@ -211,7 +211,7 @@ impl WebviewInstance {
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
-                    _ = proxy.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+                    _ = proxy.send_event(UserWindowEvent::ipc(window_id, msg));
                 }
             }
         };
@@ -235,15 +235,15 @@ impl WebviewInstance {
                             paths: _,
                             position: _,
                         } => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
+                            _ = proxy.send_event(UserWindowEvent::windows_drag_drop(window_id));
                         }
                         wry::DragDropEvent::Over { position } => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
+                            _ = proxy.send_event(UserWindowEvent::windows_drag_over(
                                 window_id, position.0, position.1,
                             ));
                         }
                         wry::DragDropEvent::Leave => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
+                            _ = proxy.send_event(UserWindowEvent::windows_drag_leave(window_id));
                         }
                         _ => {}
                     }

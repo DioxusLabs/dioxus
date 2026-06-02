@@ -71,7 +71,7 @@ impl App {
         let proxy = event_loop.create_proxy();
         let wry_bindgen = WryBindgen::new({
             let proxy = proxy.clone();
-            move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
+            move |app_event| _ = proxy.send_event(UserWindowEvent::wry_bindgen_event(app_event))
         });
         let desktop_thread_handle = spawn_dom_thread(proxy.clone());
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
@@ -129,13 +129,13 @@ impl App {
         (event_loop, app)
     }
 
-    pub fn tick(
+    pub fn tick<'a>(
         &mut self,
-        window_event: &Event<'_, UserWindowEvent>,
+        window_event: Event<'a, UserWindowEvent>,
         target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
+    ) -> Event<'a, UserWindowEvent> {
         self.control_flow = ControlFlow::Wait;
-        self.shared.event_handlers.apply_event(window_event, target);
+        self.shared.event_handlers.apply_event(window_event, target)
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -197,7 +197,7 @@ impl App {
     pub fn connect_hotreload(&self) {
         let proxy = self.shared.proxy.clone();
         dioxus_devtools::connect(move |msg| {
-            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+            _ = proxy.send_event(UserWindowEvent::hot_reload_event(msg));
         })
     }
 
@@ -206,7 +206,7 @@ impl App {
             let window = pending_webview.create_window(&self.shared, target);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+            _ = self.shared.proxy.send_event(UserWindowEvent::poll(id));
         }
     }
 
@@ -324,7 +324,7 @@ impl App {
                 .set_visible(self.is_visible_before_start);
         }
 
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+        _ = self.shared.proxy.send_event(UserWindowEvent::poll(id));
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -441,7 +441,7 @@ impl App {
         // receiver will become inert.
         global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::GlobalHotKeyEvent(t));
+            _ = receiver.send_event(UserWindowEvent::global_hot_key_event(t));
         }));
     }
 
@@ -455,7 +455,7 @@ impl App {
         // receiver will become inert.
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+            _ = receiver.send_event(UserWindowEvent::muda_menu_event(t));
         }));
     }
 
@@ -469,14 +469,14 @@ impl App {
         // receiver will become inert.
         tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+            _ = receiver.send_event(UserWindowEvent::tray_icon_event(t));
         }));
 
         // for whatever reason they had to make it separate
         let receiver = self.shared.proxy.clone();
         tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
+            _ = receiver.send_event(UserWindowEvent::tray_menu_event(t));
         }));
     }
 
@@ -604,7 +604,7 @@ impl App {
                 let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
                 if let Ok(mut sigkill) = sigkill {
                     for _ in sigkill.forever() {
-                        if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                        if target.send_event(UserWindowEvent::shutdown()).is_err() {
                             std::process::exit(0);
                         }
 

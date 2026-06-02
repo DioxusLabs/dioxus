@@ -54,7 +54,8 @@ type EventHandlerCallback = Box<dyn FnMut(UserWindowEvent)>;
 /// A wry event handler whose closure stays on the DOM thread. It is invoked with a borrowed event
 /// while the main thread is blocked, so it never needs to be `Send` or own a `'static` event.
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-type WryEventHandlerCallback = Box<dyn for<'a> FnMut(&tao::event::Event<'a, UserWindowEvent>)>;
+type WryEventHandlerCallback =
+    Box<dyn for<'a> FnMut(tao::event::Event<'a, ()>) -> tao::event::Event<'a, ()>>;
 
 /// Unique identifier for a callback stored on the DOM thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -124,10 +125,11 @@ impl DomCallbackRegistry {
         self.callbacks.get_mut(id.0)?.downcast_mut::<T>()
     }
 
-    fn invoke<T: 'static>(&mut self, id: DomCallbackId, f: impl FnOnce(&mut T)) -> bool {
-        self.callback_mut::<T>(id)
-            .map(|callback| f(callback))
-            .is_some()
+    fn invoke<T: 'static, O>(&mut self, id: DomCallbackId, f: impl FnOnce(&mut T) -> O) -> O {
+        let value = self
+            .callback_mut::<T>(id)
+            .expect("type id should match expected type");
+        f(value)
     }
 
     /// Register an asset handler.
@@ -155,7 +157,8 @@ impl DomCallbackRegistry {
             return false;
         };
 
-        self.invoke::<AssetHandlerCallback>(id, |handler| handler(request, responder))
+        self.invoke::<AssetHandlerCallback, _>(id, |handler| handler(request, responder));
+        true
     }
 
     /// Register a shortcut callback and return its ID.
@@ -169,8 +172,8 @@ impl DomCallbackRegistry {
     }
 
     /// Invoke a shortcut callback if it exists.
-    pub fn invoke_shortcut_callback(&mut self, id: DomCallbackId, state: HotKeyState) -> bool {
-        self.invoke::<ShortcutCallback>(id, |callback| callback(state))
+    pub fn invoke_shortcut_callback(&mut self, id: DomCallbackId, state: HotKeyState) {
+        self.invoke::<ShortcutCallback, _>(id, |callback| callback(state))
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -184,8 +187,8 @@ impl DomCallbackRegistry {
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn invoke_event_handler(&mut self, id: DomCallbackId, event: UserWindowEvent) -> bool {
-        self.invoke::<EventHandlerCallback>(id, |callback| callback(event))
+    pub fn invoke_event_handler(&mut self, id: DomCallbackId, event: UserWindowEvent) {
+        self.invoke::<EventHandlerCallback, _>(id, |callback| callback(event))
     }
 
     /// Register a wry event handler whose closure stays on the DOM thread.
@@ -199,12 +202,12 @@ impl DomCallbackRegistry {
 
     /// Invoke a DOM-thread wry event handler with a borrowed event, if it exists.
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn invoke_wry_event_handler(
+    pub fn invoke_wry_event_handler<'a>(
         &mut self,
         id: DomCallbackId,
-        event: &tao::event::Event<'_, UserWindowEvent>,
-    ) -> bool {
-        self.invoke::<WryEventHandlerCallback>(id, |callback| callback(event))
+        event: tao::event::Event<'a, ()>,
+    ) -> tao::event::Event<'a, ()> {
+        self.invoke::<WryEventHandlerCallback, _>(id, |callback| callback(event))
     }
 }
 
@@ -420,7 +423,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                     let join_handle = tokio::task::spawn_local(async move {
                                         _ = AssertUnwindSafe(fut).catch_unwind().await;
                                         // Close the window when the task completes (aborted or finished)
-                                        _ = proxy.send_event(UserWindowEvent::CloseWindow(window_id));
+                                        _ = proxy.send_event(UserWindowEvent::close_window(window_id));
                                     });
                                     abort_handles.insert(window_id, join_handle.abort_handle());
                                 }

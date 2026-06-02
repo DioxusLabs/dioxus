@@ -2,7 +2,7 @@ use crate::Config;
 use crate::app::MakeVirtualDom;
 use crate::{
     app::App,
-    ipc::{IpcMethod, UserWindowEvent},
+    ipc::{IpcMethod, UserWindowEventVariant},
 };
 use dioxus_core::*;
 use std::any::Any;
@@ -24,7 +24,7 @@ pub fn launch_virtual_dom_blocking(
         let _lock = crate::android_sync_lock::android_runtime_lock();
 
         // Set the control flow and check if any events need to be handled in the app itself
-        app.tick(&window_event, event_loop);
+        let window_event = app.tick(window_event, event_loop);
 
         if let Some(ref mut f) = custom_event_handler {
             f(&window_event, event_loop)
@@ -42,28 +42,30 @@ pub fn launch_virtual_dom_blocking(
                 _ => {}
             },
 
-            Event::UserEvent(event) => match event {
-                UserWindowEvent::NewWindow => app.handle_new_window(event_loop),
-                UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
-                UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
+            Event::UserEvent(event) => match event.into_variant() {
+                UserWindowEventVariant::NewWindow => app.handle_new_window(event_loop),
+                UserWindowEventVariant::CloseWindow(id) => app.handle_close_requested(id),
+                UserWindowEventVariant::Shutdown => {
+                    app.control_flow = tao::event_loop::ControlFlow::Exit
+                }
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
+                UserWindowEventVariant::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
+                UserWindowEventVariant::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::TrayMenuEvent(evnt) => app.handle_tray_menu_event(evnt),
+                UserWindowEventVariant::TrayMenuEvent(evnt) => app.handle_tray_menu_event(evnt),
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
+                UserWindowEventVariant::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
 
                 #[cfg(all(feature = "devtools", debug_assertions))]
-                UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
+                UserWindowEventVariant::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 
                 // Windows-only drag-n-drop fix events.
-                UserWindowEvent::WindowsDragDrop(id) => {
+                UserWindowEventVariant::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
                         let _ = webview
                             .desktop_context
@@ -71,7 +73,7 @@ pub fn launch_virtual_dom_blocking(
                             .evaluate_script("window.interpreter.handleWindowsDragDrop();");
                     }
                 }
-                UserWindowEvent::WindowsDragLeave(id) => {
+                UserWindowEventVariant::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
                         let _ = webview
                             .desktop_context
@@ -79,7 +81,7 @@ pub fn launch_virtual_dom_blocking(
                             .evaluate_script("window.interpreter.handleWindowsDragLeave();");
                     }
                 }
-                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                UserWindowEventVariant::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
                         let _ = webview.desktop_context.webview.evaluate_script(&format!(
                             "window.interpreter.handleWindowsDragOver({x_pos}, {y_pos});"
@@ -87,7 +89,7 @@ pub fn launch_virtual_dom_blocking(
                     }
                 }
 
-                UserWindowEvent::Ipc { id, msg } => match msg.method() {
+                UserWindowEventVariant::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
                     IpcMethod::UserEvent => {}
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
@@ -95,17 +97,17 @@ pub fn launch_virtual_dom_blocking(
                 },
 
                 // Poll event - process DOM commands for a specific window
-                UserWindowEvent::Poll(id) => {
+                UserWindowEventVariant::Poll(id) => {
                     app.poll_window(id);
                 }
 
                 // wry-bindgen IPC event
-                UserWindowEvent::WryBindgenEvent(wry_event) => {
+                UserWindowEventVariant::WryBindgenEvent(wry_event) => {
                     app.handle_wry_bindgen_event(wry_event);
                 }
 
                 // Run a closure with DesktopService access on the main thread
-                UserWindowEvent::RunWithDesktopService {
+                UserWindowEventVariant::RunWithDesktopService {
                     window_id,
                     callback,
                 } => {

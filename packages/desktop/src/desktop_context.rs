@@ -160,10 +160,10 @@ impl DesktopContext {
         let (callback, receiver) = DesktopServiceCallback::new(f);
 
         self.proxy
-            .send_event(UserWindowEvent::RunWithDesktopService {
-                window_id: self.window_id,
+            .send_event(UserWindowEvent::run_with_desktop_service(
+                self.window_id,
                 callback,
-            })
+            ))
             .expect("Event loop has been dropped");
 
         receiver
@@ -526,12 +526,21 @@ impl DesktopContext {
     /// See [`DesktopService::create_wry_event_handler`] for more details.
     pub fn create_wry_event_handler(
         &self,
+        handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
+    ) -> WryEventHandler {
+        self.run_with_desktop_service_blocking(move |desktop| {
+            desktop.create_wry_event_handler(handler)
+        })
+    }
+
+    pub(crate) fn create_wry_event_handler_with_user_event(
+        &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
         + Send
         + 'static,
     ) -> WryEventHandler {
         self.run_with_desktop_service_blocking(move |desktop| {
-            desktop.create_wry_event_handler(handler)
+            desktop.create_wry_event_handler_with_user_event(handler)
         })
     }
 
@@ -551,36 +560,56 @@ impl DesktopContext {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) fn create_wry_event_handler_forwarding(
         &self,
-        dom_handler: DomCallbackId,
+        handler: impl FnMut(&Event<()>) + 'static,
     ) -> WryEventHandler {
         let dom_tx = self.dom_tx.clone();
-        self.run_with_desktop_service_blocking(move |desktop| {
-            desktop.create_wry_event_handler(move |event, _target| {
-                struct AssertEventHandlerStaticSync<T: Send + Sync + 'static>(T);
-                // Erase the event's lifetime so it can be captured by the `Send + 'static`
-                // `RunCallback` closure below.
-                struct SendPtr(*const Event<'static, UserWindowEvent>);
-                // SAFETY: the main thread blocks on `reply_rx` until the handler has run, so the
-                // pointee outlives the read; only a shared reference is taken, on the DOM thread.
-                unsafe impl Send for SendPtr {}
+        let dom_handler = {
+            use dioxus_core::consume_context;
 
-                // Ensure the event handler's event is `Send + Sync + 'static`
-                _ = |_: AssertEventHandlerStaticSync<Event<'static, UserWindowEvent>>| {};
-                let event = SendPtr((event as *const Event<'_, UserWindowEvent>).cast());
-                let (reply_tx, reply_rx) = std::sync::mpsc::channel::<()>();
+            let registry: SharedCallbackRegistry = consume_context();
+            let mut handler = handler;
+            registry
+                .borrow_mut()
+                .register_wry_event_handler(Box::new(move |event| {
+                    handler(&event);
+                    event
+                }))
+        };
+        self.run_with_desktop_service_blocking(move |desktop| {
+            desktop.create_raw_wry_event_handler(move |event, _target| {
+                use crate::dom_thread::DomCallbackRegistry;
+
+                struct AssertEventHandlerStaticSend<T: Send + 'static>(T);
+                // Ensure the event handler's event is `Send + 'static`
+                _ = |_: AssertEventHandlerStaticSend<Event<'static, ()>>| {};
+                let event = match event.map_nonuser_event() {
+                    Ok(event) => event,
+                    Err(user_event) => return user_event,
+                };
+
+                // SAFETY: We are transmuting the event to have a 'static lifetime, but this is safe because we block the event loop until the handler returns, which keeps the original borrowed event alive for the duration of the handler.
+                let event =
+                    unsafe { std::mem::transmute::<Event<'_, ()>, Event<'static, ()>>(event) };
+                let (result_tx, result) = std::sync::mpsc::channel();
                 // Forward the borrowed event to the DOM thread and block until the handler has run,
                 // which keeps the event alive for the duration of the call. If the send fails or the
                 // DOM thread is gone, `reply_tx` is dropped and `recv` returns immediately.
-                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                    // Capture the whole `SendPtr` (which is `Send`), not just its `!Send`
-                    // raw-pointer field — otherwise disjoint closure capture makes this `!Send`.
-                    let event = event;
-                    // SAFETY: see above — the borrowed event is kept alive by the blocking `recv`.
-                    let event = unsafe { &*event.0 };
-                    registry.invoke_wry_event_handler(dom_handler, event);
-                    let _ = reply_tx.send(());
-                })));
-                let _ = reply_rx.recv();
+                let callback = move |registry: &mut DomCallbackRegistry| {
+                    let event = registry.invoke_wry_event_handler(dom_handler, event);
+                    let _ = result_tx.send(event);
+                };
+                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(callback)));
+                // Block the event loop until the handler has run and the event is sent back, keeping the borrowed event valid for the duration of the handler.
+                let event = result
+                    .recv()
+                    .expect("Wry event handler failed to send result back to main thread");
+                // SAFETY: This restores the lifetime erased above after the DOM-thread handler has
+                // returned while the original event is still alive on this stack frame.
+                let event =
+                    unsafe { std::mem::transmute::<Event<'static, ()>, Event<'_, ()>>(event) };
+                event
+                    .map_nonuser_event()
+                    .expect("non-user event stays non-user after being passed to the handler")
             })
         })
         .with_dom_handler(dom_handler)
@@ -841,7 +870,7 @@ impl DesktopService {
     fn queue_new_window(&self, window: PendingWebview) {
         self.shared
             .proxy
-            .send_event(UserWindowEvent::NewWindow)
+            .send_event(UserWindowEvent::new_window())
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -879,7 +908,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+            .send_event(UserWindowEvent::close_window(self.id()));
     }
 
     /// Close a particular window, given its ID
@@ -887,7 +916,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent::CloseWindow(id));
+            .send_event(UserWindowEvent::close_window(id));
     }
 
     /// change window to fullscreen
@@ -928,9 +957,40 @@ impl DesktopService {
     /// The id this function returns can be used to remove the event handler with [`Self::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+        mut handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
-        self.shared.event_handlers.add(self.window.id(), handler)
+        self.shared
+            .event_handlers
+            .add(self.window.id(), move |event, target| {
+                handler(&event, target);
+            })
+    }
+
+    pub(crate) fn create_wry_event_handler_with_user_event(
+        &self,
+        handler: impl for<'a> FnMut(
+            &Event<'a, UserWindowEvent>,
+            &EventLoopWindowTarget<UserWindowEvent>,
+        ) + 'static,
+    ) -> WryEventHandler {
+        self.shared
+            .event_handlers
+            .add_with_user_event(self.window.id(), handler)
+    }
+
+    pub(crate) fn create_raw_wry_event_handler(
+        &self,
+        mut handler: impl for<'a> FnMut(
+            Event<'a, UserWindowEvent>,
+            &EventLoopWindowTarget<UserWindowEvent>,
+        ) -> Event<'a, UserWindowEvent>
+        + 'static,
+    ) -> WryEventHandler {
+        self.shared
+            .event_handlers
+            .add_raw(self.window.id(), move |event, target| {
+                handler(event, target)
+            })
     }
 
     /// Remove a wry event handler created with [`Self::create_wry_event_handler`]

@@ -2,6 +2,8 @@ use std::rc::Rc;
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use crate::dom_thread::{SharedCallbackRegistry, VirtualDomEvent};
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+use crate::ipc::UserWindowEventVariant;
 use crate::{
     DesktopContext, HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler, assets::*,
     ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
@@ -48,20 +50,16 @@ pub trait IntoWryEventHandler<Marker> {
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 impl<F> IntoWryEventHandler<WithoutTargetMarker> for F
 where
-    F: FnMut(&Event<UserWindowEvent>) + 'static,
+    F: FnMut(&Event<()>) + 'static,
 {
     fn into_wry_event_handler(self) -> WryEventHandler {
-        let registry: SharedCallbackRegistry = consume_context();
-        let dom_handler = registry
-            .borrow_mut()
-            .register_wry_event_handler(Box::new(self));
-        window().create_wry_event_handler_forwarding(dom_handler)
+        window().create_wry_event_handler_forwarding(self)
     }
 }
 
 impl<F> IntoWryEventHandler<WithTargetMarker> for F
 where
-    F: FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
+    F: FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
 {
     fn into_wry_event_handler(self) -> WryEventHandler {
         window().create_wry_event_handler(self)
@@ -111,7 +109,7 @@ fn use_dom_event_handler(
             let window = window();
             let dom_tx = window.dom_event_sender();
             window
-                .create_wry_event_handler(move |event, _| {
+                .create_wry_event_handler_with_user_event(move |event, _| {
                     let Event::UserEvent(event) = event else {
                         return;
                     };
@@ -140,13 +138,13 @@ pub fn use_muda_event_handler(
 ) -> WryEventHandler {
     use_dom_event_handler(
         move |event| {
-            if let UserWindowEvent::MudaMenuEvent(event) = event {
-                handler(&event);
+            if let UserWindowEventVariant::MudaMenuEvent(event) = event.variant() {
+                handler(event);
             }
         },
-        |event| match event {
-            UserWindowEvent::MudaMenuEvent(event) => {
-                Some(UserWindowEvent::MudaMenuEvent(event.clone()))
+        |event| match event.variant() {
+            UserWindowEventVariant::MudaMenuEvent(event) => {
+                Some(UserWindowEvent::muda_menu_event(event.clone()))
             }
             _ => None,
         },
@@ -165,13 +163,13 @@ pub fn use_tray_menu_event_handler(
 ) -> WryEventHandler {
     use_dom_event_handler(
         move |event| {
-            if let UserWindowEvent::TrayMenuEvent(event) = event {
-                handler(&event);
+            if let UserWindowEventVariant::TrayMenuEvent(event) = event.variant() {
+                handler(event);
             }
         },
-        |event| match event {
-            UserWindowEvent::TrayMenuEvent(event) => {
-                Some(UserWindowEvent::TrayMenuEvent(event.clone()))
+        |event| match event.variant() {
+            UserWindowEventVariant::TrayMenuEvent(event) => {
+                Some(UserWindowEvent::tray_menu_event(event.clone()))
             }
             _ => None,
         },
@@ -192,13 +190,13 @@ pub fn use_tray_icon_event_handler(
 ) -> WryEventHandler {
     use_dom_event_handler(
         move |event| {
-            if let UserWindowEvent::TrayIconEvent(event) = event {
-                handler(&event);
+            if let UserWindowEventVariant::TrayIconEvent(event) = event.variant() {
+                handler(event);
             }
         },
-        |event| match event {
-            UserWindowEvent::TrayIconEvent(event) => {
-                Some(UserWindowEvent::TrayIconEvent(event.clone()))
+        |event| match event.variant() {
+            UserWindowEventVariant::TrayIconEvent(event) => {
+                Some(UserWindowEvent::tray_icon_event(event.clone()))
             }
             _ => None,
         },
