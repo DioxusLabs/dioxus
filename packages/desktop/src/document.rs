@@ -1,7 +1,7 @@
 use crate::DesktopContext;
 use dioxus_core::queue_effect;
 use dioxus_document::{
-    create_element_in_head, Document, Eval, LinkProps, MetaProps, ScriptProps, StyleProps,
+    Document, Eval, LinkProps, MetaProps, ScriptProps, StyleProps, create_element_in_head,
 };
 use dioxus_web_eval::WebEvaluator;
 

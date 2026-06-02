@@ -54,7 +54,7 @@ pub mod trayicon;
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
-pub use desktop_context::{window, DesktopContext, DesktopService, PendingDesktopContext};
+pub use desktop_context::{DesktopContext, DesktopService, PendingDesktopContext, window};
 pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;

@@ -1,3 +1,5 @@
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+use crate::dom_thread::DomCallbackId;
 use crate::{ipc::UserWindowEvent, window};
 use slab::Slab;
 use std::cell::RefCell;
@@ -5,9 +7,27 @@ use tao::{event::Event, event_loop::EventLoopWindowTarget, window::WindowId};
 
 /// The unique identifier of a window event handler. This can be used to later remove the handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WryEventHandler(pub(crate) usize);
+pub struct WryEventHandler {
+    pub(crate) id: usize,
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) dom_handler: Option<DomCallbackId>,
+}
 
 impl WryEventHandler {
+    pub(crate) fn new(id: usize) -> Self {
+        Self {
+            id,
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            dom_handler: None,
+        }
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn with_dom_handler(mut self, dom_handler: DomCallbackId) -> Self {
+        self.dom_handler = Some(dom_handler);
+        self
+    }
+
     /// Unregister this event handler from the window
     pub fn remove(&self) {
         window().remove_wry_event_handler(*self);
@@ -33,7 +53,7 @@ impl WindowEventHandlers {
         window_id: WindowId,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
-        WryEventHandler(
+        WryEventHandler::new(
             self.handlers
                 .borrow_mut()
                 .insert(WryWindowEventHandlerInner {
@@ -44,7 +64,7 @@ impl WindowEventHandlers {
     }
 
     pub(crate) fn remove(&self, id: WryEventHandler) {
-        self.handlers.borrow_mut().try_remove(id.0);
+        self.handlers.borrow_mut().try_remove(id.id);
     }
 
     pub fn apply_event(

@@ -5,19 +5,20 @@
 //! windows, while VirtualDom polling and rendering happens as separate tasks on
 //! a dedicated DOM thread.
 
+use crate::AssetRequest;
 use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
 use crate::file_upload::NativeFileHover;
 use crate::ipc::UserWindowEvent;
 use crate::shortcut::HotKeyState;
-use crate::AssetRequest;
-use dioxus_core::{provide_context, ScopeId, VirtualDom};
+use dioxus_core::{ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
 use futures_util::FutureExt;
 use slab::Slab;
 use std::panic::AssertUnwindSafe;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
@@ -41,26 +42,43 @@ pub(crate) enum VirtualDomEvent {
     ///
     /// This is used for the inverted callback pattern where closures stay on the
     /// DOM thread and the main thread invokes them via message passing.
-    RunCallback(DomCallbackRequest),
+    RunCallback(Box<dyn FnOnce(&mut DomCallbackRegistry) + Send>),
 }
 
-/// A request to run a callback on the DOM thread.
-///
-/// This is used by the inverted callback pattern to invoke non-Send closures
-/// that are stored on the DOM thread.
-pub(crate) struct DomCallbackRequest {
-    /// The callback to run. This closure has access to the `DomCallbackRegistry`
-    /// and can look up and invoke stored handlers.
-    pub callback: Box<dyn FnOnce(&mut DomCallbackRegistry) + Send>,
-    /// Optional channel to send the result back to the caller.
-    pub result_tx: Option<std::sync::mpsc::SyncSender<Box<dyn Any + Send>>>,
-}
+type AssetHandlerCallback = Box<dyn Fn(AssetRequest, RequestAsyncResponder)>;
+type ShortcutCallback = Box<dyn FnMut(HotKeyState)>;
 
-/// Unique identifier for a shortcut callback stored on the DOM thread.
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+type EventHandlerCallback = Box<dyn FnMut(UserWindowEvent)>;
+
+/// Unique identifier for a callback stored on the DOM thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DomShortcutId(pub usize);
+pub struct DomCallbackId(pub usize);
 
 pub(crate) type SharedCallbackRegistry = Rc<RefCell<DomCallbackRegistry>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PendingDomId(usize);
+
+thread_local! {
+    static PENDING_DOMS: RefCell<HashMap<usize, VirtualDom>> = RefCell::new(HashMap::new());
+}
+
+static NEXT_PENDING_DOM_ID: AtomicUsize = AtomicUsize::new(0);
+
+pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
+    let id = NEXT_PENDING_DOM_ID.fetch_add(1, Ordering::Relaxed);
+    PENDING_DOMS.with(|doms| {
+        doms.borrow_mut().insert(id, dom);
+    });
+    PendingDomId(id)
+}
+
+fn take_pending_dom(id: PendingDomId) -> VirtualDom {
+    PENDING_DOMS
+        .with(|doms| doms.borrow_mut().remove(&id.0))
+        .expect("Pending VirtualDom should exist on the DOM thread")
+}
 
 /// Registry for callbacks that live on the DOM thread.
 ///
@@ -68,10 +86,10 @@ pub(crate) type SharedCallbackRegistry = Rc<RefCell<DomCallbackRegistry>>;
 /// callback pattern. The main thread sends requests to invoke these callbacks,
 /// and the DOM thread looks them up and executes them.
 pub(crate) struct DomCallbackRegistry {
-    /// Asset handlers keyed by name.
-    asset_handlers: HashMap<String, Box<dyn Fn(AssetRequest, RequestAsyncResponder)>>,
-    /// Shortcut callbacks stored in a slab for efficient allocation.
-    shortcut_callbacks: Slab<Box<dyn FnMut(HotKeyState)>>,
+    /// Callback storage for asset handlers, shortcut callbacks, and event handlers.
+    callbacks: Slab<Box<dyn Any>>,
+    /// Asset handler names point into the shared callback slab.
+    asset_handler_names: HashMap<String, DomCallbackId>,
 }
 
 impl Default for DomCallbackRegistry {
@@ -84,73 +102,92 @@ impl DomCallbackRegistry {
     /// Create a new empty callback registry.
     pub fn new() -> Self {
         Self {
-            asset_handlers: HashMap::new(),
-            shortcut_callbacks: Slab::new(),
+            callbacks: Slab::new(),
+            asset_handler_names: HashMap::new(),
         }
     }
 
+    fn insert_callback<T: 'static>(&mut self, callback: T) -> DomCallbackId {
+        DomCallbackId(self.callbacks.insert(Box::new(callback)))
+    }
+
+    fn remove_callback(&mut self, id: DomCallbackId) -> Option<()> {
+        self.callbacks.try_remove(id.0).map(|_| ())
+    }
+
+    fn callback_mut<T: 'static>(&mut self, id: DomCallbackId) -> Option<&mut T> {
+        self.callbacks.get_mut(id.0)?.downcast_mut::<T>()
+    }
+
+    fn invoke<T: 'static>(&mut self, id: DomCallbackId, f: impl FnOnce(&mut T)) -> bool {
+        self.callback_mut::<T>(id)
+            .map(|callback| f(callback))
+            .is_some()
+    }
+
     /// Register an asset handler.
-    pub fn register_asset_handler(
-        &mut self,
-        name: String,
-        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder)>,
-    ) {
-        self.asset_handlers.insert(name, handler);
+    pub fn register_asset_handler(&mut self, name: String, handler: AssetHandlerCallback) {
+        let id = self.insert_callback(handler);
+        if let Some(old_id) = self.asset_handler_names.insert(name, id) {
+            self.remove_callback(old_id);
+        }
     }
 
     /// Remove an asset handler.
     pub fn remove_asset_handler(&mut self, name: &str) -> Option<()> {
-        self.asset_handlers.remove(name).map(|_| ())
+        let id = self.asset_handler_names.remove(name)?;
+        self.remove_callback(id)
     }
 
     /// Invoke an asset handler if it exists.
     pub fn invoke_asset_handler(
-        &self,
+        &mut self,
         name: &str,
         request: AssetRequest,
         responder: RequestAsyncResponder,
     ) -> bool {
-        if let Some(handler) = self.asset_handlers.get(name) {
-            handler(request, responder);
-            true
-        } else {
-            false
-        }
+        let Some(id) = self.asset_handler_names.get(name).copied() else {
+            return false;
+        };
+
+        self.invoke::<AssetHandlerCallback>(id, |handler| handler(request, responder))
     }
 
     /// Register a shortcut callback and return its ID.
-    pub fn register_shortcut_callback(
-        &mut self,
-        callback: Box<dyn FnMut(HotKeyState)>,
-    ) -> DomShortcutId {
-        DomShortcutId(self.shortcut_callbacks.insert(callback))
+    pub fn register_shortcut_callback(&mut self, callback: ShortcutCallback) -> DomCallbackId {
+        self.insert_callback(callback)
     }
 
     /// Remove a shortcut callback.
-    pub fn remove_shortcut_callback(&mut self, id: DomShortcutId) -> Option<()> {
-        if self.shortcut_callbacks.contains(id.0) {
-            let _ = self.shortcut_callbacks.remove(id.0);
-            Some(())
-        } else {
-            None
-        }
+    pub fn remove_shortcut_callback(&mut self, id: DomCallbackId) -> Option<()> {
+        self.remove_callback(id)
     }
 
     /// Invoke a shortcut callback if it exists.
-    pub fn invoke_shortcut_callback(&mut self, id: DomShortcutId, state: HotKeyState) -> bool {
-        if let Some(callback) = self.shortcut_callbacks.get_mut(id.0) {
-            callback(state);
-            true
-        } else {
-            false
-        }
+    pub fn invoke_shortcut_callback(&mut self, id: DomCallbackId, state: HotKeyState) -> bool {
+        self.invoke::<ShortcutCallback>(id, |callback| callback(state))
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn register_event_handler(&mut self, callback: EventHandlerCallback) -> DomCallbackId {
+        self.insert_callback(callback)
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn remove_event_handler(&mut self, id: DomCallbackId) -> Option<()> {
+        self.remove_callback(id)
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn invoke_event_handler(&mut self, id: DomCallbackId, event: UserWindowEvent) -> bool {
+        self.invoke::<EventHandlerCallback>(id, |callback| callback(event))
     }
 }
 
 /// Commands sent from the VirtualDom thread to the main thread.
-pub(crate) enum MainThreadCommand {
+pub(crate) struct MainThreadCommand {
     /// Serialized mutations ready to be sent to the webview.
-    Mutations(Vec<u8>),
+    pub(crate) mutations: Vec<u8>,
 }
 
 /// Handle to communicate with a VirtualDom running on a dedicated thread.
@@ -191,6 +228,37 @@ pub(crate) async fn run_virtual_dom<F>(
     F: FnOnce() -> VirtualDom + Send + 'static,
 {
     let dom = make_dom();
+    run_virtual_dom_with_dom(
+        dom, event_rx, event_tx, command_tx, proxy, window_id, file_hover,
+    )
+    .await;
+}
+
+pub(crate) async fn run_pending_virtual_dom(
+    pending_dom_id: PendingDomId,
+    event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
+    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
+    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
+    file_hover: NativeFileHover,
+) {
+    let dom = take_pending_dom(pending_dom_id);
+    run_virtual_dom_with_dom(
+        dom, event_rx, event_tx, command_tx, proxy, window_id, file_hover,
+    )
+    .await;
+}
+
+async fn run_virtual_dom_with_dom(
+    dom: VirtualDom,
+    event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
+    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
+    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
+    file_hover: NativeFileHover,
+) {
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime(), file_hover);
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
     let desktop_service_proxy = DesktopContext::new(proxy, window_id, event_tx);
@@ -236,10 +304,9 @@ async fn run_virtual_dom_loop(
                             initialized = true;
                             // Perform initial rebuild
                             dom.rebuild(&mut mutations);
-                            if let Some(edits) = take_edits(&mut mutations) {
-                                let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
-                                waiting_for_edits_ack = true;
-                            }
+                            let edits = take_edits(&mut mutations);
+                            let _ = command_tx.unbounded_send(MainThreadCommand { mutations: edits });
+                            waiting_for_edits_ack = true;
                         }
                     }
                     VirtualDomEvent::EditsAcknowledged => {
@@ -249,16 +316,10 @@ async fn run_virtual_dom_loop(
                     VirtualDomEvent::HotReload(msg) => {
                         dioxus_devtools::apply_changes(&dom, &msg);
                     }
-                    VirtualDomEvent::RunCallback(request) => {
+                    VirtualDomEvent::RunCallback(callback) => {
                         // Run the callback with access to the registry
                         let mut registry = callback_registry.borrow_mut();
-                        (request.callback)(&mut registry);
-                        // Send result back if requested
-                        if let Some(result_tx) = request.result_tx {
-                            // The callback should have already set up any result it needs
-                            // For now, just send an empty acknowledgment
-                            let _ = result_tx.send(Box::new(()));
-                        }
+                        callback(&mut registry);
                     }
                 }
             }
@@ -267,23 +328,17 @@ async fn run_virtual_dom_loop(
             _ = dom.wait_for_work(), if initialized && !waiting_for_edits_ack => {
                 // Render and send mutations
                 dom.render_immediate(&mut mutations);
-                if let Some(edits) = take_edits(&mut mutations) {
-                    let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
-                    waiting_for_edits_ack = true;
-                }
+                let edits = take_edits(&mut mutations);
+                let _ = command_tx.unbounded_send(MainThreadCommand { mutations: edits });
+                waiting_for_edits_ack = true;
             }
         }
     }
 }
 
-/// Export mutations from the MutationState if there are any.
-fn take_edits(mutations: &mut MutationState) -> Option<Vec<u8>> {
-    let bytes = mutations.export_memory();
-    if bytes.is_empty() {
-        None
-    } else {
-        Some(bytes)
-    }
+/// Export mutations from the MutationState.
+fn take_edits(mutations: &mut MutationState) -> Vec<u8> {
+    mutations.export_memory()
 }
 
 type SpawnTask = (

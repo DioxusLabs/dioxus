@@ -1,17 +1,17 @@
-use crate::app::MakeVirtualDom;
-use crate::dom_thread::{MainThreadCommand, VirtualDomEvent, VirtualDomHandle};
-use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
+use crate::app::MakeVirtualDom;
+use crate::dom_thread::{MainThreadCommand, PendingDomId, VirtualDomEvent, VirtualDomHandle};
+use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopContext,
-    DesktopService,
+    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
+    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
 use dioxus_hooks::to_owned;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Waker;
 use std::time::Duration;
+use tao::event_loop::EventLoopWindowTarget;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 use wry_bindgen::wry::{ImplWryBindgenResponder, WryBindgenResponder};
 
@@ -62,8 +62,9 @@ impl WebviewInstance {
     /// This webview connects to it via the shared channels in SharedContext.
     pub(crate) fn new(
         mut cfg: Config,
-        make_dom: MakeVirtualDom,
+        dom: PendingDom,
         shared: Rc<SharedContext>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
@@ -83,7 +84,7 @@ impl WebviewInstance {
             window = window.with_window_icon(crate::default_icon().ok());
         }
 
-        let window = Arc::new(window.build(&shared.target).unwrap());
+        let window = Arc::new(window.build(target).unwrap());
 
         let proxy = shared.proxy.clone();
 
@@ -419,16 +420,33 @@ impl WebviewInstance {
         let run_app = {
             let proxy = proxy.clone();
             let event_tx = event_tx.clone();
-            move || {
-                crate::dom_thread::run_virtual_dom(
-                    make_dom,
-                    dom_event_rx,
-                    event_tx,
-                    dom_command_tx,
-                    proxy,
-                    window_id,
-                    file_hover,
-                )
+            move || async move {
+                match dom {
+                    PendingDom::Factory(make_dom) => {
+                        crate::dom_thread::run_virtual_dom(
+                            make_dom,
+                            dom_event_rx,
+                            event_tx,
+                            dom_command_tx,
+                            proxy,
+                            window_id,
+                            file_hover,
+                        )
+                        .await;
+                    }
+                    PendingDom::Pending(pending_dom_id) => {
+                        crate::dom_thread::run_pending_virtual_dom(
+                            pending_dom_id,
+                            dom_event_rx,
+                            event_tx,
+                            dom_command_tx,
+                            proxy,
+                            window_id,
+                            file_hover,
+                        )
+                        .await;
+                    }
+                }
             }
         };
         let evaluate_script = {
@@ -509,11 +527,7 @@ impl WebviewInstance {
 
         // Process collected commands
         for cmd in commands {
-            match cmd {
-                MainThreadCommand::Mutations(edits) => {
-                    self.send_edits_raw(edits);
-                }
-            }
+            self.send_edits_raw(cmd.mutations);
         }
     }
 
@@ -583,21 +597,46 @@ impl WebviewInstance {
 ///
 /// Note: With wry-bindgen integration, all webviews share the same VirtualDom running in the wry-bindgen thread.
 pub(crate) struct PendingWebview {
-    dom: MakeVirtualDom,
+    dom: PendingDom,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
+}
+
+pub(crate) enum PendingDom {
+    Factory(MakeVirtualDom),
+    Pending(PendingDomId),
 }
 
 impl PendingWebview {
     pub(crate) fn new(cfg: Config, dom: MakeVirtualDom) -> (Self, PendingDesktopContext) {
         let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self { cfg, sender, dom };
+        let webview = Self {
+            cfg,
+            sender,
+            dom: PendingDom::Factory(dom),
+        };
         let pending = PendingDesktopContext { receiver };
         (webview, pending)
     }
 
-    pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
+    pub(crate) fn from_pending_dom(
+        cfg: Config,
+        dom: PendingDomId,
+        sender: futures_channel::oneshot::Sender<DesktopContext>,
+    ) -> Self {
+        Self {
+            cfg,
+            sender,
+            dom: PendingDom::Pending(dom),
+        }
+    }
+
+    pub(crate) fn create_window(
+        self,
+        shared: &Rc<SharedContext>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) -> WebviewInstance {
+        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
 
         // Return the desktop service proxy to the pending future
         _ = self.sender.send(window.desktop_context.proxy());

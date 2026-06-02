@@ -1,53 +1,42 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
-use std::any::Any;
-use std::sync::{Arc, Mutex, mpsc::SyncSender};
 use tao::window::WindowId;
+use tokio::sync::oneshot;
 use wry_bindgen::wry::WryBindgenEvent;
 
-/// Type alias for the desktop service callback function.
-pub(crate) type DesktopServiceCallback =
-    Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send>;
+type DesktopServiceCallbackFn = Box<dyn FnOnce(&DesktopService) + Send>;
 
-/// Inner type that holds the callback and response channel for DesktopService operations.
-pub(crate) struct DesktopServiceCallbackInner {
-    pub callback: DesktopServiceCallback,
-    pub sender: SyncSender<Box<dyn Any + Send>>,
+pub struct DesktopServiceCallback {
+    callback: DesktopServiceCallbackFn,
 }
 
-/// Wrapper for a callback that runs with DesktopService access on the main thread.
-/// The inner Option allows taking the callback exactly once.
-#[derive(Clone)]
-pub struct DesktopServiceCallbackWrapper(
-    pub(crate) Arc<Mutex<Option<DesktopServiceCallbackInner>>>,
-);
-
-impl std::fmt::Debug for DesktopServiceCallbackWrapper {
+impl std::fmt::Debug for DesktopServiceCallback {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("DesktopServiceCallbackWrapper")
-            .field(&"...")
-            .finish()
+        f.pad("DesktopServiceCallback { .. }")
     }
 }
 
-impl DesktopServiceCallbackWrapper {
-    pub(crate) fn new(
-        callback: DesktopServiceCallback,
-        sender: SyncSender<Box<dyn Any + Send>>,
-    ) -> Self {
-        Self(Arc::new(Mutex::new(Some(DesktopServiceCallbackInner {
-            callback,
-            sender,
-        }))))
+impl DesktopServiceCallback {
+    pub(crate) fn new<T, F>(f: F) -> (Self, oneshot::Receiver<T>)
+    where
+        T: Send + 'static,
+        F: FnOnce(&DesktopService) -> T + Send + 'static,
+    {
+        let (sender, receiver) = oneshot::channel();
+        let callback: DesktopServiceCallbackFn = Box::new(move |desktop| {
+            let _ = sender.send(f(desktop));
+        });
+
+        (Self { callback }, receiver)
     }
 
-    pub(crate) fn take(&self) -> Option<DesktopServiceCallbackInner> {
-        self.0.lock().ok()?.take()
+    pub(crate) fn run(self, desktop: &DesktopService) {
+        (self.callback)(desktop);
     }
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum UserWindowEvent {
     /// A global hotkey event
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -89,7 +78,7 @@ pub enum UserWindowEvent {
     /// Gracefully shutdown the entire app
     Shutdown,
 
-    /// wry-bindgen IPC event (wrapped for Clone compatibility)
+    /// wry-bindgen IPC event
     WryBindgenEvent(WryBindgenEvent),
 
     /// Run a closure with access to a specific window's DesktopService on the main thread
@@ -97,8 +86,8 @@ pub enum UserWindowEvent {
         /// The window ID to get the DesktopService for
         window_id: WindowId,
 
-        /// The callback wrapper containing the closure and response channel
-        callback: DesktopServiceCallbackWrapper,
+        /// The callback containing the closure and response channel
+        callback: DesktopServiceCallback,
     },
 }
 

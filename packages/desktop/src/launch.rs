@@ -24,14 +24,14 @@ pub fn launch_virtual_dom_blocking(
         let _lock = crate::android_sync_lock::android_runtime_lock();
 
         // Set the control flow and check if any events need to be handled in the app itself
-        app.tick(&window_event);
+        app.tick(&window_event, event_loop);
 
         if let Some(ref mut f) = custom_event_handler {
             f(&window_event, event_loop)
         }
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
+            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(event_loop),
             Event::LoopDestroyed => app.handle_loop_destroyed(),
             Event::WindowEvent {
                 event, window_id, ..
@@ -43,7 +43,7 @@ pub fn launch_virtual_dom_blocking(
             },
 
             Event::UserEvent(event) => match event {
-                UserWindowEvent::NewWindow => app.handle_new_window(),
+                UserWindowEvent::NewWindow => app.handle_new_window(event_loop),
                 UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
@@ -109,11 +109,8 @@ pub fn launch_virtual_dom_blocking(
                     window_id,
                     callback,
                 } => {
-                    if let Some(inner) = callback.take() {
-                        if let Some(webview) = app.webviews.get(&window_id) {
-                            let result = (inner.callback)(&webview.desktop_context);
-                            let _ = inner.sender.send(result);
-                        }
+                    if let Some(webview) = app.webviews.get(&window_id) {
+                        callback.run(&webview.desktop_context);
                     }
                 }
             },

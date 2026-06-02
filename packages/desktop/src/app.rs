@@ -5,7 +5,7 @@ use crate::{
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
     shortcut::ShortcutRegistry,
-    webview::{PendingWebview, WebviewInstance},
+    webview::{PendingDom, PendingWebview, WebviewInstance},
 };
 use dioxus_core::VirtualDom;
 use std::{
@@ -56,7 +56,6 @@ pub(crate) struct SharedContext {
     pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
     pub(crate) wry_bindgen: WryBindgen,
     pub(crate) desktop_thread_handle: DomThreadHandle,
@@ -93,7 +92,6 @@ impl App {
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy,
-                target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
                 wry_bindgen,
                 desktop_thread_handle,
@@ -131,11 +129,13 @@ impl App {
         (event_loop, app)
     }
 
-    pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
+    pub fn tick(
+        &mut self,
+        window_event: &Event<'_, UserWindowEvent>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
         self.control_flow = ControlFlow::Wait;
-        self.shared
-            .event_handlers
-            .apply_event(window_event, &self.shared.target);
+        self.shared.event_handlers.apply_event(window_event, target);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -201,9 +201,9 @@ impl App {
         })
     }
 
-    pub fn handle_new_window(&mut self) {
+    pub fn handle_new_window(&mut self, target: &EventLoopWindowTarget<UserWindowEvent>) {
         for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let window = pending_webview.create_window(&self.shared);
+            let window = pending_webview.create_window(&self.shared, target);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -261,7 +261,7 @@ impl App {
         }
     }
 
-    pub fn handle_start_cause_init(&mut self) {
+    pub fn handle_start_cause_init(&mut self, target: &EventLoopWindowTarget<UserWindowEvent>) {
         let virtual_dom = self
             .unmounted_dom
             .take()
@@ -280,7 +280,12 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
+        let webview = WebviewInstance::new(
+            cfg,
+            PendingDom::Factory(virtual_dom),
+            self.shared.clone(),
+            target,
+        );
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
