@@ -17,15 +17,82 @@ pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)
 }
 
-/// Register an event handler that runs when a wry event is processed. Unlike most callback hooks, this
-/// will run outside of the virtual dom context
-pub fn use_wry_event_handler(
-    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-    + Send
-    + 'static,
+/// Marker for the [`IntoWryEventHandler`] impl whose closure also takes the event loop target.
+#[doc(hidden)]
+pub struct WithTargetMarker;
+
+/// Marker for the [`IntoWryEventHandler`] impl whose closure takes only the event.
+#[doc(hidden)]
+pub struct WithoutTargetMarker;
+
+/// Lets [`use_wry_event_handler`] accept either closure shape, requiring `Send` only for the
+/// target-taking form.
+///
+/// - `FnMut(&Event<UserWindowEvent>)` — stays on the VirtualDom thread (like [`use_asset_handler`]),
+///   does **not** need to be `Send`, and cannot access the [`EventLoopWindowTarget`]. While it runs
+///   the event loop is blocked, so it must not synchronously call back into the main thread (e.g.
+///   blocking [`DesktopContext`] window methods); defer such work with [`dioxus_core::spawn`].
+/// - `FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)` — runs on the main
+///   event loop thread with access to the target, and therefore must be `Send`.
+///
+/// The `Marker` type parameter disambiguates the two blanket impls (the technique dioxus uses for
+/// `SuperInto`/`SpawnIfAsync`). Because the closure shape drives which impl applies, the closure's
+/// parameters must be annotated enough for the compiler to pick the impl: write `|event: &Event<_>|`
+/// for the no-target form, or `|event: &Event<_>, target: &_|` for the target form (the marker
+/// indirection prevents inferring bare `|event|` / `|event, target|`).
+pub trait IntoWryEventHandler<Marker> {
+    /// Register the handler with the current window, returning a handle that removes it.
+    fn into_wry_event_handler(self) -> WryEventHandler;
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+impl<F> IntoWryEventHandler<WithoutTargetMarker> for F
+where
+    F: FnMut(&Event<UserWindowEvent>) + 'static,
+{
+    fn into_wry_event_handler(self) -> WryEventHandler {
+        let registry: SharedCallbackRegistry = consume_context();
+        let dom_handler = registry
+            .borrow_mut()
+            .register_wry_event_handler(Box::new(self));
+        window().create_wry_event_handler_forwarding(dom_handler)
+    }
+}
+
+impl<F> IntoWryEventHandler<WithTargetMarker> for F
+where
+    F: FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
+{
+    fn into_wry_event_handler(self) -> WryEventHandler {
+        window().create_wry_event_handler(self)
+    }
+}
+
+/// Register an event handler that runs when a wry event is processed. Unlike most callback hooks,
+/// this runs outside of the virtual dom context.
+///
+/// The handler may take either form (see [`IntoWryEventHandler`]):
+///
+/// ```rust, ignore
+/// // Stays on the VirtualDom thread; does NOT need to be `Send`. Good for updating signals.
+/// use_wry_event_handler(|event: &Event<_>| {
+///     if let Event::WindowEvent { event: WindowEvent::Focused(focused), .. } = event {
+///         // ...
+///     }
+/// });
+///
+/// // Runs on the main event loop thread with the `EventLoopWindowTarget`; must be `Send`.
+/// use_wry_event_handler(|event: &Event<_>, target: &_| {
+///     // ...
+/// });
+/// ```
+///
+/// The handler is removed automatically when the component is dropped.
+pub fn use_wry_event_handler<Marker>(
+    handler: impl IntoWryEventHandler<Marker> + 'static,
 ) -> WryEventHandler {
     use_hook_with_cleanup(
-        move || window().create_wry_event_handler(handler),
+        move || handler.into_wry_event_handler(),
         move |handler| handler.remove(),
     )
 }

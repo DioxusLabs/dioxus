@@ -51,6 +51,11 @@ type ShortcutCallback = Box<dyn FnMut(HotKeyState)>;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 type EventHandlerCallback = Box<dyn FnMut(UserWindowEvent)>;
 
+/// A wry event handler whose closure stays on the DOM thread. It is invoked with a borrowed event
+/// while the main thread is blocked, so it never needs to be `Send` or own a `'static` event.
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+type WryEventHandlerCallback = Box<dyn for<'a> FnMut(&tao::event::Event<'a, UserWindowEvent>)>;
+
 /// Unique identifier for a callback stored on the DOM thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DomCallbackId(pub usize);
@@ -181,6 +186,25 @@ impl DomCallbackRegistry {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn invoke_event_handler(&mut self, id: DomCallbackId, event: UserWindowEvent) -> bool {
         self.invoke::<EventHandlerCallback>(id, |callback| callback(event))
+    }
+
+    /// Register a wry event handler whose closure stays on the DOM thread.
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn register_wry_event_handler(
+        &mut self,
+        callback: WryEventHandlerCallback,
+    ) -> DomCallbackId {
+        self.insert_callback(callback)
+    }
+
+    /// Invoke a DOM-thread wry event handler with a borrowed event, if it exists.
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn invoke_wry_event_handler(
+        &mut self,
+        id: DomCallbackId,
+        event: &tao::event::Event<'_, UserWindowEvent>,
+    ) -> bool {
+        self.invoke::<WryEventHandlerCallback>(id, |callback| callback(event))
     }
 }
 

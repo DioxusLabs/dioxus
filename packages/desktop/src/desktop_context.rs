@@ -535,6 +535,54 @@ impl DesktopContext {
         })
     }
 
+    /// Register a wry event handler whose closure stays on the VirtualDom thread (no `Send` bound).
+    ///
+    /// The closure itself lives in this window's [`DomCallbackRegistry`]; this method only sets up
+    /// a small `Send` forwarder on the main thread. When a wry event arrives, the forwarder hands
+    /// the DOM thread a reference to the event and **blocks the event loop** until the handler
+    /// returns, which keeps the borrowed event valid for the duration of the call.
+    ///
+    /// Because the event loop is parked while the handler runs, the handler must not synchronously
+    /// call back into the main thread (e.g. blocking [`DesktopContext`] window methods such as
+    /// [`Self::set_title`]); defer those with [`dioxus_core::spawn`] instead, or the two threads
+    /// will deadlock.
+    ///
+    /// [`DomCallbackRegistry`]: crate::dom_thread::DomCallbackRegistry
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub(crate) fn create_wry_event_handler_forwarding(
+        &self,
+        dom_handler: DomCallbackId,
+    ) -> WryEventHandler {
+        let dom_tx = self.dom_tx.clone();
+        self.run_with_desktop_service_blocking(move |desktop| {
+            desktop.create_wry_event_handler(move |event, _target| {
+                // Erase the event's lifetime so it can be captured by the `Send + 'static`
+                // `RunCallback` closure below.
+                struct SendPtr(*const Event<'static, UserWindowEvent>);
+                // SAFETY: the main thread blocks on `reply_rx` until the handler has run, so the
+                // pointee outlives the read; only a shared reference is taken, on the DOM thread.
+                unsafe impl Send for SendPtr {}
+
+                let event = SendPtr((event as *const Event<'_, UserWindowEvent>).cast());
+                let (reply_tx, reply_rx) = std::sync::mpsc::channel::<()>();
+                // Forward the borrowed event to the DOM thread and block until the handler has run,
+                // which keeps the event alive for the duration of the call. If the send fails or the
+                // DOM thread is gone, `reply_tx` is dropped and `recv` returns immediately.
+                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
+                    // Capture the whole `SendPtr` (which is `Send`), not just its `!Send`
+                    // raw-pointer field — otherwise disjoint closure capture makes this `!Send`.
+                    let event = event;
+                    // SAFETY: see above — the borrowed event is kept alive by the blocking `recv`.
+                    let event = unsafe { &*event.0 };
+                    registry.invoke_wry_event_handler(dom_handler, event);
+                    let _ = reply_tx.send(());
+                })));
+                let _ = reply_rx.recv();
+            })
+        })
+        .with_dom_handler(dom_handler)
+    }
+
     /// Remove a wry event handler created with [`Self::create_wry_event_handler`].
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
