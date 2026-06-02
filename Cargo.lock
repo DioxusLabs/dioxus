@@ -432,9 +432,9 @@ dependencies = [
 
 [[package]]
 name = "anyrender_vello_hybrid"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61b6de3eb188f15d7782e37d086b1a06bc835043e52c2f836e64a1de0e1a2ee6"
+checksum = "7bb7175d60a20edfb23d590344c02efb77c9eccbb6a749af3c4b9bf14b092dda"
 dependencies = [
  "anyrender",
  "debug_timer",
@@ -444,7 +444,7 @@ dependencies = [
  "peniko",
  "pollster",
  "rustc-hash 2.1.2",
- "vello_common",
+ "vello_common 0.0.9",
  "vello_hybrid",
  "wasm-bindgen-futures",
  "wgpu",
@@ -5841,9 +5841,9 @@ dependencies = [
 
 [[package]]
 name = "glifo"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae9d48c6d81526ad2f9d5d6e5fddf5f6949ffbc46fcac0db0d061a6e65097019"
+checksum = "d99fc21d493812643aae86d53b7bbd02f376434a90317e8a790bc209fdd6605e"
 dependencies = [
  "bytemuck",
  "foldhash 0.2.0",
@@ -5852,7 +5852,7 @@ dependencies = [
  "peniko",
  "skrifa",
  "smallvec",
- "vello_common",
+ "vello_common 0.0.9",
 ]
 
 [[package]]
@@ -13899,6 +13899,22 @@ dependencies = [
  "hashbrown 0.17.1",
  "log",
  "peniko",
+ "smallvec",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "vello_common"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d672facaa2d697285a786cd9d44d614cd2ce54cdc022504bf339f8fff3b750"
+dependencies = [
+ "bytemuck",
+ "fearless_simd",
+ "guillotiere",
+ "hashbrown 0.17.1",
+ "log",
+ "peniko",
  "png 0.18.1",
  "smallvec",
  "thiserror 2.0.18",
@@ -13913,7 +13929,7 @@ dependencies = [
  "bytemuck",
  "glifo",
  "hashbrown 0.17.1",
- "vello_common",
+ "vello_common 0.0.8",
 ]
 
 [[package]]
@@ -13931,16 +13947,16 @@ dependencies = [
 
 [[package]]
 name = "vello_hybrid"
-version = "0.0.8"
+version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644d88a5ccb2280a407eada75a9318920bdee029e293b52c6e8b3fc8c31c70dd"
+checksum = "86ca7acbf6e59ae8c354c524732c73da45239a3a8ee03d0c8a9ad66a6622e488"
 dependencies = [
  "bytemuck",
  "glifo",
  "hashbrown 0.17.1",
  "log",
  "thiserror 2.0.18",
- "vello_common",
+ "vello_common 0.0.9",
  "vello_sparse_shaders",
  "wgpu",
 ]
@@ -13960,9 +13976,9 @@ dependencies = [
 
 [[package]]
 name = "vello_sparse_shaders"
-version = "0.0.8"
+version = "0.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45c3abf652bc0f42be7b8235bc2b9ae97991ee801bbdbc694485dead5786202c"
+checksum = "e004cfe28eb71738643f60460b9cae2236eba57b351afebf244148256ff25d8b"
 
 [[package]]
 name = "version-compare"
