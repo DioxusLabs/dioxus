@@ -3,174 +3,114 @@ use std::fmt::{self, Debug, Display};
 
 pub type BeforeInputEvent = Event<BeforeInputData>;
 
-/// The kind of mutation that is about to be applied to an editable element.
-///
-/// These map to the `inputType` attribute of the underlying DOM `InputEvent`. The
-/// full list of values is defined in the W3C Input Events spec at
-/// <https://w3c.github.io/input-events/#interface-InputEvent-Attributes>. Any value
-/// not covered by a known variant (e.g. one introduced by a newer user agent) is
-/// preserved verbatim in [`InputType::Unknown`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(from = "String", into = "String"))]
-pub enum InputType {
-    InsertText,
-    InsertReplacementText,
-    InsertLineBreak,
-    InsertParagraph,
-    InsertOrderedList,
-    InsertUnorderedList,
-    InsertHorizontalRule,
-    InsertFromYank,
-    InsertFromDrop,
-    InsertFromPaste,
-    InsertFromPasteAsQuotation,
-    InsertTranspose,
-    InsertCompositionText,
-    InsertLink,
-    DeleteWordBackward,
-    DeleteWordForward,
-    DeleteSoftLineBackward,
-    DeleteSoftLineForward,
-    DeleteEntireSoftLine,
-    DeleteHardLineBackward,
-    DeleteHardLineForward,
-    DeleteByDrag,
-    DeleteByCut,
-    DeleteContent,
-    DeleteContentBackward,
-    DeleteContentForward,
-    HistoryUndo,
-    HistoryRedo,
-    FormatBold,
-    FormatItalic,
-    FormatUnderline,
-    FormatStrikeThrough,
-    FormatSuperscript,
-    FormatSubscript,
-    FormatJustifyFull,
-    FormatJustifyCenter,
-    FormatJustifyRight,
-    FormatJustifyLeft,
-    FormatIndent,
-    FormatOutdent,
-    FormatRemove,
-    FormatSetBlockTextDirection,
-    FormatSetInlineTextDirection,
-    FormatBackColor,
-    FormatFontColor,
-    FormatFontName,
-    /// An `inputType` value not covered by the known variants, preserved as-is.
-    Unknown(String),
+/// Define a string-backed enum from a single source-of-truth list that maps each variant
+/// to its canonical DOM string. The two conversion directions — `as_str` (variant → string)
+/// and `From<&str>` (string → variant) — are generated from that one list, so they can never
+/// drift out of sync: a new value only has to be added in one place. The trailing
+/// `_ => Variant(String)` arm declares a catch-all variant whose owned field preserves any
+/// value not covered by the known variants.
+macro_rules! string_enum {
+    (
+        $(#[$enum_meta:meta])*
+        $vis:vis enum $name:ident {
+            $(
+                $variant:ident => $value:literal,
+            )*
+            $(#[$unknown_meta:meta])*
+            _ => $unknown:ident($unknown_ty:ty),
+        }
+    ) => {
+        $(#[$enum_meta])*
+        $vis enum $name {
+            $(
+                $variant,
+            )*
+            $(#[$unknown_meta])*
+            $unknown($unknown_ty),
+        }
+
+        impl $name {
+            /// The canonical `inputType` string for this variant, exactly as emitted by the
+            /// DOM. For [`InputType::Unknown`] this returns the original value.
+            pub fn as_str(&self) -> &str {
+                match self {
+                    $( Self::$variant => $value, )*
+                    Self::$unknown(value) => value,
+                }
+            }
+        }
+
+        impl From<&str> for $name {
+            fn from(value: &str) -> Self {
+                match value {
+                    $( $value => Self::$variant, )*
+                    other => Self::$unknown(other.to_string()),
+                }
+            }
+        }
+    };
 }
 
-impl InputType {
-    /// The canonical `inputType` string for this variant, exactly as emitted by the
-    /// DOM. For [`InputType::Unknown`] this returns the original value.
-    pub fn as_str(&self) -> &str {
-        match self {
-            InputType::InsertText => "insertText",
-            InputType::InsertReplacementText => "insertReplacementText",
-            InputType::InsertLineBreak => "insertLineBreak",
-            InputType::InsertParagraph => "insertParagraph",
-            InputType::InsertOrderedList => "insertOrderedList",
-            InputType::InsertUnorderedList => "insertUnorderedList",
-            InputType::InsertHorizontalRule => "insertHorizontalRule",
-            InputType::InsertFromYank => "insertFromYank",
-            InputType::InsertFromDrop => "insertFromDrop",
-            InputType::InsertFromPaste => "insertFromPaste",
-            InputType::InsertFromPasteAsQuotation => "insertFromPasteAsQuotation",
-            InputType::InsertTranspose => "insertTranspose",
-            InputType::InsertCompositionText => "insertCompositionText",
-            InputType::InsertLink => "insertLink",
-            InputType::DeleteWordBackward => "deleteWordBackward",
-            InputType::DeleteWordForward => "deleteWordForward",
-            InputType::DeleteSoftLineBackward => "deleteSoftLineBackward",
-            InputType::DeleteSoftLineForward => "deleteSoftLineForward",
-            InputType::DeleteEntireSoftLine => "deleteEntireSoftLine",
-            InputType::DeleteHardLineBackward => "deleteHardLineBackward",
-            InputType::DeleteHardLineForward => "deleteHardLineForward",
-            InputType::DeleteByDrag => "deleteByDrag",
-            InputType::DeleteByCut => "deleteByCut",
-            InputType::DeleteContent => "deleteContent",
-            InputType::DeleteContentBackward => "deleteContentBackward",
-            InputType::DeleteContentForward => "deleteContentForward",
-            InputType::HistoryUndo => "historyUndo",
-            InputType::HistoryRedo => "historyRedo",
-            InputType::FormatBold => "formatBold",
-            InputType::FormatItalic => "formatItalic",
-            InputType::FormatUnderline => "formatUnderline",
-            InputType::FormatStrikeThrough => "formatStrikeThrough",
-            InputType::FormatSuperscript => "formatSuperscript",
-            InputType::FormatSubscript => "formatSubscript",
-            InputType::FormatJustifyFull => "formatJustifyFull",
-            InputType::FormatJustifyCenter => "formatJustifyCenter",
-            InputType::FormatJustifyRight => "formatJustifyRight",
-            InputType::FormatJustifyLeft => "formatJustifyLeft",
-            InputType::FormatIndent => "formatIndent",
-            InputType::FormatOutdent => "formatOutdent",
-            InputType::FormatRemove => "formatRemove",
-            InputType::FormatSetBlockTextDirection => "formatSetBlockTextDirection",
-            InputType::FormatSetInlineTextDirection => "formatSetInlineTextDirection",
-            InputType::FormatBackColor => "formatBackColor",
-            InputType::FormatFontColor => "formatFontColor",
-            InputType::FormatFontName => "formatFontName",
-            InputType::Unknown(value) => value,
-        }
-    }
-}
-
-impl From<&str> for InputType {
-    fn from(value: &str) -> Self {
-        match value {
-            "insertText" => InputType::InsertText,
-            "insertReplacementText" => InputType::InsertReplacementText,
-            "insertLineBreak" => InputType::InsertLineBreak,
-            "insertParagraph" => InputType::InsertParagraph,
-            "insertOrderedList" => InputType::InsertOrderedList,
-            "insertUnorderedList" => InputType::InsertUnorderedList,
-            "insertHorizontalRule" => InputType::InsertHorizontalRule,
-            "insertFromYank" => InputType::InsertFromYank,
-            "insertFromDrop" => InputType::InsertFromDrop,
-            "insertFromPaste" => InputType::InsertFromPaste,
-            "insertFromPasteAsQuotation" => InputType::InsertFromPasteAsQuotation,
-            "insertTranspose" => InputType::InsertTranspose,
-            "insertCompositionText" => InputType::InsertCompositionText,
-            "insertLink" => InputType::InsertLink,
-            "deleteWordBackward" => InputType::DeleteWordBackward,
-            "deleteWordForward" => InputType::DeleteWordForward,
-            "deleteSoftLineBackward" => InputType::DeleteSoftLineBackward,
-            "deleteSoftLineForward" => InputType::DeleteSoftLineForward,
-            "deleteEntireSoftLine" => InputType::DeleteEntireSoftLine,
-            "deleteHardLineBackward" => InputType::DeleteHardLineBackward,
-            "deleteHardLineForward" => InputType::DeleteHardLineForward,
-            "deleteByDrag" => InputType::DeleteByDrag,
-            "deleteByCut" => InputType::DeleteByCut,
-            "deleteContent" => InputType::DeleteContent,
-            "deleteContentBackward" => InputType::DeleteContentBackward,
-            "deleteContentForward" => InputType::DeleteContentForward,
-            "historyUndo" => InputType::HistoryUndo,
-            "historyRedo" => InputType::HistoryRedo,
-            "formatBold" => InputType::FormatBold,
-            "formatItalic" => InputType::FormatItalic,
-            "formatUnderline" => InputType::FormatUnderline,
-            "formatStrikeThrough" => InputType::FormatStrikeThrough,
-            "formatSuperscript" => InputType::FormatSuperscript,
-            "formatSubscript" => InputType::FormatSubscript,
-            "formatJustifyFull" => InputType::FormatJustifyFull,
-            "formatJustifyCenter" => InputType::FormatJustifyCenter,
-            "formatJustifyRight" => InputType::FormatJustifyRight,
-            "formatJustifyLeft" => InputType::FormatJustifyLeft,
-            "formatIndent" => InputType::FormatIndent,
-            "formatOutdent" => InputType::FormatOutdent,
-            "formatRemove" => InputType::FormatRemove,
-            "formatSetBlockTextDirection" => InputType::FormatSetBlockTextDirection,
-            "formatSetInlineTextDirection" => InputType::FormatSetInlineTextDirection,
-            "formatBackColor" => InputType::FormatBackColor,
-            "formatFontColor" => InputType::FormatFontColor,
-            "formatFontName" => InputType::FormatFontName,
-            other => InputType::Unknown(other.to_string()),
-        }
+string_enum! {
+    /// The kind of mutation that is about to be applied to an editable element.
+    ///
+    /// These map to the `inputType` attribute of the underlying DOM `InputEvent`. The
+    /// full list of values is defined in the W3C Input Events spec at
+    /// <https://w3c.github.io/input-events/#interface-InputEvent-Attributes>. Any value
+    /// not covered by a known variant (e.g. one introduced by a newer user agent) is
+    /// preserved verbatim in [`InputType::Unknown`].
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+    #[cfg_attr(feature = "serialize", serde(from = "String", into = "String"))]
+    pub enum InputType {
+        InsertText => "insertText",
+        InsertReplacementText => "insertReplacementText",
+        InsertLineBreak => "insertLineBreak",
+        InsertParagraph => "insertParagraph",
+        InsertOrderedList => "insertOrderedList",
+        InsertUnorderedList => "insertUnorderedList",
+        InsertHorizontalRule => "insertHorizontalRule",
+        InsertFromYank => "insertFromYank",
+        InsertFromDrop => "insertFromDrop",
+        InsertFromPaste => "insertFromPaste",
+        InsertFromPasteAsQuotation => "insertFromPasteAsQuotation",
+        InsertTranspose => "insertTranspose",
+        InsertCompositionText => "insertCompositionText",
+        InsertLink => "insertLink",
+        DeleteWordBackward => "deleteWordBackward",
+        DeleteWordForward => "deleteWordForward",
+        DeleteSoftLineBackward => "deleteSoftLineBackward",
+        DeleteSoftLineForward => "deleteSoftLineForward",
+        DeleteEntireSoftLine => "deleteEntireSoftLine",
+        DeleteHardLineBackward => "deleteHardLineBackward",
+        DeleteHardLineForward => "deleteHardLineForward",
+        DeleteByDrag => "deleteByDrag",
+        DeleteByCut => "deleteByCut",
+        DeleteContent => "deleteContent",
+        DeleteContentBackward => "deleteContentBackward",
+        DeleteContentForward => "deleteContentForward",
+        HistoryUndo => "historyUndo",
+        HistoryRedo => "historyRedo",
+        FormatBold => "formatBold",
+        FormatItalic => "formatItalic",
+        FormatUnderline => "formatUnderline",
+        FormatStrikeThrough => "formatStrikeThrough",
+        FormatSuperscript => "formatSuperscript",
+        FormatSubscript => "formatSubscript",
+        FormatJustifyFull => "formatJustifyFull",
+        FormatJustifyCenter => "formatJustifyCenter",
+        FormatJustifyRight => "formatJustifyRight",
+        FormatJustifyLeft => "formatJustifyLeft",
+        FormatIndent => "formatIndent",
+        FormatOutdent => "formatOutdent",
+        FormatRemove => "formatRemove",
+        FormatSetBlockTextDirection => "formatSetBlockTextDirection",
+        FormatSetInlineTextDirection => "formatSetInlineTextDirection",
+        FormatBackColor => "formatBackColor",
+        FormatFontColor => "formatFontColor",
+        FormatFontName => "formatFontName",
+        /// An `inputType` value not covered by the known variants, preserved as-is.
+        _ => Unknown(String),
     }
 }
 
