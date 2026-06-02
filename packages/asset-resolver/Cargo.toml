@@ -23,7 +23,6 @@ tokio = { workspace = true, features = ["rt"], optional = true }
 # browser resolver dependencies
 web-sys = { version = "0.3.98", features = ['Headers', 'Request', 'RequestInit', 'Response', 'Window'], optional = true }
 js-sys = { version = "0.3.98", optional = true }
-wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
@@ -38,5 +37,5 @@ serde_json = { workspace = true }
 
 [features]
 default = []
-web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen-futures"]
 native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio"]
