@@ -51,6 +51,7 @@ fn app() -> Element {
             test_before_input {}
             test_before_input_composing {}
             test_before_input_contenteditable {}
+            test_paste {}
         }
     }
 }
@@ -715,6 +716,33 @@ fn test_before_input_contenteditable() -> Element {
                 assert_eq!(event.data.input_type(), InputType::InsertText);
                 assert_eq!(event.data.data().as_deref(), Some("z"));
                 assert_eq!(event.data.value(), "draft");
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
+        }
+    }
+}
+
+fn test_paste() -> Element {
+    utils::mock_event(
+        "paste",
+        r#"(() => {
+            let data = new DataTransfer();
+            data.setData("text/plain", "pasted text");
+            return new ClipboardEvent("paste", {
+                clipboardData: data,
+                bubbles: true,
+                cancelable: true,
+            });
+        })()"#,
+    );
+
+    rsx! {
+        input {
+            id: "paste",
+            onpaste: move |event| {
+                let pasted = event.data.data_transfer().get_as_text();
+                println!("pasted: {pasted:?}");
+                assert_eq!(pasted.as_deref(), Some("pasted text"));
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             }
         }

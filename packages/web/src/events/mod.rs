@@ -1,6 +1,8 @@
 use before_input::WebBeforeInputData;
+use clipboard::WebClipboardData;
 use dioxus_html::{
-    BeforeInputData, DragData, FormData, HtmlEventConverter, ImageData, PlatformEventData,
+    BeforeInputData, ClipboardData, DragData, FormData, HtmlEventConverter, ImageData,
+    PlatformEventData,
 };
 use form::WebFormData;
 use load::WebImageEvent;
@@ -104,7 +106,12 @@ macro_rules! with_web_event_converters {
                 ))
             };
             convert_cancel_data(CancelData) => web_sys::Event;
-            convert_clipboard_data(ClipboardData) => web_sys::Event;
+            convert_clipboard_data(ClipboardData) => web_sys::ClipboardEvent => |event| {
+                let event = downcast_event(event);
+                ClipboardData::new(WebClipboardData::new(
+                    event.raw.clone().unchecked_into::<web_sys::ClipboardEvent>(),
+                ))
+            };
             convert_composition_data(CompositionData) => web_sys::CompositionEvent;
             convert_drag_data(DragData) => web_sys::DragEvent => |event| {
                 let event = downcast_event(event);
