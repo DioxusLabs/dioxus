@@ -11,8 +11,8 @@ documentation = "https://docs.rs/dioxus"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-wasm-bindgen = { version = "0.2.122-alpha.3", package = "wasm-bindgen-x", optional = true }
-wasm-bindgen-futures = { version = "0.4.72-alpha.3", package = "wasm-bindgen-futures-x", optional = true }
+wasm-bindgen = { path = "../../../dioxus-test/shims/wasm-bindgen", optional = true }
+wasm-bindgen-futures = { path = "../../../dioxus-test/wasm-bindgen/crates/futures", optional = true }
 js-sys = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = [
     "Element",

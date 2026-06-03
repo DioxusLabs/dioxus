@@ -455,7 +455,7 @@ impl WebviewInstance {
         _ = shared
             .desktop_thread_handle
             .task_tx
-            .send((window_id, Box::new(|| future.into_future())));
+            .send((window_id, Box::new(|| Box::pin(future.into_future()))));
 
         // Create a handle to communicate with the shared VirtualDom
         // The VirtualDom is already running in the wry-bindgen thread (started in App::new)

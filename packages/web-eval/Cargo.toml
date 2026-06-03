@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "web", "wasm"]
 dioxus-document = { workspace = true }
 generational-box = { workspace = true }
 
-wasm-bindgen = { version = "0.2.122-alpha.3", package = "wasm-bindgen-x" }
-wasm-bindgen-futures = { version = "0.4.72-alpha.3", package = "wasm-bindgen-futures-x" }
+wasm-bindgen = { path = "../../../dioxus-test/shims/wasm-bindgen" }
+wasm-bindgen-futures = { path = "../../../dioxus-test/wasm-bindgen/crates/futures" }
 js-sys = { workspace = true }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 serde = { workspace = true }

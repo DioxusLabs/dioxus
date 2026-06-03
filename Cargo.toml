@@ -230,13 +230,9 @@ rustc-hash = "2.1.1"
 wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.50"
 wasm-bindgen-test = "0.3.71"
-js-sys = { version = "0.3.99-alpha.3", package = "js-sys-x" }
-web-sys = { version = "0.3.99-alpha.3", package = "web-sys-x", default-features = false }
-wry-bindgen = "0.2.122-alpha.3"
-wasm-bindgen-x = "0.2.122-alpha.3"
-wasm-bindgen-futures-x = "0.4.72-alpha.3"
-js-sys-x = { version = "0.3.99-alpha.3" }
-web-sys-x = { version = "0.3.99-alpha.3", default-features = false }
+js-sys = { path = "../dioxus-test/wasm-bindgen/crates/js-sys", package = "js-sys" }
+web-sys = { path = "../dioxus-test/wasm-bindgen/crates/web-sys", package = "web-sys", default-features = false }
+wry-bindgen = { path = "../dioxus-test/wry-bindgen" }
 html_parser = "0.7.0"
 thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
@@ -492,8 +488,8 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
 pollster = "0.4.0"
 
-web-sys-x = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
-wasm-bindgen-x = { workspace = true }
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
+wasm-bindgen = { path = "../dioxus-test/shims/wasm-bindgen" }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
