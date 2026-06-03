@@ -83,7 +83,7 @@ pub use ser::*;
 #[cfg(feature = "serialize")]
 mod ser {
     use super::*;
-    use crate::data_transfer::{SerializedDataTransfer, SerializedDataTransferItem};
+    use crate::data_transfer::SerializedDataTransfer;
 
     /// A serialized version of [`ClipboardData`] used to transport the event across the
     /// IPC boundary on non-web renderers.
@@ -95,24 +95,8 @@ mod ser {
     impl SerializedClipboardData {
         fn new(clipboard: &ClipboardData) -> Self {
             let data_transfer = clipboard.data_transfer();
-            let mut items = Vec::new();
-            // The live `DataTransfer` only exposes formats by lookup, so capture the
-            // common text payload. The full set of items is reconstructed from the JS
-            // serializer on the deserialize path (the direction real events travel).
-            if let Some(text) = data_transfer.get_as_text() {
-                items.push(SerializedDataTransferItem {
-                    kind: "string".to_string(),
-                    type_: "text/plain".to_string(),
-                    data: text,
-                });
-            }
             Self {
-                data_transfer: SerializedDataTransfer {
-                    items,
-                    files: Vec::new(),
-                    effect_allowed: String::new(),
-                    drop_effect: String::new(),
-                },
+                data_transfer: SerializedDataTransfer::from_data_transfer(&data_transfer),
             }
         }
     }
@@ -125,11 +109,7 @@ mod ser {
 
     impl HasFileData for SerializedClipboardData {
         fn files(&self) -> Vec<FileData> {
-            self.data_transfer
-                .files
-                .iter()
-                .map(|f| FileData::new(f.clone()))
-                .collect()
+            self.data_transfer().files()
         }
     }
 

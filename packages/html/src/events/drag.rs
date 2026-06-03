@@ -151,11 +151,7 @@ mod ser {
 
     impl crate::file_data::HasFileData for SerializedDragData {
         fn files(&self) -> Vec<FileData> {
-            self.data_transfer
-                .files
-                .iter()
-                .map(|f| FileData::new(f.clone()))
-                .collect()
+            self.data_transfer().files()
         }
     }
 
