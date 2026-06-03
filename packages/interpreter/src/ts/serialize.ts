@@ -64,7 +64,11 @@ export function serializeEvent(
     extend({});
   }
   if (event instanceof ClipboardEvent) {
-    extend({});
+    extend({
+      data_transfer: serializeDataTransfer(
+        event.clipboardData || new DataTransfer()
+      ),
+    });
   }
 
   if (
@@ -342,8 +346,9 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
   };
 }
 
-function serializeDragEvent(event: DragEvent): SerializedEvent {
-  let data_transfer = event.dataTransfer || new DataTransfer();
+// Serialize a `DataTransfer` (shared by drag-and-drop and clipboard events) into the shape
+// expected by the Rust `SerializedDataTransfer`.
+function serializeDataTransfer(data_transfer: DataTransfer): SerializedEvent {
   let items = [];
   let files = [];
   let effect_allowed = data_transfer.effectAllowed;
@@ -380,6 +385,15 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
   }
 
   return {
+    items,
+    files,
+    effect_allowed,
+    drop_effect,
+  };
+}
+
+function serializeDragEvent(event: DragEvent): SerializedEvent {
+  return {
     mouse: {
       alt_key: event.altKey,
       ctrl_key: event.ctrlKey,
@@ -387,12 +401,7 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       shift_key: event.shiftKey,
       ...serializeMouseEvent(event),
     },
-    data_transfer: {
-      items,
-      files,
-      effect_allowed,
-      drop_effect,
-    },
+    data_transfer: serializeDataTransfer(event.dataTransfer || new DataTransfer()),
   };
 }
 

@@ -82,6 +82,15 @@ fn app() -> Element {
                         onbeforeinput: move |event| log_event(event.data()),
                         oninput: move |event| log_event(event.data()),
                     }
+                    label {
+                        r#for: "paste-input",
+                        "Paste into this field to read the clipboard text (and any files)"
+                    }
+                    input {
+                        id: "paste-input",
+                        style: "font: inherit; padding: 8px 10px;",
+                        onpaste: move |event| log_event(event.data()),
+                    }
                 }
                 div {
                     style: "text-align: center; padding: 20px; font-family: sans-serif; overflow: auto; height: 400px;",
