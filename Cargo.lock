@@ -15718,6 +15718,7 @@ dependencies = [
 name = "wry-bindgen"
 version = "0.2.122"
 dependencies = [
+ "atomic-waker",
  "base64 0.22.1",
  "bytemuck",
  "http",

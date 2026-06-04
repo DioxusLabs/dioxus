@@ -26,7 +26,7 @@ extern "C" {
 
 /// Initialize the event handler closures for the wry-bindgen bridge.
 ///
-/// This should be called once during VirtualDom initialization on the wry-bindgen thread.
+/// This should be called once during VirtualDom initialization on the DOM thread.
 /// The handler receives:
 /// - event: The raw web_sys::Event (wry-bindgen's web-sys)
 /// - name: The event name (e.g., "click", "input")

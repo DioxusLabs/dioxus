@@ -7,12 +7,18 @@ use crate::{
     edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
 use dioxus_hooks::to_owned;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
-use tao::event_loop::EventLoopWindowTarget;
+use std::{
+    rc::Rc,
+    sync::Arc,
+    task::{Context, Poll, Wake, Waker},
+    time::Duration,
+};
+use tao::{
+    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    window::WindowId,
+};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
-use wry_bindgen::wry::{ImplWryBindgenResponder, WryBindgenResponder};
+use wry_bindgen::wry::{WryBindgen, WryBindgenWebviewDriver};
 
 /// This struct manages the webview's communication with the VirtualDom thread.
 ///
@@ -34,6 +40,9 @@ pub(crate) struct WebviewInstance {
     pub dom_handle: VirtualDomHandle,
     pub edits: WebviewEdits,
     pub desktop_context: Rc<DesktopService>,
+    wry_bindgen_driver: WryBindgenWebviewDriver,
+    wry_bindgen_driver_waker: Waker,
+    wry_bindgen_driver_done: bool,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -47,11 +56,45 @@ pub(crate) struct WebviewInstance {
     _menu: Option<DioxusMenu>,
 }
 
+struct WryBindgenDriverWake {
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
+}
+
+impl Wake for WryBindgenDriverWake {
+    fn wake(self: Arc<Self>) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::wry_bindgen_driver_wake(self.window_id));
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent::wry_bindgen_driver_wake(self.window_id));
+    }
+}
+
+fn is_wry_bindgen_request(request: &wry::http::Request<Vec<u8>>) -> bool {
+    request
+        .uri()
+        .path()
+        .trim_matches('/')
+        .starts_with("__wbg__/")
+}
+
+fn wry_bindgen_not_found_response() -> wry::http::Response<Vec<u8>> {
+    wry::http::Response::builder()
+        .status(wry::http::StatusCode::NOT_FOUND)
+        .body(Vec::new())
+        .expect("Failed to build not found response")
+}
+
 impl WebviewInstance {
     /// Create a new WebviewInstance.
     ///
-    /// The VirtualDom is already running in the wry-bindgen thread (started in App::new).
-    /// This webview connects to it via the shared channels in SharedContext.
+    /// The VirtualDom runs on the DOM thread inside this webview's wry-bindgen runtime.
+    /// This webview connects to it through the event channel created below.
     pub(crate) fn new(
         mut cfg: Config,
         dom: PendingDom,
@@ -84,10 +127,8 @@ impl WebviewInstance {
         // dedicated thread and receives events from the main thread through this channel.
         let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // Start building the wry bindgen future
-        let app_builder = shared.wry_bindgen.app_builder();
-        // Get the wry bindgen protocol handler
-        let protocol = app_builder.protocol_handler();
+        let wry_bindgen = WryBindgen::new();
+        let protocol = wry_bindgen.protocol_handler();
 
         // TODO: restore on dom thread or remove dom access
         // if let Some(on_build) = cfg.on_window.as_mut() {
@@ -126,8 +167,7 @@ impl WebviewInstance {
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
-        // Use shared channels for VirtualDom communication
-        // The VirtualDom is already running in the wry-bindgen thread
+        // Use a channel for main-thread to VirtualDom communication.
         let event_tx = dom_event_tx;
 
         let edits = WebviewEdits::new(edit_queue.clone());
@@ -138,8 +178,7 @@ impl WebviewInstance {
                 cfg.custom_index,
                 cfg.root_name,
                 asset_handlers,
-                edits,
-                shared
+                edits
             ];
 
             #[cfg(feature = "tokio_runtime")]
@@ -152,35 +191,15 @@ impl WebviewInstance {
                 let _guard = tokio_rt.enter();
                 let _lock = crate::android_sync_lock::android_runtime_lock();
 
-                struct ResponderWrapper {
-                    responder: RequestAsyncResponder,
-                }
-
-                impl From<ResponderWrapper> for WryBindgenResponder {
-                    fn from(val: ResponderWrapper) -> Self {
-                        WryBindgenResponder::new(val)
-                    }
-                }
-
-                impl ImplWryBindgenResponder for ResponderWrapper {
-                    fn respond(self: Box<Self>, response: wry::http::Response<Vec<u8>>) {
-                        self.responder.respond(response);
-                    }
-                }
-
-                let responder = ResponderWrapper { responder };
-                // Create wry-bindgen protocol handler wrapped in Rc for sharing
-                let protocol_name = "dioxus";
-                let proxy = shared.proxy.clone();
-                let send_app_event = move |event| {
-                    let _ = proxy.send_event(UserWindowEvent::wry_bindgen_event(event));
-                };
-                let response =
-                    protocol.handle_request(protocol_name, send_app_event, &request, responder);
-                let Some(responder) = response else {
+                if is_wry_bindgen_request(&request) {
+                    let responder = move |response| responder.respond(response);
+                    let Some(responder) = protocol.handle_request("dioxus", &request, responder)
+                    else {
+                        return;
+                    };
+                    responder(wry_bindgen_not_found_response());
                     return;
-                };
-                let responder = responder.responder;
+                }
 
                 // Fall through to existing dioxus protocol handler
                 protocol::desktop_handler(
@@ -444,33 +463,50 @@ impl WebviewInstance {
                 }
             }
         };
-        let evaluate_script = {
-            let desktop_context = desktop_context.clone();
-            move |script: &str| {
-                // Evaluate script in the webview
-                let _ = desktop_context.webview.evaluate_script(script);
-            }
-        };
-        let future = app_builder.build(run_app, evaluate_script);
+        let (runtime, driver) = wry_bindgen.split();
+        let future = runtime.run(run_app);
         _ = shared
             .desktop_thread_handle
             .task_tx
             .send((window_id, Box::new(|| Box::pin(future.into_future()))));
 
-        // Create a handle to communicate with the shared VirtualDom
-        // The VirtualDom is already running in the wry-bindgen thread (started in App::new)
-        // Commands are received via App::process_dom_commands from the shared channel
+        // Create a handle to send events to this webview's VirtualDom task.
         let dom_handle = VirtualDomHandle::new(event_tx);
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
+        let wry_bindgen_driver = driver.with_evaluate_script({
+            let desktop_context = desktop_context.clone();
+            move |script| {
+                let _ = desktop_context.webview.evaluate_script(script);
+            }
+        });
+        let wry_bindgen_driver_waker = Waker::from(Arc::new(WryBindgenDriverWake {
+            proxy: shared.proxy.clone(),
+            window_id,
+        }));
+
         WebviewInstance {
             dom_handle,
             edits,
             desktop_context,
+            wry_bindgen_driver,
+            wry_bindgen_driver_waker,
+            wry_bindgen_driver_done: false,
             _menu: menu,
             _web_context: web_context,
+        }
+    }
+
+    pub(crate) fn poll_wry_bindgen_driver(&mut self) {
+        if self.wry_bindgen_driver_done {
+            return;
+        }
+
+        let mut cx = Context::from_waker(&self.wry_bindgen_driver_waker);
+        if matches!(self.wry_bindgen_driver.poll(&mut cx), Poll::Ready(())) {
+            self.wry_bindgen_driver_done = true;
         }
     }
 
@@ -527,7 +563,7 @@ impl WebviewInstance {
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
 /// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
 ///
-/// Note: With wry-bindgen integration, all webviews share the same VirtualDom running in the wry-bindgen thread.
+/// Each queued webview gets its own wry-bindgen runtime and driver when created.
 pub(crate) struct PendingWebview {
     dom: PendingDom,
     cfg: Config,

@@ -28,8 +28,8 @@ dioxus-web-sys-events = { workspace = true }
 generational-box = { workspace = true }
 
 js-sys = { workspace = true }
-wasm-bindgen = { path = "../../../dioxus-test/shims/wasm-bindgen" }
-wasm-bindgen-futures = { path = "../../../dioxus-test/wasm-bindgen/crates/futures" }
+wasm-bindgen = { path = "../../../review/shims/wasm-bindgen" }
+wasm-bindgen-futures = { path = "../../../review/wasm-bindgen/crates/futures" }
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }

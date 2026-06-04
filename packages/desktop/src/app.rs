@@ -20,7 +20,6 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
-use wry_bindgen::wry::WryBindgen;
 
 /// A factory for creating VirtualDom instances on dedicated threads.
 /// This type is Send because it only holds the component function and contexts,
@@ -57,7 +56,6 @@ pub(crate) struct SharedContext {
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
-    pub(crate) wry_bindgen: WryBindgen,
     pub(crate) desktop_thread_handle: DomThreadHandle,
 }
 
@@ -69,10 +67,6 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let proxy = event_loop.create_proxy();
-        let wry_bindgen = WryBindgen::new({
-            let proxy = proxy.clone();
-            move |app_event| _ = proxy.send_event(UserWindowEvent::wry_bindgen_event(app_event))
-        });
         let desktop_thread_handle = spawn_dom_thread(proxy.clone());
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
 
@@ -93,7 +87,6 @@ impl App {
                 shortcut_manager: ShortcutRegistry::new(),
                 websocket: EditWebsocket::start(proxy.clone()),
                 proxy,
-                wry_bindgen,
                 desktop_thread_handle,
             }),
         };
@@ -422,12 +415,18 @@ impl App {
         }
     }
 
-    /// Handle wry-bindgen IPC events.
-    ///
-    /// This forwards the event to wry-bindgen for processing, which may execute
-    /// JavaScript in the webview or handle callbacks from JavaScript.
-    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::wry::WryBindgenEvent) {
-        self.shared.wry_bindgen.handle_user_event(event);
+    pub fn poll_wry_bindgen_drivers(&mut self) {
+        for webview in self.webviews.values_mut() {
+            webview.poll_wry_bindgen_driver();
+        }
+    }
+
+    pub fn poll_wry_bindgen_driver(&mut self, id: WindowId) {
+        let Some(webview) = self.webviews.get_mut(&id) else {
+            return;
+        };
+
+        webview.poll_wry_bindgen_driver();
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

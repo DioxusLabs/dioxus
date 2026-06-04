@@ -31,7 +31,12 @@ pub fn launch_virtual_dom_blocking(
         }
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(event_loop),
+            Event::NewEvents(cause) => {
+                if matches!(cause, StartCause::Init) {
+                    app.handle_start_cause_init(event_loop);
+                }
+                app.poll_wry_bindgen_drivers();
+            }
             Event::LoopDestroyed => app.handle_loop_destroyed(),
             Event::WindowEvent {
                 event, window_id, ..
@@ -101,9 +106,8 @@ pub fn launch_virtual_dom_blocking(
                     app.reconnect_all_edits();
                 }
 
-                // wry-bindgen IPC event
-                UserWindowEventVariant::WryBindgenEvent(wry_event) => {
-                    app.handle_wry_bindgen_event(wry_event);
+                UserWindowEventVariant::WryBindgenDriverWake(id) => {
+                    app.poll_wry_bindgen_driver(id);
                 }
 
                 // Run a closure with DesktopService access on the main thread

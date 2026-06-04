@@ -2,7 +2,6 @@ use crate::DesktopService;
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 use tokio::sync::oneshot;
-use wry_bindgen::wry::WryBindgenEvent;
 
 type DesktopServiceCallbackFn = Box<dyn FnOnce(&DesktopService) + Send>;
 
@@ -132,9 +131,9 @@ impl UserWindowEvent {
         }
     }
 
-    pub(crate) fn wry_bindgen_event(event: WryBindgenEvent) -> Self {
+    pub(crate) fn wry_bindgen_driver_wake(id: WindowId) -> Self {
         Self {
-            variant: UserWindowEventVariant::WryBindgenEvent(event),
+            variant: UserWindowEventVariant::WryBindgenDriverWake(id),
         }
     }
 
@@ -195,8 +194,8 @@ pub(crate) enum UserWindowEventVariant {
     /// Gracefully shutdown the entire app
     Shutdown,
 
-    /// wry-bindgen IPC event
-    WryBindgenEvent(WryBindgenEvent),
+    /// Wake the wry-bindgen driver for a webview.
+    WryBindgenDriverWake(WindowId),
 
     /// Run a closure with access to a specific window's DesktopService on the main thread
     RunWithDesktopService {
