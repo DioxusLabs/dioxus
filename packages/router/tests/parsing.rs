@@ -162,3 +162,62 @@ fn optional_query_segments_parse() {
         route_without_query_and_other
     );
 }
+
+#[test]
+fn child_route_preserves_query_and_hash() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/search?:query&:word_count")]
+        Search { query: String, word_count: usize },
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[child("")]
+        App { child: ChildRoute },
+    }
+
+    #[component]
+    fn Search(query: String, word_count: usize) -> Element {
+        unimplemented!()
+    }
+
+    // A query on a child route must survive parsing.
+    let parsed = Route::from_str("/search?query=hello&word_count=8").unwrap();
+    assert_eq!(
+        parsed,
+        Route::App {
+            child: ChildRoute::Search {
+                query: "hello".to_string(),
+                word_count: 8,
+            }
+        }
+    );
+
+    // to_string -> from_str must round-trip.
+    let original = Route::App {
+        child: ChildRoute::Search {
+            query: "hello".to_string(),
+            word_count: 8,
+        },
+    };
+    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
+
+    // Values that percent-encode must round-trip without corruption.
+    let encoded = Route::App {
+        child: ChildRoute::Search {
+            query: "a/b c".to_string(),
+            word_count: 1,
+        },
+    };
+    assert_eq!(Route::from_str(&encoded.to_string()).unwrap(), encoded);
+
+    let reserved = Route::App {
+        child: ChildRoute::Search {
+            query: "a#b".to_string(),
+            word_count: 1,
+        },
+    };
+    assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
+    assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
+}

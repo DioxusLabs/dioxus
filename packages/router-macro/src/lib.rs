@@ -527,17 +527,17 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
-                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
-                    let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    let (route, raw_hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, raw_query) = route.split_once('?').unwrap_or((route, ""));
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
                     // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
-                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(query)
+                    let query = dioxus_router::exports::percent_encoding::percent_decode_str(raw_query)
                         .decode_utf8()
-                        .unwrap_or(query.into());
-                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(hash)
+                        .unwrap_or(raw_query.into());
+                    let hash = dioxus_router::exports::percent_encoding::percent_decode_str(raw_hash)
                         .decode_utf8()
-                        .unwrap_or(hash.into());
+                        .unwrap_or(raw_hash.into());
                     let mut segments = route.split('/').map(|s| {
                         dioxus_router::exports::percent_encoding::percent_decode_str(s)
                             .decode_utf8()

@@ -377,6 +377,14 @@ impl RouteTreeSegmentData<'_> {
                                 trailing += &*seg;
                                 trailing += "/";
                             }
+                            if !raw_query.is_empty() {
+                                trailing.push('?');
+                                trailing.push_str(raw_query);
+                            }
+                            if !raw_hash.is_empty() {
+                                trailing.push('#');
+                                trailing.push_str(raw_hash);
+                            }
                             match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_variant(#variant_parse_error::ChildRoute(err))) {
                                 Ok(#child_name) => {
                                     #print_route_segment
