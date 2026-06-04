@@ -1,5 +1,6 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc;
 use tao::window::WindowId;
 use tokio::sync::oneshot;
 
@@ -22,6 +23,19 @@ impl DesktopServiceCallback {
         F: FnOnce(&DesktopService) -> T + Send + 'static,
     {
         let (sender, receiver) = oneshot::channel();
+        let callback: DesktopServiceCallbackFn = Box::new(move |desktop| {
+            let _ = sender.send(f(desktop));
+        });
+
+        (Self { callback }, receiver)
+    }
+
+    pub(crate) fn new_blocking<T, F>(f: F) -> (Self, mpsc::Receiver<T>)
+    where
+        T: Send + 'static,
+        F: FnOnce(&DesktopService) -> T + Send + 'static,
+    {
+        let (sender, receiver) = mpsc::channel();
         let callback: DesktopServiceCallbackFn = Box::new(move |desktop| {
             let _ = sender.send(f(desktop));
         });

@@ -9,9 +9,9 @@ use dioxus_html::PlatformEventData;
 use dioxus_web_sys_events::{Synthetic, virtual_event_from_websys_event};
 use std::any::Any;
 use std::rc::Rc;
-use wry_bindgen::prelude::*;
+use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen(crate = wry_bindgen, inline_js = r#"
+#[wasm_bindgen(inline_js = r#"
 export function setEventHandler(handler) {
     window.rustEventHandler = handler;
 }
@@ -76,7 +76,7 @@ fn handle_event_from_js(
     element_id: u64,
     bubbles: bool,
 ) -> bool {
-    use wry_bindgen::JsCast;
+    use wasm_bindgen::JsCast;
 
     // Get the target element for the event
     let target = event

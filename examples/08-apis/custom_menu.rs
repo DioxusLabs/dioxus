@@ -1,7 +1,7 @@
 //! This example shows how to use a custom menu bar with Dioxus desktop.
 //! This example is not supported on the mobile or web renderers.
 
-use dioxus::desktop::{muda::*, use_muda_event_handler};
+use dioxus::desktop::{muda::*, use_muda_event_handler, window};
 use dioxus::prelude::*;
 
 fn main() {
@@ -33,9 +33,11 @@ fn main() {
 
 fn app() -> Element {
     let mut text = use_signal(String::new);
+
     // You can use the `use_muda_event_handler` hook to run code when a menu event is triggered.
     use_muda_event_handler(move |muda_event| {
         if muda_event.id() == "switch-text" {
+            window().set_title("Switched from menu");
             text.set("Switched to text".to_string());
         }
     });

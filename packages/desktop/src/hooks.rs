@@ -8,7 +8,7 @@ use crate::{
     DesktopContext, HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler, assets::*,
     ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
 };
-use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup};
+use dioxus_core::{Runtime, consume_context, current_scope_id, use_hook, use_hook_with_cleanup};
 
 use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
@@ -30,11 +30,10 @@ pub struct WithoutTargetMarker;
 /// Lets [`use_wry_event_handler`] accept either closure shape, requiring `Send` only for the
 /// target-taking form.
 ///
-/// - `FnMut(&Event<UserWindowEvent>)` — stays on the VirtualDom thread (like [`use_asset_handler`]),
-///   does **not** need to be `Send`, and cannot access the [`EventLoopWindowTarget`]. While it runs
-///   the event loop is blocked, so it must not synchronously call back into the main thread (e.g.
-///   blocking [`DesktopContext`] window methods); defer such work with [`dioxus_core::spawn`].
-/// - `FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)` — runs on the main
+/// - `FnMut(&Event<()>)` — stays on the VirtualDom thread (like [`use_asset_handler`]),
+///   does **not** need to be `Send`, and cannot access the [`EventLoopWindowTarget`]. Tao events
+///   that can be safely owned are queued to this handler asynchronously.
+/// - `FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>)` — runs on the main
 ///   event loop thread with access to the target, and therefore must be `Send`.
 ///
 /// The `Marker` type parameter disambiguates the two blanket impls (the technique dioxus uses for
@@ -85,6 +84,21 @@ where
 /// });
 /// ```
 ///
+/// Capturing a [`DesktopContext`] in the target-taking form is rejected because that handler is
+/// moved to the main event loop thread. Use the no-target form if you need to call blocking
+/// [`DesktopContext`] APIs.
+///
+/// ```rust, compile_fail
+/// use dioxus_desktop::{tao::event::Event, use_window, use_wry_event_handler};
+///
+/// fn app() {
+///     let desktop = use_window();
+///     use_wry_event_handler(move |_event: &Event<()>, _target: &_| {
+///         desktop.set_title("will not compile");
+///     });
+/// }
+/// ```
+///
 /// The handler is removed automatically when the component is dropped.
 pub fn use_wry_event_handler<Marker>(
     handler: impl IntoWryEventHandler<Marker> + 'static,
@@ -97,15 +111,20 @@ pub fn use_wry_event_handler<Marker>(
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 fn use_dom_event_handler(
-    handler: impl FnMut(UserWindowEvent) + 'static,
+    mut handler: impl FnMut(UserWindowEvent) + 'static,
     mut forward_event: impl FnMut(&UserWindowEvent) -> Option<UserWindowEvent> + Send + 'static,
 ) -> WryEventHandler {
+    let runtime = Runtime::current();
+    let scope_id = current_scope_id();
     use_hook_with_cleanup(
         move || {
             let registry: SharedCallbackRegistry = consume_context();
-            let dom_handler = registry
-                .borrow_mut()
-                .register_event_handler(Box::new(handler));
+            let dom_handler =
+                registry
+                    .borrow_mut()
+                    .register_event_handler(Box::new(move |event| {
+                        runtime.in_scope(scope_id, || handler(event));
+                    }));
             let window = window();
             let dom_tx = window.dom_event_sender();
             window

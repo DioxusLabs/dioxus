@@ -227,12 +227,13 @@ futures = "0.3.32"
 futures-channel = "0.3.32"
 futures-util = { version = "0.3.32", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.106"
-wasm-bindgen-futures = "0.4.50"
+wasm-bindgen = { version = "=0.2.122-alpha.4", package = "wasm-bindgen-x" }
+wasm-bindgen-futures = { version = "=0.4.72-alpha.4", package = "wasm-bindgen-futures-x" }
 wasm-bindgen-test = "0.3.71"
-js-sys = { path = "../review/wasm-bindgen/crates/js-sys", package = "js-sys" }
-web-sys = { path = "../review/wasm-bindgen/crates/web-sys", package = "web-sys", default-features = false }
-wry-bindgen = { path = "../review/wry-bindgen" }
+js-sys = { version = "=0.3.99-alpha.4", package = "js-sys-x" }
+web-sys = { version = "=0.3.99-alpha.4", package = "web-sys-x", default-features = false }
+wry-bindgen = "=0.2.122-alpha.4"
+wry-bindgen-runtime = "0.1.0"
 html_parser = "0.7.0"
 thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
@@ -489,7 +490,7 @@ tower-http = { workspace = true, features = ["timeout"] }
 pollster = "0.4.0"
 
 web-sys = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
-wasm-bindgen = { path = "../review/shims/wasm-bindgen" }
+wasm-bindgen = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }

@@ -13,6 +13,7 @@ use dioxus_core::{Callback, VirtualDom};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
+    marker::PhantomData,
     pin::Pin,
     rc::Rc,
     sync::Arc,
@@ -20,7 +21,7 @@ use std::{
 use tao::{
     dpi::{PhysicalPosition, PhysicalSize, Position, Size},
     error::{ExternalError, NotSupportedError},
-    event::Event,
+    event::{Event, WindowEvent},
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     monitor::MonitorHandle,
     window::{
@@ -92,16 +93,31 @@ pub fn window() -> DesktopContext {
     dioxus_core::consume_context()
 }
 
-/// A handle to the [`DesktopService`] that can be passed around.
 #[derive(Clone)]
-pub struct DesktopContext {
+pub(crate) struct DesktopContextInner {
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
     /// Channel to send events to the DOM thread for the inverted callback pattern.
     dom_tx: UnboundedSender<VirtualDomEvent>,
 }
 
+/// A handle to the [`DesktopService`] for the current VirtualDom thread.
+#[derive(Clone)]
+pub struct DesktopContext {
+    inner: DesktopContextInner,
+    // Keep this handle on the thread it was created for. Blocking desktop calls from the Tao event
+    // loop thread can deadlock because they send work to that same event loop and wait for it.
+    unsend: PhantomData<*const ()>,
+}
+
 impl DesktopContext {
+    fn from_inner(inner: DesktopContextInner) -> Self {
+        Self {
+            inner,
+            unsend: PhantomData,
+        }
+    }
+
     /// Create a new [`DesktopContext`] from an event loop proxy.
     ///
     /// # Arguments
@@ -120,11 +136,11 @@ impl DesktopContext {
         window_id: WindowId,
         dom_tx: UnboundedSender<VirtualDomEvent>,
     ) -> Self {
-        Self {
+        Self::from_inner(DesktopContextInner {
             proxy,
             window_id,
             dom_tx,
-        }
+        })
     }
 
     /// Run a closure on the main thread with access to the [`DesktopService`].
@@ -159,9 +175,10 @@ impl DesktopContext {
     {
         let (callback, receiver) = DesktopServiceCallback::new(f);
 
-        self.proxy
+        self.inner
+            .proxy
             .send_event(UserWindowEvent::run_with_desktop_service(
-                self.window_id,
+                self.inner.window_id,
                 callback,
             ))
             .expect("Event loop has been dropped");
@@ -174,9 +191,17 @@ impl DesktopContext {
         T: Send + 'static,
         F: FnOnce(&DesktopService) -> T + Send + 'static,
     {
-        self.run_with_desktop_service(f)
-            .blocking_recv()
-            .expect("Failed to receive result")
+        let (callback, receiver) = DesktopServiceCallback::new_blocking(f);
+
+        self.inner
+            .proxy
+            .send_event(UserWindowEvent::run_with_desktop_service(
+                self.inner.window_id,
+                callback,
+            ))
+            .expect("Event loop has been dropped");
+
+        receiver.recv().expect("Failed to receive result")
     }
 
     proxy_desktop_service_method! {
@@ -243,11 +268,11 @@ impl DesktopContext {
 
     /// Returns the unique identifier of the window.
     pub fn window_id(&self) -> WindowId {
-        self.window_id
+        self.inner.window_id
     }
 
     pub(crate) fn dom_event_sender(&self) -> UnboundedSender<VirtualDomEvent> {
-        self.dom_tx.clone()
+        self.inner.dom_tx.clone()
     }
 
     proxy_window_method! {
@@ -547,14 +572,10 @@ impl DesktopContext {
     /// Register a wry event handler whose closure stays on the VirtualDom thread (no `Send` bound).
     ///
     /// The closure itself lives in this window's [`DomCallbackRegistry`]; this method only sets up
-    /// a small `Send` forwarder on the main thread. When a wry event arrives, the forwarder hands
-    /// the DOM thread a reference to the event and **blocks the event loop** until the handler
-    /// returns, which keeps the borrowed event valid for the duration of the call.
-    ///
-    /// Because the event loop is parked while the handler runs, the handler must not synchronously
-    /// call back into the main thread (e.g. blocking [`DesktopContext`] window methods such as
-    /// [`Self::set_title`]); defer those with [`dioxus_core::spawn`] instead, or the two threads
-    /// will deadlock.
+    /// a small `Send` forwarder on the main thread. When a wry event arrives, the forwarder converts
+    /// events Tao can safely own into `'static` events and queues them for the DOM thread without
+    /// blocking the event loop. Tao events that borrow from the event loop, such as
+    /// [`WindowEvent::ScaleFactorChanged`], are left untouched and not forwarded.
     ///
     /// [`DomCallbackRegistry`]: crate::dom_thread::DomCallbackRegistry
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -562,16 +583,18 @@ impl DesktopContext {
         &self,
         handler: impl FnMut(&Event<()>) + 'static,
     ) -> WryEventHandler {
-        let dom_tx = self.dom_tx.clone();
+        let dom_tx = self.inner.dom_tx.clone();
         let dom_handler = {
-            use dioxus_core::consume_context;
+            use dioxus_core::{Runtime, consume_context, current_scope_id};
 
             let registry: SharedCallbackRegistry = consume_context();
+            let runtime = Runtime::current();
+            let scope_id = current_scope_id();
             let mut handler = handler;
             registry
                 .borrow_mut()
                 .register_wry_event_handler(Box::new(move |event| {
-                    handler(&event);
+                    runtime.in_scope(scope_id, || handler(&event));
                     event
                 }))
         };
@@ -579,37 +602,35 @@ impl DesktopContext {
             desktop.create_raw_wry_event_handler(move |event, _target| {
                 use crate::dom_thread::DomCallbackRegistry;
 
-                struct AssertEventHandlerStaticSend<T: Send + 'static>(T);
-                // Ensure the event handler's event is `Send + 'static`
-                _ = |_: AssertEventHandlerStaticSend<Event<'static, ()>>| {};
                 let event = match event.map_nonuser_event() {
                     Ok(event) => event,
                     Err(user_event) => return user_event,
                 };
 
-                // SAFETY: We are transmuting the event to have a 'static lifetime, but this is safe because we block the event loop until the handler returns, which keeps the original borrowed event alive for the duration of the handler.
-                let event =
-                    unsafe { std::mem::transmute::<Event<'_, ()>, Event<'static, ()>>(event) };
-                let (result_tx, result) = std::sync::mpsc::channel();
-                // Forward the borrowed event to the DOM thread and block until the handler has run,
-                // which keeps the event alive for the duration of the call. If the send fails or the
-                // DOM thread is gone, `reply_tx` is dropped and `recv` returns immediately.
+                if matches!(
+                    event,
+                    Event::WindowEvent {
+                        event: WindowEvent::ScaleFactorChanged { .. },
+                        ..
+                    }
+                ) {
+                    return event
+                        .map_nonuser_event()
+                        .expect("non-user event stays non-user when static forwarding is skipped");
+                }
+
+                let event = event
+                    .to_static()
+                    .expect("only ScaleFactorChanged contains non-static data");
+                let return_event = event.clone();
                 let callback = move |registry: &mut DomCallbackRegistry| {
-                    let event = registry.invoke_wry_event_handler(dom_handler, event);
-                    let _ = result_tx.send(event);
+                    registry.invoke_wry_event_handler(dom_handler, event);
                 };
                 let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(callback)));
-                // Block the event loop until the handler has run and the event is sent back, keeping the borrowed event valid for the duration of the handler.
-                let event = result
-                    .recv()
-                    .expect("Wry event handler failed to send result back to main thread");
-                // SAFETY: This restores the lifetime erased above after the DOM-thread handler has
-                // returned while the original event is still alive on this stack frame.
-                let event =
-                    unsafe { std::mem::transmute::<Event<'static, ()>, Event<'_, ()>>(event) };
-                event
+
+                return_event
                     .map_nonuser_event()
-                    .expect("non-user event stays non-user after being passed to the handler")
+                    .expect("non-user event stays non-user after being queued for the handler")
             })
         })
         .with_dom_handler(dom_handler)
@@ -656,7 +677,7 @@ impl DesktopContext {
             .register_asset_handler(name.clone(), Box::new(handler));
 
         // Set up forwarding on the main thread
-        let dom_tx = self.dom_tx.clone();
+        let dom_tx = self.inner.dom_tx.clone();
         let handler_name = name.clone();
         self.run_with_desktop_service_blocking(move |desktop| {
             // Register a forwarder that sends requests to the DOM thread
@@ -709,7 +730,7 @@ impl DesktopContext {
             .register_shortcut_callback(Box::new(callback));
 
         // Set up forwarding on the main thread
-        let dom_tx = self.dom_tx.clone();
+        let dom_tx = self.inner.dom_tx.clone();
         let result = self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_shortcut(hotkey, move |state| {
                 let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
@@ -861,7 +882,7 @@ impl DesktopService {
         &self,
         dom: PendingDomId,
         cfg: Config,
-        sender: futures_channel::oneshot::Sender<DesktopContext>,
+        sender: futures_channel::oneshot::Sender<DesktopContextInner>,
     ) {
         let window = PendingWebview::from_pending_dom(cfg, dom, sender);
         self.queue_new_window(window);
@@ -1044,28 +1065,28 @@ impl DesktopService {
         self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
-    /// Get a proxy to this [`DesktopService`] that can be used from any thread.
+    /// Get a proxy to this [`DesktopService`] for the current VirtualDom thread.
     ///
     /// The proxy allows running closures on the main thread with access to the
-    /// [`DesktopService`]. This is useful for scenarios where you need to interact
-    /// with the desktop window from a background thread.
+    /// [`DesktopService`].
     ///
     /// # Example
     ///
     /// ```rust, ignore
     /// let proxy = window().proxy();
     ///
-    /// // Can be sent to another thread
-    /// std::thread::spawn(move || {
-    ///     let result = proxy
-    ///         .run_with_desktop_service(|desktop| desktop.window.title().to_string())
-    ///         .blocking_recv()
-    ///         .expect("Failed to receive result");
-    ///     println!("Window title: {}", result);
-    /// });
+    /// let result = proxy
+    ///     .run_with_desktop_service(|desktop| desktop.window.title().to_string())
+    ///     .blocking_recv()
+    ///     .expect("Failed to receive result");
+    /// println!("Window title: {}", result);
     /// ```
     pub fn proxy(&self) -> DesktopContext {
-        DesktopContext {
+        DesktopContext::from_inner(self.proxy_inner())
+    }
+
+    pub(crate) fn proxy_inner(&self) -> DesktopContextInner {
+        DesktopContextInner {
             proxy: self.shared.proxy.clone(),
             window_id: self.window.id(),
             dom_tx: self.dom_tx.clone(),
@@ -1142,7 +1163,7 @@ fn is_main_thread() -> bool {
 /// # }
 /// ```
 pub struct PendingDesktopContext {
-    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
+    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContextInner>,
 }
 
 impl PendingDesktopContext {
@@ -1155,7 +1176,7 @@ impl PendingDesktopContext {
 
     /// Try to resolve the pending context into a [`DesktopContext`].
     pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
-        self.receiver.await
+        self.receiver.await.map(DesktopContext::from_inner)
     }
 }
 

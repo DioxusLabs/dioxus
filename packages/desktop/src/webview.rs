@@ -1,10 +1,11 @@
 use crate::PendingDesktopContext;
 use crate::app::MakeVirtualDom;
+use crate::desktop_context::DesktopContextInner;
 use crate::dom_thread::{PendingDomId, VirtualDomHandle};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
-    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    Config, DesktopService, app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
 use dioxus_hooks::to_owned;
 use std::{
@@ -18,7 +19,7 @@ use tao::{
     window::WindowId,
 };
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
-use wry_bindgen::wry::{WryBindgen, WryBindgenWebviewDriver};
+use wry_bindgen_runtime::{WryBindgen, WryBindgenWebviewDriver};
 
 /// This struct manages the webview's communication with the VirtualDom thread.
 ///
@@ -567,7 +568,7 @@ impl WebviewInstance {
 pub(crate) struct PendingWebview {
     dom: PendingDom,
     cfg: Config,
-    sender: futures_channel::oneshot::Sender<DesktopContext>,
+    sender: futures_channel::oneshot::Sender<DesktopContextInner>,
 }
 
 pub(crate) enum PendingDom {
@@ -590,7 +591,7 @@ impl PendingWebview {
     pub(crate) fn from_pending_dom(
         cfg: Config,
         dom: PendingDomId,
-        sender: futures_channel::oneshot::Sender<DesktopContext>,
+        sender: futures_channel::oneshot::Sender<DesktopContextInner>,
     ) -> Self {
         Self {
             cfg,
@@ -607,7 +608,7 @@ impl PendingWebview {
         let window = WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
 
         // Return the desktop service proxy to the pending future
-        _ = self.sender.send(window.desktop_context.proxy());
+        _ = self.sender.send(window.desktop_context.proxy_inner());
 
         window
     }
