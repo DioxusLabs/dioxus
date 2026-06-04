@@ -211,4 +211,13 @@ fn child_route_preserves_query_and_hash() {
         },
     };
     assert_eq!(Route::from_str(&encoded.to_string()).unwrap(), encoded);
+
+    let reserved = Route::App {
+        child: ChildRoute::Search {
+            query: "a#b".to_string(),
+            word_count: 1,
+        },
+    };
+    assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
+    assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
