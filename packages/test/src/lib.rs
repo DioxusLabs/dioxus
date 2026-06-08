@@ -23,7 +23,8 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::{eq, inner_html, render};
+//! use dioxus_test::{inner_html, render};
+//! use test_that::matchers::eq;
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -55,7 +56,8 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::{eq, inner_html, render};
+//! use dioxus_test::{inner_html, render};
+//! use test_that::matchers::eq;
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -95,6 +97,7 @@
 //! ```
 //! use dioxus::prelude::*;
 //! use dioxus_test::render;
+//! use test_that::matchers::eq;
 //!
 //! #[component]
 //! fn MyComponent() -> Element {

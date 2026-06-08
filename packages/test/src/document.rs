@@ -195,6 +195,7 @@ impl DocumentTester {
     /// ```rust
     /// # use dioxus::prelude::*;
     /// # use dioxus_test::*;
+    /// # use test_that::prelude::*;
     /// #[component]
     /// fn AComponent() -> Element {
     ///    let mut click_count = use_signal(|| 0);
@@ -211,9 +212,9 @@ impl DocumentTester {
     /// }
     /// # async fn run_test() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let mut tester = dioxus_test::render(AComponent).build();
-    /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 0"))).await?;
+    /// tester.query("#click-count").expect(inner_html(contains_substring("Click count: 0"))).await?;
     /// tester.query("button").click().await?;
-    /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 1"))).await?;
+    /// tester.query("#click-count").expect(inner_html(contains_substring("Click count: 1"))).await?;
     /// # Ok(())
     /// # }
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(run_test()).unwrap();
@@ -303,7 +304,8 @@ impl TryIntoSelector for QueryByTestId {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{by_testid, eq, inner_html, render};
+/// use dioxus_test::{by_testid, inner_html, render};
+/// use test_that::matchers::eq;
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
