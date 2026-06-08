@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
-use dioxus_core::{NoOpMutations, generation};
+use dioxus_core::generation;
 use dioxus_renderer_oracle::RendererOracle;
 
 // The tests in this file are intended to be run with Miri, so not all of them contain assertions.

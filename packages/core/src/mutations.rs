@@ -148,93 +148,6 @@ impl<T: WriteMutations + 'static> RenderTargetWriter for T {
     }
 }
 
-/// A `'static` wrapper around a `&mut W` raw pointer. Powers the
-/// `rebuild_into` / `render_immediate_into`
-/// convenience methods, which need to register a borrowed writer in the
-/// `'static`-bounded target registry for the duration of a single call.
-///
-/// The wrapper is only safe to use when the registry entry is removed before
-/// the underlying borrow ends — `VirtualDom::*_into` enforce this by removing
-/// the entry before returning.
-pub(crate) struct BorrowedWriter<W: WriteMutations + 'static> {
-    ptr: *mut W,
-}
-
-impl<W: WriteMutations + 'static> BorrowedWriter<W> {
-    pub(crate) fn new(writer: &mut W) -> Self {
-        Self {
-            ptr: writer as *mut W,
-        }
-    }
-
-    #[inline]
-    fn inner(&mut self) -> &mut W {
-        // SAFETY: `BorrowedWriter` is only registered for the lifetime of the
-        // `*_into` call that constructed it; that call holds the original
-        // `&mut W` borrow live until `remove_render_target` runs, so the
-        // pointer remains valid for the entire window in which the registry
-        // can reach this entry.
-        unsafe { &mut *self.ptr }
-    }
-}
-
-impl<W: WriteMutations + 'static> WriteMutations for BorrowedWriter<W> {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.inner().append_children(id, m)
-    }
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.inner().assign_node_id(path, id)
-    }
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.inner().create_text_node(value, id)
-    }
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.inner().load_template(template, index, id)
-    }
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.inner().replace_node_with(id, m)
-    }
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.inner().insert_children_at_path(path, m)
-    }
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.inner().insert_nodes_after(id, m)
-    }
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.inner().insert_nodes_before(id, m)
-    }
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.inner().set_attribute(name, ns, value, id)
-    }
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.inner().set_node_text(value, id)
-    }
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.inner().create_event_listener(name, id)
-    }
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.inner().remove_event_listener(name, id)
-    }
-    fn remove_node(&mut self, id: ElementId) {
-        self.inner().remove_node(id)
-    }
-    fn push_root(&mut self, id: ElementId) {
-        self.inner().push_root(id)
-    }
-    fn pop_root(&mut self) {
-        self.inner().pop_root()
-    }
-    fn commit(&mut self) {
-        self.inner().commit()
-    }
-}
-
 /// Internal dispatcher used by the diff machinery. Borrows the VDom's target
 /// registry and forwards each call to the writer for the active
 /// `RenderTargetId` (read from the runtime's target stack). Mutations destined
@@ -246,6 +159,7 @@ impl<W: WriteMutations + 'static> WriteMutations for BorrowedWriter<W> {
 /// of the target registry has been released).
 pub(crate) struct DiffDispatch<'a> {
     pub(crate) targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+    root: Option<&'a mut dyn WriteMutations>,
     pub(crate) runtime: Rc<Runtime>,
     /// When `true`, encountering a mutation for an unregistered target id will
     /// lazily insert a `Mutations` collector so the write is captured rather
@@ -263,18 +177,40 @@ impl<'a> DiffDispatch<'a> {
     ) -> Self {
         Self {
             targets,
+            root: None,
+            runtime,
+            auto_create_targets,
+        }
+    }
+
+    pub(crate) fn with_root<W: WriteMutations>(
+        targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+        root: &'a mut W,
+        runtime: Rc<Runtime>,
+        auto_create_targets: bool,
+    ) -> Self {
+        Self {
+            targets,
+            root: Some(root),
             runtime,
             auto_create_targets,
         }
     }
 
     #[inline]
-    fn current(&mut self) -> Option<&mut dyn RenderTargetWriter> {
+    fn current(&mut self) -> Option<&mut dyn WriteMutations> {
         let id = self.runtime.current_render_target_id();
+        if id == RenderTargetId::ROOT
+            && let Some(root) = self.root.as_deref_mut()
+        {
+            return Some(root);
+        }
         if self.auto_create_targets && !self.targets.contains_key(&id) {
             self.targets.insert(id, Box::new(Mutations::default()));
         }
-        self.targets.get_mut(&id).map(|b| &mut **b)
+        self.targets
+            .get_mut(&id)
+            .map(|b| &mut **b as &mut dyn WriteMutations)
     }
 }
 

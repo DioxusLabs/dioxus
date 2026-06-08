@@ -7,7 +7,7 @@ use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     ComponentFunction, Element, Mutations, RenderTargetId,
     arena::ElementId,
-    innerlude::{DirtyScopes, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
+    innerlude::{SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
 };
@@ -15,7 +15,7 @@ use crate::{Task, VComponent};
 use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -203,7 +203,7 @@ use tracing::instrument;
 pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
-    pub(crate) dirty_scopes: DirtyScopes,
+    pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
     pub(crate) runtime: Rc<Runtime>,
 
@@ -434,24 +434,54 @@ impl VirtualDom {
 
     /// Borrow `writer` at `ROOT` for the duration of a rebuild. Convenience
     /// for tests / single-target hosts that don't want to give up ownership.
-    ///
-    /// Internally registers a thin pointer-wrapper at `ROOT` that forwards
-    /// every call to `writer`, then removes it before returning.
     #[doc(hidden)]
-    pub fn rebuild_into<W: WriteMutations + 'static>(&mut self, writer: &mut W) {
-        let wrap = crate::mutations::BorrowedWriter::new(writer);
-        self.insert_render_target(RenderTargetId::ROOT, wrap);
-        self.rebuild();
-        self.remove_render_target(RenderTargetId::ROOT);
+    pub fn rebuild_into<W: WriteMutations>(&mut self, writer: &mut W) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+        let runtime = self.runtime.clone();
+        let mut targets = std::mem::take(&mut self.targets);
+        let mut dispatch = crate::mutations::DiffDispatch::with_root(
+            &mut targets,
+            writer,
+            runtime,
+            self.auto_create_targets,
+        );
+
+        self.rebuild_with_writer(&mut dispatch);
+        drop(dispatch);
+
+        self.commit_root_writer(writer);
+        self.commit_targets(&mut targets, Some(RenderTargetId::ROOT));
+        self.targets = targets;
+
+        self.drain_remaining_effects();
     }
 
     /// Borrow `writer` at `ROOT` for the duration of a [`Self::render_immediate`] call.
     #[doc(hidden)]
-    pub fn render_immediate_into<W: WriteMutations + 'static>(&mut self, writer: &mut W) {
-        let wrap = crate::mutations::BorrowedWriter::new(writer);
-        self.insert_render_target(RenderTargetId::ROOT, wrap);
-        self.render_immediate();
-        self.remove_render_target(RenderTargetId::ROOT);
+    pub fn render_immediate_into<W: WriteMutations>(&mut self, writer: &mut W) {
+        self.process_events();
+
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+        let runtime = self.runtime.clone();
+        let mut targets = std::mem::take(&mut self.targets);
+        let mut dispatch = crate::mutations::DiffDispatch::with_root(
+            &mut targets,
+            writer,
+            runtime,
+            self.auto_create_targets,
+        );
+
+        self.render_immediate_with_writer(&mut dispatch);
+        drop(dispatch);
+
+        self.commit_root_writer(writer);
+        self.commit_targets(&mut targets, Some(RenderTargetId::ROOT));
+        self.targets = targets;
+
+        self.drain_remaining_effects();
+        self.runtime.finish_render();
     }
 
     /// Mark all scopes as dirty. Each scope will be re-rendered.
@@ -613,26 +643,24 @@ impl VirtualDom {
         // target need to fire now — there's no render pass coming to flush
         // them. Effects under registered targets fire when that target's next
         // commit runs.
-        let orphan_effects: Vec<_> = {
-            let mut pending = self.runtime.pending_effects.borrow_mut();
-            let all = std::mem::take(&mut *pending);
-            let mut orphans = Vec::new();
-            let mut remaining = std::collections::BTreeSet::new();
-            for effect in all {
-                let belongs_to_registered_target = self
-                    .runtime
-                    .try_get_state(effect.order.id)
-                    .map(|s| self.targets.contains_key(&s.target_id()))
-                    .unwrap_or(false);
-                if belongs_to_registered_target {
-                    remaining.insert(effect);
-                } else {
-                    orphans.push(effect);
-                }
+        let mut orphan_effects = Vec::new();
+        let mut remaining_effects = BTreeSet::new();
+        while let Some(effect) = self.pop_effect() {
+            let belongs_to_registered_target = self
+                .runtime
+                .try_get_state(effect.order.id)
+                .map(|s| self.targets.contains_key(&s.target_id()))
+                .unwrap_or(false);
+            if belongs_to_registered_target {
+                remaining_effects.insert(effect);
+            } else {
+                orphan_effects.push(effect);
             }
-            *pending = remaining;
-            orphans
-        };
+        }
+        self.runtime
+            .pending_effects
+            .borrow_mut()
+            .extend(remaining_effects);
         for effect in orphan_effects {
             effect.run();
         }
@@ -693,14 +721,6 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        let new_nodes = self
-            .runtime
-            .clone()
-            .while_rendering(|| self.run_scope(ScopeId::ROOT));
-
-        let new_nodes = LastRenderedNode::new(new_nodes);
-
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Lend the registry to the diff dispatcher for the rebuild pass.
         let runtime = self.runtime.clone();
@@ -708,21 +728,13 @@ impl VirtualDom {
         let mut dispatch =
             crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
 
-        let m = self.create_scope(Some(&mut dispatch), ScopeId::ROOT, new_nodes, None);
-        dispatch.append_children(ElementId::ROOT, m);
+        self.rebuild_with_writer(&mut dispatch);
+        drop(dispatch);
 
-        for (target_id, writer) in targets.iter_mut() {
-            writer.commit();
-            for effect in self.runtime.drain_effects_for_target(*target_id) {
-                effect.run();
-            }
-        }
-
+        self.commit_targets(&mut targets, None);
         self.targets = targets;
 
-        for effect in self.runtime.drain_remaining_effects() {
-            effect.run();
-        }
+        self.drain_remaining_effects();
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without
@@ -745,6 +757,31 @@ impl VirtualDom {
         let mut dispatch =
             crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
 
+        self.render_immediate_with_writer(&mut dispatch);
+        drop(dispatch);
+
+        self.commit_targets(&mut targets, None);
+        self.targets = targets;
+
+        self.drain_remaining_effects();
+        self.runtime.finish_render();
+    }
+
+    fn rebuild_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
+        let new_nodes = self
+            .runtime
+            .clone()
+            .while_rendering(|| self.run_scope(ScopeId::ROOT));
+
+        let new_nodes = LastRenderedNode::new(new_nodes);
+
+        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
+
+        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+        to.append_children(ElementId::ROOT, m);
+    }
+
+    fn render_immediate_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
         while let Some(work) = self.pop_work() {
             match work {
                 Work::PollTask(task) => {
@@ -753,30 +790,40 @@ impl VirtualDom {
                 }
                 Work::RerunScope(scope) => {
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(&mut dispatch), scope.id);
+                        self.run_and_diff_scope(Some(to), scope.id);
                     });
                 }
             }
         }
+    }
 
-        // Commit per target and run that subtree's effects so they observe a
-        // DOM that already reflects this target's edits.
+    fn commit_targets(
+        &mut self,
+        targets: &mut BTreeMap<RenderTargetId, Box<dyn crate::mutations::RenderTargetWriter>>,
+        skip: Option<RenderTargetId>,
+    ) {
         for (target_id, writer) in targets.iter_mut() {
+            if Some(*target_id) == skip {
+                continue;
+            }
             writer.commit();
             for effect in self.runtime.drain_effects_for_target(*target_id) {
                 effect.run();
             }
         }
-        self.targets = targets;
+    }
 
-        // Any effects belonging to scopes whose target was never registered
-        // (SSR-style or orphaned portals) still need to fire so hook cleanup
-        // and one-shot side effects don't leak.
+    fn commit_root_writer(&mut self, writer: &mut impl WriteMutations) {
+        writer.commit();
+        for effect in self.runtime.drain_effects_for_target(RenderTargetId::ROOT) {
+            effect.run();
+        }
+    }
+
+    fn drain_remaining_effects(&mut self) {
         for effect in self.runtime.drain_remaining_effects() {
             effect.run();
         }
-
-        self.runtime.finish_render();
     }
 
     /// [`Self::render_immediate`] into a single root-target `Mutations`

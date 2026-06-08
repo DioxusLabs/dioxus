@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-use dioxus::prelude::dioxus_core::NoOpMutations;
 use dioxus::prelude::*;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 

@@ -399,9 +399,6 @@ impl SuspenseBoundaryProps {
                     // and we want to observe that before committing to a fallback render.
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
                         suspended_nodes.diff_node(&new_suspended_nodes, dom, to.as_deref_mut());
-                        while let Some(order) = dom.pop_dirty_descendant_of(scope_id) {
-                            dom.run_and_diff_scope(to.as_deref_mut(), order.id);
-                        }
                     });
 
                     if !suspense_context.suspended_futures().is_empty() {
@@ -432,57 +429,21 @@ impl SuspenseBoundaryProps {
                                 new_suspended_nodes.remove_node_inner(dom, None::<&mut M>, false);
                             },
                         );
-                        set_rendered_children(dom, scope_id, LastRenderedNode::Real(new_suspended_nodes));
+                        set_rendered_children(
+                            dom,
+                            scope_id,
+                            LastRenderedNode::Real(new_suspended_nodes),
+                        );
                         mark_suspense_resolved(&suspense_context, dom, scope_id);
                     }
                 }
-                // We have no suspended nodes, and we are not suspended at diff start.
-                // Diff the children normally — but a descendant scope may invoke
-                // `suspend(task)?` during diff. If that happens we need to
-                // retroactively switch this boundary to its fallback so the user
-                // never sees a half-rendered tree.
+                // We have no suspended nodes, and we are not suspended. Just diff the children like normal
                 (None, false) => {
                     suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                        last_rendered_node.diff_node(&children, dom, to.as_deref_mut());
-                        // diff_node queues descendant component scopes for
-                        // diffing instead of running them inline. Flush that
-                        // queue here so any `suspend(task)?` they emit lands in
-                        // `suspense_context.suspended_futures()` before we
-                        // decide whether to commit or fall back.
-                        while let Some(order) = dom.pop_dirty_descendant_of(scope_id) {
-                            dom.run_and_diff_scope(to.as_deref_mut(), order.id);
-                        }
+                        last_rendered_node.diff_node(&children, dom, to);
                     });
 
-                    if suspense_context.suspended_futures().is_empty() {
-                        set_rendered_children(dom, scope_id, children);
-                    } else {
-                        // A descendant suspended during diff. Move the just-diffed
-                        // children into the background and show the fallback.
-                        let new_children: VNode = children.as_vnode().clone();
-                        let new_placeholder =
-                            LastRenderedNode::new(fallback.call(suspense_context.clone()));
-
-                        let parent = dom.get_mounted_parent(new_children.mount.get());
-
-                        suspense_context.in_suspense_placeholder(&dom.runtime(), || {
-                            children.move_node_to_background(
-                                std::slice::from_ref(&new_placeholder),
-                                parent,
-                                dom,
-                                to.as_deref_mut(),
-                            );
-                        });
-
-                        dom.set_mount_mode(new_children.mount.get(), RenderMode::Background);
-
-                        let branch = SuspenseBranch::new(new_children);
-                        store_suspended_branch(dom, scope_id, &branch);
-                        dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
-                        suspense_context.set_suspended_branch(branch);
-
-                        un_resolve_suspense(dom, scope_id);
-                    }
+                    set_rendered_children(dom, scope_id, children);
                 }
                 // We have no suspended nodes, but we just became suspended. Move the children to the background
                 (None, true) => {
@@ -551,7 +512,7 @@ impl SuspenseBoundaryProps {
                         to,
                         |dom| {
                             old_suspended_nodes.diff_node(&children, dom, None::<&mut M>);
-                            promote_resolved_suspense_descendants::<M>(dom, &children);
+                            promote_suspense_mounts_to_foreground::<M>(dom, &children);
                         },
                     );
 
@@ -638,7 +599,7 @@ fn mark_suspense_resolved(
     suspense_context.run_resolved_closures(&dom.runtime);
 }
 
-fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom, vnode: &VNode) {
+fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom, vnode: &VNode) {
     let mount = vnode.mount.get();
     if !mount.mounted() {
         return;
@@ -677,7 +638,7 @@ fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom
                     if let Some(branch) = context.suspended_branch() {
                         let root = branch.root();
                         dom.set_mount_mode(branch.root_mount(), RenderMode::Foreground);
-                        promote_resolved_suspense_descendants::<M>(dom, &root);
+                        promote_suspense_mounts_to_foreground::<M>(dom, &root);
                         dom.scopes[scope_id.0].last_rendered_node =
                             Some(LastRenderedNode::Real(root));
                         context.take_suspended_branch();
@@ -685,12 +646,12 @@ fn promote_resolved_suspense_descendants<M: WriteMutations>(dom: &mut VirtualDom
                 }
 
                 if let Some(rendered) = dom.scopes[scope_id.0].last_rendered_node.clone() {
-                    promote_resolved_suspense_descendants::<M>(dom, &rendered);
+                    promote_suspense_mounts_to_foreground::<M>(dom, &rendered);
                 }
             }
             DynamicNode::Fragment(nodes) => {
                 for node in nodes {
-                    promote_resolved_suspense_descendants::<M>(dom, node);
+                    promote_suspense_mounts_to_foreground::<M>(dom, node);
                 }
             }
             DynamicNode::Text(_) => {}

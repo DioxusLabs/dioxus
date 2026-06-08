@@ -2,7 +2,6 @@ use crate::ScopeId;
 use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
 use crate::innerlude::{Runtime, remove_future, spawn};
-use crate::scheduler::SchedulerMsg;
 use crate::scope_context::ScopeStatus;
 use crate::scope_context::SuspenseLocation;
 use futures_util::task::ArcWake;
@@ -371,6 +370,25 @@ impl TaskType {
     fn runs_during_suspense(&self) -> bool {
         matches!(self, TaskType::Isomorphic | TaskType::Suspended { .. })
     }
+}
+
+/// The type of message that can be sent to the scheduler.
+///
+/// These messages control how the scheduler will process updates to the UI.
+#[derive(Debug)]
+pub(crate) enum SchedulerMsg {
+    /// All components have been marked as dirty, requiring a full render
+    #[allow(unused)]
+    AllDirty,
+
+    /// Immediate updates from Components that mark them as dirty
+    Immediate(ScopeId),
+
+    /// A task has woken and needs to be progressed
+    TaskNotified(slotmap::DefaultKey),
+
+    /// An effect has been queued to run after the next render
+    EffectQueued,
 }
 
 struct LocalTaskHandle {

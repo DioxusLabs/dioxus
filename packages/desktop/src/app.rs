@@ -602,7 +602,7 @@ impl App {
                 return;
             }
 
-            if !self.dom.has_dirty_scopes() {
+            {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
                 #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();

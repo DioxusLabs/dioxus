@@ -32,9 +32,6 @@ impl<T> WriteOnceAttr<T> {
         let value = Rc::new(RefCell::new(Some(value)));
         Self { id, value }
     }
-    pub(crate) fn take(&self) -> Option<T> {
-        self.value.borrow_mut().take()
-    }
 }
 
 impl<T> Clone for WriteOnceAttr<T> {
