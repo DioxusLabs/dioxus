@@ -129,6 +129,17 @@ mod serialize {
                 contents: None,
             }
         }
+
+        /// Create serialized file metadata without eagerly reading the file contents.
+        pub(crate) fn from_file_data(file_data: &FileData) -> Self {
+            Self {
+                path: file_data.path(),
+                size: file_data.size(),
+                last_modified: file_data.last_modified(),
+                content_type: file_data.content_type(),
+                contents: None,
+            }
+        }
     }
 
     impl NativeFileData for SerializedFileData {
