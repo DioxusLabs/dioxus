@@ -75,8 +75,8 @@ async-stream = "0.3.6"
 web-sys = { version = "0.3.98", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
 gloo-net = "0.6.0"
 js-sys = "0.3.98"
-wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
+wasm-bindgen = "0.2.121"
+wasm-bindgen-futures = "0.4.71"
 wasm-streams = "0.4.2"
 content_disposition = "0.4.0"
 
