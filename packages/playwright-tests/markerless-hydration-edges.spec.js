@@ -73,6 +73,10 @@ test("dangerous inner html hydrates host and updates innerHTML", async ({
   await expect(host).toContainText("changed HTML");
 });
 
+// Adjacent dynamic texts merge into one DOM text node during SSR; the walker
+// must split it so each dynamic slice owns its own node. Split offsets are
+// UTF-16 code units (matching JS `Text.splitText`) — splitting mid surrogate
+// pair would corrupt non-BMP text.
 test("adjacent dynamic texts split correctly after hydration", async ({
   page,
 }) => {
@@ -85,12 +89,20 @@ test("adjacent dynamic texts split correctly after hydration", async ({
   await page.locator("#swap-adjacent").click();
   // After swap: a="" and b="CCC". Visible text must be exactly "CCC".
   await expect(div).toHaveText("CCC");
+
+  const utf16 = page.locator("#utf16-text");
+  await expect(utf16).toHaveText("before 💧 | 🌊🌊 after");
+  await page.locator("#utf16-swap").click();
+  // a is now "é💧é" (4 utf16 units) and b is "" → "before é💧é |  after"
+  await expect(utf16).toHaveText("before é💧é |  after");
 });
 
-// Long runs of empty dynamic texts must hydrate in source order in all three
-// position classes (trailing, leading, all-empty). The order is only visible
-// once they become non-empty.
-test("10 empty dynamic texts hydrate in source order in every position", async ({
+// Empty dynamic texts in every position of a text run: long runs
+// (trailing/leading/all-empty), an empty sandwiched between non-empties
+// (addressable via `SynthText` between two `SplitText` cursor moves), and
+// empties separated by static text — all must hydrate in source order and
+// stay individually addressable.
+test("empty dynamic texts hydrate in source order in every position", async ({
   page,
 }) => {
   await page.goto(URL);
@@ -108,59 +120,20 @@ test("10 empty dynamic texts hydrate in source order in every position", async (
   await expect(trailing).toHaveText("HEAD" + labels);
   await expect(leading).toHaveText(labels + "TAIL");
   await expect(allEmpty).toHaveText(labels);
-});
 
-// Non-BMP characters in adjacent dynamic texts. `SplitText` offsets must use
-// UTF-16 code units (matching JS `Text.splitText`) — splitting in the middle
-// of a surrogate pair would corrupt the text. After swap, the lengths change
-// so the runtime emits `set_text` on each id; if the original splits landed
-// on the wrong code unit, the visible text would be off by 1+ chars.
-test("utf-16 multi-code-unit dynamic text splits correctly", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const div = page.locator("#utf16-text");
-  await expect(div).toHaveText("before 💧 | 🌊🌊 after");
-
-  await page.locator("#utf16-swap").click();
-  // a is now "é💧é" (4 utf16 units) and b is "" → "before é💧é |  after"
-  await expect(div).toHaveText("before é💧é |  after");
-});
-
-// An empty dynamic text sandwiched between two non-empty dynamic texts.
-// The walker must address the empty's ElementId via `SynthText` *between*
-// two `SplitText` cursor moves, then later updates must replace its content
-// without disturbing the surrounding mapped texts.
-test("empty dynamic text in middle of run is addressable after hydration", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const div = page.locator("#empty-middle");
-  await expect(div).toHaveText("AAABBB");
-
+  const middle = page.locator("#empty-middle");
+  await expect(middle).toHaveText("AAABBB");
   await page.locator("#fill-middle").click();
-  await expect(div).toHaveText("leftMIDright");
-});
+  await expect(middle).toHaveText("leftMIDright");
 
-test("separated empty dynamic slots hydrate in source order", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const div = page.locator("#separated-empty-slots");
-  await expect(div).toHaveText("S");
-
+  const separated = page.locator("#separated-empty-slots");
+  await expect(separated).toHaveText("S");
   await page.locator("#fill-separated-slot-b").click();
-  await expect(div).toHaveText("SB");
-
+  await expect(separated).toHaveText("SB");
   await page.locator("#fill-separated-slot-a").click();
-  await expect(div).toHaveText("ASB");
+  await expect(separated).toHaveText("ASB");
 });
+
 
 // A pure-text child component flattened into the parent's text-run. SSR
 // emits a single merged text node; the walker must split it so the child
@@ -184,69 +157,44 @@ test("child component contributing to parent text-run hydrates correctly", async
 // real content via `replace_with`. The interpreter's anchor op must resolve
 // against the virtual entry's `{parent, after}` instead of calling
 // `.replaceWith` on a synthesized comment.
-test("virtual placeholder is replaced with content without a comment anchor", async ({
+// Virtual placeholders never materialize comment anchors: an empty slot is
+// replaced with content and back (diff-time `create_placeholder` stays
+// virtual), `insert_after` against a trailing virtual placeholder advances
+// its `after` pointer per append, and `remove(id)` collapsing a hydrated
+// element back to an empty slot injects no comment either.
+test("virtual placeholders anchor replace/insert/remove without comments", async ({
   page,
 }) => {
   await page.goto(URL);
   await page.waitForTimeout(2000);
 
-  const div = page.locator("#placeholder-to-content");
-  await expect(div).toHaveText("before  after");
-
+  const toContent = page.locator("#placeholder-to-content");
+  await expect(toContent).toHaveText("before  after");
   // No `<span#placeholder-content>` and crucially no `<!---->` anchor sitting
   // between the static text contributions.
-  const initialMarkup = await div.evaluate((el) => el.innerHTML);
-  expect(initialMarkup).not.toContain("<!--");
-
+  expect(await toContent.evaluate((el) => el.innerHTML)).not.toContain("<!--");
   await page.locator("#toggle-placeholder").click();
-  await expect(div).toHaveText("before HELLO after");
+  await expect(toContent).toHaveText("before HELLO after");
   await expect(page.locator("#placeholder-content")).toBeVisible();
-
-  // Toggle back: diff-time `create_placeholder` runs and must also stay
-  // virtual (no comment injected).
   await page.locator("#toggle-placeholder").click();
-  await expect(div).toHaveText("before  after");
-  const afterToggleMarkup = await div.evaluate((el) => el.innerHTML);
-  expect(afterToggleMarkup).not.toContain("<!--");
-});
+  await expect(toContent).toHaveText("before  after");
+  expect(await toContent.evaluate((el) => el.innerHTML)).not.toContain("<!--");
 
-// `insert_after` against a virtual placeholder: the placeholder logically
-// sits between HEAD and the appended items. After each append the
-// placeholder's `after` pointer must advance to the new first sibling so the
-// next append still lands on the correct side.
-test("virtual placeholder anchors insert_after in source order", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const div = page.locator("#trailing-placeholder");
-  await expect(div).toHaveText("HEAD");
-
+  const trailing = page.locator("#trailing-placeholder");
+  await expect(trailing).toHaveText("HEAD");
   const button = page.locator("#append-trailing");
   await button.click();
-  await expect(div).toHaveText("HEAD(1)[1]");
+  await expect(trailing).toHaveText("HEAD(1)[1]");
   await button.click();
-  await expect(div).toHaveText("HEAD(2)[1][2]");
+  await expect(trailing).toHaveText("HEAD(2)[1][2]");
   await button.click();
-  await expect(div).toHaveText("HEAD(3)[1][2][3]");
-});
+  await expect(trailing).toHaveText("HEAD(3)[1][2][3]");
 
-// `remove(id)` against a real hydrated element, with its slot replaced by a
-// virtual placeholder. No comment is created for the new empty slot.
-test("hidden conditional collapses to a virtual placeholder", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const div = page.locator("#remove-placeholder");
-  await expect(div).toHaveText("edges PRESENT edges");
-
+  const removable = page.locator("#remove-placeholder");
+  await expect(removable).toHaveText("edges PRESENT edges");
   await page.locator("#hide-removable").click();
-  await expect(div).toHaveText("edges  edges");
-  const markup = await div.evaluate((el) => el.innerHTML);
-  expect(markup).not.toContain("<!--");
+  await expect(removable).toHaveText("edges  edges");
+  expect(await removable.evaluate((el) => el.innerHTML)).not.toContain("<!--");
 });
 
 test("parser-inserted wrapper does not capture hydrated row state", async ({

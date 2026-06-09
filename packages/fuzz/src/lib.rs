@@ -1055,6 +1055,46 @@ fn drive_render(dom: &mut dioxus_core::VirtualDom) {
     dom.render_immediate(&mut dioxus_core::Mutations::default());
 }
 
+thread_local! {
+    /// Shared generation counter for the `warmup_*` scenarios below. Apps read
+    /// it via [`warmup_gen`] to pick which variant to render;
+    /// [`run_generations`] advances it once per render round.
+    static WARMUP_GEN: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// The current warmup generation: 0 during the initial rebuild, then 1, 2, …
+/// for each subsequent render round driven by [`run_generations`].
+fn warmup_gen() -> u32 {
+    WARMUP_GEN.with(|c| c.get())
+}
+
+/// Run a warmup app through `generations` render rounds: reset [`WARMUP_GEN`]
+/// to 0, rebuild against a fresh [`RendererOracle`], then for each generation
+/// `g` in `1..generations` set `WARMUP_GEN = g`, mark the root scope dirty,
+/// and render. Returns the dom and oracle so callers can drive extra custom
+/// rounds.
+fn run_generations(
+    app: fn() -> dioxus_core::Element,
+    generations: u32,
+) -> (
+    dioxus_core::VirtualDom,
+    dioxus_renderer_oracle::RendererOracle,
+) {
+    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+
+    WARMUP_GEN.with(|c| c.set(0));
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    for g in 1..generations {
+        WARMUP_GEN.with(|c| c.set(g));
+        dom.mark_dirty(ScopeId::APP);
+        oracle.render(&mut dom);
+    }
+    (dom, oracle)
+}
+
 /// Drive a small unkeyed fragment of identical-component children through a
 /// re-render so the batched `queue_component_props_diff` fast path in
 /// `diff::iterator::diff_child_pairs` fires (every pair is a same-component,
@@ -1062,9 +1102,6 @@ fn drive_render(dom: &mut dioxus_core::VirtualDom) {
 /// the `Take` iterator monomorphization via a keyed shared-prefix re-render.
 fn warmup_batched_component_props_diff() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
 
     #[derive(Clone, PartialEq, Props)]
     struct ItemProps {
@@ -1076,29 +1113,17 @@ fn warmup_batched_component_props_diff() {
         rsx! { span { "{props.value}" } }
     }
 
-    thread_local! {
-        static UNKEYED_OFFSET: Cell<u32> = const { Cell::new(0) };
-        static KEYED_OFFSET: Cell<u32> = const { Cell::new(0) };
-    }
-
     // --- Unkeyed: exercises the slice-iter monomorphization of
     // `diff_child_pairs`.
     fn unkeyed_app() -> Element {
-        let g = UNKEYED_OFFSET.with(|c| c.get());
+        let g = warmup_gen();
         rsx! {
             for i in 0..20u32 {
                 Item { value: i + g }
             }
         }
     }
-    {
-        let mut dom = VirtualDom::new(unkeyed_app);
-        let mut oracle = RendererOracle::new();
-        oracle.rebuild(&mut dom);
-        UNKEYED_OFFSET.with(|c| c.set(1));
-        dom.mark_dirty(ScopeId::APP);
-        oracle.render(&mut dom);
-    }
+    run_generations(unkeyed_app, 2);
 
     // --- Keyed with stable prefix: exercises the `Take<slice iter>`
     // monomorphization of `diff_child_pairs` reached via
@@ -1106,21 +1131,14 @@ fn warmup_batched_component_props_diff() {
     // `FRAGMENT_WORK_BATCH + 1` keys stable so the shared-prefix walk pumps
     // a same-component batched diff through the fast path.
     fn keyed_app() -> Element {
-        let g = KEYED_OFFSET.with(|c| c.get());
+        let g = warmup_gen();
         rsx! {
             for i in 0..20u32 {
                 Item { key: "{i}", value: i + g }
             }
         }
     }
-    {
-        let mut dom = VirtualDom::new(keyed_app);
-        let mut oracle = RendererOracle::new();
-        oracle.rebuild(&mut dom);
-        KEYED_OFFSET.with(|c| c.set(1));
-        dom.mark_dirty(ScopeId::APP);
-        oracle.render(&mut dom);
-    }
+    run_generations(keyed_app, 2);
 }
 
 /// Drive a keyed shuffle of >FRAGMENT_WORK_BATCH items so
@@ -1129,9 +1147,6 @@ fn warmup_batched_component_props_diff() {
 /// splice.
 fn warmup_keyed_reorder() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
 
     #[derive(Clone, PartialEq, Props)]
     struct ItemProps {
@@ -1143,12 +1158,8 @@ fn warmup_keyed_reorder() {
         rsx! { span { "{props.value}" } }
     }
 
-    thread_local! {
-        static ORDER: Cell<u32> = const { Cell::new(0) };
-    }
-
     fn keyed_shuffle_app() -> Element {
-        let round = ORDER.with(|c| c.get());
+        let round = warmup_gen();
         // Build a permutation of 0..20 that's the identity on round 0 and
         // shuffled on round 1+. The shuffled half forces `diff_keyed_middle`
         // to splice survivors, walking through `collect_splice_mounts`.
@@ -1163,12 +1174,7 @@ fn warmup_keyed_reorder() {
             }
         }
     }
-    let mut dom = VirtualDom::new(keyed_shuffle_app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    ORDER.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
+    run_generations(keyed_shuffle_app, 2);
 }
 
 /// Drive a `SuspenseBoundary` through suspend/resolve transitions so the
@@ -1177,8 +1183,7 @@ fn warmup_keyed_reorder() {
 /// materialized in the renderer arena.
 fn warmup_suspense_hidden_paths() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, generation};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_core::generation;
     use std::cell::Cell;
 
     thread_local! {
@@ -1217,13 +1222,7 @@ fn warmup_suspense_hidden_paths() {
                 }
             }
         }
-        let mut dom = VirtualDom::new(app_a);
-        let mut renderer = RendererOracle::new();
-        renderer.rebuild(&mut dom);
-        for _ in 0..3 {
-            dom.mark_dirty(ScopeId::APP);
-            renderer.render(&mut dom);
-        }
+        run_generations(app_a, 4);
     }
 
     // Scenario B: render normally, then suspend, then re-render with a
@@ -1251,18 +1250,9 @@ fn warmup_suspense_hidden_paths() {
                 }
             }
         }
-        let mut dom = VirtualDom::new(app_b);
-        let mut renderer = RendererOracle::new();
-        renderer.rebuild(&mut dom);
-        // generation 1: suspend
-        dom.mark_dirty(ScopeId::APP);
-        renderer.render(&mut dom);
-        // generation 2: shuffle + still suspending
-        dom.mark_dirty(ScopeId::APP);
-        renderer.render(&mut dom);
-        // generation 3: shuffle again
-        dom.mark_dirty(ScopeId::APP);
-        renderer.render(&mut dom);
+        // generation 1: suspend; generation 2: shuffle + still suspending;
+        // generation 3: shuffle again.
+        run_generations(app_b, 4);
     }
     // Reset for any subsequent warmups.
     SUSPEND_GEN.with(|c| c.set(usize::MAX));
@@ -1315,13 +1305,7 @@ fn warmup_deferred_subtree_check() {
 /// take their `None` branches.
 fn warmup_dropped_scope_anchor_lookup() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, generation};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
-
-    thread_local! {
-        static GEN: Cell<usize> = const { Cell::new(0) };
-    }
+    use dioxus_core::generation;
 
     #[derive(Clone, PartialEq, Props)]
     struct InnerProps {
@@ -1331,7 +1315,7 @@ fn warmup_dropped_scope_anchor_lookup() {
     #[component]
     #[allow(non_snake_case)]
     fn Suspender(props: InnerProps) -> Element {
-        if GEN.with(|c| c.get()) == 1 {
+        if warmup_gen() == 1 {
             let task = spawn(async { std::future::pending::<()>().await });
             suspend(task)?;
         }
@@ -1360,24 +1344,9 @@ fn warmup_dropped_scope_anchor_lookup() {
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut renderer = RendererOracle::new();
-    GEN.with(|c| c.set(0));
-    renderer.rebuild(&mut dom);
-    // gen 1: suspend
-    GEN.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    renderer.render(&mut dom);
-    // gen 2: shrink the suspended fragment from 10 to 4 (drops 6 suspended
-    // child scopes).
-    GEN.with(|c| c.set(2));
-    dom.mark_dirty(ScopeId::APP);
-    renderer.render(&mut dom);
-    // gen 3: remove the boundary entirely.
-    GEN.with(|c| c.set(3));
-    dom.mark_dirty(ScopeId::APP);
-    renderer.render(&mut dom);
-    GEN.with(|c| c.set(0));
+    // gen 1: suspend; gen 2: shrink the suspended fragment from 10 to 4
+    // (drops 6 suspended child scopes); gen 3: remove the boundary entirely.
+    run_generations(app, 4);
 }
 
 /// Suspense + removal: render a suspense boundary, suspend its child, then
@@ -1388,13 +1357,6 @@ fn warmup_dropped_scope_anchor_lookup() {
 /// when scopes get dropped mid-diff.
 fn warmup_suspense_then_remove() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, generation};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
-
-    thread_local! {
-        static REMOVE_GEN: Cell<usize> = const { Cell::new(usize::MAX) };
-    }
 
     #[derive(Clone, PartialEq, Props)]
     struct ChildProps {
@@ -1410,8 +1372,7 @@ fn warmup_suspense_then_remove() {
     }
 
     fn app() -> Element {
-        let g = generation();
-        if g >= REMOVE_GEN.with(|c| c.get()) {
+        if warmup_gen() >= 2 {
             // After the remove gen, render nothing — the boundary and its
             // suspended subtree get fully removed.
             return rsx! { "removed" };
@@ -1426,19 +1387,11 @@ fn warmup_suspense_then_remove() {
         }
     }
 
-    REMOVE_GEN.with(|c| c.set(2));
-    let mut dom = VirtualDom::new(app);
-    let mut renderer = RendererOracle::new();
-    renderer.rebuild(&mut dom);
-    // generation 1: re-render, boundary stays suspended
-    dom.mark_dirty(ScopeId::APP);
-    renderer.render(&mut dom);
-    // generation 2: replace the boundary with plain text — removes the
-    // suspended subtree, exercising remove_node_inner on `PLACEHOLDER`
-    // mounts in the hidden children.
-    dom.mark_dirty(ScopeId::APP);
-    renderer.render(&mut dom);
-    REMOVE_GEN.with(|c| c.set(usize::MAX));
+    // generation 1: re-render, boundary stays suspended; generation 2:
+    // replace the boundary with plain text — removes the suspended subtree,
+    // exercising remove_node_inner on `PLACEHOLDER` mounts in the hidden
+    // children.
+    run_generations(app, 3);
 }
 
 /// One-shot warmup that exercises the multi-priority deferred-priority paths in
@@ -1535,12 +1488,10 @@ fn warmup_portal_target_switch() {
 /// model never uses `use_effect`.
 fn warmup_scope_with_pending_effect() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, current_scope_id, queue_effect};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_core::{ScopeId, current_scope_id, queue_effect};
     use std::cell::Cell;
 
     thread_local! {
-        static SHOW_CHILD: Cell<bool> = const { Cell::new(true) };
         static CHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
         static GRANDCHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
     }
@@ -1564,16 +1515,14 @@ fn warmup_scope_with_pending_effect() {
     }
 
     fn app() -> Element {
-        if SHOW_CHILD.with(|c| c.get()) {
+        if warmup_gen() == 0 {
             rsx! { EffectChild {} }
         } else {
             rsx! { "no child" }
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut renderer = RendererOracle::new();
-    renderer.rebuild(&mut dom);
+    let (mut dom, mut renderer) = run_generations(app, 1);
 
     let child_id = CHILD_SCOPE.with(|c| c.get()).expect("child scope captured");
     let grandchild_id = GRANDCHILD_SCOPE
@@ -1593,7 +1542,7 @@ fn warmup_scope_with_pending_effect() {
 
     // Removing the child triggers `drop_scope(child)`, which then sees its own
     // and its descendant's pending effects and removes their stale entries.
-    SHOW_CHILD.with(|c| c.set(false));
+    WARMUP_GEN.with(|c| c.set(1));
     dom.mark_dirty(ScopeId::APP);
     renderer.render(&mut dom);
 }
@@ -1606,8 +1555,7 @@ fn warmup_scope_with_pending_effect() {
 /// to force a re-run that actually iterates the hook lists.
 fn warmup_before_after_render_hooks() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom, current_scope_id, use_after_render, use_before_render};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_core::{ScopeId, current_scope_id, use_after_render, use_before_render};
     use std::cell::Cell;
 
     thread_local! {
@@ -1629,9 +1577,7 @@ fn warmup_before_after_render_hooks() {
         rsx! { HookedChild {} }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut renderer = RendererOracle::new();
-    renderer.rebuild(&mut dom);
+    let (mut dom, mut renderer) = run_generations(app, 1);
 
     if let Some(hooked) = HOOKED_SCOPE.with(|c| c.get()) {
         dom.mark_dirty(hooked);
@@ -1644,8 +1590,7 @@ fn warmup_before_after_render_hooks() {
 /// `handle_element_return` (which calls `throw_error`) both fire.
 fn warmup_throw_error() {
     use dioxus::prelude::*;
-    use dioxus_core::{CapturedError, RenderError, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_core::{CapturedError, RenderError};
 
     #[component]
     #[allow(non_snake_case)]
@@ -1666,9 +1611,7 @@ fn warmup_throw_error() {
         }
     }
 
-    let mut dom = VirtualDom::new(Boundary);
-    let mut renderer = RendererOracle::new();
-    renderer.rebuild(&mut dom);
+    run_generations(Boundary, 1);
 }
 
 /// Keyed list with a shared left prefix, a fully-replaced middle, and no
@@ -1677,19 +1620,12 @@ fn warmup_throw_error() {
 /// left sibling before the old middle is removed.
 fn warmup_keyed_left_prefix_splice() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
-
-    thread_local! {
-        static GEN: Cell<u32> = const { Cell::new(0) };
-    }
 
     fn app() -> Element {
         // gen 0: [a, x0, x1, x2]; gen 1: [a, p0, p1, p2].
         // "a" is a shared left prefix, the middle keys are entirely new, and
         // the last keys differ so there is no shared suffix.
-        let keys: &[&str] = if GEN.with(|c| c.get()) == 0 {
+        let keys: &[&str] = if warmup_gen() == 0 {
             &["a", "x0", "x1", "x2"]
         } else {
             &["a", "p0", "p1", "p2"]
@@ -1701,13 +1637,7 @@ fn warmup_keyed_left_prefix_splice() {
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    GEN.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    GEN.with(|c| c.set(0));
+    run_generations(app, 2);
 }
 
 /// A spread adds a dynamic attribute that shadows a static template attribute
@@ -1716,13 +1646,7 @@ fn warmup_keyed_left_prefix_splice() {
 /// attribute's static value is restored instead of cleared.
 fn warmup_static_attribute_fallback() {
     use dioxus::prelude::*;
-    use dioxus_core::{Attribute, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
-
-    thread_local! {
-        static GEN: Cell<u32> = const { Cell::new(0) };
-    }
+    use dioxus_core::Attribute;
 
     fn app() -> Element {
         // The template carries a static `class="static"`. The spread shadows
@@ -1731,7 +1655,7 @@ fn warmup_static_attribute_fallback() {
         // (the namespace-matches arm of the static lookup); gen 2 uses a
         // *namespaced* dynamic attr so the dropped attr finds the static name
         // but mismatches its namespace (the namespace-mismatch arm).
-        let extra: Vec<Attribute> = match GEN.with(|c| c.get()) {
+        let extra: Vec<Attribute> = match warmup_gen() {
             0 => vec![Attribute::new("class", "dynamic", None, false)],
             2 => vec![Attribute::new("class", "dynamic", Some("custom"), false)],
             _ => Vec::new(),
@@ -1741,22 +1665,10 @@ fn warmup_static_attribute_fallback() {
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
     // gen 1: drop the same-namespace dynamic attr -> restore the static value.
-    GEN.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
     // gen 2: add a namespaced dynamic attr, gen 3: drop it -> the static
     // lookup finds the name but mismatches the namespace.
-    GEN.with(|c| c.set(2));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    GEN.with(|c| c.set(3));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    GEN.with(|c| c.set(0));
+    run_generations(app, 4);
 }
 
 /// The same spread attribute slot holds a plain value on gen 0 and a listener
@@ -1765,16 +1677,10 @@ fn warmup_static_attribute_fallback() {
 /// listener is installed (installing a listener doesn't overwrite it).
 fn warmup_attribute_value_to_listener() {
     use dioxus::prelude::*;
-    use dioxus_core::{Attribute, AttributeValue, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
-
-    thread_local! {
-        static GEN: Cell<u32> = const { Cell::new(0) };
-    }
+    use dioxus_core::{Attribute, AttributeValue};
 
     fn app() -> Element {
-        let attrs: Vec<Attribute> = if GEN.with(|c| c.get()) == 0 {
+        let attrs: Vec<Attribute> = if warmup_gen() == 0 {
             vec![Attribute::new("data-x", "value", None, false)]
         } else {
             vec![Attribute::new(
@@ -1789,13 +1695,7 @@ fn warmup_attribute_value_to_listener() {
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    GEN.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    GEN.with(|c| c.set(0));
+    run_generations(app, 2);
 }
 
 /// A keyed list of portals whose body is a single dynamic text node mounted in
@@ -1809,7 +1709,6 @@ fn warmup_portal_dynamic_text_root() {
     use std::cell::Cell;
 
     thread_local! {
-        static GEN: Cell<u32> = const { Cell::new(0) };
         static TARGET: Cell<u64> = const { Cell::new(0) };
     }
 
@@ -1819,7 +1718,7 @@ fn warmup_portal_dynamic_text_root() {
         // `diff_keyed_middle` *moves* most entries through its splice. Each
         // moved entry is re-pushed via `push_all_root_nodes`, which recurses
         // into the portal body — a dynamic text root mounted in `target`.
-        let keys: &[u32] = if GEN.with(|c| c.get()) == 0 {
+        let keys: &[u32] = if warmup_gen() == 0 {
             &[0, 1, 2, 3]
         } else {
             &[3, 2, 1, 0]
@@ -1831,6 +1730,7 @@ fn warmup_portal_dynamic_text_root() {
         }
     }
 
+    WARMUP_GEN.with(|c| c.set(0));
     let mut dom = VirtualDom::new(app);
     let target = dom.runtime().create_render_target();
     TARGET.with(|c| c.set(target.0 as u64));
@@ -1841,10 +1741,9 @@ fn warmup_portal_dynamic_text_root() {
 
     // gen 1: reverse the list, forcing keyed-middle moves whose
     // `push_all_root_nodes` recurses across the portal's target boundary.
-    GEN.with(|c| c.set(1));
+    WARMUP_GEN.with(|c| c.set(1));
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut writer);
-    GEN.with(|c| c.set(0));
 }
 
 /// A keyed list of single-element components that is reordered while some
@@ -1853,9 +1752,6 @@ fn warmup_portal_dynamic_text_root() {
 /// dropped-scope `?` branch in `find_element_at_root_in_target`'s component arm.
 fn warmup_keyed_component_anchor() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
 
     #[derive(Clone, PartialEq, Props)]
     struct ItemProps {
@@ -1867,15 +1763,11 @@ fn warmup_keyed_component_anchor() {
         rsx! { span { "{props.value}" } }
     }
 
-    thread_local! {
-        static GEN: Cell<u32> = const { Cell::new(0) };
-    }
-
     fn app() -> Element {
         // gen 0: [a, b, c, d, e]; gen 1: [a, e] — the middle three component
         // scopes drop while the list keeps a shared prefix/suffix, so anchors
         // are resolved around components mid-removal.
-        let keys: &[u32] = if GEN.with(|c| c.get()) == 0 {
+        let keys: &[u32] = if warmup_gen() == 0 {
             &[0, 1, 2, 3, 4]
         } else {
             &[0, 4]
@@ -1887,13 +1779,7 @@ fn warmup_keyed_component_anchor() {
         }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    GEN.with(|c| c.set(1));
-    dom.mark_dirty(ScopeId::APP);
-    oracle.render(&mut dom);
-    GEN.with(|c| c.set(0));
+    run_generations(app, 2);
 }
 
 pub fn warmup_deferred_priority_paths() {
@@ -1913,8 +1799,7 @@ pub fn warmup_deferred_priority_paths() {
     warmup_portal_dynamic_text_root();
     warmup_keyed_component_anchor();
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_core::ScopeId;
 
     #[derive(Clone, PartialEq, Props)]
     struct ItemProps {
@@ -1938,9 +1823,7 @@ pub fn warmup_deferred_priority_paths() {
     // Re-render a parent whose children are also dirty, driving the diff for a
     // small fragment of identical components.
     {
-        let mut dom = VirtualDom::new(app);
-        let mut oracle = RendererOracle::new();
-        oracle.rebuild(&mut dom);
+        let (mut dom, _oracle) = run_generations(app, 1);
         dom.mark_dirty(ScopeId::APP);
         drive_render(&mut dom);
     }
