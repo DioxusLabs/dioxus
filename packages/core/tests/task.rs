@@ -8,7 +8,7 @@ use dioxus_core::{generation, needs_update, spawn_forever};
 async fn run_vdom(app: fn() -> Element) {
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     tokio::select! {
         _ = dom.wait_for_work() => {}
@@ -78,8 +78,8 @@ async fn spawn_forever_persists() {
 
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild();
-    dom.render_immediate();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
     tokio::select! {
         _ = dom.wait_for_work() => {}

@@ -132,7 +132,7 @@ fn parents_see_child_write() {
         STORE.resolve().inner1().set(1);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();
@@ -169,7 +169,7 @@ fn deep_root_reader_sees_future_child_write() {
         STORE.resolve().inner1().set(1);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     assert_eq!(*runs.borrow(), 2);
 }
@@ -270,7 +270,7 @@ fn deep_parent_reader_sees_grandchild_write() {
         STORE.resolve().outer().inner1().set(1);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();
@@ -332,7 +332,7 @@ fn deep_grandparent_reader_sees_descendant_write() {
         STORE.resolve().nested().outer().inner1().set(1);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();
@@ -394,7 +394,7 @@ fn len_is_shallow_but_push_marks_it_dirty() {
         STORE.resolve().index(0).set(10);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();
@@ -407,7 +407,7 @@ fn len_is_shallow_but_push_marks_it_dirty() {
         items.push(4);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();
@@ -473,7 +473,7 @@ fn deep_parent_reader_sees_nested_vec_push() {
         items.push(4);
     });
 
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();

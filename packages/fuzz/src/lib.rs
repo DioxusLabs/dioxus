@@ -1052,7 +1052,7 @@ pub fn reduce_case_to_encoded_vec(
 
 /// Drive the VirtualDom's pending work to completion synchronously.
 fn drive_render(dom: &mut dioxus_core::VirtualDom) {
-    dom.render_immediate();
+    dom.render_immediate(&mut dioxus_core::Mutations::default());
 }
 
 /// Drive a small unkeyed fragment of identical-component children through a
@@ -1296,17 +1296,13 @@ fn warmup_deferred_subtree_check() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
     // Cover all plausible scope ids for the Child instances. Unmounted ids
     // are silently ignored by `mark_dirty`.
     for scope_idx in 1usize..=10 {
         dom.mark_dirty(ScopeId(scope_idx));
     }
-    dom.insert_render_target(
-        dioxus_core::RenderTargetId::ROOT,
-        dioxus_core::Mutations::default(),
-    );
     drive_render(&mut dom);
 }
 
@@ -1459,7 +1455,7 @@ fn warmup_suspense_then_remove() {
 fn warmup_portal_target_switch() {
     use dioxus::prelude::*;
     use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
     use std::cell::Cell;
 
     thread_local! {
@@ -1487,47 +1483,32 @@ fn warmup_portal_target_switch() {
     let second = dom.runtime().create_render_target();
     FIRST_TARGET.with(|c| c.set(first.0 as u64));
     SECOND_TARGET.with(|c| c.set(second.0 as u64));
-    let root = RendererOracle::new();
-    let a = RendererOracle::new();
-    let b = RendererOracle::new();
-    dom.insert_render_target(RenderTargetId::ROOT, root);
-    dom.insert_render_target(first, a);
-    dom.insert_render_target(second, b);
-    dom.rebuild();
-    let root = dom
-        .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
-        .unwrap();
-    let a = dom.take_render_target::<RendererOracle>(first).unwrap();
-    let b = dom.take_render_target::<RendererOracle>(second).unwrap();
+    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    writer.insert(RenderTargetId::ROOT, RendererOracle::new());
+    writer.insert(first, RendererOracle::new());
+    writer.insert(second, RendererOracle::new());
+    dom.rebuild(&mut writer);
 
-    // mode 1: switch from first -> second target, with oracles registered.
+    // mode 1: switch from first -> second target, with oracles attached.
     MODE.with(|c| c.set(1));
     dom.mark_dirty(ScopeId::APP);
-    dom.insert_render_target(RenderTargetId::ROOT, root);
-    dom.insert_render_target(first, a);
-    dom.insert_render_target(second, b);
-    dom.render_immediate();
-    let root = dom
-        .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
-        .unwrap();
-    let _ = dom.take_render_target::<RendererOracle>(first);
-    let _ = dom.take_render_target::<RendererOracle>(second);
+    dom.render_immediate(&mut writer);
 
-    // mode 2: switch back to first target with NO oracle registered for it.
+    // mode 2: switch back to first target with NO oracle attached for it.
     // `render_target_should_write` still returns true (target is Real), but
-    // the dispatcher drops mutations because there's no writer — this drives
-    // the `render_to` filter chain and the `if let Some(to) = render_to`
-    // alternative branches.
+    // the writer reports it unready — this drives the `render_to` filter
+    // chain and the `if let Some(to) = render_to` alternative branches.
+    let _ = writer.take(first);
+    let _ = writer.take(second);
     MODE.with(|c| c.set(2));
     dom.mark_dirty(ScopeId::APP);
-    dom.insert_render_target(RenderTargetId::ROOT, root);
-    dom.render_immediate();
+    dom.render_immediate(&mut writer);
 
     // mode 3: same props as mode 2 — memoize sees self == new and the
     // `equal` branch of `PortalProps::memoize` fires.
     MODE.with(|c| c.set(2));
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate();
+    dom.render_immediate(&mut writer);
 
     // Separate dom: switch to a NOOP target so `render_target_should_write`
     // returns false and the `should_mount` / `if let Some(to)` false arms
@@ -1539,14 +1520,13 @@ fn warmup_portal_target_switch() {
     FIRST_TARGET.with(|c| c.set(first.0 as u64));
     SECOND_TARGET.with(|c| c.set(noop.0 as u64));
     MODE.with(|c| c.set(0));
-    let root = RendererOracle::new();
-    let a = RendererOracle::new();
-    dom.insert_render_target(RenderTargetId::ROOT, root);
-    dom.insert_render_target(first, a);
-    dom.rebuild();
+    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    writer.insert(RenderTargetId::ROOT, RendererOracle::new());
+    writer.insert(first, RendererOracle::new());
+    dom.rebuild(&mut writer);
     MODE.with(|c| c.set(1));
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate();
+    dom.render_immediate(&mut writer);
 }
 
 /// Mount a scope with a pending effect, then drop it. Exercises the
@@ -1825,7 +1805,7 @@ fn warmup_attribute_value_to_listener() {
 fn warmup_portal_dynamic_text_root() {
     use dioxus::prelude::*;
     use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::RendererOracle;
+    use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
     use std::cell::Cell;
 
     thread_local! {
@@ -1854,19 +1834,16 @@ fn warmup_portal_dynamic_text_root() {
     let mut dom = VirtualDom::new(app);
     let target = dom.runtime().create_render_target();
     TARGET.with(|c| c.set(target.0 as u64));
-    dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
-    dom.insert_render_target(target, RendererOracle::new());
-    dom.rebuild();
-    let _ = dom.take_render_target::<RendererOracle>(RenderTargetId::ROOT);
-    let _ = dom.take_render_target::<RendererOracle>(target);
+    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    writer.insert(RenderTargetId::ROOT, RendererOracle::new());
+    writer.insert(target, RendererOracle::new());
+    dom.rebuild(&mut writer);
 
     // gen 1: reverse the list, forcing keyed-middle moves whose
     // `push_all_root_nodes` recurses across the portal's target boundary.
     GEN.with(|c| c.set(1));
     dom.mark_dirty(ScopeId::APP);
-    dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
-    dom.insert_render_target(target, RendererOracle::new());
-    dom.render_immediate();
+    dom.render_immediate(&mut writer);
     GEN.with(|c| c.set(0));
 }
 
@@ -1965,10 +1942,6 @@ pub fn warmup_deferred_priority_paths() {
         let mut oracle = RendererOracle::new();
         oracle.rebuild(&mut dom);
         dom.mark_dirty(ScopeId::APP);
-        dom.insert_render_target(
-            dioxus_core::RenderTargetId::ROOT,
-            dioxus_core::Mutations::default(),
-        );
         drive_render(&mut dom);
     }
 }

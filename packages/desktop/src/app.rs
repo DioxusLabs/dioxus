@@ -253,11 +253,9 @@ impl App {
 
         self.shared.window_close_handlers.notify(id);
 
-        if let Some(removed) = self.webviews.remove(&id) {
-            if is_shared_dom {
-                self.dom.remove_render_target(removed.target_id);
-            }
-        }
+        // Dropping the webview drops its WryQueue with it; the next
+        // shared-DOM render pass simply won't include the target.
+        self.webviews.remove(&id);
 
         if is_shared_dom {
             self.render_shared_dom_after_webview_removed();
@@ -340,7 +338,7 @@ impl App {
             if let Some(dom) = view.dom.as_mut() {
                 view.edits
                     .wry_queue
-                    .with_mutation_state_mut(|f| dom.rebuild_into(f));
+                    .with_mutation_state_mut(|f| dom.rebuild(f));
                 view.edits.wry_queue.send_edits();
                 true
             } else {
@@ -508,18 +506,20 @@ impl App {
         }
     }
 
-    /// Ensure every shared-DOM webview has its `WryQueue` registered with the
-    /// VirtualDom at the webview's target id, then clear each queue's
-    /// `touched` flag so we can detect which targets receive writes during the
-    /// upcoming render pass.
-    fn prepare_shared_targets(&mut self) {
-        for webview in self.webviews.values() {
-            if webview.dom.is_none() {
+    /// Build the writer for one shared-DOM render pass: every shared webview's
+    /// `WryQueue` keyed by its target id, with each queue's `touched` flag
+    /// cleared so we can detect which targets receive writes during the pass.
+    fn shared_dom_writer(&self) -> crate::edits::SharedDomWriter {
+        let queues = self
+            .webviews
+            .values()
+            .filter(|webview| webview.dom.is_none())
+            .map(|webview| {
                 webview.edits.wry_queue.clear_touched();
-                self.dom
-                    .insert_render_target(webview.target_id, webview.edits.wry_queue.clone());
-            }
-        }
+                (webview.target_id, webview.edits.wry_queue.clone())
+            })
+            .collect();
+        crate::edits::SharedDomWriter::new(queues)
     }
 
     /// Collect every shared-DOM webview whose `WryQueue` was touched during the
@@ -535,15 +535,15 @@ impl App {
     }
 
     fn rebuild_shared_dom(&mut self) -> BTreeSet<RenderTargetId> {
-        self.prepare_shared_targets();
-        self.dom.rebuild();
+        let mut writer = self.shared_dom_writer();
+        self.dom.rebuild(&mut writer);
         self.dom_rebuilt = true;
         self.collect_touched()
     }
 
     fn render_shared_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
-        self.prepare_shared_targets();
-        self.dom.render_immediate();
+        let mut writer = self.shared_dom_writer();
+        self.dom.render_immediate(&mut writer);
         self.collect_touched()
     }
 

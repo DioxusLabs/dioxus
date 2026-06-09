@@ -7,7 +7,7 @@ fn escape_static_values() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -23,7 +23,7 @@ fn escape_dynamic_values() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -38,7 +38,7 @@ fn escape_static_style() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -54,7 +54,7 @@ fn escape_dynamic_style() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -73,7 +73,7 @@ fn escape_static_text() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -93,7 +93,7 @@ fn escape_dynamic_text() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -112,7 +112,7 @@ fn don_t_escape_static_scripts() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -132,7 +132,7 @@ fn don_t_escape_dynamic_scripts() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -151,7 +151,7 @@ fn don_t_escape_static_styles() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -171,7 +171,7 @@ fn don_t_escape_dynamic_styles() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -191,7 +191,7 @@ fn don_t_escape_static_fragment_styles() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -215,7 +215,7 @@ fn escape_static_component_fragment_div() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -240,7 +240,7 @@ fn escape_dynamic_component_fragment_div() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild_in_place();
 
     assert_eq!(
         dioxus_ssr::render(&dom),

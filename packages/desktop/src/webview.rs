@@ -602,7 +602,7 @@ impl WebviewInstance {
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             self.edits.wry_queue.with_mutation_state_mut(|f| {
-                dom.render_immediate_into(f);
+                dom.render_immediate(f);
             });
             self.edits.wry_queue.send_edits();
         }

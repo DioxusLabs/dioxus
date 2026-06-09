@@ -32,7 +32,7 @@ async fn child_futures_drop_first() {
 
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Here the parent and task could resolve at the same time, but because the task is in the child, dioxus should run the parent first because the child might be dropped
     dom.mark_dirty(ScopeId::APP);
@@ -42,7 +42,7 @@ async fn child_futures_drop_first() {
         _ = tokio::time::sleep(Duration::from_millis(500)) => panic!("timed out")
     };
 
-    dom.render_immediate();
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
     // By the time the tasks are finished, we should've accumulated ticks from two tasks
     // Be warned that by setting the delay to too short, tokio might not schedule in the tasks

@@ -81,8 +81,8 @@ fn reading_subscribes() {
     }
 
     dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate();
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();

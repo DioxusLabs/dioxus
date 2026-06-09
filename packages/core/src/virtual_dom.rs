@@ -5,7 +5,7 @@
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
-    ComponentFunction, Element, Mutations, RenderTargetId,
+    ComponentFunction, Element, Mutations, NoOpMutations,
     arena::ElementId,
     innerlude::{SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
@@ -15,7 +15,7 @@ use crate::{Task, VComponent};
 use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -82,9 +82,8 @@ use tracing::instrument;
 /// }
 /// ```
 ///
-/// To start an app, register your renderer's writer via
-/// [`VirtualDom::insert_render_target`] and call [`VirtualDom::rebuild`] to
-/// queue the initial mutations required to draw the UI.
+/// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
+/// draw the UI.
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
@@ -92,12 +91,7 @@ use tracing::instrument;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
-/// vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
-/// vdom.rebuild();
-/// let mutations = vdom
-///     .take_render_target::<Mutations>(RenderTargetId::ROOT)
-///     .unwrap();
-/// assert!(!mutations.edits.is_empty());
+/// let edits = vdom.rebuild_to_vec();
 /// ```
 ///
 /// To call listeners inside the VirtualDom, call [`Runtime::handle_event`] with the appropriate event data.
@@ -124,16 +118,18 @@ use tracing::instrument;
 /// });
 /// ```
 ///
-/// Once work is ready, call [`VirtualDom::render_immediate`] to compute the differences between the previous
-/// and current UI trees. This writes into the renderer's mutation queue without an intermediate copy.
+/// Once work is ready, call [`VirtualDom::render_immediate`] to compute the differences between the previous and
+/// current UI trees. This will write edits to a [`WriteMutations`] object you pass in that contains with edits that need to be
+/// handled by the renderer.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// # vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
-/// vdom.render_immediate();
+/// let mut mutations = Mutations::default();
+///
+/// vdom.render_immediate(&mut mutations);
 /// ```
 /// ## Building an event loop around Dioxus:
 ///
@@ -161,10 +157,10 @@ use tracing::instrument;
 /// }
 ///
 /// let mut dom = VirtualDom::new(app);
-/// dom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
+/// let mut edits = Mutations::default();
 ///
-/// dom.rebuild();
-/// real_dom.flush(dom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
+/// dom.rebuild(&mut edits);
+/// real_dom.flush(&edits);
 ///
 /// loop {
 ///     tokio::select! {
@@ -175,8 +171,9 @@ use tracing::instrument;
 ///         },
 ///     }
 ///
-///     dom.render_immediate();
-///     real_dom.flush(dom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
+///     edits = Mutations::default();
+///     dom.render_immediate(&mut edits);
+///     real_dom.flush(&edits);
 /// }
 /// # });
 /// ```
@@ -209,18 +206,6 @@ pub struct VirtualDom {
 
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
-
-    /// Renderer-supplied writers, keyed by `RenderTargetId`. Diff output for a
-    /// given target is dispatched into the matching writer; targets without a
-    /// registered writer have their mutations dropped (matches the historical
-    /// `NoOpMutations` behaviour).
-    pub(crate) targets: BTreeMap<RenderTargetId, Box<dyn crate::mutations::RenderTargetWriter>>,
-
-    /// When `true`, mutations for unregistered targets lazily get a default
-    /// `Mutations` collector instead of being dropped. Used by the
-    /// `rebuild_to_targeted_vec` / `render_immediate_to_targeted_vec` helpers
-    /// so portal targets created during diff don't lose their edits.
-    pub(crate) auto_create_targets: bool,
 
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
@@ -324,8 +309,6 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             resolved_scopes: Default::default(),
-            targets: BTreeMap::new(),
-            auto_create_targets: false,
         };
 
         let root = VProps::new(
@@ -386,97 +369,6 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope().state().provide_any_context(context);
-    }
-
-    /// Register a writer that will receive diff output for a given
-    /// `RenderTargetId`. The root viewport uses `RenderTargetId::ROOT`; portal
-    /// hosts insert their own ids on mount.
-    ///
-    /// Calling this twice with the same id drops the previous writer; use
-    /// [`Self::take_render_target`] first to recover it.
-    pub fn insert_render_target<W: WriteMutations + 'static>(
-        &mut self,
-        id: RenderTargetId,
-        writer: W,
-    ) {
-        self.targets.insert(id, Box::new(writer));
-    }
-
-    /// Drop the writer for a given target. Mutations destined for an
-    /// unregistered target are silently dropped during diff; use
-    /// [`Self::take_render_target`] to recover the writer instead.
-    pub fn remove_render_target(&mut self, id: RenderTargetId) {
-        self.targets.remove(&id);
-    }
-
-    /// Borrow the writer for a target, downcast to its concrete type. Returns
-    /// `None` if no writer is registered for `id` or the registered writer is
-    /// not of type `W`.
-    pub fn render_target_mut<W: WriteMutations + 'static>(
-        &mut self,
-        id: RenderTargetId,
-    ) -> Option<&mut W> {
-        self.targets.get_mut(&id)?.as_any_mut().downcast_mut::<W>()
-    }
-
-    /// Remove the writer at `id`, recovering ownership of its concrete type.
-    /// Returns `None` if no writer is registered for `id` or the registered
-    /// writer is not of type `W`.
-    pub fn take_render_target<W: WriteMutations + 'static>(
-        &mut self,
-        id: RenderTargetId,
-    ) -> Option<W> {
-        let writer = self.targets.remove(&id)?;
-        writer.into_any().downcast::<W>().ok().map(|b| *b)
-    }
-
-    /// Borrow `writer` at `ROOT` for the duration of a rebuild. Convenience
-    /// for tests / single-target hosts that don't want to give up ownership.
-    #[doc(hidden)]
-    pub fn rebuild_into<W: WriteMutations>(&mut self, writer: &mut W) {
-        self.render_pass(Some(writer), Self::rebuild_with_writer);
-    }
-
-    /// Borrow `writer` at `ROOT` for the duration of a [`Self::render_immediate`] call.
-    #[doc(hidden)]
-    pub fn render_immediate_into<W: WriteMutations>(&mut self, writer: &mut W) {
-        self.process_events();
-        self.render_pass(Some(writer), Self::render_immediate_with_writer);
-        self.runtime.finish_render();
-    }
-
-    /// Run one diff pass (`run`), dispatching edits into the registered render
-    /// targets — plus `root`, if given, which temporarily fronts for
-    /// `RenderTargetId::ROOT`. Afterwards every touched writer is committed
-    /// and each target's pending effects run, so consumers observe the whole
-    /// pass atomically.
-    fn render_pass(
-        &mut self,
-        mut root: Option<&mut dyn WriteMutations>,
-        run: fn(&mut Self, &mut crate::mutations::DiffDispatch),
-    ) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        let runtime = self.runtime.clone();
-        let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch = crate::mutations::DiffDispatch::new(
-            &mut targets,
-            root.as_deref_mut(),
-            runtime,
-            self.auto_create_targets,
-        );
-
-        run(self, &mut dispatch);
-        drop(dispatch);
-
-        let skip_root = root.map(|writer| {
-            self.commit_root_writer(writer);
-            RenderTargetId::ROOT
-        });
-        self.commit_targets(&mut targets, skip_root);
-        self.targets = targets;
-
-        self.drain_remaining_effects();
     }
 
     /// Mark all scopes as dirty. Each scope will be re-rendered.
@@ -634,62 +526,28 @@ impl VirtualDom {
         }
 
         // Effects that were dirtied by task wakeups (e.g. a subscribed signal
-        // written from a future) and that don't belong to a registered render
-        // target need to fire now — there's no render pass coming to flush
-        // them. Effects under registered targets fire when that target's next
-        // commit runs.
-        let targets = &self.targets;
-        for effect in self
-            .runtime
-            .drain_effects_where(|id| !targets.contains_key(&id))
-        {
-            effect.run();
-        }
+        // written from a future) need to fire now — no render pass is coming
+        // to flush them.
+        self.drain_remaining_effects();
     }
 
-    /// Rebuild the virtualdom without handling any of the mutations.
+    /// Rebuild the virtualdom without handling any of the mutations
     ///
-    /// Equivalent to [`Self::rebuild`] for a VDom with no registered render
-    /// targets — diff still runs, every produced mutation is dropped.
-    #[doc(hidden)]
+    /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
+    /// handling any of its mutations.
     pub fn rebuild_in_place(&mut self) {
-        self.rebuild();
+        self.rebuild(&mut NoOpMutations);
     }
 
-    /// [`VirtualDom::rebuild`] into a single root-target `Mutations` collector
-    /// for tests.
-    #[doc(hidden)]
+    /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
     pub fn rebuild_to_vec(&mut self) -> Mutations {
-        self.insert_render_target(RenderTargetId::ROOT, Mutations::default());
-        self.rebuild();
-        let collected = std::mem::take(
-            self.render_target_mut::<Mutations>(RenderTargetId::ROOT)
-                .expect("ROOT target was just registered"),
-        );
-        self.remove_render_target(RenderTargetId::ROOT);
-        collected
+        let mut mutations = Mutations::default();
+        self.rebuild(&mut mutations);
+        mutations
     }
 
-    /// [`VirtualDom::rebuild`] grouped into per-target mutation streams. Pairs
-    /// with [`Self::render_immediate_to_targeted_vec`]. Pre-registers a fresh
-    /// `Mutations` collector at every render target id the runtime knows
-    /// about; targets created during diff get a lazy `Mutations` collector
-    /// (the `auto_create_targets` flag).
-    #[doc(hidden)]
-    pub fn rebuild_to_targeted_vec(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
-        for id in self.runtime.known_render_target_ids() {
-            self.insert_render_target(id, Mutations::default());
-        }
-
-        self.auto_create_targets = true;
-        self.rebuild();
-        self.auto_create_targets = false;
-
-        self.drain_targeted_mutations()
-    }
-
-    /// Performs a *full* rebuild of the virtual dom, dispatching every edit to
-    /// the renderer writers registered via [`Self::insert_render_target`].
+    /// Performs a *full* rebuild of the virtual dom, writing every produced
+    /// edit into `to`.
     ///
     /// Tasks will not be polled with this method, nor will any events be
     /// processed from the event queue. Instead, the root component will be run
@@ -698,29 +556,30 @@ impl VirtualDom {
     /// All state stored in components will be completely wiped away.
     ///
     /// Any templates previously registered will remain.
-    #[doc(hidden)]
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::rebuild")]
-    pub fn rebuild(&mut self) {
-        self.render_pass(None, Self::rebuild_with_writer);
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
+    pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+        self.rebuild_with_writer(&mut router);
+        self.drain_remaining_effects();
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without
-    /// requiring an executor to progress suspended subtrees. Edits flow into
-    /// the registered render targets; all accumulated writes are committed
-    /// once at the end of the call.
-    ///
-    /// Suspense boundaries and other consumers that observe partial diff state
-    /// rely on the whole pass landing atomically, so this only commits once the
-    /// pass is complete.
-    #[doc(hidden)]
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::render_immediate")]
-    pub fn render_immediate(&mut self) {
+    /// requiring an executor to progress suspended subtrees, writing edits
+    /// into `to`.
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
+    pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         self.process_events();
-        self.render_pass(None, Self::render_immediate_with_writer);
+        {
+            let _runtime = RuntimeGuard::new(self.runtime.clone());
+            let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+            self.render_immediate_with_writer(&mut router);
+        }
+        self.drain_remaining_effects();
         self.runtime.finish_render();
     }
 
-    fn rebuild_with_writer(&mut self, to: &mut crate::mutations::DiffDispatch) {
+    fn rebuild_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
         let new_nodes = self
             .runtime
             .clone()
@@ -734,7 +593,7 @@ impl VirtualDom {
         to.append_children(ElementId::ROOT, m);
     }
 
-    fn render_immediate_with_writer(&mut self, to: &mut crate::mutations::DiffDispatch) {
+    fn render_immediate_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
         // Tasks notified before this render are polled as part of it; tasks
         // first spawned *by* this render wait for the next scheduler pass.
         // Without the cutoff, a task that wakes itself on every poll would
@@ -774,80 +633,17 @@ impl VirtualDom {
         }
     }
 
-    fn commit_targets(
-        &mut self,
-        targets: &mut BTreeMap<RenderTargetId, Box<dyn crate::mutations::RenderTargetWriter>>,
-        skip: Option<RenderTargetId>,
-    ) {
-        for (target_id, writer) in targets.iter_mut() {
-            if Some(*target_id) == skip {
-                continue;
-            }
-            writer.commit();
-            for effect in self.runtime.drain_effects_for_target(*target_id) {
-                effect.run();
-            }
-        }
-    }
-
-    fn commit_root_writer(&mut self, writer: &mut dyn WriteMutations) {
-        writer.commit();
-        for effect in self.runtime.drain_effects_for_target(RenderTargetId::ROOT) {
-            effect.run();
-        }
-    }
-
     fn drain_remaining_effects(&mut self) {
         for effect in self.runtime.drain_remaining_effects() {
             effect.run();
         }
     }
 
-    /// [`Self::render_immediate`] into a single root-target `Mutations`
-    /// collector for tests.
-    #[doc(hidden)]
+    /// [`Self::render_immediate`] to a vector of mutations for testing purposes
     pub fn render_immediate_to_vec(&mut self) -> Mutations {
-        self.insert_render_target(RenderTargetId::ROOT, Mutations::default());
-        self.render_immediate();
-        let collected = std::mem::take(
-            self.render_target_mut::<Mutations>(RenderTargetId::ROOT)
-                .expect("ROOT target was just registered"),
-        );
-        self.remove_render_target(RenderTargetId::ROOT);
-        collected
-    }
-
-    /// [`Self::render_immediate`] grouped into per-target mutation streams.
-    ///
-    /// Pre-registers `Mutations` collectors at every known target id and
-    /// turns on `auto_create_targets` so portal targets created during the
-    /// diff still capture their edits.
-    #[doc(hidden)]
-    pub fn render_immediate_to_targeted_vec(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
-        for id in self.runtime.known_render_target_ids() {
-            self.insert_render_target(id, Mutations::default());
-        }
-
-        self.auto_create_targets = true;
-        self.render_immediate();
-        self.auto_create_targets = false;
-
-        self.drain_targeted_mutations()
-    }
-
-    fn drain_targeted_mutations(&mut self) -> BTreeMap<RenderTargetId, Mutations> {
-        let ids: Vec<RenderTargetId> = self.targets.keys().copied().collect();
-        let mut out = BTreeMap::new();
-        for id in ids {
-            if let Some(target) = self.render_target_mut::<Mutations>(id) {
-                let m = std::mem::take(target);
-                if !m.edits.is_empty() {
-                    out.insert(id, m);
-                }
-            }
-            self.remove_render_target(id);
-        }
-        out
+        let mut mutations = Mutations::default();
+        self.render_immediate(&mut mutations);
+        mutations
     }
 
     /// Render the virtual dom, waiting for all suspense to be finished
@@ -948,18 +744,8 @@ impl VirtualDom {
                         .is_some();
                     if run_scope {
                         // Run the scope and diff it without writing mutations.
-                        // Pass `None::<&mut DiffDispatch>` so this branch shares
-                        // its monomorphization with the streaming render path.
-                        // Using `NoOpMutations` here would generate a separate
-                        // mono whose "writes enabled" branches are unreachable
-                        // by construction (the `Option` is always `None`),
-                        // tanking per-monomorphization region coverage for the
-                        // diff functions.
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(
-                                None::<&mut crate::mutations::DiffDispatch>,
-                                scope_id,
-                            );
+                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);

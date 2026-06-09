@@ -100,7 +100,7 @@ fn memo_works_properly() {
 
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn free_works_on_root_hooks() {
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
     assert!(Rc::strong_count(&ptr) > 1);
@@ -190,11 +190,11 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        dom.rebuild();
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
-            dom.render_immediate();
+            dom.render_immediate(&mut dioxus_core::NoOpMutations);
         }
     });
 }

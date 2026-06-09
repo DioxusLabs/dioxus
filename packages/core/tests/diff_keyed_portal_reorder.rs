@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use dioxus::prelude::*;
 use dioxus_core::{Portal, RenderTargetId, VirtualDom};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
 
 /// Reordering a keyed list whose entries are `Portal`s exercises the
 /// cross-render-target paths in `push_all_root_nodes`: the keyed-middle
@@ -60,31 +60,25 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
 
     let mut dom = VirtualDom::new_with_props(app, AppProps { target: inner_target });
     let _ = dom.runtime().create_render_target();
-    dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
-    dom.insert_render_target(inner_target, RendererOracle::new());
-    dom.rebuild();
-    let mut outer = dom
-        .take_render_target::<RendererOracle>(RenderTargetId::ROOT)
-        .unwrap();
-    let mut inner = dom
-        .take_render_target::<RendererOracle>(inner_target)
-        .unwrap();
+    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    writer.insert(RenderTargetId::ROOT, RendererOracle::new());
+    writer.insert(inner_target, RendererOracle::new());
+    dom.rebuild(&mut writer);
 
     // Sanity: outer holds the portal placeholders, inner holds the bodies.
-    assert!(outer.is_stack_clean());
-    assert!(inner.is_stack_clean());
+    assert!(writer.get(RenderTargetId::ROOT).unwrap().is_stack_clean());
+    assert!(writer.get(inner_target).unwrap().is_stack_clean());
 
     ORDER.with(|o| o.set(1));
     dom.mark_dirty(dioxus_core::ScopeId::APP);
-    dom.insert_render_target(RenderTargetId::ROOT, outer);
-    dom.insert_render_target(RenderTargetId(1), inner);
-    dom.render_immediate();
-    outer = dom.take_render_target(RenderTargetId::ROOT).unwrap();
-    inner = dom.take_render_target(RenderTargetId(1)).unwrap();
+    dom.render_immediate(&mut writer);
 
     // Stack still clean after the reorder, which is the canary for the
     // cross-target push paths going wrong (an unbalanced push leaves the
     // mutation stack with extra entries).
-    outer.assert_stack_clean();
-    inner.assert_stack_clean();
+    writer
+        .take(RenderTargetId::ROOT)
+        .unwrap()
+        .assert_stack_clean();
+    writer.take(inner_target).unwrap().assert_stack_clean();
 }

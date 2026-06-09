@@ -10,7 +10,7 @@ fn static_boolean_attributes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -28,7 +28,7 @@ fn dynamic_boolean_attributes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::render(&dom),

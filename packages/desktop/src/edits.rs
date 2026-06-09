@@ -18,7 +18,7 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{AttributeValue, ElementId, Template, WriteMutations};
+use dioxus_core::{AttributeValue, ElementId, RenderTargetId, Template, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
@@ -133,8 +133,132 @@ impl WriteMutations for WryQueue {
     fn pop_root(&mut self) {
         self.with_mutation_state(|state| state.pop_root());
     }
+}
 
-    fn commit(&mut self) {}
+/// Routes one shared-VirtualDom render pass across the per-window
+/// [`WryQueue`]s. The diff declares the active render target via
+/// `enter_render_target`; every other call forwards to that window's queue.
+/// Targets without a window (e.g. a `Window` whose webview is still being
+/// created) are reported unready, so the diff skips their writes and the
+/// component re-renders once the webview attaches.
+pub(crate) struct SharedDomWriter {
+    queues: std::collections::BTreeMap<RenderTargetId, WryQueue>,
+    current: Option<WryQueue>,
+}
+
+impl SharedDomWriter {
+    pub(crate) fn new(queues: std::collections::BTreeMap<RenderTargetId, WryQueue>) -> Self {
+        Self {
+            queues,
+            current: None,
+        }
+    }
+}
+
+impl WriteMutations for SharedDomWriter {
+    fn enter_render_target(&mut self, id: RenderTargetId) {
+        self.current = self.queues.get(&id).cloned();
+    }
+
+    fn render_target_ready(&self, id: RenderTargetId) -> bool {
+        self.queues.contains_key(&id)
+    }
+
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        if let Some(q) = self.current.as_mut() {
+            q.append_children(id, m)
+        }
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.assign_node_id(path, id)
+        }
+    }
+
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.create_text_node(value, id)
+        }
+    }
+
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.load_template(template, index, id)
+        }
+    }
+
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        if let Some(q) = self.current.as_mut() {
+            q.replace_node_with(id, m)
+        }
+    }
+
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+        if let Some(q) = self.current.as_mut() {
+            q.insert_children_at_path(path, m)
+        }
+    }
+
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        if let Some(q) = self.current.as_mut() {
+            q.insert_nodes_after(id, m)
+        }
+    }
+
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        if let Some(q) = self.current.as_mut() {
+            q.insert_nodes_before(id, m)
+        }
+    }
+
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        if let Some(q) = self.current.as_mut() {
+            q.set_attribute(name, ns, value, id)
+        }
+    }
+
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.set_node_text(value, id)
+        }
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.create_event_listener(name, id)
+        }
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.remove_event_listener(name, id)
+        }
+    }
+
+    fn remove_node(&mut self, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.remove_node(id)
+        }
+    }
+
+    fn push_root(&mut self, id: ElementId) {
+        if let Some(q) = self.current.as_mut() {
+            q.push_root(id)
+        }
+    }
+
+    fn pop_root(&mut self) {
+        if let Some(q) = self.current.as_mut() {
+            q.pop_root()
+        }
+    }
 }
 
 impl WryQueue {

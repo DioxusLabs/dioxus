@@ -192,5 +192,4 @@ impl WriteMutations for MutationState {
         self.channel.pop_root();
     }
 
-    fn commit(&mut self) {}
 }

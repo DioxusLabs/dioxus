@@ -1,10 +1,36 @@
 use dioxus::prelude::*;
 use dioxus_core::{ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom};
+use dioxus_renderer_oracle::MultiTargetWriter;
 use std::{
     any::Any,
+    collections::BTreeMap,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
+/// Collect one rebuild into per-target mutation lists. Targets created during
+/// the diff lazily get a fresh `Mutations` collector; untouched targets are
+/// dropped so tests can assert absence with `get(..) == None`.
+fn rebuild_to_targeted_vec(dom: &mut VirtualDom) -> BTreeMap<RenderTargetId, Mutations> {
+    let mut writer = MultiTargetWriter::<Mutations>::with_factory(Mutations::default);
+    dom.rebuild(&mut writer);
+    drain_targets(writer)
+}
+
+/// [`rebuild_to_targeted_vec`], but for one `render_immediate` pass.
+fn render_immediate_to_targeted_vec(dom: &mut VirtualDom) -> BTreeMap<RenderTargetId, Mutations> {
+    let mut writer = MultiTargetWriter::<Mutations>::with_factory(Mutations::default);
+    dom.render_immediate(&mut writer);
+    drain_targets(writer)
+}
+
+fn drain_targets(writer: MultiTargetWriter<Mutations>) -> BTreeMap<RenderTargetId, Mutations> {
+    writer
+        .into_targets()
+        .into_iter()
+        .filter(|(_, m)| !m.edits.is_empty())
+        .collect()
+}
 
 static ROOT_CLICKS: AtomicUsize = AtomicUsize::new(0);
 static PORTAL_CLICKS: AtomicUsize = AtomicUsize::new(0);
@@ -262,7 +288,7 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
 
     let root_edits = edits.get(&RenderTargetId::ROOT).unwrap();
     let portal_edits = edits.get(&target).unwrap();
@@ -289,9 +315,9 @@ fn noop_targets_do_not_mount_effects() {
     let target = dom.runtime().create_noop_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.process_events();
-    dom.render_immediate();
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(EFFECTS.load(Ordering::SeqCst), 0);
 }
@@ -302,7 +328,7 @@ fn portal_children_keep_scope_context() {
     let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     assert!(edits.contains_key(&target));
 }
 
@@ -320,13 +346,13 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
 
     dom.runtime()
         .handle_event("click", click_event(), ElementId(2));
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
 
     assert!(
         edits
@@ -355,7 +381,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
     let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     assert!(edits.get(&target).unwrap().edits.iter().any(
         |mutation| matches!(mutation, Mutation::LoadTemplate { id, .. } if *id == ElementId(1))
     ));
@@ -363,7 +389,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
     SHOW_PORTAL.store(0, Ordering::SeqCst);
     dom.mark_dirty(ScopeId::APP);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
 
     assert!(
         edits
@@ -385,14 +411,14 @@ fn dropped_targets_do_not_write_or_mount_effects() {
     let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     let show_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime().drop_render_target(target);
     dom.runtime()
         .handle_event("click", click_event(), show_button);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
 
     assert!(!edits.contains_key(&target));
     dom.process_events();
@@ -412,19 +438,19 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     let open_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
     assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
 
     dom.runtime()
         .handle_event_for_target(first, "click", click_event(), ElementId(1));
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
     assert!(
         edits
             .get(&first)
@@ -437,7 +463,7 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
 
     assert!(has_click_listener(
         edits.get(&second).unwrap(),
@@ -451,13 +477,13 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
 
     let mut dom = VirtualDom::new(dynamic_reopen_after_close_app);
 
-    let edits = dom.rebuild_to_targeted_vec();
+    let edits = rebuild_to_targeted_vec(&mut dom);
     let open_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
     assert!(has_click_listener(
         edits.get(&RenderTargetId(1)).unwrap(),
         ElementId(1)
@@ -466,7 +492,7 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event_for_target(RenderTargetId(1), "click", click_event(), ElementId(1));
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
     assert!(
         edits
             .get(&RenderTargetId(1))
@@ -479,7 +505,7 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
-    let edits = dom.render_immediate_to_targeted_vec();
+    let edits = render_immediate_to_targeted_vec(&mut dom);
 
     assert!(has_click_listener(
         edits.get(&RenderTargetId(2)).unwrap(),

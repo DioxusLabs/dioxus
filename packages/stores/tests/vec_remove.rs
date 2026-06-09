@@ -46,7 +46,7 @@ fn vec_store_remove_non_last_item() {
     }
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     // Second render triggers remove(0), which previously panicked during memoization
     dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();

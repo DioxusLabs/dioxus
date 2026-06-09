@@ -5,7 +5,7 @@
 //! semantics without webviews, JS bindings, layout, or serialization.
 
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, ElementId, ScopeId, Template,
+    Attribute, AttributeValue, DynamicNode, Element, ElementId, RenderTargetId, ScopeId, Template,
     TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations, consume_context,
     generation,
 };
@@ -276,12 +276,7 @@ impl RendererOracle {
     /// Rebuild `vdom` into this renderer and assert the renderer stack is clean.
     pub fn rebuild(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.clear();
-        let stolen = std::mem::take(self);
-        vdom.insert_render_target(dioxus_core::RenderTargetId::ROOT, stolen);
-        vdom.rebuild();
-        *self = vdom
-            .take_render_target::<RendererOracle>(dioxus_core::RenderTargetId::ROOT)
-            .expect("oracle was just registered at ROOT");
+        vdom.rebuild(self);
         self.assert_stack_clean();
         self.edit_counters.clone()
     }
@@ -289,12 +284,7 @@ impl RendererOracle {
     /// Drain pending immediate work from `vdom` into this renderer and assert the stack is clean.
     pub fn render(&mut self, vdom: &mut VirtualDom) -> EditSummary {
         self.edit_counters = EditSummary::default();
-        let stolen = std::mem::take(self);
-        vdom.insert_render_target(dioxus_core::RenderTargetId::ROOT, stolen);
-        vdom.render_immediate();
-        *self = vdom
-            .take_render_target::<RendererOracle>(dioxus_core::RenderTargetId::ROOT)
-            .expect("oracle was just registered at ROOT");
+        vdom.render_immediate(self);
         self.assert_stack_clean();
         self.edit_counters.clone()
     }
@@ -767,6 +757,149 @@ impl RendererOracle {
     }
 }
 
+/// Routes writes to one writer per [`RenderTargetId`], for tests that assert
+/// on portal output. The diff declares the active target via
+/// `enter_render_target`; all other calls forward to that target's writer.
+///
+/// Built with [`Self::with_factory`], unknown targets get a fresh writer on
+/// first use; built with [`Self::new`], only explicitly inserted targets are
+/// ready and everything else is skipped by the diff.
+pub struct MultiTargetWriter<W> {
+    targets: std::collections::BTreeMap<RenderTargetId, W>,
+    current: RenderTargetId,
+    factory: Option<fn() -> W>,
+}
+
+impl<W: WriteMutations> MultiTargetWriter<W> {
+    pub fn new() -> Self {
+        Self {
+            targets: Default::default(),
+            current: RenderTargetId::ROOT,
+            factory: None,
+        }
+    }
+
+    pub fn with_factory(factory: fn() -> W) -> Self {
+        Self {
+            targets: Default::default(),
+            current: RenderTargetId::ROOT,
+            factory: Some(factory),
+        }
+    }
+
+    pub fn insert(&mut self, id: RenderTargetId, writer: W) {
+        self.targets.insert(id, writer);
+    }
+
+    pub fn take(&mut self, id: RenderTargetId) -> Option<W> {
+        self.targets.remove(&id)
+    }
+
+    pub fn get(&self, id: RenderTargetId) -> Option<&W> {
+        self.targets.get(&id)
+    }
+
+    pub fn targets(&self) -> impl Iterator<Item = (RenderTargetId, &W)> {
+        self.targets.iter().map(|(id, w)| (*id, w))
+    }
+
+    pub fn into_targets(self) -> std::collections::BTreeMap<RenderTargetId, W> {
+        self.targets
+    }
+
+    fn current(&mut self) -> &mut W {
+        if !self.targets.contains_key(&self.current) {
+            let factory = self
+                .factory
+                .expect("diff wrote to a target this writer never reported ready");
+            self.targets.insert(self.current, factory());
+        }
+        self.targets.get_mut(&self.current).unwrap()
+    }
+}
+
+impl<W: WriteMutations> Default for MultiTargetWriter<W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<W: WriteMutations> WriteMutations for MultiTargetWriter<W> {
+    fn enter_render_target(&mut self, id: RenderTargetId) {
+        self.current = id;
+    }
+
+    fn render_target_ready(&self, id: RenderTargetId) -> bool {
+        self.factory.is_some() || self.targets.contains_key(&id)
+    }
+
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        self.current().append_children(id, m)
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        self.current().assign_node_id(path, id)
+    }
+
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        self.current().create_text_node(value, id)
+    }
+
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.current().load_template(template, index, id)
+    }
+
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        self.current().replace_node_with(id, m)
+    }
+
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+        self.current().insert_children_at_path(path, m)
+    }
+
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        self.current().insert_nodes_after(id, m)
+    }
+
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        self.current().insert_nodes_before(id, m)
+    }
+
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        self.current().set_attribute(name, ns, value, id)
+    }
+
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        self.current().set_node_text(value, id)
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.current().create_event_listener(name, id)
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.current().remove_event_listener(name, id)
+    }
+
+    fn remove_node(&mut self, id: ElementId) {
+        self.current().remove_node(id)
+    }
+
+    fn push_root(&mut self, id: ElementId) {
+        self.current().push_root(id)
+    }
+
+    fn pop_root(&mut self) {
+        self.current().pop_root()
+    }
+}
+
 impl WriteMutations for RendererOracle {
     fn append_children(&mut self, id: ElementId, m: usize) {
         self.edit_counters.inserts += 1;
@@ -929,8 +1062,6 @@ impl WriteMutations for RendererOracle {
         }
         self.stack.pop();
     }
-
-    fn commit(&mut self) {}
 }
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so

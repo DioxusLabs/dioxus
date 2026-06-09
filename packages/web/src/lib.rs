@@ -148,7 +148,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
-                virtual_dom.rebuild_into(&mut websys_dom);
+                virtual_dom.rebuild(&mut websys_dom);
             });
             websys_dom.skip_mutations = false;
 
@@ -166,7 +166,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             panic!("Hydration is not enabled. Please enable the `hydrate` feature.");
         }
     } else {
-        virtual_dom.rebuild_into(&mut websys_dom);
+        virtual_dom.rebuild(&mut websys_dom);
         websys_dom.flush_edits();
     }
 
@@ -248,7 +248,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
-        virtual_dom.render_immediate_into(&mut websys_dom);
+        virtual_dom.render_immediate(&mut websys_dom);
         websys_dom.flush_edits();
     }
 }

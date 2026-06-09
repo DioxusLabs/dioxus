@@ -19,7 +19,7 @@
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
-use dioxus_core::ScopeId;
+use dioxus_core::{NoOpMutations, ScopeId};
 use rand::prelude::*;
 use std::{cell::RefCell, hint::black_box, rc::Rc};
 
@@ -29,10 +29,10 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(synthetic_app);
-        dom.rebuild();
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
-            dom.rebuild();
+            dom.rebuild(&mut NoOpMutations);
         })
     });
 }
@@ -222,7 +222,7 @@ impl JsFrameworkDom {
             generator: generator.clone(),
         };
         let mut dom = VirtualDom::new_with_props(js_framework_app, props);
-        dom.rebuild();
+        dom.rebuild(&mut NoOpMutations);
 
         Self {
             dom,
@@ -273,7 +273,7 @@ impl JsFrameworkDom {
     }
 
     fn render_and_count(&mut self) -> usize {
-        self.dom.render_immediate();
+        self.dom.render_immediate(&mut NoOpMutations);
         self.controls().row_count()
     }
 
@@ -355,6 +355,7 @@ impl RowGenerator {
 fn js_framework_app(props: AppProps) -> Element {
     let mut rows = use_signal(Vec::<RowData>::new);
     let selected_row: Signal<Option<usize>> = use_signal(|| None);
+    #[allow(clippy::redundant_closure)]
     let compare_selected = use_set_compare(move || selected_row());
 
     *props.controls.borrow_mut() = Some(Controls { rows, selected_row });

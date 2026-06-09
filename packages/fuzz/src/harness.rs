@@ -52,7 +52,7 @@ impl Harness {
         let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
         context.lifecycle.with_run(LifecycleRun::Incremental, || {
             vdom.borrow_mut()
-                .rebuild_into(&mut *incremental.borrow_mut())
+                .rebuild(&mut *incremental.borrow_mut())
         });
         incremental.borrow().assert_stack_clean();
         let state = Self {
@@ -333,8 +333,12 @@ impl WriteMutations for TargetedRendererOracle {
         self.current_renderer().pop_root()
     }
 
-    fn commit(&mut self) {
-        self.renderer.commit();
+    fn enter_render_target(&mut self, id: dioxus_core::RenderTargetId) {
+        self.renderer.enter_render_target(id);
+    }
+
+    fn render_target_ready(&self, id: dioxus_core::RenderTargetId) -> bool {
+        self.renderer.render_target_ready(id)
     }
 }
 
@@ -593,7 +597,7 @@ fn render_once(state: &mut Harness, assert_lifecycle_matches_fresh: bool) -> Res
             state
                 .vdom
                 .borrow_mut()
-                .render_immediate_into(&mut *state.incremental.borrow_mut())
+                .render_immediate(&mut *state.incremental.borrow_mut())
         });
     check_incremental_state(state, assert_lifecycle_matches_fresh)
 }
@@ -647,7 +651,7 @@ fn build_fresh_check(
     let mut renderer = RendererOracle::new();
     context.without_suspense_ready_registration(|| {
         context.lifecycle.with_run(LifecycleRun::Fresh, || {
-            fresh_vdom.rebuild_into(&mut renderer)
+            fresh_vdom.rebuild(&mut renderer)
         });
     });
     renderer.check_stack_clean()?;

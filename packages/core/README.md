@@ -4,15 +4,10 @@
 
 ```rust, no_run
 # tokio::runtime::Runtime::new().unwrap().block_on(async {
-use dioxus_core::{
-    VirtualDom, Event, Element, Mutations, VNode, ElementId, RenderTargetId,
-};
+use dioxus_core::{VirtualDom, Event, Element, Mutations, VNode, ElementId};
 
 let mut vdom = VirtualDom::new(app);
-let mut real_dom = SomeRenderer::new();
-vdom.insert_render_target(RenderTargetId::ROOT, Mutations::default());
-vdom.rebuild();
-real_dom.flush(vdom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
+let real_dom = SomeRenderer::new();
 
 loop {
     tokio::select! {
@@ -22,17 +17,11 @@ loop {
         },
         _ = vdom.wait_for_work() => {}
     }
-    vdom.render_immediate();
-    real_dom.flush(vdom.render_target_mut::<Mutations>(RenderTargetId::ROOT).unwrap());
+    vdom.render_immediate(&mut real_dom.apply())
 }
 
 # fn app() -> Element { VNode::empty() }
-# struct SomeRenderer;
-# impl SomeRenderer {
-#     fn new() -> Self { Self }
-#     async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() }
-#     fn flush(&mut self, _: &Mutations) {}
-# }
+# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&self) -> Mutations { Mutations::default() } }
 # });
 ```
 
@@ -70,7 +59,7 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 First, start with your app:
 
 ```rust
-# use dioxus::dioxus_core::VirtualDom;
+# use dioxus::dioxus_core::{Mutations, VirtualDom};
 use dioxus::prelude::*;
 
 // First, declare a root component
@@ -84,13 +73,8 @@ fn main() {
     // Next, create a new VirtualDom using this app as the root component.
     let mut dom = VirtualDom::new(app);
 
-    // Register an in-memory collector at the root target. The initial render
-    // populates it with mutations.
-    dom.insert_render_target(
-        dioxus_core::RenderTargetId::ROOT,
-        dioxus_core::Mutations::default(),
-    );
-    dom.rebuild();
+    // The initial render of the dom will generate a stream of edits for the real dom to apply
+    let mutations = dom.rebuild_to_vec();
 }
 ```
 
