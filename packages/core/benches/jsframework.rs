@@ -19,7 +19,7 @@
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
-use dioxus_core::{NoOpMutations, ScopeId};
+use dioxus_core::ScopeId;
 use rand::prelude::*;
 use std::{cell::RefCell, hint::black_box, rc::Rc};
 
@@ -353,9 +353,9 @@ impl RowGenerator {
 // Criterion drives the actions directly and Dioxus writes NoOpMutations so we
 // only measure core.
 fn js_framework_app(props: AppProps) -> Element {
-    let mut rows = use_signal(|| Vec::<RowData>::new());
+    let mut rows = use_signal(Vec::<RowData>::new);
     let selected_row: Signal<Option<usize>> = use_signal(|| None);
-    let compare_selected = use_set_compare(move || selected_row());
+    let compare_selected = use_set_compare(&*selected_row);
 
     *props.controls.borrow_mut() = Some(Controls { rows, selected_row });
 

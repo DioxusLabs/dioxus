@@ -235,17 +235,20 @@ fn MyComponent() -> Element {{
             .collect()
     }
 
-    /// Drain pending effects whose owning scope belongs to `target_id`.
-    /// Returns them in `ScopeOrder` (height-asc, id-asc), the same order they
-    /// would have come out of [`Self::pop_first_effect`].
-    pub(crate) fn drain_effects_for_target(&self, target_id: RenderTargetId) -> Vec<Effect> {
+    /// Drain pending effects whose owning scope's render target satisfies
+    /// `matches`. Returned in `ScopeOrder` (height-asc, id-asc); effects whose
+    /// scope no longer exists never match.
+    pub(crate) fn drain_effects_where(
+        &self,
+        mut matches: impl FnMut(RenderTargetId) -> bool,
+    ) -> Vec<Effect> {
         let mut pending = self.pending_effects.borrow_mut();
         let mut matched = Vec::new();
         let mut remaining = std::collections::BTreeSet::new();
         for effect in std::mem::take(&mut *pending) {
             let belongs = self
                 .try_get_state(effect.order.id)
-                .map(|s| s.target_id() == target_id)
+                .map(|s| matches(s.target_id()))
                 .unwrap_or(false);
             if belongs {
                 matched.push(effect);
@@ -255,6 +258,11 @@ fn MyComponent() -> Element {{
         }
         *pending = remaining;
         matched
+    }
+
+    /// Drain pending effects whose owning scope belongs to `target_id`.
+    pub(crate) fn drain_effects_for_target(&self, target_id: RenderTargetId) -> Vec<Effect> {
+        self.drain_effects_where(|id| id == target_id)
     }
 
     /// Drain every remaining effect regardless of target. Run as a final pass

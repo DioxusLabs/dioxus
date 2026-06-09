@@ -638,25 +638,11 @@ impl VirtualDom {
         // target need to fire now — there's no render pass coming to flush
         // them. Effects under registered targets fire when that target's next
         // commit runs.
-        let mut orphan_effects = Vec::new();
-        let mut remaining_effects = BTreeSet::new();
-        while let Some(effect) = self.pop_effect() {
-            let belongs_to_registered_target = self
-                .runtime
-                .try_get_state(effect.order.id)
-                .map(|s| self.targets.contains_key(&s.target_id()))
-                .unwrap_or(false);
-            if belongs_to_registered_target {
-                remaining_effects.insert(effect);
-            } else {
-                orphan_effects.push(effect);
-            }
-        }
-        self.runtime
-            .pending_effects
-            .borrow_mut()
-            .extend(remaining_effects);
-        for effect in orphan_effects {
+        let targets = &self.targets;
+        for effect in self
+            .runtime
+            .drain_effects_where(|id| !targets.contains_key(&id))
+        {
             effect.run();
         }
     }

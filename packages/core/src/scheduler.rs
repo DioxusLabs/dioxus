@@ -163,18 +163,6 @@ impl VirtualDom {
         Some(task)
     }
 
-    /// Take any effects from the highest scope. This should only be called if there is no pending scope reruns or tasks
-    pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
-        let mut pending_effects = self.runtime.pending_effects.borrow_mut();
-        let effect = pending_effects.pop_first()?;
-
-        // The scope that owns the effect should still exist. We can't just ignore the effect if the scope doesn't exist
-        // because the scope id may have been reallocated
-        debug_assert!(self.scopes.contains(effect.order.id.0));
-
-        Some(effect)
-    }
-
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub(crate) fn pop_work(&mut self) -> Option<Work> {
         let dirty_scope = self.dirty_scopes.first();

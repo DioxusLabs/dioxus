@@ -662,7 +662,7 @@ impl RendererOracle {
         parent_node.children.extend(nodes);
         parent_node
             .child_template_indices
-            .extend(std::iter::repeat(ti).take(added));
+            .extend(std::iter::repeat_n(ti, added));
     }
 
     /// Find the insertion index in `parent` for content belonging to the slot at
