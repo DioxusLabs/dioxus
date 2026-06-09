@@ -54,7 +54,7 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
 
     // Spin up the vdom and reserve a second render target before the App
     // gets a chance to read its props.
-    let mut bootstrap = VirtualDom::new_with_props(app, AppProps { target: RenderTargetId::ROOT });
+    let bootstrap = VirtualDom::new_with_props(app, AppProps { target: RenderTargetId::ROOT });
     let inner_target = bootstrap.runtime().create_render_target();
     drop(bootstrap);
 

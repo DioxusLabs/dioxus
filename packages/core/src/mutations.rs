@@ -157,9 +157,9 @@ impl<T: WriteMutations + 'static> RenderTargetWriter for T {
 /// `VirtualDom::rebuild`/`render_immediate`, which call `commit` directly on
 /// each registered writer after the diff pass (and after this dispatch's borrow
 /// of the target registry has been released).
-pub(crate) struct DiffDispatch<'a> {
+pub(crate) struct DiffDispatch<'a, 'r> {
     pub(crate) targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
-    root: Option<&'a mut dyn WriteMutations>,
+    root: Option<&'a mut (dyn WriteMutations + 'r)>,
     pub(crate) runtime: Rc<Runtime>,
     /// When `true`, encountering a mutation for an unregistered target id will
     /// lazily insert a `Mutations` collector so the write is captured rather
@@ -169,29 +169,16 @@ pub(crate) struct DiffDispatch<'a> {
     pub(crate) auto_create_targets: bool,
 }
 
-impl<'a> DiffDispatch<'a> {
+impl<'a, 'r> DiffDispatch<'a, 'r> {
     pub(crate) fn new(
         targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
+        root: Option<&'a mut (dyn WriteMutations + 'r)>,
         runtime: Rc<Runtime>,
         auto_create_targets: bool,
     ) -> Self {
         Self {
             targets,
-            root: None,
-            runtime,
-            auto_create_targets,
-        }
-    }
-
-    pub(crate) fn with_root<W: WriteMutations>(
-        targets: &'a mut BTreeMap<RenderTargetId, Box<dyn RenderTargetWriter>>,
-        root: &'a mut W,
-        runtime: Rc<Runtime>,
-        auto_create_targets: bool,
-    ) -> Self {
-        Self {
-            targets,
-            root: Some(root),
+            root,
             runtime,
             auto_create_targets,
         }
@@ -214,7 +201,7 @@ impl<'a> DiffDispatch<'a> {
     }
 }
 
-impl WriteMutations for DiffDispatch<'_> {
+impl WriteMutations for DiffDispatch<'_, '_> {
     fn append_children(&mut self, id: ElementId, m: usize) {
         if let Some(w) = self.current() {
             w.append_children(id, m);

@@ -434,52 +434,49 @@ impl VirtualDom {
     /// for tests / single-target hosts that don't want to give up ownership.
     #[doc(hidden)]
     pub fn rebuild_into<W: WriteMutations>(&mut self, writer: &mut W) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        let runtime = self.runtime.clone();
-        let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch = crate::mutations::DiffDispatch::with_root(
-            &mut targets,
-            writer,
-            runtime,
-            self.auto_create_targets,
-        );
-
-        self.rebuild_with_writer(&mut dispatch);
-        drop(dispatch);
-
-        self.commit_root_writer(writer);
-        self.commit_targets(&mut targets, Some(RenderTargetId::ROOT));
-        self.targets = targets;
-
-        self.drain_remaining_effects();
+        self.render_pass(Some(writer), Self::rebuild_with_writer);
     }
 
     /// Borrow `writer` at `ROOT` for the duration of a [`Self::render_immediate`] call.
     #[doc(hidden)]
     pub fn render_immediate_into<W: WriteMutations>(&mut self, writer: &mut W) {
         self.process_events();
+        self.render_pass(Some(writer), Self::render_immediate_with_writer);
+        self.runtime.finish_render();
+    }
 
+    /// Run one diff pass (`run`), dispatching edits into the registered render
+    /// targets — plus `root`, if given, which temporarily fronts for
+    /// `RenderTargetId::ROOT`. Afterwards every touched writer is committed
+    /// and each target's pending effects run, so consumers observe the whole
+    /// pass atomically.
+    fn render_pass(
+        &mut self,
+        mut root: Option<&mut dyn WriteMutations>,
+        run: fn(&mut Self, &mut crate::mutations::DiffDispatch),
+    ) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let runtime = self.runtime.clone();
         let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch = crate::mutations::DiffDispatch::with_root(
+        let mut dispatch = crate::mutations::DiffDispatch::new(
             &mut targets,
-            writer,
+            root.as_deref_mut(),
             runtime,
             self.auto_create_targets,
         );
 
-        self.render_immediate_with_writer(&mut dispatch);
+        run(self, &mut dispatch);
         drop(dispatch);
 
-        self.commit_root_writer(writer);
-        self.commit_targets(&mut targets, Some(RenderTargetId::ROOT));
+        let skip_root = root.map(|writer| {
+            self.commit_root_writer(writer);
+            RenderTargetId::ROOT
+        });
+        self.commit_targets(&mut targets, skip_root);
         self.targets = targets;
 
         self.drain_remaining_effects();
-        self.runtime.finish_render();
     }
 
     /// Mark all scopes as dirty. Each scope will be re-rendered.
@@ -718,21 +715,7 @@ impl VirtualDom {
     #[doc(hidden)]
     #[instrument(skip(self), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        // Lend the registry to the diff dispatcher for the rebuild pass.
-        let runtime = self.runtime.clone();
-        let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch =
-            crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
-
-        self.rebuild_with_writer(&mut dispatch);
-        drop(dispatch);
-
-        self.commit_targets(&mut targets, None);
-        self.targets = targets;
-
-        self.drain_remaining_effects();
+        self.render_pass(None, Self::rebuild_with_writer);
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without
@@ -747,25 +730,11 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self) {
         self.process_events();
-
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        let runtime = self.runtime.clone();
-        let mut targets = std::mem::take(&mut self.targets);
-        let mut dispatch =
-            crate::mutations::DiffDispatch::new(&mut targets, runtime, self.auto_create_targets);
-
-        self.render_immediate_with_writer(&mut dispatch);
-        drop(dispatch);
-
-        self.commit_targets(&mut targets, None);
-        self.targets = targets;
-
-        self.drain_remaining_effects();
+        self.render_pass(None, Self::render_immediate_with_writer);
         self.runtime.finish_render();
     }
 
-    fn rebuild_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
+    fn rebuild_with_writer(&mut self, to: &mut crate::mutations::DiffDispatch) {
         let new_nodes = self
             .runtime
             .clone()
@@ -779,7 +748,7 @@ impl VirtualDom {
         to.append_children(ElementId::ROOT, m);
     }
 
-    fn render_immediate_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
+    fn render_immediate_with_writer(&mut self, to: &mut crate::mutations::DiffDispatch) {
         // Tasks notified before this render are polled as part of it; tasks
         // first spawned *by* this render wait for the next scheduler pass.
         // Without the cutoff, a task that wakes itself on every poll would
@@ -835,7 +804,7 @@ impl VirtualDom {
         }
     }
 
-    fn commit_root_writer(&mut self, writer: &mut impl WriteMutations) {
+    fn commit_root_writer(&mut self, writer: &mut dyn WriteMutations) {
         writer.commit();
         for effect in self.runtime.drain_effects_for_target(RenderTargetId::ROOT) {
             effect.run();
