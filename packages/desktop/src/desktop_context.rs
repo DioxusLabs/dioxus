@@ -143,32 +143,50 @@ impl DesktopContext {
         })
     }
 
-    /// Run a closure on the main thread with access to the [`DesktopService`].
+    /// Run a closure on the main thread and block until it returns its result.
     ///
-    /// This method sends the closure to the main event loop thread and returns a receiver for the
-    /// result. Call [`tokio::sync::oneshot::Receiver::blocking_recv`] to block for the result, or
-    /// await the receiver from async code.
+    /// Dioxus desktop runs your components on a dedicated thread, while the OS event loop and every
+    /// native window live on the *main* thread. Some platform and FFI APIs may only be called from
+    /// the main thread; this method ships the closure over there, runs it, and hands the result
+    /// back.
     ///
-    /// # Type Parameters
-    ///
-    /// * `T` - The return type of the closure. Must be `Send + 'static`.
-    /// * `F` - The closure type.
+    /// The closure and its return value must be `Send` because they cross the thread boundary. The
+    /// closure takes no arguments — use the methods on [`DesktopContext`] (such as
+    /// [`set_title`](Self::set_title)) when you need to touch the window or webview.
     ///
     /// # Panics
     ///
     /// Panics if the event loop has been dropped.
     ///
+    /// Do **not** call this from code that already runs on the main thread (such as the
+    /// target-taking form of [`use_wry_event_handler`](crate::use_wry_event_handler)): it would
+    /// block the event loop waiting on itself and deadlock.
+    ///
     /// # Example
     ///
     /// ```rust, ignore
-    /// let proxy = window().proxy();
-    ///
-    /// let title = proxy
-    ///     .run_with_desktop_service(|desktop| desktop.window.title().to_string())
-    ///     .blocking_recv()
-    ///     .expect("Failed to receive result");
+    /// let answer = window().run_on_main_thread(|| {
+    ///     // main-thread-only FFI goes here
+    ///     6 * 7
+    /// });
+    /// assert_eq!(answer, 42);
     /// ```
-    pub fn run_with_desktop_service<T, F>(&self, f: F) -> oneshot::Receiver<T>
+    pub fn run_on_main_thread<T, F>(&self, f: F) -> T
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
+    {
+        self.run_with_desktop_service_blocking(move |_| f())
+    }
+
+    /// Run a closure on the main thread with access to this window's [`DesktopService`], returning
+    /// a receiver for the result. Await it or call
+    /// [`blocking_recv`](tokio::sync::oneshot::Receiver::blocking_recv).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the event loop has been dropped.
+    fn run_with_desktop_service<T, F>(&self, f: F) -> oneshot::Receiver<T>
     where
         T: Send + 'static,
         F: FnOnce(&DesktopService) -> T + Send + 'static,
@@ -1067,19 +1085,17 @@ impl DesktopService {
 
     /// Get a proxy to this [`DesktopService`] for the current VirtualDom thread.
     ///
-    /// The proxy allows running closures on the main thread with access to the
-    /// [`DesktopService`].
+    /// The proxy runs closures on the main thread via
+    /// [`run_on_main_thread`](DesktopContext::run_on_main_thread) and exposes the window/webview
+    /// methods on [`DesktopContext`].
     ///
     /// # Example
     ///
     /// ```rust, ignore
     /// let proxy = window().proxy();
     ///
-    /// let result = proxy
-    ///     .run_with_desktop_service(|desktop| desktop.window.title().to_string())
-    ///     .blocking_recv()
-    ///     .expect("Failed to receive result");
-    /// println!("Window title: {}", result);
+    /// let title = proxy.title();
+    /// println!("Window title: {}", title);
     /// ```
     pub fn proxy(&self) -> DesktopContext {
         DesktopContext::from_inner(self.proxy_inner())

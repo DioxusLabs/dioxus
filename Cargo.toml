@@ -966,6 +966,12 @@ path = "examples/08-apis/window_event.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "run_on_main_thread"
+required-features = ["desktop"]
+path = "examples/08-apis/run_on_main_thread.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "read_size"
 path = "examples/08-apis/read_size.rs"
 doc-scrape-examples = true
