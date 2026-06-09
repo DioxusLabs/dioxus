@@ -43,6 +43,7 @@ tokio = { workspace = true, features = [
 infer = { workspace = true }
 dunce = { workspace = true }
 slab = { workspace = true }
+slotmap = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }

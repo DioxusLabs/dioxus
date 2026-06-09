@@ -90,12 +90,17 @@ impl HtmlEventConverter for DesktopEventConverter {
                                         input_name.clone(),
                                         FormValue::File(Some(file_data)),
                                     ));
+                                } else {
+                                    tracing::warn!(
+                                        "skipping file input entry whose name is not an existing \
+                                         native path: {path:?}"
+                                    );
                                 }
                             }
                         }
 
                         if !values.is_empty() {
-                            return FormData::new(DesktopFormData::new(values));
+                            return FormData::new(DesktopFormData::new(input.value(), values));
                         }
                     }
                 }

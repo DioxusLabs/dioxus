@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-use crate::dom_thread::{SharedCallbackRegistry, VirtualDomEvent};
+use crate::dom_thread::VirtualDomEvent;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use crate::ipc::UserWindowEventVariant;
 use crate::{
@@ -32,7 +32,9 @@ pub struct WithoutTargetMarker;
 ///
 /// - `FnMut(&Event<()>)` — stays on the VirtualDom thread (like [`use_asset_handler`]),
 ///   does **not** need to be `Send`, and cannot access the [`EventLoopWindowTarget`]. Tao events
-///   that can be safely owned are queued to this handler asynchronously.
+///   that can be safely owned are queued to this handler asynchronously; events that borrow from
+///   the event loop ([`WindowEvent::ScaleFactorChanged`](tao::event::WindowEvent)) are never
+///   forwarded to it. This form is only available on Windows, Linux, and macOS.
 /// - `FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>)` — runs on the main
 ///   event loop thread with access to the target, and therefore must be `Send`.
 ///
@@ -118,14 +120,16 @@ fn use_dom_event_handler(
     let scope_id = current_scope_id();
     use_hook_with_cleanup(
         move || {
-            let registry: SharedCallbackRegistry = consume_context();
-            let dom_handler =
-                registry
-                    .borrow_mut()
-                    .register_event_handler(Box::new(move |event| {
-                        runtime.in_scope(scope_id, || handler(event));
-                    }));
             let window = window();
+            let Some(registry) = window.callback_registry() else {
+                tracing::warn!(
+                    "cannot register a dom event handler: this window's VirtualDom is not running"
+                );
+                return crate::WryEventHandler::new(usize::MAX);
+            };
+            let dom_handler = registry.register(move |event: UserWindowEvent| {
+                runtime.in_scope(scope_id, || handler(event));
+            });
             let dom_tx = window.dom_event_sender();
             window
                 .create_wry_event_handler_with_user_event(move |event, _| {
@@ -136,7 +140,7 @@ fn use_dom_event_handler(
                         return;
                     };
                     let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                        registry.invoke_event_handler(dom_handler, event);
+                        registry.invoke(dom_handler, event);
                     })));
                 })
                 .with_dom_handler(dom_handler)

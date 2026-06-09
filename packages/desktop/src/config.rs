@@ -77,7 +77,7 @@ pub struct Config {
     pub(crate) navigation_handler: Option<NavigationHandler>,
 
     #[allow(clippy::type_complexity)]
-    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
+    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + Send + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -323,11 +323,16 @@ impl Config {
         self
     }
 
-    /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
+    /// Allows modifying the window and virtual dom right after they are built, before the
+    /// VirtualDom starts running.
     ///
-    /// This is important for z-ordering textures in child windows. Note that this callback runs on
-    /// every window creation, so it's up to you to
-    pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
+    /// This is important for z-ordering textures in child windows. The callback runs on the
+    /// VirtualDom thread (where the dom lives) and therefore must be `Send`; the window handle it
+    /// receives can be freely shared across threads.
+    pub fn with_on_window(
+        mut self,
+        f: impl FnMut(Arc<Window>, &mut VirtualDom) + Send + 'static,
+    ) -> Self {
         self.on_window = Some(Box::new(f));
         self
     }

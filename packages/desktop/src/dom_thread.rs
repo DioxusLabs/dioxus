@@ -11,14 +11,13 @@ use crate::document::DesktopDocument;
 use crate::edits::EditWebsocket;
 use crate::file_upload::NativeFileHover;
 use crate::ipc::UserWindowEvent;
-use crate::shortcut::HotKeyState;
 use dioxus_core::{ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use futures_util::future::OptionFuture;
-use slab::Slab;
+use slotmap::SlotMap;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
@@ -40,37 +39,86 @@ pub(crate) enum VirtualDomEvent {
     ///
     /// This is used for the inverted callback pattern where closures stay on the
     /// DOM thread and the main thread invokes them via message passing.
-    RunCallback(Box<dyn FnOnce(&mut DomCallbackRegistry) + Send>),
+    RunCallback(Box<dyn FnOnce(&SharedCallbackRegistry) + Send>),
 }
 
-type AssetHandlerCallback = Box<dyn Fn(AssetRequest, RequestAsyncResponder)>;
-type ShortcutCallback = Box<dyn FnMut(HotKeyState)>;
+/// A type-erased callback stored on the DOM thread. The wrapper created in
+/// [`SharedCallbackRegistry::register`] downcasts the argument back to its concrete type.
+type StoredCallback = Box<dyn FnMut(Box<dyn Any>)>;
 
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-type EventHandlerCallback = Box<dyn FnMut(UserWindowEvent)>;
+slotmap::new_key_type! {
+    /// Unique identifier for a callback stored on the DOM thread. Ids are generational: a
+    /// removed callback's id can never dispatch to a different callback reusing its slot.
+    pub struct DomCallbackId;
+}
 
-/// A wry event handler whose closure stays on the DOM thread. It is invoked with a borrowed event
-/// while the main thread is blocked, so it never needs to be `Send` or own a `'static` event.
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-type WryEventHandlerCallback =
-    Box<dyn for<'a> FnMut(tao::event::Event<'a, ()>) -> tao::event::Event<'a, ()>>;
-
-/// Unique identifier for a callback stored on the DOM thread.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DomCallbackId(pub usize);
-
-pub(crate) type SharedCallbackRegistry = Rc<RefCell<DomCallbackRegistry>>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct PendingDomId(usize);
+/// A shared handle to this window's [`DomCallbackRegistry`]. Invocation never holds the inner
+/// `RefCell` borrow while user code runs, so callbacks can register/remove callbacks freely.
+#[derive(Clone, Default)]
+pub(crate) struct SharedCallbackRegistry(Rc<RefCell<DomCallbackRegistry>>);
 
 thread_local! {
     static PENDING_DOMS: RefCell<HashMap<usize, VirtualDom>> = RefCell::new(HashMap::new());
+
+    /// Every window's callback registry, keyed by window id, so a `DesktopContext` for *any*
+    /// window resolves the registry matching the `dom_tx` it dispatches through.
+    static WINDOW_REGISTRIES: RefCell<HashMap<WindowId, SharedCallbackRegistry>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Make `registry` discoverable by `window_id` until the returned guard drops (the guard lives
+/// inside the window's VirtualDom task, so cleanup also covers task aborts).
+pub(crate) fn register_window_registry(
+    window_id: WindowId,
+    registry: SharedCallbackRegistry,
+) -> WindowRegistryGuard {
+    WINDOW_REGISTRIES.with(|registries| {
+        registries.borrow_mut().insert(window_id, registry);
+    });
+    WindowRegistryGuard { window_id }
+}
+
+/// Look up the callback registry for a window. Returns `None` if the window's VirtualDom is not
+/// running (window closed, not yet started) or when called off the DOM thread.
+pub(crate) fn lookup_window_registry(window_id: WindowId) -> Option<SharedCallbackRegistry> {
+    WINDOW_REGISTRIES.with(|registries| registries.borrow().get(&window_id).cloned())
+}
+
+/// Removes a window's registry entry from [`WINDOW_REGISTRIES`] on drop.
+pub(crate) struct WindowRegistryGuard {
+    window_id: WindowId,
+}
+
+impl Drop for WindowRegistryGuard {
+    fn drop(&mut self) {
+        WINDOW_REGISTRIES.with(|registries| {
+            registries.borrow_mut().remove(&self.window_id);
+        });
+    }
 }
 
 static NEXT_PENDING_DOM_ID: AtomicUsize = AtomicUsize::new(0);
 
+/// The name of the dedicated DOM thread spawned by [`spawn_dom_thread`].
+const DOM_THREAD_NAME: &str = "dioxus-desktop-dom";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PendingDomId(usize);
+
+/// Park a `VirtualDom` in the DOM thread's thread-local so a `Send` id for it can travel to the
+/// main thread (used by `DesktopContext::new_window`, since `VirtualDom` itself is `!Send`).
+///
+/// # Panics
+///
+/// Panics when called off the DOM thread: the dom would be parked in the wrong thread's
+/// thread-local and could never be retrieved.
 pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
+    assert_eq!(
+        std::thread::current().name(),
+        Some(DOM_THREAD_NAME),
+        "DesktopContext::new_window must be called from a Dioxus component or task (the \
+         VirtualDom thread)"
+    );
     let id = NEXT_PENDING_DOM_ID.fetch_add(1, Ordering::Relaxed);
     PENDING_DOMS.with(|doms| {
         doms.borrow_mut().insert(id, dom);
@@ -78,10 +126,9 @@ pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
     PendingDomId(id)
 }
 
-fn take_pending_dom(id: PendingDomId) -> VirtualDom {
-    PENDING_DOMS
-        .with(|doms| doms.borrow_mut().remove(&id.0))
-        .expect("Pending VirtualDom should exist on the DOM thread")
+/// Take a parked `VirtualDom`. Returns `None` if it was already taken.
+pub(crate) fn take_pending_dom(id: PendingDomId) -> Option<VirtualDom> {
+    PENDING_DOMS.with(|doms| doms.borrow_mut().remove(&id.0))
 }
 
 /// Registry for callbacks that live on the DOM thread.
@@ -89,123 +136,93 @@ fn take_pending_dom(id: PendingDomId) -> VirtualDom {
 /// This registry stores non-Send closures that are invoked via the inverted
 /// callback pattern. The main thread sends requests to invoke these callbacks,
 /// and the DOM thread looks them up and executes them.
+#[derive(Default)]
 pub(crate) struct DomCallbackRegistry {
-    /// Callback storage for asset handlers, shortcut callbacks, and event handlers.
-    callbacks: Slab<Box<dyn Any>>,
-    /// Asset handler names point into the shared callback slab.
+    /// Callback storage. A slot is `None` while its callback is checked out for invocation; the
+    /// entry stays in the map so the id remains reserved until the callback is restored.
+    callbacks: SlotMap<DomCallbackId, Option<StoredCallback>>,
+    /// Asset handler names point into the shared callback map.
     asset_handler_names: HashMap<String, DomCallbackId>,
 }
 
-impl Default for DomCallbackRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
+/// Erase a callback's argument type so every callback kind shares one storage type. The wrapper
+/// restores the concrete type on invocation.
+fn erase<A: 'static>(mut f: impl FnMut(A) + 'static) -> StoredCallback {
+    Box::new(move |arg| match arg.downcast::<A>() {
+        Ok(arg) => f(*arg),
+        Err(_) => tracing::warn!("dom callback invoked with an unexpected argument type"),
+    })
 }
 
-impl DomCallbackRegistry {
-    /// Create a new empty callback registry.
-    pub fn new() -> Self {
-        Self {
-            callbacks: Slab::new(),
-            asset_handler_names: HashMap::new(),
+impl SharedCallbackRegistry {
+    /// Register a callback taking an argument of type `A`. Invoke it with
+    /// [`Self::invoke`]`(id, arg)`.
+    pub fn register<A: 'static>(&self, f: impl FnMut(A) + 'static) -> DomCallbackId {
+        self.0.borrow_mut().callbacks.insert(Some(erase(f)))
+    }
+
+    /// Remove a callback. Works even while the callback is checked out for invocation; the
+    /// in-flight restore will see the missing entry and drop the closure.
+    pub fn remove(&self, id: DomCallbackId) -> Option<()> {
+        self.0.borrow_mut().callbacks.remove(id).map(|_| ())
+    }
+
+    /// Invoke a callback without holding the registry borrow while user code runs.
+    ///
+    /// The callback is taken out of the registry, invoked, and restored afterwards, so the
+    /// callback itself may register or remove callbacks (including itself). Returns `false` if
+    /// the callback is missing (already removed, or currently running reentrantly).
+    pub fn invoke<A: 'static>(&self, id: DomCallbackId, arg: A) -> bool {
+        let taken = self
+            .0
+            .borrow_mut()
+            .callbacks
+            .get_mut(id)
+            .and_then(Option::take);
+        let Some(mut callback) = taken else {
+            tracing::warn!(
+                "dropping invocation of dom callback {id:?}: it was removed or is already running"
+            );
+            return false;
+        };
+        callback(Box::new(arg));
+        // Put the callback back, unless it was removed (or replaced) while it ran.
+        if let Some(slot @ None) = self.0.borrow_mut().callbacks.get_mut(id) {
+            *slot = Some(callback);
         }
+        true
     }
 
-    fn insert_callback<T: 'static>(&mut self, callback: T) -> DomCallbackId {
-        DomCallbackId(self.callbacks.insert(Box::new(callback)))
-    }
-
-    fn remove_callback(&mut self, id: DomCallbackId) -> Option<()> {
-        self.callbacks.try_remove(id.0).map(|_| ())
-    }
-
-    fn callback_mut<T: 'static>(&mut self, id: DomCallbackId) -> Option<&mut T> {
-        self.callbacks.get_mut(id.0)?.downcast_mut::<T>()
-    }
-
-    fn invoke<T: 'static, O>(&mut self, id: DomCallbackId, f: impl FnOnce(&mut T) -> O) -> O {
-        let value = self
-            .callback_mut::<T>(id)
-            .expect("type id should match expected type");
-        f(value)
-    }
-
-    /// Register an asset handler.
-    pub fn register_asset_handler(&mut self, name: String, handler: AssetHandlerCallback) {
-        let id = self.insert_callback(handler);
-        if let Some(old_id) = self.asset_handler_names.insert(name, id) {
-            self.remove_callback(old_id);
+    /// Register an asset handler under a name, replacing any previous handler with that name.
+    pub fn register_asset_handler(
+        &self,
+        name: String,
+        mut handler: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
+    ) {
+        let id = self.register(move |(request, responder)| handler(request, responder));
+        let mut registry = self.0.borrow_mut();
+        if let Some(old_id) = registry.asset_handler_names.insert(name, id) {
+            registry.callbacks.remove(old_id);
         }
     }
 
     /// Remove an asset handler.
-    pub fn remove_asset_handler(&mut self, name: &str) -> Option<()> {
-        let id = self.asset_handler_names.remove(name)?;
-        self.remove_callback(id)
+    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
+        let id = self.0.borrow_mut().asset_handler_names.remove(name)?;
+        self.remove(id)
     }
 
     /// Invoke an asset handler if it exists.
     pub fn invoke_asset_handler(
-        &mut self,
+        &self,
         name: &str,
         request: AssetRequest,
         responder: RequestAsyncResponder,
     ) -> bool {
-        let Some(id) = self.asset_handler_names.get(name).copied() else {
+        let Some(id) = self.0.borrow_mut().asset_handler_names.get(name).copied() else {
             return false;
         };
-
-        self.invoke::<AssetHandlerCallback, _>(id, |handler| handler(request, responder));
-        true
-    }
-
-    /// Register a shortcut callback and return its ID.
-    pub fn register_shortcut_callback(&mut self, callback: ShortcutCallback) -> DomCallbackId {
-        self.insert_callback(callback)
-    }
-
-    /// Remove a shortcut callback.
-    pub fn remove_shortcut_callback(&mut self, id: DomCallbackId) -> Option<()> {
-        self.remove_callback(id)
-    }
-
-    /// Invoke a shortcut callback if it exists.
-    pub fn invoke_shortcut_callback(&mut self, id: DomCallbackId, state: HotKeyState) {
-        self.invoke::<ShortcutCallback, _>(id, |callback| callback(state))
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn register_event_handler(&mut self, callback: EventHandlerCallback) -> DomCallbackId {
-        self.insert_callback(callback)
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn remove_event_handler(&mut self, id: DomCallbackId) -> Option<()> {
-        self.remove_callback(id)
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn invoke_event_handler(&mut self, id: DomCallbackId, event: UserWindowEvent) {
-        self.invoke::<EventHandlerCallback, _>(id, |callback| callback(event))
-    }
-
-    /// Register a wry event handler whose closure stays on the DOM thread.
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn register_wry_event_handler(
-        &mut self,
-        callback: WryEventHandlerCallback,
-    ) -> DomCallbackId {
-        self.insert_callback(callback)
-    }
-
-    /// Invoke a DOM-thread wry event handler with a borrowed event, if it exists.
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub fn invoke_wry_event_handler<'a>(
-        &mut self,
-        id: DomCallbackId,
-        event: tao::event::Event<'a, ()>,
-    ) -> tao::event::Event<'a, ()> {
-        self.invoke::<WryEventHandlerCallback, _>(id, |callback| callback(event))
+        self.invoke(id, (request, responder))
     }
 }
 
@@ -232,48 +249,11 @@ impl VirtualDomHandle {
     }
 }
 
-/// Run the VirtualDom in the current async context (called from wry-bindgen app thread).
-///
-/// This creates the VirtualDom and runs its event loop until completion.
-/// Also sets up the wasm-bindgen event handler for direct JS->Rust event calls.
-pub(crate) async fn run_virtual_dom<F>(
-    make_dom: F,
-    event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-    websocket: EditWebsocket,
-    webview_id: u32,
-    proxy: EventLoopProxy<UserWindowEvent>,
-    window_id: WindowId,
-    file_hover: NativeFileHover,
-) where
-    F: FnOnce() -> VirtualDom + Send + 'static,
-{
-    let dom = make_dom();
-    run_virtual_dom_with_dom(
-        dom, event_rx, event_tx, websocket, webview_id, proxy, window_id, file_hover,
-    )
-    .await;
-}
-
-pub(crate) async fn run_pending_virtual_dom(
-    pending_dom_id: PendingDomId,
-    event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-    websocket: EditWebsocket,
-    webview_id: u32,
-    proxy: EventLoopProxy<UserWindowEvent>,
-    window_id: WindowId,
-    file_hover: NativeFileHover,
-) {
-    let dom = take_pending_dom(pending_dom_id);
-    run_virtual_dom_with_dom(
-        dom, event_rx, event_tx, websocket, webview_id, proxy, window_id, file_hover,
-    )
-    .await;
-}
-
+/// Run the VirtualDom's event loop until completion in the current async context (called from
+/// the wry-bindgen app task on the DOM thread). Also sets up the wasm-bindgen event handler for
+/// direct JS->Rust event calls.
 #[allow(clippy::too_many_arguments)]
-async fn run_virtual_dom_with_dom(
+pub(crate) async fn run_virtual_dom_with_dom(
     dom: VirtualDom,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
@@ -287,15 +267,16 @@ async fn run_virtual_dom_with_dom(
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
     let desktop_service_proxy = DesktopContext::new(proxy, window_id, event_tx);
 
-    // Create the callback registry for the inverted callback pattern
-    let callback_registry = Rc::new(RefCell::new(DomCallbackRegistry::new()));
+    // Create the callback registry for the inverted callback pattern and make it discoverable
+    // by window id for the lifetime of this VirtualDom task (the guard cleans up on abort too).
+    let callback_registry = SharedCallbackRegistry::default();
+    let _registry_guard = register_window_registry(window_id, callback_registry.clone());
 
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
         provide_context(Rc::new(DesktopDocument::new(desktop_service_proxy.clone()))
             as Rc<dyn dioxus_document::Document>);
         provide_context(desktop_service_proxy);
-        provide_context(callback_registry.clone());
     });
     run_virtual_dom_loop(dom, event_rx, websocket, webview_id, callback_registry).await;
 }
@@ -328,23 +309,24 @@ async fn run_virtual_dom_loop(
                     return;
                 };
                 match event {
+                    // The webview sends initialize on every page load, so a reload triggers a
+                    // fresh rebuild for the new document
                     VirtualDomEvent::Initialize => {
-                        if !initialized {
-                            initialized = true;
-                            // Perform initial rebuild
-                            dom.rebuild(&mut mutations);
-                            let edits = take_edits(&mut mutations);
-                            pending_flush = Some(websocket.send_edits(webview_id, edits));
-                        }
+                        initialized = true;
+                        // Perform initial rebuild
+                        dom.rebuild(&mut mutations);
+                        let edits = take_edits(&mut mutations);
+                        pending_flush = Some(websocket.send_edits(webview_id, edits));
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
                         dioxus_devtools::apply_changes(&dom, &msg);
                     }
                     VirtualDomEvent::RunCallback(callback) => {
-                        // Run the callback with access to the registry
-                        let mut registry = callback_registry.borrow_mut();
-                        callback(&mut registry);
+                        // Run the callback with access to the registry. The registry handle is
+                        // passed by reference (not a borrow of its RefCell) so the callback can
+                        // register and remove other callbacks while it runs.
+                        callback(&callback_registry);
                     }
                 }
             }
@@ -392,7 +374,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
         tokio::sync::mpsc::unbounded_channel();
 
     std::thread::Builder::new()
-        .name("dioxus-desktop-dom".into())
+        .name(DOM_THREAD_NAME.into())
         .spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -402,7 +384,8 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
             runtime.block_on(async move {
                 tokio::task::LocalSet::new()
                     .run_until(async {
-                        let mut abort_handles: HashMap<WindowId, AbortHandle> = HashMap::new();
+                        let abort_handles: Rc<RefCell<HashMap<WindowId, AbortHandle>>> =
+                            Rc::new(RefCell::new(HashMap::new()));
 
                         loop {
                             tokio::select! {
@@ -410,7 +393,8 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
 
                                 // Handle abort requests with priority
                                 Some(window_id) = abort_rx.recv() => {
-                                    if let Some(handle) = abort_handles.remove(&window_id) {
+                                    let handle = abort_handles.borrow_mut().remove(&window_id);
+                                    if let Some(handle) = handle {
                                         handle.abort();
                                     }
                                 }
@@ -423,12 +407,16 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                     };
                                     let fut = spawn_task();
                                     let proxy = proxy.clone();
+                                    let handles = abort_handles.clone();
                                     let join_handle = tokio::task::spawn_local(async move {
                                         _ = AssertUnwindSafe(fut).catch_unwind().await;
-                                        // Close the window when the task completes (aborted or finished)
-                                        _ = proxy.send_event(UserWindowEvent::close_window(window_id));
+                                        // Runs when the VirtualDom task finishes or panics (never
+                                        // on abort). Force-destroy the window: hiding a window
+                                        // whose VirtualDom is gone would leave a zombie.
+                                        handles.borrow_mut().remove(&window_id);
+                                        _ = proxy.send_event(UserWindowEvent::destroy_window(window_id));
                                     });
-                                    abort_handles.insert(window_id, join_handle.abort_handle());
+                                    abort_handles.borrow_mut().insert(window_id, join_handle.abort_handle());
                                 }
                             }
                         }

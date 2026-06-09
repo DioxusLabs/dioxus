@@ -29,6 +29,7 @@ export class NativeInterpreter extends JSChannel_ {
   headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
+  queuedMountedEvents: [Element, NodeId, boolean][] = [];
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
   // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
@@ -345,6 +346,28 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Mounted events are queued and flushed at the end of each edit batch, once the element is
+  // attached to the document (so geometry queries in onmounted observe real layout). The queue
+  // also covers the startup race where edits arrive before Rust has installed the handler:
+  // events stay queued until setMountedHandler flushes them on install.
+  queueMountedEvent(element: Element, id: NodeId, bubbles: boolean) {
+    this.queuedMountedEvents.push([element, id, bubbles]);
+  }
+
+  flushMountedEvents() {
+    // @ts-ignore - rustMountedHandler is set by wry-bindgen from Rust
+    const handler = window.rustMountedHandler;
+    if (typeof handler !== "function") {
+      // Not installed yet; mounted events fire exactly once per element, so keep them queued.
+      return;
+    }
+    const queued = this.queuedMountedEvents;
+    this.queuedMountedEvents = [];
+    for (const [element, id, bubbles] of queued) {
+      handler(element, id, bubbles);
+    }
+  }
+
   handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const element = getTargetId(target)!;
@@ -374,12 +397,13 @@ export class NativeInterpreter extends JSChannel_ {
 
     // Desktop passes the raw event directly to Rust via wry-bindgen
     // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
-    const preventDefault = window.rustEventHandler(
-      event,
-      name,
-      element,
-      bubbles
-    );
+    const rustHandler = window.rustEventHandler;
+    if (typeof rustHandler !== "function") {
+      // User-initiated events are re-firable, so dropping the rare pre-init event is fine
+      console.warn(`Dropping event "${name}": Rust event handler not yet installed`);
+      return;
+    }
+    const preventDefault = rustHandler(event, name, element, bubbles);
 
     if (preventDefault) {
       event.preventDefault();
@@ -440,11 +464,13 @@ export class NativeInterpreter extends JSChannel_ {
     if (this.headless) {
       // @ts-ignore
       this.run_from_bytes(bytes);
+      this.flushMountedEvents();
       this.markEditsFinished();
     } else {
       this.enqueueBytes(bytes);
       requestAnimationFrame(() => {
         this.flushQueuedBytes();
+        this.flushMountedEvents();
         this.markEditsFinished();
       });
     }

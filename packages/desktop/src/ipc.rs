@@ -139,6 +139,12 @@ impl UserWindowEvent {
         }
     }
 
+    pub(crate) fn destroy_window(id: WindowId) -> Self {
+        Self {
+            variant: UserWindowEventVariant::DestroyWindow(id),
+        }
+    }
+
     pub(crate) fn shutdown() -> Self {
         Self {
             variant: UserWindowEventVariant::Shutdown,
@@ -205,6 +211,14 @@ pub(crate) enum UserWindowEventVariant {
     /// Close a given window (could be any window!)
     CloseWindow(WindowId),
 
+    /// Destroy a window unconditionally, ignoring [`WindowCloseBehaviour`].
+    ///
+    /// Sent when a window's VirtualDom task has finished: hiding such a window
+    /// (`WindowCloseBehaviour::WindowHides`) would leave an unrecoverable zombie.
+    ///
+    /// [`WindowCloseBehaviour`]: crate::WindowCloseBehaviour
+    DestroyWindow(WindowId),
+
     /// Gracefully shutdown the entire app
     Shutdown,
 
@@ -233,7 +247,6 @@ pub struct IpcMessage {
 /// A set of known messages that we need to respond to
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
-    UserEvent,
     BrowserOpen,
     Initialize,
     Other(&'a str),
@@ -242,7 +255,6 @@ pub enum IpcMethod<'a> {
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
-            "user_event" => IpcMethod::UserEvent,
             "browser_open" => IpcMethod::BrowserOpen,
             "initialize" => IpcMethod::Initialize,
             _ => IpcMethod::Other(&self.method),

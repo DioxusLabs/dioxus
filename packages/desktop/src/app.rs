@@ -26,6 +26,21 @@ use tao::{
 /// not the VirtualDom itself.
 pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 
+/// The thread the tao event loop runs on, recorded when the [`App`] is created.
+static MAIN_THREAD_ID: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
+
+/// Blocking [`DesktopContext`](crate::DesktopContext) calls wait on an event the main thread must
+/// process; calling them *from* the main thread would deadlock, so panic with a clear message.
+pub(crate) fn assert_not_main_thread() {
+    if MAIN_THREAD_ID.get() == Some(&std::thread::current().id()) {
+        panic!(
+            "blocking DesktopContext methods cannot be called from the main/event-loop thread: \
+             they wait on an event that same thread must process, which would deadlock. Use the \
+             DesktopService methods directly instead."
+        );
+    }
+}
+
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
@@ -61,6 +76,10 @@ pub(crate) struct SharedContext {
 
 impl App {
     pub fn new(mut cfg: Config, virtual_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+        // Record the event loop thread so blocking DesktopContext calls can detect (and refuse)
+        // being driven from it, which would deadlock.
+        _ = MAIN_THREAD_ID.set(std::thread::current().id());
+
         let event_loop = cfg
             .event_loop
             .take()

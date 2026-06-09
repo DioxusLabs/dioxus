@@ -1,8 +1,8 @@
 use before_input::WebBeforeInputData;
 use clipboard::WebClipboardData;
 use dioxus_html::{
-    BeforeInputData, ClipboardData, DragData, FormData, HtmlEventConverter, ImageData,
-    MountedData, PlatformEventData,
+    BeforeInputData, ClipboardData, DragData, FormData, HtmlEventConverter, ImageData, MountedData,
+    PlatformEventData,
 };
 pub use form::WebFormData;
 use load::WebImageEvent;
@@ -57,10 +57,17 @@ impl<T: 'static> Synthetic<T> {
 
 /// Map each converter to the web_sys event type its synthesized data will
 /// `unchecked_cast` into. Converters that wrap the raw `Event` directly map to
-/// `Event` (everything matches). Non-event converters (mounted, resize,
-/// visible) also map to `Event` since their input isn't a `web_sys::Event`
-/// in practice — those names will never reach `event_type_matches`.
+/// `Event` (everything matches). Resize and visible events are dispatched by
+/// the interpreter as `CustomEvent`s carrying the observer entry in `.detail`,
+/// so a user-dispatched plain `Event("resize")` must be rejected here or the
+/// converter would cast garbage into a `ResizeObserverEntry`.
 macro_rules! converter_web_type {
+    (convert_resize_data) => {
+        web_sys::CustomEvent
+    };
+    (convert_visible_data) => {
+        web_sys::CustomEvent
+    };
     (convert_animation_data) => {
         web_sys::AnimationEvent
     };
@@ -297,7 +304,7 @@ impl HtmlEventConverter for WebEventConverter {
         }
         #[cfg(not(feature = "mounted"))]
         {
-            panic!("mounted events are not supported without the mounted feature on the dioxus-web crate enabled")
+            panic!("mounted events are not supported without the `mounted` feature of the dioxus-web-sys-events crate (re-exported as the `mounted` feature of dioxus-web and dioxus-desktop)")
         }
     }
 

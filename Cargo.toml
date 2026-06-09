@@ -232,7 +232,6 @@ wasm-bindgen-futures = { version = "=0.4.72-alpha.5", package = "wasm-bindgen-fu
 wasm-bindgen-test = "0.3.71"
 js-sys = { version = "=0.3.99-alpha.5", package = "js-sys-x" }
 web-sys = { version = "=0.3.99-alpha.5", package = "web-sys-x", default-features = false }
-wry-bindgen = "=0.2.122-alpha.5"
 wry-bindgen-runtime = "=0.1.0-alpha.5"
 html_parser = "0.7.0"
 thiserror = "2.0.18"

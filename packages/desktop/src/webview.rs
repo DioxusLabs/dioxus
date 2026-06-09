@@ -131,10 +131,8 @@ impl WebviewInstance {
         let wry_bindgen = WryBindgen::new();
         let protocol = wry_bindgen.protocol_handler();
 
-        // TODO: restore on dom thread or remove dom access
-        // if let Some(on_build) = cfg.on_window.as_mut() {
-        //     on_build(window.clone(), &mut dom);
-        // }
+        // Runs on the VirtualDom thread right after the dom is created, before it starts.
+        let on_window = cfg.on_window.take();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -433,35 +431,39 @@ impl WebviewInstance {
         let run_app = {
             let proxy = proxy.clone();
             let event_tx = event_tx.clone();
+            let window = desktop_context.window.clone();
             move || async move {
-                match dom {
-                    PendingDom::Factory(make_dom) => {
-                        crate::dom_thread::run_virtual_dom(
-                            make_dom,
-                            dom_event_rx,
-                            event_tx,
-                            websocket,
-                            webview_id,
-                            proxy,
-                            window_id,
-                            file_hover,
-                        )
-                        .await;
+                let mut dom = match dom {
+                    PendingDom::Factory(make_dom) => make_dom(),
+                    PendingDom::Pending(pending) => {
+                        match crate::dom_thread::take_pending_dom(pending) {
+                            Some(dom) => dom,
+                            None => {
+                                tracing::warn!(
+                                    "the pending VirtualDom for window {window_id:?} was already \
+                                     taken; the window will not render"
+                                );
+                                return;
+                            }
+                        }
                     }
-                    PendingDom::Pending(pending_dom_id) => {
-                        crate::dom_thread::run_pending_virtual_dom(
-                            pending_dom_id,
-                            dom_event_rx,
-                            event_tx,
-                            websocket,
-                            webview_id,
-                            proxy,
-                            window_id,
-                            file_hover,
-                        )
-                        .await;
-                    }
+                };
+
+                if let Some(mut on_window) = on_window {
+                    on_window(window, &mut dom);
                 }
+
+                crate::dom_thread::run_virtual_dom_with_dom(
+                    dom,
+                    dom_event_rx,
+                    event_tx,
+                    websocket,
+                    webview_id,
+                    proxy,
+                    window_id,
+                    file_hover,
+                )
+                .await;
             }
         };
         let (runtime, driver) = wry_bindgen.split();

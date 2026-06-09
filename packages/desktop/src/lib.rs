@@ -54,7 +54,10 @@ pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{DesktopContext, DesktopService, PendingDesktopContext, window};
-pub use dioxus_web_sys_events::*;
+// Re-export the pieces of the shared web-sys-events crate users need to downcast desktop
+// events (e.g. `as_web_event`). The rest of the crate is an implementation detail.
+pub use dioxus_web_sys_events::{Synthetic, WebEventExt};
+pub use dom_thread::DomCallbackId;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

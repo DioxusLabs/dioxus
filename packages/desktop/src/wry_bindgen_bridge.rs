@@ -17,6 +17,12 @@ export function setEventHandler(handler) {
 }
 export function setMountedHandler(handler) {
     window.rustMountedHandler = handler;
+    // Flush mounted events the interpreter queued before the handler was installed (the handler
+    // travels over wry-bindgen's channel while edits travel over the edit websocket, so there is
+    // no ordering guarantee between them).
+    if (window.interpreter) {
+        window.interpreter.flushMountedEvents();
+    }
 }
 "#)]
 extern "C" {
@@ -78,6 +84,12 @@ fn handle_event_from_js(
 ) -> bool {
     use wasm_bindgen::JsCast;
 
+    // Drop events whose JS type doesn't match what the converters will unchecked-cast to
+    // (e.g. a user-dispatched plain `Event` with a typed name like "keydown")
+    if !dioxus_web_sys_events::event_type_matches(&name, &event) {
+        return false;
+    }
+
     // Get the target element for the event
     let target = event
         .target()
@@ -88,23 +100,32 @@ fn handle_event_from_js(
                 .expect("document should have a root element")
         });
 
-    // For drag events, we need to inject native file paths from the file_hover context
+    // For drag events, we need to inject native file paths from the file_hover context. A
+    // JS-dispatched plain `Event` with a drag name (synthetic events are a supported pattern)
+    // fails the `DragEvent` cast and falls through to the generic conversion instead.
+    // For drag events, we need to inject native file paths from the file_hover context. A
+    // JS-dispatched plain `Event` with a drag name (synthetic events are a supported pattern)
+    // fails the `DragEvent` cast and falls back to the generic conversion instead of panicking.
     let platform_event: PlatformEventData = if is_drag_event(&name) {
-        // Get native file paths from the file_hover
-        let native_files = file_hover
-            .current()
-            .map(|evt| match evt {
-                wry::DragDropEvent::Drop { paths, .. } => paths,
-                wry::DragDropEvent::Enter { paths, .. } => paths,
-                _ => vec![],
-            })
-            .unwrap_or_default();
+        match event.dyn_into::<web_sys::DragEvent>() {
+            Ok(drag_event) => {
+                // Get native file paths from the file_hover
+                let native_files = file_hover
+                    .current()
+                    .map(|evt| match evt {
+                        wry::DragDropEvent::Drop { paths, .. } => paths,
+                        wry::DragDropEvent::Enter { paths, .. } => paths,
+                        _ => vec![],
+                    })
+                    .unwrap_or_default();
 
-        // Create a DesktopFileDragEvent with native file paths
-        let drag_event: web_sys::DragEvent =
-            event.dyn_into().expect("drag event should be DragEvent");
-        let desktop_drag = DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
-        PlatformEventData::new(Box::new(desktop_drag))
+                // Create a DesktopFileDragEvent with native file paths
+                let desktop_drag =
+                    DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
+                PlatformEventData::new(Box::new(desktop_drag))
+            }
+            Err(event) => virtual_event_from_websys_event(event, target),
+        }
     } else {
         // Convert to platform event data using the shared web-sys-events crate
         virtual_event_from_websys_event(event, target)

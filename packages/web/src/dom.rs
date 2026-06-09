@@ -15,8 +15,9 @@ use rustc_hash::FxHashMap;
 use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{Document, Event, Node};
 
-use crate::{
-    Config, WebEventConverter, event_type_matches, load_document, virtual_event_from_websys_event,
+use crate::Config;
+use dioxus_web_sys_events::{
+    WebEventConverter, event_type_matches, load_document, virtual_event_from_websys_event,
 };
 
 pub struct WebsysDom {

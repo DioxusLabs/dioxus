@@ -261,9 +261,9 @@ pub(crate) struct DesktopFormData {
 }
 
 impl DesktopFormData {
-    pub fn new(values: Vec<(String, FormValue)>) -> Self {
+    pub fn new(value: String, values: Vec<(String, FormValue)>) -> Self {
         Self {
-            value: String::new(),
+            value,
             valid: true,
             values,
         }

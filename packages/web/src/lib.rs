@@ -16,8 +16,9 @@ mod dom;
 pub mod launch;
 mod mutations;
 
-// Re-export from the shared web-sys-events crate
-pub use dioxus_web_sys_events::*;
+// Re-export the items from the shared web-sys-events crate that were part of dioxus-web's
+// public API before the extraction. The rest of the crate is an implementation detail.
+pub use dioxus_web_sys_events::{WebDataTransfer, WebEventExt, WebFileData, WebFileExt};
 
 #[cfg(feature = "document")]
 mod document;

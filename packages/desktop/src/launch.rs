@@ -50,6 +50,7 @@ pub fn launch_virtual_dom_blocking(
             Event::UserEvent(event) => match event.into_variant() {
                 UserWindowEventVariant::NewWindow => app.handle_new_window(event_loop),
                 UserWindowEventVariant::CloseWindow(id) => app.handle_close_requested(id),
+                UserWindowEventVariant::DestroyWindow(id) => app.window_destroyed(id),
                 UserWindowEventVariant::Shutdown => {
                     app.control_flow = tao::event_loop::ControlFlow::Exit
                 }
@@ -96,7 +97,6 @@ pub fn launch_virtual_dom_blocking(
 
                 UserWindowEventVariant::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
-                    IpcMethod::UserEvent => {}
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
                     IpcMethod::Other(_) => {}
                 },

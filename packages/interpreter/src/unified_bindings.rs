@@ -180,7 +180,8 @@ mod js {
     this_node.setAttribute('data-dioxus-id', `\${id}`);
     const event_name = $event$;
 
-    // if this is a mounted listener, we send the event immediately
+    // if this is a mounted listener, we send the event once the current edit batch has been
+    // applied (so the element is attached and laid out by the time the listener runs)
     if (event_name === "mounted") {
         if (this.liveview) {
             this.sendSerializedEvent({
@@ -190,7 +191,7 @@ mod js {
                 bubbles,
             });
         } else {
-            window.rustMountedHandler(this_node, id, bubbles);
+            this.queueMountedEvent(this_node, id, bubbles);
         }
     } else {
         this.createListener(event_name, this_node, bubbles, (event) => {
