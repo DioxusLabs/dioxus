@@ -225,29 +225,7 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                if self.exit_on_last_window_close
-                    && is_shared_dom
-                    && target_id == RenderTargetId::ROOT
-                {
-                    self.control_flow = ControlFlow::Exit;
-                    return;
-                }
-
-                self.notify_close_handlers(id);
-
-                if let Some(removed) = self.webviews.remove(&id) {
-                    if is_shared_dom {
-                        self.dom.remove_render_target(removed.target_id);
-                    }
-                }
-
-                if is_shared_dom {
-                    self.render_shared_dom_after_webview_removed();
-                }
-
-                if self.exit_on_last_window_close && self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
-                }
+                self.close_window(id, is_shared_dom, target_id);
             }
         };
     }
@@ -261,12 +239,19 @@ impl App {
             return;
         };
 
+        self.close_window(id, is_shared_dom, target_id);
+    }
+
+    /// Tear down one webview: fire close callbacks, drop its render target,
+    /// re-render the shared DOM, and exit if it was the last window (or the
+    /// root target of a shared DOM).
+    fn close_window(&mut self, id: WindowId, is_shared_dom: bool, target_id: RenderTargetId) {
         if self.exit_on_last_window_close && is_shared_dom && target_id == RenderTargetId::ROOT {
             self.control_flow = ControlFlow::Exit;
             return;
         }
 
-        self.notify_close_handlers(id);
+        self.shared.window_close_handlers.notify(id);
 
         if let Some(removed) = self.webviews.remove(&id) {
             if is_shared_dom {
@@ -281,10 +266,6 @@ impl App {
         if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
-    }
-
-    fn notify_close_handlers(&self, id: WindowId) {
-        self.shared.window_close_handlers.notify(id);
     }
 
     pub fn resize_window(&self, id: WindowId, size: PhysicalSize<u32>) {

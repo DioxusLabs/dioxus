@@ -224,22 +224,12 @@ impl WebviewInstance {
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
         let mut instance =
-            Self::new_shared_inner(cfg, RenderTargetId::ROOT, &mut dom, shared, true);
+            Self::new_shared(cfg, RenderTargetId::ROOT, &mut dom, shared, true);
         instance.dom = Some(dom);
         instance
     }
 
     pub(crate) fn new_shared(
-        cfg: Config,
-        target_id: RenderTargetId,
-        dom: &mut VirtualDom,
-        shared: Rc<SharedContext>,
-        provide_root_context: bool,
-    ) -> WebviewInstance {
-        Self::new_shared_inner(cfg, target_id, dom, shared, provide_root_context)
-    }
-
-    fn new_shared_inner(
         mut cfg: Config,
         target_id: RenderTargetId,
         dom: &mut VirtualDom,
