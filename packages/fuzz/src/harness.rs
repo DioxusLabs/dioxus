@@ -1346,6 +1346,27 @@ mod tests {
     }
 
     #[test]
+    fn ready_suspense_set_resolved_promotes_children() {
+        // Regression: a Ready (suspended) boundary whose mode prop flips to
+        // Resolved must swap the fallback for the children on the next
+        // rerender. The incremental DOM used to stay stuck on the fallback.
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::suspense(176, SuspenseMode::Resolved),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn resolved_suspense_with_edited_child_matches_fresh_render() {
         replay_ops([
             Op::template(
