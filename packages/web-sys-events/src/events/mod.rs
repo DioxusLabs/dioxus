@@ -1,5 +1,8 @@
+use before_input::WebBeforeInputData;
+use clipboard::WebClipboardData;
 use dioxus_html::{
-    DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
+    BeforeInputData, ClipboardData, DragData, FormData, HtmlEventConverter, ImageData,
+    MountedData, PlatformEventData,
 };
 pub use form::WebFormData;
 use load::WebImageEvent;
@@ -7,6 +10,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, Event};
 
 mod animation;
+mod before_input;
 mod cancel;
 mod clipboard;
 mod composition;
@@ -59,6 +63,12 @@ impl<T: 'static> Synthetic<T> {
 macro_rules! converter_web_type {
     (convert_animation_data) => {
         web_sys::AnimationEvent
+    };
+    (convert_before_input_data) => {
+        web_sys::InputEvent
+    };
+    (convert_clipboard_data) => {
+        web_sys::ClipboardEvent
     };
     (convert_composition_data) => {
         web_sys::CompositionEvent
@@ -134,6 +144,44 @@ macro_rules! expand_event_type_matches {
 
 dioxus_html::with_html_event_groups!(expand_event_type_matches);
 
+/// Read the textual value of an editable element.
+///
+/// Mirrors what the wasm renderer reports for `value` across the input-shaped events
+/// (`oninput`, `onchange`, `onbeforeinput`, …): the element's `value` for
+/// `<input>`/`<textarea>`/`<select>` (with checkboxes coerced to `"true"`/`"false"`),
+/// falling back to `textContent` for `contenteditable` elements. Returns `None` only
+/// when the target is none of these.
+pub(crate) fn editable_element_value(element: &Element) -> Option<String> {
+    element
+        .dyn_ref()
+        .map(
+            |input: &web_sys::HtmlInputElement| match input.type_().as_str() {
+                // todo: special case more input types
+                "checkbox" => match input.checked() {
+                    true => "true".to_string(),
+                    false => "false".to_string(),
+                },
+                _ => input.value(),
+            },
+        )
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+        })
+        // select elements are NOT input events - because - why woudn't they be??
+        .or_else(|| {
+            element
+                .dyn_ref()
+                .map(|input: &web_sys::HtmlSelectElement| input.value())
+        })
+        .or_else(|| {
+            element
+                .dyn_ref::<web_sys::HtmlElement>()
+                .and_then(|el| el.text_content())
+        })
+}
+
 /// Event converter for web-sys events
 pub struct WebEventConverter;
 
@@ -154,6 +202,18 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     #[inline(always)]
+    fn convert_before_input_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::BeforeInputData {
+        let event = downcast_event(event);
+        BeforeInputData::new(WebBeforeInputData::new(
+            event.element.clone(),
+            event.raw.clone().unchecked_into::<web_sys::InputEvent>(),
+        ))
+    }
+
+    #[inline(always)]
     fn convert_cancel_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -166,7 +226,13 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ClipboardData {
-        Synthetic::new(downcast_event(event).raw.clone()).into()
+        let event = downcast_event(event);
+        ClipboardData::new(WebClipboardData::new(
+            event
+                .raw
+                .clone()
+                .unchecked_into::<web_sys::ClipboardEvent>(),
+        ))
     }
 
     #[inline(always)]

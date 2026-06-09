@@ -264,7 +264,7 @@ mod decode_ok {
                     Ok(res) => {
                         let status = res.status();
 
-                        let bytes = res.bytes().await.unwrap();
+                        let bytes = res.bytes().await?;
                         let as_bytes = if bytes.is_empty() {
                             b"null".as_slice()
                         } else {

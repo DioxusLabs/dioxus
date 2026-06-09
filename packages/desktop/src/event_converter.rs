@@ -49,6 +49,10 @@ impl HtmlEventConverter for DesktopEventConverter {
         self.inner.convert_animation_data(event)
     }
 
+    fn convert_before_input_data(&self, event: &PlatformEventData) -> dioxus_html::BeforeInputData {
+        self.inner.convert_before_input_data(event)
+    }
+
     fn convert_cancel_data(&self, event: &PlatformEventData) -> dioxus_html::CancelData {
         self.inner.convert_cancel_data(event)
     }

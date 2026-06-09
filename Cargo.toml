@@ -200,8 +200,8 @@ blitz-shell = { version = "=0.3.0-alpha.4", default-features = false }
 peniko = { version = "0.6.1", default-features = false }
 anyrender = { version = "0.10", default-features = false }
 anyrender_vello = { version = "0.10.1", default-features = false }
-anyrender_vello_cpu = { version = "0.12.1", default-features = false }
-anyrender_vello_hybrid = { version = "0.5.1", default-features = false }
+anyrender_vello_cpu = { version = "0.13.0", default-features = false }
+anyrender_vello_hybrid = { version = "0.6.0", default-features = false }
 anyrender_skia = { version = "0.8", default-features = false }
 wgpu_context = { version = "0.6" }
 wgpu = { version = "29.0.3" }

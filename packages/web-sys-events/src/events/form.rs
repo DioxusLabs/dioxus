@@ -32,40 +32,7 @@ impl WebFormData {
 
 impl HasFormData for WebFormData {
     fn value(&self) -> String {
-        let target = &self.element;
-        target
-            .dyn_ref()
-            .map(|input: &web_sys::HtmlInputElement| {
-                // todo: special case more input types
-                match input.type_().as_str() {
-                    "checkbox" => {
-                        match input.checked() {
-                            true => "true".to_string(),
-                            false => "false".to_string(),
-                        }
-                    },
-                    _ => {
-                        input.value()
-                    }
-                }
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlTextAreaElement| input.value())
-            })
-            // select elements are NOT input events - because - why woudn't they be??
-            .or_else(|| {
-                target
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlSelectElement| input.value())
-            })
-            .or_else(|| {
-                target
-                    .dyn_ref::<web_sys::HtmlElement>()
-                    .unwrap()
-                    .text_content()
-            })
+        super::editable_element_value(&self.element)
             .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
