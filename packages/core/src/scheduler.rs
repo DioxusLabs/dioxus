@@ -79,7 +79,6 @@
 use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
-use crate::innerlude::Effect;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
