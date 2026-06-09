@@ -685,12 +685,15 @@ impl BuildRequest {
             features.sort();
         }
 
-        // Check if we should prompt the user to apply the wasm-bindgen patch for desktop targets
-        if !matches!(platform, Platform::Web | Platform::Server) {
+        // Check if we should prompt the user to apply the wasm-bindgen patch. Only the
+        // webview-based renderer runs wasm-bindgen code natively through wry-bindgen; web,
+        // server, liveview, and native (Blitz) builds never need the patch even though upstream
+        // wasm-bindgen usually appears somewhere in their dependency graph (e.g. via fullstack).
+        if matches!(renderer, Some(Renderer::Webview)) {
             if let Err(err) =
                 crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(&workspace).await
             {
-                tracing::warn!("Warning: Failed to check for wasm-bindgen patch: {}", err);
+                tracing::warn!("Failed to check for wasm-bindgen patch: {err}");
             }
         }
 
@@ -851,11 +854,7 @@ impl BuildRequest {
             );
         }
 
-        let target_dir = std::env::var("CARGO_TARGET_DIR")
-            .ok()
-            .map(PathBuf::from)
-            .or_else(|| cargo_config.build.target_dir.clone())
-            .unwrap_or_else(|| workspace.workspace_root().join("target"));
+        let target_dir = workspace.resolved_target_dir();
 
         // If the user provided a profile and wasm_split is enabled, we should check that LTO=true and debug=true
         if args.wasm_split {

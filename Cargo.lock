@@ -3508,6 +3508,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "slab",
+ "slotmap",
  "subtle",
  "tao",
  "thiserror 2.0.18",

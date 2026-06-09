@@ -284,6 +284,15 @@ impl Workspace {
             .map(|krate| krate.krate.version.to_string())
     }
 
+    /// Return the version of the wasm-bindgen-x fork shim if it is in the graph (pulled in by
+    /// dioxus-desktop). When present, a `[patch.crates-io]` git tag must match it exactly.
+    pub fn wasm_bindgen_fork_version(&self) -> Option<krates::semver::Version> {
+        self.krates
+            .krates_by_name("wasm-bindgen-x")
+            .next()
+            .map(|krate| krate.krate.version.clone())
+    }
+
     // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
     // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
     fn gcc_ld_dir(&self) -> PathBuf {
@@ -539,6 +548,21 @@ impl Workspace {
 
     pub(crate) fn workspace_root(&self) -> PathBuf {
         self.krates.workspace_root().as_std_path().to_path_buf()
+    }
+
+    /// The cargo target directory builds resolve to: `CARGO_TARGET_DIR`, then the cargo config's
+    /// `build.target-dir`, then `<workspace root>/target`. (A relative config path is kept
+    /// relative, matching how the build itself treats it.)
+    pub(crate) fn resolved_target_dir(&self) -> PathBuf {
+        std::env::var("CARGO_TARGET_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| {
+                cargo_config2::Config::load()
+                    .ok()
+                    .and_then(|config| config.build.target_dir)
+            })
+            .unwrap_or_else(|| self.workspace_root().join("target"))
     }
 
     /// Returns the root of the crate that the command is run from, without calling `cargo metadata`

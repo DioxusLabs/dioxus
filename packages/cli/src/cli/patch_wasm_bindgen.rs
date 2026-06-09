@@ -1,8 +1,9 @@
 use super::*;
 use crate::{CliSettings, Workspace};
-use krates::semver::{Version, VersionReq};
+use krates::semver::Version;
 use std::io::IsTerminal;
 use std::path::Path;
+use std::time::Duration;
 
 /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
 #[derive(Clone, Debug, Parser)]
@@ -26,12 +27,15 @@ async fn fetch_available_tags() -> Result<Vec<String>> {
         PATCH_GITHUB_REPO
     );
 
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("User-Agent", "dioxus-cli")
-        .send()
-        .await?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+    let mut request = client.get(&url).header("User-Agent", "dioxus-cli");
+    // Use the user's token when available to dodge the 60 req/hr unauthenticated rate limit
+    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request.send().await?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
@@ -54,49 +58,56 @@ fn parse_version(version: &str) -> Option<Version> {
     Version::parse(version.trim_start_matches('v')).ok()
 }
 
-/// Find the best matching tag for the given wasm-bindgen version using semver compatibility
-fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Option<String> {
-    let target = parse_version(target_version)?;
+/// Find the best matching tag for the resolved upstream wasm-bindgen version. The tag's base
+/// version must be able to shadow the upstream version (same `major.minor`, base `>=` it), and
+/// when the fork (`wasm-bindgen-x`, pulled in by dioxus-desktop) is in the graph the tag must
+/// match its pin exactly — prerelease included — or the patched git stack carries a mismatched
+/// copy of the wry-bindgen runtime. Returns `None` when no published tag qualifies; the caller
+/// must skip patching rather than write a known-broken patch.
+fn find_best_matching_tag(
+    upstream_version: &Version,
+    fork_pin: Option<&Version>,
+    available_tags: &[String],
+) -> Option<String> {
+    let base = |v: &Version| Version::new(v.major, v.minor, v.patch);
 
-    // Create a semver requirement for compatible versions (^x.y.z)
-    let version_req = VersionReq::parse(&format!("^{}", target)).ok()?;
-
-    // Parse all available tags and filter to valid versions
-    let mut parsed_tags: Vec<(String, Version)> = available_tags
+    available_tags
         .iter()
-        .filter_map(|tag| {
-            let parsed = parse_version(tag)?;
-            Some((tag.clone(), parsed))
-        })
-        .collect();
-
-    // Sort by version (descending) so we prefer newer versions
-    parsed_tags.sort_by(|a, b| b.1.cmp(&a.1));
-
-    // First, try to find an exact match
-    if let Some((tag, _)) = parsed_tags.iter().find(|(_, v)| v == &target) {
-        return Some(tag.clone());
-    }
-
-    // Second, find the newest semver-compatible version
-    if let Some((tag, _)) = parsed_tags.iter().find(|(_, v)| version_req.matches(v)) {
-        return Some(tag.clone());
-    }
-
-    // Finally, just return the newest available tag as a fallback
-    parsed_tags.first().map(|(tag, _)| tag.clone())
+        .filter_map(|tag| Some((tag, parse_version(tag)?)))
+        .filter(|(_, v)| v.major == upstream_version.major && v.minor == upstream_version.minor)
+        .filter(|(_, v)| base(v) >= base(upstream_version))
+        .filter(|(_, v)| fork_pin.is_none_or(|pin| v == pin))
+        .max_by(|(_, a), (_, b)| a.cmp(b))
+        .map(|(tag, _)| tag.clone())
 }
 
-/// Get the best matching tag for the workspace's wasm-bindgen version
-pub(crate) async fn get_matching_patch_tag(wasm_bindgen_version: &str) -> Result<String> {
+/// Get the best matching tag for the workspace's resolved wasm-bindgen versions.
+///
+/// `Err` means the tag list could not be fetched (network failure); `Ok(None)` means no published
+/// tag is compatible — the two cases warrant different handling at the prompt.
+pub(crate) async fn get_matching_patch_tag(
+    upstream_version: &Version,
+    fork_pin: Option<&Version>,
+) -> Result<Option<String>> {
     let available_tags = fetch_available_tags().await?;
+    Ok(find_best_matching_tag(
+        upstream_version,
+        fork_pin,
+        &available_tags,
+    ))
+}
 
-    find_best_matching_tag(wasm_bindgen_version, &available_tags).ok_or_else(|| {
-        anyhow::anyhow!(
-            "No compatible wasm-bindgen-wry tag found for version {}",
-            wasm_bindgen_version
-        )
-    })
+/// The user-facing explanation for skipping the patch when no tag matches.
+fn no_matching_tag_message(upstream: &Version, fork_pin: Option<&Version>) -> String {
+    let constraint = match fork_pin {
+        Some(pin) => format!("wasm-bindgen-x {pin} (upstream wasm-bindgen {upstream})"),
+        None => format!("wasm-bindgen {upstream}"),
+    };
+    format!(
+        "No published wasm-bindgen-wry tag matches {constraint}; skipping the patch since it \
+         would produce a broken build. Re-run `dx tools patch-wasm-bindgen` after the next fork \
+         release."
+    )
 }
 
 /// Check if the wasm-bindgen patch is needed (i.e., not all patches are applied)
@@ -128,9 +139,10 @@ pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// Path to the hints file that stores CLI state for this workspace
-fn hints_file_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("target").join("dx").join(".dx-hints")
+/// Path to the hints file that stores CLI state for this workspace, inside the resolved cargo
+/// target directory (which honors `CARGO_TARGET_DIR` and the cargo config's `build.target-dir`).
+fn hints_file_path(target_dir: &Path) -> PathBuf {
+    target_dir.join("dx").join(".dx-hints")
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -139,16 +151,16 @@ struct DxHints {
     wasm_bindgen_prompted: bool,
 }
 
-fn load_hints(workspace_root: &Path) -> DxHints {
-    let path = hints_file_path(workspace_root);
+fn load_hints(target_dir: &Path) -> DxHints {
+    let path = hints_file_path(target_dir);
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-fn save_hints(workspace_root: &Path, hints: &DxHints) -> Result<()> {
-    let path = hints_file_path(workspace_root);
+fn save_hints(target_dir: &Path, hints: &DxHints) -> Result<()> {
+    let path = hints_file_path(target_dir);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -158,15 +170,15 @@ fn save_hints(workspace_root: &Path, hints: &DxHints) -> Result<()> {
 }
 
 /// Check if we've already prompted the user for this workspace
-pub(crate) fn was_prompted(workspace_root: &Path) -> bool {
-    load_hints(workspace_root).wasm_bindgen_prompted
+pub(crate) fn was_prompted(target_dir: &Path) -> bool {
+    load_hints(target_dir).wasm_bindgen_prompted
 }
 
 /// Mark that we've prompted the user for this workspace
-pub(crate) fn mark_prompted(workspace_root: &Path) -> Result<()> {
-    let mut hints = load_hints(workspace_root);
+pub(crate) fn mark_prompted(target_dir: &Path) -> Result<()> {
+    let mut hints = load_hints(target_dir);
     hints.wasm_bindgen_prompted = true;
-    save_hints(workspace_root, &hints)
+    save_hints(target_dir, &hints)
 }
 
 /// Apply the wasm-bindgen patch to a Cargo.toml file
@@ -176,10 +188,13 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Res
         .parse()
         .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
 
-    // Get or create the [patch.crates-io] section
-    let patch = doc
-        .entry("patch")
-        .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
+    // Get or create the [patch.crates-io] section. A newly created [patch] table is implicit so
+    // the written manifest contains only the [patch.crates-io] header, not a stray bare [patch].
+    let patch = doc.entry("patch").or_insert_with(|| {
+        let mut table = toml_edit::Table::new();
+        table.set_implicit(true);
+        toml_edit::Item::Table(table)
+    });
     let patch_table = patch
         .as_table_mut()
         .ok_or_else(|| anyhow::anyhow!("[patch] is not a table"))?;
@@ -212,23 +227,27 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
         return Ok(());
     }
 
-    let workspace_root = workspace.krates.workspace_root().as_std_path();
+    let target_dir = workspace.resolved_target_dir();
 
-    // Only try to patch if we have a wasm-bindgen version
-    let Some(wasm_bindgen_version) = workspace.wasm_bindgen_version() else {
+    // Only try to patch if we have an upstream wasm-bindgen version
+    let Some(upstream) = workspace
+        .wasm_bindgen_version()
+        .as_deref()
+        .and_then(parse_version)
+    else {
         return Ok(());
     };
 
     // Skip if already prompted for this workspace
-    if was_prompted(workspace_root) {
+    if was_prompted(&target_dir) {
         return Ok(());
     }
 
-    let cargo_toml = workspace_root.join("Cargo.toml");
+    let cargo_toml = workspace.workspace_root().join("Cargo.toml");
 
     // Skip if patch already exists in Cargo.toml
     if !needs_wasm_bindgen_patch(&cargo_toml)? {
-        mark_prompted(workspace_root)?;
+        mark_prompted(&target_dir)?;
         return Ok(());
     }
 
@@ -243,15 +262,26 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     let input = term.read_line()?;
     let should_patch = input.trim().is_empty() || input.trim().eq_ignore_ascii_case("y");
 
-    // Mark as prompted so we don't ask again
-    mark_prompted(workspace_root)?;
-
-    if should_patch {
-        let tag = get_matching_patch_tag(&wasm_bindgen_version).await?;
-        apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
-        term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
-    } else {
+    if !should_patch {
+        // An explicit decline is sticky; don't ask again for this workspace
+        mark_prompted(&target_dir)?;
         term.write_line("Skipped. Run `dx tools patch-wasm-bindgen` later if needed.")?;
+        return Ok(());
+    }
+
+    // A network failure propagates *without* marking the workspace as prompted, so the user is
+    // asked again on the next build instead of silently never getting the patch.
+    let fork_pin = workspace.wasm_bindgen_fork_version();
+    match get_matching_patch_tag(&upstream, fork_pin.as_ref()).await? {
+        Some(tag) => {
+            // Mark prompted only once the patch is actually written
+            apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+            mark_prompted(&target_dir)?;
+            term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
+        }
+        // No suitable tag exists yet: warn-and-skip, and leave the prompt armed so it re-asks
+        // once a matching fork release is published.
+        None => term.write_line(&no_matching_tag_message(&upstream, fork_pin.as_ref()))?,
     }
 
     Ok(())
@@ -262,14 +292,95 @@ impl PatchWasmBindgen {
         let workspace = Workspace::current().await?;
         let workspace_root = workspace.krates.workspace_root().as_std_path();
         let cargo_toml = workspace_root.join("Cargo.toml");
-        let Some(wasm_bindgen_version) = workspace.wasm_bindgen_version() else {
+        let Some(upstream) = workspace
+            .wasm_bindgen_version()
+            .as_deref()
+            .and_then(parse_version)
+        else {
             tracing::info!("No wasm-bindgen version found in workspace; skipping patch.");
             return Ok(StructuredOutput::Success);
         };
 
-        let tag = get_matching_patch_tag(&wasm_bindgen_version).await?;
-        apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
-        tracing::info!("Patch applied to Cargo.toml (tag: {})", tag);
+        let fork_pin = workspace.wasm_bindgen_fork_version();
+        match get_matching_patch_tag(&upstream, fork_pin.as_ref()).await? {
+            Some(tag) => {
+                apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+                tracing::info!("Patch applied to Cargo.toml (tag: {})", tag);
+            }
+            None => tracing::warn!("{}", no_matching_tag_message(&upstream, fork_pin.as_ref())),
+        }
         Ok(StructuredOutput::Success)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tags published on DioxusLabs/wasm-bindgen-wry at the time of writing
+    fn real_tags() -> Vec<String> {
+        ["v0.2.106", "v0.2.122-alpha.2", "v0.2.122-alpha.4"]
+            .map(String::from)
+            .to_vec()
+    }
+
+    fn v(s: &str) -> Version {
+        Version::parse(s).unwrap()
+    }
+
+    #[test]
+    fn fork_pin_requires_exact_tag() {
+        // The workspace pins wasm-bindgen-x =0.2.122-alpha.5 but no such tag exists yet:
+        // every upstream version must select nothing (warn-and-skip), never a stale tag.
+        let pin = v("0.2.122-alpha.5");
+        for upstream in ["0.2.100", "0.2.106", "0.2.122", "0.2.123"] {
+            assert_eq!(
+                find_best_matching_tag(&v(upstream), Some(&pin), &real_tags()),
+                None,
+                "upstream {upstream} must not match any tag with pin {pin}"
+            );
+        }
+
+        // Once the pinned tag exists, it is selected exactly
+        let pin = v("0.2.122-alpha.4");
+        assert_eq!(
+            find_best_matching_tag(&v("0.2.122"), Some(&pin), &real_tags()),
+            Some("v0.2.122-alpha.4".to_string())
+        );
+    }
+
+    #[test]
+    fn no_fork_pin_selects_highest_compatible_base() {
+        // Without a fork pin, pick the highest tag whose base can shadow the upstream version.
+        // Notably 0.2.106 must NOT be pinned to the stale v0.2.106 prototype tag.
+        for upstream in ["0.2.100", "0.2.106", "0.2.122"] {
+            assert_eq!(
+                find_best_matching_tag(&v(upstream), None, &real_tags()),
+                Some("v0.2.122-alpha.4".to_string()),
+                "upstream {upstream} should select the newest compatible tag"
+            );
+        }
+
+        // An upstream newer than every tag base cannot be shadowed
+        assert_eq!(
+            find_best_matching_tag(&v("0.2.123"), None, &real_tags()),
+            None
+        );
+
+        // A different minor line never matches
+        assert_eq!(
+            find_best_matching_tag(&v("0.3.0"), None, &real_tags()),
+            None
+        );
+    }
+
+    #[test]
+    fn stable_tag_outranks_prereleases() {
+        let mut tags = real_tags();
+        tags.push("v0.2.122".to_string());
+        assert_eq!(
+            find_best_matching_tag(&v("0.2.122"), None, &tags),
+            Some("v0.2.122".to_string())
+        );
     }
 }
