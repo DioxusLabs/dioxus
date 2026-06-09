@@ -19,7 +19,6 @@ use futures_util::FutureExt;
 use futures_util::future::OptionFuture;
 use slotmap::SlotMap;
 use std::panic::AssertUnwindSafe;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
@@ -58,12 +57,15 @@ slotmap::new_key_type! {
 pub(crate) struct SharedCallbackRegistry(Rc<RefCell<DomCallbackRegistry>>);
 
 thread_local! {
-    static PENDING_DOMS: RefCell<HashMap<usize, VirtualDom>> = RefCell::new(HashMap::new());
+    static DOM_THREAD_STATE: RefCell<DomThreadState> = RefCell::new(DomThreadState::default());
+}
 
+#[derive(Default)]
+struct DomThreadState {
+    pending_doms: slab::Slab<VirtualDom>,
     /// Every window's callback registry, keyed by window id, so a `DesktopContext` for *any*
     /// window resolves the registry matching the `dom_tx` it dispatches through.
-    static WINDOW_REGISTRIES: RefCell<HashMap<WindowId, SharedCallbackRegistry>> =
-        RefCell::new(HashMap::new());
+    window_registries: HashMap<WindowId, SharedCallbackRegistry>,
 }
 
 /// Make `registry` discoverable by `window_id` until the returned guard drops (the guard lives
@@ -72,8 +74,11 @@ pub(crate) fn register_window_registry(
     window_id: WindowId,
     registry: SharedCallbackRegistry,
 ) -> WindowRegistryGuard {
-    WINDOW_REGISTRIES.with(|registries| {
-        registries.borrow_mut().insert(window_id, registry);
+    DOM_THREAD_STATE.with(|state| {
+        state
+            .borrow_mut()
+            .window_registries
+            .insert(window_id, registry);
     });
     WindowRegistryGuard { window_id }
 }
@@ -81,23 +86,21 @@ pub(crate) fn register_window_registry(
 /// Look up the callback registry for a window. Returns `None` if the window's VirtualDom is not
 /// running (window closed, not yet started) or when called off the DOM thread.
 pub(crate) fn lookup_window_registry(window_id: WindowId) -> Option<SharedCallbackRegistry> {
-    WINDOW_REGISTRIES.with(|registries| registries.borrow().get(&window_id).cloned())
+    DOM_THREAD_STATE.with(|state| state.borrow().window_registries.get(&window_id).cloned())
 }
 
-/// Removes a window's registry entry from [`WINDOW_REGISTRIES`] on drop.
+/// Removes a window's registry entry from [`DOM_THREAD_STATE`] on drop.
 pub(crate) struct WindowRegistryGuard {
     window_id: WindowId,
 }
 
 impl Drop for WindowRegistryGuard {
     fn drop(&mut self) {
-        WINDOW_REGISTRIES.with(|registries| {
-            registries.borrow_mut().remove(&self.window_id);
+        DOM_THREAD_STATE.with(|state| {
+            state.borrow_mut().window_registries.remove(&self.window_id);
         });
     }
 }
-
-static NEXT_PENDING_DOM_ID: AtomicUsize = AtomicUsize::new(0);
 
 /// The name of the dedicated DOM thread spawned by [`spawn_dom_thread`].
 const DOM_THREAD_NAME: &str = "dioxus-desktop-dom";
@@ -119,16 +122,19 @@ pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
         "DesktopContext::new_window must be called from a Dioxus component or task (the \
          VirtualDom thread)"
     );
-    let id = NEXT_PENDING_DOM_ID.fetch_add(1, Ordering::Relaxed);
-    PENDING_DOMS.with(|doms| {
-        doms.borrow_mut().insert(id, dom);
-    });
+    let id = DOM_THREAD_STATE.with(|state| state.borrow_mut().pending_doms.insert(dom));
     PendingDomId(id)
 }
 
 /// Take a parked `VirtualDom`. Returns `None` if it was already taken.
 pub(crate) fn take_pending_dom(id: PendingDomId) -> Option<VirtualDom> {
-    PENDING_DOMS.with(|doms| doms.borrow_mut().remove(&id.0))
+    DOM_THREAD_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state
+            .pending_doms
+            .contains(id.0)
+            .then(|| state.pending_doms.remove(id.0))
+    })
 }
 
 /// Registry for callbacks that live on the DOM thread.
