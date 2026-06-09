@@ -660,24 +660,12 @@ impl<T> ListenerCallback<T> {
     ///
     /// This is expected to be called within a runtime scope. Make sure a runtime is current before
     /// calling this method.
-    ///
-    /// If the callback is already executing — i.e. its body synchronously
-    /// dispatched another event that bubbled back into the same listener —
-    /// the re-entrant invocation is dropped with a warning rather than
-    /// triggering a `RefCell` panic. `FnMut` closures aren't reentrant by
-    /// construction, so the right answer for the recursive call is "skip,
-    /// don't crash"; the user's code already saw the original event.
     pub fn call(&self, event: Event<dyn Any>) {
         Runtime::current().with_scope_on_stack(self.origin, || {
-            match self.callback.try_borrow_mut() {
-                Ok(mut cb) => (cb)(event),
-                Err(_) => {
-                    tracing::warn!(
-                        "skipping re-entrant ListenerCallback invocation: the event \
-                         handler synchronously dispatched another event that bubbled \
-                         back into the same listener"
-                    );
-                }
+            if let Ok(mut borrow_mut) = self.callback.try_borrow_mut() {
+                borrow_mut(event);
+            } else {
+                tracing::warn!("ListenerCallback was called recursively, ignoring recursive call to avoid re-entrance issues");
             }
         });
     }
