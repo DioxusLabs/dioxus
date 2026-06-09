@@ -89,7 +89,12 @@ fn app() -> Element {
                     input {
                         id: "paste-input",
                         style: "font: inherit; padding: 8px 10px;",
-                        onpaste: move |event| log_event(event.data()),
+                        onpaste: move |event| {
+                            // The clipboard is only readable while the paste event is being
+                            // dispatched, so snapshot the contents before logging them.
+                            let data_transfer = event.data.data_transfer();
+                            log_event(Rc::new((data_transfer.get_as_text(), data_transfer.files())));
+                        },
                     }
                 }
                 div {
