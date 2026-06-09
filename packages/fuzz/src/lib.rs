@@ -2143,10 +2143,15 @@ mod tests {
                 // the cross-target `else` arm of the Text case.
                 vec![
                     set_root_dynamic(),
-                    fragment_with_children(2, Some(40)),
+                    fragment_with_children(3, Some(40)),
                     set_vnode_root_dynamic(1, DynamicKind::Portal),
                     set_vnode_root_dynamic(2, DynamicKind::Text(7)),
+                    set_vnode_root_dynamic(3, DynamicKind::Portal),
+                    set_vnode_root_dynamic(4, DynamicKind::Text(8)),
+                    set_vnode_root_dynamic(5, DynamicKind::Portal),
+                    set_vnode_root_dynamic(6, DynamicKind::Text(9)),
                     Op::Rerender,
+                    move_fragment_child(0, 2),
                     move_fragment_child(0, 1),
                     Op::Rerender,
                 ]
