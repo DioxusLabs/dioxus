@@ -17,6 +17,9 @@ homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 rust-version = "1.85.0"
 
+[lib]
+bench = false
+
 [dependencies]
 dioxus-core-types = { workspace = true }
 const_format = { workspace = true }
@@ -52,7 +55,7 @@ sysinfo = "0.35.2"
 criterion = { workspace = true }
 
 [dev-dependencies.web-sys]
-version = "0.3.77"
+workspace = true
 features = ["Document", "HtmlElement", "Window"]
 
 [features]

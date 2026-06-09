@@ -3160,7 +3160,6 @@ dependencies = [
 name = "dioxus"
 version = "0.8.0-alpha.0"
 dependencies = [
- "criterion",
  "dioxus",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
