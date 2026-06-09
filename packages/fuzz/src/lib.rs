@@ -2135,6 +2135,22 @@ mod tests {
                     Op::Rerender,
                 ]
             }),
+            case("keyed_portal_text_reorder", {
+                // A keyed fragment whose first child is a Portal with a
+                // dynamic-text body, reordered so the moved entry is
+                // re-pushed via `push_all_root_nodes`. The portal body's
+                // text root is mounted in another render target, driving
+                // the cross-target `else` arm of the Text case.
+                vec![
+                    set_root_dynamic(),
+                    fragment_with_children(2, Some(40)),
+                    set_vnode_root_dynamic(1, DynamicKind::Portal),
+                    set_vnode_root_dynamic(2, DynamicKind::Text(7)),
+                    Op::Rerender,
+                    move_fragment_child(0, 1),
+                    Op::Rerender,
+                ]
+            }),
             case("portal_inside_fragment_and_remove", {
                 vec![
                     set_root_dynamic(),
