@@ -448,7 +448,7 @@ impl VNode {
     /// Create a VNode that represents a failed component render (suspense / error boundary).
     /// Unlike [`Self::placeholder`], this contributes a single empty text anchor to the DOM so
     /// that the parent boundary's diff has a stable slot to replace once content resolves.
-    pub fn error_anchor() -> Self {
+    pub(crate) fn error_anchor() -> Self {
         use std::cell::OnceCell;
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };

@@ -215,21 +215,6 @@ impl VirtualDom {
             .is_some_and(|target| target.kind == RenderTargetKind::Real)
     }
 
-    /// Create a new real renderer target with an isolated [`ElementId`] arena.
-    pub fn create_render_target(&mut self) -> RenderTargetId {
-        let mut targets = self.runtime.render_targets.borrow_mut();
-        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Real)))
-    }
-
-    /// Create a new no-op renderer target.
-    ///
-    /// Scopes rendered into this target can keep logical state alive, but they
-    /// will not materialize renderer nodes or run mount effects.
-    pub fn create_noop_render_target(&mut self) -> RenderTargetId {
-        let mut targets = self.runtime.render_targets.borrow_mut();
-        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Noop)))
-    }
-
     pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> ElementId {
         let target_id = self.mount_target_id(mount);
         self.next_element_in_target(target_id)

@@ -1483,8 +1483,8 @@ fn warmup_portal_target_switch() {
     }
 
     let mut dom = VirtualDom::new(app);
-    let first = dom.create_render_target();
-    let second = dom.create_render_target();
+    let first = dom.runtime().create_render_target();
+    let second = dom.runtime().create_render_target();
     FIRST_TARGET.with(|c| c.set(first.0 as u64));
     SECOND_TARGET.with(|c| c.set(second.0 as u64));
     let root = RendererOracle::new();
@@ -1534,8 +1534,8 @@ fn warmup_portal_target_switch() {
     // of the target-switch branch fire.
     drop(dom);
     let mut dom = VirtualDom::new(app);
-    let first = dom.create_render_target();
-    let noop = dom.create_noop_render_target();
+    let first = dom.runtime().create_render_target();
+    let noop = dom.runtime().create_noop_render_target();
     FIRST_TARGET.with(|c| c.set(first.0 as u64));
     SECOND_TARGET.with(|c| c.set(noop.0 as u64));
     MODE.with(|c| c.set(0));
@@ -1852,7 +1852,7 @@ fn warmup_portal_dynamic_text_root() {
     }
 
     let mut dom = VirtualDom::new(app);
-    let target = dom.create_render_target();
+    let target = dom.runtime().create_render_target();
     TARGET.with(|c| c.set(target.0 as u64));
     dom.insert_render_target(RenderTargetId::ROOT, RendererOracle::new());
     dom.insert_render_target(target, RendererOracle::new());

@@ -259,7 +259,7 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new_with_props(app, AppProps { target: RenderTargetId(1) });
-    let target = dom.create_render_target();
+    let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
     let edits = dom.rebuild_to_targeted_vec();
@@ -286,7 +286,7 @@ fn noop_targets_do_not_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
 
     let mut dom = VirtualDom::new_with_props(noop_app, AppProps { target: RenderTargetId(1) });
-    let target = dom.create_noop_render_target();
+    let target = dom.runtime().create_noop_render_target();
     assert_eq!(target, RenderTargetId(1));
 
     dom.rebuild();
@@ -299,7 +299,7 @@ fn noop_targets_do_not_mount_effects() {
 #[test]
 fn portal_children_keep_scope_context() {
     let mut dom = VirtualDom::new_with_props(context_app, AppProps { target: RenderTargetId(1) });
-    let target = dom.create_render_target();
+    let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
     let edits = dom.rebuild_to_targeted_vec();
@@ -315,8 +315,8 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
         retarget_app,
         RetargetProps { first: RenderTargetId(1), second: RenderTargetId(2) },
     );
-    let first = dom.create_render_target();
-    let second = dom.create_render_target();
+    let first = dom.runtime().create_render_target();
+    let second = dom.runtime().create_render_target();
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 
@@ -352,7 +352,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
 
     let mut dom =
         VirtualDom::new_with_props(replace_portal_app, AppProps { target: RenderTargetId(1) });
-    let target = dom.create_render_target();
+    let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
     let edits = dom.rebuild_to_targeted_vec();
@@ -382,7 +382,7 @@ fn dropped_targets_do_not_write_or_mount_effects() {
 
     let mut dom =
         VirtualDom::new_with_props(dropped_target_app, AppProps { target: RenderTargetId(1) });
-    let target = dom.create_render_target();
+    let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
     let edits = dom.rebuild_to_targeted_vec();
@@ -407,8 +407,8 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
         reopen_after_close_app,
         ReopenProps { first: RenderTargetId(1), second: RenderTargetId(2) },
     );
-    let first = dom.create_render_target();
-    let second = dom.create_render_target();
+    let first = dom.runtime().create_render_target();
+    let second = dom.runtime().create_render_target();
     assert_eq!(first, RenderTargetId(1));
     assert_eq!(second, RenderTargetId(2));
 

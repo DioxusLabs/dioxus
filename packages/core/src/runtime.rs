@@ -227,7 +227,7 @@ fn MyComponent() -> Element {{
     /// Every render target id currently tracked by the runtime, in id order
     /// (`ROOT` first, then portal/custom ids in creation order). Used by the
     /// per-target collector helpers on [`VirtualDom`].
-    pub fn known_render_target_ids(&self) -> Vec<RenderTargetId> {
+    pub(crate) fn known_render_target_ids(&self) -> Vec<RenderTargetId> {
         self.render_targets
             .borrow()
             .iter()

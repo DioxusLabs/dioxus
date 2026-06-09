@@ -129,7 +129,7 @@ pub trait WriteMutations {
 /// A registered render target writer. Blanket-implemented for every
 /// `WriteMutations + 'static`. The `'static` bound is required so the registry
 /// can hand out typed `&mut W` references via `VirtualDom::render_target_mut`.
-pub trait RenderTargetWriter: WriteMutations + 'static {
+pub(crate) trait RenderTargetWriter: WriteMutations + 'static {
     /// Erased self for typed downcasting via [`std::any::Any`].
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 

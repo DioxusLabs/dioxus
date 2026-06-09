@@ -392,23 +392,21 @@ impl VirtualDom {
     /// `RenderTargetId`. The root viewport uses `RenderTargetId::ROOT`; portal
     /// hosts insert their own ids on mount.
     ///
-    /// Calling this twice with the same id replaces the previous writer and
-    /// returns it.
+    /// Calling this twice with the same id drops the previous writer; use
+    /// [`Self::take_render_target`] first to recover it.
     pub fn insert_render_target<W: WriteMutations + 'static>(
         &mut self,
         id: RenderTargetId,
         writer: W,
-    ) -> Option<Box<dyn crate::mutations::RenderTargetWriter>> {
-        self.targets.insert(id, Box::new(writer))
+    ) {
+        self.targets.insert(id, Box::new(writer));
     }
 
-    /// Remove the writer for a given target. Mutations destined for an
-    /// unregistered target are silently dropped during diff.
-    pub fn remove_render_target(
-        &mut self,
-        id: RenderTargetId,
-    ) -> Option<Box<dyn crate::mutations::RenderTargetWriter>> {
-        self.targets.remove(&id)
+    /// Drop the writer for a given target. Mutations destined for an
+    /// unregistered target are silently dropped during diff; use
+    /// [`Self::take_render_target`] to recover the writer instead.
+    pub fn remove_render_target(&mut self, id: RenderTargetId) {
+        self.targets.remove(&id);
     }
 
     /// Borrow the writer for a target, downcast to its concrete type. Returns
