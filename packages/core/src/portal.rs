@@ -103,6 +103,36 @@ impl PortalProps {
         props.props_mut().downcast_mut()
     }
 
+    /// Create `children` inside `target_id`, record them as the scope's
+    /// rendered output, and fire mount lifecycle when a writer is attached.
+    /// Shared by initial creation and the retarget arm of `diff`.
+    fn mount_children<M: WriteMutations>(
+        scope_id: ScopeId,
+        target_id: RenderTargetId,
+        children: LastRenderedNode,
+        parent: Option<ElementRef>,
+        dom: &mut VirtualDom,
+        to: Option<&mut M>,
+    ) {
+        dom.runtime.clone().with_render_target(target_id, || {
+            let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+            let should_mount = render_to.is_some();
+            let m = dom.create_children_with_parents(
+                render_to.as_deref_mut(),
+                std::slice::from_ref(children.as_vnode()),
+                None,
+                parent,
+            );
+            if let Some(to) = render_to {
+                to.append_children(ElementId::ROOT, m);
+            }
+            dom.scopes[scope_id.0].last_rendered_node = Some(children);
+            if should_mount {
+                dom.runtime.get_state(scope_id).mount(&dom.runtime);
+            }
+        });
+    }
+
     pub(crate) fn create<M: WriteMutations>(
         mount: MountId,
         idx: usize,
@@ -135,24 +165,8 @@ impl PortalProps {
             let children = props.children.clone();
             let target_id = props.target;
 
-            dom.runtime.clone().with_render_target(target_id, || {
-                let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
-                let should_mount = render_to.is_some();
-                let m = dom.create_children_with_parents(
-                    render_to.as_deref_mut(),
-                    std::slice::from_ref(children.as_vnode()),
-                    None,
-                    parent,
-                );
-                if let Some(to) = render_to {
-                    to.append_children(ElementId::ROOT, m);
-                }
-                dom.scopes[scope_id.0].last_rendered_node = Some(children);
-                if should_mount {
-                    dom.runtime.get_state(scope_id).mount(&dom.runtime);
-                }
-                0
-            })
+            Self::mount_children(scope_id, target_id, children, parent, dom, to);
+            0
         })
     }
 
@@ -196,23 +210,7 @@ impl PortalProps {
                     .expect("active portal scope state must be live")
                     .set_target_id(target_id);
 
-                dom.runtime.clone().with_render_target(target_id, || {
-                    let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
-                    let should_mount = render_to.is_some();
-                    let m = dom.create_children_with_parents(
-                        render_to.as_deref_mut(),
-                        std::slice::from_ref(new_children.as_vnode()),
-                        None,
-                        logical_parent,
-                    );
-                    if let Some(to) = render_to {
-                        to.append_children(ElementId::ROOT, m);
-                    }
-                    dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
-                    if should_mount {
-                        dom.runtime.get_state(scope_id).mount(&dom.runtime);
-                    }
-                });
+                Self::mount_children(scope_id, target_id, new_children, logical_parent, dom, to);
                 return;
             }
 

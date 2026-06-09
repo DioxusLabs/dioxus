@@ -418,23 +418,14 @@ impl SuspenseBoundaryProps {
                         // The background diff resolved the suspension. Promote the
                         // background-rendered nodes by replacing the fallback placeholder.
                         suspense_context.take_suspended_branch();
-                        dom.set_mount_mode(new_suspended_nodes.mount.get(), RenderMode::Foreground);
-                        replace_suspense_nodes(
+                        promote_resolved_children(
                             &suspense_context,
                             &last_rendered_node,
-                            &new_suspended_nodes,
+                            new_suspended_nodes,
+                            scope_id,
                             dom,
                             to.as_deref_mut(),
-                            |dom| {
-                                new_suspended_nodes.remove_node_inner(dom, None::<&mut M>, false);
-                            },
                         );
-                        set_rendered_children(
-                            dom,
-                            scope_id,
-                            LastRenderedNode::Real(new_suspended_nodes),
-                        );
-                        mark_suspense_resolved(&suspense_context, dom, scope_id);
                     }
                 }
                 // We have no suspended nodes, and we are not suspended. Just diff the children like normal
@@ -472,20 +463,14 @@ impl SuspenseBoundaryProps {
                     });
 
                     if suspense_context.suspended_futures().is_empty() {
-                        dom.set_mount_mode(new_children.mount.get(), RenderMode::Foreground);
-                        replace_suspense_nodes(
+                        promote_resolved_children(
                             &suspense_context,
                             &new_placeholder,
-                            &new_children,
+                            new_children,
+                            scope_id,
                             dom,
                             to.as_deref_mut(),
-                            |dom| {
-                                new_children.remove_node_inner(dom, None::<&mut M>, false);
-                            },
                         );
-
-                        set_rendered_children(dom, scope_id, LastRenderedNode::Real(new_children));
-                        mark_suspense_resolved(&suspense_context, dom, scope_id);
                     } else {
                         let branch = SuspenseBranch::new(new_children);
                         store_suspended_branch(dom, scope_id, &branch);
@@ -540,6 +525,26 @@ fn store_suspended_branch(dom: &mut VirtualDom, scope_id: ScopeId, branch: &Susp
     debug_assert!(branch.root_mount().mounted());
     dom.set_mount_mode(branch.root_mount(), RenderMode::Background);
     store_suspense_children(dom, scope_id, &LastRenderedNode::Real(branch.root()));
+}
+
+/// Promote freshly-resolved `children` over the visible fallback
+/// `placeholder`, record them as the boundary's rendered output, and mark the
+/// boundary resolved. Shared by the two diff arms that observe a suspension
+/// clearing while a fallback is on screen.
+fn promote_resolved_children<M: WriteMutations>(
+    suspense_context: &SuspenseContext,
+    placeholder: &LastRenderedNode,
+    children: VNode,
+    scope_id: ScopeId,
+    dom: &mut VirtualDom,
+    to: Option<&mut M>,
+) {
+    dom.set_mount_mode(children.mount.get(), RenderMode::Foreground);
+    replace_suspense_nodes(suspense_context, placeholder, &children, dom, to, |dom| {
+        children.remove_node_inner(dom, None::<&mut M>, false);
+    });
+    set_rendered_children(dom, scope_id, LastRenderedNode::Real(children));
+    mark_suspense_resolved(suspense_context, dom, scope_id);
 }
 
 fn replace_suspense_nodes<M: WriteMutations>(
