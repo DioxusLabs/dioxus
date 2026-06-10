@@ -1,6 +1,7 @@
 use crate::{
     RenderTargetId, Runtime, ScopeId, Task,
     innerlude::{SchedulerMsg, SuspenseContext},
+    render_driver::RenderDriver,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -8,6 +9,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -92,7 +94,7 @@ pub(crate) struct Scope {
     pub(crate) name: &'static str,
     pub(crate) id: ScopeId,
     pub(crate) parent_id: Option<ScopeId>,
-    pub(crate) target_id: RenderTargetId,
+    pub(crate) target_id: Cell<RenderTargetId>,
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
 
@@ -110,6 +112,10 @@ pub(crate) struct Scope {
     /// The suspense context owned by this scope when this scope is a boundary.
     suspense_boundary: RefCell<Option<SuspenseContext>>,
 
+    /// The driver owning this scope's rendered output: the plain component
+    /// lifecycle unless the scope's body registers a portal/suspense driver.
+    render_driver: RefCell<Rc<dyn RenderDriver>>,
+
     pub(crate) status: RefCell<ScopeStatus>,
 }
 
@@ -126,7 +132,7 @@ impl Scope {
             name,
             id,
             parent_id,
-            target_id,
+            target_id: Cell::new(target_id),
             height,
             render_count: Cell::new(0),
             shared_contexts: RefCell::new(vec![]),
@@ -140,6 +146,7 @@ impl Scope {
             }),
             suspense_location,
             suspense_boundary: RefCell::new(None),
+            render_driver: RefCell::new(crate::render_driver::component_driver()),
         }
     }
 
@@ -148,11 +155,22 @@ impl Scope {
     }
 
     pub(crate) fn target_id(&self) -> RenderTargetId {
-        self.target_id
+        self.target_id.get()
     }
 
-    pub(crate) fn set_target_id(&mut self, target_id: RenderTargetId) {
-        self.target_id = target_id;
+    pub(crate) fn set_target_id(&self, target_id: RenderTargetId) {
+        self.target_id.set(target_id);
+    }
+
+    /// Replace the driver that owns this scope's rendered output.
+    #[expect(dead_code, reason = "drivers register through this in follow-up commits")]
+    pub(crate) fn set_render_driver(&self, driver: Rc<dyn RenderDriver>) {
+        self.render_driver.replace(driver);
+    }
+
+    /// The driver owning this scope's rendered output.
+    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
+        self.render_driver.borrow().clone()
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {

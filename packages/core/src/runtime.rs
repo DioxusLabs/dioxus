@@ -296,6 +296,13 @@ fn MyComponent() -> Element {{
         self.scope_stack.borrow().last().copied()
     }
 
+    /// The depth of the scope stack, used to check that render drivers leave
+    /// the stack balanced.
+    #[cfg(debug_assertions)]
+    pub(crate) fn scope_stack_depth(&self) -> usize {
+        self.scope_stack.borrow().len()
+    }
+
     /// Call this function with the current scope set to the given scope
     #[track_caller]
     pub fn in_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {

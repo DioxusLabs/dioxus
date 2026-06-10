@@ -16,6 +16,30 @@ use crate::{
     virtual_dom::VirtualDom,
 };
 
+/// Invoke a scope's render driver with the writer erased to
+/// `dyn WriteMutations`, checking that the driver leaves the runtime scope
+/// stack balanced.
+fn drive<M: WriteMutations, R>(
+    state: &mut DiffState<'_, M>,
+    f: impl FnOnce(&mut VirtualDom, Option<&mut dyn WriteMutations>) -> R,
+) -> R {
+    let dom = &mut *state.dom;
+    let to = state
+        .to
+        .as_deref_mut()
+        .map(|m| m as &mut dyn WriteMutations);
+    #[cfg(debug_assertions)]
+    let depth = dom.runtime.scope_stack_depth();
+    let result = f(&mut *dom, to);
+    #[cfg(debug_assertions)]
+    debug_assert_eq!(
+        depth,
+        dom.runtime.scope_stack_depth(),
+        "render driver left the runtime scope stack unbalanced"
+    );
+    result
+}
+
 #[derive(Clone, Copy)]
 enum ComponentDriver {
     Normal,
@@ -102,6 +126,7 @@ impl NormalComponentLifecycle {
         state: &mut DiffState<'_, M>,
     ) -> usize {
         let mut scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
+        let mut body = None;
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
@@ -115,37 +140,24 @@ impl NormalComponentLifecycle {
             state.dom.set_mounted_dyn_node(mount, idx, scope_id.0);
 
             // If this is a new scope, we also need to run it once to get the initial state
-            let new = state.dom.run_scope(scope_id);
-
-            // Then set the new node as the last rendered node
-            state.dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
+            body = Some(state.dom.run_scope(scope_id));
         }
 
-        // If our scope landed in `dirty_scopes` during its initial render
-        // (e.g. a hook synchronously queued an update for itself), drain the
-        // entry now so we don't re-process the same scope after creation.
-        let height = state.dom.runtime.get_state(scope_id).height;
-        state
-            .dom
-            .dirty_scopes
-            .remove(&ScopeOrder::new(height, scope_id));
-
-        let new_node = state.dom.scopes[scope_id.0]
-            .last_rendered_node
-            .clone()
-            .expect("Component to be mounted");
-
-        state
-            .dom
-            .create_scope(state.to.as_deref_mut(), scope_id, new_node, parent)
+        // The body run is the scope's chance to register a driver; from here
+        // the driver owns how the scope's output is mounted.
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(state, |dom, to| {
+            driver.create(dom, scope_id, body, parent, to)
+        })
     }
 
     fn diff<M: WriteMutations>(scope_id: ScopeId, state: &mut DiffState<'_, M>) {
-        let new_nodes = state.dom.run_scope(scope_id);
+        let body = state.dom.run_scope(scope_id);
         let context = state.context();
-        state
-            .dom
-            .diff_scope(state.to.as_deref_mut(), scope_id, new_nodes, context);
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(state, |dom, to| {
+            driver.diff(dom, scope_id, body, context, to)
+        })
     }
 
     fn remove<M: WriteMutations>(
@@ -153,7 +165,10 @@ impl NormalComponentLifecycle {
         state: &mut DiffState<'_, M>,
         destroy_component_state: bool,
     ) {
-        remove_rendered_scope_node(scope_id, state, destroy_component_state);
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(state, |dom, to| {
+            driver.remove(dom, scope_id, to, destroy_component_state)
+        })
     }
 }
 
@@ -255,11 +270,9 @@ fn remove_rendered_scope_node<M: WriteMutations>(
     state: &mut DiffState<'_, M>,
     destroy_component_state: bool,
 ) {
-    // Both callers (`NormalComponentLifecycle::remove` and
-    // `SuspenseLifecycle::remove`) only fire after the scope has rendered at
-    // least once via the lifecycle `create` hook, which sets
-    // `last_rendered_node` to `Some`. A scope that never rendered is dropped
-    // without going through this path.
+    // Callers only fire after the scope has rendered at least once via the
+    // lifecycle `create` hook, which sets `last_rendered_node` to `Some`. A
+    // scope that never rendered is dropped without going through this path.
     let node = state.dom.scopes[scope_id.0]
         .last_rendered_node
         .clone()
@@ -293,7 +306,7 @@ impl VirtualDom {
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
-    fn diff_scope<M: WriteMutations>(
+    pub(crate) fn diff_scope<M: WriteMutations>(
         &mut self,
         to: Option<&mut M>,
         scope: ScopeId,
@@ -361,7 +374,7 @@ impl VirtualDom {
         })
     }
 
-    fn scope_should_write_now(&self, scope: ScopeId) -> bool {
+    pub(crate) fn scope_should_write_now(&self, scope: ScopeId) -> bool {
         self.runtime.scope_should_render(scope)
             || self
                 .runtime

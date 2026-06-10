@@ -117,6 +117,76 @@ pub trait WriteMutations {
     fn pop_root(&mut self);
 }
 
+/// Forward through a mutable reference so writer-generic code can be
+/// instantiated at `&mut dyn WriteMutations`.
+impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        (**self).append_children(id, m)
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        (**self).assign_node_id(path, id)
+    }
+
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        (**self).create_text_node(value, id)
+    }
+
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        (**self).load_template(template, index, id)
+    }
+
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        (**self).replace_node_with(id, m)
+    }
+
+    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+        (**self).insert_children_at_path(path, m)
+    }
+
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        (**self).insert_nodes_after(id, m)
+    }
+
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        (**self).insert_nodes_before(id, m)
+    }
+
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        (**self).set_attribute(name, ns, value, id)
+    }
+
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        (**self).set_node_text(value, id)
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        (**self).create_event_listener(name, id)
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        (**self).remove_event_listener(name, id)
+    }
+
+    fn remove_node(&mut self, id: ElementId) {
+        (**self).remove_node(id)
+    }
+
+    fn push_root(&mut self, id: ElementId) {
+        (**self).push_root(id)
+    }
+
+    fn pop_root(&mut self) {
+        (**self).pop_root()
+    }
+}
+
 /// A host's collection of render-target writers.
 ///
 /// The diff routes each write to the writer for the render target it lands
