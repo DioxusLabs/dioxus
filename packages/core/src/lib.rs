@@ -118,7 +118,7 @@ pub use crate::innerlude::{
     provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
     schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
     throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
-    use_hook_with_cleanup, use_portal, use_suspense, with_owner,
+    use_hook_with_cleanup, with_owner,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

@@ -230,19 +230,10 @@ pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {
     VNode::empty()
 }
 
-/// Render `children` behind a suspense boundary owned by the calling scope,
-/// showing `fallback` while any descendant is suspended.
+/// Stage the boundary's inputs and register its driver on the calling scope.
 ///
-/// The calling scope's rendered output is owned by the boundary: the
-/// component must return an empty element (e.g. [`VNode::empty`]) from its
-/// body. Returns the boundary's [`SuspenseContext`].
-pub fn use_suspense(
-    children: Element,
-    fallback: Callback<SuspenseContext, Element>,
-) -> SuspenseContext {
-    use_suspense_node(LastRenderedNode::new(children), fallback, None)
-}
-
+/// Only the [`SuspenseBoundary`] component body calls this: the driver owns
+/// the scope's rendered output, so the body must render nothing itself.
 pub(crate) fn use_suspense_node(
     children: LastRenderedNode,
     fallback: Callback<SuspenseContext, Element>,

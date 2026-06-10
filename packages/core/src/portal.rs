@@ -104,15 +104,10 @@ pub fn Portal(__props: PortalProps) -> Element {
     VNode::empty()
 }
 
-/// Render `children` into the render target `target` while keeping logical
-/// ancestry with the calling component.
+/// Stage the portal's inputs and register its driver on the calling scope.
 ///
-/// The calling scope's rendered output is owned by the portal: the component
-/// must return an empty element (e.g. [`VNode::empty`]) from its body.
-pub fn use_portal(target: RenderTargetId, children: Element) {
-    use_portal_node(target, LastRenderedNode::new(children));
-}
-
+/// Only the [`Portal`] component body calls this: the driver owns the
+/// scope's rendered output, so the body must render nothing itself.
 pub(crate) fn use_portal_node(target: RenderTargetId, children: LastRenderedNode) {
     let driver = crate::use_hook(|| {
         let driver = Rc::new(PortalDriver {
