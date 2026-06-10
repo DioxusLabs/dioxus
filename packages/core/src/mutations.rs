@@ -140,8 +140,9 @@ pub trait WriteMutations {
 
 /// Routes diff writes to the host writer, tracking the active render target.
 ///
-/// The active target follows the runtime's scope stack (portals push a target
-/// for their subtree). On every write the router resolves the current target:
+/// The active target follows the runtime's scope stack: every scope carries
+/// its render target, and portal scopes carry the portal's target. On every
+/// write the router resolves the current target:
 /// targets the writer reports unready have their writes dropped; otherwise the
 /// writer is told about target changes via `enter_render_target` before the
 /// write is forwarded.

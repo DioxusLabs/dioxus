@@ -114,23 +114,26 @@ impl PortalProps {
         dom: &mut VirtualDom,
         to: Option<&mut M>,
     ) {
-        dom.runtime.clone().with_render_target(target_id, || {
-            let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
-            let should_mount = render_to.is_some();
-            let m = dom.create_children_with_parents(
-                render_to.as_deref_mut(),
-                std::slice::from_ref(children.as_vnode()),
-                None,
-                parent,
-            );
-            if let Some(to) = render_to {
-                to.append_children(ElementId::ROOT, m);
-            }
-            dom.scopes[scope_id.0].last_rendered_node = Some(children);
-            if should_mount {
-                dom.runtime.get_state(scope_id).mount(&dom.runtime);
-            }
-        });
+        debug_assert_eq!(
+            dom.runtime.current_render_target_id(),
+            target_id,
+            "portal mount runs inside the portal scope, whose target_id routes its writes"
+        );
+        let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+        let should_mount = render_to.is_some();
+        let m = dom.create_children_with_parents(
+            render_to.as_deref_mut(),
+            std::slice::from_ref(children.as_vnode()),
+            None,
+            parent,
+        );
+        if let Some(to) = render_to {
+            to.append_children(ElementId::ROOT, m);
+        }
+        dom.scopes[scope_id.0].last_rendered_node = Some(children);
+        if should_mount {
+            dom.runtime.get_state(scope_id).mount(&dom.runtime);
+        }
     }
 
     pub(crate) fn create<M: WriteMutations>(
@@ -150,12 +153,10 @@ impl PortalProps {
         let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
         if scope_id.is_placeholder() {
-            let scope_state = dom.runtime.clone().with_render_target(target_id, || {
-                dom.new_scope(component.props.duplicate(), component.name)
-                    .state()
-                    .id
-            });
-            scope_id = scope_state;
+            scope_id = dom
+                .new_scope_with_target(component.props.duplicate(), component.name, target_id)
+                .state()
+                .id;
             dom.set_mounted_dyn_node(mount, idx, scope_id.0);
         }
 
@@ -196,13 +197,16 @@ impl PortalProps {
                             .and_then(|mount| mount.logical_parent)
                     });
 
-                dom.runtime.clone().with_render_target(old_target_id, || {
-                    let render_to = to
-                        .as_deref_mut()
-                        .filter(|_| dom.render_target_should_write(old_target_id));
-                    old_children.remove_node_inner(dom, render_to, true);
-                });
+                let render_to = to
+                    .as_deref_mut()
+                    .filter(|_| dom.render_target_should_write(old_target_id));
+                old_children.remove_node_inner(dom, render_to, true);
 
+                // Ordering is correctness-critical: writes route through the
+                // portal scope's `target_id`, so the removal above resolves
+                // against the old target and `mount_children` below resolves
+                // against the new one.
+                //
                 // `scope_id` is the live portal scope we just dispatched
                 // into; its slot in `scope_states` is therefore populated.
                 dom.runtime.scope_states.borrow_mut()[scope_id.0]
@@ -214,16 +218,14 @@ impl PortalProps {
                 return;
             }
 
-            dom.runtime.clone().with_render_target(target_id, || {
-                let mut render_to = to
-                    .filter(|_| dom.runtime.scope_should_render(scope_id))
-                    .filter(|_| dom.render_target_should_write(target_id));
-                old_children.diff_node(&new_children, dom, render_to.as_deref_mut());
-                dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
-                if render_to.is_some() {
-                    dom.runtime.get_state(scope_id).mount(&dom.runtime);
-                }
-            });
+            let mut render_to = to
+                .filter(|_| dom.runtime.scope_should_render(scope_id))
+                .filter(|_| dom.render_target_should_write(target_id));
+            old_children.diff_node(&new_children, dom, render_to.as_deref_mut());
+            dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
+            if render_to.is_some() {
+                dom.runtime.get_state(scope_id).mount(&dom.runtime);
+            }
         })
     }
 
@@ -235,17 +237,15 @@ impl PortalProps {
     ) {
         let target_id = dom.runtime.get_state(scope_id).target_id();
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            dom.runtime.clone().with_render_target(target_id, || {
-                let render_to = to.filter(|_| dom.render_target_should_write(target_id));
-                // `PortalProps::create` always sets `last_rendered_node`
-                // before returning, and removal only fires after a scope has
-                // gone through `create`, so the clone is always `Some`.
-                let node = dom.scopes[scope_id.0]
-                    .last_rendered_node
-                    .clone()
-                    .expect("portal scope must have rendered before remove");
-                node.remove_node_inner(dom, render_to, destroy_component_state);
-            });
+            let render_to = to.filter(|_| dom.render_target_should_write(target_id));
+            // `PortalProps::create` always sets `last_rendered_node`
+            // before returning, and removal only fires after a scope has
+            // gone through `create`, so the clone is always `Some`.
+            let node = dom.scopes[scope_id.0]
+                .last_rendered_node
+                .clone()
+                .expect("portal scope must have rendered before remove");
+            node.remove_node_inner(dom, render_to, destroy_component_state);
         });
 
         if destroy_component_state {

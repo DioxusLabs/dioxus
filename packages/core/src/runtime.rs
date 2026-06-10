@@ -41,9 +41,6 @@ pub struct Runtime {
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
     suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
-    // The renderer target inherited by newly-created scopes.
-    target_stack: RefCell<Vec<RenderTargetId>>,
-
     // A hand-rolled slab of scope states
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
@@ -95,16 +92,6 @@ impl Drop for SuspenseLocationGuard<'_> {
     }
 }
 
-struct RenderTargetGuard<'a> {
-    runtime: &'a Runtime,
-}
-
-impl Drop for RenderTargetGuard<'_> {
-    fn drop(&mut self) {
-        self.runtime.target_stack.borrow_mut().pop();
-    }
-}
-
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         let mut render_targets = Slab::default();
@@ -117,7 +104,6 @@ impl Runtime {
             scope_states: Default::default(),
             scope_stack: Default::default(),
             suspense_stack: Default::default(),
-            target_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
@@ -202,19 +188,13 @@ fn MyComponent() -> Element {{
         result
     }
 
-    /// Get the render target currently receiving renderer mutations.
-    ///
-    /// This falls back to the active scope's target and then the root target
-    /// when rendering code is not inside an explicit target stack frame.
+    /// Get the render target currently receiving renderer mutations: the
+    /// target of the scope currently being rendered, or the root target when
+    /// no scope is active. Every scope carries a flat target assignment;
+    /// portal scopes carry the portal's target and their subtree inherits it.
     pub fn current_render_target_id(&self) -> RenderTargetId {
-        self.target_stack
-            .borrow()
-            .last()
-            .copied()
-            .or_else(|| {
-                self.try_current_scope_id()
-                    .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
-            })
+        self.try_current_scope_id()
+            .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
             .unwrap_or(RenderTargetId::ROOT)
     }
 
@@ -252,17 +232,6 @@ fn MyComponent() -> Element {{
         if let Some(target) = self.render_targets.borrow_mut().get_mut(target_id.0) {
             target.kind = RenderTargetKind::Noop;
         }
-    }
-
-    /// Run a callback with a render target at the top of the stack.
-    pub(crate) fn with_render_target<T>(
-        &self,
-        target_id: RenderTargetId,
-        f: impl FnOnce() -> T,
-    ) -> T {
-        self.target_stack.borrow_mut().push(target_id);
-        let _guard = RenderTargetGuard { runtime: self };
-        f()
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.

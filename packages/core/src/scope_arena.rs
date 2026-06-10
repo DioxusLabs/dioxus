@@ -8,16 +8,30 @@ use crate::{
 };
 
 impl VirtualDom {
+    /// Create a scope rendering into the current scope's render target (the
+    /// root target when no scope is active).
     pub(super) fn new_scope(
         &mut self,
         props: BoxedAnyProps,
         name: &'static str,
     ) -> &mut ScopeState {
+        let target_id = self.runtime.current_render_target_id();
+        self.new_scope_with_target(props, name, target_id)
+    }
+
+    /// Create a scope rendering into an explicit render target. Portals use
+    /// this to declare their scope as a retargeting point: the scope's target
+    /// differs from its parent's, and everything below inherits it.
+    pub(super) fn new_scope_with_target(
+        &mut self,
+        props: BoxedAnyProps,
+        name: &'static str,
+        target_id: crate::RenderTargetId,
+    ) -> &mut ScopeState {
         let parent_id = self.runtime.try_current_scope_id();
         let height = parent_id
             .and_then(|id| self.runtime.try_get_state(id))
             .map_or(0, |parent| parent.height() + 1);
-        let target_id = self.runtime.current_render_target_id();
         let suspense_boundary = self
             .runtime
             .current_suspense_location()
