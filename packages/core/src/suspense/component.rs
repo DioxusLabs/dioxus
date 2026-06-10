@@ -358,8 +358,7 @@ fn suspense_create<M: WriteMutations>(
     to: Option<&mut M>,
 ) -> usize {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
-        let suspense_context =
-            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id).unwrap();
+        let suspense_context = dom.runtime.get_state(scope_id).suspense_boundary().unwrap();
 
         let children = driver.children();
 
@@ -772,8 +771,9 @@ impl SuspenseContext {
         )
     }
 
-    /// Try to get a suspense boundary from a scope id
-    pub fn downcast_suspense_boundary_from_scope(
+    /// The suspense context owned by `scope_id`, if that scope is a
+    /// suspense boundary.
+    pub fn of_scope(
         runtime: &Runtime,
         scope_id: ScopeId,
     ) -> Option<Self> {
@@ -785,7 +785,7 @@ impl SuspenseContext {
         scope_id: ScopeId,
         destroy_component_state: bool,
     ) {
-        if let Some(scope) = Self::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+        if let Some(scope) = Self::of_scope(&dom.runtime, scope_id)
             && let Some(branch) = scope.take_suspended_branch()
         {
             branch
