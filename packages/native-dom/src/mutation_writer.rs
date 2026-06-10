@@ -105,7 +105,6 @@ impl MutationWriter<'_> {
 }
 
 impl WriteMutations for MutationWriter<'_> {
-
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
         trace!("assign_node_id path:{:?} id:{}", path, id.0);
 

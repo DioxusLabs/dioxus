@@ -295,5 +295,4 @@ impl WriteMutations for WebsysDom {
         }
         self.interpreter.pop_root()
     }
-
 }

@@ -602,8 +602,8 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
                     break;
                 }
             }
-            let edits = resolve_edits
-                .expect("the boundary should resolve and write the portal target");
+            let edits =
+                resolve_edits.expect("the boundary should resolve and write the portal target");
             assert!(edits.get(&RenderTargetId::ROOT).is_some());
             let portal_edits = edits.get(&target).unwrap();
             assert!(portal_edits.edits.iter().any(|mutation| matches!(

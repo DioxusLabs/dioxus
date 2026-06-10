@@ -2,6 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     scopes::ScopeId,
 };
 use crate::{Task, VComponent};
-use crate::innerlude::Work;
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;

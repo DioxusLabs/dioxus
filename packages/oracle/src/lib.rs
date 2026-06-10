@@ -802,7 +802,6 @@ impl<W: WriteMutations> MultiTargetWriter<W> {
     pub fn into_targets(self) -> std::collections::BTreeMap<RenderTargetId, W> {
         self.targets
     }
-
 }
 
 impl<W: WriteMutations> Default for MultiTargetWriter<W> {

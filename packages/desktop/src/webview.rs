@@ -223,8 +223,7 @@ impl WebviewInstance {
         mut dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let mut instance =
-            Self::new_shared(cfg, RenderTargetId::ROOT, &mut dom, shared, true);
+        let mut instance = Self::new_shared(cfg, RenderTargetId::ROOT, &mut dom, shared, true);
         instance.dom = Some(dom);
         instance
     }

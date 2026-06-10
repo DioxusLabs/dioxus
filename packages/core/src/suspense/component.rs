@@ -773,10 +773,7 @@ impl SuspenseContext {
 
     /// The suspense context owned by `scope_id`, if that scope is a
     /// suspense boundary.
-    pub fn of_scope(
-        runtime: &Runtime,
-        scope_id: ScopeId,
-    ) -> Option<Self> {
+    pub fn of_scope(runtime: &Runtime, scope_id: ScopeId) -> Option<Self> {
         runtime.try_get_state(scope_id)?.suspense_boundary()
     }
 
