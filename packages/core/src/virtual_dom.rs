@@ -557,7 +557,7 @@ impl VirtualDom {
     ///
     /// Any templates previously registered will remain.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
-    pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
+    pub fn rebuild(&mut self, to: &mut impl crate::MultiWriter) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
         self.rebuild_with_writer(&mut router);
@@ -568,7 +568,7 @@ impl VirtualDom {
     /// requiring an executor to progress suspended subtrees, writing edits
     /// into `to`.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
-    pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
+    pub fn render_immediate(&mut self, to: &mut impl crate::MultiWriter) {
         self.process_events();
         {
             let _runtime = RuntimeGuard::new(self.runtime.clone());

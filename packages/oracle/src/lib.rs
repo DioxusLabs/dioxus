@@ -5,9 +5,9 @@
 //! semantics without webviews, JS bindings, layout, or serialization.
 
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, ElementId, RenderTargetId, ScopeId, Template,
-    TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations, consume_context,
-    generation,
+    Attribute, AttributeValue, DynamicNode, Element, ElementId, MultiWriter, RenderTargetId,
+    ScopeId, Template, TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations,
+    consume_context, generation,
 };
 use std::any::Any;
 use std::fmt;
@@ -757,16 +757,14 @@ impl RendererOracle {
     }
 }
 
-/// Routes writes to one writer per [`RenderTargetId`], for tests that assert
-/// on portal output. The diff declares the active target via
-/// `enter_render_target`; all other calls forward to that target's writer.
+/// Holds one writer per [`RenderTargetId`], for tests that assert on portal
+/// output. Each target's writes land in that target's writer.
 ///
 /// Built with [`Self::with_factory`], unknown targets get a fresh writer on
-/// first use; built with [`Self::new`], only explicitly inserted targets are
-/// ready and everything else is skipped by the diff.
+/// first use; built with [`Self::new`], only explicitly inserted targets have
+/// a writer and everything else is skipped by the diff.
 pub struct MultiTargetWriter<W> {
     targets: std::collections::BTreeMap<RenderTargetId, W>,
-    current: RenderTargetId,
     factory: Option<fn() -> W>,
 }
 
@@ -774,7 +772,6 @@ impl<W: WriteMutations> MultiTargetWriter<W> {
     pub fn new() -> Self {
         Self {
             targets: Default::default(),
-            current: RenderTargetId::ROOT,
             factory: None,
         }
     }
@@ -782,7 +779,6 @@ impl<W: WriteMutations> MultiTargetWriter<W> {
     pub fn with_factory(factory: fn() -> W) -> Self {
         Self {
             targets: Default::default(),
-            current: RenderTargetId::ROOT,
             factory: Some(factory),
         }
     }
@@ -807,15 +803,6 @@ impl<W: WriteMutations> MultiTargetWriter<W> {
         self.targets
     }
 
-    fn current(&mut self) -> &mut W {
-        if !self.targets.contains_key(&self.current) {
-            let factory = self
-                .factory
-                .expect("diff wrote to a target this writer never reported ready");
-            self.targets.insert(self.current, factory());
-        }
-        self.targets.get_mut(&self.current).unwrap()
-    }
 }
 
 impl<W: WriteMutations> Default for MultiTargetWriter<W> {
@@ -824,79 +811,16 @@ impl<W: WriteMutations> Default for MultiTargetWriter<W> {
     }
 }
 
-impl<W: WriteMutations> WriteMutations for MultiTargetWriter<W> {
-    fn enter_render_target(&mut self, id: RenderTargetId) {
-        self.current = id;
-    }
+impl<W: WriteMutations> MultiWriter for MultiTargetWriter<W> {
+    type Writer = W;
 
-    fn render_target_ready(&self, id: RenderTargetId) -> bool {
-        self.factory.is_some() || self.targets.contains_key(&id)
-    }
-
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.current().append_children(id, m)
-    }
-
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.current().assign_node_id(path, id)
-    }
-
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.current().create_text_node(value, id)
-    }
-
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.current().load_template(template, index, id)
-    }
-
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.current().replace_node_with(id, m)
-    }
-
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.current().insert_children_at_path(path, m)
-    }
-
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.current().insert_nodes_after(id, m)
-    }
-
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.current().insert_nodes_before(id, m)
-    }
-
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.current().set_attribute(name, ns, value, id)
-    }
-
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.current().set_node_text(value, id)
-    }
-
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.current().create_event_listener(name, id)
-    }
-
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.current().remove_event_listener(name, id)
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        self.current().remove_node(id)
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        self.current().push_root(id)
-    }
-
-    fn pop_root(&mut self) {
-        self.current().pop_root()
+    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut W> {
+        if let Some(factory) = self.factory
+            && !self.targets.contains_key(&id)
+        {
+            self.targets.insert(id, factory());
+        }
+        self.targets.get_mut(&id)
     }
 }
 

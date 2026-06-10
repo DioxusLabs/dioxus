@@ -332,14 +332,6 @@ impl WriteMutations for TargetedRendererOracle {
         self.record_mutation(MutationTrace::PopRoot);
         self.current_renderer().pop_root()
     }
-
-    fn enter_render_target(&mut self, id: dioxus_core::RenderTargetId) {
-        self.renderer.enter_render_target(id);
-    }
-
-    fn render_target_ready(&self, id: dioxus_core::RenderTargetId) -> bool {
-        self.renderer.render_target_ready(id)
-    }
 }
 
 const TRACE_CONTEXT: usize = 6;

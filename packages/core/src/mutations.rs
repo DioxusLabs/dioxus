@@ -115,73 +115,62 @@ pub trait WriteMutations {
     /// Pop the topmost entry off the renderer's stack without modifying the DOM.
     /// Used to clean up temporary roots pushed for path-based insertions during diff transitions.
     fn pop_root(&mut self);
+}
 
-    /// Route subsequent writes to the given render target.
-    ///
-    /// The diff declares the active target before every run of writes that
-    /// could land somewhere new (scope reruns, portal boundaries), and only
-    /// for targets the writer reported ready via
-    /// [`Self::render_target_ready`]. Single-target writers can ignore this:
-    /// with the default `render_target_ready` they only ever receive writes
-    /// for [`RenderTargetId::ROOT`].
-    fn enter_render_target(&mut self, _id: RenderTargetId) {}
+/// A host's collection of render-target writers.
+///
+/// The diff routes each write to the writer for the render target it lands
+/// in. Single-target hosts get this for free: every [`WriteMutations`] writer
+/// is a `MultiWriter` serving [`RenderTargetId::ROOT`] and nothing else.
+/// Hosts that fan out to several sinks (one webview per window, one collector
+/// per portal target) implement [`Self::writer_for`] over their own writer
+/// storage.
+pub trait MultiWriter {
+    /// The writer type serving each individual target.
+    type Writer: WriteMutations;
 
-    /// Whether this writer can currently apply mutations for `id`.
-    ///
-    /// Writes for unready targets are skipped (the logical tree still
-    /// updates, and the host can attach a writer and re-render later — the
-    /// desktop `Window` component does exactly this while its webview is
-    /// being created). The default accepts only the root target, which is
-    /// correct for every single-target renderer.
-    fn render_target_ready(&self, id: RenderTargetId) -> bool {
-        id == RenderTargetId::ROOT
+    /// The writer for `id`, or `None` to skip writes for a target with no
+    /// attached host. The logical tree still updates either way — the host
+    /// can attach a writer and re-render later (the desktop `Window`
+    /// component does exactly this while its webview is being created).
+    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Self::Writer>;
+}
+
+impl<W: WriteMutations> MultiWriter for W {
+    type Writer = W;
+
+    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut W> {
+        if id == RenderTargetId::ROOT {
+            Some(self)
+        } else {
+            None
+        }
     }
 }
 
-/// Routes diff writes to the host writer, tracking the active render target.
+/// Routes diff writes to the host's per-target writers.
 ///
-/// The active target follows the runtime's scope stack: every scope carries
-/// its render target, and portal scopes carry the portal's target. On every
-/// write the router resolves the current target:
-/// targets the writer reports unready have their writes dropped; otherwise the
-/// writer is told about target changes via `enter_render_target` before the
-/// write is forwarded.
-pub(crate) struct TargetRouter<'a, M: WriteMutations> {
+/// On every write the router resolves the active render target from the
+/// runtime (every scope carries its render target; portal scopes carry the
+/// portal's target) and forwards the write to that target's writer. Writes
+/// for targets the host has no writer for are dropped.
+pub(crate) struct TargetRouter<'a, M: MultiWriter> {
     to: &'a mut M,
     runtime: Rc<Runtime>,
-    /// Memo of the last resolved target: `(target, ready)`. Avoids re-querying
-    /// the writer for every mutation while the target is unchanged.
-    last: Option<(RenderTargetId, bool)>,
 }
 
-impl<'a, M: WriteMutations> TargetRouter<'a, M> {
+impl<'a, M: MultiWriter> TargetRouter<'a, M> {
     pub(crate) fn new(to: &'a mut M, runtime: Rc<Runtime>) -> Self {
-        Self {
-            to,
-            runtime,
-            last: None,
-        }
+        Self { to, runtime }
     }
 
     #[inline]
-    fn current(&mut self) -> Option<&mut M> {
-        let id = self.runtime.current_render_target_id();
-        let ready = match self.last {
-            Some((last_id, ready)) if last_id == id => ready,
-            _ => {
-                let ready = self.to.render_target_ready(id);
-                if ready {
-                    self.to.enter_render_target(id);
-                }
-                self.last = Some((id, ready));
-                ready
-            }
-        };
-        ready.then(|| &mut *self.to)
+    fn current(&mut self) -> Option<&mut M::Writer> {
+        self.to.writer_for(self.runtime.current_render_target_id())
     }
 }
 
-impl<M: WriteMutations> WriteMutations for TargetRouter<'_, M> {
+impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
     fn append_children(&mut self, id: ElementId, m: usize) {
         if let Some(w) = self.current() {
             w.append_children(id, m);
