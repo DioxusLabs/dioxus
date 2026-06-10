@@ -35,63 +35,6 @@ fn drive<M: WriteMutations, R>(
     result
 }
 
-struct NormalComponentLifecycle;
-
-impl NormalComponentLifecycle {
-    fn create<M: WriteMutations>(
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
-    ) -> usize {
-        let mut scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
-        let mut body = None;
-
-        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
-        if scope_id.is_placeholder() {
-            scope_id = state
-                .dom
-                .new_scope(component.props.duplicate(), component.name)
-                .state()
-                .id;
-
-            // Store the scope id for the next render
-            state.dom.set_mounted_dyn_node(mount, idx, scope_id.0);
-
-            // If this is a new scope, we also need to run it once to get the initial state
-            body = Some(state.dom.run_scope(scope_id));
-        }
-
-        // The body run is the scope's chance to register a driver; from here
-        // the driver owns how the scope's output is mounted.
-        let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(state, |dom, to| {
-            driver.create(dom, scope_id, body, parent, to)
-        })
-    }
-
-    fn diff<M: WriteMutations>(scope_id: ScopeId, state: &mut DiffState<'_, M>) {
-        let body = state.dom.run_scope(scope_id);
-        let context = state.context();
-        let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(state, |dom, to| {
-            driver.diff(dom, scope_id, body, context, to)
-        })
-    }
-
-    fn remove<M: WriteMutations>(
-        scope_id: ScopeId,
-        state: &mut DiffState<'_, M>,
-        destroy_component_state: bool,
-    ) {
-        let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(state, |dom, to| {
-            driver.remove(dom, scope_id, to, destroy_component_state)
-        })
-    }
-}
-
 impl VirtualDom {
     pub(crate) fn run_and_diff_scope<M: WriteMutations>(
         &mut self,
@@ -108,7 +51,12 @@ impl VirtualDom {
         parent_context: Option<DiffContext<'_>>,
     ) {
         let mut state = DiffState::new_with_context(self, to, parent_context);
-        NormalComponentLifecycle::diff(scope_id, &mut state);
+        let body = state.dom.run_scope(scope_id);
+        let context = state.context();
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(&mut state, |dom, to| {
+            driver.diff(dom, scope_id, body, context, to)
+        })
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
@@ -195,7 +143,10 @@ impl VirtualDom {
         scope_id: ScopeId,
     ) {
         let mut state = DiffState::new(self, to);
-        NormalComponentLifecycle::remove(scope_id, &mut state, destroy_component_state);
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(&mut state, |dom, to| {
+            driver.remove(dom, scope_id, to, destroy_component_state)
+        })
     }
 }
 
@@ -283,6 +234,29 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, impl WriteMutations>,
     ) -> usize {
-        NormalComponentLifecycle::create(mount, idx, component, parent, state)
+        let mut scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
+        let mut body = None;
+
+        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
+        if scope_id.is_placeholder() {
+            scope_id = state
+                .dom
+                .new_scope(component.props.duplicate(), component.name)
+                .state()
+                .id;
+
+            // Store the scope id for the next render
+            state.dom.set_mounted_dyn_node(mount, idx, scope_id.0);
+
+            // If this is a new scope, we also need to run it once to get the initial state
+            body = Some(state.dom.run_scope(scope_id));
+        }
+
+        // The body run is the scope's chance to register a driver; from here
+        // the driver owns how the scope's output is mounted.
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        drive(state, |dom, to| {
+            driver.create(dom, scope_id, body, parent, to)
+        })
     }
 }

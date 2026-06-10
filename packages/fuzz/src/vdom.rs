@@ -473,9 +473,9 @@ fn build_dynamic(
         DynamicSpec::Portal(child) => {
             // All generated portals share the ROOT render target so the harness'
             // single oracle observes mutations from both the outer tree and the
-            // portal bodies. The portal scope still flows through
-            // `PortalLifecycle::{create,diff,remove}` regardless of whether the
-            // target ultimately differs.
+            // portal bodies. The portal scope still flows through the portal
+            // driver's create/diff/remove regardless of whether the target
+            // ultimately differs.
             DynamicNode::Component(VComponent::new(
                 GeneratedPortal,
                 GeneratedPortalProps {

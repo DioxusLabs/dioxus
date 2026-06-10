@@ -1589,11 +1589,11 @@ fn warmup_suspense_then_remove() {
 /// time, so the `render_deferred_priority`/`deferred_priority_for_subtree`
 /// branches are unreachable from corpus inputs alone. Calling this once per
 /// fuzz process records coverage of those branches in the fuzz binary.
-/// Drive a `Portal` through a target-switch transition so the
-/// `if old_target_id != target_id` branch of `PortalProps::diff` and the
-/// surrounding `remove_node_inner` + `create_children_with_parents` machinery
-/// fire. The fuzz harness's per-input Portal always uses a single target
-/// allocated via `use_hook`, so this branch is otherwise unreachable.
+/// Drive a `Portal` through a target-switch transition so the retarget
+/// branch of the portal driver's diff and the surrounding
+/// `remove_node_inner` + `create_children_with_parents` machinery fire. The
+/// fuzz harness's per-input Portal always uses a single target allocated via
+/// `use_hook`, so this branch is otherwise unreachable.
 fn warmup_portal_target_switch() {
     use dioxus::prelude::*;
     use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};

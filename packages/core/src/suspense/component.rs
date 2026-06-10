@@ -394,7 +394,6 @@ fn suspense_create<M: WriteMutations>(
     })
 }
 
-/// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {
     #[doc(hidden)]
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
