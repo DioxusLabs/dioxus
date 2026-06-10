@@ -605,7 +605,14 @@ impl VirtualDom {
             .dirty_tasks
             .borrow()
             .iter()
-            .flat_map(|dirty| dirty.tasks_queued.borrow().iter().copied().collect::<Vec<_>>())
+            .flat_map(|dirty| {
+                dirty
+                    .tasks_queued
+                    .borrow()
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>()
+            })
             .collect();
         let mut deferred_tasks = Vec::new();
 

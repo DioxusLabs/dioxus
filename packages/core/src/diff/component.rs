@@ -1,16 +1,11 @@
-use std::any::{Any, TypeId};
-
 use crate::{
-    Element, SuspenseContext,
+    Element,
     any_props::AnyProps,
     diff::{
         anchor::{Anchor, anchor_for_slot, at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
     },
-    innerlude::{
-        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
-        VComponent, WriteMutations,
-    },
+    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
@@ -38,71 +33,6 @@ fn drive<M: WriteMutations, R>(
         "render driver left the runtime scope stack unbalanced"
     );
     result
-}
-
-#[derive(Clone, Copy)]
-enum ComponentDriver {
-    Normal,
-    Suspense,
-}
-
-impl ComponentDriver {
-    fn from_props(props: &dyn Any) -> Self {
-        if props.type_id() == TypeId::of::<SuspenseBoundaryPropsWithOwner>() {
-            Self::Suspense
-        } else {
-            Self::Normal
-        }
-    }
-
-    fn from_component(component: &VComponent) -> Self {
-        Self::from_props(component.props.props())
-    }
-
-    fn from_scope(dom: &VirtualDom, scope_id: ScopeId) -> Self {
-        Self::from_props(dom.scopes[scope_id.0].props.props())
-    }
-
-    fn create<M: WriteMutations>(
-        self,
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
-    ) -> usize {
-        match self {
-            ComponentDriver::Normal => {
-                NormalComponentLifecycle::create(mount, idx, component, parent, state)
-            }
-            ComponentDriver::Suspense => {
-                SuspenseLifecycle::create(mount, idx, component, parent, state)
-            }
-        }
-    }
-
-    fn diff<M: WriteMutations>(self, scope_id: ScopeId, state: &mut DiffState<'_, M>) {
-        match self {
-            ComponentDriver::Normal => NormalComponentLifecycle::diff(scope_id, state),
-            ComponentDriver::Suspense => SuspenseLifecycle::diff(scope_id, state),
-        }
-    }
-
-    fn remove<M: WriteMutations>(
-        self,
-        scope_id: ScopeId,
-        state: &mut DiffState<'_, M>,
-        destroy_component_state: bool,
-    ) {
-        match self {
-            ComponentDriver::Normal => {
-                NormalComponentLifecycle::remove(scope_id, state, destroy_component_state)
-            }
-            ComponentDriver::Suspense => {
-                SuspenseLifecycle::remove(scope_id, state, destroy_component_state)
-            }
-        }
-    }
 }
 
 struct NormalComponentLifecycle;
@@ -162,81 +92,6 @@ impl NormalComponentLifecycle {
     }
 }
 
-struct SuspenseLifecycle;
-
-impl SuspenseLifecycle {
-    fn create<M: WriteMutations>(
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
-    ) -> usize {
-        SuspenseBoundaryProps::create(
-            mount,
-            idx,
-            component,
-            parent,
-            state.dom,
-            state.to.as_deref_mut(),
-        )
-    }
-
-    fn diff<M: WriteMutations>(scope_id: ScopeId, state: &mut DiffState<'_, M>) {
-        let target_id = state.dom.runtime.get_state(scope_id).target_id();
-        let should_write = state.dom.scope_should_write_now(scope_id)
-            && state.dom.render_target_should_write(target_id);
-        let render_to = if should_write {
-            state.to.as_deref_mut()
-        } else {
-            None
-        };
-        SuspenseBoundaryProps::diff(scope_id, state.dom, render_to)
-    }
-
-    fn remove<M: WriteMutations>(
-        scope_id: ScopeId,
-        state: &mut DiffState<'_, M>,
-        destroy_component_state: bool,
-    ) {
-        // If this is a suspense boundary, remove the suspended nodes as well.
-        //
-        // When we are only moving a component out of the real DOM for an
-        // ancestor suspense boundary, the nested boundary's suspended nodes are
-        // still its background state. Keep them so the nested boundary can
-        // resume or continue diffing while hidden.
-        if destroy_component_state {
-            SuspenseContext::remove_suspended_nodes::<M>(
-                state.dom,
-                scope_id,
-                destroy_component_state,
-            );
-        }
-
-        remove_rendered_scope_node(scope_id, state, destroy_component_state);
-    }
-}
-
-fn remove_rendered_scope_node<M: WriteMutations>(
-    scope_id: ScopeId,
-    state: &mut DiffState<'_, M>,
-    destroy_component_state: bool,
-) {
-    // Callers only fire after the scope has rendered at least once via the
-    // lifecycle `create` hook, which sets `last_rendered_node` to `Some`. A
-    // scope that never rendered is dropped without going through this path.
-    let node = state.dom.scopes[scope_id.0]
-        .last_rendered_node
-        .clone()
-        .expect("scope being removed should have last_rendered_node set");
-    node.remove_node_inner(state.dom, state.to.as_deref_mut(), destroy_component_state);
-
-    if destroy_component_state {
-        // Now drop all the resources
-        state.dom.drop_scope(scope_id);
-    }
-}
-
 impl VirtualDom {
     pub(crate) fn run_and_diff_scope<M: WriteMutations>(
         &mut self,
@@ -252,9 +107,8 @@ impl VirtualDom {
         scope_id: ScopeId,
         parent_context: Option<DiffContext<'_>>,
     ) {
-        let driver = ComponentDriver::from_scope(self, scope_id);
         let mut state = DiffState::new_with_context(self, to, parent_context);
-        driver.diff(scope_id, &mut state);
+        NormalComponentLifecycle::diff(scope_id, &mut state);
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
@@ -340,9 +194,8 @@ impl VirtualDom {
         destroy_component_state: bool,
         scope_id: ScopeId,
     ) {
-        let driver = ComponentDriver::from_scope(self, scope_id);
         let mut state = DiffState::new(self, to);
-        driver.remove(scope_id, &mut state, destroy_component_state);
+        NormalComponentLifecycle::remove(scope_id, &mut state, destroy_component_state);
     }
 }
 
@@ -430,6 +283,6 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, impl WriteMutations>,
     ) -> usize {
-        ComponentDriver::from_component(component).create(mount, idx, component, parent, state)
+        NormalComponentLifecycle::create(mount, idx, component, parent, state)
     }
 }

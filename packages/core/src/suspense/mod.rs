@@ -93,8 +93,75 @@ impl SuspenseContext {
                 suspended_branch: Default::default(),
                 frozen: Default::default(),
                 after_suspense_resolved: Default::default(),
+                staged: Default::default(),
             }),
         }
+    }
+
+    /// Stage the boundary's children/fallback inputs from a body run.
+    ///
+    /// The driver writes the mounted children handle back into the stage as
+    /// it renders (see [`Self::set_staged_children`]), so a body rerun that
+    /// was triggered by task wake-ups alone (same `generation`) must keep the
+    /// driver-written handle rather than clobber it with the unmounted clone
+    /// the props carry. A `generation` of `None` always restages: hook
+    /// callers build fresh children every body run, which is ordinary diff
+    /// input.
+    pub(crate) fn stage_props(
+        &self,
+        children: LastRenderedNode,
+        fallback: Callback<SuspenseContext, Element>,
+        generation: Option<u64>,
+    ) {
+        let mut staged = self.inner.staged.borrow_mut();
+        match &mut *staged {
+            Some(stage) => {
+                stage.fallback = fallback;
+                if generation.is_none() || generation != stage.generation {
+                    stage.children = children;
+                    stage.generation = generation;
+                }
+            }
+            None => {
+                *staged = Some(StagedSuspense {
+                    children,
+                    fallback,
+                    generation,
+                })
+            }
+        }
+    }
+
+    /// The boundary's current children input.
+    pub(crate) fn staged_children(&self) -> LastRenderedNode {
+        self.inner
+            .staged
+            .borrow()
+            .as_ref()
+            .expect("suspense boundary body must stage props before rendering")
+            .children
+            .clone()
+    }
+
+    /// The boundary's current fallback input.
+    pub(crate) fn staged_fallback(&self) -> Callback<SuspenseContext, Element> {
+        self.inner
+            .staged
+            .borrow()
+            .as_ref()
+            .expect("suspense boundary body must stage props before rendering")
+            .fallback
+    }
+
+    /// Record the children handle the driver mounted, so later reads (diff
+    /// arms, streaming resolution) observe mount-accurate state.
+    pub(crate) fn set_staged_children(&self, children: LastRenderedNode) {
+        self.inner
+            .staged
+            .borrow_mut()
+            .as_mut()
+            .expect("suspense boundary body must stage props before rendering")
+            .children = children;
     }
 
     /// Mount the context in a specific scope
@@ -200,6 +267,19 @@ pub struct SuspenseBoundaryInner {
 
     /// Closures queued to run after the suspense boundary is resolved
     after_suspense_resolved: RefCell<Vec<Box<dyn FnOnce()>>>,
+
+    /// The boundary's children/fallback inputs: staged by the boundary's
+    /// body run, updated in place by the driver as children mount.
+    staged: RefCell<Option<StagedSuspense>>,
+}
+
+/// The hook-staged inputs the suspense driver consumes at create/diff time.
+struct StagedSuspense {
+    children: LastRenderedNode,
+    fallback: Callback<SuspenseContext, Element>,
+    /// The props generation `children` was staged from, or `None` for hook
+    /// callers that restage unconditionally.
+    generation: Option<u64>,
 }
 
 impl Debug for SuspenseBoundaryInner {

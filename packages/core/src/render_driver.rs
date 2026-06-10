@@ -79,6 +79,12 @@ pub(crate) fn component_driver() -> Rc<dyn RenderDriver> {
     COMPONENT.with(|driver| driver.clone() as Rc<dyn RenderDriver>)
 }
 
+/// Whether `driver` is the shared plain-component driver (i.e. the scope's
+/// body output is its rendered output).
+pub(crate) fn is_component_driver(driver: &Rc<dyn RenderDriver>) -> bool {
+    Rc::ptr_eq(driver, &component_driver())
+}
+
 /// The rendering lifecycle of a plain component: the element returned by the
 /// scope's body is the scope's rendered output.
 pub(crate) struct ComponentDriver;
