@@ -1,8 +1,10 @@
 # generational_box intentionally leaks each `UnsyncStorage` slot via
 # `Box::leak` and recycles them through a thread-local free list, so any
 # slots still in the pool when the libFuzzer worker thread exits look like
-# leaks to LSan.
+# leaks to LSan. The coverage build demangles inherent impls as
+# `<Type>::method`, so we need both patterns.
 leak:generational_box::unsync::UnsyncStorage::create_new
+leak:generational_box::unsync::UnsyncStorage>::create_new
 
 # The fuzz harness interns generated `Template` content into `&'static`
 # caches with `Box::leak` so it satisfies `Template::new`'s static-lifetime

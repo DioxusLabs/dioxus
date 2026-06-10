@@ -33,7 +33,12 @@ use std::{
 };
 
 const MAX_STEPS: usize = 512;
-const PRIMITIVE_MUTATION_COUNT: u32 = 19;
+const PRIMITIVE_MUTATION_COUNT: u32 = 20;
+
+/// Fold every attribute name into a 16-slot pool so static and dynamic
+/// attributes on the same element collide on the same `(name, namespace)`
+/// key often enough for `remove_attribute_or_write_fallback` to fire.
+pub(crate) const ATTR_NAME_POOL_MASK: u8 = 0x0F;
 
 pub struct FuzzCase {
     ops: Vec<Op>,
@@ -154,13 +159,24 @@ fn splice_primitive_op(context: &mut mutatis::Context, case: &mut FuzzCase, whic
     let model = replay_model_prefix(&case.ops, index);
     let selector = context.rng().gen_u8();
     let value = context.rng().gen_u8();
-    let op = biased_primitive_op(&model, which, selector, value);
-    if case.ops.len() < MAX_STEPS {
-        case.ops.insert(index, op);
-    } else {
-        let replace = index.min(case.ops.len() - 1);
-        case.ops[replace] = op;
+    let ops = biased_primitive_op_sequence(&model, which, selector, value);
+    for (offset, op) in ops.into_iter().enumerate() {
+        if case.ops.len() < MAX_STEPS {
+            case.ops.insert(index + offset, op);
+        } else {
+            let replace = (index + offset).min(case.ops.len() - 1);
+            case.ops[replace] = op;
+        }
     }
+}
+
+fn biased_primitive_op_sequence(model: &Model, which: u32, selector: u8, value: u8) -> Vec<Op> {
+    if which == 19 {
+        if let Some(ops) = collision_aliasing_sequence(model, selector, value) {
+            return ops;
+        }
+    }
+    vec![biased_primitive_op(model, which, selector, value)]
 }
 
 fn fragment_insert_key(fragment: FragmentShape, value: u8) -> Option<u8> {
@@ -388,6 +404,18 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
             },
         ),
         18 => Op::Rerender,
+        // Note: `which == 19` is handled specially by
+        // `biased_primitive_op_sequence` (it can emit a paired alias-then-
+        // remove sequence). If the splice path falls through to this arm
+        // because the model has no dynamic attribute to alias, fall back to
+        // a SetNode op so we still produce something useful.
+        19 => Op::template(
+            vnode,
+            TemplateEdit::SetNode {
+                node,
+                kind: TemplateNodeKind::Dynamic(biased_leaf_dynamic_kind(value)),
+            },
+        ),
         _ => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -395,6 +423,151 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
                 kind: TemplateNodeKind::Dynamic(biased_leaf_dynamic_kind(value)),
             },
         ),
+    }
+}
+
+/// Build the alias-then-remove sequence that drives
+/// `diff_attributes::remove_attribute_or_write_fallback`.
+///
+/// Step 1 inserts a *static* template attribute on the element with the same
+/// resolved name as one of its existing dynamic attributes. Step 2 removes
+/// the dynamic side via a `Rerender` so the diff can compare the two
+/// renders, then a `DynamicAttrs::Remove` op that disposes of the colliding
+/// dynamic attribute. After the next `Rerender`, the diff sees:
+///   old: dynamic at K  /  new: dynamic gone, static at K still on template
+/// → `remove_attribute_or_write_fallback` falls back to the static value.
+fn collision_aliasing_sequence(model: &Model, selector: u8, value: u8) -> Option<Vec<Op>> {
+    let mut candidates: Vec<CollisionCandidate> = Vec::new();
+    collect_collision_candidates(&model.root, 0, &mut 0u8, &mut candidates);
+    let pick = *candidates.get(selector as usize % candidates.len().max(1))?;
+    let alias = Op::template(
+        pick.vnode,
+        TemplateEdit::Attrs {
+            element: pick.element,
+            edit: ListEdit::Insert {
+                index: biased_index(value, pick.element_attr_count),
+                item: TemplateAttrSpec::Static {
+                    // Copy the dynamic attribute's name byte verbatim. The
+                    // candidate collector filters to non-listener bytes
+                    // with high bit clear, so this resolves to
+                    // `attr_name(name)` == the dynamic side's
+                    // `attr_name(name)` — a real key collision.
+                    name: pick.dynamic_name,
+                    value: value.wrapping_add(1),
+                    namespace: None,
+                },
+            },
+        },
+    );
+    // Schedule the dynamic drop right after the alias. The fuzz target
+    // already injects `Rerender` ops on its own; chaining alias+drop without
+    // explicit rerenders keeps the case short so other diff paths still get
+    // op budget.
+    let drop_dynamic =
+        Op::dynamic_attrs(pick.vnode, pick.dynamic_slot, ListEdit::Remove { index: 0 });
+    Some(vec![alias, drop_dynamic])
+}
+
+#[derive(Clone, Copy)]
+struct CollisionCandidate {
+    vnode: u8,
+    element: u8,
+    element_attr_count: usize,
+    dynamic_slot: u8,
+    dynamic_name: u8,
+}
+
+fn collect_collision_candidates(
+    vnode: &VNodeSpec,
+    vnode_index_hint: u8,
+    next_vnode_index: &mut u8,
+    out: &mut Vec<CollisionCandidate>,
+) {
+    let vnode_index = vnode_index_hint;
+    // Track the depth-first element index within this vnode and the global
+    // dynamic-attr slot counter to match `ModelFacts::select_element` and the
+    // `attr` numbering consumed by `selected_dynamic_attr_mut`.
+    let mut element_index: u8 = 0;
+    let mut dynamic_slot: u8 = 0;
+    walk_template_for_collisions(
+        vnode_index,
+        &vnode.template.roots,
+        &mut element_index,
+        &mut dynamic_slot,
+        out,
+    );
+
+    // Recurse into nested vnodes produced by fragments / suspense children so
+    // we can also target attributes inside those subtrees. The numbering
+    // matches `ModelFacts::collect_vnode`'s pre-order traversal.
+    walk_dynamic_for_nested_vnodes(&vnode.template.roots, next_vnode_index, out);
+}
+
+fn walk_template_for_collisions(
+    vnode: u8,
+    nodes: &[TemplateNodeSpec],
+    element_index: &mut u8,
+    dynamic_slot: &mut u8,
+    out: &mut Vec<CollisionCandidate>,
+) {
+    for node in nodes {
+        if let TemplateNodeSpec::Element {
+            attrs, children, ..
+        } = node
+        {
+            let element = *element_index;
+            *element_index = element_index.saturating_add(1);
+
+            for attr in attrs {
+                if let TemplateAttrSpec::Dynamic(dynamic_attrs) = attr {
+                    let slot = *dynamic_slot;
+                    *dynamic_slot = dynamic_slot.saturating_add(1);
+                    for dyn_attr in dynamic_attrs {
+                        // Skip listeners (their name space is disjoint from
+                        // static attribute names) and skip any byte whose
+                        // high bit is set, since `dynamic_attr_name` routes
+                        // those through the listener naming path regardless
+                        // of the AttrValueSpec variant.
+                        if matches!(dyn_attr.value, AttrValueSpec::Listener)
+                            || dyn_attr.name & 0x80 != 0
+                        {
+                            continue;
+                        }
+                        out.push(CollisionCandidate {
+                            vnode,
+                            element,
+                            element_attr_count: attrs.len(),
+                            dynamic_slot: slot,
+                            dynamic_name: dyn_attr.name,
+                        });
+                    }
+                }
+            }
+
+            walk_template_for_collisions(vnode, children, element_index, dynamic_slot, out);
+        }
+    }
+}
+
+fn walk_dynamic_for_nested_vnodes(
+    nodes: &[TemplateNodeSpec],
+    next_vnode_index: &mut u8,
+    out: &mut Vec<CollisionCandidate>,
+) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                walk_dynamic_for_nested_vnodes(children, next_vnode_index, out);
+            }
+            TemplateNodeSpec::Dynamic(DynamicSpec::Fragment(children)) => {
+                for child in children {
+                    *next_vnode_index = next_vnode_index.saturating_add(1);
+                    let child_index = *next_vnode_index;
+                    collect_collision_candidates(child, child_index, next_vnode_index, out);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -810,7 +983,10 @@ fn biased_template_attr(value: u8) -> TemplateAttrSpec {
         TemplateAttrSpec::Dynamic(vec![biased_attr(value)])
     } else {
         TemplateAttrSpec::Static {
-            name: value,
+            // Mask the name into the shared pool so this static attribute
+            // can collide with a dynamic attribute on the same element and
+            // exercise `remove_attribute_or_write_fallback`.
+            name: value & ATTR_NAME_POOL_MASK,
             value: value.wrapping_add(1),
             namespace: (value & 2 == 0).then_some(value.wrapping_add(2)),
         }
@@ -892,15 +1068,28 @@ fn biased_attr(value: u8) -> AttrSpec {
 }
 
 fn biased_dynamic_attr_name(value: &AttrValueSpec, seed: u8) -> u8 {
-    match value {
-        AttrValueSpec::Listener => seed & 0x7f,
-        _ if seed & 0x80 != 0 => seed,
+    // Listeners use a name format that's keyed by slot, not by this byte's
+    // value — leave the existing `seed & 0x7f` selection alone.
+    if matches!(value, AttrValueSpec::Listener) {
+        return seed & 0x7f;
+    }
+
+    let raw = match value {
         AttrValueSpec::Text(value)
         | AttrValueSpec::Float(value)
         | AttrValueSpec::Int(value)
         | AttrValueSpec::Any(value) => *value,
         AttrValueSpec::Bool(value) => u8::from(*value),
         AttrValueSpec::None => 0,
+        AttrValueSpec::Listener => unreachable!("handled by the early return above"),
+    };
+
+    // Allow a small fraction of out-of-pool names through so the
+    // "no static at this key" diff path keeps getting exercised.
+    if seed & 0xF0 == 0xF0 {
+        seed
+    } else {
+        raw & ATTR_NAME_POOL_MASK
     }
 }
 

@@ -931,7 +931,7 @@ fn intern_template_attr_shape_slice(
                     }
                 }
             }
-            static_attrs.sort_by(|(left, _), (right, _)| left.cmp(right));
+            static_attrs.sort_by_key(|(name, _)| *name);
             let attrs = static_attrs
                 .into_iter()
                 .map(|(_, attr)| attr)
