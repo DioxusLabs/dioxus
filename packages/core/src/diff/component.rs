@@ -1,6 +1,5 @@
 use crate::{
     Element,
-    any_props::AnyProps,
     diff::{
         anchor::{Anchor, anchor_for_slot, at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
@@ -51,11 +50,10 @@ impl VirtualDom {
         parent_context: Option<DiffContext<'_>>,
     ) {
         let mut state = DiffState::new_with_context(self, to, parent_context);
-        let body = state.dom.run_scope(scope_id);
         let context = state.context();
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         drive(&mut state, |dom, to| {
-            driver.diff(dom, scope_id, body, context, to)
+            driver.diff(dom, scope_id, context, to)
         })
     }
 
@@ -74,6 +72,15 @@ impl VirtualDom {
             };
             // Load the old and new rendered nodes
             let old = self.scopes[scope.0].last_rendered_node.take().unwrap();
+
+            if !old.mount.get().mounted() {
+                // The previous output was never materialized (it is awaiting
+                // the foreground re-create pass of a resolving suspense
+                // boundary). There is nothing to diff against: adopt the body
+                // output; the create pass mounts it.
+                self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+                return;
+            }
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
@@ -161,22 +168,21 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, M>,
     ) {
-        // Replace components that have different render fns
-        if old.render_fn != new.render_fn {
+        // Replace components whose drivers identify different components
+        // (different driver type, or a different body function value)
+        if !old.driver.same_component(&*new.driver) {
             return self.replace_vcomponent(mount, idx, new, parent, state);
         }
 
         // If the props are static, then we try to memoize by setting the new with the old
-        // The target ScopeState still has the reference to the old props, so there's no need to update anything
+        // The scope's driver still owns the live props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         let height = state.dom.runtime.get_state(scope_id).height;
 
-        // copy out the box for both
-        let old_props: &mut dyn AnyProps = &mut *state.dom.scopes[scope_id.0].props;
-
-        if old_props.memoize(new.props.props()) {
-            // The target ScopeState still references the old props; memoizing
-            // here implicitly drops the new props since they're unused.
+        let scope_driver = state.dom.runtime.get_state(scope_id).render_driver();
+        if scope_driver.memoize(new.driver.as_any()) {
+            // The scope's driver still owns the live props; memoizing here
+            // implicitly drops the new props since they're unused.
             return;
         }
 
@@ -235,28 +241,26 @@ impl VNode {
         state: &mut DiffState<'_, impl WriteMutations>,
     ) -> usize {
         let mut scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
-        let mut body = None;
+        let new = scope_id.is_placeholder();
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
-        if scope_id.is_placeholder() {
+        if new {
+            // The scope adopts a duplicate of the vnode's driver so the live
+            // scope never aliases props with a vnode (a cached rsx element
+            // hands out the same driver instance every render).
             scope_id = state
                 .dom
-                .new_scope(component.props.duplicate(), component.name)
+                .new_scope(component.name, component.driver.duplicate())
                 .state()
                 .id;
 
             // Store the scope id for the next render
             state.dom.set_mounted_dyn_node(mount, idx, scope_id.0);
-
-            // If this is a new scope, we also need to run it once to get the initial state
-            body = Some(state.dom.run_scope(scope_id));
         }
 
-        // The body run is the scope's chance to register a driver; from here
-        // the driver owns how the scope's output is mounted.
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         drive(state, |dom, to| {
-            driver.create(dom, scope_id, body, parent, to)
+            driver.create(dom, scope_id, new, parent, to)
         })
     }
 }

@@ -1,34 +1,21 @@
-use std::rc::Rc;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
     DynamicNode,
     diff::context::DiffContext,
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
-    render_driver::{
-        RenderDriver, component_driver, debug_assert_driver_body_is_empty, is_component_driver,
-    },
+    render_driver::{RenderDriver, remove_rendered_output},
     scope_context::SuspenseLocation,
 };
 
 /// Properties for the [`SuspenseBoundary()`] component.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[allow(non_camel_case_types)]
 pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,
     /// The children of the suspense boundary
     children: LastRenderedNode,
-    /// Bumped by `memoize` each time a parent render adopts new children.
-    /// Lets the boundary's body distinguish parent-driven restages from
-    /// task-driven reruns, which must keep the mounted children handle the
-    /// driver staged.
-    generation: u64,
-}
-
-impl PartialEq for SuspenseBoundaryProps {
-    fn eq(&self, other: &Self) -> bool {
-        self.fallback == other.fallback && self.children == other.children
-    }
 }
 
 impl SuspenseBoundaryProps {
@@ -62,7 +49,6 @@ impl Properties for SuspenseBoundaryProps {
     fn memoize(&mut self, new: &Self) -> bool {
         self.fallback.__point_to(&new.fallback);
         self.children = new.children.clone();
-        self.generation = self.generation.wrapping_add(1);
         false
     }
 }
@@ -176,11 +162,7 @@ impl SuspenseBoundaryPropsWithOwner {
         render_fn: impl ComponentFunction<SuspenseBoundaryProps, M>,
     ) -> VComponent {
         let component_name = std::any::type_name_of_val(&render_fn);
-        VComponent::new(
-            move |wrapper: Self| render_fn.rebuild(wrapper.inner),
-            self,
-            component_name,
-        )
+        VComponent::new_with_driver(component_name, Rc::new(SuspenseDriver::new(self)))
     }
 }
 impl Properties for SuspenseBoundaryPropsWithOwner {
@@ -202,7 +184,6 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
             inner: SuspenseBoundaryProps {
                 fallback: fallback.0,
                 children: LastRenderedNode::new(children.into_value(VNode::empty)),
-                generation: 0,
             },
             owner: self.owner,
         }
@@ -224,73 +205,106 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
 ///     }
 /// }
 /// ```
+/// This function exists as a unique fn-pointer identity that `rsx!` uses when
+/// constructing a `VComponent`; `SuspenseBoundaryPropsWithOwner::into_vcomponent`
+/// attaches a [`SuspenseDriver`] that owns the scope's rendered output, so this
+/// body never runs.
 #[allow(non_snake_case)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {
-    use_suspense_node(__props.children, __props.fallback, Some(__props.generation));
-    VNode::empty()
-}
-
-/// Stage the boundary's inputs and register its driver on the calling scope.
-///
-/// Only the [`SuspenseBoundary`] component body calls this: the driver owns
-/// the scope's rendered output, so the body must render nothing itself.
-pub(crate) fn use_suspense_node(
-    children: LastRenderedNode,
-    fallback: Callback<SuspenseContext, Element>,
-    generation: Option<u64>,
-) -> SuspenseContext {
-    let context = crate::use_hook(|| {
-        let context = SuspenseContext::new();
-        let driver = Rc::new(SuspenseDriver {
-            context: context.clone(),
-        });
-        Runtime::with_current_scope(|scope| {
-            scope.set_suspense_boundary(context.clone());
-            context.mount(scope.id);
-            scope.set_render_driver(driver);
-        });
-        context
-    });
-    context.stage_props(children, fallback, generation);
-    context
+    unreachable!("SuspenseBoundary should not be called directly")
 }
 
 /// The rendering lifecycle of a suspense boundary scope: children render in
 /// the background first, and the scope's output is either the children or
-/// the fallback depending on whether any descendant suspended.
+/// the fallback depending on whether any descendant suspended. Owns the
+/// [`SuspenseBoundaryProps`] it renders from.
 struct SuspenseDriver {
-    context: SuspenseContext,
+    props: RefCell<SuspenseBoundaryPropsWithOwner>,
+}
+
+impl SuspenseDriver {
+    fn new(props: SuspenseBoundaryPropsWithOwner) -> Self {
+        Self {
+            props: RefCell::new(props),
+        }
+    }
+
+    /// The boundary's current children input.
+    fn children(&self) -> LastRenderedNode {
+        self.props.borrow().inner.children.clone()
+    }
+
+    /// The boundary's current fallback input.
+    fn fallback(&self) -> Callback<SuspenseContext, Element> {
+        self.props.borrow().inner.fallback
+    }
+
+    /// Record the children handle the boundary mounted, so later reads (diff
+    /// arms, streaming resolution) observe mount-accurate state.
+    fn store_children(&self, children: &LastRenderedNode) {
+        self.props.borrow_mut().inner.children.clone_from(children);
+    }
+}
+
+/// The suspense driver owning `scope_id`, which must be a suspense boundary
+/// scope. The returned `Rc` keeps the driver borrowable past `&mut dom` uses.
+fn suspense_driver(dom: &VirtualDom, scope_id: ScopeId) -> Rc<dyn RenderDriver> {
+    dom.runtime.get_state(scope_id).render_driver()
+}
+
+fn as_suspense(driver: &Rc<dyn RenderDriver>) -> &SuspenseDriver {
+    driver
+        .as_any()
+        .downcast_ref::<SuspenseDriver>()
+        .expect("suspense boundary scopes carry a SuspenseDriver")
 }
 
 impl RenderDriver for SuspenseDriver {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn memoize(&self, new_driver: &dyn Any) -> bool {
+        match new_driver.downcast_ref::<Self>() {
+            Some(new) => Properties::memoize(&mut *self.props.borrow_mut(), &new.props.borrow()),
+            None => false,
+        }
+    }
+
+    fn duplicate(&self) -> Rc<dyn RenderDriver> {
+        Rc::new(Self::new(self.props.borrow().clone()))
+    }
+
     fn create(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        body: Option<Element>,
+        new: bool,
         parent: Option<ElementRef>,
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
-        if let Some(body) = &body {
-            debug_assert_driver_body_is_empty(body);
+        if new {
+            let suspense_context = SuspenseContext::new();
+            let scope_state = dom.runtime.get_state(scope_id);
+            scope_state.set_suspense_boundary(suspense_context.clone());
+            suspense_context.mount(scope_id);
         }
-        suspense_create(&self.context, scope_id, parent, dom, to.as_mut())
+        suspense_create(self, scope_id, parent, dom, to.as_mut())
     }
 
     fn diff(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        body: Element,
         _parent_context: Option<DiffContext<'_>>,
         mut to: Option<&mut dyn WriteMutations>,
     ) {
-        debug_assert_driver_body_is_empty(&body);
         let target_id = dom.runtime.get_state(scope_id).target_id();
         let should_write =
             dom.scope_should_write_now(scope_id) && dom.render_target_should_write(target_id);
         let mut render_to = if should_write { to.as_mut() } else { None };
-        suspense_diff(scope_id, dom, render_to.as_mut())
+        suspense_diff(self, scope_id, dom, render_to.as_mut())
     }
 
     fn remove(
@@ -316,7 +330,7 @@ impl RenderDriver for SuspenseDriver {
 
         // The scope's rendered output (children or fallback) is removed the
         // same way a plain component's output is.
-        component_driver().remove(dom, scope_id, to, destroy_component_state);
+        remove_rendered_output(dom, scope_id, to, destroy_component_state);
     }
 }
 #[allow(non_snake_case)]
@@ -337,21 +351,24 @@ use generational_box::Owner;
 /// first, then mount either the children or the fallback depending on whether
 /// anything suspended.
 fn suspense_create<M: WriteMutations>(
-    suspense_context: &SuspenseContext,
+    driver: &SuspenseDriver,
     scope_id: ScopeId,
     parent: Option<ElementRef>,
     dom: &mut VirtualDom,
     to: Option<&mut M>,
 ) -> usize {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
-        let children = suspense_context.staged_children();
+        let suspense_context =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id).unwrap();
+
+        let children = driver.children();
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         suspense_context.under_suspense_boundary(&dom.runtime(), || {
             children.create(dom, parent, None::<&mut M>);
         });
 
-        suspense_context.set_staged_children(children.clone());
+        driver.store_children(&children);
 
         // If there are suspended futures, render the fallback
 
@@ -359,9 +376,9 @@ fn suspense_create<M: WriteMutations>(
             let placeholder_context = suspense_context.clone();
             let (node, nodes_created) =
                 suspense_context.in_suspense_placeholder(&dom.runtime(), || {
-                    let fallback = suspense_context.staged_fallback();
+                    let fallback = driver.fallback();
                     let branch = SuspenseBranch::new(children.as_vnode().clone());
-                    store_suspended_branch(suspense_context, dom, &branch);
+                    store_suspended_branch(driver, dom, &branch);
                     placeholder_context.set_suspended_branch(branch);
                     let suspense_placeholder =
                         LastRenderedNode::new(fallback.call(placeholder_context));
@@ -378,7 +395,7 @@ fn suspense_create<M: WriteMutations>(
                 .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
             dom.scopes[scope_id.0].last_rendered_node = Some(children);
             suspense_context.take_suspended_branch();
-            mark_suspense_resolved(suspense_context, dom, scope_id);
+            mark_suspense_resolved(&suspense_context, dom, scope_id);
 
             nodes_created
         }
@@ -418,8 +435,11 @@ impl SuspenseBoundaryProps {
                 .expect("suspense placeholder is not mounted")
                 .render_parent;
 
+            let driver = suspense_driver(dom, scope_id);
+            let driver = as_suspense(&driver);
+
             // Unmount any children to reset any scopes under this suspense boundary
-            let children = suspense_context.staged_children();
+            let children = driver.children();
             // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
             if let Some(branch) = suspense_context.take_suspended_branch() {
                 branch.into_root().remove_node(&mut *dom, None::<&mut M>);
@@ -442,7 +462,7 @@ impl SuspenseBoundaryProps {
                 children.create(dom, parent, Some(to));
             });
 
-            set_rendered_children(&suspense_context, dom, scope_id, children);
+            set_rendered_children(driver, dom, scope_id, children);
 
             // Run any closures that were waiting for the suspense to resolve
             suspense_context.run_resolved_closures(&dom.runtime);
@@ -450,12 +470,13 @@ impl SuspenseBoundaryProps {
     }
 }
 
-/// Diff a suspense boundary scope against its staged children/fallback.
+/// Diff a suspense boundary scope against its current children/fallback
+/// props.
 ///
 /// `to` is the pre-gated writer: [`SuspenseDriver::diff`] applies the
-/// scope/target write gate before calling in, and internal callers that are
-/// already writeless pass `None` directly.
+/// scope/target write gate before calling in.
 fn suspense_diff<M: WriteMutations>(
+    driver: &SuspenseDriver,
     scope_id: ScopeId,
     dom: &mut VirtualDom,
     mut to: Option<&mut M>,
@@ -463,10 +484,10 @@ fn suspense_diff<M: WriteMutations>(
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let scope = &mut dom.scopes[scope_id.0];
         let last_rendered_node = scope.last_rendered_node.clone().unwrap();
+        let children = driver.children();
+        let fallback = driver.fallback();
 
         let suspense_context = scope.state().suspense_boundary().unwrap().clone();
-        let children = suspense_context.staged_children();
-        let fallback = suspense_context.staged_fallback();
         let suspended_branch = suspense_context.suspended_branch();
         let suspended = !suspense_context.suspended_futures().is_empty();
         match (suspended_branch, suspended) {
@@ -494,13 +515,14 @@ fn suspense_diff<M: WriteMutations>(
                         });
                     dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
                     let branch = SuspenseBranch::new(new_suspended_nodes);
-                    store_suspended_branch(&suspense_context, dom, &branch);
+                    store_suspended_branch(driver, dom, &branch);
                     suspense_context.set_suspended_branch(branch);
                 } else {
                     // The background diff resolved the suspension. Promote the
                     // background-rendered nodes by replacing the fallback placeholder.
                     suspense_context.take_suspended_branch();
                     promote_resolved_children(
+                        driver,
                         &suspense_context,
                         &last_rendered_node,
                         new_suspended_nodes,
@@ -516,7 +538,7 @@ fn suspense_diff<M: WriteMutations>(
                     last_rendered_node.diff_node(&children, dom, to);
                 });
 
-                set_rendered_children(&suspense_context, dom, scope_id, children);
+                set_rendered_children(driver, dom, scope_id, children);
             }
             // We have no suspended nodes, but we just became suspended. Move the children to the background
             (None, true) => {
@@ -546,6 +568,7 @@ fn suspense_diff<M: WriteMutations>(
 
                 if suspense_context.suspended_futures().is_empty() {
                     promote_resolved_children(
+                        driver,
                         &suspense_context,
                         &new_placeholder,
                         new_children,
@@ -555,7 +578,7 @@ fn suspense_diff<M: WriteMutations>(
                     );
                 } else {
                     let branch = SuspenseBranch::new(new_children);
-                    store_suspended_branch(&suspense_context, dom, &branch);
+                    store_suspended_branch(driver, dom, &branch);
                     // Set the last rendered node to the new suspense placeholder
                     dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
                     suspense_context.set_suspended_branch(branch);
@@ -583,7 +606,7 @@ fn suspense_diff<M: WriteMutations>(
                     },
                 );
 
-                set_rendered_children(&suspense_context, dom, scope_id, children);
+                set_rendered_children(driver, dom, scope_id, children);
 
                 mark_suspense_resolved(&suspense_context, dom, scope_id);
             }
@@ -592,23 +615,19 @@ fn suspense_diff<M: WriteMutations>(
 }
 
 fn set_rendered_children(
-    suspense_context: &SuspenseContext,
+    driver: &SuspenseDriver,
     dom: &mut VirtualDom,
     scope_id: ScopeId,
     children: LastRenderedNode,
 ) {
-    suspense_context.set_staged_children(children.clone());
+    driver.store_children(&children);
     dom.scopes[scope_id.0].last_rendered_node = Some(children);
 }
 
-fn store_suspended_branch(
-    suspense_context: &SuspenseContext,
-    dom: &mut VirtualDom,
-    branch: &SuspenseBranch,
-) {
+fn store_suspended_branch(driver: &SuspenseDriver, dom: &mut VirtualDom, branch: &SuspenseBranch) {
     debug_assert!(branch.root_mount().mounted());
     dom.set_mount_mode(branch.root_mount(), RenderMode::Background);
-    suspense_context.set_staged_children(LastRenderedNode::Real(branch.root()));
+    driver.store_children(&LastRenderedNode::Real(branch.root()));
 }
 
 /// Promote freshly-resolved `children` over the visible fallback
@@ -616,6 +635,7 @@ fn store_suspended_branch(
 /// boundary resolved. Shared by the two diff arms that observe a suspension
 /// clearing while a fallback is on screen.
 fn promote_resolved_children<M: WriteMutations>(
+    driver: &SuspenseDriver,
     suspense_context: &SuspenseContext,
     placeholder: &LastRenderedNode,
     children: VNode,
@@ -627,12 +647,7 @@ fn promote_resolved_children<M: WriteMutations>(
     replace_suspense_nodes(suspense_context, placeholder, &children, dom, to, |dom| {
         children.remove_node_inner(dom, None::<&mut M>, false);
     });
-    set_rendered_children(
-        suspense_context,
-        dom,
-        scope_id,
-        LastRenderedNode::Real(children),
-    );
+    set_rendered_children(driver, dom, scope_id, LastRenderedNode::Real(children));
     mark_suspense_resolved(suspense_context, dom, scope_id);
 }
 
@@ -711,39 +726,7 @@ fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom
                 {
                     let order = ScopeOrder::new(height, scope_id);
                     if dom.dirty_scopes.remove(&order) {
-                        let mounted = dom.scopes[scope_id.0]
-                            .last_rendered_node
-                            .as_ref()
-                            .is_some_and(|node| node.mount.get().mounted());
-                        if mounted {
-                            dom.run_and_diff_scope(None::<&mut M>, scope_id);
-                        } else {
-                            // The body output is the scope's rendered output
-                            // only for plain components; a driver-managed
-                            // scope (portal/suspense) restages its hook state
-                            // from the body run and keeps the node its driver
-                            // maintains.
-                            let new = dom.run_scope(scope_id);
-                            let driver = dom.runtime.get_state(scope_id).render_driver();
-                            if is_component_driver(&driver) {
-                                dom.scopes[scope_id.0].last_rendered_node =
-                                    Some(LastRenderedNode::new(new));
-                            }
-                        }
-                    }
-                }
-
-                if let Some(context) =
-                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
-                {
-                    suspense_diff::<M>(scope_id, dom, None);
-                    if let Some(branch) = context.suspended_branch() {
-                        let root = branch.root();
-                        dom.set_mount_mode(branch.root_mount(), RenderMode::Foreground);
-                        promote_suspense_mounts_to_foreground::<M>(dom, &root);
-                        dom.scopes[scope_id.0].last_rendered_node =
-                            Some(LastRenderedNode::Real(root));
-                        context.take_suspended_branch();
+                        dom.run_and_diff_scope(None::<&mut M>, scope_id);
                     }
                 }
 

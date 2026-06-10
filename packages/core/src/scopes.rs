@@ -1,6 +1,5 @@
 use crate::{
-    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps,
-    reactive_context::ReactiveContext, scope_context::Scope,
+    Element, RenderError, Runtime, VNode, reactive_context::ReactiveContext, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -76,7 +75,6 @@ pub struct ScopeState {
     /// The last node that has been rendered for this component. This node may not ben mounted
     /// During suspense, this component can be rendered in the background multiple times
     pub(crate) last_rendered_node: Option<LastRenderedNode>,
-    pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,
 }
 

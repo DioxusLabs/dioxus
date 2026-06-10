@@ -1,9 +1,8 @@
 use crate::{
     Element, Event, Properties, ScopeId, VirtualDom,
-    any_props::BoxedAnyProps,
     arena::ElementId,
     events::ListenerCallback,
-    innerlude::{MountId, ScopeState, VProps},
+    innerlude::{MountId, ScopeState},
     properties::ComponentFunction,
 };
 use dioxus_core_types::DioxusFormattable;
@@ -1071,19 +1070,19 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The raw pointer to the render function
-    pub(crate) render_fn: usize,
-
-    /// The props for this component
-    pub(crate) props: BoxedAnyProps,
+    /// The rendering lifecycle for this component's scope, owning the props
+    /// it renders from. Plain components use a body-running driver; portal
+    /// and suspense attach drivers in `into_vcomponent` that manage the
+    /// scope's output directly. The driver also identifies the component
+    /// during diffing (see `RenderDriver::same_component`).
+    pub(crate) driver: Rc<dyn crate::render_driver::RenderDriver>,
 }
 
 impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            props: self.props.duplicate(),
-            render_fn: self.render_fn,
+            driver: self.driver.duplicate(),
         }
     }
 }
@@ -1098,18 +1097,26 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let render_fn = component.fn_ptr();
-        let props = Box::new(VProps::new(
-            component,
-            <P as Properties>::memoize,
-            props,
+        Self::new_with_driver(
             fn_name,
-        ));
+            Rc::new(crate::render_driver::BodyDriver::new(
+                component,
+                <P as Properties>::memoize,
+                props,
+                fn_name,
+            )),
+        )
+    }
 
+    /// Create a new [`VComponent`] whose scope is rendered by `driver` from
+    /// the props it owns.
+    pub(crate) fn new_with_driver(
+        fn_name: &'static str,
+        driver: Rc<dyn crate::render_driver::RenderDriver>,
+    ) -> Self {
         VComponent {
-            render_fn,
             name: fn_name,
-            props,
+            driver,
         }
     }
 

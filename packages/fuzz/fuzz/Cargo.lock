@@ -323,6 +323,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "gloo-timers",
  "longest-increasing-subsequence",
  "rustc-hash 2.1.2",
  "rustversion",

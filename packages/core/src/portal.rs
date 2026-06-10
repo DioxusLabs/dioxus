@@ -1,10 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
-    RenderTargetId, Runtime,
-    diff::context::DiffContext,
-    innerlude::*,
-    render_driver::{RenderDriver, debug_assert_driver_body_is_empty},
+    RenderTargetId, diff::context::DiffContext, innerlude::*, render_driver::RenderDriver,
 };
 
 /// Properties for the [`Portal()`] component.
@@ -39,6 +36,11 @@ impl Properties for PortalProps {
 
     fn builder() -> Self::Builder {
         PortalProps::builder()
+    }
+
+    fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {
+        let type_name = std::any::type_name_of_val(&render_fn);
+        VComponent::new_with_driver(type_name, Rc::new(PortalDriver::new(self)))
     }
 
     fn memoize(&mut self, new: &Self) -> bool {
@@ -95,51 +97,35 @@ impl PortalPropsBuilder<((RenderTargetId,), (Element,))> {
 
 /// Render children into another render target while keeping logical ancestry.
 ///
-/// The body registers a [`PortalDriver`] on the scope via [`use_portal`]; the
-/// driver owns the scope's rendered output, so the body itself renders
-/// nothing.
+/// This function exists as a unique fn-pointer identity that `rsx!` uses when
+/// constructing a `VComponent`; [`PortalProps::into_vcomponent`] attaches a
+/// [`PortalDriver`] that owns the scope's rendered output, so this body never
+/// runs.
 #[allow(non_snake_case)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn Portal(__props: PortalProps) -> Element {
-    use_portal_node(__props.target, __props.children);
-    VNode::empty()
-}
-
-/// Stage the portal's inputs and register its driver on the calling scope.
-///
-/// Only the [`Portal`] component body calls this: the driver owns the
-/// scope's rendered output, so the body must render nothing itself.
-pub(crate) fn use_portal_node(target: RenderTargetId, children: LastRenderedNode) {
-    let driver = crate::use_hook(|| {
-        let driver = Rc::new(PortalDriver {
-            stage: RefCell::new(PortalStage {
-                target,
-                children: children.clone(),
-            }),
-        });
-        Runtime::with_current_scope(|scope| {
-            // The scope's target routes its writes; declare this scope as a
-            // retargeting point before any child mounts under it. Later
-            // target changes are applied by the retarget arm of
-            // `PortalDriver::diff`, which must observe the old target first.
-            scope.set_target_id(target);
-            scope.set_render_driver(driver.clone());
-        });
-        driver
-    });
-    driver.stage.replace(PortalStage { target, children });
-}
-
-/// The hook-staged inputs the driver consumes at create/diff time.
-#[derive(Clone)]
-struct PortalStage {
-    target: RenderTargetId,
-    children: LastRenderedNode,
+    unreachable!("Portal should not be called directly")
 }
 
 /// The rendering lifecycle of a portal scope: its output lives at the root of
-/// another render target instead of mounting at the scope's slot.
+/// another render target instead of mounting at the scope's slot. Owns the
+/// [`PortalProps`] it renders from.
 struct PortalDriver {
-    stage: RefCell<PortalStage>,
+    props: RefCell<PortalProps>,
+}
+
+impl PortalDriver {
+    fn new(props: PortalProps) -> Self {
+        Self {
+            props: RefCell::new(props),
+        }
+    }
+
+    /// The portal's current target and children inputs.
+    fn props(&self) -> (RenderTargetId, LastRenderedNode) {
+        let props = self.props.borrow();
+        (props.target, props.children.clone())
+    }
 }
 
 /// Create `children` inside `target_id`, record them as the scope's
@@ -176,21 +162,48 @@ fn mount_children<M: WriteMutations>(
 }
 
 impl RenderDriver for PortalDriver {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn memoize(&self, new_driver: &dyn Any) -> bool {
+        match new_driver.downcast_ref::<Self>() {
+            Some(new) => Properties::memoize(&mut *self.props.borrow_mut(), &new.props.borrow()),
+            None => false,
+        }
+    }
+
+    fn duplicate(&self) -> Rc<dyn RenderDriver> {
+        Rc::new(Self::new(self.props.borrow().clone()))
+    }
+
     fn create(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        body: Option<Element>,
+        new: bool,
         parent: Option<ElementRef>,
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
-        if let Some(body) = &body {
-            debug_assert_driver_body_is_empty(body);
-        }
-        let PortalStage {
-            target: target_id,
-            children,
-        } = self.stage.borrow().clone();
+        let (target_id, children) = if new {
+            let (target_id, children) = self.props();
+            // The scope was allocated with its parent's target; declare it as
+            // a retargeting point before anything mounts under it. Later
+            // target changes are applied by the retarget arm of `diff`, which
+            // must observe the old target first.
+            dom.runtime.get_state(scope_id).set_target_id(target_id);
+            (target_id, children)
+        } else {
+            // Re-creating a live scope: the props' children handle is not
+            // mount-accurate (mounts land on the clone the first create
+            // rendered), so re-create from the mounted output and the scope's
+            // current target. Pending prop changes apply on the next `diff`.
+            let children = dom.scopes[scope_id.0]
+                .last_rendered_node
+                .clone()
+                .expect("portal scope must have rendered before re-create");
+            (dom.runtime.get_state(scope_id).target_id(), children)
+        };
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             mount_children(scope_id, target_id, children, parent, dom, to.as_mut());
@@ -202,15 +215,10 @@ impl RenderDriver for PortalDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        body: Element,
         _parent_context: Option<DiffContext<'_>>,
         mut to: Option<&mut dyn WriteMutations>,
     ) {
-        debug_assert_driver_body_is_empty(&body);
-        let PortalStage {
-            target: target_id,
-            children: new_children,
-        } = self.stage.borrow().clone();
+        let (target_id, new_children) = self.props();
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let old_children = dom.scopes[scope_id.0].last_rendered_node.take().unwrap();

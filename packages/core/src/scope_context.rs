@@ -112,9 +112,11 @@ pub(crate) struct Scope {
     /// The suspense context owned by this scope when this scope is a boundary.
     suspense_boundary: RefCell<Option<SuspenseContext>>,
 
-    /// The driver owning this scope's rendered output: the plain component
-    /// lifecycle unless the scope's body registers a portal/suspense driver.
-    render_driver: RefCell<Rc<dyn RenderDriver>>,
+    /// The driver owning this scope's rendered output, attached when the
+    /// scope's `VComponent` was constructed: the plain component lifecycle
+    /// unless the component's `into_vcomponent` supplied a portal/suspense
+    /// driver.
+    render_driver: Rc<dyn RenderDriver>,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -127,6 +129,7 @@ impl Scope {
         target_id: RenderTargetId,
         height: u32,
         suspense_location: SuspenseLocation,
+        render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
             name,
@@ -146,7 +149,7 @@ impl Scope {
             }),
             suspense_location,
             suspense_boundary: RefCell::new(None),
-            render_driver: RefCell::new(crate::render_driver::component_driver()),
+            render_driver,
         }
     }
 
@@ -162,14 +165,9 @@ impl Scope {
         self.target_id.set(target_id);
     }
 
-    /// Replace the driver that owns this scope's rendered output.
-    pub(crate) fn set_render_driver(&self, driver: Rc<dyn RenderDriver>) {
-        self.render_driver.replace(driver);
-    }
-
     /// The driver owning this scope's rendered output.
     pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
-        self.render_driver.borrow().clone()
+        self.render_driver.clone()
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {

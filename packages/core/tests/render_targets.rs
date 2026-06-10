@@ -512,3 +512,109 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
         ElementId(1)
     ));
 }
+
+static PORTAL_STATE_INITS: AtomicUsize = AtomicUsize::new(0);
+static PORTAL_LABEL: GlobalSignal<usize> = Signal::global(|| 0);
+
+fn suspended_portal_app(props: AppProps) -> Element {
+    rsx! {
+        SuspenseBoundary {
+            fallback: |_| rsx! { "fallback" },
+            SuspendingChild {}
+            Portal {
+                target: props.target,
+                PortalStateChild {}
+            }
+        }
+    }
+}
+
+#[component]
+fn SuspendingChild() -> Element {
+    let mut resolved = use_signal(|| false);
+    let task = use_hook(|| {
+        spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            resolved.set(true);
+        })
+    });
+    if !resolved() {
+        suspend(task)?;
+    }
+    rsx! {
+        div { "resolved" }
+    }
+}
+
+#[component]
+fn PortalStateChild() -> Element {
+    use_hook(|| {
+        PORTAL_STATE_INITS.fetch_add(1, Ordering::SeqCst);
+    });
+    rsx! { "{PORTAL_LABEL}" }
+}
+
+/// A portal hidden under a suspended boundary keeps its component state and
+/// emits its up-to-date content into the target when the boundary resolves.
+///
+/// Resolving re-creates the boundary's children from dom-state, which reaches
+/// the live portal scope through `PortalDriver::create`: the driver must
+/// re-create from the mounted output instead of the props' children handle,
+/// whose mount cell never observes the mounts of the first render. Re-creating
+/// from the unmounted handle allocates fresh child scopes, resetting portal
+/// subtree state.
+#[test]
+fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
+    PORTAL_STATE_INITS.store(0, Ordering::SeqCst);
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new_with_props(
+                suspended_portal_app,
+                AppProps { target: RenderTargetId(1) },
+            );
+            let target = dom.runtime().create_render_target();
+            assert_eq!(target, RenderTargetId(1));
+
+            let edits = rebuild_to_targeted_vec(&mut dom);
+            // The boundary suspends: the fallback renders on the main target
+            // and the background-created portal content writes nothing.
+            assert!(edits.get(&RenderTargetId::ROOT).is_some());
+            assert!(edits.get(&target).is_none());
+            assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);
+
+            // Update the hidden portal child while the boundary is suspended.
+            dom.in_scope(ScopeId::APP, || *PORTAL_LABEL.write() = 1);
+
+            // Drive work/render passes until the suspended task finishes and
+            // the boundary resolves: the resolve pass swaps the fallback for
+            // the children on the main target and emits the portal's current
+            // content into its target.
+            let mut resolve_edits = None;
+            for _ in 0..10 {
+                dom.wait_for_work().await;
+                let edits = render_immediate_to_targeted_vec(&mut dom);
+                if edits.contains_key(&target) {
+                    resolve_edits = Some(edits);
+                    break;
+                }
+            }
+            let edits = resolve_edits
+                .expect("the boundary should resolve and write the portal target");
+            assert!(edits.get(&RenderTargetId::ROOT).is_some());
+            let portal_edits = edits.get(&target).unwrap();
+            assert!(portal_edits.edits.iter().any(|mutation| matches!(
+                mutation,
+                Mutation::CreateTextNode { value, .. } if value.as_str() == "1"
+            )));
+            assert!(portal_edits.edits.iter().any(|mutation| matches!(
+                mutation,
+                Mutation::AppendChildren { id: ElementId(0), .. }
+            )));
+            // The live portal subtree was reused, not re-created from scratch.
+            assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);
+        });
+}

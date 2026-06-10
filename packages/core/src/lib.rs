@@ -8,7 +8,6 @@
 // don't drag the coverage metric down. Stable builds see no effect.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
-mod any_props;
 mod arena;
 mod diff;
 mod effect;
@@ -64,7 +63,6 @@ pub mod internal {
 }
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
     pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;

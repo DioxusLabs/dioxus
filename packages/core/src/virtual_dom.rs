@@ -7,12 +7,12 @@ use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     ComponentFunction, Element, Mutations, NoOpMutations,
     arena::ElementId,
-    innerlude::{SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
+    innerlude::{SchedulerMsg, ScopeOrder, ScopeState, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
 };
 use crate::{Task, VComponent};
-use crate::{innerlude::Work, scopes::LastRenderedNode};
+use crate::innerlude::Work;
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
@@ -282,13 +282,13 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let render_fn = root.fn_ptr();
-        let props = VProps::new(root, |_, _| true, root_props, "Root");
-        Self::new_with_component(VComponent {
-            name: "root",
-            render_fn,
-            props: Box::new(props),
-        })
+        let driver = Rc::new(crate::render_driver::BodyDriver::new(
+            root,
+            |_, _| true,
+            root_props,
+            "Root",
+        ));
+        Self::new_with_component(VComponent::new_with_driver("root", driver))
     }
 
     /// Create a new virtualdom and build it immediately
@@ -311,13 +311,13 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
+        let root = crate::render_driver::BodyDriver::new(
             RootScopeWrapper,
             |_, _| true,
             RootProps(root),
             "RootWrapper",
         );
-        dom.new_scope(Box::new(root), "app");
+        dom.new_scope("app", Rc::new(root));
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();
@@ -582,16 +582,16 @@ impl VirtualDom {
     }
 
     fn rebuild_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
-        let new_nodes = self
-            .runtime
-            .clone()
-            .while_rendering(|| self.run_scope(ScopeId::ROOT));
-
-        let new_nodes = LastRenderedNode::new(new_nodes);
-
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
-
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+        let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
+        let m = self.runtime.clone().while_rendering(|| {
+            driver.create(
+                self,
+                ScopeId::ROOT,
+                true,
+                None,
+                Some(to as &mut dyn WriteMutations),
+            )
+        });
         to.append_children(ElementId::ROOT, m);
     }
 

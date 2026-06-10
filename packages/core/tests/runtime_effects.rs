@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{generation, needs_update, queue_effect, Runtime};
+use dioxus_core::{Runtime, generation, needs_update, queue_effect};
 
 #[test]
 fn effect_queued_during_render_immediate_has_runtime() {
