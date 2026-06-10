@@ -572,10 +572,12 @@ impl VirtualDom {
         self.process_events();
         {
             let _runtime = RuntimeGuard::new(self.runtime.clone());
-            let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
-            self.render_immediate_with_writer(&mut router);
+            {
+                let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+                self.render_immediate_with_writer(&mut router);
+            }
+            self.drain_remaining_effects();
         }
-        self.drain_remaining_effects();
         self.runtime.finish_render();
     }
 
