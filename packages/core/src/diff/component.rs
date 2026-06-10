@@ -8,8 +8,8 @@ use crate::{
         context::{DiffContext, DiffFrame, DiffState},
     },
     innerlude::{
-        ElementRef, MountId, PortalProps, ScopeOrder, SuspenseBoundaryProps,
-        SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
+        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
+        VComponent, WriteMutations,
     },
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
@@ -43,7 +43,6 @@ fn drive<M: WriteMutations, R>(
 #[derive(Clone, Copy)]
 enum ComponentDriver {
     Normal,
-    Portal,
     Suspense,
 }
 
@@ -51,8 +50,6 @@ impl ComponentDriver {
     fn from_props(props: &dyn Any) -> Self {
         if props.type_id() == TypeId::of::<SuspenseBoundaryPropsWithOwner>() {
             Self::Suspense
-        } else if props.type_id() == TypeId::of::<PortalProps>() {
-            Self::Portal
         } else {
             Self::Normal
         }
@@ -78,9 +75,6 @@ impl ComponentDriver {
             ComponentDriver::Normal => {
                 NormalComponentLifecycle::create(mount, idx, component, parent, state)
             }
-            ComponentDriver::Portal => {
-                PortalLifecycle::create(mount, idx, component, parent, state)
-            }
             ComponentDriver::Suspense => {
                 SuspenseLifecycle::create(mount, idx, component, parent, state)
             }
@@ -90,7 +84,6 @@ impl ComponentDriver {
     fn diff<M: WriteMutations>(self, scope_id: ScopeId, state: &mut DiffState<'_, M>) {
         match self {
             ComponentDriver::Normal => NormalComponentLifecycle::diff(scope_id, state),
-            ComponentDriver::Portal => PortalLifecycle::diff(scope_id, state),
             ComponentDriver::Suspense => SuspenseLifecycle::diff(scope_id, state),
         }
     }
@@ -104,9 +97,6 @@ impl ComponentDriver {
         match self {
             ComponentDriver::Normal => {
                 NormalComponentLifecycle::remove(scope_id, state, destroy_component_state)
-            }
-            ComponentDriver::Portal => {
-                PortalLifecycle::remove(scope_id, state, destroy_component_state)
             }
             ComponentDriver::Suspense => {
                 SuspenseLifecycle::remove(scope_id, state, destroy_component_state)
@@ -169,44 +159,6 @@ impl NormalComponentLifecycle {
         drive(state, |dom, to| {
             driver.remove(dom, scope_id, to, destroy_component_state)
         })
-    }
-}
-
-struct PortalLifecycle;
-
-impl PortalLifecycle {
-    fn create<M: WriteMutations>(
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
-    ) -> usize {
-        PortalProps::create(
-            mount,
-            idx,
-            component,
-            parent,
-            state.dom,
-            state.to.as_deref_mut(),
-        )
-    }
-
-    fn diff<M: WriteMutations>(scope_id: ScopeId, state: &mut DiffState<'_, M>) {
-        PortalProps::diff(scope_id, state.dom, state.to.as_deref_mut())
-    }
-
-    fn remove<M: WriteMutations>(
-        scope_id: ScopeId,
-        state: &mut DiffState<'_, M>,
-        destroy_component_state: bool,
-    ) {
-        PortalProps::remove(
-            scope_id,
-            state.dom,
-            state.to.as_deref_mut(),
-            destroy_component_state,
-        )
     }
 }
 

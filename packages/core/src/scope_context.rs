@@ -163,7 +163,6 @@ impl Scope {
     }
 
     /// Replace the driver that owns this scope's rendered output.
-    #[expect(dead_code, reason = "drivers register through this in follow-up commits")]
     pub(crate) fn set_render_driver(&self, driver: Rc<dyn RenderDriver>) {
         self.render_driver.replace(driver);
     }

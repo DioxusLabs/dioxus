@@ -55,6 +55,22 @@ pub(crate) trait RenderDriver {
     );
 }
 
+/// A driver-managed scope's body exists only to run hooks; it must render the
+/// empty placeholder so the discarded body element can never own real output.
+pub(crate) fn debug_assert_driver_body_is_empty(body: &Element) {
+    debug_assert!(
+        matches!(
+            body,
+            Ok(node) if node.template == crate::nodes::VNode::placeholder().template
+                && matches!(
+                    &*node.dynamic_nodes,
+                    [crate::innerlude::DynamicNode::Fragment(roots)] if roots.is_empty()
+                )
+        ),
+        "a scope with a render driver must return an empty element from its body"
+    );
+}
+
 /// The shared driver instance for plain components.
 pub(crate) fn component_driver() -> Rc<dyn RenderDriver> {
     thread_local! {

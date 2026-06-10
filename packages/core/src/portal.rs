@@ -1,4 +1,11 @@
-use crate::{RenderTargetId, any_props::AnyProps, innerlude::*};
+use std::{cell::RefCell, rc::Rc};
+
+use crate::{
+    RenderTargetId, Runtime,
+    diff::context::DiffContext,
+    innerlude::*,
+    render_driver::{RenderDriver, debug_assert_driver_body_is_empty},
+};
 
 /// Properties for the [`Portal()`] component.
 #[derive(Clone, PartialEq)]
@@ -88,99 +95,129 @@ impl PortalPropsBuilder<((RenderTargetId,), (Element,))> {
 
 /// Render children into another render target while keeping logical ancestry.
 ///
-/// This function exists as a unique fn-pointer identity that `rsx!` uses when
-/// constructing a `VComponent`; the diff machinery special-cases `PortalProps`
-/// and routes through `PortalProps::{create,diff,remove}` instead of ever
-/// invoking this body.
+/// The body registers a [`PortalDriver`] on the scope via [`use_portal`]; the
+/// driver owns the scope's rendered output, so the body itself renders
+/// nothing.
 #[allow(non_snake_case)]
-#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn Portal(__props: PortalProps) -> Element {
-    unreachable!("Portal should not be called directly")
+    use_portal_node(__props.target, __props.children);
+    VNode::empty()
 }
 
-impl PortalProps {
-    pub(crate) fn downcast_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
-        props.props_mut().downcast_mut()
-    }
+/// Render `children` into the render target `target` while keeping logical
+/// ancestry with the calling component.
+///
+/// The calling scope's rendered output is owned by the portal: the component
+/// must return an empty element (e.g. [`VNode::empty`]) from its body.
+pub fn use_portal(target: RenderTargetId, children: Element) {
+    use_portal_node(target, LastRenderedNode::new(children));
+}
 
-    /// Create `children` inside `target_id`, record them as the scope's
-    /// rendered output, and fire mount lifecycle when a writer is attached.
-    /// Shared by initial creation and the retarget arm of `diff`.
-    fn mount_children<M: WriteMutations>(
+pub(crate) fn use_portal_node(target: RenderTargetId, children: LastRenderedNode) {
+    let driver = crate::use_hook(|| {
+        let driver = Rc::new(PortalDriver {
+            stage: RefCell::new(PortalStage {
+                target,
+                children: children.clone(),
+            }),
+        });
+        Runtime::with_current_scope(|scope| {
+            // The scope's target routes its writes; declare this scope as a
+            // retargeting point before any child mounts under it. Later
+            // target changes are applied by the retarget arm of
+            // `PortalDriver::diff`, which must observe the old target first.
+            scope.set_target_id(target);
+            scope.set_render_driver(driver.clone());
+        });
+        driver
+    });
+    driver.stage.replace(PortalStage { target, children });
+}
+
+/// The hook-staged inputs the driver consumes at create/diff time.
+#[derive(Clone)]
+struct PortalStage {
+    target: RenderTargetId,
+    children: LastRenderedNode,
+}
+
+/// The rendering lifecycle of a portal scope: its output lives at the root of
+/// another render target instead of mounting at the scope's slot.
+struct PortalDriver {
+    stage: RefCell<PortalStage>,
+}
+
+/// Create `children` inside `target_id`, record them as the scope's
+/// rendered output, and fire mount lifecycle when a writer is attached.
+/// Shared by initial creation and the retarget arm of `diff`.
+fn mount_children<M: WriteMutations>(
+    scope_id: ScopeId,
+    target_id: RenderTargetId,
+    children: LastRenderedNode,
+    parent: Option<ElementRef>,
+    dom: &mut VirtualDom,
+    to: Option<&mut M>,
+) {
+    debug_assert_eq!(
+        dom.runtime.current_render_target_id(),
+        target_id,
+        "portal mount runs inside the portal scope, whose target_id routes its writes"
+    );
+    let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+    let should_mount = render_to.is_some();
+    let m = dom.create_children_with_parents(
+        render_to.as_deref_mut(),
+        std::slice::from_ref(children.as_vnode()),
+        None,
+        parent,
+    );
+    if let Some(to) = render_to {
+        to.append_children(ElementId::ROOT, m);
+    }
+    dom.scopes[scope_id.0].last_rendered_node = Some(children);
+    if should_mount {
+        dom.runtime.get_state(scope_id).mount(&dom.runtime);
+    }
+}
+
+impl RenderDriver for PortalDriver {
+    fn create(
+        &self,
+        dom: &mut VirtualDom,
         scope_id: ScopeId,
-        target_id: RenderTargetId,
-        children: LastRenderedNode,
+        body: Option<Element>,
         parent: Option<ElementRef>,
-        dom: &mut VirtualDom,
-        to: Option<&mut M>,
-    ) {
-        debug_assert_eq!(
-            dom.runtime.current_render_target_id(),
-            target_id,
-            "portal mount runs inside the portal scope, whose target_id routes its writes"
-        );
-        let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
-        let should_mount = render_to.is_some();
-        let m = dom.create_children_with_parents(
-            render_to.as_deref_mut(),
-            std::slice::from_ref(children.as_vnode()),
-            None,
-            parent,
-        );
-        if let Some(to) = render_to {
-            to.append_children(ElementId::ROOT, m);
-        }
-        dom.scopes[scope_id.0].last_rendered_node = Some(children);
-        if should_mount {
-            dom.runtime.get_state(scope_id).mount(&dom.runtime);
-        }
-    }
-
-    pub(crate) fn create<M: WriteMutations>(
-        mount: MountId,
-        idx: usize,
-        component: &VComponent,
-        parent: Option<ElementRef>,
-        dom: &mut VirtualDom,
-        to: Option<&mut M>,
+        mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
-        let target_id = component
-            .props
-            .props()
-            .downcast_ref::<PortalProps>()
-            .expect("Portal props should downcast")
-            .target;
-        let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-
-        if scope_id.is_placeholder() {
-            scope_id = dom
-                .new_scope_with_target(component.props.duplicate(), component.name, target_id)
-                .state()
-                .id;
-            dom.set_mounted_dyn_node(mount, idx, scope_id.0);
+        if let Some(body) = &body {
+            debug_assert_driver_body_is_empty(body);
         }
+        let PortalStage {
+            target: target_id,
+            children,
+        } = self.stage.borrow().clone();
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let scope_state = &mut dom.scopes[scope_id.0];
-            let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
-            let children = props.children.clone();
-            let target_id = props.target;
-
-            Self::mount_children(scope_id, target_id, children, parent, dom, to);
+            mount_children(scope_id, target_id, children, parent, dom, to.as_mut());
             0
         })
     }
 
-    pub(crate) fn diff<M: WriteMutations>(
-        scope_id: ScopeId,
+    fn diff(
+        &self,
         dom: &mut VirtualDom,
-        mut to: Option<&mut M>,
+        scope_id: ScopeId,
+        body: Element,
+        _parent_context: Option<DiffContext<'_>>,
+        mut to: Option<&mut dyn WriteMutations>,
     ) {
+        debug_assert_driver_body_is_empty(&body);
+        let PortalStage {
+            target: target_id,
+            children: new_children,
+        } = self.stage.borrow().clone();
+
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let scope_state = &mut dom.scopes[scope_id.0];
-            let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
-            let new_children = props.children.clone();
-            let target_id = props.target;
             let old_children = dom.scopes[scope_id.0].last_rendered_node.take().unwrap();
             let old_target_id = dom.runtime.get_state(scope_id).target_id();
 
@@ -198,7 +235,7 @@ impl PortalProps {
                     });
 
                 let render_to = to
-                    .as_deref_mut()
+                    .as_mut()
                     .filter(|_| dom.render_target_should_write(old_target_id));
                 old_children.remove_node_inner(dom, render_to, true);
 
@@ -206,22 +243,23 @@ impl PortalProps {
                 // portal scope's `target_id`, so the removal above resolves
                 // against the old target and `mount_children` below resolves
                 // against the new one.
-                //
-                // `scope_id` is the live portal scope we just dispatched
-                // into; its slot in `scope_states` is therefore populated.
-                dom.runtime.scope_states.borrow_mut()[scope_id.0]
-                    .as_mut()
-                    .expect("active portal scope state must be live")
-                    .set_target_id(target_id);
+                dom.runtime.get_state(scope_id).set_target_id(target_id);
 
-                Self::mount_children(scope_id, target_id, new_children, logical_parent, dom, to);
+                mount_children(
+                    scope_id,
+                    target_id,
+                    new_children,
+                    logical_parent,
+                    dom,
+                    to.as_mut(),
+                );
                 return;
             }
 
             let mut render_to = to
                 .filter(|_| dom.runtime.scope_should_render(scope_id))
                 .filter(|_| dom.render_target_should_write(target_id));
-            old_children.diff_node(&new_children, dom, render_to.as_deref_mut());
+            old_children.diff_node(&new_children, dom, render_to.as_mut());
             dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
             if render_to.is_some() {
                 dom.runtime.get_state(scope_id).mount(&dom.runtime);
@@ -229,23 +267,24 @@ impl PortalProps {
         })
     }
 
-    pub(crate) fn remove<M: WriteMutations>(
-        scope_id: ScopeId,
+    fn remove(
+        &self,
         dom: &mut VirtualDom,
-        to: Option<&mut M>,
+        scope_id: ScopeId,
+        to: Option<&mut dyn WriteMutations>,
         destroy_component_state: bool,
     ) {
         let target_id = dom.runtime.get_state(scope_id).target_id();
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let render_to = to.filter(|_| dom.render_target_should_write(target_id));
-            // `PortalProps::create` always sets `last_rendered_node`
-            // before returning, and removal only fires after a scope has
-            // gone through `create`, so the clone is always `Some`.
+            let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+            // `PortalDriver::create` always sets `last_rendered_node` before
+            // returning, and removal only fires after a scope has gone
+            // through `create`, so the clone is always `Some`.
             let node = dom.scopes[scope_id.0]
                 .last_rendered_node
                 .clone()
                 .expect("portal scope must have rendered before remove");
-            node.remove_node_inner(dom, render_to, destroy_component_state);
+            node.remove_node_inner(dom, render_to.as_mut(), destroy_component_state);
         });
 
         if destroy_component_state {
