@@ -23,6 +23,8 @@ mod load;
 mod media;
 #[cfg(feature = "mounted")]
 mod mounted;
+#[cfg(feature = "mounted")]
+pub use mounted::*;
 mod mouse;
 mod pointer;
 mod resize;

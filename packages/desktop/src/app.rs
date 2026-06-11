@@ -201,12 +201,7 @@ impl App {
         } = event
         {
             if button == tray_icon::MouseButton::Left && self.tray_icon_show_window_on_click {
-                for webview in self.webviews.values() {
-                    // Skip windows that are tearing down (kept in the map only until their
-                    // remaining DesktopContexts drop) — re-showing one would revive a zombie.
-                    if webview.closing.get() {
-                        continue;
-                    }
+                for webview in self.alive_webviews() {
                     webview.desktop_context.window.set_visible(true);
                     webview.desktop_context.window.set_focus();
                 }
@@ -230,16 +225,26 @@ impl App {
         }
     }
 
+    /// Look up a window that hasn't started closing. A closing window stays in the map only so
+    /// proxied calls can find it (see [`Self::begin_window_close`]); everything user-facing must
+    /// treat it as already gone, which this lookup encodes.
+    fn alive_webview(&self, id: WindowId) -> Option<&WebviewInstance> {
+        self.webviews
+            .get(&id)
+            .filter(|webview| !webview.closing.get())
+    }
+
+    /// Iterate the windows that haven't started closing — see [`Self::alive_webview`].
+    fn alive_webviews(&self) -> impl Iterator<Item = &WebviewInstance> + '_ {
+        self.webviews
+            .values()
+            .filter(|webview| !webview.closing.get())
+    }
+
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        let Some(window) = self.webviews.get(&id) else {
-            // If the window is not found, we can just return
+        let Some(window) = self.alive_webview(id) else {
             return;
         };
-
-        // The window is already tearing down; don't re-run its close behaviour.
-        if window.closing.get() {
-            return;
-        }
 
         match window.desktop_context.close_behaviour.get() {
             // If the window is just set to hide when closed, we can just hide it
@@ -262,12 +267,10 @@ impl App {
     /// ([`Self::window_handles_dropped`]), so proxied calls through handles held elsewhere (e.g.
     /// by another window's components) always find their window.
     pub fn begin_window_close(&mut self, id: WindowId) {
-        let Some(window) = self.webviews.get(&id) else {
+        let Some(window) = self.alive_webview(id) else {
             return;
         };
-        if window.closing.replace(true) {
-            return;
-        }
+        window.closing.set(true);
 
         window.desktop_context.window.set_visible(false);
         let _ = self
@@ -369,15 +372,11 @@ impl App {
     ///
     /// Send the Initialize event to the VirtualDom thread to trigger initial rebuild
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let Some(view) = self.webviews.get(&id) else {
+        // A closing window's webview may still reload and re-send Initialize; ignore it rather
+        // than restarting or re-showing the window.
+        let Some(view) = self.alive_webview(id) else {
             return;
         };
-
-        // A closing window's webview may still reload and re-send Initialize; don't restart or
-        // re-show it.
-        if view.closing.get() {
-            return;
-        }
 
         // Send Initialize event to VirtualDom thread. The VirtualDom thread renders and sends
         // its edits straight to the webview's websocket, so no further poll is needed here.
@@ -557,11 +556,7 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        if let Some(webview) = self
-            .webviews
-            .values()
-            .find(|webview| !webview.closing.get())
-        {
+        if let Some(webview) = self.alive_webviews().next() {
             let window = &webview.desktop_context.window;
 
             let Some(monitor) = window.current_monitor() else {

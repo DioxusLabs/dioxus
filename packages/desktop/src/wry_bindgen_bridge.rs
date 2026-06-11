@@ -15,19 +15,17 @@ use wasm_bindgen::prelude::*;
 export function setEventHandler(handler) {
     window.rustEventHandler = handler;
 }
-export function setMountedHandler(handler) {
-    window.rustMountedHandler = handler;
-    // Flush mounted events the interpreter queued before the handler was installed (the handler
-    // travels over wry-bindgen's channel while edits travel over the edit websocket, so there is
-    // no ordering guarantee between them).
-    if (window.interpreter) {
-        window.interpreter.flushMountedEvents();
+export function mountedElementById(id) {
+    if (!window.interpreter) {
+        return null;
     }
+    const node = window.interpreter.nodes[id];
+    return node instanceof Element ? node : null;
 }
 "#)]
 extern "C" {
     fn setEventHandler(handler: Closure<dyn FnMut(web_sys::Event, String, u64, bool) -> bool>);
-    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys::Element, u64, bool)>);
+    fn mountedElementById(id: u64) -> Option<web_sys::Element>;
 }
 
 /// Initialize the event handler closures for the wry-bindgen bridge.
@@ -55,14 +53,7 @@ pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
         },
     );
 
-    let mounted_closure = Closure::new(
-        move |element: web_sys::Element, element_id: u64, bubbles: bool| {
-            handle_mounted_from_js(&runtime, element, element_id, bubbles)
-        },
-    );
-
     setEventHandler(event_closure);
-    setMountedHandler(mounted_closure);
 }
 
 /// Handle an event from JavaScript, returning whether to prevent default.
@@ -120,17 +111,11 @@ fn handle_event_from_js(
     !event.default_action_enabled()
 }
 
-/// Handle a mounted event from JavaScript.
-fn handle_mounted_from_js(
-    runtime: &Rc<Runtime>,
-    element: web_sys::Element,
-    element_id: u64,
-    bubbles: bool,
-) {
-    // For mounted events, we pass the element directly as the event data
-    let platform_event = PlatformEventData::new(Box::new(element));
+/// Handle a mounted event after the webview has applied the edit batch that created the listener.
+pub(crate) fn handle_mounted_event(runtime: &Rc<Runtime>, element_id: ElementId) {
+    let Some(element) = mountedElementById(element_id.0 as u64) else {
+        return;
+    };
 
-    let element = ElementId(element_id as usize);
-    let event = dioxus_core::Event::new(Rc::new(platform_event) as Rc<dyn Any>, bubbles);
-    runtime.handle_event("mounted", event, element);
+    dioxus_web_sys_events::dispatch_mounted_event(runtime, element_id, element);
 }

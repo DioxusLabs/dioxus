@@ -33,8 +33,8 @@ pub(crate) struct WebviewInstance {
     pub desktop_context: Rc<DesktopService>,
     /// Set once this window starts closing (its VirtualDom task is aborted or finished). The
     /// instance stays in the `App::webviews` map until every [`WindowHandle`] drops, so proxied
-    /// calls on handles held elsewhere keep working; this flag stops the closing window from
-    /// being re-shown (tray click, webview reload) in the meantime.
+    /// calls on handles held elsewhere keep working; in the meantime `App::alive_webview(s)`
+    /// filters this window out of everything user-facing (tray click, close requests, reload).
     pub closing: Cell<bool>,
     wry_bindgen_driver: WryBindgenWebviewDriver,
     wry_bindgen_driver_waker: Waker,

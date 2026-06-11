@@ -11,7 +11,7 @@ use crate::document::DesktopDocument;
 use crate::edits::EditWebsocket;
 use crate::file_upload::NativeFileHover;
 use crate::ipc::{UserWindowEvent, UserWindowEventVariant, WindowHandle};
-use dioxus_core::{ScopeId, VirtualDom, provide_context};
+use dioxus_core::{ElementId, ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
@@ -234,11 +234,12 @@ async fn run_virtual_dom_loop(
     callback_registry: SharedCallbackRegistry,
 ) {
     let mut mutations = MutationState::default();
+    mutations.queue_mounted_events();
     // The receiver for the edits we are currently waiting on the webview to apply. While this is
     // `Some`, we hold off rendering new work so effects don't run before the DOM has updated. The
     // websocket worker resolves it once the webview acks the edits (or drops it if the connection
     // goes away).
-    let mut pending_flush: Option<oneshot::Receiver<()>> = None;
+    let mut pending_flush: Option<PendingFlush> = None;
     let mut initialized = false;
 
     loop {
@@ -259,8 +260,11 @@ async fn run_virtual_dom_loop(
                         initialized = true;
                         // Perform initial rebuild
                         dom.rebuild(&mut mutations);
-                        pending_flush =
-                            Some(websocket.send_edits(webview_id, mutations.export_memory()));
+                        pending_flush = Some(send_edits(
+                            &websocket,
+                            webview_id,
+                            &mut mutations,
+                        ));
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
@@ -277,17 +281,45 @@ async fn run_virtual_dom_loop(
 
             // The webview applied the in-flight edits (Ok) or the connection dropped them (Err).
             // Either way we are no longer waiting, so rendering can resume.
-            Some(_) = OptionFuture::from(pending_flush.as_mut()) => {
-                pending_flush = None;
+            Some(applied) = OptionFuture::from(pending_flush.as_mut().map(|flush| &mut flush.applied)) => {
+                if let Some(flush) = pending_flush.take() {
+                    if applied.is_ok() {
+                        for id in flush.mounted_events {
+                            crate::wry_bindgen_bridge::handle_mounted_event(&dom.runtime(), id);
+                        }
+                    }
+                }
             }
 
             // Wait for the VirtualDom to have work ready
             _ = dom.wait_for_work(), if initialized && pending_flush.is_none() => {
                 // Render and send mutations straight to the webview's edit websocket
                 dom.render_immediate(&mut mutations);
-                pending_flush = Some(websocket.send_edits(webview_id, mutations.export_memory()));
+                pending_flush = Some(send_edits(
+                    &websocket,
+                    webview_id,
+                    &mut mutations,
+                ));
             }
         }
+    }
+}
+
+struct PendingFlush {
+    applied: oneshot::Receiver<()>,
+    mounted_events: Vec<ElementId>,
+}
+
+fn send_edits(
+    websocket: &EditWebsocket,
+    webview_id: u32,
+    mutations: &mut MutationState,
+) -> PendingFlush {
+    let edits = mutations.export_memory();
+    let mounted_events = mutations.take_mounted_events();
+    PendingFlush {
+        applied: websocket.send_edits(webview_id, edits),
+        mounted_events,
     }
 }
 

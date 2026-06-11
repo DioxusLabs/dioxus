@@ -180,8 +180,8 @@ mod js {
     this_node.setAttribute('data-dioxus-id', `\${id}`);
     const event_name = $event$;
 
-    // if this is a mounted listener, we send the event once the current edit batch has been
-    // applied (so the element is attached and laid out by the time the listener runs)
+    // Liveview serializes mounted listeners through the interpreter. Native renderers that
+    // dispatch mounted events in Rust intercept them before this mutation reaches JS.
     if (event_name === "mounted") {
         if (this.liveview) {
             this.sendSerializedEvent({
@@ -190,8 +190,6 @@ mod js {
                 data: null,
                 bubbles,
             });
-        } else {
-            this.queueMountedEvent(this_node, id, bubbles);
         }
     } else {
         this.createListener(event_name, this_node, bubbles, (event) => {

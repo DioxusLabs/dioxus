@@ -1,5 +1,5 @@
 use crate::unified_bindings::Interpreter as Channel;
-use dioxus_core::{Template, TemplateAttribute, TemplateNode, WriteMutations};
+use dioxus_core::{ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations};
 use dioxus_core_types::event_bubbles;
 use rustc_hash::FxHashMap;
 
@@ -11,6 +11,13 @@ pub struct MutationState {
 
     /// The channel that we are applying mutations to
     channel: Channel,
+
+    /// The mounted event listeners queued during this mutation batch.
+    mounted_event_listeners: Vec<ElementId>,
+
+    /// Queue mounted events on the Rust side instead of sending mounted listeners to the JS
+    /// interpreter. Desktop uses this to mirror the web renderer's mounted event behavior.
+    queue_mounted_events: bool,
 }
 
 impl MutationState {
@@ -27,6 +34,14 @@ impl MutationState {
     pub fn write_memory_into(&mut self, buffer: &mut Vec<u8>) {
         buffer.extend(self.channel.export_memory());
         self.channel.reset();
+    }
+
+    pub fn queue_mounted_events(&mut self) {
+        self.queue_mounted_events = true;
+    }
+
+    pub fn take_mounted_events(&mut self) -> Vec<ElementId> {
+        std::mem::take(&mut self.mounted_event_listeners)
     }
 
     pub fn channel(&mut self) -> &mut Channel {
@@ -173,6 +188,11 @@ impl WriteMutations for MutationState {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
+        if self.queue_mounted_events && name == "mounted" {
+            self.mounted_event_listeners.push(id);
+            return;
+        }
+
         // note that we use the foreign event listener here instead of the native one
         // the native method assumes we have direct access to the dom, which we don't.
         self.channel
@@ -180,6 +200,10 @@ impl WriteMutations for MutationState {
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
+        if self.queue_mounted_events && name == "mounted" {
+            return;
+        }
+
         self.channel
             .remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
