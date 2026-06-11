@@ -30,10 +30,7 @@ fn app() -> Element {
         button { onclick: move |_| counter_b += 1, "Increment B" }
 
         h2 { "Reversible name" }
-        input {
-            value: "{name}",
-            oninput: move |evt| set_name.call(evt.value()),
-        }
+        input { value: "{name}", oninput: move |evt| set_name.call(evt.value()) }
         button { onclick: move |_| reverse.call(()), "Reverse" }
         p { "Name: {name}" }
     }

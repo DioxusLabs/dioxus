@@ -65,9 +65,7 @@ fn app() -> Element {
                 multiple: true,
                 name: "textreader",
                 directory: enable_directory_upload,
-                onchange: move |evt| async move {
-                    upload_files(evt.files()).await
-                },
+                onchange: move |evt| async move { upload_files(evt.files()).await },
             }
         }
 
@@ -91,7 +89,7 @@ fn app() -> Element {
             for file in files_uploaded.read().iter().rev() {
                 li {
                     span { "{file.name}" }
-                    pre  { "{file.contents}"  }
+                    pre { "{file.contents}" }
                 }
             }
         }

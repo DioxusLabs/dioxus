@@ -12,11 +12,19 @@ fn app() -> Element {
     let mut disabled = use_signal(|| false);
 
     rsx! {
-        div { text_align: "center", margin: "20px", display: "flex", flex_direction: "column", align_items: "center",
-            button {
-                onclick: move |_| disabled.toggle(),
+        div {
+            text_align: "center",
+            margin: "20px",
+            display: "flex",
+            flex_direction: "column",
+            align_items: "center",
+            button { onclick: move |_| disabled.toggle(),
                 "click to "
-                if disabled() { "enable" } else { "disable" }
+                if disabled() {
+                    "enable"
+                } else {
+                    "disable"
+                }
                 " the lower button"
             }
             button { disabled, "lower button" }

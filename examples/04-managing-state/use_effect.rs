@@ -31,10 +31,7 @@ fn app() -> Element {
         h1 { "Hello, {name}! ({count})" }
 
         button { onclick: move |_| count += 1, "Increment count" }
-        input {
-            value: "{name}",
-            oninput: move |evt| name.set(evt.value()),
-        }
+        input { value: "{name}", oninput: move |evt| name.set(evt.value()) }
         p { "Check your terminal — each change fires an effect." }
     }
 }

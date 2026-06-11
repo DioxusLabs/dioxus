@@ -32,9 +32,9 @@ fn app() -> Element {
             onclick: move |_| async move {
                 fetch_sensitive.call();
             },
-            "Get Sensitive Data",
+            "Get Sensitive Data"
         }
-        pre { "Response from locked API: {fetch_sensitive.value():?}"}
+        pre { "Response from locked API: {fetch_sensitive.value():?}" }
         form {
             onsubmit: move |evt: FormEvent| async move {
                 // Prevent the browser from navigating away.
@@ -57,7 +57,6 @@ fn app() -> Element {
             label { "Password" }
             button { "Login" }
         }
-
     }
 }
 

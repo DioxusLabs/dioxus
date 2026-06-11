@@ -35,8 +35,6 @@ fn app() -> Element {
 #[component]
 fn Child(count: WriteSignal<i32>) -> Element {
     rsx! {
-        div {
-            "{count}"
-        }
+        div { "{count}" }
     }
 }

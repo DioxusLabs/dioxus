@@ -376,9 +376,7 @@ fn empty_for_loop_works() {
     fn app() -> Element {
         rsx! {
             div { class: "asdasdasd",
-                for _ in (0..5) {
-
-                }
+                for _ in (0..5) {}
             }
         }
     }

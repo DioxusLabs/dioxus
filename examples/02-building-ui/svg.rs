@@ -12,7 +12,11 @@ use rand::{Rng, rng};
 fn main() {
     dioxus::launch(|| {
         rsx! {
-            div { user_select: "none", webkit_user_select: "none", margin_left: "10%", margin_right: "10%",
+            div {
+                user_select: "none",
+                webkit_user_select: "none",
+                margin_left: "10%",
+                margin_right: "10%",
                 h1 { "Click die to generate a new value" }
                 div { cursor: "pointer", height: "100%", width: "100%", Dice {} }
             }
@@ -44,13 +48,20 @@ fn Dice() -> Element {
                 event.prevent_default();
                 value.set(rng().random_range(1..=6))
             },
-            rect { x: -1000, y: -1000, width: 2000, height: 2000, rx: 200, fill: "#aaa" }
+            rect {
+                x: -1000,
+                y: -1000,
+                width: 2000,
+                height: 2000,
+                rx: 200,
+                fill: "#aaa",
+            }
             for ((x, y), _) in DOTS.iter().zip(active_dots.read().iter()).filter(|(_, active)| **active) {
                 circle {
                     cx: *x * 600,
                     cy: *y * 600,
                     r: 200,
-                    fill: "#333"
+                    fill: "#333",
                 }
             }
         }

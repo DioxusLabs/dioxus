@@ -11,8 +11,8 @@ fn main() {
         let mut message = use_action(get_message);
 
         rsx! {
-            h1 { "Server says: "}
-            pre { "{message:?}"}
+            h1 { "Server says: " }
+            pre { "{message:?}" }
             button { onclick: move |_| message.call("world".into(), 30), "Click me!" }
         }
     });

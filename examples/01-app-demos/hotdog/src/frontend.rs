@@ -12,7 +12,7 @@ pub fn Favorites() -> Element {
 
     rsx! {
         div { id: "favorites",
-            for (id , url) in favorites.cloned() {
+            for (id, url) in favorites.cloned() {
                 div { class: "favorite-dog", key: "{id}",
                     img { src: "{url}" }
                     button {
@@ -33,7 +33,9 @@ pub fn NavBar() -> Element {
     rsx! {
         div { id: "title",
             span {}
-            Link { to: Route::DogView, h1 { "🌭 HotDog! " } }
+            Link { to: Route::DogView,
+                h1 { "🌭 HotDog! " }
+            }
             Link { to: Route::Favorites, id: "heart", "♥️" }
         }
         Outlet::<Route> {}
@@ -61,11 +63,7 @@ pub fn DogView() -> Element {
             img { id: "dogimg", src: "{img_src}" }
         }
         div { id: "buttons",
-            button {
-                id: "skip",
-                onclick: move |_| img_src.restart(),
-                "skip"
-            }
+            button { id: "skip", onclick: move |_| img_src.restart(), "skip" }
             button {
                 id: "save",
                 onclick: move |_| async move { _ = save_dog(img_src()).await },

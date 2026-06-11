@@ -12,13 +12,9 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        div {
-            onclick: move |_| println!("clicked! top"),
+        div { onclick: move |_| println!("clicked! top"),
             "- div"
-            button {
-                onclick: move |_| println!("clicked! bottom propagate"),
-                "Propagate"
-            }
+            button { onclick: move |_| println!("clicked! bottom propagate"), "Propagate" }
             button {
                 onclick: move |evt| {
                     println!("clicked! bottom no bubbling");
@@ -26,9 +22,7 @@ fn app() -> Element {
                 },
                 "Dont propagate"
             }
-            button {
-                "Does not handle clicks - only propagate"
-            }
+            button { "Does not handle clicks - only propagate" }
         }
     }
 }

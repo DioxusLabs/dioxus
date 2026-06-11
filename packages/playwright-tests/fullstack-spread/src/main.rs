@@ -37,11 +37,8 @@ fn Button() -> Element {
 #[component]
 fn Comp(#[props(extends = GlobalAttributes)] attributes: Vec<Attribute>) -> Element {
     rsx! {
-        div {
-            width: 100,
-            div {
-                ..attributes,
-            }
+        div { width: 100,
+            div { ..attributes }
         }
     }
 }

@@ -9,7 +9,9 @@ fn nested_passthru_creates() {
         rsx! {
             PassThru {
                 PassThru {
-                    PassThru { div { "hi" } }
+                    PassThru {
+                        div { "hi" }
+                    }
                 }
             }
         }
@@ -17,7 +19,9 @@ fn nested_passthru_creates() {
 
     #[component]
     fn PassThru(children: Element) -> Element {
-        rsx!({ children })
+        rsx!(
+            {children}
+        )
     }
 
     let mut dom = VirtualDom::new(app);
@@ -54,7 +58,9 @@ fn nested_passthru_creates_add() {
 
     #[component]
     fn ChildComp(children: Element) -> Element {
-        rsx! {{children}}
+        rsx! {
+            {children}
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -81,7 +87,10 @@ fn dynamic_node_as_root() {
     fn app() -> Element {
         let a = 123;
         let b = 456;
-        rsx! { "{a}" "{b}" }
+        rsx! {
+            "{a}"
+            "{b}"
+        }
     }
 
     let mut dom = VirtualDom::new(app);

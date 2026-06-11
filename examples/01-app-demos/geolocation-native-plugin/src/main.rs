@@ -86,8 +86,10 @@ fn App() -> Element {
             header { class: "hero",
                 div { class: "hero__copy",
                     h1 { "Geolocation plugin demo" }
-                    p { "One-shot location fetching through the Dioxus geolocation plugin.
-                        Measure permissions, request access, and inspect the last fix received from the device." }
+                    p {
+                        "One-shot location fetching through the Dioxus geolocation plugin.
+                        Measure permissions, request access, and inspect the last fix received from the device."
+                    }
                 }
             }
 
@@ -96,10 +98,15 @@ fn App() -> Element {
                     h2 { "Permissions" }
                     p { class: "muted",
                         "First, inspect what the OS currently allows this app to do. \
-                        On Android & iOS these calls talk to the native permission dialog APIs." }
+                        On Android & iOS these calls talk to the native permission dialog APIs."
+                    }
                     div { class: "button-row",
                         button { onclick: on_check_permissions, "Check permissions" }
-                        button { class: "secondary", onclick: on_request_permissions, "Request permissions" }
+                        button {
+                            class: "secondary",
+                            onclick: on_request_permissions,
+                            "Request permissions"
+                        }
                     }
                     match permission_status() {
                         Some(status) => rsx! {
@@ -108,7 +115,9 @@ fn App() -> Element {
                                 PermissionBadge { label: "Coarse location".to_string(), state: status.coarse_location }
                             }
                         },
-                        None => rsx!(p { class: "muted", "Tap “Check permissions” to see the current status." }),
+                        None => rsx! {
+                            p { class: "muted", "Tap “Check permissions” to see the current status." }
+                        },
                     }
                 }
 
@@ -116,10 +125,16 @@ fn App() -> Element {
                     h2 { "Current position" }
                     p { class: "muted",
                         "The plugin resolves the device location once per request (no background watch). \
-                        Configure the query and then fetch the coordinates." }
+                        Configure the query and then fetch the coordinates."
+                    }
                     div { class: "settings",
                         button {
-                            class: if use_high_accuracy() { "toggle toggle--active" } else { "toggle" },
+                            class:
+                            if use_high_accuracy() {
+                                "toggle toggle--active"
+                            } else {
+                                "toggle"
+                            },
                             onclick: on_toggle_accuracy,
                             "{accuracy_label}"
                         }
@@ -135,7 +150,11 @@ fn App() -> Element {
                             }
                         }
                     }
-                    button { class: "primary full-width", onclick: on_fetch_position, "Get current position" }
+                    button {
+                        class: "primary full-width",
+                        onclick: on_fetch_position,
+                        "Get current position"
+                    }
 
                     match last_position() {
                         Some(position) => {
@@ -146,18 +165,41 @@ fn App() -> Element {
                                     h3 { "Latest reading" }
                                     p { class: "muted", "Timestamp: {snapshot.timestamp} ms since Unix epoch" }
                                     div { class: "position__grid",
-                                        CoordinateRow { label: "Latitude".to_string(), value: format!("{:.6}", coords.latitude) }
-                                        CoordinateRow { label: "Longitude".to_string(), value: format!("{:.6}", coords.longitude) }
-                                        CoordinateRow { label: "Accuracy (m)".to_string(), value: format!("{:.1}", coords.accuracy) }
-                                        CoordinateRow { label: "Altitude (m)".to_string(), value: format_optional(coords.altitude) }
-                                        CoordinateRow { label: "Altitude accuracy (m)".to_string(), value: format_optional(coords.altitude_accuracy) }
-                                        CoordinateRow { label: "Speed (m/s)".to_string(), value: format_optional(coords.speed) }
-                                        CoordinateRow { label: "Heading (°)".to_string(), value: format_optional(coords.heading) }
+                                        CoordinateRow {
+                                            label: "Latitude".to_string(),
+                                            value: format!("{:.6}", coords.latitude),
+                                        }
+                                        CoordinateRow {
+                                            label: "Longitude".to_string(),
+                                            value: format!("{:.6}", coords.longitude),
+                                        }
+                                        CoordinateRow {
+                                            label: "Accuracy (m)".to_string(),
+                                            value: format!("{:.1}", coords.accuracy),
+                                        }
+                                        CoordinateRow {
+                                            label: "Altitude (m)".to_string(),
+                                            value: format_optional(coords.altitude),
+                                        }
+                                        CoordinateRow {
+                                            label: "Altitude accuracy (m)".to_string(),
+                                            value: format_optional(coords.altitude_accuracy),
+                                        }
+                                        CoordinateRow {
+                                            label: "Speed (m/s)".to_string(),
+                                            value: format_optional(coords.speed),
+                                        }
+                                        CoordinateRow {
+                                            label: "Heading (°)".to_string(),
+                                            value: format_optional(coords.heading),
+                                        }
                                     }
                                 }
                             }
                         }
-                        None => rsx!(p { class: "muted", "No location fetched yet." }),
+                        None => rsx! {
+                            p { class: "muted", "No location fetched yet." }
+                        },
                     }
                 }
 
@@ -185,7 +227,7 @@ fn PermissionBadge(label: String, state: PermissionState) -> Element {
     rsx! {
         div { class: "permission-row",
             span { class: "muted", "{label}" }
-            span { class: class, "{text}" }
+            span { class, "{text}" }
         }
     }
 }
@@ -240,7 +282,8 @@ fn LiveActivityCard(
             h2 { "Live Activity" }
             p { class: "muted",
                 "Start a Live Activity to show your current location on the lock screen. \
-                Fetch your position first, then start the activity." }
+                Fetch your position first, then start the activity."
+            }
             div { class: "button-row",
                 button { onclick: on_start_live_activity, "Start Activity" }
                 button { class: "secondary", onclick: on_update_live_activity, "Update" }

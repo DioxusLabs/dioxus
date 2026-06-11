@@ -100,10 +100,7 @@ fn app() -> Element {
                 },
                 "Logout"
             }
-            button {
-                onclick: fetch_new,
-                "Fetch User Info"
-            }
+            button { onclick: fetch_new, "Fetch User Info" }
 
             pre { "Logged in: {login.value():?}" }
             pre { "User name: {user_name.value():?}" }

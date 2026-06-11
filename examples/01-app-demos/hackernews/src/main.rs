@@ -34,9 +34,7 @@ fn StoryPreview(story: ReadSignal<Option<i64>>) -> Element {
     rsx! {
         div { display: "flex", flex_direction: "row", width: "100%",
             div { width: "50%",
-                SuspenseBoundary { fallback: |context| rsx! { "Loading..." },
-                    Stories {}
-                }
+                SuspenseBoundary { fallback: |context| rsx! { "Loading..." }, Stories {} }
             }
             div { width: "50%",
                 SuspenseBoundary { fallback: |context| rsx! { "Loading preview..." },
@@ -107,12 +105,12 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
     let time = time.format("%D %l:%M %p");
 
     rsx! {
-        div {
-            padding: "0.5rem",
-            position: "relative",
+        div { padding: "0.5rem", position: "relative",
             div { font_size: "1.5rem",
                 Link {
-                    to: Route::StoryPreview { story: Some(id) },
+                    to: Route::StoryPreview {
+                        story: Some(id),
+                    },
                     "{title}"
                 }
                 a {
@@ -137,11 +135,14 @@ fn Preview(story_id: ReadSignal<i64>) -> Element {
     let story = use_loader(move || get_story(story_id()))?.cloned();
     rsx! {
         div { padding: "0.5rem",
-            div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
-            if let Some(text) = &story.item.text { div { dangerous_inner_html: "{text}" } }
+            div { font_size: "1.5rem",
+                a { href: story.item.url, "{story.item.title}" }
+            }
+            if let Some(text) = &story.item.text {
+                div { dangerous_inner_html: "{text}" }
+            }
             for comment in story.item.kids.iter().copied() {
-                ChildrenOrLoading {
-                    key: "{comment}",
+                ChildrenOrLoading { key: "{comment}",
                     Comment { comment }
                 }
             }
@@ -173,8 +174,7 @@ fn Comment(comment: ReadSignal<i64>) -> Element {
             div { color: "gray", "by {by}" }
             div { dangerous_inner_html: "{text}" }
             for comment in kids.iter().copied() {
-                ChildrenOrLoading {
-                    key: "{comment}",
+                ChildrenOrLoading { key: "{comment}",
                     Comment { comment }
                 }
             }
@@ -242,8 +242,10 @@ pub async fn get_story(id: i64) -> Result<StoryPageData> {
 fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         SuspenseBoundary {
-            fallback: |_| rsx! { div { class: "spinner", } },
-            children
+            fallback: |_| rsx! {
+                div { class: "spinner" }
+            },
+            children,
         }
     }
 }

@@ -18,7 +18,10 @@ fn app() -> Element {
         document::Script { "console.log('Hello from an inline script!');" }
 
         // External script, loaded with `defer` so it runs after parsing
-        document::Script { src: "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js", defer: true }
+        document::Script {
+            src: "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js",
+            defer: true,
+        }
 
         h1 { "Script example" }
         p { "Open your browser's console to see the inline script's output." }

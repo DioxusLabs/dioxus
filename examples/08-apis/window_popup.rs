@@ -53,10 +53,7 @@ fn popup(send: Rc<dyn Fn(String)>) -> Element {
     rsx! {
         div {
             h1 { "Compose a new email" }
-            button {
-                onclick: close_window,
-                "Close Window B (button)"
-            }
+            button { onclick: close_window, "Close Window B (button)" }
             button {
                 onclick: move |_| {
                     send(user_input.cloned());
@@ -64,7 +61,10 @@ fn popup(send: Rc<dyn Fn(String)>) -> Element {
                 },
                 "Send"
             }
-            input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
+            input {
+                oninput: move |e| user_input.set(e.value()),
+                value: "{user_input}",
+            }
         }
     }
 }

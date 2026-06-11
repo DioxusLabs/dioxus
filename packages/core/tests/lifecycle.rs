@@ -20,7 +20,9 @@ fn manual_diffing() {
 
     fn app(cx: AppProps) -> Element {
         let val = cx.value.lock().unwrap();
-        rsx! { div { "{val}" } }
+        rsx! {
+            div { "{val}" }
+        }
     };
 
     let value = Arc::new(Mutex::new("Hello"));

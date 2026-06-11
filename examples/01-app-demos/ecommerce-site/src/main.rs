@@ -17,14 +17,9 @@ mod api;
 fn main() {
     dioxus::launch(|| {
         rsx! {
-            document::Link {
-                rel: "stylesheet",
-                href: asset!("/public/tailwind.css")
-            }
+            document::Link { rel: "stylesheet", href: asset!("/public/tailwind.css") }
 
-            ChildrenOrLoading {
-                Router::<Route> {}
-            }
+            ChildrenOrLoading { Router::<Route> {} }
         }
     });
 }
@@ -44,9 +39,7 @@ fn Details(product_id: usize) -> Element {
     rsx! {
         div {
             components::nav::Nav {}
-            components::product_page::ProductPage {
-                product_id
-            }
+            components::product_page::ProductPage { product_id }
         }
     }
 }

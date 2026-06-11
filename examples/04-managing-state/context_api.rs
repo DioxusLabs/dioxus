@@ -22,8 +22,7 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: STYLE }
-        main {
-            class: "main-container",
+        main { class: "main-container",
 
             h1 { "Theme Switcher" }
             ThemeControls {}
@@ -52,12 +51,11 @@ fn ThemeControls() -> Element {
     let mut theme = use_theme_context();
     let current_theme = *theme.read();
     rsx! {
-        div {
-            class: "controls",
+        div { class: "controls",
             button {
                 class: "btn",
                 onclick: move |_| theme.set(Theme::Light),
-                disabled: current_theme== Theme::Light,
+                disabled: current_theme == Theme::Light,
                 "Switch to Light"
             }
             button {
@@ -75,8 +73,7 @@ fn ThemeDisplay() -> Element {
     let theme = use_theme_context();
 
     rsx! {
-        div {
-            class: "display {theme.read().stylesheet()}",
+        div { class: "display {theme.read().stylesheet()}",
             p { "Current theme: {theme:?}" }
             p { "Try switching themes using the buttons above!" }
         }

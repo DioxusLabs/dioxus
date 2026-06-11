@@ -39,7 +39,7 @@ async fn values_memoize_in_place() {
                     let _ = &x;
                     println!("num is {num}");
                 },
-                number: count() / 2
+                number: count() / 2,
             }
             TakesSignal { sig: count(), number: count() / 2 }
         }
@@ -78,7 +78,7 @@ fn cloning_event_handler_components_work() {
                 click: move |evt| {
                     println!("Clicked {evt:?}!");
                 },
-                number: 0
+                number: 0,
             }
         };
 
@@ -116,10 +116,7 @@ fn TakesEventHandler(click: EventHandler<usize>, number: usize) -> Element {
     }
 
     rsx! {
-        button {
-            onclick: move |_| click(number),
-            "{number}"
-        }
+        button { onclick: move |_| click(number), "{number}" }
     }
 }
 

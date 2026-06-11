@@ -73,10 +73,7 @@ fn memos_prevents_component_rerun() {
             }
 
             rsx! {
-                Child {
-                    signal: signal,
-                    counter: props.clone(),
-                }
+                Child { signal, counter: props.clone() }
             }
         },
         counter.clone(),

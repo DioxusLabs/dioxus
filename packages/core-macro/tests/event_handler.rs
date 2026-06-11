@@ -21,9 +21,11 @@ fn event_handlers_compile() {
 
             // New! You can now use async closures for custom event handlers!
             // This shouldn't require an explicit type annotation
-            TakesEventHandler { onclick: |event| async move {
-                println!("{event:?}");
-            } }
+            TakesEventHandler {
+                onclick: |event| async move {
+                    println!("{event:?}");
+                },
+            }
             // Or you can accept a callback that returns a value
             // This shouldn't require an explicit type annotation
             TakesEventHandlerWithArg { double: move |value| (value * 2) as i32 }
@@ -35,7 +37,7 @@ fn event_handlers_compile() {
         rsx! {
             button {
                 // You can pass in EventHandlers directly to events
-                onclick: onclick,
+                onclick,
                 "Click!"
             }
             button {
@@ -45,9 +47,7 @@ fn event_handlers_compile() {
             }
 
             // You should also be able to forward event handlers to other components with the shorthand syntax
-            TakesEventHandler {
-                onclick
-            }
+            TakesEventHandler { onclick }
         }
     }
 

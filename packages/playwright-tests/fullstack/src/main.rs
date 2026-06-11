@@ -44,10 +44,7 @@ fn app() -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
-        div {
-            id: "errors",
-            Errors {}
-        }
+        div { id: "errors", Errors {} }
         OnMounted {}
         DefaultServerFnCodec {}
         DocumentElements {}
@@ -128,15 +125,10 @@ fn Errors() -> Element {
         // Root suspense boundary is already resolved when the inner suspense boundary throws an error.
         // We need to throw the error from the inner suspense boundary on the server to the hydrated
         // suspense boundary on the client
-        ErrorBoundary {
-            handle_error: |_| rsx! {
-                "Hmm, something went wrong."
-            },
+        ErrorBoundary { handle_error: |_| rsx! { "Hmm, something went wrong." },
             SuspenseBoundary {
                 fallback: |_: SuspenseContext| rsx! {
-                    div {
-                        "Loading..."
-                    }
+                    div { "Loading..." }
                 },
                 ThrowsError {}
             }
@@ -147,9 +139,7 @@ fn Errors() -> Element {
 #[component]
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?.unwrap()?;
-    rsx! {
-        "success"
-    }
+    rsx! { "success" }
 }
 
 /// This component tests the document::* elements pre-rendered on the server
@@ -160,10 +150,13 @@ fn DocumentElements() -> Element {
         document::Link {
             id: "link-head",
             rel: "stylesheet",
-            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono",
         }
-        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
-        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Stylesheet {
+            id: "stylesheet-head",
+            href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic",
+        }
+        document::Script { id: "script-head", r#async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
     }
 }
@@ -190,18 +183,10 @@ fn Assets() -> Element {
     static _EMBEDDED_FOLDER: Asset = asset!("/assets/nested");
 
     rsx! {
-        img {
-            src: asset!("/assets/image.png"),
-        }
-        img {
-            src: "{_EMBEDDED_FOLDER}/image.png",
-        }
-        img {
-            src: "{_UNHASHED_FOLDER}/image.png",
-        }
-        img {
-            src: "/assets/image.png",
-        }
+        img { src: asset!("/assets/image.png") }
+        img { src: "{_EMBEDDED_FOLDER}/image.png" }
+        img { src: "{_UNHASHED_FOLDER}/image.png" }
+        img { src: "/assets/image.png" }
     }
 }
 
@@ -221,10 +206,7 @@ fn WebSockets() -> Element {
     });
 
     rsx! {
-        div {
-            id: "websocket-div",
-            "Received: {received}"
-        }
+        div { id: "websocket-div", "Received: {received}" }
     }
 }
 

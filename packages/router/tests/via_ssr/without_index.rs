@@ -27,17 +27,14 @@ enum Route {
 #[component]
 fn Test() -> Element {
     rsx! {
-        div {
-            "router with no index route renders"
-        }
+        div { "router with no index route renders" }
     }
 }
 
 #[component]
 fn App(path: Route) -> Element {
     rsx! {
-        HistoryProvider {
-            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
+        HistoryProvider { history: move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
             Router::<Route> {}
         }
     }

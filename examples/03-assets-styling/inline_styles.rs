@@ -25,8 +25,7 @@ fn app() -> Element {
         }
 
         // The raw `style` attribute accepts any CSS string
-        div {
-            style: "margin-top: 12px; border: 2px dashed tomato; padding: 10px;",
+        div { style: "margin-top: 12px; border: 2px dashed tomato; padding: 10px;",
             "Use `style:` when you want a plain CSS string."
         }
 

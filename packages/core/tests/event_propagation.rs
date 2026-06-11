@@ -50,23 +50,23 @@ fn events_propagate() {
 
 fn app() -> Element {
     rsx! {
-        div { onclick: move |_| {
+        div {
+            onclick: move |_| {
                 println!("top clicked");
                 *CLICKS.lock().unwrap() += 1;
             },
 
-            {vec![
-                rsx! {
-                    problematic_child {}
-                }
-            ].into_iter()}
+            {vec![rsx! {
+                problematic_child {}
+            }].into_iter()}
         }
     }
 }
 
 fn problematic_child() -> Element {
     rsx! {
-        button { onclick: move |evt| {
+        button {
+            onclick: move |evt| {
                 println!("bottom clicked");
                 let mut clicks = CLICKS.lock().unwrap();
                 if *clicks == 3 {
@@ -74,6 +74,7 @@ fn problematic_child() -> Element {
                 } else {
                     *clicks += 1;
                 }
-            } }
+            },
+        }
     }
 }

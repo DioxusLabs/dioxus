@@ -3,7 +3,9 @@ use dioxus::prelude::*;
 
 #[test]
 fn bool_test() {
-    let mut app = VirtualDom::new(|| rsx!(div { hidden: false }));
+    let mut app = VirtualDom::new(|| rsx!(
+        div { hidden: false }
+    ));
 
     assert_eq!(
         app.rebuild_to_vec().edits,

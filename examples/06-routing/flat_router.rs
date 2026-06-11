@@ -46,9 +46,7 @@ fn Footer() -> Element {
             Link { to: Route::Play {}, class: "nav-btn", "Play" }
             Link { to: Route::Settings {}, class: "nav-btn", "Settings" }
         }
-        div { id: "content",
-            Outlet::<Route> {}
-        }
+        div { id: "content", Outlet::<Route> {} }
     }
 }
 
@@ -56,7 +54,9 @@ fn Footer() -> Element {
 fn Home() -> Element {
     rsx!(
         h1 { "Home" }
-        p { "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." }
+        p {
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        }
     )
 }
 
@@ -73,7 +73,9 @@ fn Games() -> Element {
 fn Play() -> Element {
     rsx!(
         h1 { "Play" }
-        p { "Always play with your full heart adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." }
+        p {
+            "Always play with your full heart adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        }
     )
 }
 
@@ -81,6 +83,8 @@ fn Play() -> Element {
 fn Settings() -> Element {
     rsx!(
         h1 { "Settings" }
-        p { "Settings are consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." }
+        p {
+            "Settings are consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        }
     )
 }

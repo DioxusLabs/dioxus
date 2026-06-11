@@ -45,15 +45,60 @@ fn main() {
         let mut http_error_context_data = use_action(throws_http_error_context);
 
         rsx! {
-            button { onclick: move |_| { dog_data.call(); }, "Fetch dog data" }
-            button { onclick: move |_| { ip_data.call(); }, "Fetch IP data" }
-            button { onclick: move |_| { custom_data.call(); }, "Fetch custom encoded data" }
-            button { onclick: move |_| { error_data.call(); }, "Fetch error data" }
-            button { onclick: move |_| { typed_error_data.call(); }, "Fetch typed error data" }
-            button { onclick: move |_| { dog_data_err.call(); }, "Fetch dog error data" }
-            button { onclick: move |_| { throws_ok_data.call(); }, "Fetch throws ok data" }
-            button { onclick: move |_| { http_error_data.call(); }, "Fetch HTTP 400" }
-            button { onclick: move |_| { http_error_context_data.call(); }, "Fetch HTTP 400 (context)" }
+            button {
+                onclick: move |_| {
+                    dog_data.call();
+                },
+                "Fetch dog data"
+            }
+            button {
+                onclick: move |_| {
+                    ip_data.call();
+                },
+                "Fetch IP data"
+            }
+            button {
+                onclick: move |_| {
+                    custom_data.call();
+                },
+                "Fetch custom encoded data"
+            }
+            button {
+                onclick: move |_| {
+                    error_data.call();
+                },
+                "Fetch error data"
+            }
+            button {
+                onclick: move |_| {
+                    typed_error_data.call();
+                },
+                "Fetch typed error data"
+            }
+            button {
+                onclick: move |_| {
+                    dog_data_err.call();
+                },
+                "Fetch dog error data"
+            }
+            button {
+                onclick: move |_| {
+                    throws_ok_data.call();
+                },
+                "Fetch throws ok data"
+            }
+            button {
+                onclick: move |_| {
+                    http_error_data.call();
+                },
+                "Fetch HTTP 400"
+            }
+            button {
+                onclick: move |_| {
+                    http_error_context_data.call();
+                },
+                "Fetch HTTP 400 (context)"
+            }
             button {
                 onclick: move |_| {
                     ip_data.reset();

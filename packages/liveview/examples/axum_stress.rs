@@ -12,9 +12,7 @@ fn app() -> Element {
 
     rsx! {
         for _ in 0..10000 {
-            div {
-                "hello axum! {state}"
-            }
+            div { "hello axum! {state}" }
         }
     }
 }

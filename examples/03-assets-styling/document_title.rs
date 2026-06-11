@@ -16,7 +16,11 @@ fn app() -> Element {
     rsx! {
         // The title updates every time the signal changes
         Title {
-            if unread() > 0 { "({unread}) Inbox" } else { "Inbox" }
+            if unread() > 0 {
+                "({unread}) Inbox"
+            } else {
+                "Inbox"
+            }
         }
 
         h1 { "Inbox" }

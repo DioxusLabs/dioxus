@@ -47,7 +47,11 @@ fn app() -> Element {
                         onclick: move |_| {
                             scan.call();
                         },
-                        if scan.pending() { "Scanning" } else { "Scan" }
+                        if scan.pending() {
+                            "Scanning"
+                        } else {
+                            "Scan"
+                        }
                     }
                 }
             }
@@ -74,12 +78,20 @@ fn app() -> Element {
                                             tr { class: "text-xs bg-gray-50",
                                                 td { class: "py-5 px-6 font-medium", "{peripheral.rssi.unwrap_or(-100)}" }
                                                 td { class: "flex py-3 font-medium", "{peripheral.local_name.clone().unwrap_or_default()}" }
-                                                td { span { class: "inline-block py-1 px-2 text-white bg-green-500 rounded-full", "{peripheral.address}" } }
-                                                td {  span { class: "inline-block py-1 px-2 text-purple-500 bg-purple-50 rounded-full", "{peripheral.tx_power_level.unwrap_or_default()}" } }
+                                                td {
+                                                    span { class: "inline-block py-1 px-2 text-white bg-green-500 rounded-full",
+                                                        "{peripheral.address}"
+                                                    }
+                                                }
+                                                td {
+                                                    span { class: "inline-block py-1 px-2 text-purple-500 bg-purple-50 rounded-full",
+                                                        "{peripheral.tx_power_level.unwrap_or_default()}"
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                }
+                                },
                             }
                         }
                     }

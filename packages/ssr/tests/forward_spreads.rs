@@ -12,14 +12,8 @@ fn forward_spreads() {
     #[component]
     fn Comp1(props: Comp1Props) -> Element {
         rsx! {
-            Comp2 {
-                attributes: props.attributes.clone(),
-                height: "100%",
-            }
-            Comp2 {
-                height: "100%",
-                attributes: props.attributes.clone(),
-            }
+            Comp2 { attributes: props.attributes.clone(), height: "100%" }
+            Comp2 { height: "100%", attributes: props.attributes.clone() }
         }
     }
 
@@ -33,17 +27,13 @@ fn forward_spreads() {
     fn Comp2(props: CompProps2) -> Element {
         let attributes = props.attributes;
         rsx! {
-            div {
-                ..attributes
-            }
+            div { ..attributes }
         }
     }
 
     let merged = || {
         rsx! {
-            Comp1 {
-                width: "100%"
-            }
+            Comp1 { width: "100%" }
         }
     };
     let dom = VirtualDom::prebuilt(merged);

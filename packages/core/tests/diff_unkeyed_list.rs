@@ -436,17 +436,13 @@ fn replace_and_add_items() {
                 VNode::empty()
             } else {
                 rsx! {
-                    li {
-                        "Fizz"
-                    }
+                    li { "Fizz" }
                 }
             }
         });
 
         rsx! {
-            ul {
-                {items}
-            }
+            ul { {items} }
         }
     });
 

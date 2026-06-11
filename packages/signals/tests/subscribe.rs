@@ -33,10 +33,7 @@ fn reading_subscribes() {
 
             rsx! {
                 for id in 0..10 {
-                    Child {
-                        signal: signal,
-                        counter: props.clone()
-                    }
+                    Child { signal, counter: props.clone() }
                 }
             }
         },
@@ -64,9 +61,7 @@ fn reading_subscribes() {
             .entry(current_scope_id())
             .or_default() += 1;
 
-        rsx! {
-            "{props.signal}"
-        }
+        rsx! { "{props.signal}" }
     }
 
     dom.rebuild_in_place();

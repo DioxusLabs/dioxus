@@ -20,10 +20,11 @@ fn app() -> Element {
                 "by hunter–gatherers over 15,000 years ago,[7] before the development of agriculture.[1]"
             }
             h3 { "Illustrious Dog Photo" }
-            ErrorBoundary { handle_error: |_| rsx! { p { "Error loading doggos" } },
-                SuspenseBoundary { fallback: move |_| rsx! { "Loading doggos..." },
-                    Doggo {}
-                }
+            ErrorBoundary {
+                handle_error: |_| rsx! {
+                    p { "Error loading doggos" }
+                },
+                SuspenseBoundary { fallback: move |_| rsx! { "Loading doggos..." }, Doggo {} }
             }
         }
     }
@@ -54,7 +55,7 @@ fn Doggo() -> Element {
             img {
                 max_width: "500px",
                 max_height: "500px",
-                src: "{dog.read().message}"
+                src: "{dog.read().message}",
             }
         }
     }

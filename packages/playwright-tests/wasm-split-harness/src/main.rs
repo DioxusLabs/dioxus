@@ -48,21 +48,13 @@ fn Home() -> Element {
         h1 { "Hello bundle split 456" }
         h3 { id: "counter-display", "Count: {count}" }
         h3 { id: "global-counter", "Global Counter: {GLOBAL_COUNTER}" }
-        button {
-            id: "increment-counter",
-            onclick: move |_| count += 1,
-            "Click me"
-        }
+        button { id: "increment-counter", onclick: move |_| count += 1, "Click me" }
         button {
             id: "increment-counter-global",
             onclick: move |_| *GLOBAL_COUNTER.write() += 1,
             "Click me"
         }
-        button {
-            id: "add-body-text",
-            onclick: move |_| add_body_text(),
-            "Add body text"
-        }
+        button { id: "add-body-text", onclick: move |_| add_body_text(), "Add body text" }
         button {
             id: "add-body-element",
             onclick: move |_| async move {
@@ -107,9 +99,7 @@ fn Home() -> Element {
             },
             "local request"
         }
-        LazyComponent {
-            abc: 0
-        }
+        LazyComponent { abc: 0 }
         div { "Response: {res}" }
         div { id: "output-box" }
     }
@@ -202,9 +192,7 @@ async fn make_request() -> Result<String, anyhow::Error> {
 #[component(lazy)]
 fn LazyComponent(abc: i32) -> Element {
     rsx! {
-        div {
-            "This is a lazy component! {abc}"
-        }
+        div { "This is a lazy component! {abc}" }
     }
 }
 

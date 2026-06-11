@@ -37,7 +37,7 @@ fn Child(state: Memo<isize>, items: Memo<Vec<isize>>, depth: ReadSignal<usize>) 
     println!("rendering child: {}", depth());
 
     rsx! {
-        h3 { "Depth({depth})-Item({item}): {state}"}
+        h3 { "Depth({depth})-Item({item}): {state}" }
         if depth() > 0 {
             Child { depth, state, items }
         }

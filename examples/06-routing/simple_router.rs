@@ -5,7 +5,9 @@ use dioxus::prelude::*;
 fn main() {
     // launch the router, using our `Route` component as the generic type
     // This will automatically boot the app to "/" unless otherwise specified
-    dioxus::launch(|| rsx! { Router::<Route> {} });
+    dioxus::launch(|| rsx! {
+        Router::<Route> {}
+    });
 }
 
 /// By default, the Routable derive will use the name of the variant as the route
@@ -24,7 +26,9 @@ enum Route {
 
 #[component]
 fn Homepage() -> Element {
-    rsx! { h1 { "Welcome home" } }
+    rsx! {
+        h1 { "Welcome home" }
+    }
 }
 
 #[component]

@@ -13,18 +13,27 @@ fn main() {
         let mut message_all = use_action(get_message_all);
 
         rsx! {
-            h1 { "Server says: "}
+            h1 { "Server says: " }
             div {
                 button { onclick: move |_| message.call(22), "Single" }
-                pre { "{message:?}"}
+                pre { "{message:?}" }
             }
             div {
                 button { onclick: move |_| message_rebind.call(25), "Rebind" }
-                pre { "{message_rebind:?}"}
+                pre { "{message_rebind:?}" }
             }
             div {
-                button { onclick: move |_| message_all.call(Params { age: 30, name: "world".into() }), "Bind all" }
-                pre { "{message_all:?}"}
+                button {
+                    onclick: move |_| {
+                        message_all
+                            .call(Params {
+                                age: 30,
+                                name: "world".into(),
+                            })
+                    },
+                    "Bind all"
+                }
+                pre { "{message_all:?}" }
             }
         }
     });

@@ -10,18 +10,10 @@ use dioxus::prelude::*;
 fn generic_props_compile() {
     fn app() -> Element {
         rsx! {
-            TakesClone {
-                value: "hello world"
-            }
-            TakesCloneManual {
-                value: "hello world"
-            }
-            TakesCloneManualWhere {
-                value: "hello world"
-            }
-            GenericFnWhereClause {
-                value: "hello world"
-            }
+            TakesClone { value: "hello world" }
+            TakesCloneManual { value: "hello world" }
+            TakesCloneManualWhere { value: "hello world" }
+            GenericFnWhereClause { value: "hello world" }
         }
     }
 

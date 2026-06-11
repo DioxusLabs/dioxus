@@ -40,16 +40,24 @@ impl ServerDocument {
         myself.title.as_ref().map(|title| {
             RENDERER
                 .write()
-                .render_element(rsx! { title { "{title}" } })
+                .render_element(rsx! {
+                    title { "{title}" }
+                })
         })
     }
 
     pub(crate) fn render(&self, to: &mut impl std::fmt::Write) -> std::fmt::Result {
         let myself = self.0.borrow();
         let element = rsx! {
-            {myself.meta.iter().map(|m| rsx! { {m} })}
-            {myself.link.iter().map(|l| rsx! { {l} })}
-            {myself.script.iter().map(|s| rsx! { {s} })}
+            {myself.meta.iter().map(|m| rsx! {
+                {m}
+            })}
+            {myself.link.iter().map(|l| rsx! {
+                {l}
+            })}
+            {myself.script.iter().map(|s| rsx! {
+                {s}
+            })}
         };
 
         RENDERER.write().render_element_to(to, element)?;

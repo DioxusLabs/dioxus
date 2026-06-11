@@ -43,7 +43,7 @@ fn component_swap() {
                 nav_bar {}
                 dash_board {}
             },
-            _ => rsx!("blah"),
+            _ => rsx!( "blah" ),
         }
     }
 
@@ -59,15 +59,21 @@ fn component_swap() {
     }
 
     fn nav_link() -> Element {
-        rsx!( h1 { "nav_link" } )
+        rsx!(
+            h1 { "nav_link" }
+        )
     }
 
     fn dash_board() -> Element {
-        rsx!( div { "dashboard" } )
+        rsx!(
+            div { "dashboard" }
+        )
     }
 
     fn dash_results() -> Element {
-        rsx!( div { "results" } )
+        rsx!(
+            div { "results" }
+        )
     }
 
     let mut dom = VirtualDom::new(app);

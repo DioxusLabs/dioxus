@@ -37,9 +37,6 @@ fn app() -> Element {
 #[component]
 fn FancyButton(label: String, onpress: EventHandler<String>) -> Element {
     rsx! {
-        button {
-            onclick: move |_| onpress.call(label.clone()),
-            "{label}"
-        }
+        button { onclick: move |_| onpress.call(label.clone()), "{label}" }
     }
 }

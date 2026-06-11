@@ -41,10 +41,7 @@ fn app() -> Element {
     rsx!(
         div {
             "Waiting for... "
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                suspended_child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, suspended_child {} }
         }
     )
 }
@@ -70,7 +67,7 @@ fn suspended_child() -> Element {
         suspend(task)?;
     }
 
-    rsx!("child")
+    rsx!( "child" )
 }
 
 /// When switching from a suspense fallback to the real child, the state of that component must be kept
@@ -97,10 +94,7 @@ fn suspense_keeps_state() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                Child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, Child {} }
         }
     }
 
@@ -151,10 +145,7 @@ fn suspense_does_not_poll_spawn() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                Child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, Child {} }
         }
     }
 
@@ -210,10 +201,7 @@ fn suspended_nodes_dont_trigger_effects() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                Child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, Child {} }
         }
     }
 
@@ -271,10 +259,7 @@ fn resolved_to_suspended() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                Child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, Child {} }
         }
     }
 
@@ -298,9 +283,7 @@ fn resolved_to_suspended() {
             suspend(task().unwrap())?;
         }
 
-        rsx! {
-            "rendered {render_count.peek()} times"
-        }
+        rsx! { "rendered {render_count.peek()} times" }
     }
 }
 
@@ -325,10 +308,7 @@ fn suspense_tracks_resolved() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
-                Child {}
-            }
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" }, Child {} }
         }
     }
 
@@ -350,9 +330,7 @@ fn suspense_tracks_resolved() {
             suspend(task)?;
         }
 
-        rsx! {
-            "child"
-        }
+        rsx! { "child" }
     }
 }
 
@@ -363,8 +341,7 @@ fn toggle_suspense() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: |_| rsx! { "fallback" },
+            SuspenseBoundary { fallback: |_| rsx! { "fallback" },
                 if generation() % 2 == 0 {
                     Page {}
                 } else {
@@ -381,16 +358,12 @@ fn toggle_suspense() {
             1 + 1
         })
         .suspend()?;
-        rsx! {
-            "hello world"
-        }
+        rsx! { "hello world" }
     }
 
     #[component]
     pub fn Page() -> Element {
-        rsx! {
-            "goodbye world"
-        }
+        rsx! { "goodbye world" }
     }
 
     tokio::runtime::Builder::new_current_thread()
@@ -460,10 +433,7 @@ fn nested_suspense_resolves_client() {
 
     fn app() -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: move |_| rsx! {},
-                LoadTitle {}
-            }
+            SuspenseBoundary { fallback: move |_| rsx! {}, LoadTitle {} }
             MessageWithLoader { id: 0 }
         }
     }
@@ -471,10 +441,7 @@ fn nested_suspense_resolves_client() {
     #[component]
     fn MessageWithLoader(id: usize) -> Element {
         rsx! {
-            SuspenseBoundary {
-                fallback: move |_| rsx! {
-                    "Loading {id}..."
-                },
+            SuspenseBoundary { fallback: move |_| rsx! { "Loading {id}..." },
                 Message { id }
             }
         }
@@ -494,17 +461,9 @@ fn nested_suspense_resolves_client() {
         let message = use_resource(move || async_content(id)).suspend()?();
 
         rsx! {
-            h2 {
-                id: "title-{id}",
-                "{message.title}"
-            }
-            p {
-                id: "body-{id}",
-                "{message.body}"
-            }
-            div {
-                id: "children-{id}",
-                padding: "10px",
+            h2 { id: "title-{id}", "{message.title}" }
+            p { id: "body-{id}", "{message.body}" }
+            div { id: "children-{id}", padding: "10px",
                 for child in message.children {
                     MessageWithLoader { id: child }
                 }

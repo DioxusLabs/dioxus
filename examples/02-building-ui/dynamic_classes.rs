@@ -21,26 +21,17 @@ fn app() -> Element {
         // CSS properties are plain named attributes — snake_case in Rust, kebab-case in CSS
         style { {STYLE} }
 
-        button {
-            class: classes,
-            onclick: move |_| is_active.toggle(),
+        button { class: classes, onclick: move |_| is_active.toggle(),
             "Toggle active (currently {is_active})"
         }
 
         // Or compute the class string ahead of time for anything more complex
-        div {
-            class: if is_active() { "box highlight" } else { "box" },
-            "This box changes class with the button."
-        }
+        div { class: if is_active() { "box highlight" } else { "box" }, "This box changes class with the button." }
 
         hr {}
 
         // Style values can be driven directly by signals
-        p {
-            font_size: "{size}px",
-            color: if size() > 24 { "crimson" } else { "black" },
-            "Font size: {size}px"
-        }
+        p { font_size: "{size}px", color: if size() > 24 { "crimson" } else { "black" }, "Font size: {size}px" }
         button { onclick: move |_| size += 2, "Bigger" }
         button { onclick: move |_| size -= 2, "Smaller" }
     }

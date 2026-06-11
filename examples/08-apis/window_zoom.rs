@@ -22,7 +22,7 @@ fn app() -> Element {
                     level.set(new_zoom);
                     _ = dioxus::desktop::window().webview.zoom(new_zoom);
                 }
-            }
+            },
         }
     }
 }

@@ -35,9 +35,15 @@ fn app() -> Element {
         // `match` works too — each arm returns rsx!
         div {
             match status() {
-                Status::Loading => rsx! { p { "⏳ Loading..." } },
-                Status::Ready => rsx! { p { "✅ Ready!" } },
-                Status::Error => rsx! { p { "❌ Something went wrong." } },
+                Status::Loading => rsx! {
+                    p { "⏳ Loading..." }
+                },
+                Status::Ready => rsx! {
+                    p { "✅ Ready!" }
+                },
+                Status::Error => rsx! {
+                    p { "❌ Something went wrong." }
+                },
             }
         }
         button { onclick: move |_| status.set(Status::Loading), "Loading" }

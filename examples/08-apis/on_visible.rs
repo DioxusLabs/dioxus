@@ -11,8 +11,7 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: asset!("/examples/assets/visible.css") }
-        div {
-            class: "container",
+        div { class: "container",
 
             p {
                 "Scroll to the bottom of the page. The text will transition in when it becomes visible in the viewport."

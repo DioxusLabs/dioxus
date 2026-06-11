@@ -37,7 +37,9 @@ async fn running_async() {
             });
         });
 
-        rsx!({})
+        rsx!(
+            {}
+        )
     }
 
     run_vdom(app).await;
@@ -57,10 +59,14 @@ async fn spawn_forever_persists() {
 
     fn app() -> Element {
         if generation() > 0 {
-            rsx!(div {})
+            rsx!(
+                div {}
+            )
         } else {
             needs_update();
-            rsx!(Child {})
+            rsx!(
+                Child {}
+            )
         }
     }
 
@@ -73,7 +79,9 @@ async fn spawn_forever_persists() {
             }
         });
 
-        rsx!(div {})
+        rsx!(
+            div {}
+        )
     }
 
     let mut dom = VirtualDom::new(app);
@@ -120,7 +128,9 @@ async fn yield_now_works() {
             })
         });
 
-        rsx!({})
+        rsx!(
+            {}
+        )
     }
 
     run_vdom(app).await;

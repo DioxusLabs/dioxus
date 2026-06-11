@@ -20,7 +20,12 @@ fn app() -> Element {
 
         div { id: "controls",
             button { onclick: move |_| counters.push(0), "Add counter" }
-            button { onclick: move |_| { counters.pop(); }, "Remove counter" }
+            button {
+                onclick: move |_| {
+                    counters.pop();
+                },
+                "Remove counter"
+            }
         }
 
         h3 { "Total: {sum}" }
@@ -44,10 +49,15 @@ fn app() -> Element {
                         if let Ok(value) = e.parsed() {
                             counters.write()[i] = value;
                         }
-                    }
+                    },
                 }
                 button { onclick: move |_| counters.write()[i] += 1, "+1" }
-                button { onclick: move |_| { counters.remove(i); }, "x" }
+                button {
+                    onclick: move |_| {
+                        counters.remove(i);
+                    },
+                    "x"
+                }
             }
         }
     }

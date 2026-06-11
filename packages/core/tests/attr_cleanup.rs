@@ -12,9 +12,13 @@ fn attrs_cycle() {
     let mut dom = VirtualDom::new(|| {
         let id = generation();
         match id % 2 {
-            0 => rsx! { div {} },
+            0 => rsx! {
+                div {}
+            },
             1 => rsx! {
-                div { h1 { class: "{id}", id: "{id}" } }
+                div {
+                    h1 { class: "{id}", id: "{id}" }
+                }
             },
             _ => unreachable!(),
         }

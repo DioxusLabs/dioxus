@@ -28,7 +28,9 @@ fn ThrowChild() -> Element {
 
     let _g: i32 = "123123".parse()?;
 
-    rsx! { div {} }
+    rsx! {
+        div {}
+    }
 }
 
 #[test]
@@ -48,9 +50,7 @@ fn clear_error_boundary() {
             THREW_ERROR.store(true, std::sync::atomic::Ordering::SeqCst);
             Err(CapturedError::from_display("This is an error").into())
         } else {
-            rsx! {
-                "We should see this"
-            }
+            rsx! { "We should see this" }
         }
     }
 

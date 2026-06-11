@@ -17,9 +17,7 @@ fn create_signals_global() {
     fn Child() -> Element {
         let signal = create_without_cx();
 
-        rsx! {
-            "{signal}"
-        }
+        rsx! { "{signal}" }
     }
 
     fn create_without_cx() -> Signal<String> {
@@ -55,7 +53,9 @@ fn deref_signal() {
     static STRINGS_MATCH: AtomicBool = AtomicBool::new(false);
 
     let mut dom = VirtualDom::new(|| {
-        rsx! { Child {} }
+        rsx! {
+            Child {}
+        }
     });
 
     fn Child() -> Element {
@@ -65,9 +65,7 @@ fn deref_signal() {
         let result = &*signal();
         STRINGS_MATCH.store(result.eq("hello world"), Ordering::Relaxed);
 
-        rsx! {
-            "arbitrary text"
-        }
+        rsx! { "arbitrary text" }
     }
 
     dom.rebuild_in_place();
@@ -104,9 +102,7 @@ fn drop_signals() {
 
         use_signal(|| TracksDrops);
 
-        rsx! {
-            ""
-        }
+        rsx! { "" }
     }
 
     dom.rebuild_in_place();

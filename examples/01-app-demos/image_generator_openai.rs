@@ -46,23 +46,26 @@ fn app() -> Element {
         div { class: "container",
             div { class: "columns",
                 div { class: "column",
-                    input { class: "input is-primary mt-4",
+                    input {
+                        class: "input is-primary mt-4",
                         value: "{api_key}",
                         r#type: "text",
                         placeholder: "Your OpenAI API Key",
                         oninput: move |evt| api_key.set(evt.value()),
                     }
-                    input { class: "input is-primary mt-4",
+                    input {
+                        class: "input is-primary mt-4",
                         placeholder: "MAX 1000 Dgts",
                         r#type: "text",
-                        value:"{prompt}",
-                        oninput: move |evt| prompt.set(evt.value())
+                        value: "{prompt}",
+                        oninput: move |evt| prompt.set(evt.value()),
                     }
-                    input { class: "input is-primary mt-4",
+                    input {
+                        class: "input is-primary mt-4",
                         r#type: "number",
-                        min:"1",
-                        max:"10",
-                        value:"{num_images}",
+                        min: "1",
+                        max: "10",
+                        value: "{num_images}",
                         oninput: move |evt| num_images.set(evt.value()),
                     }
                 }
@@ -83,7 +86,12 @@ fn app() -> Element {
                                 div { class: "is-justify-content-center",
                                     div { class: "level",
                                         div { class: "level-item",
-                                            figure { class: "image", img { alt: "", src: "{image.url}", } }
+                                            figure { class: "image",
+                                                img {
+                                                    alt: "",
+                                                    src: "{image.url}",
+                                                }
+                                            }
                                         }
                                     }
                                 }

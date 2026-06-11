@@ -30,14 +30,28 @@ fn app() -> Element {
                     upload_as_multipart.call(evt).await;
                 },
                 label { r#for: "headshot", "Photos" }
-                input { r#type: "file", name: "headshot", multiple: true, accept: ".png,.jpg,.jpeg" }
+                input {
+                    r#type: "file",
+                    name: "headshot",
+                    multiple: true,
+                    accept: ".png,.jpg,.jpeg",
+                }
                 label { r#for: "resume", "Resume" }
-                input { r#type: "file", name: "resume", multiple: false, accept: ".pdf" }
+                input {
+                    r#type: "file",
+                    name: "resume",
+                    multiple: false,
+                    accept: ".pdf",
+                }
                 label { r#for: "name", "Name" }
                 input { r#type: "text", name: "name", placeholder: "Name" }
                 label { r#for: "age", "Age" }
                 input { r#type: "number", name: "age", placeholder: "Age" }
-                input { r#type: "submit", name: "submit", value: "Submit your resume" }
+                input {
+                    r#type: "submit",
+                    name: "submit",
+                    value: "Submit your resume",
+                }
             }
         }
     }

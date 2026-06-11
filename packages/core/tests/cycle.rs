@@ -6,8 +6,12 @@ use dioxus_core::generation;
 #[test]
 fn cycling_elements() {
     let mut dom = VirtualDom::new(|| match generation() % 2 {
-        0 => rsx! { div { "wasd" } },
-        1 => rsx! { div { "abcd" } },
+        0 => rsx! {
+            div { "wasd" }
+        },
+        1 => rsx! {
+            div { "abcd" }
+        },
         _ => unreachable!(),
     });
 

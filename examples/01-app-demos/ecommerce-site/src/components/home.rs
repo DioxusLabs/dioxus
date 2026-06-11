@@ -14,9 +14,7 @@ pub(crate) fn Home() -> Element {
         Nav {}
         section { class: "p-10",
             for product in products.iter() {
-                ProductItem {
-                    product: product.clone()
-                }
+                ProductItem { product: product.clone() }
             }
         }
     }

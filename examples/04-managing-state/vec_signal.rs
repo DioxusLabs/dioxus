@@ -38,7 +38,9 @@ fn app() -> Element {
                 li { key: "{index}",
                     "{todo} "
                     button {
-                        onclick: move |_| { todos.remove(index); },
+                        onclick: move |_| {
+                            todos.remove(index);
+                        },
                         "×"
                     }
                 }

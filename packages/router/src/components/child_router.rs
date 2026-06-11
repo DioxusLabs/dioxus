@@ -65,5 +65,7 @@ pub fn ChildRouter<R: Routable>(props: ChildRouterProps<R>) -> Element {
         provide_context(OutletContext::<R>::new());
     });
 
-    rsx! { Outlet::<R> {} }
+    rsx! {
+        Outlet::<R> {}
+    }
 }

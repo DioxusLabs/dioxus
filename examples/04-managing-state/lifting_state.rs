@@ -39,9 +39,13 @@ fn Display(counter: Signal<i32>) -> Element {
     rsx! {
         p { "Count is: {counter}" }
         p {
-            if counter() > 0 { "Positive" }
-            else if counter() < 0 { "Negative" }
-            else { "Zero" }
+            if counter() > 0 {
+                "Positive"
+            } else if counter() < 0 {
+                "Negative"
+            } else {
+                "Zero"
+            }
         }
     }
 }

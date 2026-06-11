@@ -23,14 +23,13 @@ enum Route {
 #[component]
 fn Other() -> Element {
     rsx! {
-        div {
-            id: "other",
-            "Other"
-        }
+        div { id: "other", "Other" }
 
         Link {
             id: "other-id-link",
-            to: Route::OtherId { id: "123".to_string() },
+            to: Route::OtherId {
+                id: "123".to_string(),
+            },
             "go to OtherId"
         }
     }
@@ -39,19 +38,13 @@ fn Other() -> Element {
 #[component]
 fn OtherId(id: String) -> Element {
     rsx! {
-        div {
-            id: "other-id",
-            "OtherId {id}"
-        }
+        div { id: "other-id", "OtherId {id}" }
     }
 }
 
 #[component]
 fn NotFound(segments: Vec<String>) -> Element {
     rsx! {
-        div {
-            id: "not-found",
-            "NotFound {segments:?}"
-        }
+        div { id: "not-found", "NotFound {segments:?}" }
     }
 }

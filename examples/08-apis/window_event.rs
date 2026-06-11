@@ -26,7 +26,10 @@ fn main() {
 
 fn app() -> Element {
     rsx!(
-        document::Link { href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel: "stylesheet" }
+        document::Link {
+            href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css",
+            rel: "stylesheet",
+        }
         Header {}
         div { class: "container mx-auto",
             div { class: "grid grid-cols-5",
@@ -43,7 +46,9 @@ fn Header() -> Element {
     let mut fullscreen = use_signal(|| false);
 
     rsx! {
-        header { class: "text-gray-400 bg-gray-900 body-font", onmousedown: move |_| window().drag(),
+        header {
+            class: "text-gray-400 bg-gray-900 body-font",
+            onmousedown: move |_| window().drag(),
             div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                 a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                     span { class: "ml-3 text-xl", "Dioxus" }

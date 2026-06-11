@@ -3,7 +3,9 @@ use dioxus::prelude::*;
 #[test]
 fn root_ids() {
     fn app() -> Element {
-        rsx! { div { width: "100px" } }
+        rsx! {
+            div { width: "100px" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -20,7 +22,9 @@ fn dynamic_attributes() {
     fn app() -> Element {
         let dynamic = 123;
         rsx! {
-            div { width: "100px", div { width: "{dynamic}px" } }
+            div { width: "100px",
+                div { width: "{dynamic}px" }
+            }
         }
     }
 
@@ -37,7 +41,9 @@ fn dynamic_attributes() {
 fn listeners() {
     fn app() -> Element {
         rsx! {
-            div { width: "100px", div { onclick: |_| {} } }
+            div { width: "100px",
+                div { onclick: |_| {} }
+            }
         }
     }
 
@@ -52,7 +58,9 @@ fn listeners() {
     fn app2() -> Element {
         let dynamic = 123;
         rsx! {
-            div { width: "100px", div { width: "{dynamic}px", onclick: |_| {} } }
+            div { width: "100px",
+                div { width: "{dynamic}px", onclick: |_| {} }
+            }
         }
     }
 
@@ -85,7 +93,10 @@ fn text_nodes() {
     fn app2() -> Element {
         let dynamic = 123;
         rsx! {
-            div { "{dynamic}" "{1234}" }
+            div {
+                "{dynamic}"
+                "{1234}"
+            }
         }
     }
 
@@ -102,11 +113,15 @@ fn text_nodes() {
 #[test]
 fn components_hydrate() {
     fn app() -> Element {
-        rsx! { Child {} }
+        rsx! {
+            Child {}
+        }
     }
 
     fn Child() -> Element {
-        rsx! { div { "hello" } }
+        rsx! {
+            div { "hello" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -118,7 +133,9 @@ fn components_hydrate() {
     );
 
     fn app2() -> Element {
-        rsx! { Child2 {} }
+        rsx! {
+            Child2 {}
+        }
     }
 
     fn Child2() -> Element {
@@ -137,11 +154,15 @@ fn components_hydrate() {
     );
 
     fn app3() -> Element {
-        rsx! { Child3 {} }
+        rsx! {
+            Child3 {}
+        }
     }
 
     fn Child3() -> Element {
-        rsx! { div { width: "{1}" } }
+        rsx! {
+            div { width: "{1}" }
+        }
     }
 
     let mut dom = VirtualDom::new(app3);
@@ -153,13 +174,17 @@ fn components_hydrate() {
     );
 
     fn app4() -> Element {
-        rsx! { Child4 {} }
+        rsx! {
+            Child4 {}
+        }
     }
 
     fn Child4() -> Element {
         rsx! {
             for _ in 0..2 {
-                {rsx! { "{1}" }}
+                {
+                    rsx! { "{1}" }
+                }
             }
         }
     }

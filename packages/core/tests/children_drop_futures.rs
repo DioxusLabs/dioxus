@@ -11,7 +11,9 @@ async fn child_futures_drop_first() {
 
     fn app() -> Element {
         if generation() == 0 {
-            rsx! { Child {} }
+            rsx! {
+                Child {}
+            }
         } else {
             rsx! {}
         }

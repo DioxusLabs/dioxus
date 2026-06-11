@@ -13,7 +13,7 @@ fn app() -> Element {
 
     rsx! {
         div {
-            h1 {"Dioxus is XSS-Safe"}
+            h1 { "Dioxus is XSS-Safe" }
             h3 { "{contents}" }
             input {
                 value: "{contents}",

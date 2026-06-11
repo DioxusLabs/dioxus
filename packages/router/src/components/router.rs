@@ -49,5 +49,7 @@ pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
         provide_context(OutletContext::<R>::new());
     });
 
-    rsx! { Outlet::<R> {} }
+    rsx! {
+        Outlet::<R> {}
+    }
 }

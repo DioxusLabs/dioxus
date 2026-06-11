@@ -13,12 +13,23 @@ fn app() -> Element {
             document::Title { "hello axum! {num}" }
             button { class: "increment-button", onclick: move |_| num += 1, "Increment" }
         }
-        svg { circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" } }
-        div { class: "raw-attribute-div", "raw-attribute": "raw-attribute-value" }
+        svg {
+            circle {
+                cx: 50,
+                cy: 50,
+                r: 40,
+                stroke: "green",
+                fill: "yellow",
+            }
+        }
+        div {
+            class: "raw-attribute-div",
+            "raw-attribute": "raw-attribute-value",
+        }
         div { class: "hidden-attribute-div", hidden: true }
         div {
             class: "dangerous-inner-html-div",
-            dangerous_inner_html: "<p>hello dangerous inner html</p>"
+            dangerous_inner_html: "<p>hello dangerous inner html</p>",
         }
         input { value: "hello input" }
         div { class: "style-div", color: "red", "colored text" }
@@ -132,8 +143,7 @@ fn WebSysClosure() -> Element {
     });
 
     rsx! {
-        div {
-            id: "web-sys-closure-div",
+        div { id: "web-sys-closure-div",
             if TRIGGERED() {
                 "the keydown event was triggered"
             }
@@ -149,10 +159,13 @@ fn DocumentElements() -> Element {
         document::Link {
             id: "link-head",
             rel: "stylesheet",
-            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono",
         }
-        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
-        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Stylesheet {
+            id: "stylesheet-head",
+            href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic",
+        }
+        document::Script { id: "script-head", r#async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
 
         // Test that links with same href but different rel are NOT deduplicated
@@ -170,16 +183,8 @@ fn DocumentElements() -> Element {
         }
 
         // Test that links with same href AND same rel ARE deduplicated
-        document::Link {
-            id: "dedup-first",
-            rel: "stylesheet",
-            href: "dedup-same.css",
-        }
-        document::Link {
-            id: "dedup-second",
-            rel: "stylesheet",
-            href: "dedup-same.css",
-        }
+        document::Link { id: "dedup-first", rel: "stylesheet", href: "dedup-same.css" }
+        document::Link { id: "dedup-second", rel: "stylesheet", href: "dedup-same.css" }
     }
 }
 

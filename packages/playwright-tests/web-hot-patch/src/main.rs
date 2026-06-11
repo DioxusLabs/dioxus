@@ -12,14 +12,8 @@ fn app() -> Element {
     );
 
     rsx! {
-        document::Link {
-            href: CSS,
-            rel: "stylesheet",
-        }
-        img {
-            id: "toasts",
-            src: IMAGE,
-        }
+        document::Link { href: CSS, rel: "stylesheet" }
+        img { id: "toasts", src: IMAGE }
         button {
             id: "increment-button",
             onclick: move |_| {

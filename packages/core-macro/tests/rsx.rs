@@ -109,17 +109,10 @@ mod test_optional_signals {
     #[component]
     fn UsesComponents() -> Element {
         rsx! {
-            PropsStruct {
-                regular_read_signal: ReadSignal::new(Signal::new(1234)),
-            }
-            PropsStruct {
-                optional_read_signal: 1234,
-                regular_read_signal: 123u16,
-            }
+            PropsStruct { regular_read_signal: ReadSignal::new(Signal::new(1234)) }
+            PropsStruct { optional_read_signal: 1234, regular_read_signal: 123u16 }
             PropParams {}
-            PropParams {
-                opt_read_sig: 1234
-            }
+            PropParams { opt_read_sig: 1234 }
             DoubleOption {}
             DoubleOption { optional: Some(1234) }
         }

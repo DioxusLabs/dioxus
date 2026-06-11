@@ -5,7 +5,9 @@ use dioxus::prelude::*;
 #[test]
 fn simple() {
     fn App() -> Element {
-        rsx! { div { "hello!" } }
+        rsx! {
+            div { "hello!" }
+        }
     }
 
     let mut dom = VirtualDom::new(App);
@@ -54,7 +56,9 @@ fn components() {
     }
 
     fn MyComponent(MyComponentProps { name }: MyComponentProps) -> Element {
-        rsx! { div { "component {name}" } }
+        rsx! {
+            div { "component {name}" }
+        }
     }
 
     assert_eq!(

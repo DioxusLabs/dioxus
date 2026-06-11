@@ -9,10 +9,7 @@ fn app() -> Element {
     let doubled = use_memo(move || signal * 2);
 
     rsx! {
-        button {
-            onclick: move |_| signal += 1,
-            "Increase"
-        }
+        button { onclick: move |_| signal += 1, "Increase" }
         Child { signal: doubled }
     }
 }

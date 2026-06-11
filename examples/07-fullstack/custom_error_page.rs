@@ -44,8 +44,12 @@ fn Home() -> Element {
 #[component]
 fn Blog(id: u32) -> Element {
     match id {
-        1 => rsx! { div { "Blog post 1" } },
-        2 => rsx! { div { "Blog post 2" } },
+        1 => rsx! {
+            div { "Blog post 1" }
+        },
+        2 => rsx! {
+            div { "Blog post 2" }
+        },
         3 => dioxus_core::bail!("An error occurred while loading the blog post!"),
         _ => HttpError::not_found("Blog post not found")?,
     }
@@ -65,10 +69,18 @@ fn ErrorLayout() -> Element {
             handle_error: move |err: ErrorContext| {
                 let http_error = FullstackContext::commit_error_status(err.error().unwrap());
                 match http_error.status {
-                    StatusCode::NOT_FOUND => rsx! { div { "404 - Page not found" } },
-                    StatusCode::UNAUTHORIZED => rsx! { div { "401 - Unauthorized" } },
-                    StatusCode::INTERNAL_SERVER_ERROR => rsx! { div { "500 - Internal Server Error" } },
-                    _ => rsx! { div { "An unknown error occurred" } },
+                    StatusCode::NOT_FOUND => rsx! {
+                        div { "404 - Page not found" }
+                    },
+                    StatusCode::UNAUTHORIZED => rsx! {
+                        div { "401 - Unauthorized" }
+                    },
+                    StatusCode::INTERNAL_SERVER_ERROR => rsx! {
+                        div { "500 - Internal Server Error" }
+                    },
+                    _ => rsx! {
+                        div { "An unknown error occurred" }
+                    },
                 }
             },
             Outlet::<Route> {}

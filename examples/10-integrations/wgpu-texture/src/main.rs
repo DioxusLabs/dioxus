@@ -59,10 +59,9 @@ fn app() -> Element {
 
     rsx!(
         Stylesheet { href: STYLES }
-        div { id:"overlay",
-            h2 { "Control Panel" },
-            button {
-                onclick: move |_| show_cube.toggle(),
+        div { id: "overlay",
+            h2 { "Control Panel" }
+            button { onclick: move |_| show_cube.toggle(),
                 if show_cube() {
                     "Hide cube"
                 } else {
@@ -70,12 +69,16 @@ fn app() -> Element {
                 }
             }
             br {}
-            ColorControl { label: "Color:", color_str },
-            p { "This overlay demonstrates that the custom WGPU content can be rendered beneath layers of HTML content" }
+            ColorControl { label: "Color:", color_str }
+            p {
+                "This overlay demonstrates that the custom WGPU content can be rendered beneath layers of HTML content"
+            }
         }
-        div { id:"underlay",
-            h2 { "Underlay" },
-            p { "This underlay demonstrates that the custom WGPU content can be rendered above layers and blended with the content underneath" }
+        div { id: "underlay",
+            h2 { "Underlay" }
+            p {
+                "This underlay demonstrates that the custom WGPU content can be rendered above layers and blended with the content underneath"
+            }
         }
         header {
             h1 { "Blitz WGPU Demo" }
@@ -88,16 +91,15 @@ fn app() -> Element {
 
 #[component]
 fn ColorControl(label: &'static str, color_str: WriteSignal<String>) -> Element {
-    rsx!(div {
-        class: "color-control",
-        { label },
-        input {
-            value: color_str(),
-            oninput: move |evt| {
-                *color_str.write() = evt.value()
+    rsx!(
+        div { class: "color-control",
+            {label}
+            input {
+                value: color_str(),
+                oninput: move |evt| { *color_str.write() = evt.value() },
             }
         }
-    })
+    )
 }
 
 #[component]

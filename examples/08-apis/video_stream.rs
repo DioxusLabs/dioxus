@@ -41,7 +41,7 @@ fn app() -> Element {
                 autoplay: true,
                 controls: true,
                 width: 640,
-                height: 480
+                height: 480,
             }
         }
     }

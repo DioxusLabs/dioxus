@@ -28,7 +28,12 @@ fn app() -> Element {
     });
 
     rsx! {
-        div { width: "100%", height: "100%", display: "flex", flex_direction: "column", align_items: "center",
+        div {
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flex_direction: "column",
+            align_items: "center",
             if focused() {
                 "This window is focused!"
             } else {

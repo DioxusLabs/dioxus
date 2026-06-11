@@ -43,7 +43,8 @@ fn app() -> Element {
         Stylesheet { href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
-        div { id: "roulette-grid",
+        div {
+            id: "roulette-grid",
             // Restart the roulette if the user presses escape
             onkeydown: move |event| {
                 if event.code().to_string() == "Escape" {

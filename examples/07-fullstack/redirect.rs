@@ -29,9 +29,7 @@ enum Route {
 fn Home() -> Element {
     rsx! {
         h1 { "Welcome home" }
-        form {
-            method: "post",
-            action: "/api/old-blog",
+        form { method: "post", action: "/api/old-blog",
             button { "Go to blog" }
         }
     }

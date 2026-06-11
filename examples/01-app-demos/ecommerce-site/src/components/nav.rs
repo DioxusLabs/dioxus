@@ -6,56 +6,42 @@ pub fn Nav() -> Element {
         section { class: "relative",
             nav { class: "flex justify-between border-b",
                 div { class: "px-12 py-8 flex w-full items-center",
-                    a { class: "hidden xl:block mr-16",
-                        href: "/",
-                        icons::cart_icon {}
-                    }
+                    a { class: "hidden xl:block mr-16", href: "/", icons::cart_icon {} }
                     ul { class: "hidden xl:flex font-semibold font-heading",
                         li { class: "mr-12",
-                            a { class: "hover:text-gray-600",
-                                href: "/",
-                                "Category"
-                            }
+                            a { class: "hover:text-gray-600", href: "/", "Category" }
                         }
                         li { class: "mr-12",
-                            a { class: "hover:text-gray-600",
-                                href: "/",
-                                "Collection"
-                            }
+                            a { class: "hover:text-gray-600", href: "/", "Collection" }
                         }
                         li { class: "mr-12",
-                            a { class: "hover:text-gray-600",
-                                href: "/",
-                                "Story"
-                            }
+                            a { class: "hover:text-gray-600", href: "/", "Story" }
                         }
                         li {
-                            a { class: "hover:text-gray-600",
-                                href: "/",
-                                "Brand"
-                            }
+                            a { class: "hover:text-gray-600", href: "/", "Brand" }
                         }
                     }
-                    a { class: "shrink-0 xl:mx-auto text-3xl font-bold font-heading",
+                    a {
+                        class: "shrink-0 xl:mx-auto text-3xl font-bold font-heading",
                         href: "/",
-                        img { class: "h-9",
+                        img {
+                            class: "h-9",
                             width: "auto",
                             alt: "",
                             src: "https://shuffle.dev/yofte-assets/logos/yofte-logo.svg",
                         }
                     }
                     div { class: "hidden xl:inline-block mr-14",
-                        input { class: "py-5 px-8 w-full placeholder-gray-400 text-xs uppercase font-semibold font-heading bg-gray-50 border border-gray-200 focus:ring-blue-300 focus:border-blue-300 rounded-md",
+                        input {
+                            class: "py-5 px-8 w-full placeholder-gray-400 text-xs uppercase font-semibold font-heading bg-gray-50 border border-gray-200 focus:ring-blue-300 focus:border-blue-300 rounded-md",
                             placeholder: "Search",
                             r#type: "text",
                         }
                     }
                     div { class: "hidden xl:flex items-center",
-                        a { class: "mr-10 hover:text-gray-600",
-                            href: "",
-                            icons::icon_1 {}
-                        }
-                        a { class: "flex items-center hover:text-gray-600",
+                        a { class: "mr-10 hover:text-gray-600", href: "", icons::icon_1 {} }
+                        a {
+                            class: "flex items-center hover:text-gray-600",
                             href: "/",
                             icons::icon_2 {}
                             span { class: "inline-block w-6 h-6 text-center bg-gray-50 rounded-full font-semibold font-heading",
@@ -64,57 +50,52 @@ pub fn Nav() -> Element {
                         }
                     }
                 }
-                a { class: "hidden xl:flex items-center px-12 border-l font-semibold font-heading hover:text-gray-600",
+                a {
+                    class: "hidden xl:flex items-center px-12 border-l font-semibold font-heading hover:text-gray-600",
                     href: "/",
                     icons::icon_3 {}
-                    span {
-                        "Sign In"
-                    }
+                    span { "Sign In" }
                 }
-                a { class: "xl:hidden flex mr-6 items-center text-gray-600",
+                a {
+                    class: "xl:hidden flex mr-6 items-center text-gray-600",
                     href: "/",
                     icons::icon_4 {}
                     span { class: "inline-block w-6 h-6 text-center bg-gray-50 rounded-full font-semibold font-heading",
                         "3"
                     }
                 }
-                a { class: "navbar-burger self-center mr-12 xl:hidden",
+                a {
+                    class: "navbar-burger self-center mr-12 xl:hidden",
                     href: "/",
                     icons::icon_5 {}
                 }
             }
             div { class: "hidden navbar-menu fixed top-0 left-0 bottom-0 w-5/6 max-w-sm z-50",
-                div { class: "navbar-backdrop fixed inset-0 bg-gray-800 opacity-25",
-                }
+                div { class: "navbar-backdrop fixed inset-0 bg-gray-800 opacity-25" }
                 nav { class: "relative flex flex-col py-6 px-6 w-full h-full bg-white border-r overflow-y-auto",
                     div { class: "flex items-center mb-8",
-                        a { class: "mr-auto text-3xl font-bold font-heading",
+                        a {
+                            class: "mr-auto text-3xl font-bold font-heading",
                             href: "/",
-                            img { class: "h-9",
+                            img {
+                                class: "h-9",
                                 src: "https://shuffle.dev/yofte-assets/logos/yofte-logo.svg",
                                 width: "auto",
                                 alt: "",
                             }
                         }
-                        button { class: "navbar-close",
-                            icons::icon_6 {}
-                        }
+                        button { class: "navbar-close", icons::icon_6 {} }
                     }
                     div { class: "flex mb-8 justify-between",
-                        a { class: "inline-flex items-center font-semibold font-heading",
+                        a {
+                            class: "inline-flex items-center font-semibold font-heading",
                             href: "/",
                             icons::icon_7 {}
-                            span {
-                                "Sign In"
-                            }
+                            span { "Sign In" }
                         }
                         div { class: "flex items-center",
-                            a { class: "mr-10",
-                                href: "/",
-                                icons::icon_8 {}
-                            }
-                            a { class: "flex items-center",
-                                href: "/",
+                            a { class: "mr-10", href: "/", icons::icon_8 {} }
+                            a { class: "flex items-center", href: "/",
                                 icons::icon_9 {}
                                 span { class: "inline-block w-6 h-6 text-center bg-gray-100 rounded-full font-semibold font-heading",
                                     "3"
@@ -122,34 +103,23 @@ pub fn Nav() -> Element {
                             }
                         }
                     }
-                    input { class: "block mb-10 py-5 px-8 bg-gray-100 rounded-md border-transparent focus:ring-blue-300 focus:border-blue-300 focus:outline-hidden",
+                    input {
+                        class: "block mb-10 py-5 px-8 bg-gray-100 rounded-md border-transparent focus:ring-blue-300 focus:border-blue-300 focus:outline-hidden",
                         r#type: "search",
                         placeholder: "Search",
                     }
                     ul { class: "text-3xl font-bold font-heading",
                         li { class: "mb-8",
-                            a {
-                                href: "/",
-                                "Category"
-                            }
+                            a { href: "/", "Category" }
                         }
                         li { class: "mb-8",
-                            a {
-                                href: "/",
-                                "Collection"
-                            }
+                            a { href: "/", "Collection" }
                         }
                         li { class: "mb-8",
-                            a {
-                                href: "/",
-                                "Story"
-                            }
+                            a { href: "/", "Story" }
                         }
                         li {
-                            a {
-                                href: "/",
-                                "Brand"
-                            }
+                            a { href: "/", "Brand" }
                         }
                     }
                 }
@@ -163,7 +133,8 @@ mod icons {
 
     pub(super) fn cart_icon() -> Element {
         rsx! {
-            svg { class: "mr-3",
+            svg {
+                class: "mr-3",
                 fill: "none",
                 xmlns: "http://www.w3.org/2000/svg",
                 view_box: "0 0 23 23",
@@ -208,7 +179,8 @@ mod icons {
 
     pub(super) fn icon_2() -> Element {
         rsx! {
-            svg { class: "mr-3",
+            svg {
+                class: "mr-3",
                 fill: "none",
                 height: "31",
                 xmlns: "http://www.w3.org/2000/svg",
@@ -234,7 +206,8 @@ mod icons {
 
     pub(super) fn icon_3() -> Element {
         rsx! {
-            svg { class: "h-2 w-2 text-gray-500 cursor-pointer",
+            svg {
+                class: "h-2 w-2 text-gray-500 cursor-pointer",
                 height: "10",
                 width: "10",
                 xmlns: "http://www.w3.org/2000/svg",
@@ -269,7 +242,8 @@ mod icons {
 
     pub(super) fn icon_5() -> Element {
         rsx! {
-            svg { class: "mr-2",
+            svg {
+                class: "mr-2",
                 fill: "none",
                 xmlns: "http://www.w3.org/2000/svg",
                 width: "23",
@@ -295,7 +269,8 @@ mod icons {
 
     pub(super) fn icon_6() -> Element {
         rsx! {
-            svg { class: "mr-3",
+            svg {
+                class: "mr-3",
                 height: "31",
                 xmlns: "http://www.w3.org/2000/svg",
                 view_box: "0 0 32 31",
@@ -321,7 +296,8 @@ mod icons {
 
     pub(super) fn icon_7() -> Element {
         rsx! {
-            svg { class: "mr-3",
+            svg {
+                class: "mr-3",
                 view_box: "0 0 23 23",
                 fill: "none",
                 height: "23",
@@ -372,18 +348,12 @@ mod icons {
                 width: "18",
                 height: "18",
                 fill: "none",
-                path {
-                    fill: "black",
-                    d: "M18 15.4688H0V17.7207H18V15.4688Z",
-                }
+                path { fill: "black", d: "M18 15.4688H0V17.7207H18V15.4688Z" }
                 path {
                     fill: "black",
                     d: "M11.0226 7.87402H0V10.126H11.0226V7.87402Z",
                 }
-                path {
-                    fill: "black",
-                    d: "M18 0.279297H0V2.53127H18V0.279297Z",
-                }
+                path { fill: "black", d: "M18 0.279297H0V2.53127H18V0.279297Z" }
             }
         }
     }

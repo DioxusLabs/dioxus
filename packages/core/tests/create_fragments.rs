@@ -7,7 +7,9 @@ use dioxus_core::ElementId;
 #[test]
 fn empty_fragment_creates_nothing() {
     fn app() -> Element {
-        rsx!({})
+        rsx!(
+            {}
+        )
     }
 
     let mut vdom = VirtualDom::new(app);
@@ -43,18 +45,24 @@ fn fragments_nested() {
         rsx!(
             div { "hello" }
             div { "goodbye" }
-            {rsx! {
-                div { "hello" }
-                div { "goodbye" }
-                {rsx! {
+            {
+                rsx! {
                     div { "hello" }
                     div { "goodbye" }
-                    {rsx! {
-                        div { "hello" }
-                        div { "goodbye" }
-                    }}
-                }}
-            }}
+                    {
+                        rsx! {
+                            div { "hello" }
+                            div { "goodbye" }
+                            {
+                                rsx! {
+                                    div { "hello" }
+                                    div { "goodbye" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         )
     });
 
@@ -77,7 +85,10 @@ fn fragments_across_components() {
 
     fn demo_child() -> Element {
         let world = "world";
-        rsx! { "hellO!" {world} }
+        rsx! {
+            "hellO!"
+            {world}
+        }
     }
 
     assert_eq!(
@@ -91,7 +102,9 @@ fn list_fragments() {
     fn app() -> Element {
         rsx!(
             h1 { "hello" }
-            {(0..6).map(|f| rsx!( span { "{f}" }))}
+            {(0..6).map(|f| rsx! {
+                span { "{f}" }
+            })}
         )
     }
     assert_eq!(

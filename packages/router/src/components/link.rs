@@ -254,7 +254,7 @@ pub fn Link(props: LinkProps) -> Element {
             onclick: action,
             "onclick": liveview_prevent_default,
             href: full_href,
-            onmounted: onmounted,
+            onmounted,
             class,
             rel,
             target: tag_target,

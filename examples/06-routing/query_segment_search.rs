@@ -45,7 +45,7 @@ fn Home() -> Element {
                 Link {
                     to: Route::Search {
                         query: "hello".to_string(),
-                        word_count: 1
+                        word_count: 1,
                     },
                     "Search for results containing 'hello' and at least one word"
                 }
@@ -54,7 +54,7 @@ fn Home() -> Element {
                 Link {
                     to: Route::Search {
                         query: "dioxus".to_string(),
-                        word_count: 2
+                        word_count: 2,
                     },
                     "Search for results containing 'dioxus' and at least two word"
                 }
@@ -90,10 +90,11 @@ fn Search(query: ReadSignal<String>, word_count: ReadSignal<usize>) -> Element {
         input {
             oninput: move |e| {
                 // Every time the query changes, we change the current route to the new query
-                navigator().replace(Route::Search {
-                    query: e.value(),
-                    word_count: word_count(),
-                });
+                navigator()
+                    .replace(Route::Search {
+                        query: e.value(),
+                        word_count: word_count(),
+                    });
             },
             value: "{query}",
         }
@@ -102,10 +103,11 @@ fn Search(query: ReadSignal<String>, word_count: ReadSignal<usize>) -> Element {
             oninput: move |e| {
                 // Every time the word count changes, we change the current route to the new query
                 if let Ok(word_count) = e.value().parse() {
-                    navigator().replace(Route::Search {
-                        query: query(),
-                        word_count,
-                    });
+                    navigator()
+                        .replace(Route::Search {
+                            query: query(),
+                            word_count,
+                        });
                 }
             },
             value: "{word_count}",

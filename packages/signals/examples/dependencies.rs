@@ -16,9 +16,7 @@ fn app() -> Element {
 
     rsx! {
         "Parent count: {signal}"
-        Child {
-            non_reactive_prop: signal()
-        }
+        Child { non_reactive_prop: signal() }
     }
 }
 
@@ -40,10 +38,7 @@ fn Child(non_reactive_prop: i32) -> Element {
     }));
 
     rsx! {
-        button {
-            onclick: move |_| signal += 1,
-            "Child count: {signal}"
-        }
+        button { onclick: move |_| signal += 1, "Child count: {signal}" }
 
         "Sum: {computed}"
 

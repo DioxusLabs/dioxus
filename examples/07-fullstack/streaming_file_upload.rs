@@ -65,9 +65,7 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: asset!("/examples/assets/file_upload.css") }
-        div {
-            max_width: "600px",
-            margin: "auto",
+        div { max_width: "600px", margin: "auto",
             h1 { "File upload example" }
             div {
                 h3 { "Upload as FileUpload" }

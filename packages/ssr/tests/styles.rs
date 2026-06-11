@@ -3,7 +3,9 @@ use dioxus::prelude::*;
 #[test]
 fn static_styles() {
     fn app() -> Element {
-        rsx! { div { width: "100px" } }
+        rsx! {
+            div { width: "100px" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);

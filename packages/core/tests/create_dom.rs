@@ -13,7 +13,9 @@ use dioxus_core::ElementId;
 fn test_original_diff() {
     let mut dom = VirtualDom::new(|| {
         rsx! {
-            div { div { "Hello, world!" } }
+            div {
+                div { "Hello, world!" }
+            }
         }
     });
 
@@ -38,7 +40,10 @@ fn create() {
                     "Hello, world!"
                     div {
                         div {
-                            Fragment { "hello""world" }
+                            Fragment {
+                                "hello"
+                                "world"
+                            }
                         }
                     }
                 }
@@ -75,7 +80,11 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
+    let mut dom = VirtualDom::new(|| rsx! {
+        {(0..3).map(|f| rsx! {
+            div { "hello" }
+        })}
+    });
 
     let _edits = dom.rebuild_to_vec();
 
@@ -152,7 +161,7 @@ fn anchors() {
     let mut dom = VirtualDom::new(|| {
         rsx! {
             if true {
-                 div { "hello" }
+                div { "hello" }
             }
             if false {
                 div { "goodbye" }

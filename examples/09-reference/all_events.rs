@@ -31,7 +31,9 @@ fn app() -> Element {
         Stylesheet { href: STYLE }
         div { id: "container",
             // focusing is necessary to catch keyboard events
-            div { id: "receiver", tabindex: 0,
+            div {
+                id: "receiver",
+                tabindex: 0,
                 onmousemove: move |event| log_event(event.data()),
                 onclick: move |event| log_event(event.data()),
                 ondoubleclick: move |event| log_event(event.data()),
@@ -49,12 +51,9 @@ fn app() -> Element {
 
                 "Hover, click, type or scroll to see the info down below"
             }
-            div {
-                style: "padding: 50px;",
-                div {
-                    style: "display: grid; gap: 12px; max-width: 520px; margin: 0 auto 24px; font-family: sans-serif;",
-                    label {
-                        r#for: "selection-input",
+            div { style: "padding: 50px;",
+                div { style: "display: grid; gap: 12px; max-width: 520px; margin: 0 auto 24px; font-family: sans-serif;",
+                    label { r#for: "selection-input",
                         "Select text in the input to inspect the selection range and direction"
                     }
                     input {
@@ -70,10 +69,9 @@ fn app() -> Element {
                         onselect: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
                         onselectstart: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
                         onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
-                        "Selection events also include textarea ranges and direction.",
+                        "Selection events also include textarea ranges and direction."
                     }
-                    label {
-                        r#for: "beforeinput-input",
+                    label { r#for: "beforeinput-input",
                         "Type here to inspect beforeinput (input_type, data, pre-change value)"
                     }
                     input {
@@ -82,8 +80,7 @@ fn app() -> Element {
                         onbeforeinput: move |event| log_event(event.data()),
                         oninput: move |event| log_event(event.data()),
                     }
-                    label {
-                        r#for: "paste-input",
+                    label { r#for: "paste-input",
                         "Paste into this field to read the clipboard text (and any files)"
                     }
                     input {

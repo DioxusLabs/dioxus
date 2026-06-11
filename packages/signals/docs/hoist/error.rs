@@ -9,9 +9,7 @@ fn Counters() -> Element {
         // A signal from a child is read or written to in a parent scope
         "{counts:?}"
         for _ in 0..children() {
-            Counter {
-                counts
-            }
+            Counter { counts }
         }
     }
 }
@@ -23,9 +21,6 @@ fn Counter(mut counts: Signal<Vec<Signal<i32>>>) -> Element {
     use_hook(|| counts.push(signal_owned_by_child));
 
     rsx! {
-        button {
-            onclick: move |_| signal_owned_by_child += 1,
-            "{signal_owned_by_child}"
-        }
+        button { onclick: move |_| signal_owned_by_child += 1, "{signal_owned_by_child}" }
     }
 }

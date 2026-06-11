@@ -148,10 +148,7 @@ fn app() -> Element {
 
     rsx! {
         h1 { "Server Functions Example" }
-        div {
-            display: "flex",
-            flex_direction: "column",
-            gap: "8px",
+        div { display: "flex", flex_direction: "column", gap: "8px",
 
             button { onclick: move |_| echo_action.call("Hello from client".into()), "Echo: Hello" }
             button { onclick: move |_| chat_action.call(42u32, Some(7u32)), "Chat (user 42, room 7)" }

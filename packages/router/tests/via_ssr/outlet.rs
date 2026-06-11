@@ -41,8 +41,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn App(path: Route) -> Element {
         rsx! {
             h1 { "App" }
-            HistoryProvider {
-                history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            HistoryProvider { history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
                 Router::<Route> {}
             }
         }
@@ -50,43 +49,53 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn RootIndex() -> Element {
-        rsx! { h2 { "Root Index" } }
+        rsx! {
+            h2 { "Root Index" }
+        }
     }
 
     #[component]
     fn Fixed() -> Element {
         rsx! {
             h2 { "Fixed" }
-            Outlet::<Route> { }
+            Outlet::<Route> {}
         }
     }
 
     #[component]
     fn FixedIndex() -> Element {
-        rsx! { h3 { "Fixed - Index" } }
+        rsx! {
+            h3 { "Fixed - Index" }
+        }
     }
 
     #[component]
     fn FixedFixed() -> Element {
-        rsx! { h3 { "Fixed - Fixed"} }
+        rsx! {
+            h3 { "Fixed - Fixed" }
+        }
     }
 
     #[component]
     fn Parameter(id: u8) -> Element {
         rsx! {
             h2 { "Parameter {id}" }
-            Outlet::<Route> { }
+            Outlet::<Route> {}
         }
     }
 
     #[component]
     fn ParameterIndex(id: u8) -> Element {
-        rsx! { h3 { "Parameter - Index" } }
+        rsx! {
+            h3 { "Parameter - Index" }
+        }
     }
 
     #[component]
     fn ParameterFixed(id: u8) -> Element {
-        rsx! { h3 { "Parameter - Fixed" } }
+        rsx! {
+            h3 { "Parameter - Fixed" }
+        }
     }
 }
 

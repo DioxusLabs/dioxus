@@ -134,7 +134,7 @@ fn app() -> Element {
                         class: "toggle-all",
                         r#type: "checkbox",
                         onchange: toggle_all,
-                        checked: active_todo_count() == 0
+                        checked: active_todo_count() == 0,
                     }
                     label { r#for: "toggle-all" }
                 }
@@ -192,7 +192,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
                 value: "{draft}",
                 autofocus: "true",
                 oninput: move |evt| draft.set(evt.value()),
-                onkeydown
+                onkeydown,
             }
         }
     }
@@ -225,7 +225,7 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| entry.checked().set(evt.checked())
+                    oninput: move |evt| entry.checked().set(evt.checked()),
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -255,7 +255,7 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                             Key::Enter | Key::Escape | Key::Tab => is_editing.set(false),
                             _ => {}
                         }
-                    }
+                    },
                 }
             }
         }
@@ -283,11 +283,12 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
                 }
             }
             ul { class: "filters",
-                for (state , state_text , url) in [
+                for (state, state_text, url) in [
                     (FilterState::All, "All", "#/"),
                     (FilterState::Active, "Active", "#/active"),
                     (FilterState::Completed, "Completed", "#/completed"),
-                ] {
+                ]
+                {
                     li {
                         a {
                             href: url,

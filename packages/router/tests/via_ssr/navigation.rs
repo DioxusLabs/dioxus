@@ -58,14 +58,10 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    rsx! {
-        "Home!"
-    }
+    rsx! { "Home!" }
 }
 
 #[component]
 fn Other() -> Element {
-    rsx! {
-        "Other"
-    }
+    rsx! { "Other" }
 }

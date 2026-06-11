@@ -34,9 +34,7 @@ fn Errors() -> Element {
             },
             SuspenseBoundary {
                 fallback: |_: SuspenseContext| rsx! {
-                    div {
-                        "Loading..."
-                    }
+                    div { "Loading..." }
                 },
                 ThrowsError {}
             }
@@ -50,9 +48,7 @@ pub fn ErrorFallbackButton() -> Element {
 
     rsx! {
         // Make sure the error fallback is interactive after hydration
-        button {
-            id: "error-fallback-button",
-            onclick: move |_| count += 1,
+        button { id: "error-fallback-button", onclick: move |_| count += 1,
             "Error fallback button clicked {count} times"
         }
     }
@@ -61,7 +57,5 @@ pub fn ErrorFallbackButton() -> Element {
 #[component]
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?.unwrap()?;
-    rsx! {
-        "success"
-    }
+    rsx! { "success" }
 }

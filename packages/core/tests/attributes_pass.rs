@@ -10,7 +10,7 @@ fn attributes_pass_properly() {
             cy: 50,
             r: 40,
             stroke: "green",
-            fill: "yellow"
+            fill: "yellow",
         }
     };
 

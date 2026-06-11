@@ -6,10 +6,7 @@ fn app() -> Element {
     let mut num = use_signal(|| 0);
 
     rsx! {
-        document::Link {
-            href: CSS,
-            rel: "stylesheet",
-        }
+        document::Link { href: CSS, rel: "stylesheet" }
         button {
             id: "increment-button",
             onclick: move |_| async move {

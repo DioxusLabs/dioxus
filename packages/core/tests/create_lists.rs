@@ -14,7 +14,7 @@ fn app() -> Element {
         div {
             for i in 0..3 {
                 div {
-                    h1 { "hello world! "}
+                    h1 { "hello world! " }
                     p { "{i}" }
                 }
             }

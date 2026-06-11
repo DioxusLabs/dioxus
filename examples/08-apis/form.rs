@@ -51,24 +51,33 @@ fn app() -> Element {
                         oninput: move |ev| {
                             println!("setting username");
                             values.set(ev.values());
-                        }
+                        },
                     }
 
                     // And then the various inputs that might exist
                     // Note for a value to be returned in .values(), it must be named!
-
                     label { r#for: "full-name", "Full Name" }
                     input { r#type: "text", name: "full-name" }
                     input { r#type: "text", name: "full-name" }
 
                     label { r#for: "email", "Email (matching <name>@example.com)" }
-                    input { r#type: "email", size: "30", id: "email", name: "email" }
+                    input {
+                        r#type: "email",
+                        size: "30",
+                        id: "email",
+                        name: "email",
+                    }
 
                     label { r#for: "password", "Password" }
                     input { r#type: "password", name: "password" }
 
                     label { r#for: "color", "Color" }
-                    input { r#type: "radio", checked: true, name: "color", value: "red" }
+                    input {
+                        r#type: "radio",
+                        checked: true,
+                        name: "color",
+                        value: "red",
+                    }
                     input { r#type: "radio", name: "color", value: "blue" }
                     input { r#type: "radio", name: "color", value: "green" }
 
@@ -82,15 +91,20 @@ fn app() -> Element {
                             println!("Input event: {:#?}", ev);
                             println!("Values: {:#?}", ev.value().split(',').collect::<Vec<_>>());
                         },
-                        option { value: "usa",  "USA" }
-                        option { value: "canada",  "Canada" }
-                        option { value: "mexico",  "Mexico" }
+                        option { value: "usa", "USA" }
+                        option { value: "canada", "Canada" }
+                        option { value: "mexico", "Mexico" }
                     }
 
                     // Safari can be quirky with color inputs on mac.
                     // We recommend always providing a text input for color as a fallback.
                     label { r#for: "color", "Color" }
-                    input { r#type: "color", value: "#000002", name: "head", id: "head" }
+                    input {
+                        r#type: "color",
+                        value: "#000002",
+                        name: "head",
+                        id: "head",
+                    }
 
                     // Dates!
                     input {
@@ -99,31 +113,58 @@ fn app() -> Element {
                         r#type: "date",
                         name: "trip-start",
                         max: "2025-12-31",
-                        id: "start"
+                        id: "start",
                     }
 
                     // CHekcboxes
                     label { r#for: "cbox", "Color" }
                     div {
                         label { r#for: "cbox-red", "red" }
-                        input { r#type: "checkbox", checked: true, name: "cbox", value: "red", id: "cbox-red" }
+                        input {
+                            r#type: "checkbox",
+                            checked: true,
+                            name: "cbox",
+                            value: "red",
+                            id: "cbox-red",
+                        }
                     }
                     div {
                         label { r#for: "cbox-blue", "blue" }
-                        input { r#type: "checkbox", name: "cbox", value: "blue", id: "cbox-blue" }
+                        input {
+                            r#type: "checkbox",
+                            name: "cbox",
+                            value: "blue",
+                            id: "cbox-blue",
+                        }
                     }
                     div {
                         label { r#for: "cbox-green", "green" }
-                        input { r#type: "checkbox", name: "cbox", value: "green", id: "cbox-green" }
+                        input {
+                            r#type: "checkbox",
+                            name: "cbox",
+                            value: "green",
+                            id: "cbox-green",
+                        }
                     }
                     div {
                         label { r#for: "cbox-yellow", "yellow" }
-                        input { r#type: "checkbox", name: "cbox", value: "yellow", id: "cbox-yellow" }
+                        input {
+                            r#type: "checkbox",
+                            name: "cbox",
+                            value: "yellow",
+                            id: "cbox-yellow",
+                        }
                     }
 
                     // File input
                     label { r#for: "headshot", "Headshot" }
-                    input { r#type: "file", name: "headshot", id: "headshot", multiple: true, accept: ".png,.jpg,.jpeg" }
+                    input {
+                        r#type: "file",
+                        name: "headshot",
+                        id: "headshot",
+                        multiple: true,
+                        accept: ".png,.jpg,.jpeg",
+                    }
 
                     // Buttons will submit your form by default.
                     button { r#type: "submit", value: "Submit", "Submit the form" }

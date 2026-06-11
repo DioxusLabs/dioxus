@@ -16,53 +16,37 @@ fn app() -> Element {
     });
 
     rsx! {
-        TakesReadSignal {
-            item,
-        }
-        TakesReadStore {
-            item,
-        }
-        TakesStr {
-            item: item.contents().deref(),
-        }
-        TakesStrStore {
-            item: item.contents().deref(),
-        }
+        TakesReadSignal { item }
+        TakesReadStore { item }
+        TakesStr { item: item.contents().deref() }
+        TakesStrStore { item: item.contents().deref() }
     }
 }
 
 #[component]
 fn TakesStr(item: ReadSignal<str>) -> Element {
     rsx! {
-        TakesStr {
-            item,
-        }
+        TakesStr { item }
     }
 }
 
 #[component]
 fn TakesStrStore(item: ReadStore<str>) -> Element {
     rsx! {
-        TakesStrStore {
-            item,
-        }
+        TakesStrStore { item }
     }
 }
 
 #[component]
 fn TakesReadSignal(item: ReadSignal<TodoItem>) -> Element {
     rsx! {
-        TakesReadSignal {
-            item,
-        }
+        TakesReadSignal { item }
     }
 }
 
 #[component]
 fn TakesReadStore(item: ReadStore<TodoItem>) -> Element {
     rsx! {
-        TakesReadStore {
-            item,
-        }
+        TakesReadStore { item }
     }
 }

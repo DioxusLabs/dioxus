@@ -32,7 +32,9 @@ fn app() -> Element {
             "Add item"
         }
         button {
-            onclick: move |_| { items.pop(); },
+            onclick: move |_| {
+                items.pop();
+            },
             "Remove last"
         }
 
@@ -47,7 +49,9 @@ fn app() -> Element {
         // You can also use iterator adapters with .map() for anything more complex than a for loop
         p { "Uppercased:" }
         ul {
-            {items.iter().map(|item| rsx! { li { "{item.to_uppercase()}" } })}
+            {items.iter().map(|item| rsx! {
+                li { "{item.to_uppercase()}" }
+            })}
         }
     }
 }

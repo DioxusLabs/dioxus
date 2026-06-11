@@ -38,9 +38,7 @@ fn Blog(id: ReadSignal<i32>) -> Element {
 
     match res() {
         Some(id) => rsx! {
-            div {
-                "Blog post {id}"
-            }
+            div { "Blog post {id}" }
             for i in 0..10 {
                 div {
                     Link { to: Route::Blog { id: i }, "Go to Blog {i}" }
@@ -54,11 +52,6 @@ fn Blog(id: ReadSignal<i32>) -> Element {
 #[component]
 fn Home() -> Element {
     rsx! {
-        Link {
-            to: Route::Blog {
-                id: 0
-            },
-            "Go to blog"
-        }
+        Link { to: Route::Blog { id: 0 }, "Go to blog" }
     }
 }

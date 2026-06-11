@@ -100,10 +100,7 @@ fn Home(url_hash: ReadSignal<State>) -> Element {
     });
 
     rsx! {
-        button {
-            onclick: move |_| state.write().counters.clear(),
-            "Reset"
-        }
+        button { onclick: move |_| state.write().counters.clear(), "Reset" }
         button {
             onclick: move |_| {
                 state.write().counters.push(0);

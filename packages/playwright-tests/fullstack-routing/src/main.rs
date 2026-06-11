@@ -16,7 +16,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! { Router::<Route> {} }
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -62,9 +64,7 @@ fn ThrowsAsyncError() -> Element {
     }
 
     use_server_future(error_after_delay)?().unwrap()?;
-    rsx! {
-        "Hello, world!"
-    }
+    rsx! { "Hello, world!" }
 }
 
 #[component]
@@ -83,33 +83,31 @@ pub fn HydrateCanGoBack() -> Element {
     let navigator = use_navigator();
     let mut count = use_signal(|| 0);
     rsx! {
-        header {
-            class:"flex justify-start items-center app-bg-color-primary px-5 py-2 space-x-4",
+        header { class: "flex justify-start items-center app-bg-color-primary px-5 py-2 space-x-4",
             if navigator.can_go_back() {
-                button  {
+                button {
                     class: "app-button-circle item-navbar",
                     onclick: move |_| {
                         count += 1;
                     },
                     "{count}"
-                },
-            }
-            else {
+                }
+            } else {
                 div {
-                    Link  {
+                    Link {
                         class: "app-button-circle item-navbar",
                         to: Route::Home,
                         "Go to home"
-                    },
-                    button  {
+                    }
+                    button {
                         class: "app-button-circle item-navbar",
                         onclick: move |_| {
                             count += 1;
                         },
                         "{count}"
-                    },
+                    }
                 }
             }
-        },
+        }
     }
 }

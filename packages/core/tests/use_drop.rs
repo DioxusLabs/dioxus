@@ -28,7 +28,7 @@ fn app(props: AppProps) -> Element {
         if render_child {
             child_component {
                 drop_count: props.drop_count.clone(),
-                render_child: props.render_child.clone()
+                render_child: props.render_child.clone(),
             }
         }
     }

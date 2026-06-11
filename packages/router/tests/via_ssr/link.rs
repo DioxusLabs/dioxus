@@ -51,7 +51,12 @@ fn prepare_at_with_base_path<R: Routable>(at: impl ToString, base_path: impl ToS
         rsx! {
             h1 { "App" }
             HistoryProvider {
-                history:  move |_| Rc::new(MemoryHistory::with_initial_path(props.at.clone()).with_prefix(props.base_path.clone())) as Rc<dyn History>,
+                history: move |_| {
+                    Rc::new(
+                        MemoryHistory::with_initial_path(props.at.clone())
+                            .with_prefix(props.base_path.clone()),
+                    ) as Rc<dyn History>
+                },
                 Router::<R> {}
             }
         }
@@ -76,10 +81,7 @@ fn href_internal() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                "Link"
-            }
+            Link { to: Route::Test {}, "Link" }
         }
     }
 
@@ -115,10 +117,7 @@ fn href_external() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: "https://dioxuslabs.com/",
-                "Link"
-            }
+            Link { to: "https://dioxuslabs.com/", "Link" }
         }
     }
 
@@ -154,11 +153,7 @@ fn with_class() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                class: "test_class",
-                "Link"
-            }
+            Link { to: Route::Test {}, class: "test_class", "Link" }
         }
     }
 
@@ -255,11 +250,7 @@ fn with_id() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                id: "test_id",
-                "Link"
-            }
+            Link { to: Route::Test {}, id: "test_id", "Link" }
         }
     }
 
@@ -290,11 +281,7 @@ fn with_new_tab() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                new_tab: true,
-                "Link"
-            }
+            Link { to: Route::Test {}, new_tab: true, "Link" }
         }
     }
 
@@ -318,11 +305,7 @@ fn with_new_tab_external() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: "https://dioxuslabs.com/",
-                new_tab: true,
-                "Link"
-            }
+            Link { to: "https://dioxuslabs.com/", new_tab: true, "Link" }
         }
     }
 
@@ -354,11 +337,7 @@ fn with_rel() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                rel: "test_rel".to_string(),
-                "Link"
-            }
+            Link { to: Route::Test {}, rel: "test_rel".to_string(), "Link" }
         }
     }
 
@@ -399,12 +378,13 @@ fn with_child_route() {
     #[component]
     fn Root() -> Element {
         rsx! {
+            Link { to: Route::Test {}, "Parent Link" }
             Link {
-                to: Route::Test {},
-                "Parent Link"
-            }
-            Link {
-                to: Route::Nested { child: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() } },
+                to: Route::Nested {
+                    child: ChildRoute::NotStatic {
+                        not_static: "this-is-a-child-route".to_string(),
+                    },
+                },
                 "Child Link"
             }
         }
@@ -413,16 +393,19 @@ fn with_child_route() {
     #[component]
     fn ChildRoot() -> Element {
         rsx! {
+            Link { to: Route::Test {}, "Parent Link" }
             Link {
-                to: Route::Test {},
-                "Parent Link"
-            }
-            Link {
-                to: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() },
+                to: ChildRoute::NotStatic {
+                    not_static: "this-is-a-child-route".to_string(),
+                },
                 "Child Link 1"
             }
             Link {
-                to: Route::Nested { child: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() } },
+                to: Route::Nested {
+                    child: ChildRoute::NotStatic {
+                        not_static: "this-is-a-child-route".to_string(),
+                    },
+                },
                 "Child Link 2"
             }
         }
@@ -456,11 +439,15 @@ fn with_hash_segment() {
     fn Root(data: String) -> Element {
         rsx! {
             Link {
-                to: Route::Root { data: "test".to_string() },
+                to: Route::Root {
+                    data: "test".to_string(),
+                },
                 "Link"
             }
             Link {
-                to: Route::Root { data: "".to_string() },
+                to: Route::Root {
+                    data: "".to_string(),
+                },
                 "Empty"
             }
         }

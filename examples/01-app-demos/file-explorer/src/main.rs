@@ -23,19 +23,32 @@ fn app() -> Element {
         div {
             header {
                 i { class: "material-icons icon-menu", "menu" }
-                h1 { "Files: " {files.read().current()} }
-                span { }
-                i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
+                h1 {
+                    "Files: "
+                    {files.read().current()}
+                }
+                span {}
+                i {
+                    class: "material-icons",
+                    onclick: move |_| files.write().go_up(),
+                    "logout"
+                }
             }
             main {
                 for (dir_id, path) in files.read().path_names.iter().enumerate() {
                     {
-                        let path_end = path.components().next_back().map(|p|p.as_os_str()).unwrap_or(path.as_os_str()).to_string_lossy();
+                        let path_end = path
+                            .components()
+                            .next_back()
+                            .map(|p| p.as_os_str())
+                            .unwrap_or(path.as_os_str())
+                            .to_string_lossy();
                         let path_display = path.display();
                         let is_file = path.is_file();
                         rsx! {
                             div { class: "folder", key: "{path_display}",
-                                i { class: "material-icons",
+                                i {
+                                    class: "material-icons",
                                     onclick: move |_| files.write().enter_dir(dir_id),
                                     if is_file {
                                         "description"

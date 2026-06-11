@@ -3,7 +3,9 @@ use dioxus::prelude::*;
 #[test]
 fn static_inner_html() {
     fn app() -> Element {
-        rsx! { div { dangerous_inner_html: "<div>1234</div>" } }
+        rsx! {
+            div { dangerous_inner_html: "<div>1234</div>" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -16,7 +18,9 @@ fn static_inner_html() {
 fn dynamic_inner_html() {
     fn app() -> Element {
         let inner_html = "<div>1234</div>";
-        rsx! { div { dangerous_inner_html: "{inner_html}" } }
+        rsx! {
+            div { dangerous_inner_html: "{inner_html}" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);

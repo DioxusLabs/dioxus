@@ -35,8 +35,7 @@ fn Home(lang: String) -> Element {
 #[component]
 fn App(path: Route) -> Element {
     rsx! {
-        HistoryProvider {
-            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+        HistoryProvider { history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
             Router::<Route> {}
         }
     }

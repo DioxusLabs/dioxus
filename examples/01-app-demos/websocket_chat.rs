@@ -64,7 +64,7 @@ fn app() -> Element {
                     _ = socket.send(ClientEvent::SendMessage(input.read().clone())).await;
                     input.set("".to_string());
                 }
-            }
+            },
         }
 
         div {

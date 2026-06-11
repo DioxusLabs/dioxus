@@ -30,10 +30,7 @@ fn app() -> Element {
                             div { class: "px-6 py-6 relative",
                                 match current_weather {
                                     Ok(weather) => rsx! {
-                                        CountryData {
-                                            country: country.read().clone(),
-                                            weather: weather.cloned(),
-                                        }
+                                        CountryData { country: country.read().clone(), weather: weather.cloned() }
                                         Forecast { weather: weather.cloned() }
                                         div { height: "20px", margin_top: "10px",
                                             if weather.loading() {
@@ -46,7 +43,7 @@ fn app() -> Element {
                                     },
                                     Err(Loading::Failed(_)) => rsx! {
                                         div { "Failed to load weather data." }
-                                    }
+                                    },
                                 }
                             }
                         }
@@ -96,7 +93,9 @@ fn Forecast(weather: WeatherResponse) -> Element {
     rsx! {
         div { class: "px-6 pt-4 relative",
             div { class: "w-full h-px bg-gray-100 mb-4" }
-            div { p { class: "text-center w-full mb-4", "👇 Forecast 📆" } }
+            div {
+                p { class: "text-center w-full mb-4", "👇 Forecast 📆" }
+            }
             div { class: "text-center justify-between items-center flex",
                 div { class: "text-center mb-0 flex items-center justify-center flex-col mx-4 w-16",
                     span { class: "block my-1", "Today" }
@@ -129,7 +128,7 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                         placeholder: "Country name",
                         "type": "text",
                         autofocus: true,
-                        oninput: move |e: FormEvent| input.set(e.value())
+                        oninput: move |e: FormEvent| input.set(e.value()),
                     }
                     svg {
                         class: "w-4 h-4 absolute left-2.5 top-3.5",
@@ -141,20 +140,19 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                             d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
                             "stroke-linejoin": "round",
                             "stroke-linecap": "round",
-                            "stroke-width": "2"
+                            "stroke-width": "2",
                         }
                     }
                 }
                 ul { class: "bg-white border border-gray-100 w-full mt-2 max-h-72 overflow-auto",
                     match locations {
                         Ok(locs) if locs.is_empty() => rsx! {
-                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
-                                "No locations found"
-                            }
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative", "No locations found" }
                         },
                         Ok(locs) => rsx! {
                             for wl in locs.read().iter().take(5).cloned() {
-                                li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                li {
+                                    class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
                                     onclick: move |_| country.set(wl.clone()),
                                     MapIcon {}
                                     b { "{wl.name}" }
@@ -163,15 +161,13 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                             }
                         },
                         Err(Loading::Pending(_)) => rsx! {
-                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
-                                "Searching..."
-                            }
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative", "Searching..." }
                         },
                         Err(Loading::Failed(handle)) => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "Failed to search: {handle.error():?}"
                             }
-                        }
+                        },
                     }
                 }
             }
@@ -191,13 +187,13 @@ fn MapIcon() -> Element {
                 "stroke-linejoin": "round",
                 "stroke-width": "2",
                 "stroke-linecap": "round",
-                d: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                d: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z",
             }
             path {
                 "stroke-linecap": "round",
                 "stroke-linejoin": "round",
                 d: "M15 11a3 3 0 11-6 0 3 3 0 016 0z",
-                "stroke-width": "2"
+                "stroke-width": "2",
             }
         }
     }

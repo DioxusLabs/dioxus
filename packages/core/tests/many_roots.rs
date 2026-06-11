@@ -27,7 +27,7 @@ fn many_roots() {
     fn MyNav() -> Element {
         rsx!(
             div { "trailing nav" }
-            div { "whhhhh"}
+            div { "whhhhh" }
             div { "bhhhh" }
         )
     }

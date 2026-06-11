@@ -5,7 +5,9 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| rsx! { Home {} });
+    dioxus::launch(|| rsx! {
+        Home {}
+    });
 }
 
 #[component]
@@ -16,11 +18,7 @@ pub fn Home() -> Element {
             MyStrings {}
             MyFloats {}
         }
-        button {
-            id: "counter",
-            onclick: move |_| count += 1,
-            "Count {count}"
-        }
+        button { id: "counter", onclick: move |_| count += 1, "Count {count}" }
     }
 }
 

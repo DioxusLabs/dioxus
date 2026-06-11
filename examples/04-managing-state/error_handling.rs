@@ -11,7 +11,9 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| rsx! { Router::<Route> {} });
+    dioxus::launch(|| rsx! {
+        Router::<Route> {}
+    });
 }
 
 /// You can use an ErrorBoundary to catch errors in children and display a warning
@@ -63,16 +65,10 @@ fn Show() -> Element {
                                     border_width: "2px",
                                     border_radius: "5px",
                                     p { "Failed to parse data" }
-                                    Link {
-                                        to: Route::Home {},
-                                        "Go back to the homepage"
-                                    }
+                                    Link { to: Route::Home {}, "Go back to the homepage" }
                                 }
                             } else {
-                                pre {
-                                    color: "red",
-                                    "{error}"
-                                }
+                                pre { color: "red", "{error}" }
                             }
                         }
                     }
@@ -134,22 +130,13 @@ fn Home() -> Element {
     rsx! {
         ul {
             li {
-                Link {
-                    to: Route::Simple {},
-                    "Simple errors"
-                }
+                Link { to: Route::Simple {}, "Simple errors" }
             }
             li {
-                Link {
-                    to: Route::Panic {},
-                    "Capture panics"
-                }
+                Link { to: Route::Panic {}, "Capture panics" }
             }
             li {
-                Link {
-                    to: Route::Show {},
-                    "Show errors"
-                }
+                Link { to: Route::Show {}, "Show errors" }
             }
         }
     }

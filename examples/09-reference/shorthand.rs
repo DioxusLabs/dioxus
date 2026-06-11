@@ -21,8 +21,23 @@ fn app() -> Element {
 
     rsx! {
         div { class, id, {&children} }
-        Component { a, b, c, children, onclick }
-        Component { a, ..ComponentProps { a: 1, b: 2, c: 3, children: VNode::empty(), onclick: Default::default() } }
+        Component {
+            a,
+            b,
+            c,
+            children,
+            onclick,
+        }
+        Component {
+            a,
+            ..ComponentProps {
+                a: 1,
+                b: 2,
+                c: 3,
+                children: VNode::empty(),
+                onclick: Default::default(),
+            },
+        }
     }
 }
 

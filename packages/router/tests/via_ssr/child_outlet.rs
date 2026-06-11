@@ -36,8 +36,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn App(path: Route) -> Element {
         rsx! {
             h1 { "App" }
-            HistoryProvider {
-                history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            HistoryProvider { history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
                 Router::<Route> {}
             }
         }
@@ -45,14 +44,16 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn RootIndex() -> Element {
-        rsx! { h2 { "Root Index" } }
+        rsx! {
+            h2 { "Root Index" }
+        }
     }
 
     #[component]
     fn Layout() -> Element {
         rsx! {
             h2 { "parent layout" }
-            Outlet::<Route> { }
+            Outlet::<Route> {}
         }
     }
 
@@ -60,7 +61,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn ChildLayout() -> Element {
         rsx! {
             h2 { "child layout" }
-            Outlet::<ChildRoute> { }
+            Outlet::<ChildRoute> {}
         }
     }
 }

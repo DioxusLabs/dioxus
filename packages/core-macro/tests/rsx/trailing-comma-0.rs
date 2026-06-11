@@ -5,9 +5,6 @@ use dioxus::prelude::*;
 
 fn main() {
     rsx! {
-        p {
-            class: "foo bar"
-            "Hello world"
-        }
+        p { class: "foo bar", "Hello world" }
     };
 }

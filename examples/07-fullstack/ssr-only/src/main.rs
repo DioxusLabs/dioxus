@@ -11,7 +11,9 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| rsx! { Router::<Route> { } });
+    dioxus::launch(|| rsx! {
+        Router::<Route> {}
+    });
 }
 
 #[derive(Routable, Clone, Debug, PartialEq)]
@@ -26,11 +28,17 @@ enum Route {
 #[component]
 fn Home() -> Element {
     rsx! {
-        h1 { "home"  }
+        h1 { "home" }
         ul {
-            li { a { href: "/post/1", "Post 1" } }
-            li { a { href: "/post/2", "Post 2" } }
-            li { a { href: "/post/3", "Post 3 (404)" } }
+            li {
+                a { href: "/post/1", "Post 1" }
+            }
+            li {
+                a { href: "/post/2", "Post 2" }
+            }
+            li {
+                a { href: "/post/3", "Post 3 (404)" }
+            }
         }
     }
 }

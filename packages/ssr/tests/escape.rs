@@ -3,7 +3,9 @@ use dioxus::prelude::*;
 #[test]
 fn escape_static_values() {
     fn app() -> Element {
-        rsx! { input { disabled: "\"><div>" } }
+        rsx! {
+            input { disabled: "\"><div>" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -19,7 +21,9 @@ fn escape_static_values() {
 fn escape_dynamic_values() {
     fn app() -> Element {
         let disabled = "\"><div>";
-        rsx! { input { disabled } }
+        rsx! {
+            input { disabled }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -34,7 +38,9 @@ fn escape_dynamic_values() {
 #[test]
 fn escape_static_style() {
     fn app() -> Element {
-        rsx! { div { width: "\"><div>" } }
+        rsx! {
+            div { width: "\"><div>" }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -50,7 +56,9 @@ fn escape_static_style() {
 fn escape_dynamic_style() {
     fn app() -> Element {
         let width = "\"><div>";
-        rsx! { div { width } }
+        rsx! {
+            div { width }
+        }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -66,9 +74,7 @@ fn escape_dynamic_style() {
 fn escape_static_text() {
     fn app() -> Element {
         rsx! {
-            div {
-                "\"><div>"
-            }
+            div { "\"><div>" }
         }
     }
 
@@ -86,9 +92,7 @@ fn escape_dynamic_text() {
     fn app() -> Element {
         let text = "\"><div>";
         rsx! {
-            div {
-                {text}
-            }
+            div { {text} }
         }
     }
 
@@ -105,9 +109,7 @@ fn escape_dynamic_text() {
 fn don_t_escape_static_scripts() {
     fn app() -> Element {
         rsx! {
-            script {
-                "console.log('hello world');"
-            }
+            script { "console.log('hello world');" }
         }
     }
 
@@ -125,9 +127,7 @@ fn don_t_escape_dynamic_scripts() {
     fn app() -> Element {
         let script = "console.log('hello world');";
         rsx! {
-            script {
-                {script}
-            }
+            script { {script} }
         }
     }
 
@@ -144,9 +144,7 @@ fn don_t_escape_dynamic_scripts() {
 fn don_t_escape_static_styles() {
     fn app() -> Element {
         rsx! {
-            style {
-                "body {{ background-color: red; }}"
-            }
+            style { "body {{ background-color: red; }}" }
         }
     }
 
@@ -164,9 +162,7 @@ fn don_t_escape_dynamic_styles() {
     fn app() -> Element {
         let style = "body { font-family: \"sans-serif\"; }";
         rsx! {
-            style {
-                {style}
-            }
+            style { {style} }
         }
     }
 
@@ -184,9 +180,7 @@ fn don_t_escape_static_fragment_styles() {
     fn app() -> Element {
         let style_element = rsx! { "body {{ font-family: \"sans-serif\"; }}" };
         rsx! {
-            style {
-                {style_element}
-            }
+            style { {style_element} }
         }
     }
 
@@ -208,9 +202,7 @@ fn escape_static_component_fragment_div() {
 
     fn app() -> Element {
         rsx! {
-            div {
-                StyleContents {}
-            }
+            div { StyleContents {} }
         }
     }
 
@@ -233,9 +225,7 @@ fn escape_dynamic_component_fragment_div() {
 
     fn app() -> Element {
         rsx! {
-            div {
-                StyleContents {}
-            }
+            div { StyleContents {} }
         }
     }
 

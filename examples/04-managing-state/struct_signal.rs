@@ -50,11 +50,13 @@ fn app() -> Element {
 
         // Replacing the whole value works too
         button {
-            onclick: move |_| user.set(User {
-                name: "Grace".to_string(),
-                age: 85,
-                admin: true,
-            }),
+            onclick: move |_| {
+                user.set(User {
+                    name: "Grace".to_string(),
+                    age: 85,
+                    admin: true,
+                })
+            },
             "Reset to Grace"
         }
     }

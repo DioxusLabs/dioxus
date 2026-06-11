@@ -39,7 +39,7 @@ fn app() -> Element {
             button { onclick: move |_| idx -= 1, "-" }
             ul {
                 {(0..idx()).map(|i| rsx! {
-                    ChildExample { i: i, onhover: onhover }
+                    ChildExample { i, onhover }
                 })}
             }
         }
@@ -48,5 +48,7 @@ fn app() -> Element {
 
 #[component]
 fn ChildExample(i: i32, onhover: EventHandler<MouseEvent>) -> Element {
-    rsx! { li { onmouseover: move |e| onhover.call(e), "{i}" } }
+    rsx! {
+        li { onmouseover: move |e| onhover.call(e), "{i}" }
+    }
 }

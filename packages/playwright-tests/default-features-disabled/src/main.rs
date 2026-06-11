@@ -19,16 +19,9 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
-        div {
-            "server features: {server_features:?}"
-        }
-        div {
-            "client features: {client_features:?}"
-        }
-        button {
-            onclick: move |_| count += 1,
-            "{count}"
-        }
+        div { "server features: {server_features:?}" }
+        div { "client features: {client_features:?}" }
+        button { onclick: move |_| count += 1, "{count}" }
     }
 }
 

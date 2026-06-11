@@ -7,9 +7,7 @@ use dioxus::prelude::*;
 fn partially_formatted_conditional_attribute() {
     let width = "1px";
     _ = rsx! {
-        div {
-            width: if true { "{width}" } else { "100px" }
-        }
+        div { width: if true { "{width}" } else { "100px" } }
     };
 
     // And make sure it works if one of those branches is an expression
@@ -17,32 +15,21 @@ fn partially_formatted_conditional_attribute() {
     let opt = "button";
 
     _ = rsx! {
-        input {
-            type: if true { opt } else { "text" },
-        }
-        input {
-            type: if true { opt.to_string() } else { "text with" },
-        }
-        input {
-            type: if true { opt.to_string() } else { "text with {width}" },
-        }
-        input {
-            type: if true { opt.to_string() } else if true { "" } else { "text with {width}" },
-        }
-        input {
-            type: if true { "one" } else if true { "two" } else { "three" },
-        }
-        input {
-            type: if true { "one" } else if true { "two" } else if true { "three" } else { opt },
-        }
-        input {
-            type: if true { "one" } else if true { if false { "true" } else { "false" } } else { "three" },
-        }
-        input {
-            type: if true { "one".to_string() },
-        }
-        input {
-            type: if true { "one" },
-        }
+        input { r#type: if true { opt } else { "text" } }
+        input { r#type: if true { opt.to_string() } else { "text with" } }
+        input { r#type: if true { opt.to_string() } else { "text with {width}" } }
+        input { r#type: if true { opt.to_string() } else if true { "" } else { "text with {width}" } }
+        input { r#type: if true { "one" } else if true { "two" } else { "three" } }
+        input { r#type: if true { "one" } else if true { "two" } else if true { "three" } else { opt } }
+        input { r#type:
+            if true {
+                "one"
+            } else if true {
+                if false { "true" } else { "false" }
+            } else {
+                "three"
+            } }
+        input { r#type: if true { "one".to_string() } }
+        input { r#type: if true { "one" } }
     };
 }

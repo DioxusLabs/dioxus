@@ -129,43 +129,53 @@ fn is_child() {
 
 #[component]
 fn RootIndex() -> Element {
-    rsx! { h2 { "Root Index" } }
+    rsx! {
+        h2 { "Root Index" }
+    }
 }
 
 #[component]
 fn Fixed() -> Element {
     rsx! {
         h2 { "Fixed" }
-        Outlet::<Route> { }
+        Outlet::<Route> {}
     }
 }
 
 #[component]
 fn FixedIndex() -> Element {
-    rsx! { h3 { "Fixed - Index" } }
+    rsx! {
+        h3 { "Fixed - Index" }
+    }
 }
 
 #[component]
 fn FixedFixed() -> Element {
-    rsx! { h3 { "Fixed - Fixed"} }
+    rsx! {
+        h3 { "Fixed - Fixed" }
+    }
 }
 
 #[component]
 fn Parameter(id: u8) -> Element {
     rsx! {
         h2 { "Parameter {id}" }
-        Outlet::<Route> { }
+        Outlet::<Route> {}
     }
 }
 
 #[component]
 fn ParameterIndex(id: u8) -> Element {
-    rsx! { h3 { "Parameter - Index" } }
+    rsx! {
+        h3 { "Parameter - Index" }
+    }
 }
 
 #[component]
 fn ParameterFixed(id: u8) -> Element {
-    rsx! { h3 { "Parameter - Fixed" } }
+    rsx! {
+        h3 { "Parameter - Fixed" }
+    }
 }
 
 #[component]
@@ -180,7 +190,9 @@ fn HashQuery(id: u8, query: String, hash: String) -> Element {
 
 #[component]
 fn HashIndex() -> Element {
-    rsx! { h3 { "Hash Index" } }
+    rsx! {
+        h3 { "Hash Index" }
+    }
 }
 
 #[component]

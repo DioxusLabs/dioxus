@@ -39,9 +39,7 @@ fn children_see_parent_write() {
     fn app() -> Element {
         let x = STORE.resolve();
         let inner1 = x.inner1();
-        rsx! {
-            "x = {inner1}"
-        }
+        rsx! { "x = {inner1}" }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -86,25 +84,19 @@ fn parents_see_child_write() {
     #[component]
     fn inner1_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().inner1 += 1;
-        rsx! {
-            "inner1 = {value}"
-        }
+        rsx! { "inner1 = {value}" }
     }
 
     #[component]
     fn inner2_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().inner2 += 1;
-        rsx! {
-            "inner2 = {value}"
-        }
+        rsx! { "inner2 = {value}" }
     }
 
     #[component]
     fn root_reader(value: Store<X>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().root += 1;
-        rsx! {
-            "x = {value:?}"
-        }
+        rsx! { "x = {value:?}" }
     }
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));
@@ -155,9 +147,7 @@ fn deep_root_reader_sees_future_child_write() {
         |runs: Rc<RefCell<usize>>| {
             *runs.borrow_mut() += 1;
             let x = STORE.resolve();
-            rsx! {
-                "x = {x:?}"
-            }
+            rsx! { "x = {x:?}" }
         },
         runs.clone(),
     );
@@ -184,9 +174,7 @@ fn boxed_child_subscribers_remove_visited_parent_deep_subscriber() {
 
     fn app() -> Element {
         let x = STORE.resolve();
-        rsx! {
-            "x = {x:?}"
-        }
+        rsx! { "x = {x:?}" }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -234,17 +222,13 @@ fn deep_parent_reader_sees_grandchild_write() {
     #[component]
     fn outer_reader(value: Store<X>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().outer += 1;
-        rsx! {
-            "outer = {value:?}"
-        }
+        rsx! { "outer = {value:?}" }
     }
 
     #[component]
     fn other_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().other += 1;
-        rsx! {
-            "other = {value}"
-        }
+        rsx! { "other = {value}" }
     }
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));
@@ -296,17 +280,13 @@ fn deep_grandparent_reader_sees_descendant_write() {
     #[component]
     fn grandparent_reader(value: Store<Y>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().nested += 1;
-        rsx! {
-            "nested = {value:?}"
-        }
+        rsx! { "nested = {value:?}" }
     }
 
     #[component]
     fn other_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().other += 1;
-        rsx! {
-            "other = {value}"
-        }
+        rsx! { "other = {value}" }
     }
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));
@@ -358,17 +338,13 @@ fn len_is_shallow_but_push_marks_it_dirty() {
     #[component]
     fn len_reader(value: Store<Vec<i32>>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().len += 1;
-        rsx! {
-            "len = {value.len()}"
-        }
+        rsx! { "len = {value.len()}" }
     }
 
     #[component]
     fn first_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().first += 1;
-        rsx! {
-            "first = {value}"
-        }
+        rsx! { "first = {value}" }
     }
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));
@@ -436,17 +412,13 @@ fn deep_parent_reader_sees_nested_vec_push() {
     #[component]
     fn collection_reader(value: Store<Z>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().collection += 1;
-        rsx! {
-            "z = {value:?}"
-        }
+        rsx! { "z = {value:?}" }
     }
 
     #[component]
     fn other_reader(value: Store<i32>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().other += 1;
-        rsx! {
-            "other = {value}"
-        }
+        rsx! { "other = {value}" }
     }
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));

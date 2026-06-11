@@ -25,10 +25,7 @@ fn app() -> Element {
     let mut items = use_signal(initial_kanban_data);
 
     rsx! {
-        div {
-            display: "flex",
-            gap: "20px",
-            flex_direction: "row",
+        div { display: "flex", gap: "20px", flex_direction: "row",
             for category in ["A", "B", "C"] {
                 div {
                     class: "category",
@@ -42,7 +39,11 @@ fn app() -> Element {
                     background_color: "#f0f0f0",
                     ondragover: |e| e.prevent_default(),
                     ondrop: move |e| {
-                        if let Some(item_id) = e.data_transfer().get_data("text/plain").and_then(|data| data.parse::<usize>().ok()) {
+                        if let Some(item_id) = e
+                            .data_transfer()
+                            .get_data("text/plain")
+                            .and_then(|data| data.parse::<usize>().ok())
+                        {
                             if let Some(pos) = items.iter().position(|item| item.id == item_id) {
                                 items.write()[pos].category = category.to_string();
                             }
@@ -70,7 +71,7 @@ fn app() -> Element {
                                 value: "{item.contents}",
                                 oninput: move |e| {
                                     items.write()[index].contents = e.value();
-                                }
+                                },
                             }
                         }
                     }

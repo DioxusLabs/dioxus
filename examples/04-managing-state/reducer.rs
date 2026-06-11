@@ -18,15 +18,25 @@ fn app() -> Element {
 
     rsx!(
         Stylesheet { href: STYLE }
-        h1 {"Select an option"}
+        h1 { "Select an option" }
 
         // Add some cute animations if the radio is playing!
         div { class: if state.read().is_playing { "bounce" },
-            "The radio is... " {state.read().is_playing()} "!"
+            "The radio is... "
+            {state.read().is_playing()}
+            "!"
         }
 
-        button { id: "play", onclick: move |_| state.write().reduce(PlayerAction::Pause), "Pause" }
-        button { id: "pause", onclick: move |_| state.write().reduce(PlayerAction::Play), "Play" }
+        button {
+            id: "play",
+            onclick: move |_| state.write().reduce(PlayerAction::Pause),
+            "Pause"
+        }
+        button {
+            id: "pause",
+            onclick: move |_| state.write().reduce(PlayerAction::Play),
+            "Play"
+        }
     )
 }
 

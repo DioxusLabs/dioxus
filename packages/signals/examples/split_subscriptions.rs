@@ -71,12 +71,11 @@ fn ReadsManySignals() -> Element {
     let mut data = use_context::<ApplicationData>();
 
     rsx! {
+        button { onclick: move |_| data.many_signals.write().push(Signal::new(0)), "Create" }
         button {
-            onclick: move |_| data.many_signals.write().push(Signal::new(0)),
-            "Create"
-        }
-        button {
-            onclick: move |_| { data.many_signals.write().pop(); },
+            onclick: move |_| {
+                data.many_signals.write().pop();
+            },
             "Destroy"
         }
         button {

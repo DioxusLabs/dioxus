@@ -7,7 +7,9 @@ use dioxus_core::generation;
 fn text_diff() {
     fn app() -> Element {
         let g = generation();
-        rsx!( h1 { "hello {g}" } )
+        rsx!(
+            h1 { "hello {g}" }
+        )
     }
 
     let mut vdom = VirtualDom::new(app);
@@ -38,8 +40,12 @@ fn element_swap() {
         let g = generation();
 
         match g % 2 {
-            0 => rsx!( h1 { "hello 1" } ),
-            1 => rsx!( h2 { "hello 2" } ),
+            0 => rsx!(
+                h1 { "hello 1" }
+            ),
+            1 => rsx!(
+                h2 { "hello 2" }
+            ),
             _ => unreachable!(),
         }
     }
@@ -117,10 +123,7 @@ fn attribute_diff() {
         };
 
         rsx!(
-            div {
-                ..attrs,
-                "hello"
-            }
+            div { ..attrs, "hello" }
         )
     }
 
@@ -187,7 +190,9 @@ fn attribute_diff() {
 fn diff_empty() {
     fn app() -> Element {
         match generation() % 2 {
-            0 => rsx! { div { "hello" } },
+            0 => rsx! {
+                div { "hello" }
+            },
             1 => rsx! {},
             _ => unreachable!(),
         }

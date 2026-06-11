@@ -18,17 +18,27 @@ fn app() -> Element {
         h1 { "Doggo selector" }
         div { width: "400px",
             for cur_breed in breed_list.read().iter().take(20).cloned() {
-                button { onclick: move |_| { breed.call(cur_breed.clone()); }, "{cur_breed}" }
+                button {
+                    onclick: move |_| {
+                        breed.call(cur_breed.clone());
+                    },
+                    "{cur_breed}"
+                }
             }
         }
         div {
             match breed.value() {
-                None => rsx! { div { "Click the button to fetch a dog!" } },
-                Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
-                Some(Ok(res)) => rsx! { img { max_width: "500px", max_height: "500px", src: "{res}" } },
+                None => rsx! {
+                    div { "Click the button to fetch a dog!" }
+                },
+                Some(Err(_e)) => rsx! {
+                    div { "Failed to fetch a dog, please try again." }
+                },
+                Some(Ok(res)) => rsx! {
+                    img { max_width: "500px", max_height: "500px", src: "{res}" }
+                },
             }
         }
-
     }
 }
 

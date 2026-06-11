@@ -76,7 +76,9 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    rsx! { h1 { "Welcome to the Dioxus Blog!" } }
+    rsx! {
+        h1 { "Welcome to the Dioxus Blog!" }
+    }
 }
 
 #[component]
@@ -92,10 +94,16 @@ fn BlogList() -> Element {
     rsx! {
         h2 { "Choose a post" }
         div { id: "blog-list",
-            Link { to: Route::BlogPost { name: "Blog post 1".into() },
+            Link {
+                to: Route::BlogPost {
+                    name: "Blog post 1".into(),
+                },
                 "Read the first blog post"
             }
-            Link { to: Route::BlogPost { name: "Blog post 2".into() },
+            Link {
+                to: Route::BlogPost {
+                    name: "Blog post 2".into(),
+                },
                 "Read the second blog post"
             }
         }

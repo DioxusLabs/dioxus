@@ -15,9 +15,6 @@ fn app() -> Element {
 
     rsx! {
         h1 { "High-five counter: {count}" }
-        button {
-            id: "increment-button",
-            onclick: move |_| count += 1, "Up high!"
-        }
+        button { id: "increment-button", onclick: move |_| count += 1, "Up high!" }
     }
 }

@@ -75,15 +75,14 @@ fn check_html_renders() -> Element {
     });
 
     rsx! {
-        div {
-            id: "div-{signal}",
+        div { id: "div-{signal}",
             h1 { "Form" }
             form {
                 input {
                     r#type: "text",
                     name: "username",
                     id: "username",
-                    value: "goodbye"
+                    value: "goodbye",
                 }
                 input { r#type: "text", name: "full-name", value: "lorem" }
                 input { r#type: "password", name: "password", value: "ipsum" }
@@ -91,7 +90,7 @@ fn check_html_renders() -> Element {
                     r#type: "radio",
                     name: "color",
                     value: "red",
-                    checked: true
+                    checked: true,
                 }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { id: "form-submit", r#type: "submit", value: "Submit", "Submit the form" }

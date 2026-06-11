@@ -58,10 +58,15 @@ fn app() -> Element {
         div {
             // Elements
             div {}
-            h1 {"Some text"}
-            h1 {"Some text with {formatting}"}
-            h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
-            h1 {"Formatting without interpolation " {formatting_tuple.0} "and" {formatting_tuple.1} }
+            h1 { "Some text" }
+            h1 { "Some text with {formatting}" }
+            h1 { "Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}" }
+            h1 {
+                "Formatting without interpolation "
+                {formatting_tuple.0}
+                "and"
+                {formatting_tuple.1}
+            }
             h2 {
                 "Multiple"
                 "Text"
@@ -69,33 +74,21 @@ fn app() -> Element {
                 "Use comments as separators in html"
             }
             div {
-                h1 {"multiple"}
-                h2 {"nested"}
-                h3 {"elements"}
+                h1 { "multiple" }
+                h2 { "nested" }
+                h3 { "elements" }
+            }
+            div { class: "my special div",
+                h1 { "Headers and attributes!" }
             }
             div {
-                class: "my special div",
-                h1 {"Headers and attributes!"}
-            }
-            div {
-                h1 {"Style attributes!"}
+                h1 { "Style attributes!" }
                 p {
                     "hello"
-                    b {
-                        "world"
-                    }
-                    i {
-                        "foo"
-                    }
-                    span {
-                        style: "color: red;font-style:italic",
-                        "red"
-                    }
-                    span {
-                        color: "blue",
-                        font_weight: "bold",
-                        "attr_blue"
-                    }
+                    b { "world" }
+                    i { "foo" }
+                    span { style: "color: red;font-style:italic", "red" }
+                    span { color: "blue", font_weight: "bold", "attr_blue" }
                 }
             }
             div {
@@ -107,11 +100,21 @@ fn app() -> Element {
                 // if statements can be used to conditionally render attributes
                 class: if formatting.contains("form") { "{asd}" },
                 // longer if chains also work
-                class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" },
-                class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" } else { "{asd}" },
-                div {
-                    class: format_args!("Arguments can be passed in through curly braces for complex {asd}")
-                }
+                class:
+                if formatting.contains("form") {
+                    "{asd}"
+                } else if formatting.contains("my other form") {
+                    "{asd}"
+                },
+                class:
+                if formatting.contains("form") {
+                    "{asd}"
+                } else if formatting.contains("my other form") {
+                    "{asd}"
+                } else {
+                    "{asd}"
+                },
+                div { class: format_args!("Arguments can be passed in through curly braces for complex {asd}") }
             }
 
             // dangerous_inner_html for both html and svg
@@ -119,51 +122,58 @@ fn app() -> Element {
             svg { dangerous_inner_html: "<circle r='50' cx='50' cy='50' />" }
 
             // Built-in idents can be used
-            use {}
-            link {
-                as: "asd"
-            }
+            r#use {}
+            link { r#as: "asd" }
 
             // Expressions can be used in element position too:
-            {rsx!(p { "More templating!" })}
+            {
+                rsx! {
+                    p { "More templating!" }
+                }
+            }
 
             // Iterators
-            {(0..10).map(|i| rsx!(li { "{i}" }))}
+            {(0..10).map(|i| rsx! {
+                li { "{i}" }
+            })}
 
             // Iterators within expressions
             {
                 let data = std::collections::HashMap::<&'static str, &'static str>::new();
-                // Iterators *should* have keys when you can provide them.
-                // Keys make your app run faster. Make sure your keys are stable, unique, and predictable.
-                // Using an "ID" associated with your data is a good idea.
-                data.into_iter().map(|(k, v)| rsx!(li { key: "{k}", "{v}" }))
+                data.into_iter().map(|(k, v)| rsx! {
+                    li { key: "{k}", "{v}" }
+                })
             }
 
             // Matching
             match true {
-                true => rsx!( h1 {"Top text"}),
-                false => rsx!( h1 {"Bottom text"})
+                true => rsx! {
+                    h1 { "Top text" }
+                },
+                false => rsx! {
+                    h1 { "Bottom text" }
+                },
             }
 
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            {true.then(|| rsx!(div {}))}
+            {true.then(|| rsx! {
+                div {}
+            })}
 
             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
             if false {
-                h1 {"Top text"}
+                h1 { "Top text" }
             } else {
-                h1 {"Bottom text"}
+                h1 { "Bottom text" }
             }
 
             // Using optionals for diverging branches
             // Note that since this is wrapped in curlies, it's interpreted as an expression
-            {if true {
-                Some(rsx!(h1 {"Top text"}))
-            } else {
-                None
-            }}
+            {if true { Some(rsx! {
+                h1 { "Top text" }
+            }) } else { None }}
 
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
             {None as Option<()>}
@@ -173,10 +183,10 @@ fn app() -> Element {
 
             // Fragments let you insert groups of nodes without a parent.
             // This lets you make components that insert elements as siblings without a container.
-            div {"A"}
+            div { "A" }
             Fragment {
-                div {"B"}
-                div {"C"}
+                div { "B" }
+                div { "C" }
                 Fragment {
                     "D"
                     Fragment {
@@ -201,18 +211,28 @@ fn app() -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: VNode::empty() };
-                rsx!(Taller { ..props })
+                let props = TallerProps {
+                    a: "hello",
+                    children: VNode::empty(),
+                };
+                rsx! {
+                    Taller { ..props }
+                }
             }
 
             // Spreading can also be overridden manually
             Taller {
                 a: "not ballin!",
-                ..TallerProps { a: "ballin!", children: VNode::empty() }
+                ..TallerProps {
+                    a: "ballin!",
+                    children: VNode::empty(),
+                },
             }
 
             // Can take children too!
-            Taller { a: "asd", div {"hello world!"} }
+            Taller { a: "asd",
+                div { "hello world!" }
+            }
 
             // This component's props are defined *inline* with the `component` macro
             WithInline { text: "using functionc all syntax" }
@@ -266,9 +286,7 @@ fn helper(text: &str) -> Element {
 // something like Clippy.
 #[component(no_case_check)]
 fn lowercase_helper() -> Element {
-    rsx! {
-        "asd"
-    }
+    rsx! { "asd" }
 }
 
 mod baller {
@@ -296,7 +314,9 @@ pub fn Taller(
     a: &'static str,
     children: Element,
 ) -> Element {
-    rsx! { {&children} }
+    rsx! {
+        {&children}
+    }
 }
 
 #[derive(Props, Clone, PartialEq, Eq)]

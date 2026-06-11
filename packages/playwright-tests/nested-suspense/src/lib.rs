@@ -15,11 +15,8 @@ pub fn app() -> Element {
     use_hook(dioxus::fullstack::commit_initial_chunk);
 
     rsx! {
-        SuspenseBoundary {
-            fallback: move |_| rsx! {},
-            document::Style {
-                href: asset!("/assets/style.css")
-            }
+        SuspenseBoundary { fallback: move |_| rsx! {},
+            document::Style { href: asset!("/assets/style.css") }
             LoadTitle {}
         }
         MessageWithLoader { id: 0 }
@@ -29,10 +26,7 @@ pub fn app() -> Element {
 #[component]
 fn MessageWithLoader(id: usize) -> Element {
     rsx! {
-        SuspenseBoundary {
-            fallback: move |_| rsx! {
-                "Loading {id}..."
-            },
+        SuspenseBoundary { fallback: move |_| rsx! { "Loading {id}..." },
             Message { id }
         }
     }
@@ -57,17 +51,9 @@ fn Message(id: usize) -> Element {
         .unwrap();
 
     rsx! {
-        h2 {
-            id: "title-{id}",
-            "{message.title}"
-        }
-        p {
-            id: "body-{id}",
-            "{message.body}"
-        }
-        div {
-            id: "children-{id}",
-            padding: "10px",
+        h2 { id: "title-{id}", "{message.title}" }
+        p { id: "body-{id}", "{message.body}" }
+        div { id: "children-{id}", padding: "10px",
             for child in message.children {
                 MessageWithLoader { id: child }
             }

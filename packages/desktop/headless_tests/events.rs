@@ -74,7 +74,7 @@ fn test_mounted() -> Element {
                 let mut onmounted_triggered_write = onmounted_triggered.write();
                 assert!(!*onmounted_triggered_write);
                 *onmounted_triggered_write = true;
-            }
+            },
         }
     }
 }
@@ -102,7 +102,7 @@ fn test_button() -> Element {
                     Some(dioxus_html::input_data::MouseButton::Primary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -131,7 +131,7 @@ fn test_mouse_move_div() -> Element {
                         .contains(dioxus_html::input_data::MouseButton::Secondary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -165,7 +165,7 @@ fn test_mouse_click_div() -> Element {
                     Some(dioxus_html::input_data::MouseButton::Secondary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -205,7 +205,7 @@ fn test_mouse_dblclick_div() -> Element {
                     Some(dioxus_html::input_data::MouseButton::Secondary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -239,7 +239,7 @@ fn test_mouse_down_div() -> Element {
                     Some(dioxus_html::input_data::MouseButton::Secondary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -268,7 +268,7 @@ fn test_mouse_up_div() -> Element {
                     Some(dioxus_html::input_data::MouseButton::Primary),
                 );
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -299,7 +299,7 @@ fn test_mouse_scroll_div() -> Element {
                 };
                 assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -322,10 +322,7 @@ fn test_scroll_does_not_bubble() -> Element {
                     println!("{:?}", event.data);
                     RECEIVED_EVENTS.with_mut(|x| *x += 1);
                 },
-                div {
-                    height: "100px",
-                    "Scrollable content"
-                }
+                div { height: "100px", "Scrollable content" }
             }
         }
     }
@@ -364,7 +361,7 @@ fn test_key_down_div() -> Element {
                 assert!(event.data.is_auto_repeating());
                 assert!(event.data.is_composing());
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -402,7 +399,7 @@ fn test_key_up_div() -> Element {
                 assert!(!event.data.is_auto_repeating());
                 assert!(!event.data.is_composing());
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -439,7 +436,7 @@ fn test_key_press_div() -> Element {
                 assert!(!event.data.is_auto_repeating());
                 assert!(!event.data.is_composing());
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -456,7 +453,7 @@ fn test_focus_in_div() -> Element {
             onfocusin: move |event| {
                 println!("{:?}", event.data);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -472,7 +469,7 @@ fn test_focus_out_div() -> Element {
             onfocusout: move |event| {
                 println!("{:?}", event.data);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -517,7 +514,7 @@ fn test_form_input() -> Element {
                     r#type: "text",
                     name: "username",
                     id: "form-username",
-                    oninput: set_username
+                    oninput: set_username,
                 }
                 input { r#type: "text", name: "full-name", value: "lorem" }
                 input { r#type: "password", name: "password", value: "ipsum" }
@@ -525,7 +522,7 @@ fn test_form_input() -> Element {
                     r#type: "radio",
                     name: "color",
                     value: "red",
-                    checked: true
+                    checked: true,
                 }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
@@ -562,7 +559,7 @@ fn test_form_submit() -> Element {
                     r#type: "text",
                     name: "username",
                     id: "username",
-                    value: "goodbye"
+                    value: "goodbye",
                 }
                 input { r#type: "text", name: "full-name", value: "lorem" }
                 input { r#type: "password", name: "password", value: "ipsum" }
@@ -570,7 +567,7 @@ fn test_form_submit() -> Element {
                     r#type: "radio",
                     name: "color",
                     value: "red",
-                    checked: true
+                    checked: true,
                 }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
@@ -629,7 +626,7 @@ fn test_unicode() -> Element {
                 println!("{:?}", event.data);
                 assert_eq!(event.data.value(), "🦀");
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -661,7 +658,7 @@ fn test_before_input() -> Element {
                 assert!(!event.data.is_composing());
                 assert_eq!(event.data.value(), "hello");
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -686,7 +683,7 @@ fn test_before_input_composing() -> Element {
                 assert_eq!(event.data.data().as_deref(), Some("あ"));
                 assert!(event.data.is_composing());
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -717,7 +714,7 @@ fn test_before_input_contenteditable() -> Element {
                 assert_eq!(event.data.data().as_deref(), Some("z"));
                 assert_eq!(event.data.value(), "draft");
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }
@@ -744,7 +741,7 @@ fn test_paste() -> Element {
                 println!("pasted: {pasted:?}");
                 assert_eq!(pasted.as_deref(), Some("pasted text"));
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
-            }
+            },
         }
     }
 }

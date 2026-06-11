@@ -54,17 +54,16 @@ fn app() -> Element {
         }
         div {
             match breed.value() {
-                None => rsx! { div { "Click the button to fetch a dog!" } },
-                Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
+                None => rsx! {
+                    div { "Click the button to fetch a dog!" }
+                },
+                Some(Err(_e)) => rsx! {
+                    div { "Failed to fetch a dog, please try again." }
+                },
                 Some(Ok(res)) => rsx! {
-                    img {
-                        max_width: "500px",
-                        max_height: "500px",
-                        src: "{res.read().message}"
-                    }
+                    img { max_width: "500px", max_height: "500px", src: "{res.read().message}" }
                 },
             }
         }
-
     }
 }

@@ -45,12 +45,22 @@ fn app() -> Element {
 
             div {
                 label { r#for: "username", "Username: " }
-                input { r#type: "text", id: "username", name: "username", required: true }
+                input {
+                    r#type: "text",
+                    id: "username",
+                    name: "username",
+                    required: true,
+                }
             }
 
             div {
                 label { r#for: "email", "Email: " }
-                input { r#type: "email", id: "email", name: "email", required: true }
+                input {
+                    r#type: "email",
+                    id: "email",
+                    name: "email",
+                    required: true,
+                }
             }
 
             div {
@@ -64,7 +74,12 @@ fn app() -> Element {
 
             div {
                 label { r#for: "newsletter",
-                    input { r#type: "checkbox", id: "newsletter", name: "newsletter", value: "yes" }
+                    input {
+                        r#type: "checkbox",
+                        id: "newsletter",
+                        name: "newsletter",
+                        value: "yes",
+                    }
                     " Subscribe to newsletter"
                 }
             }

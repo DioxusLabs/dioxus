@@ -95,28 +95,18 @@ fn App() -> Element {
     // }})()");
 
     rsx! {
-        div {
-            id: "editor",
-            width: "100vw",
-            height: "100vw",
-        }
+        div { id: "editor", width: "100vw", height: "100vw" }
         // // Monaco script
         // script {
         //     src: "{MONACO_FOLDER}/loader.js",
         //     "onload": script
         // }
-        img {
-            id: "some_image",
-            src: "{SOME_IMAGE}"
-        }
+        img { id: "some_image", src: "{SOME_IMAGE}" }
         img {
             id: "some_image_with_the_same_url",
-            src: "{SOME_IMAGE_WITH_THE_SAME_URL}"
+            src: "{SOME_IMAGE_WITH_THE_SAME_URL}",
         }
-        img {
-            id: "some_image_without_hash",
-            src: "{SOME_IMAGE_WITHOUT_HASH}"
-        }
+        img { id: "some_image_without_hash", src: "{SOME_IMAGE_WITHOUT_HASH}" }
         LoadsAsset {}
     }
 }
@@ -138,15 +128,10 @@ fn LoadsAsset() -> Element {
     });
     match data() {
         Some(data) => rsx! {
-            div {
-                id: "resolved-data",
-                "List: {data.list:?}"
-            }
+            div { id: "resolved-data", "List: {data.list:?}" }
         },
         None => rsx! {
-            div {
-                "Loading..."
-            }
+            div { "Loading..." }
         },
     }
 }

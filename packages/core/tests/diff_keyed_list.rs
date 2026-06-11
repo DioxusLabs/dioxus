@@ -18,13 +18,17 @@ fn keyed_diffing_out_of_order() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     {
@@ -66,13 +70,17 @@ fn keyed_diffing_out_of_order_adds() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -98,13 +106,17 @@ fn keyed_diffing_out_of_order_adds_3() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -130,13 +142,17 @@ fn keyed_diffing_out_of_order_adds_4() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -162,13 +178,17 @@ fn keyed_diffing_out_of_order_adds_5() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -193,13 +213,17 @@ fn keyed_diffing_additions() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -224,13 +248,17 @@ fn keyed_diffing_additions_and_moves_on_ends() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -259,13 +287,17 @@ fn keyed_diffing_additions_and_moves_in_middle() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -299,13 +331,17 @@ fn controlled_keyed_diffing_out_of_order() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -339,13 +375,17 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -374,13 +414,17 @@ fn remove_list() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -405,13 +449,17 @@ fn no_common_keys() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -439,13 +487,17 @@ fn perfect_reverse() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -479,13 +531,17 @@ fn old_middle_empty_left_pivot() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -514,13 +570,17 @@ fn old_middle_empty_right_pivot() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|i| {
-                rsx! {
-                    div { key: "{i}" }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|i| {
+                        rsx! {
+                            div { key: "{i}" }
+                        }
+                    })
+            }
+        )
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -551,13 +611,17 @@ fn keyed_list_with_dynamic_placeholder_and_text() {
             _ => unreachable!(),
         };
 
-        rsx!({
-            order.iter().map(|id| {
-                rsx! {
-                    iter_view { key: "{id}", id: *id }
-                }
-            })
-        })
+        rsx!(
+            {
+                order
+                    .iter()
+                    .map(|id| {
+                        rsx! {
+                            iter_view { key: "{id}", id: *id }
+                        }
+                    })
+            }
+        )
     });
 
     #[component]

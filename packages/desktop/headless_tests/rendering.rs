@@ -52,7 +52,9 @@ fn check_html_renders() -> Element {
     }
 
     let dyn_value = 0;
-    let dyn_element = rsx! { div { dangerous_inner_html: "<p>hello world</p>" } };
+    let dyn_element = rsx! {
+        div { dangerous_inner_html: "<p>hello world</p>" }
+    };
 
     rsx! {
         div { id: "main_div",

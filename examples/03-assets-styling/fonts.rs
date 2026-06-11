@@ -25,14 +25,12 @@ fn app() -> Element {
 
         // Approach 2 — register a bundled font with an inline @font-face rule.
         // `{INTER}` interpolates to the asset's resolved URL at runtime.
-        style { "@font-face {{ font-family: 'Inter'; src: url('{INTER}') format('woff2'); font-display: swap; }}" }
+        style {
+            "@font-face {{ font-family: 'Inter'; src: url('{INTER}') format('woff2'); font-display: swap; }}"
+        }
 
-        h1 { font_family: "'Lobster', cursive", font_size: "48px",
-            "From Google Fonts"
-        }
-        p { font_family: "'Roboto Mono', monospace",
-            "This paragraph also comes from the CDN."
-        }
+        h1 { font_family: "'Lobster', cursive", font_size: "48px", "From Google Fonts" }
+        p { font_family: "'Roboto Mono', monospace", "This paragraph also comes from the CDN." }
 
         hr {}
 

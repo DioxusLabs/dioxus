@@ -13,10 +13,7 @@ fn Counters() -> Element {
         "{counts:?}"
         // Instead of passing up a signal, we can just write to the signal that lives in the parent
         for index in 0..counts.len() {
-            Counter {
-                index,
-                counts
-            }
+            Counter { index, counts }
         }
     }
 }
@@ -24,9 +21,6 @@ fn Counters() -> Element {
 #[component]
 fn Counter(index: usize, mut counts: Signal<Vec<i32>>) -> Element {
     rsx! {
-        button {
-            onclick: move |_| counts.write()[index] += 1,
-            "{counts.read()[index]}"
-        }
+        button { onclick: move |_| counts.write()[index] += 1, "{counts.read()[index]}" }
     }
 }

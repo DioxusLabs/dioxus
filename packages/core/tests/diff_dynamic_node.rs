@@ -11,9 +11,7 @@ fn toggle_option_text() {
         println!("{:?}", text);
 
         rsx! {
-            div {
-                {text}
-            }
+            div { {text} }
         }
     });
 

@@ -25,10 +25,7 @@ fn app() -> Element {
             oninput: move |evt| name.set(evt.value()),
         }
 
-        button {
-            onclick: move |_| name.set(String::new()),
-            "Clear"
-        }
+        button { onclick: move |_| name.set(String::new()), "Clear" }
 
         hr {}
 

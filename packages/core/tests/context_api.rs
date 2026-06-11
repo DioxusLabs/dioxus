@@ -7,16 +7,20 @@ fn state_shares() {
     fn app() -> Element {
         provide_context(generation() as i32);
 
-        rsx!(child_1 {})
+        rsx!(
+            child_1 {}
+        )
     }
 
     fn child_1() -> Element {
-        rsx!(child_2 {})
+        rsx!(
+            child_2 {}
+        )
     }
 
     fn child_2() -> Element {
         let value = consume_context::<i32>();
-        rsx!("Value is {value}")
+        rsx!( "Value is {value}" )
     }
 
     let mut dom = VirtualDom::new(app);

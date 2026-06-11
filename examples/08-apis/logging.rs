@@ -29,14 +29,8 @@ fn app() -> Element {
     rsx! {
         div {
             h1 { "Logger demo" }
-            button {
-                onclick: move |_| warn!("Here's a warning!"),
-                "Warn!"
-            }
-            button {
-                onclick: move |_| error!("Here's an error!"),
-                "Error!"
-            }
+            button { onclick: move |_| warn!("Here's a warning!"), "Warn!" }
+            button { onclick: move |_| error!("Here's an error!"), "Error!" }
             button {
                 onclick: move |_| {
                     debug!("Here's a debug");
@@ -44,10 +38,7 @@ fn app() -> Element {
                 },
                 "Debug!"
             }
-            button {
-                onclick: move |_| info!("Here's an info!"),
-                "Info!"
-            }
+            button { onclick: move |_| info!("Here's an info!"), "Info!" }
         }
     }
 }

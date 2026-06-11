@@ -25,13 +25,16 @@ async fn test_for_memory_leaks() {
 
         rsx! {
             for el in 0..*count.read() {
-                div {
-                    key: "{el}",
+                div { key: "{el}",
                     div {
-                        onclick: move |_| { println!("click"); },
+                        onclick: move |_| {
+                            println!("click");
+                        },
                     }
                     AcceptsEventHandlerAndReadSignal {
-                        event_handler: move |_| { println!("click"); },
+                        event_handler: move |_| {
+                            println!("click");
+                        },
                         signal: el,
                     }
                 }
@@ -47,10 +50,7 @@ async fn test_for_memory_leaks() {
         signal: ReadSignal<i32>,
     ) -> Element {
         rsx! {
-            div {
-                onclick: event_handler,
-                "{signal}"
-            }
+            div { onclick: event_handler, "{signal}" }
         }
     }
 

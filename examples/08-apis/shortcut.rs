@@ -21,5 +21,5 @@ fn app() -> Element {
         }
     });
 
-    rsx!("toggle: {toggled}")
+    rsx!( "toggle: {toggled}" )
 }

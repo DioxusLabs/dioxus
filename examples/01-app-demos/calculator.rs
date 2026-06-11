@@ -64,7 +64,10 @@ fn app() -> Element {
         Stylesheet { href: STYLE }
         div { id: "wrapper",
             div { class: "app",
-                div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,
+                div {
+                    class: "calculator",
+                    tabindex: "0",
+                    onkeydown: handle_key_down_event,
                     div { class: "calculator-display",
                         if val().is_empty() {
                             "0"
@@ -83,7 +86,11 @@ fn app() -> Element {
                                             val.set("0".into());
                                         }
                                     },
-                                    if val.cloned().is_empty() { "C" } else { "AC" }
+                                    if val.cloned().is_empty() {
+                                        "C"
+                                    } else {
+                                        "AC"
+                                    }
                                 }
                                 button {
                                     class: "calculator-key key-sign",
@@ -125,7 +132,13 @@ fn app() -> Element {
                             }
                         }
                         div { class: "operator-keys",
-                            for (key, class) in [("/", "key-divide"), ("*", "key-multiply"), ("-", "key-subtract"), ("+", "key-add")] {
+                            for (key, class) in [
+                                ("/", "key-divide"),
+                                ("*", "key-multiply"),
+                                ("-", "key-subtract"),
+                                ("+", "key-add"),
+                            ]
+                            {
                                 button {
                                     class: "calculator-key {class}",
                                     onclick: move |_| input_operator(key),
