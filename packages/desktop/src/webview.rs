@@ -518,7 +518,7 @@ impl WebviewInstance {
     /// The socket may be killed by the OS while running. On iOS the websocket is killed when
     /// the device goes to sleep; when that happens the server rebinds to a new port and key
     /// and we tell the webview to reconnect to the new location so it keeps receiving edits.
-    /// https://github.com/DioxusLabs/dioxus/issues/4374
+    /// <https://github.com/DioxusLabs/dioxus/issues/4374>
     pub fn send_edits_location(&self) {
         _ = self.desktop_context.webview.evaluate_script(&format!(
             "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",

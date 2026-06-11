@@ -330,7 +330,7 @@ impl DesktopContext {
         let pending_dom = reserve_pending_dom(dom);
         let (sender, receiver) = futures_channel::oneshot::channel();
 
-        let _ = self.run_with_desktop_service(move |desktop| {
+        let _rx = self.run_with_desktop_service(move |desktop| {
             desktop.new_window_from_pending_dom(pending_dom, make_cfg(), sender);
         });
 
