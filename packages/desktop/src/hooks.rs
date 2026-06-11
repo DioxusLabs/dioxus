@@ -8,7 +8,9 @@ use crate::{
     DesktopContext, HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler, assets::*,
     ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
 };
-use dioxus_core::{Runtime, consume_context, current_scope_id, use_hook, use_hook_with_cleanup};
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+use dioxus_core::{Runtime, current_scope_id};
+use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup};
 
 use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
@@ -19,94 +21,71 @@ pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)
 }
 
-/// Marker for the [`IntoWryEventHandler`] impl whose closure also takes the event loop target.
-#[doc(hidden)]
-pub struct WithTargetMarker;
-
-/// Marker for the [`IntoWryEventHandler`] impl whose closure takes only the event.
-#[doc(hidden)]
-pub struct WithoutTargetMarker;
-
-/// Lets [`use_wry_event_handler`] accept either closure shape, requiring `Send` only for the
-/// target-taking form.
+/// Register an event handler that runs on the VirtualDom thread when a wry event is processed.
 ///
-/// - `FnMut(&Event<()>)` — stays on the VirtualDom thread (like [`use_asset_handler`]),
-///   does **not** need to be `Send`, and cannot access the [`EventLoopWindowTarget`]. Tao events
-///   that can be safely owned are queued to this handler asynchronously; events that borrow from
-///   the event loop ([`WindowEvent::ScaleFactorChanged`](tao::event::WindowEvent)) are never
-///   forwarded to it. This form is only available on Windows, Linux, and macOS.
-/// - `FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>)` — runs on the main
-///   event loop thread with access to the target, and therefore must be `Send`.
+/// The handler stays on the VirtualDom thread (like [`use_asset_handler`]), so it does **not**
+/// need to be `Send`: it can capture signals and call blocking [`DesktopContext`] APIs such as
+/// [`set_title`](DesktopContext::set_title). Events are cloned and queued over to the
+/// VirtualDom thread, so they arrive asynchronously, after the event loop has already finished
+/// processing them.
 ///
-/// The `Marker` type parameter disambiguates the two blanket impls (the technique dioxus uses for
-/// `SuperInto`/`SpawnIfAsync`). Because the closure shape drives which impl applies, the closure's
-/// parameters must be annotated enough for the compiler to pick the impl: write `|event: &Event<_>|`
-/// for the no-target form, or `|event: &Event<_>, target: &_|` for the target form (the marker
-/// indirection prevents inferring bare `|event|` / `|event, target|`).
-pub trait IntoWryEventHandler<Marker> {
-    /// Register the handler with the current window, returning a handle that removes it.
-    fn into_wry_event_handler(self) -> WryEventHandler;
-}
-
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-impl<F> IntoWryEventHandler<WithoutTargetMarker> for F
-where
-    F: FnMut(&Event<()>) + 'static,
-{
-    fn into_wry_event_handler(self) -> WryEventHandler {
-        window().create_wry_event_handler_forwarding(self)
-    }
-}
-
-impl<F> IntoWryEventHandler<WithTargetMarker> for F
-where
-    F: FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
-{
-    fn into_wry_event_handler(self) -> WryEventHandler {
-        window().create_wry_event_handler(self)
-    }
-}
-
-/// Register an event handler that runs when a wry event is processed. Unlike most callback hooks,
-/// this runs outside of the virtual dom context.
-///
-/// The handler may take either form (see [`IntoWryEventHandler`]):
+/// The one event that never reaches this handler is
+/// [`WindowEvent::ScaleFactorChanged`](tao::event::WindowEvent::ScaleFactorChanged): it borrows
+/// from the event loop and cannot be sent across threads. Tao delivers a
+/// [`WindowEvent::Resized`](tao::event::WindowEvent::Resized) alongside it, so size changes are
+/// still observed; query [`scale_factor`](tao::window::Window::scale_factor) if you need the new
+/// scale. If you need that event, synchronous delivery, or the [`EventLoopWindowTarget`], use
+/// [`use_main_thread_wry_event_handler`] instead.
 ///
 /// ```rust, ignore
-/// // Stays on the VirtualDom thread; does NOT need to be `Send`. Good for updating signals.
-/// use_wry_event_handler(|event: &Event<_>| {
+/// use_wry_event_handler(move |event| {
 ///     if let Event::WindowEvent { event: WindowEvent::Focused(focused), .. } = event {
-///         // ...
+///         // Signals are fine here: this closure never leaves the VirtualDom thread.
 ///     }
-/// });
-///
-/// // Runs on the main event loop thread with the `EventLoopWindowTarget`; must be `Send`.
-/// use_wry_event_handler(|event: &Event<_>, target: &_| {
-///     // ...
 /// });
 /// ```
 ///
-/// Capturing a [`DesktopContext`] in the target-taking form is rejected because that handler is
-/// moved to the main event loop thread. Use the no-target form if you need to call blocking
-/// [`DesktopContext`] APIs.
+/// The handler is removed automatically when the component is dropped.
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub fn use_wry_event_handler(handler: impl FnMut(&Event<()>) + 'static) -> WryEventHandler {
+    use_hook_with_cleanup(
+        move || window().create_wry_event_handler(handler),
+        move |handler| handler.remove(),
+    )
+}
+
+/// Register an event handler that runs synchronously on the main event loop thread for every wry
+/// event, with access to the [`EventLoopWindowTarget`].
+///
+/// Unlike [`use_wry_event_handler`], this sees every event — including
+/// [`WindowEvent::ScaleFactorChanged`](tao::event::WindowEvent::ScaleFactorChanged) — before the
+/// event loop continues. Because the closure is moved to the main thread, it must be `Send`.
+///
+/// Capturing a [`DesktopContext`] is rejected because its blocking APIs would deadlock the event
+/// loop waiting on itself (and the context is not `Send`). Use [`use_wry_event_handler`] if you
+/// need to update signals or call [`DesktopContext`] APIs.
 ///
 /// ```rust, compile_fail
-/// use dioxus_desktop::{tao::event::Event, use_window, use_wry_event_handler};
+/// use dioxus_desktop::{use_main_thread_wry_event_handler, use_window};
 ///
 /// fn app() {
 ///     let desktop = use_window();
-///     use_wry_event_handler(move |_event: &Event<()>, _target: &_| {
+///     use_main_thread_wry_event_handler(move |_event, _target| {
 ///         desktop.set_title("will not compile");
 ///     });
 /// }
 /// ```
 ///
 /// The handler is removed automatically when the component is dropped.
-pub fn use_wry_event_handler<Marker>(
-    handler: impl IntoWryEventHandler<Marker> + 'static,
+pub fn use_main_thread_wry_event_handler(
+    handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
 ) -> WryEventHandler {
     use_hook_with_cleanup(
-        move || handler.into_wry_event_handler(),
+        move || window().create_main_thread_wry_event_handler(handler),
         move |handler| handler.remove(),
     )
 }

@@ -39,7 +39,7 @@ tokio = { workspace = true, features = [
   "macros",
   "fs",
   "io-util",
-], optional = true }
+] }
 infer = { workspace = true }
 dunce = { workspace = true }
 slab = { workspace = true }
@@ -105,7 +105,7 @@ objc2-app-kit = { workspace = true, features = ["NSView"] }
 
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
-tokio_runtime = ["dep:tokio"]
+tokio_runtime = []
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]

@@ -21,10 +21,10 @@ pub fn launch_virtual_dom_blocking(
     let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
-        let _lock = crate::android_sync_lock::android_runtime_lock();
-
         // Set the control flow and check if any events need to be handled in the app itself
         let window_event = app.tick(window_event, event_loop);
+
+        let _lock = crate::android_sync_lock::android_runtime_lock();
 
         if let Some(ref mut f) = custom_event_handler {
             f(&window_event, event_loop)

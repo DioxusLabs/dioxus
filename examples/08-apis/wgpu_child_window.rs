@@ -47,7 +47,7 @@ fn app() -> Element {
         window().request_redraw();
     });
 
-    use_wry_event_handler(move |event: &WryEvent<_>| {
+    use_wry_event_handler(move |event| {
         use dioxus::desktop::tao::event::WindowEvent;
 
         if let WryEvent::WindowEvent {

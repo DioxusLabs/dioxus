@@ -178,9 +178,9 @@ impl DesktopContext {
     ///
     /// Panics if the event loop has been dropped.
     ///
-    /// Do **not** call this from code that already runs on the main thread (such as the
-    /// target-taking form of [`use_wry_event_handler`](crate::use_wry_event_handler)): it would
-    /// block the event loop waiting on itself and deadlock.
+    /// Do **not** call this from code that already runs on the main thread (such as a
+    /// [`use_main_thread_wry_event_handler`](crate::use_main_thread_wry_event_handler) handler):
+    /// it would block the event loop waiting on itself and deadlock.
     ///
     /// # Example
     ///
@@ -646,18 +646,21 @@ impl DesktopContext {
             .unwrap_or(Err(wry::Error::MessageSender))
     }
 
-    /// Create a wry event handler that listens for wry events.
+    /// Register a wry event handler that runs synchronously on the main event loop thread for
+    /// every wry event, with access to the [`EventLoopWindowTarget`]. The closure must be `Send`
+    /// because it is moved to the main thread.
     ///
-    /// This is the thread-safe version that accepts `Send` closures, allowing
-    /// event handlers to be created from any thread.
+    /// The handler must not call blocking [`DesktopContext`] APIs (such as
+    /// [`set_title`](Self::set_title)): they would block the event loop waiting on itself and
+    /// deadlock. Use [`Self::create_wry_event_handler`] if you need to do that.
     ///
-    /// See [`DesktopService::create_wry_event_handler`] for more details.
-    pub fn create_wry_event_handler(
+    /// See [`DesktopService::create_main_thread_wry_event_handler`] for more details.
+    pub fn create_main_thread_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + Send + 'static,
     ) -> WryEventHandler {
         self.run_with_desktop_service_blocking(move |desktop| {
-            desktop.create_wry_event_handler(handler)
+            desktop.create_main_thread_wry_event_handler(handler)
         })
         .unwrap_or_else(|| WryEventHandler::new(usize::MAX))
     }
@@ -676,15 +679,19 @@ impl DesktopContext {
 
     /// Register a wry event handler whose closure stays on the VirtualDom thread (no `Send` bound).
     ///
-    /// The closure itself lives in this window's [`DomCallbackRegistry`]; this method only sets up
-    /// a small `Send` forwarder on the main thread. When a wry event arrives, the forwarder converts
-    /// events Tao can safely own into `'static` events and queues them for the DOM thread without
-    /// blocking the event loop. Tao events that borrow from the event loop, such as
-    /// [`WindowEvent::ScaleFactorChanged`], are left untouched and not forwarded.
+    /// Events are cloned and queued over to the VirtualDom thread without blocking the event
+    /// loop, so they arrive asynchronously. The one event that is never forwarded is
+    /// [`WindowEvent::ScaleFactorChanged`], because it borrows from the event loop — use
+    /// [`Self::create_main_thread_wry_event_handler`] if you need it delivered synchronously.
     ///
-    /// [`DomCallbackRegistry`]: crate::dom_thread::DomCallbackRegistry
+    /// Must be called from this window's VirtualDom thread inside the dioxus runtime (where the
+    /// handler will run); otherwise it warns and returns a handle that does nothing.
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+    )]
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub(crate) fn create_wry_event_handler_forwarding(
+    pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<()>) + 'static,
     ) -> WryEventHandler {
@@ -747,7 +754,8 @@ impl DesktopContext {
         handler.with_dom_handler(dom_handler)
     }
 
-    /// Remove a wry event handler created with [`Self::create_wry_event_handler`].
+    /// Remove a wry event handler created with [`Self::create_wry_event_handler`] or
+    /// [`Self::create_main_thread_wry_event_handler`].
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if let Some(dom_handler) = id.dom_handler {
@@ -1101,19 +1109,17 @@ impl DesktopService {
         tracing::warn!("Devtools are disabled in release builds");
     }
 
-    /// Create a wry event handler that listens for wry events.
+    /// Create a wry event handler that runs synchronously on the main event loop thread for every
+    /// wry event. No `Send` bound is needed here because [`DesktopService`] already lives on the
+    /// main thread.
     /// This event handler is scoped to the currently active window and will only receive events that are either global or related to the current window.
     ///
     /// The id this function returns can be used to remove the event handler with [`Self::remove_wry_event_handler`]
-    pub fn create_wry_event_handler(
+    pub fn create_main_thread_wry_event_handler(
         &self,
-        mut handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+        handler: impl FnMut(&Event<()>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
-        self.shared
-            .event_handlers
-            .add(self.window.id(), move |event, target| {
-                handler(&event, target);
-            })
+        self.shared.event_handlers.add(self.window.id(), handler)
     }
 
     pub(crate) fn create_wry_event_handler_with_user_event(
@@ -1143,7 +1149,7 @@ impl DesktopService {
             })
     }
 
-    /// Remove a wry event handler created with [`Self::create_wry_event_handler`]
+    /// Remove a wry event handler created with [`Self::create_main_thread_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         self.shared.event_handlers.remove(id)
     }
