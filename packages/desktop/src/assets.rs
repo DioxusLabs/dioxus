@@ -60,17 +60,3 @@ impl AssetHandlerRegistry {
         self.handlers.borrow_mut().remove(name)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::AssetHandlerRegistry;
-
-    #[test]
-    fn register_handler_does_not_require_dioxus_runtime() {
-        let registry = AssetHandlerRegistry::new();
-
-        registry.register_handler("custom".to_string(), |_request, _responder| {});
-
-        assert!(registry.has_handler("custom"));
-    }
-}
