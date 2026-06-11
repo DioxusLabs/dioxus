@@ -5,7 +5,7 @@ use crate::{IndentOptions, Writer, lexstate::LexState};
 
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
-        unparse_expr(expr, self.raw_src, &self.out.indent)
+        unparse_expr(expr, self.raw_src, &self.indent.clone())
     }
 
     pub fn unparse_pat(&self, pat: &syn::Pat) -> String {

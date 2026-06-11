@@ -3,14 +3,15 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 use crate::writer::*;
-use dioxus_rsx::{BodyNode, CallBody};
+use dioxus_rsx::CallBody;
 use proc_macro2::{LineColumn, Span};
 use syn::parse::Parser;
 
-mod buffer;
 mod collect_macros;
 mod indent;
 mod lexstate;
+#[allow(dead_code)]
+mod mesa;
 mod prettier_please;
 mod writer;
 
@@ -91,14 +92,13 @@ pub fn try_fmt_file(
 
         let rsx_start = macro_path.span().start();
 
-        writer.out.indent_level = writer
-            .out
+        let indent_level = writer
             .indent
             .count_indents(writer.src.get(rsx_start.line - 1).unwrap_or(&""));
 
         // TESTME
         // Writing *should* not fail but it's possible that it does
-        if writer.write_rsx_call(&body).is_err() {
+        if writer.write_rsx_call(&body, indent_level).is_err() {
             let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
             return Err(syn::Error::new(
                 span,
@@ -106,28 +106,21 @@ pub fn try_fmt_file(
             ));
         }
 
-        // writing idents leaves the final line ended at the end of the last ident
-        if writer.out.buf.contains('\n') {
-            _ = writer.out.new_line();
-            _ = writer.out.tab();
-        }
-
         let span = item.delimiter.span().join();
-        let mut formatted = writer.out.buf.split_off(0);
+        let mut formatted = writer.take_output();
         let start = collect_macros::byte_offset(contents, span.start()) + 1;
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
-        // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.body.roots.len() == 1
-            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
-
-        // If it's short, and it's not a single expression, and it's not empty, then we can collapse it
-        if formatted.len() <= 80
-            && !formatted.contains('\n')
-            && !body_is_solo_expr
-            && !formatted.trim().is_empty()
-        {
-            formatted = format!(" {formatted} ");
+        // The writer leaves the cursor at the end of the last ident or comment.
+        // Multi-line bodies need a closing newline so the `}` lands back at the
+        // macro's own indentation; single-line bodies get padded with spaces.
+        if formatted.contains('\n') {
+            formatted.push('\n');
+            for _ in 0..indent_level {
+                formatted.push_str(writer.indent.indent_str());
+            }
+        } else if !formatted.trim().is_empty() {
+            formatted = format!(" {} ", formatted.trim());
         }
 
         end_span = span.end();
@@ -152,7 +145,7 @@ pub fn try_fmt_file(
 /// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("", IndentOptions::default());
-    buf.write_rsx_call(body).ok()?;
+    buf.write_rsx_call(body, 0).ok()?;
     buf.consume()
 }
 
@@ -160,15 +153,16 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     let body = CallBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block, indent);
-    buf.out.indent_level = indent_level;
-    buf.write_rsx_call(&body).ok()?;
+    buf.write_rsx_call(&body, indent_level).ok()?;
+
+    let mut formatted = buf.take_output();
 
     // writing idents leaves the final line ended at the end of the last ident
-    if buf.out.buf.contains('\n') {
-        buf.out.new_line().unwrap();
+    if formatted.contains('\n') {
+        formatted.push('\n');
     }
 
-    buf.consume()
+    Some(formatted)
 }
 
 // Apply all the blocks
