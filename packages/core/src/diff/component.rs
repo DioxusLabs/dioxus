@@ -7,8 +7,8 @@ use crate::{
     Element, SuspenseContext,
     any_props::AnyProps,
     innerlude::{
-        ElementRef, MountId, NoOpMutations, ScopeOrder, SuspenseBoundaryProps,
-        SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
+        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
+        VComponent, WriteMutations,
     },
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
@@ -30,14 +30,6 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn scope_render_target<'a, M: WriteMutations>(
-        &self,
-        scope: ScopeId,
-        to: Option<&'a mut M>,
-    ) -> Option<&'a mut M> {
-        to.filter(|_| self.runtime.scope_should_render(scope))
-    }
-
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
     fn diff_scope<M: WriteMutations>(
         &mut self,
@@ -57,7 +49,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = self.scope_render_target(scope, to);
+            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
             old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
             self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
@@ -83,7 +75,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = self.scope_render_target(scope, to);
+            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
 
             // Create the node
             let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
@@ -106,34 +98,18 @@ impl VirtualDom {
         scope_id: ScopeId,
         replace_with: Option<usize>,
     ) {
-        // If this is a suspense boundary being destroyed, remove its retained
-        // suspended nodes as well. When moving rendered children into a parent
-        // suspense background, keep nested suspended nodes attached to their
-        // boundary so a later real unmount can still destroy their scopes.
-        if destroy_component_state {
-            SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, true);
-        }
+        // If this is a suspense boundary, remove the suspended nodes as well
+        SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
 
         // Remove the component from the dom
-        let node = self.scopes[scope_id.0]
-            .last_rendered_node
-            .clone()
-            .expect("component scope should have a rendered node before removal");
-        node.remove_node_inner(self, to, destroy_component_state, replace_with);
+        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.clone() {
+            node.remove_node_inner(self, to, destroy_component_state, replace_with)
+        };
 
         if destroy_component_state {
             // Now drop all the resources
             self.drop_scope(scope_id);
         }
-    }
-
-    pub(crate) fn clear_scope_rendered_output(&mut self, scope_id: ScopeId) {
-        let parent = self
-            .remove_scope_rendered_output_without_mutations(scope_id)
-            .expect("suspended scope should have rendered output to clear");
-        let placeholder = LastRenderedNode::Real(VNode::placeholder());
-        placeholder.create(self, parent, None::<&mut NoOpMutations>);
-        self.scopes[scope_id.0].last_rendered_node = Some(placeholder);
     }
 }
 
@@ -145,12 +121,12 @@ impl VNode {
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
+        parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
     ) {
         // Replace components that have different render fns
         if old.render_fn != new.render_fn {
-            let parent = Some(self.reference_to_dynamic_node(mount, idx));
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 

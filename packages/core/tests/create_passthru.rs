@@ -1,5 +1,6 @@
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_core::ElementId;
 
 /// Should push the text node onto the stack and modify it
 #[test]
@@ -19,14 +20,16 @@ fn nested_passthru_creates() {
         rsx!({ children })
     }
 
-    fn expected() -> Element {
-        rsx! { div { "hi" } }
-    }
-
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+    let edits = dom.rebuild_to_vec();
+
+    assert_eq!(
+        edits.edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(1) },
+            AppendChildren { m: 1, id: ElementId(0) },
+        ]
+    )
 }
 
 /// Should load all the templates and append them
@@ -54,19 +57,22 @@ fn nested_passthru_creates_add() {
         rsx! {{children}}
     }
 
-    fn expected() -> Element {
-        rsx! {
-            "1"
-            "2"
-            "3"
-            div { "hi" }
-        }
-    }
-
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+
+    assert_eq!(
+        dom.rebuild_to_vec().edits,
+        [
+            // load 1
+            LoadTemplate { index: 0, id: ElementId(1) },
+            // load 2
+            LoadTemplate { index: 0, id: ElementId(2) },
+            // load 3
+            LoadTemplate { index: 0, id: ElementId(3) },
+            // load div that contains 4
+            LoadTemplate { index: 1, id: ElementId(4) },
+            AppendChildren { id: ElementId(0), m: 4 },
+        ]
+    );
 }
 
 /// note that the template is all dynamic roots - so it doesn't actually get cached as a template
@@ -78,12 +84,17 @@ fn dynamic_node_as_root() {
         rsx! { "{a}" "{b}" }
     }
 
-    fn expected() -> Element {
-        rsx! { "123" "456" }
-    }
-
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+    let edits = dom.rebuild_to_vec();
+
+    // Since the roots were all dynamic, they should not cause any template muations
+    // The root node is text, so we just create it on the spot
+    assert_eq!(
+        edits.edits,
+        [
+            CreateTextNode { value: "123".to_string(), id: ElementId(1) },
+            CreateTextNode { value: "456".to_string(), id: ElementId(2) },
+            AppendChildren { id: ElementId(0), m: 2 }
+        ]
+    )
 }

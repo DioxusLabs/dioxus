@@ -1,43 +1,52 @@
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::{ScopeId, generation};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_core::generation;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn toggle_option_text() {
-    fn empty() -> Element {
-        let text: Option<&str> = None;
+    let mut dom = VirtualDom::new(|| {
+        let g = generation();
+        let text = if g % 2 != 0 { Some("hello") } else { None };
+        println!("{:?}", text);
+
         rsx! {
             div {
                 {text}
             }
         }
-    }
+    });
 
-    fn app() -> Element {
-        match generation() {
-            1 => rsx! { div { "hello" } },
-            _ => empty(),
-        }
-    }
+    // load the div and then assign the None as a placeholder
+    assert_eq!(
+        dom.rebuild_to_vec().edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(1,) },
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
+            AppendChildren { id: ElementId(0), m: 1 },
+        ]
+    );
 
-    fn expected_hello() -> Element {
-        rsx! { div { "hello" } }
-    }
-
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(empty);
-
+    // Rendering again should replace the placeholder with an text node
     dom.mark_dirty(ScopeId::APP);
-    let summary = oracle.render(&mut dom);
-    oracle.assert_matches(expected_hello);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreateTextNode { value: "hello".to_string(), id: ElementId(3,) },
+            ReplaceWith { id: ElementId(2,), m: 1 },
+        ]
+    );
 
+    // Rendering again should replace the placeholder with an text node
     dom.mark_dirty(ScopeId::APP);
-    let summary = oracle.render(&mut dom);
-    oracle.assert_matches(empty);
-    assert_eq!(summary.replaces, 1);
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplaceWith { id: ElementId(3,), m: 1 },
+        ]
+    );
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2815
@@ -64,27 +73,43 @@ fn toggle_template() {
         }
     }
 
-    fn expected_true() -> Element {
-        rsx! { "true" }
-    }
-
-    fn expected_empty() -> Element {
-        rsx!({})
-    }
-
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected_true);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    for step in 1..=4 {
-        dom.mark_dirty(ScopeId::APP);
-        let summary = oracle.render(&mut dom);
-        if step % 2 == 0 {
-            oracle.assert_matches(expected_true);
-        } else {
-            oracle.assert_matches(expected_empty);
-        }
-        assert_eq!(summary.replaces, 1);
-    }
+    // Rendering again should replace the placeholder with an text node
+    dom.mark_dirty(ScopeId::APP);
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreatePlaceholder { id: ElementId(2) },
+            ReplaceWith { id: ElementId(1), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreateTextNode { value: "true".to_string(), id: ElementId(1) },
+            ReplaceWith { id: ElementId(2), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreatePlaceholder { id: ElementId(2) },
+            ReplaceWith { id: ElementId(1), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreateTextNode { value: "true".to_string(), id: ElementId(1) },
+            ReplaceWith { id: ElementId(2), m: 1 },
+        ]
+    );
 }

@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 use dioxus_core::{NoOpMutations, generation};
-use dioxus_renderer_oracle::RendererOracle;
 
 // The tests in this file are intended to be run with Miri, so not all of them contain assertions.
 // If the tests  complete under Miri, they have passed.
@@ -63,12 +62,12 @@ fn test_memory_leak() {
     }
 
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::APP);
-        oracle.render(&mut dom);
+        _ = dom.render_immediate_to_vec();
     }
 }
 

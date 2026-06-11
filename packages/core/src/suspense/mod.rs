@@ -155,9 +155,7 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task != task.id);
-        if let Some(scope) = self.inner.rt.try_get_state(self.inner.id.get()) {
-            scope.needs_update();
-        }
+        self.inner.rt.needs_update(self.inner.id.get());
     }
 
     /// Get all suspended tasks

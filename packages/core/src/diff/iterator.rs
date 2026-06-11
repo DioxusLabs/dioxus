@@ -92,8 +92,7 @@ impl VirtualDom {
         new: &[VNode],
         parent: Option<ElementRef>,
     ) {
-        #[cfg(debug_assertions)]
-        {
+        if cfg!(debug_assertions) {
             let mut keys = rustc_hash::FxHashSet::default();
             let mut assert_unique_keys = |children: &[VNode]| {
                 keys.clear();
@@ -142,7 +141,12 @@ impl VirtualDom {
             "New middle returned from `diff_keyed_ends` should not be empty"
         );
 
-        self.diff_keyed_middle(to, old_middle, new_middle, parent);
+        // A few nodes in the middle were removed, just remove the old nodes
+        if new_middle.is_empty() {
+            self.remove_nodes(to, old_middle, None);
+        } else {
+            self.diff_keyed_middle(to, old_middle, new_middle, parent);
+        }
     }
 
     /// Diff both ends of the children that share keys.
@@ -357,8 +361,11 @@ impl VirtualDom {
                     // If the node existed in the old list, diff it
                     if let Some(old_node) = old.get(old_index) {
                         old_node.diff_node(new_node, vdom, to.as_deref_mut());
-                        to.as_deref_mut()
-                            .map_or(0, |to| new_node.push_all_root_nodes(vdom, to))
+                        if let Some(to) = to.as_deref_mut() {
+                            new_node.push_all_root_nodes(vdom, to)
+                        } else {
+                            0
+                        }
                     } else {
                         // Otherwise, just add it to the stack
                         new_node.create(vdom, parent, to.as_deref_mut())
@@ -435,12 +442,10 @@ impl VirtualDom {
 
     fn insert_before(&mut self, to: Option<&mut impl WriteMutations>, new: usize, before: &VNode) {
         if let Some(to) = to {
-            debug_assert!(
-                new > 0,
-                "we currently always insert at least one placeholder node. if we did not, this would result in insert before failing"
-            );
-            let id = before.find_first_element(self);
-            to.insert_nodes_before(id, new);
+            if new > 0 {
+                let id = before.find_first_element(self);
+                to.insert_nodes_before(id, new);
+            }
         }
     }
 

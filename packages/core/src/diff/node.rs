@@ -1,25 +1,15 @@
-use crate::DynamicNode::*;
 use crate::innerlude::MountId;
+use crate::{Attribute, AttributeValue, DynamicNode::*};
 use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
 use crate::{
     TemplateNode,
-    arena::{ElementId, UNMOUNTED},
+    arena::ElementId,
     innerlude::{ElementPath, ElementRef, VNodeMount, VText},
     nodes::DynamicNode,
     scopes::ScopeId,
 };
-
-fn mounted_mount(node: &VNode, dom: &VirtualDom) -> MountId {
-    let mount = node.mount.get();
-    let mount = mount
-        .as_usize()
-        .map(MountId)
-        .expect("node should already be mounted");
-    debug_assert!(dom.runtime.mounts.borrow().contains(mount.0));
-    mount
-}
 
 impl VNode {
     pub(crate) fn diff_node(
@@ -28,14 +18,19 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
-        let mount_id = self.mount.get();
-
         // The node we are diffing from should always be mounted
-        debug_assert!(mount_id.mounted());
-        debug_assert!(dom.runtime.mounts.borrow().get(mount_id.0).is_some());
+        debug_assert!(
+            dom.runtime
+                .mounts
+                .borrow()
+                .get(self.mount.get().0)
+                .is_some()
+                || to.is_none()
+        );
 
         // If the templates are different, we need to replace the entire template
         if self.template != new.template {
+            let mount_id = self.mount.get();
             let parent = dom.get_mounted_parent(mount_id);
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
@@ -51,9 +46,7 @@ impl VNode {
         // Start with the attributes
         // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
         if let Some(to) = to.as_deref_mut() {
-            if !self.template.attr_paths().is_empty() {
-                self.diff_attributes(new, dom, to);
-            }
+            self.diff_attributes(new, dom, to);
         }
 
         // Now diff the dynamic nodes
@@ -73,12 +66,13 @@ impl VNode {
         let mount_id = self.mount.take();
         new.mount.set(mount_id);
 
-        debug_assert!(mount_id.mounted());
-        let mut mounts = dom.runtime.mounts.borrow_mut();
-        let mount = &mut mounts[mount_id.0];
+        if mount_id.mounted() {
+            let mut mounts = dom.runtime.mounts.borrow_mut();
+            let mount = &mut mounts[mount_id.0];
 
-        // Update the reference to the node for bubbling events
-        mount.node = new.clone();
+            // Update the reference to the node for bubbling events
+            mount.node = new.clone();
+        }
     }
 
     fn diff_dynamic_node(
@@ -108,7 +102,16 @@ impl VNode {
             ),
             (Component(old), Component(new)) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                self.diff_vcomponent(mount, idx, new, old, scope_id, dom, to)
+                self.diff_vcomponent(
+                    mount,
+                    idx,
+                    new,
+                    old,
+                    scope_id,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                    dom,
+                    to,
+                )
             }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id
@@ -243,15 +246,13 @@ impl VNode {
         right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut impl WriteMutations>,
         destroy_component_state: bool,
     ) {
-        let mut to = to;
         let m = dom.create_children(to.as_deref_mut(), right, parent);
-        let replace_with = to.is_some().then_some(m);
 
         // Instead of *just* removing it, we can use the replace mutation
-        self.remove_node_inner(dom, to, destroy_component_state, replace_with)
+        self.remove_node_inner(dom, to, destroy_component_state, Some(m))
     }
 
     /// Remove a node from the dom and potentially replace it with the top m nodes from the stack
@@ -272,7 +273,10 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        let mount = mounted_mount(self, dom);
+        let mount = self.mount.get();
+        if !mount.mounted() {
+            return;
+        }
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
@@ -316,19 +320,17 @@ impl VNode {
                     dynamic_node,
                     replace_with.filter(|_| last_node),
                 );
-            } else {
+            } else if let Some(to) = to.as_deref_mut() {
                 let id = dom.get_mounted_root_node(mount, idx);
-                if let Some(to) = to.as_deref_mut() {
-                    if let (true, Some(replace_with)) = (last_node, replace_with) {
-                        to.replace_node_with(id, replace_with);
-                    } else {
-                        to.remove_node(id);
-                    }
+                if let (true, Some(replace_with)) = (last_node, replace_with) {
+                    to.replace_node_with(id, replace_with);
+                } else {
+                    to.remove_node(id);
                 }
                 dom.reclaim(id);
-                // Stamp the slot so a later traversal cannot mistake the
-                // reclaimed id for a live element.
-                dom.set_mounted_root_node(mount, idx, ElementId::UNMOUNTED);
+            } else {
+                let id = dom.get_mounted_root_node(mount, idx);
+                dom.reclaim(id);
             }
         }
     }
@@ -373,46 +375,25 @@ impl VNode {
                 dom.remove_component_node(to, destroy_component_state, scope_id, replace_with);
             }
             Text(_) | Placeholder(_) => {
-                Self::remove_anchor(dom, to, mount, idx, replace_with);
+                let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
+                if let Some(to) = to {
+                    if let Some(replace_with) = replace_with {
+                        to.replace_node_with(id, replace_with);
+                    } else {
+                        to.remove_node(id);
+                    }
+                }
+                dom.reclaim(id)
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {
                     node.remove_node_inner(dom, to.as_deref_mut(), destroy_component_state, None)
                 }
-                let last_node = nodes
-                    .last()
-                    .expect("fragment dynamic nodes should be normalized to non-empty fragments");
-                last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
-            }
-        };
-    }
-
-    fn remove_anchor(
-        dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
-        mount: MountId,
-        idx: usize,
-        replace_with: Option<usize>,
-    ) {
-        let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-        let removing_live_anchor = to.is_some() && replace_with.is_none();
-        if id != ElementId::UNMOUNTED {
-            if let Some(to) = to {
-                if let Some(replace_with) = replace_with {
-                    to.replace_node_with(id, replace_with);
-                } else {
-                    to.remove_node(id);
+                if let Some(last_node) = nodes.last() {
+                    last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
                 }
             }
-        }
-        debug_assert!(
-            id != ElementId::UNMOUNTED || !removing_live_anchor,
-            "attempted to remove an unmounted dynamic anchor from the live DOM"
-        );
-        dom.reclaim(id);
-        // Stamp the slot so a later traversal cannot mistake the reclaimed id
-        // for a live anchor.
-        dom.set_mounted_dyn_node(mount, idx, UNMOUNTED);
+        };
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
@@ -429,7 +410,131 @@ impl VNode {
                 dom.reclaim(new_id);
                 next_id = Some(new_id);
             }
-            dom.set_mounted_dyn_attr(mount, idx, ElementId::UNMOUNTED);
+        }
+    }
+
+    pub(super) fn diff_attributes(
+        &self,
+        new: &VNode,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        let mount_id = new.mount.get();
+        for (idx, (old_attrs, new_attrs)) in self
+            .dynamic_attrs
+            .iter()
+            .zip(new.dynamic_attrs.iter())
+            .enumerate()
+        {
+            let mut old_attributes_iter = old_attrs.iter().peekable();
+            let mut new_attributes_iter = new_attrs.iter().peekable();
+            let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
+            let path = self.template.attr_paths()[idx];
+
+            loop {
+                match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
+                    (Some(old_attribute), Some(new_attribute)) => {
+                        // check which name is greater
+                        match old_attribute.name.cmp(new_attribute.name) {
+                            // The two attributes are the same, so diff them
+                            std::cmp::Ordering::Equal => {
+                                let old = old_attributes_iter.next().unwrap();
+                                let new = new_attributes_iter.next().unwrap();
+                                // Volatile attributes are attributes that the browser may override so we always update them
+                                let volatile = old.volatile;
+                                // We only need to write the attribute if the attribute is volatile or the value has changed
+                                // and this is not an event listener.
+                                // Interpreters reference event listeners by name and element id, so we don't need to write them
+                                // even if the closure has changed.
+                                let attribute_changed = match (&old.value, &new.value) {
+                                    (AttributeValue::Text(l), AttributeValue::Text(r)) => l != r,
+                                    (AttributeValue::Float(l), AttributeValue::Float(r)) => l != r,
+                                    (AttributeValue::Int(l), AttributeValue::Int(r)) => l != r,
+                                    (AttributeValue::Bool(l), AttributeValue::Bool(r)) => l != r,
+                                    (AttributeValue::Any(l), AttributeValue::Any(r)) => {
+                                        !l.as_ref().any_cmp(r.as_ref())
+                                    }
+                                    (AttributeValue::None, AttributeValue::None) => false,
+                                    (AttributeValue::Listener(_), AttributeValue::Listener(_)) => {
+                                        false
+                                    }
+                                    _ => true,
+                                };
+                                if volatile || attribute_changed {
+                                    self.write_attribute(
+                                        path,
+                                        new,
+                                        attribute_id,
+                                        mount_id,
+                                        dom,
+                                        to,
+                                    );
+                                }
+                            }
+                            // In a sorted list, if the old attribute name is first, then the new attribute is missing
+                            std::cmp::Ordering::Less => {
+                                let old = old_attributes_iter.next().unwrap();
+                                self.remove_attribute(old, attribute_id, to)
+                            }
+                            // In a sorted list, if the new attribute name is first, then the old attribute is missing
+                            std::cmp::Ordering::Greater => {
+                                let new = new_attributes_iter.next().unwrap();
+                                self.write_attribute(path, new, attribute_id, mount_id, dom, to);
+                            }
+                        }
+                    }
+                    (Some(_), None) => {
+                        let left = old_attributes_iter.next().unwrap();
+                        self.remove_attribute(left, attribute_id, to)
+                    }
+                    (None, Some(_)) => {
+                        let right = new_attributes_iter.next().unwrap();
+                        self.write_attribute(path, right, attribute_id, mount_id, dom, to)
+                    }
+                    (None, None) => break,
+                }
+            }
+        }
+    }
+
+    fn remove_attribute(&self, attribute: &Attribute, id: ElementId, to: &mut impl WriteMutations) {
+        match &attribute.value {
+            AttributeValue::Listener(_) => {
+                to.remove_event_listener(&attribute.name[2..], id);
+            }
+            _ => {
+                to.set_attribute(
+                    attribute.name,
+                    attribute.namespace,
+                    &AttributeValue::None,
+                    id,
+                );
+            }
+        }
+    }
+
+    fn write_attribute(
+        &self,
+        path: &'static [u8],
+        attribute: &Attribute,
+        id: ElementId,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        match &attribute.value {
+            AttributeValue::Listener(_) => {
+                let element_ref = ElementRef {
+                    path: ElementPath { path },
+                    mount,
+                };
+                let mut elements = dom.runtime.elements.borrow_mut();
+                elements[id.0] = Some(element_ref);
+                to.create_event_listener(&attribute.name[2..], id);
+            }
+            _ => {
+                to.set_attribute(attribute.name, attribute.namespace, &attribute.value, id);
+            }
         }
     }
 
@@ -456,7 +561,7 @@ impl VNode {
                 root_ids: vec![ElementId(0); template.roots().len()].into_boxed_slice(),
                 mounted_attributes: vec![ElementId(0); template.attr_paths().len()]
                     .into_boxed_slice(),
-                mounted_dynamic_nodes: vec![UNMOUNTED; template.node_paths().len()]
+                mounted_dynamic_nodes: vec![usize::MAX; template.node_paths().len()]
                     .into_boxed_slice(),
             });
         }
@@ -474,7 +579,9 @@ impl VNode {
                     .get()
                     .as_usize()
                     .expect("node should already be mounted"),
-            )
+            ),
+            "Tried to find mount {:?} in dom.mounts, but it wasn't there",
+            self.mount.get()
         );
         let mount = self.mount.get();
 
@@ -535,11 +642,7 @@ impl VNode {
 
 impl VNode {
     /// Get a reference back into a dynamic node
-    pub(super) fn reference_to_dynamic_node(
-        &self,
-        mount: MountId,
-        dynamic_node_id: usize,
-    ) -> ElementRef {
+    fn reference_to_dynamic_node(&self, mount: MountId, dynamic_node_id: usize) -> ElementRef {
         ElementRef {
             path: ElementPath {
                 path: self.template.node_paths()[dynamic_node_id],
@@ -627,7 +730,10 @@ impl VNode {
             while let Some((idx, p)) =
                 dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
             {
-                debug_assert!(p.len() > 1);
+                if p.len() == 1 {
+                    continue;
+                }
+
                 end = idx;
             }
 
@@ -663,13 +769,11 @@ impl VNode {
             );
             if let Some(to) = to.as_deref_mut() {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
-                debug_assert!(
-                    m > 0,
-                    "Create dynamic node will always create at least once placeholder node on the stack"
-                );
-                // The path is one shorter because the top node is the root
-                let path = &self.template.node_paths()[dynamic_node_id][1..];
-                to.replace_placeholder_with_nodes(path, m);
+                if m > 0 {
+                    // The path is one shorter because the top node is the root
+                    let path = &self.template.node_paths()[dynamic_node_id][1..];
+                    to.replace_placeholder_with_nodes(path, m);
+                }
             }
         }
     }

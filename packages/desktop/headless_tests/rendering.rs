@@ -33,7 +33,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
     value()
 }
 
-const EXPECTED_HTML: &str = r#"<div style="height: 100px; width: 100px; color: rgb(0, 0, 0);" id="5"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
+const EXPECTED_HTML: &str = r#"<div style="width: 100px; height: 100px; color: rgb(0, 0, 0);" id="5"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
 
 fn check_html_renders() -> Element {
     let inner_html = use_inner_html("main_div");

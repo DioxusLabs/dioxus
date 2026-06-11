@@ -1,7 +1,9 @@
 #![allow(non_snake_case)]
 
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_core::{AttributeValue, ElementId};
+use pretty_assertions::assert_eq;
 
 /// Should push the text node onto the stack and modify it
 /// Regression test for https://github.com/DioxusLabs/dioxus/issues/2809 and https://github.com/DioxusLabs/dioxus/issues/3055
@@ -36,22 +38,32 @@ fn many_roots() {
         )
     }
 
-    fn expected() -> Element {
-        rsx! {
-            div {
-                div { "trailing nav" }
-                div { "whhhhh" }
-                div { "bhhhh" }
-                div { "homepage 1" }
-                div { width: "100%" }
-            }
-        }
-    }
-
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    let summary = oracle.rebuild(&mut dom);
+    let edits = dom.rebuild_to_vec();
 
-    oracle.assert_matches(expected);
-    assert_eq!(summary.set_attrs, 1);
+    assert_eq!(
+        edits.edits,
+        [
+            // load the div {} container
+            LoadTemplate { index: 0, id: ElementId(1) },
+            // Set the width attribute first
+            AssignId { path: &[2], id: ElementId(2,) },
+            SetAttribute {
+                name: "width",
+                ns: Some("style",),
+                value: AttributeValue::Text("100%".to_string()),
+                id: ElementId(2,),
+            },
+            // Load MyOutlet next
+            LoadTemplate { index: 0, id: ElementId(3) },
+            ReplacePlaceholder { path: &[1], m: 1 },
+            // Then MyNav
+            LoadTemplate { index: 0, id: ElementId(4) },
+            LoadTemplate { index: 1, id: ElementId(5) },
+            LoadTemplate { index: 2, id: ElementId(6) },
+            ReplacePlaceholder { path: &[0], m: 3 },
+            // Then mount the div to the dom
+            AppendChildren { m: 1, id: ElementId(0) },
+        ]
+    )
 }

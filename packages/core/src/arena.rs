@@ -1,4 +1,4 @@
-use crate::innerlude::{NoOpMutations, ScopeOrder};
+use crate::innerlude::ScopeOrder;
 use crate::{ScopeId, virtual_dom::VirtualDom};
 
 /// An Element's unique identifier.
@@ -8,13 +8,6 @@ use crate::{ScopeId, virtual_dom::VirtualDom};
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
-
-pub(crate) const UNMOUNTED: usize = usize::MAX;
-
-impl ElementId {
-    pub(crate) const ROOT: Self = Self(0);
-    pub(crate) const UNMOUNTED: Self = Self(UNMOUNTED);
-}
 
 /// An Element that can be bubbled to's unique identifier.
 ///
@@ -31,7 +24,7 @@ impl Default for MountId {
 }
 
 impl MountId {
-    pub(crate) const PLACEHOLDER: Self = Self(UNMOUNTED);
+    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
 
     pub(crate) fn as_usize(self) -> Option<usize> {
         if self.mounted() { Some(self.0) } else { None }
@@ -71,7 +64,7 @@ impl VirtualDom {
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
         // We never reclaim the unmounted elements or the root element
-        if el == ElementId::ROOT || el == ElementId::UNMOUNTED {
+        if el.0 == 0 || el.0 == usize::MAX {
             return true;
         }
 
@@ -79,9 +72,9 @@ impl VirtualDom {
         elements.try_remove(el.0).is_some()
     }
 
-    // Drop a scope without dropping its children.
+    // Drop a scope without dropping its children
     //
-    // Note: This will not remove any ids from the arena.
+    // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         let height = {
             let scope = self.scopes.remove(id.0);
@@ -93,29 +86,6 @@ impl VirtualDom {
 
         // If this scope was a suspense boundary, remove it from the resolved scopes
         self.resolved_scopes.retain(|s| s != &id);
-    }
-
-    pub(crate) fn remove_scope_rendered_output_without_mutations(
-        &mut self,
-        id: ScopeId,
-    ) -> Option<Option<ElementRef>> {
-        let old = self.scopes[id.0].last_rendered_node.take()?;
-        let parent = old
-            .mount
-            .get()
-            .as_usize()
-            .and_then(|mount| {
-                self.runtime
-                    .mounts
-                    .borrow()
-                    .get(mount)
-                    .map(|mount| mount.parent)
-            })
-            .flatten();
-
-        old.remove_node_inner(self, None::<&mut NoOpMutations>, true, None);
-
-        Some(parent)
     }
 }
 

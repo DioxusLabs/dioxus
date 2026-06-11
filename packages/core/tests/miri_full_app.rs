@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
+use dioxus_core::ElementId;
 use dioxus_elements::SerializedHtmlEventConverter;
-use dioxus_renderer_oracle::RendererOracle;
 use std::{any::Any, rc::Rc};
 
 // This test is intended to be run with Miri, and contains no assertions. If it completes under
@@ -9,18 +9,17 @@ use std::{any::Any, rc::Rc};
 fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..3 {
         let event = Event::new(
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        let target = oracle.element_id_by_attr("id", "increment");
-        dom.runtime().handle_event("click", event, target);
+        dom.runtime().handle_event("click", event, ElementId(2));
         dom.process_events();
-        oracle.render(&mut dom);
+        _ = dom.render_immediate_to_vec();
     }
 }
 
@@ -31,7 +30,6 @@ fn app() -> Element {
     rsx! {
         div {
             button {
-                id: "increment",
                 onclick: move |_| {
                     idx += 1;
                     println!("Clicked");

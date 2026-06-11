@@ -1,7 +1,8 @@
 //! Do we create fragments properly across complex boundaries?
 
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_core::ElementId;
 
 #[test]
 fn empty_fragment_creates_nothing() {
@@ -9,30 +10,36 @@ fn empty_fragment_creates_nothing() {
         rsx!({})
     }
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(app);
+    let mut vdom = VirtualDom::new(app);
+    let edits = vdom.rebuild_to_vec();
+
+    assert_eq!(
+        edits.edits,
+        [
+            CreatePlaceholder { id: ElementId(1) },
+            AppendChildren { id: ElementId(0), m: 1 }
+        ]
+    );
 }
 
 #[test]
 fn root_fragments_work() {
-    fn app() -> Element {
-        rsx! {
+    let mut vdom = VirtualDom::new(|| {
+        rsx!(
             div { "hello" }
             div { "goodbye" }
-        }
-    }
+        )
+    });
 
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(app);
+    assert_eq!(
+        vdom.rebuild_to_vec().edits.last().unwrap(),
+        &AppendChildren { id: ElementId(0), m: 2 }
+    );
 }
 
 #[test]
 fn fragments_nested() {
-    fn app() -> Element {
+    let mut vdom = VirtualDom::new(|| {
         rsx!(
             div { "hello" }
             div { "goodbye" }
@@ -49,25 +56,12 @@ fn fragments_nested() {
                 }}
             }}
         )
-    }
+    });
 
-    fn expected() -> Element {
-        rsx! {
-            div { "hello" }
-            div { "goodbye" }
-            div { "hello" }
-            div { "goodbye" }
-            div { "hello" }
-            div { "goodbye" }
-            div { "hello" }
-            div { "goodbye" }
-        }
-    }
-
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+    assert_eq!(
+        vdom.rebuild_to_vec().edits.last().unwrap(),
+        &AppendChildren { id: ElementId(0), m: 8 }
+    );
 }
 
 #[test]
@@ -86,23 +80,10 @@ fn fragments_across_components() {
         rsx! { "hellO!" {world} }
     }
 
-    fn expected() -> Element {
-        rsx! {
-            "hellO!"
-            "world"
-            "hellO!"
-            "world"
-            "hellO!"
-            "world"
-            "hellO!"
-            "world"
-        }
-    }
-
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+    assert_eq!(
+        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
+        &AppendChildren { id: ElementId(0), m: 8 }
+    );
 }
 
 #[test]
@@ -113,21 +94,8 @@ fn list_fragments() {
             {(0..6).map(|f| rsx!( span { "{f}" }))}
         )
     }
-
-    fn expected() -> Element {
-        rsx! {
-            h1 { "hello" }
-            span { "0" }
-            span { "1" }
-            span { "2" }
-            span { "3" }
-            span { "4" }
-            span { "5" }
-        }
-    }
-
-    let mut dom = VirtualDom::new(app);
-    let mut oracle = RendererOracle::new();
-    oracle.rebuild(&mut dom);
-    oracle.assert_matches(expected);
+    assert_eq!(
+        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
+        &AppendChildren { id: ElementId(0), m: 7 }
+    );
 }

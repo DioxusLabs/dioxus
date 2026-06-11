@@ -1,5 +1,5 @@
 use crate::{
-    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps, arena::UNMOUNTED,
+    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps,
     reactive_context::ReactiveContext, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
@@ -60,7 +60,7 @@ impl ScopeId {
     // ScopeId(0) is the root scope wrapper
     pub const ROOT: ScopeId = ScopeId(0);
 
-    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(UNMOUNTED);
+    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
 
     pub(crate) fn is_placeholder(&self) -> bool {
         *self == Self::PLACEHOLDER
