@@ -146,9 +146,9 @@ mod js {
         // that `prepareTemplateClone` translates into a per-clone
         // `__dxSlotAnchors` map of pre-built virtual placeholder sentinels —
         // one per slot, chained right-to-left within each parent so
-        // reverse-order `replace_placeholder` calls resolve to the correct
-        // live position even when adjacent slots share an end-of-parent
-        // anchor.
+        // reverse-order `insert_children_at_path` calls resolve to the
+        // correct live position even when adjacent slots share an
+        // end-of-parent anchor.
         "{let node = this.prepareTemplateClone($tmpl_id$, $index$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
 

@@ -149,7 +149,10 @@ impl WriteMutations for MutationWriter<'_> {
     }
 
     fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
-        trace!("insert_children_at_path id:{} path:{:?} m:{}", id.0, path, m);
+        trace!(
+            "insert_children_at_path id:{} path:{:?} m:{}",
+            id.0, path, m
+        );
         let new_node_ids = self.state.m_stack_nodes(m);
         let root_node_id = self.state.element_to_node_id(id);
         let anchor_node_id = self.docm.node_at_path(root_node_id, path);

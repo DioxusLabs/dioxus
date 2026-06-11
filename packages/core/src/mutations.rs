@@ -543,7 +543,8 @@ impl WriteMutations for Mutations {
     }
 
     fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
-        self.edits.push(Mutation::InsertChildrenAtPath { id, path, m })
+        self.edits
+            .push(Mutation::InsertChildrenAtPath { id, path, m })
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {

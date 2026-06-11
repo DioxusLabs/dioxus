@@ -14,189 +14,6 @@ use crate::{
 use core::iter::Peekable;
 
 impl VNode {
-    pub(super) fn reference_to_dynamic_node(&self, mount: MountId, idx: usize) -> ElementRef {
-        let path = self.template.node_paths()[idx];
-        ElementRef {
-            path: ElementPath { path },
-            mount,
-        }
-    }
-
-    pub(crate) fn create_dynamic_node(
-        &self,
-        node: &DynamicNode,
-        mount: MountId,
-        idx: usize,
-        state: &mut DiffState<'_, impl WriteMutations>,
-    ) -> usize {
-        use DynamicNode::*;
-        let parent = Some(self.reference_to_dynamic_node(mount, idx));
-        match node {
-            Component(c) => self.create_component_node(mount, idx, c, parent, state),
-            Fragment(frag) => state
-                .dom
-                .create_children(state.to.as_deref_mut(), frag, parent),
-            Text(text) => {
-                // If we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = state.to.as_deref_mut() {
-                    let id = state.dom.next_element_for_mount(mount);
-                    state.dom.set_mounted_dyn_node(mount, idx, id.0);
-                    to.create_text_node(&text.value, id);
-                    1
-                } else {
-                    0
-                }
-            }
-        }
-    }
-
-    /// Mount all dynamic nodes that are descendants of this root template element.
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # let some_text = "hello world";
-    /// # let some_value = "123";
-    /// rsx! {
-    ///     div { // We just wrote this node
-    ///         // This is a dynamic slot
-    ///         {some_value}
-    ///
-    ///         // Load this too
-    ///         "{some_text}"
-    ///     }
-    /// };
-    /// ```
-    pub(super) fn load_dynamic_slots(
-        &self,
-        mount: MountId,
-        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
-        root_idx: u8,
-        state: &mut DiffState<'_, impl WriteMutations>,
-    ) {
-        let Some((start, [first, ..])) = dynamic_nodes_iter.peek().copied() else {
-            return;
-        };
-        if *first != root_idx {
-            return;
-        }
-        let mut end = start;
-        // Every dynamic surfaced here lives under an Element/Text root (the
-        // Dynamic-at-root case is handled by the sibling arm in
-        // `create_with_parents`), so the path always has the root index plus
-        // at least one child segment — `idx` advances `end` unconditionally.
-        while let Some((idx, _)) =
-            dynamic_nodes_iter.next_if(|(_, path)| matches!(path, [idx, ..] if *idx == root_idx))
-        {
-            end = idx;
-        }
-
-        // Reverse order keeps path-based insertions from invalidating the paths
-        // of slots that have not been processed yet.
-        for dynamic_node_id in (start..=end).rev() {
-            let m = self.create_dynamic_node(
-                &self.dynamic_nodes[dynamic_node_id],
-                mount,
-                dynamic_node_id,
-                state,
-            );
-            if m > 0
-                && let Some(to) = state.to.as_deref_mut()
-            {
-                let root_id = state.dom.get_mounted_root_node(mount, root_idx as usize);
-                let path = &self.template.node_paths()[dynamic_node_id][1..];
-                to.insert_children_at_path(root_id, path, m);
-            }
-        }
-    }
-
-    /// After we have written a root element, we need to write all the attributes that are on the root node
-    ///
-    /// ```rust, ignore
-    /// rsx! {
-    ///     div { // We just wrote this node
-    ///         class: "{class}", // We need to set these attributes
-    ///         id: "{id}",
-    ///         style: "{style}",
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// IMPORTANT: This function assumes that root node is the top node on the stack
-    pub(super) fn write_attrs(
-        &self,
-        mount: MountId,
-        dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
-        root_idx: u8,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) {
-        let mut last_path = None;
-        let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
-        while let Some((attribute_idx, attribute_path)) =
-            dynamic_attributes_iter.next_if(from_root_node)
-        {
-            let attribute = &self.dynamic_attrs[attribute_idx];
-
-            let id = match last_path {
-                Some((path, id)) if path == attribute_path => id,
-                _ => {
-                    let id = self.assign_static_node_as_dynamic(mount, attribute_path, dom, to);
-                    last_path = Some((attribute_path, id));
-                    id
-                }
-            };
-
-            for attr in &**attribute {
-                self.write_attribute(attribute_path, attr, id, mount, dom, to);
-            }
-            // Store this even for empty dynamic attribute groups so fullstack
-            // can later find where attributes may be inserted.
-            dom.set_mounted_dyn_attr(mount, attribute_idx, id);
-        }
-    }
-
-    /// We have some dynamic attributes attached to a some node
-    ///
-    /// That node needs to be loaded at runtime, so we need to give it an ID
-    ///
-    /// If the node in question is the root node, we just return the ID
-    ///
-    /// If the node is not on the stack, we create a new ID for it and assign it
-    fn assign_static_node_as_dynamic(
-        &self,
-        mount: MountId,
-        path: &'static [u8],
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) -> ElementId {
-        // This is just the root node. We already know it's id
-        if let [root_idx] = path {
-            return dom.get_mounted_root_node(mount, *root_idx as usize);
-        }
-
-        // The node is deeper in the template and we should create a new id for it
-        let id = dom.next_element_for_mount(mount);
-
-        to.assign_node_id(&path[1..], id);
-
-        id
-    }
-
-    fn load_template_root(
-        &self,
-        mount: MountId,
-        root_idx: usize,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) -> ElementId {
-        let id = dom.next_element_for_mount(mount);
-        dom.set_mounted_root_node(mount, root_idx, id);
-        to.load_template(self.template, root_idx, id);
-        id
-    }
-}
-
-impl VNode {
     pub(crate) fn diff_node(
         &self,
         new: &VNode,
@@ -905,6 +722,189 @@ impl VNode {
         // them out from under anchor lookups that read this mount.
         state.dom.commit_mount(mount, self);
         nodes_created
+    }
+}
+
+impl VNode {
+    pub(super) fn reference_to_dynamic_node(&self, mount: MountId, idx: usize) -> ElementRef {
+        let path = self.template.node_paths()[idx];
+        ElementRef {
+            path: ElementPath { path },
+            mount,
+        }
+    }
+
+    pub(crate) fn create_dynamic_node(
+        &self,
+        node: &DynamicNode,
+        mount: MountId,
+        idx: usize,
+        state: &mut DiffState<'_, impl WriteMutations>,
+    ) -> usize {
+        use DynamicNode::*;
+        let parent = Some(self.reference_to_dynamic_node(mount, idx));
+        match node {
+            Component(c) => self.create_component_node(mount, idx, c, parent, state),
+            Fragment(frag) => state
+                .dom
+                .create_children(state.to.as_deref_mut(), frag, parent),
+            Text(text) => {
+                // If we are diffing suspended nodes and are not outputting mutations, we can skip it
+                if let Some(to) = state.to.as_deref_mut() {
+                    let id = state.dom.next_element_for_mount(mount);
+                    state.dom.set_mounted_dyn_node(mount, idx, id.0);
+                    to.create_text_node(&text.value, id);
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    /// Mount all dynamic nodes that are descendants of this root template element.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let some_text = "hello world";
+    /// # let some_value = "123";
+    /// rsx! {
+    ///     div { // We just wrote this node
+    ///         // This is a dynamic slot
+    ///         {some_value}
+    ///
+    ///         // Load this too
+    ///         "{some_text}"
+    ///     }
+    /// };
+    /// ```
+    pub(super) fn load_dynamic_slots(
+        &self,
+        mount: MountId,
+        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
+        state: &mut DiffState<'_, impl WriteMutations>,
+    ) {
+        let Some((start, [first, ..])) = dynamic_nodes_iter.peek().copied() else {
+            return;
+        };
+        if *first != root_idx {
+            return;
+        }
+        let mut end = start;
+        // Every dynamic surfaced here lives under an Element/Text root (the
+        // Dynamic-at-root case is handled by the sibling arm in
+        // `create_with_parents`), so the path always has the root index plus
+        // at least one child segment — `idx` advances `end` unconditionally.
+        while let Some((idx, _)) =
+            dynamic_nodes_iter.next_if(|(_, path)| matches!(path, [idx, ..] if *idx == root_idx))
+        {
+            end = idx;
+        }
+
+        // Reverse order keeps path-based insertions from invalidating the paths
+        // of slots that have not been processed yet.
+        for dynamic_node_id in (start..=end).rev() {
+            let m = self.create_dynamic_node(
+                &self.dynamic_nodes[dynamic_node_id],
+                mount,
+                dynamic_node_id,
+                state,
+            );
+            if m > 0
+                && let Some(to) = state.to.as_deref_mut()
+            {
+                let root_id = state.dom.get_mounted_root_node(mount, root_idx as usize);
+                let path = &self.template.node_paths()[dynamic_node_id][1..];
+                to.insert_children_at_path(root_id, path, m);
+            }
+        }
+    }
+
+    /// After we have written a root element, we need to write all the attributes that are on the root node
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///     div { // We just wrote this node
+    ///         class: "{class}", // We need to set these attributes
+    ///         id: "{id}",
+    ///         style: "{style}",
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// IMPORTANT: This function assumes that root node is the top node on the stack
+    pub(super) fn write_attrs(
+        &self,
+        mount: MountId,
+        dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        let mut last_path = None;
+        let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
+        while let Some((attribute_idx, attribute_path)) =
+            dynamic_attributes_iter.next_if(from_root_node)
+        {
+            let attribute = &self.dynamic_attrs[attribute_idx];
+
+            let id = match last_path {
+                Some((path, id)) if path == attribute_path => id,
+                _ => {
+                    let id = self.assign_static_node_as_dynamic(mount, attribute_path, dom, to);
+                    last_path = Some((attribute_path, id));
+                    id
+                }
+            };
+
+            for attr in &**attribute {
+                self.write_attribute(attribute_path, attr, id, mount, dom, to);
+            }
+            // Store this even for empty dynamic attribute groups so fullstack
+            // can later find where attributes may be inserted.
+            dom.set_mounted_dyn_attr(mount, attribute_idx, id);
+        }
+    }
+
+    /// We have some dynamic attributes attached to a some node
+    ///
+    /// That node needs to be loaded at runtime, so we need to give it an ID
+    ///
+    /// If the node in question is the root node, we just return the ID
+    ///
+    /// If the node is not on the stack, we create a new ID for it and assign it
+    fn assign_static_node_as_dynamic(
+        &self,
+        mount: MountId,
+        path: &'static [u8],
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) -> ElementId {
+        // This is just the root node. We already know it's id
+        if let [root_idx] = path {
+            return dom.get_mounted_root_node(mount, *root_idx as usize);
+        }
+
+        // The node is deeper in the template and we should create a new id for it
+        let id = dom.next_element_for_mount(mount);
+
+        to.assign_node_id(&path[1..], id);
+
+        id
+    }
+
+    fn load_template_root(
+        &self,
+        mount: MountId,
+        root_idx: usize,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) -> ElementId {
+        let id = dom.next_element_for_mount(mount);
+        dom.set_mounted_root_node(mount, root_idx, id);
+        to.load_template(self.template, root_idx, id);
+        id
     }
 }
 

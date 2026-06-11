@@ -102,20 +102,61 @@ impl Ord for EventListenerTarget {
 
 #[derive(Copy, Clone, Debug)]
 enum MutationTrace {
-    AppendChildren { id: ElementId, m: usize },
-    AssignNodeId { path: &'static [u8], id: ElementId },
-    CreateTextNode { len: usize, id: ElementId },
-    LoadTemplate { index: usize, id: ElementId },
-    ReplaceNodeWith { id: ElementId, m: usize },
-    InsertChildrenAtPath { id: ElementId, path: &'static [u8], m: usize },
-    InsertNodesAfter { id: ElementId, m: usize },
-    InsertNodesBefore { id: ElementId, m: usize },
-    SetAttribute { name: &'static str, id: ElementId },
-    SetNodeText { len: usize, id: ElementId },
-    CreateEventListener { name: &'static str, id: ElementId },
-    RemoveEventListener { name: &'static str, id: ElementId },
-    RemoveNode { id: ElementId },
-    PushRoot { id: ElementId },
+    AppendChildren {
+        id: ElementId,
+        m: usize,
+    },
+    AssignNodeId {
+        path: &'static [u8],
+        id: ElementId,
+    },
+    CreateTextNode {
+        len: usize,
+        id: ElementId,
+    },
+    LoadTemplate {
+        index: usize,
+        id: ElementId,
+    },
+    ReplaceNodeWith {
+        id: ElementId,
+        m: usize,
+    },
+    InsertChildrenAtPath {
+        id: ElementId,
+        path: &'static [u8],
+        m: usize,
+    },
+    InsertNodesAfter {
+        id: ElementId,
+        m: usize,
+    },
+    InsertNodesBefore {
+        id: ElementId,
+        m: usize,
+    },
+    SetAttribute {
+        name: &'static str,
+        id: ElementId,
+    },
+    SetNodeText {
+        len: usize,
+        id: ElementId,
+    },
+    CreateEventListener {
+        name: &'static str,
+        id: ElementId,
+    },
+    RemoveEventListener {
+        name: &'static str,
+        id: ElementId,
+    },
+    RemoveNode {
+        id: ElementId,
+    },
+    PushRoot {
+        id: ElementId,
+    },
 }
 
 impl fmt::Display for MutationTrace {
@@ -137,7 +178,10 @@ impl fmt::Display for MutationTrace {
                 write!(f, "replace_node_with(id: {id:?}, m: {m})")
             }
             Self::InsertChildrenAtPath { id, path, m } => {
-                write!(f, "insert_children_at_path(id: {id:?}, path: {path:?}, m: {m})")
+                write!(
+                    f,
+                    "insert_children_at_path(id: {id:?}, path: {path:?}, m: {m})"
+                )
             }
             Self::InsertNodesAfter { id, m } => {
                 write!(f, "insert_nodes_after(id: {id:?}, m: {m})")

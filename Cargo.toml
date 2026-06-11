@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/oracle",
+    "packages/fuzz",
     "packages/core-types",
     "packages/cli",
     "packages/cli-config",
@@ -63,6 +65,8 @@ members = [
     "packages/playwright-tests/fullstack-spread",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/fullstack-hydration-order",
+    "packages/playwright-tests/markerless-hydration-edges",
+    "packages/playwright-tests/empty-root-hydration",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
@@ -120,6 +124,7 @@ version = "0.8.0-alpha.0"
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.8.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.8.0-alpha.0" }
+dioxus-renderer-oracle = { path = "packages/oracle", version = "0.8.0-alpha.0" }
 dioxus-core-types = { path = "packages/core-types", version = "0.8.0-alpha.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.8.0-alpha.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.8.0-alpha.0" }
@@ -394,6 +399,12 @@ incremental = true
 
 # crank up walrus since it's quite slow in dev mode
 [profile.dev.package.walrus]
+opt-level = 3
+
+# Keep debug assertions for fuzzing, but compile the reusable fuzzer crate
+# with release-style optimizations. (The libFuzzer binary `dioxus-fuzz` lives
+# in its own sub-workspace under packages/fuzz/fuzz and sets its own profile.)
+[profile.dev.package.dioxus-vdom-fuzz]
 opt-level = 3
 
 # ensure we have adversarial setup for tls

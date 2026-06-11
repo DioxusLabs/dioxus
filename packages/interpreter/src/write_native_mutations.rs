@@ -114,7 +114,12 @@ impl WriteMutations for MutationState {
         self.channel.replace_with(id.0 as u32, m as u16);
     }
 
-    fn insert_children_at_path(&mut self, id: dioxus_core::ElementId, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(
+        &mut self,
+        id: dioxus_core::ElementId,
+        path: &'static [u8],
+        m: usize,
+    ) {
         self.channel
             .insert_children_at_path_ref(id.0 as u32, path, m as u16);
     }
