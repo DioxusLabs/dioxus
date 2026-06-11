@@ -43,7 +43,7 @@ fn app() -> Element {
                                     },
                                     Err(Loading::Failed(_)) => rsx! {
                                         div { "Failed to load weather data." }
-                                    },
+                                    }
                                 }
                             }
                         }
@@ -167,7 +167,7 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "Failed to search: {handle.error():?}"
                             }
-                        },
+                        }
                     }
                 }
             }

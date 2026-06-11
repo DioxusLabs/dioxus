@@ -152,7 +152,7 @@ fn app() -> Element {
                 },
                 false => rsx! {
                     h1 { "Bottom text" }
-                },
+                }
             }
 
             // Conditional rendering
