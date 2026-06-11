@@ -1519,13 +1519,23 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 /// Uses the heuristics from the wasm-bindgen source code itself:
 ///
 /// <https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165>
+///
+/// Symbols arrive in both mangling schemes (legacy `_ZN..$LT$..$GT$..` and v0 `_R..`, the default
+/// since rustc 1.97), so each describe pattern needs a matcher per scheme. The v0 patterns match
+/// the trailing `<Trait><method>` identifiers rather than the `wasm_bindgen` crate path because v0
+/// backrefs (`NtB5_` etc.) routinely compress the path away. If any of these slip through, the
+/// describe functions get pinned into the ifunc table, wasm-bindgen's GC can't delete them, and
+/// the final module ships an unsatisfiable `__wbindgen_placeholder__.__wbindgen_describe` import.
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
         || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
+        || name.contains("12WasmDescribe8describe")
         || (name.contains("wasm_bindgen..closure..WasmClosure") && name.contains("describe"))
+        || (name.contains("11WasmClosure") && name.contains("describe"))
         || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
+        || (name.contains("7closure7Closure") && name.contains("describe"))
         || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
 }
 
@@ -1539,10 +1549,35 @@ fn bindgen_symbol_catch() {
     let symbol = "_ZN12wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe17h1234567890abcdefE";
     assert!(name_is_bindgen_symbol(symbol));
 
+    // v0 mangling (default since rustc 1.97): `<T as WasmDescribe>::describe` impl with the
+    // full wasm_bindgen path spelled out
+    let symbol = "_RNvXNvNtNtCs9jB4f2OZCsR_7web_sys8features36gen_TransformStreamDefaultController1__NtB4_32TransformStreamDefaultControllerNtNtCs9tRDgkfeYnK_12wasm_bindgen8describe12WasmDescribe8describe";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // v0 describe impl where a backref (NtB5_) compresses the wasm_bindgen::describe path away
+    let symbol = "_RNvXNvNtNtCs9jB4f2OZCsR_7web_sys8features8gen_Node4NodeENtB5_12WasmDescribe8describeCs3X5Dvr2wWzv_21dioxus_interpreter_js";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // v0 closure describe_invoke (WasmClosure trait path is backref-compressed to `NtNtBc_`)
+    let symbol = "_RINvXs1_NvNtNtCs9tRDgkfeYnK_12wasm_bindgen7convert8closuress8_1__DINtNtNtCs9WN6KVdqFxk_4core3ops8function5FnMutTNtBc_7JsValueB1M_mNtCsezy3jvZZ1sp_6js_sys5ArrayEEp6OutputB1M_EL_NtNtBc_7closure11WasmClosure15describe_invokeKb1_EB26_";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // v0 name of the __wbindgen_describe import shim
+    let symbol = "_RNvCs9tRDgkfeYnK_12wasm_bindgen19___wbindgen_describe";
+    assert!(name_is_bindgen_symbol(symbol));
+
     // does_not_match_saved_runtime_exports
     assert!(!name_is_bindgen_symbol("__wbindgen_malloc"));
     assert!(!name_is_bindgen_symbol("__wbindgen_realloc"));
     assert!(!name_is_bindgen_symbol("__wbindgen_free"));
+
+    // does_not_match_ordinary_user_symbols_in_either_mangling
+    assert!(!name_is_bindgen_symbol(
+        "_ZN5alloc7raw_vec19RawVec$LT$T$C$A$GT$8grow_one17h1234567890abcdefE"
+    ));
+    assert!(!name_is_bindgen_symbol(
+        "_RNvXs5_NtCs9tRDgkfeYnK_12wasm_bindgen5__rt5LazyINtB5_4LazyNtNtCsezy3jvZZ1sp_6js_sys6ObjectE5force"
+    ));
 }
 
 /// Manually parse the data section from a wasm module
