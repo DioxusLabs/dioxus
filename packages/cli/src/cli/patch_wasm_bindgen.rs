@@ -223,11 +223,7 @@ impl WasmBindgenPatch {
                 "https://api.github.com/repos/{PATCH_GITHUB_REPO}/tags?per_page={PER_PAGE}&page={page}"
             );
 
-            let mut request = client.get(&url).header("User-Agent", "dioxus-cli");
-            // Use the user's token when available to dodge the 60 req/hr unauthenticated rate limit
-            if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-                request = request.header("Authorization", format!("Bearer {token}"));
-            }
+            let request = client.get(&url).header("User-Agent", "dioxus-cli");
             let response = request.send().await?;
 
             if !response.status().is_success() {
@@ -521,18 +517,14 @@ impl DxHints {
     /// Path to the hints file for this workspace, keyed by a hash of the workspace root under
     /// the dioxus data dir (same pattern as the component cache). Keeping it out of the cargo
     /// target dir means `cargo clean` doesn't re-arm the prompt and a shared `CARGO_TARGET_DIR`
-    /// doesn't conflate unrelated workspaces. The hash is FNV-1a, implemented inline because
-    /// the file name must be stable across releases and std's `DefaultHasher` makes no such
-    /// guarantee.
+    /// doesn't conflate unrelated workspaces. The hash is FNV-1a because the file name must be
+    /// stable across releases and std's `DefaultHasher` makes no such guarantee.
     fn path(workspace_root: &Path) -> PathBuf {
-        const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-        const FNV_PRIME: u64 = 0x100000001b3;
+        use std::hash::Hasher;
 
-        let mut hash = FNV_OFFSET;
-        for &byte in workspace_root.as_os_str().as_encoded_bytes() {
-            hash ^= u64::from(byte);
-            hash = hash.wrapping_mul(FNV_PRIME);
-        }
+        let mut hasher = fnv::FnvHasher::default();
+        hasher.write(workspace_root.as_os_str().as_encoded_bytes());
+        let hash = hasher.finish();
         Workspace::dioxus_data_dir()
             .join("hints")
             .join(format!("{hash:016x}.json"))
