@@ -362,6 +362,19 @@ impl<'a> BundleContext<'a> {
 
     /// Copy resources to the given path.
     pub(crate) fn copy_resources(&self, dest: &Path) -> Result<()> {
+        fn copy_entries(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
+            if src.is_dir() {
+                for entry in src.read_dir()? {
+                    let entry = entry?;
+                    let dst = dst.join(entry.file_name());
+                    copy_entries(&entry.path(), &dst)?;
+                }
+            } else {
+                std::fs::copy(src, dst)?;
+            }
+            Ok(())
+        }
+
         for (src, target) in &self.resources_map {
             let src_path = PathBuf::from(src);
             if !src_path.exists() {
@@ -376,7 +389,7 @@ impl<'a> BundleContext<'a> {
             if let Some(parent) = dest_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(&src_path, &dest_path).with_context(|| {
+            copy_entries(&src_path, &dest_path).with_context(|| {
                 format!("Failed to copy resource {src} -> {}", dest_path.display())
             })?;
         }
