@@ -1,8 +1,6 @@
 //! Example: SSR
 //!
 //! This example shows how we can render the Dioxus Virtualdom using SSR.
-//! Dioxus' SSR output is hydratable without inserting marker attributes, as long as the server
-//! and client build matching VirtualDOMs.
 
 use dioxus::prelude::*;
 
@@ -20,9 +18,6 @@ fn main() {
             }
         })
     );
-
-    // Hydration uses the same clean SSR output.
-    println!("{}", dioxus_ssr::render(&vdom));
 
     // We can render to a buf directly too
     let mut file = String::new();
