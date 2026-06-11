@@ -206,25 +206,37 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    fn body_has_trailing_comments(&mut self, body: &CallBody) -> bool {
+    /// Full-line comments between the last node and the body's closing brace.
+    /// Only lines inside the body count - the backwards walk from the closing
+    /// brace must not escape above the body's opening line.
+    fn trailing_body_comments(&mut self, body: &CallBody) -> VecDeque<usize> {
         let Some(span) = body.span else {
-            return false;
+            return VecDeque::new();
         };
-        let comments = self.accumulate_full_line_comments(span.span().end());
+        let mut comments = self.accumulate_full_line_comments(span.span().end());
+        // The backwards walk from the closing brace must not escape above the
+        // body's own contents and pick up comments preceding the rsx! call
+        if let Some(last) = body.body.roots.last() {
+            let last_line = Self::final_span_of_node(last).end().line;
+            comments.retain(|&id| id >= last_line);
+        }
+        comments
+    }
+
+    fn body_has_trailing_comments(&mut self, body: &CallBody) -> bool {
+        let comments = self.trailing_body_comments(body);
         comments
             .iter()
             .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())))
     }
 
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
-        if let Some(span) = body.span {
-            let comments = self.accumulate_full_line_comments(span.span().end());
-            let has_real_comment = comments
-                .iter()
-                .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())));
-            if has_real_comment {
-                self.emit_line_comments(comments)?;
-            }
+        let comments = self.trailing_body_comments(body);
+        let has_real_comment = comments
+            .iter()
+            .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())));
+        if has_real_comment {
+            self.emit_line_comments(comments)?;
         }
         Ok(())
     }
@@ -1380,8 +1392,20 @@ impl<'a> Writer<'a> {
 
                     // Splicing such a block verbatim only exists to preserve the
                     // comments inside it; without any, the pretty line is
-                    // canonical and re-emitting the source would not be idempotent
-                    if requires_comments
+                    // canonical and re-emitting the source would not be
+                    // idempotent. Blocks containing nested rsx! are also
+                    // canonical in pretty form, since the macro gets reformatted
+                    let is_chain = ml.iter().skip(1).any(|l| {
+                        let t = l.trim();
+                        t.starts_with('.')
+                            || t.starts_with("&&")
+                            || t.starts_with("||")
+                            || matches!(t.chars().next(), Some('+' | '-' | '*' | '/' | '?'))
+                    });
+                    let pretty_is_canonical = requires_comments
+                        || !is_chain
+                        || ml.iter().any(|l| l.contains("rsx!") || l.contains("render!"));
+                    if pretty_is_canonical
                         && !ml
                             .iter()
                             .any(|l| is_standalone_comment(l.trim()) || l.contains("//"))
