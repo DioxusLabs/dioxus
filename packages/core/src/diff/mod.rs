@@ -10,13 +10,14 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    ElementId, TemplateNode,
+    ElementId,
     arena::MountId,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
 };
 
+mod attributes;
 mod component;
 mod iterator;
 mod node;
@@ -86,33 +87,5 @@ impl VirtualDom {
             let last_node = i == nodes.len() - 1;
             node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
         }
-    }
-}
-
-/// We can apply various optimizations to dynamic nodes that are the single child of their parent.
-///
-/// IE
-///  - for text - we can use SetTextContent
-///  - for clearing children we can use RemoveChildren
-///  - for appending children we can use AppendChildren
-#[allow(dead_code)]
-fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
-    let template = node.template;
-    let path = template.node_paths()[idx];
-
-    // use a loop to index every static node's children until the path has run out
-    // only break if the last path index is a dynamic node
-    let mut static_node = &template.roots()[path[0] as usize];
-
-    for i in 1..path.len() - 1 {
-        match static_node {
-            TemplateNode::Element { children, .. } => static_node = &children[path[i] as usize],
-            _ => return false,
-        }
-    }
-
-    match static_node {
-        TemplateNode::Element { children, .. } => children.len() == 1,
-        _ => false,
     }
 }

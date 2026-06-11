@@ -127,15 +127,10 @@ third-party-renderer = []
 futures-util = { workspace = true }
 tracing = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
-criterion = { workspace = true }
 thiserror = { workspace = true }
 env_logger = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
-
-[[bench]]
-name = "jsframework"
-harness = false
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

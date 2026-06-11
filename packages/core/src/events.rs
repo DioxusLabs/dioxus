@@ -662,7 +662,11 @@ impl<T> ListenerCallback<T> {
     /// calling this method.
     pub fn call(&self, event: Event<dyn Any>) {
         Runtime::current().with_scope_on_stack(self.origin, || {
-            (self.callback.borrow_mut())(event);
+            if let Ok(mut borrow_mut) = self.callback.try_borrow_mut() {
+                borrow_mut(event);
+            } else {
+                tracing::warn!("ListenerCallback was called recursively, ignoring recursive call to avoid re-entrance issues");
+            }
         });
     }
 
