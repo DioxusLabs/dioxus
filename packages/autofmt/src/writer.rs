@@ -1402,8 +1402,15 @@ impl<'a> Writer<'a> {
                             || t.starts_with("||")
                             || matches!(t.chars().next(), Some('+' | '-' | '*' | '/' | '?'))
                     });
+                    // A gather whose last line opens a block continues into the
+                    // following pretty lines, so splicing it verbatim would mix
+                    // source and pretty layouts
+                    let opens_block = ml
+                        .last()
+                        .is_some_and(|l| matches!(l.trim_end().chars().last(), Some('{' | '(' | '[')));
                     let pretty_is_canonical = requires_comments
                         || !is_chain
+                        || opens_block
                         || ml.iter().any(|l| l.contains("rsx!") || l.contains("render!"));
                     if pretty_is_canonical
                         && !ml

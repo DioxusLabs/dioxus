@@ -18,6 +18,41 @@ const MARKER: &str = "𝕣𝕤𝕩";
 const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 
 pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
+    // Prettyplease formats closures with a block body differently (and more
+    // consistently) than ones with a bare expression body: a bare body that
+    // doesn't fit on one line gets its method chains broken, while the same
+    // body inside braces stays attached. Normalize multiline closures to the
+    // block form so formatting converges in a single pass.
+    if let Expr::Closure(closure) = expr
+        && !matches!(*closure.body, Expr::Block(_))
+    {
+        let unparsed = unparse_expr_inner(expr, src, cfg);
+        // Only rebrace when prettyplease itself wrapped the body in a block
+        // (the first line ends at the opening brace); bodies it prints without
+        // braces (async blocks, matches, etc.) must keep their tokens as-is
+        let braced_by_prettyplease = unparsed
+            .lines()
+            .next()
+            .is_some_and(|l| l.trim_end().ends_with("| {"));
+        if unparsed.contains('\n') && braced_by_prettyplease {
+            let mut braced = closure.clone();
+            braced.body = Box::new(Expr::Block(syn::ExprBlock {
+                attrs: vec![],
+                label: None,
+                block: syn::Block {
+                    brace_token: Default::default(),
+                    stmts: vec![syn::Stmt::Expr((*closure.body).clone(), None)],
+                },
+            }));
+            return unparse_expr_inner(&Expr::Closure(braced), src, cfg);
+        }
+        return unparsed;
+    }
+
+    unparse_expr_inner(expr, src, cfg)
+}
+
+fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
         src: &'a str,
         formatted_stack: Vec<String>,
