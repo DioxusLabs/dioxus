@@ -580,33 +580,6 @@ mod tests {
         Version::new(v.major, v.minor, v.patch)
     }
 
-    /// Write `content` to a Cargo.toml in a fresh temp dir, returning the dir and the path
-    fn manifest(content: &str) -> (tempfile::TempDir, PathBuf) {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("Cargo.toml");
-        std::fs::write(&path, content).unwrap();
-        (dir, path)
-    }
-
-    fn status(content: &str, pin: &str) -> PatchStatus {
-        let (_dir, path) = manifest(content);
-        wasm_bindgen_patch_status(&path, &v(pin)).unwrap()
-    }
-
-    const BARE_MANIFEST: &str =
-        "# top comment\n[package]\nname = \"demo\" # trailing comment\nversion = \"0.1.0\"\n";
-
-    fn fork_entry(tag: &str) -> String {
-        format!("{{ git = \"{PATCH_GIT_URL}\", tag = \"{tag}\" }}")
-    }
-
-    fn fully_patched(tag: &str) -> String {
-        let entry = fork_entry(tag);
-        format!(
-            "{BARE_MANIFEST}\n[patch.crates-io]\nwasm-bindgen = {entry}\nwasm-bindgen-futures = {entry}\njs-sys = {entry}\nweb-sys = {entry}\n"
-        )
-    }
-
     #[test]
     fn fork_pin_requires_exact_tag() {
         let Some(tags) = fetched_tags() else { return };
