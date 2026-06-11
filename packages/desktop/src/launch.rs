@@ -118,9 +118,10 @@ pub fn launch_virtual_dom_blocking(
                     // Every sender holds a strong WindowHandle and the window only leaves the
                     // map after the last handle drops (AllWindowHandlesDropped), so the lookup
                     // cannot miss. A miss is a dioxus-desktop teardown-ordering bug.
-                    let webview = app.webviews.get(&window_id).expect(
-                        "a window's main-thread state outlives all of its DesktopContexts",
-                    );
+                    let webview = app
+                        .webviews
+                        .get(&window_id)
+                        .expect("a window's main-thread state outlives all of its DesktopContexts");
                     callback.run(&webview.desktop_context);
                 }
             },

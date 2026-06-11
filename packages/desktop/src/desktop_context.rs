@@ -151,10 +151,7 @@ impl DesktopContext {
     /// * `dom_tx` - Channel to send events to the DOM thread
     /// * `handle` - The window's [`WindowHandle`], which carries the event-loop proxy and window
     ///   id and keeps the window's main-thread state alive
-    pub(crate) fn new(
-        dom_tx: UnboundedSender<VirtualDomEvent>,
-        handle: Arc<WindowHandle>,
-    ) -> Self {
+    pub(crate) fn new(dom_tx: UnboundedSender<VirtualDomEvent>, handle: Arc<WindowHandle>) -> Self {
         Self::from_inner(DesktopContextInner { dom_tx, handle })
     }
 

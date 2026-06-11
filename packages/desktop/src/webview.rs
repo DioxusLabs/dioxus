@@ -461,10 +461,13 @@ impl WebviewInstance {
         };
         let (runtime, driver) = wry_bindgen.split();
         let future = runtime.run(run_app);
-        _ = shared.desktop_thread_handle.tx.send(DomThreadMessage::Spawn(
-            window_id,
-            Box::new(|| Box::pin(future.into_future())),
-        ));
+        _ = shared
+            .desktop_thread_handle
+            .tx
+            .send(DomThreadMessage::Spawn(
+                window_id,
+                Box::new(|| Box::pin(future.into_future())),
+            ));
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
@@ -584,7 +587,8 @@ impl PendingWebview {
         shared: &Rc<SharedContext>,
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) -> WebviewInstance {
-        let (window, window_handle) = WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
+        let (window, window_handle) =
+            WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
 
         // Return the desktop service proxy to the pending future. The strong window handle moves
         // into it: the resolved DesktopContext keeps the window's main-thread state alive.

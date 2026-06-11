@@ -557,7 +557,11 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        if let Some(webview) = self.webviews.values().find(|webview| !webview.closing.get()) {
+        if let Some(webview) = self
+            .webviews
+            .values()
+            .find(|webview| !webview.closing.get())
+        {
             let window = &webview.desktop_context.window;
 
             let Some(monitor) = window.current_monitor() else {

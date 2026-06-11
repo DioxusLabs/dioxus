@@ -347,9 +347,13 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                         // on abort). Start tearing down the window: hiding a
                                         // window whose VirtualDom is gone would leave a zombie.
                                         handles.borrow_mut().remove(&window_id);
-                                        _ = proxy.send_event(UserWindowEventVariant::DestroyWindow(window_id).into());
+                                        _ = proxy.send_event(
+                                            UserWindowEventVariant::DestroyWindow(window_id).into(),
+                                        );
                                     });
-                                    abort_handles.borrow_mut().insert(window_id, join_handle.abort_handle());
+                                    abort_handles
+                                        .borrow_mut()
+                                        .insert(window_id, join_handle.abort_handle());
                                 }
                             }
                         }
