@@ -12,7 +12,8 @@
 //! The generator covers the shapes from historical autofmt issues, including
 //! multiline strings in expressions (#4507, #3983), nested rsx! in vec! (#4106, #3591),
 //! cfg-gated closures (#5523), or-patterns in if-let (#4268), block comments (#2751),
-//! comments in every position, deeply nested elements, and long attribute lists.
+//! comments in every position (full-line, inline trailing, inside closure bodies,
+//! at the start of if/else branches), deeply nested elements, and long attribute lists.
 //!
 //! Run with more iterations: `AUTOFMT_FUZZ_ITERS=10000 cargo test -p dioxus-autofmt --test fuzz`
 
@@ -157,6 +158,10 @@ impl Gen {
         let n = 1 + self.rng.below(3);
         let mut out = String::new();
         for _ in 0..n {
+            // comments inside event-handler closure bodies
+            if self.rng.chance(20) {
+                out.push_str(&format!("{pad}{}\n", self.line_comment()));
+            }
             match self.rng.below(8) {
                 0 => out.push_str(&format!("{pad}{}.set(true);\n", self.ident())),
                 1 => out.push_str(&format!(
@@ -273,6 +278,15 @@ impl Gen {
         }
     }
 
+    /// Sometimes a full-line comment at the start of an if/else branch body
+    fn branch_comment(&mut self, indent: usize) -> String {
+        if self.rng.chance(20) {
+            format!("{}{}\n", "    ".repeat(indent), self.line_comment())
+        } else {
+            String::new()
+        }
+    }
+
     fn body_node(&mut self, depth: usize, indent: usize) -> String {
         let pad = "    ".repeat(indent);
         let choice = if depth == 0 {
@@ -295,17 +309,28 @@ impl Gen {
                     if self.rng.chance(15) {
                         out.push_str(&format!("{pad}    {}\n", self.line_comment()));
                     }
-                    out.push_str(&format!("{pad}    {},\n", self.attribute(depth, indent + 1)));
+                    let attr = self.attribute(depth, indent + 1);
+                    if self.rng.chance(15) {
+                        // inline trailing comment after an attribute
+                        let m = self.marker("trailing");
+                        out.push_str(&format!("{pad}    {attr}, // {m}\n"));
+                    } else {
+                        out.push_str(&format!("{pad}    {attr},\n"));
+                    }
                 }
                 let n_children = 1 + self.rng.below(3);
                 for _ in 0..n_children {
                     if self.rng.chance(20) {
                         out.push_str(&format!("{pad}    {}\n", self.line_comment()));
                     }
-                    out.push_str(&format!(
-                        "{pad}    {}\n",
-                        self.body_node(depth - 1, indent + 1)
-                    ));
+                    let child = self.body_node(depth - 1, indent + 1);
+                    if self.rng.chance(15) {
+                        // inline trailing comment after a child node
+                        let m = self.marker("trailing");
+                        out.push_str(&format!("{pad}    {child} // {m}\n"));
+                    } else {
+                        out.push_str(&format!("{pad}    {child}\n"));
+                    }
                 }
                 if self.rng.chance(10) {
                     out.push_str(&format!("{pad}    {}\n", self.line_comment()));
@@ -350,20 +375,23 @@ impl Gen {
             // if chain
             _ => {
                 let mut out = format!(
-                    "if {} {{\n{pad}    {}\n{pad}}}",
+                    "if {} {{\n{}{pad}    {}\n{pad}}}",
                     self.condition(),
+                    self.branch_comment(indent + 1),
                     self.body_node(depth - 1, indent + 1)
                 );
                 if self.rng.chance(50) {
                     out.push_str(&format!(
-                        " else if {} {{\n{pad}    {}\n{pad}}}",
+                        " else if {} {{\n{}{pad}    {}\n{pad}}}",
                         self.condition(),
+                        self.branch_comment(indent + 1),
                         self.body_node(depth - 1, indent + 1)
                     ));
                 }
                 if self.rng.chance(50) {
                     out.push_str(&format!(
-                        " else {{\n{pad}    {}\n{pad}}}",
+                        " else {{\n{}{pad}    {}\n{pad}}}",
+                        self.branch_comment(indent + 1),
                         self.body_node(depth - 1, indent + 1)
                     ));
                 }

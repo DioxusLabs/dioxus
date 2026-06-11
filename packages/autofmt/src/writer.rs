@@ -37,6 +37,13 @@ fn is_comment_line(trimmed: &str) -> bool {
     trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.ends_with("*/")
 }
 
+/// Whether a trimmed source line is a standalone comment that can be spliced
+/// verbatim into pretty-printed expression output: a `//` line comment or a
+/// single-line `/* */` block comment
+fn is_standalone_comment(trimmed: &str) -> bool {
+    trimmed.starts_with("//") || (trimmed.starts_with("/*") && trimmed.ends_with("*/"))
+}
+
 pub struct Writer<'a> {
     pub raw_src: &'a str,
     pub src: Vec<&'a str>,
@@ -1167,13 +1174,13 @@ impl<'a> Writer<'a> {
         let source = src_span.source_text().unwrap_or_default();
         let source_has_line_comments = source
             .lines()
-            .any(|line| line.trim_start().starts_with("//"));
+            .any(|line| is_standalone_comment(line.trim_start()));
         let mut src_lines = source.lines().peekable();
 
         // Comments already in pretty output (from nested rsx!) - skip these from source
         let pretty_comments: HashSet<_> = pretty
             .lines()
-            .filter(|l| l.trim().starts_with("//"))
+            .filter(|l| is_standalone_comment(l.trim()))
             .map(|l| l.trim())
             .collect();
 
@@ -1182,12 +1189,29 @@ impl<'a> Writer<'a> {
         if src_lines.peek().is_none() {
             out = pretty;
         } else {
+            // When one source line expands into several pretty lines (e.g. a
+            // one-line nested rsx! that gets broken up), this holds the not yet
+            // consumed compacted remainder of that source line so the iterators
+            // stay in sync instead of drifting and dropping comments
+            let mut src_carry = String::new();
             for line in pretty.lines() {
                 let trimmed = line.trim();
                 let compacted = line.replace(" ", "").replace(",", "");
 
+                if !src_carry.is_empty() {
+                    if !out.is_empty() {
+                        out.push('\n');
+                    }
+                    out.push_str(line);
+                    src_carry = src_carry
+                        .strip_prefix(&compacted)
+                        .unwrap_or_default()
+                        .to_string();
+                    continue;
+                }
+
                 // Pretty comments: consume matching source lines, preserve preceding empty lines
-                if trimmed.starts_with("//") {
+                if is_standalone_comment(trimmed) {
                     if !out.is_empty() {
                         out.push('\n');
                     }
@@ -1233,12 +1257,12 @@ impl<'a> Writer<'a> {
                 // Scan source for comments/empty lines before the matching line
                 let mut pending_comments = Vec::new();
                 let mut had_empty = false;
-                let mut multiline: Option<Vec<&str>> = None;
+                let mut multiline: Option<(Vec<&str>, bool)> = None;
 
                 while let Some(src) = src_lines.peek() {
                     let src_trimmed = src.trim();
 
-                    if src_trimmed.is_empty() || src_trimmed.starts_with("//") {
+                    if src_trimmed.is_empty() || is_standalone_comment(src_trimmed) {
                         if src_trimmed.is_empty() {
                             if pending_comments.is_empty() {
                                 had_empty = true;
@@ -1257,15 +1281,17 @@ impl<'a> Writer<'a> {
                         break;
                     }
 
-                    // Multi-line method chain (e.g., foo\n  .bar()\n  .baz())
+                    // Multi-line method chain (e.g., foo\n  .bar()\n  .baz()),
+                    // or - when the source has comments that could otherwise be
+                    // lost to iterator drift - any multi-line construct
                     if !src_compacted.is_empty() && compacted.starts_with(&src_compacted) {
                         let is_call = src_trimmed.ends_with('(')
                             || src_trimmed.ends_with(',')
                             || src_trimmed.ends_with('{');
-                        let is_commented_block =
-                            source_has_line_comments && src_trimmed.ends_with('{');
-                        if is_commented_block || !is_call {
-                            multiline = Some(vec![*src]);
+                        if source_has_line_comments || !is_call {
+                            // Splices entered only because the source has
+                            // comments must actually contain one to be emitted
+                            multiline = Some((vec![*src], is_call));
                             break;
                         }
                     }
@@ -1295,7 +1321,7 @@ impl<'a> Writer<'a> {
                 }
 
                 // Handle multi-line method chains
-                if let Some(mut ml) = multiline {
+                if let Some((mut ml, requires_comments)) = multiline {
                     // Compact a source line, ignoring any trailing line comment
                     let compact_src = |s: &str| {
                         let code = COMMENT_REGEX.with(|r| {
@@ -1313,7 +1339,7 @@ impl<'a> Writer<'a> {
 
                     while let Some(src) = src_lines.peek() {
                         let t = src.trim();
-                        if t.starts_with("//") {
+                        if is_standalone_comment(t) {
                             ml.push(src);
                             src_lines.next();
                             continue;
@@ -1352,6 +1378,18 @@ impl<'a> Writer<'a> {
                         continue;
                     }
 
+                    // Splicing such a block verbatim only exists to preserve the
+                    // comments inside it; without any, the pretty line is
+                    // canonical and re-emitting the source would not be idempotent
+                    if requires_comments
+                        && !ml
+                            .iter()
+                            .any(|l| is_standalone_comment(l.trim()) || l.contains("//"))
+                    {
+                        out.push_str(line);
+                        continue;
+                    }
+
                     // Write multi-line with adjusted indentation
                     let base_indent = if source_has_line_comments && ml[0].trim_end().ends_with('{')
                     {
@@ -1380,17 +1418,32 @@ impl<'a> Writer<'a> {
                 } else {
                     // Single line - output pretty line and capture inline comments
                     out.push_str(line);
-                    if let Some(src_line) = src_lines.next()
-                        && let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
-                        && let Some(c) = cap.get(1)
-                    {
+                    if let Some(src_line) = src_lines.next() {
+                        let src_code = match COMMENT_REGEX
+                            .with(|r| r.captures(src_line).and_then(|cap| cap.get(1)))
+                        {
+                            Some(c) => &src_line[..c.start()],
+                            None => src_line,
+                        };
+                        let src_compacted = src_code.replace(" ", "").replace(",", "");
+
                         // Only attach the comment if the source line's code actually matches
                         // the pretty line, otherwise the iterators have drifted apart and the
                         // comment belongs somewhere else
-                        let src_code = src_line[..c.start()].replace(" ", "").replace(",", "");
-                        if src_code == compacted {
+                        if let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
+                            && let Some(c) = cap.get(1)
+                            && src_compacted == compacted
+                        {
                             out.push_str(" // ");
                             out.push_str(c.as_str().replace("//", "").trim());
+                        }
+
+                        // The source line continues past this pretty line; the
+                        // remainder corresponds to the following pretty lines
+                        if let Some(rest) = src_compacted.strip_prefix(&compacted)
+                            && !rest.is_empty()
+                        {
+                            src_carry = rest.to_string();
                         }
                     }
                 }
@@ -1531,10 +1584,16 @@ impl<'a> Writer<'a> {
             BodyNode::Text(txt) => txt.input.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(f) => f.brace.span.span(),
-            BodyNode::IfChain(i) => match i.else_brace {
-                Some(b) => b.span.span(),
-                None => i.then_brace.span.span(),
-            },
+            BodyNode::IfChain(i) => {
+                let mut chain = i;
+                while let Some(next) = &chain.else_if_branch {
+                    chain = next;
+                }
+                match chain.else_brace {
+                    Some(b) => b.span.span(),
+                    None => chain.then_brace.span.span(),
+                }
+            }
         }
     }
 
