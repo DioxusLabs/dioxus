@@ -9,6 +9,7 @@ use crate::AssetRequest;
 use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
 use crate::edits::EditWebsocket;
+use crate::event_handlers::WryEventHandler;
 use crate::file_upload::NativeFileHover;
 use crate::ipc::{UserWindowEvent, UserWindowEventVariant, WindowHandle};
 use crate::shortcut::ShortcutHandle;
@@ -85,6 +86,10 @@ pub(crate) struct DomCallbackRegistry {
     asset_handler_names: HashMap<(WindowId, String), DomCallbackId>,
     /// Shortcut handles point into the shared callback map.
     shortcut_handlers: HashMap<ShortcutHandle, DomCallbackId>,
+    /// Wry event handler ids point into the shared callback map. Only handlers with a DOM-thread
+    /// callback (created with [`DesktopContext::create_wry_event_handler`] or the wry event
+    /// hooks) have an entry here.
+    wry_event_handlers: HashMap<WryEventHandler, DomCallbackId>,
 }
 
 /// Erase a callback's argument type so every callback kind shares one storage type. The wrapper
@@ -129,6 +134,19 @@ impl SharedCallbackRegistry {
         registry.callbacks.remove(id).map(|_| ())
     }
 
+    /// Associate a wry event handler with its DOM-thread callback. Handler ids are generational,
+    /// so a handler can never be registered twice.
+    pub fn register_wry_event_handler(&self, handler: WryEventHandler, id: DomCallbackId) {
+        self.0.borrow_mut().wry_event_handlers.insert(handler, id);
+    }
+
+    /// Remove the DOM-thread callback associated with a wry event handler.
+    pub fn remove_wry_event_handler(&self, handler: WryEventHandler) -> Option<()> {
+        let mut registry = self.0.borrow_mut();
+        let id = registry.wry_event_handlers.remove(&handler)?;
+        registry.callbacks.remove(id).map(|_| ())
+    }
+
     /// Remove every shortcut callback, matching the main thread's global shortcut registry.
     pub fn remove_all_shortcut_handlers(&self) {
         let mut registry = self.0.borrow_mut();
@@ -150,10 +168,12 @@ impl SharedCallbackRegistry {
             callbacks,
             asset_handler_names,
             shortcut_handlers,
+            wry_event_handlers,
         } = &mut *registry;
         callbacks.retain(|_, (owner, _)| *owner != window_id);
         asset_handler_names.retain(|_, id| callbacks.contains_key(*id));
         shortcut_handlers.retain(|_, id| callbacks.contains_key(*id));
+        wry_event_handlers.retain(|_, id| callbacks.contains_key(*id));
     }
 
     /// Invoke a callback without holding the registry borrow while user code runs.

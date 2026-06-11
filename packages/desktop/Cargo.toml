@@ -41,7 +41,6 @@ tokio = { workspace = true, features = [
 ] }
 infer = { workspace = true }
 dunce = { workspace = true }
-slab = { workspace = true }
 slotmap = { workspace = true }
 send_wrapper = { workspace = true }
 rustc-hash = { workspace = true }

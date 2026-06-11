@@ -290,6 +290,8 @@ impl App {
             .desktop_thread_handle
             .tx
             .send(DomThreadMessage::RemoveWindowCallbacks(id));
+        self.shared.event_handlers.remove_window(id);
+        self.shared.shortcut_manager.remove_window(id);
         self.webviews.remove(&id);
 
         if (self.exit_on_last_window_close || self.shutting_down) && self.webviews.is_empty() {

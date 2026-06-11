@@ -110,19 +110,21 @@ fn use_dom_event_handler<T: Send + 'static>(
                         runtime.in_scope(scope_id, || handler(event));
                     });
             let dom_tx = window.dom_event_sender();
+            let handler = window.create_wry_event_handler_with_user_event(move |event, _| {
+                let Event::UserEvent(event) = event else {
+                    return;
+                };
+                let Some(event) = forward_event(event) else {
+                    return;
+                };
+                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
+                    registry.invoke(dom_handler, event);
+                })));
+            });
             window
-                .create_wry_event_handler_with_user_event(move |event, _| {
-                    let Event::UserEvent(event) = event else {
-                        return;
-                    };
-                    let Some(event) = forward_event(event) else {
-                        return;
-                    };
-                    let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                        registry.invoke(dom_handler, event);
-                    })));
-                })
-                .with_dom_handler(dom_handler)
+                .callback_registry()
+                .register_wry_event_handler(handler, dom_handler);
+            handler
         },
         |handler| handler.remove(),
     )

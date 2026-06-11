@@ -3508,7 +3508,6 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
- "slab",
  "slotmap",
  "subtle",
  "tao",

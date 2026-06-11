@@ -755,16 +755,15 @@ impl DesktopContext {
                     .expect("non-user event stays non-user after being queued for the handler")
             })
         });
-        handler.with_dom_handler(dom_handler)
+        self.callbacks.register_wry_event_handler(handler, dom_handler);
+        handler
     }
 
     /// Remove a wry event handler created with [`Self::create_wry_event_handler`] or
     /// [`Self::create_main_thread_wry_event_handler`].
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-        if let Some(dom_handler) = id.dom_handler {
-            self.callbacks.remove(dom_handler);
-        }
+        self.callbacks.remove_wry_event_handler(id);
 
         drop(self.run_with_desktop_service(move |desktop| desktop.remove_wry_event_handler(id)));
     }
@@ -1087,7 +1086,7 @@ impl DesktopService {
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         self.shared
             .shortcut_manager
-            .add_shortcut(hotkey, Box::new(callback))
+            .add_shortcut(self.window.id(), hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut

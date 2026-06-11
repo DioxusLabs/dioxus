@@ -19,7 +19,7 @@ use crate::window;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slotmap::SlotMap;
 use std::{cell::RefCell, collections::HashMap, str::FromStr, sync::Arc};
-use tao::keyboard::ModifiersState;
+use tao::{keyboard::ModifiersState, window::WindowId};
 
 slotmap::new_key_type! {
     /// A handle to a registered global shortcut callback. Handles are generational: a removed
@@ -53,6 +53,8 @@ struct ShortcutInner {
     shortcut: HotKey,
     /// The accelerator id shared by every callback registered for the same key combination.
     id: u32,
+    /// The window whose DOM thread this shortcut forwards into; the shortcut is purged with it.
+    window_id: WindowId,
     callback: Box<dyn FnMut(HotKeyState)>,
 }
 
@@ -75,6 +77,7 @@ impl ShortcutRegistry {
 
     pub(crate) fn add_shortcut(
         &self,
+        window_id: WindowId,
         hotkey: HotKey,
         callback: Box<dyn FnMut(HotKeyState)>,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
@@ -94,6 +97,7 @@ impl ShortcutRegistry {
         Ok(shortcuts.insert(ShortcutInner {
             shortcut: hotkey,
             id: accelerator_id,
+            window_id,
             callback,
         }))
     }
@@ -107,6 +111,31 @@ impl ShortcutRegistry {
         if !shortcuts.values().any(|s| s.id == removed.id) {
             let _ = self.manager.unregister(removed.shortcut);
         }
+    }
+
+    /// Drop every shortcut `window_id` registered, unregistering OS-level hotkeys that no other
+    /// window still uses. Runs once the last [`WindowHandle`](crate::ipc::WindowHandle) for the
+    /// window has dropped: the shortcut can only forward into that window's dead channel, so
+    /// keeping it registered would block the key combination system-wide for no effect.
+    pub(crate) fn remove_window(&self, window_id: WindowId) {
+        let mut shortcuts = self.shortcuts.borrow_mut();
+        let mut removed: HashMap<u32, HotKey> = HashMap::new();
+        shortcuts.retain(|_, shortcut| {
+            if shortcut.window_id == window_id {
+                removed.insert(shortcut.id, shortcut.shortcut);
+                false
+            } else {
+                true
+            }
+        });
+
+        // Unregister the key combinations with no surviving callback from another window.
+        let dead: Vec<HotKey> = removed
+            .into_iter()
+            .filter(|(id, _)| !shortcuts.values().any(|s| s.id == *id))
+            .map(|(_, hotkey)| hotkey)
+            .collect();
+        let _ = self.manager.unregister_all(&dead);
     }
 
     pub(crate) fn remove_all(&self) {

@@ -1,33 +1,16 @@
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-use crate::dom_thread::DomCallbackId;
 use crate::{ipc::UserWindowEvent, window};
-use slab::Slab;
+use slotmap::SlotMap;
 use std::cell::RefCell;
 use tao::{event::Event, event_loop::EventLoopWindowTarget, window::WindowId};
 
-/// The unique identifier of a window event handler. This can be used to later remove the handler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WryEventHandler {
-    pub(crate) id: usize,
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub(crate) dom_handler: Option<DomCallbackId>,
+slotmap::new_key_type! {
+    /// The unique identifier of a window event handler. This can be used to later remove the
+    /// handler. Ids are generational: a removed handler's id can never remove a different
+    /// handler reusing its slot.
+    pub struct WryEventHandler;
 }
 
 impl WryEventHandler {
-    pub(crate) fn new(id: usize) -> Self {
-        Self {
-            id,
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            dom_handler: None,
-        }
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub(crate) fn with_dom_handler(mut self, dom_handler: DomCallbackId) -> Self {
-        self.dom_handler = Some(dom_handler);
-        self
-    }
-
     /// Unregister this event handler from the window
     pub fn remove(&self) {
         window().remove_wry_event_handler(*self);
@@ -36,7 +19,7 @@ impl WryEventHandler {
 
 #[derive(Default)]
 pub struct WindowEventHandlers {
-    handlers: RefCell<Slab<WryWindowEventHandlerInner>>,
+    handlers: RefCell<SlotMap<WryEventHandler, WryWindowEventHandlerInner>>,
 }
 
 struct WryWindowEventHandlerInner {
@@ -62,14 +45,12 @@ impl WindowEventHandlers {
         ) -> Event<'a, UserWindowEvent>
         + 'static,
     ) -> WryEventHandler {
-        WryEventHandler::new(
-            self.handlers
-                .borrow_mut()
-                .insert(WryWindowEventHandlerInner {
-                    window_id,
-                    handler: Box::new(handler),
-                }),
-        )
+        self.handlers
+            .borrow_mut()
+            .insert(WryWindowEventHandlerInner {
+                window_id,
+                handler: Box::new(handler),
+            })
     }
 
     pub(crate) fn add(
@@ -94,7 +75,16 @@ impl WindowEventHandlers {
     }
 
     pub(crate) fn remove(&self, id: WryEventHandler) {
-        self.handlers.borrow_mut().try_remove(id.id);
+        self.handlers.borrow_mut().remove(id);
+    }
+
+    /// Drop every handler `window_id` registered. Runs once the last
+    /// [`WindowHandle`](crate::ipc::WindowHandle) for the window has dropped, mirroring the
+    /// DOM-side callback purge.
+    pub(crate) fn remove_window(&self, window_id: WindowId) {
+        self.handlers
+            .borrow_mut()
+            .retain(|_, handler| handler.window_id != window_id);
     }
 
     pub fn apply_event<'a>(
