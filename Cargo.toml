@@ -488,8 +488,9 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
 pollster = "0.4.0"
 
-web-sys = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "Navigator", "MediaDevices", "MediaStream", "MediaStreamConstraints", "MediaStreamTrack", "HtmlMediaElement", "HtmlVideoElement", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
 wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -580,6 +581,11 @@ doc-scrape-examples = true
 [[example]]
 name = "canvas"
 path = "examples/01-app-demos/canvas.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "camera"
+path = "examples/01-app-demos/camera.rs"
 doc-scrape-examples = true
 
 [[example]]
