@@ -13,7 +13,7 @@ use crate::{
 };
 use dioxus_hooks::to_owned;
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     rc::Rc,
     sync::Arc,
     task::{Context, Poll, Wake, Waker},
@@ -67,21 +67,6 @@ impl Wake for WryBindgenDriverWake {
             .proxy
             .send_event(UserWindowEventVariant::WryBindgenDriverWake(self.window_id).into());
     }
-}
-
-fn is_wry_bindgen_request(request: &wry::http::Request<Vec<u8>>) -> bool {
-    request
-        .uri()
-        .path()
-        .trim_matches('/')
-        .starts_with("__wbg__/")
-}
-
-fn wry_bindgen_not_found_response() -> wry::http::Response<Vec<u8>> {
-    wry::http::Response::builder()
-        .status(wry::http::StatusCode::NOT_FOUND)
-        .body(Vec::new())
-        .expect("Failed to build not found response")
 }
 
 impl WebviewInstance {
@@ -179,16 +164,31 @@ impl WebviewInstance {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
 
-                if is_wry_bindgen_request(&request) {
+                let responder = {
                     let _lock = crate::android_sync_lock::android_runtime_lock();
-                    let responder = move |response| responder.respond(response);
-                    let Some(responder) = protocol.handle_request("dioxus", &request, responder)
-                    else {
-                        return;
+
+                    let responder = Rc::new(RefCell::new(Some(responder)));
+                    let wry_bindgen_responder = {
+                        to_owned![responder];
+                        move |response| {
+                            if let Some(responder) = responder.borrow_mut().take() {
+                                responder.respond(response);
+                            }
+                        }
                     };
-                    responder(wry_bindgen_not_found_response());
-                    return;
-                }
+
+                    if protocol
+                        .handle_request("dioxus", &request, wry_bindgen_responder)
+                        .is_none()
+                    {
+                        return;
+                    }
+
+                    responder
+                        .borrow_mut()
+                        .take()
+                        .expect("unhandled wry-bindgen request should return the responder")
+                };
 
                 // Fall through to existing dioxus protocol handler
                 protocol::desktop_handler(
