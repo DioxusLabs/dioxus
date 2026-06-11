@@ -1532,6 +1532,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("12WasmDescribe8describe")
+        || name.contains("18WasmDescribeVector15describe_vector")
         || (name.contains("wasm_bindgen..closure..WasmClosure") && name.contains("describe"))
         || (name.contains("11WasmClosure") && name.contains("describe"))
         || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
@@ -1556,6 +1557,15 @@ fn bindgen_symbol_catch() {
 
     // v0 describe impl where a backref (NtB5_) compresses the wasm_bindgen::describe path away
     let symbol = "_RNvXNvNtNtCs9jB4f2OZCsR_7web_sys8features8gen_Node4NodeENtB5_12WasmDescribe8describeCs3X5Dvr2wWzv_21dioxus_interpreter_js";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // v0 `<T as WasmDescribeVector>::describe_vector` impl (legacy mangling matches these via
+    // the `wasm_bindgen..describe..WasmDescribe` prefix substring, v0 needs its own pattern)
+    let symbol = "_RNvXs4_NtNtCs9tRDgkfeYnK_12wasm_bindgen7convert6slicesNtNtCscHiZRFGp0KF_5alloc6string6StringNtNtB9_8describe18WasmDescribeVector15describe_vector";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // v0 describe_vector impl in a downstream crate with the trait path backref-compressed
+    let symbol = "_RNvXsf_NtCs4ofacjxbDm2_10dioxus_web8documentNtB5_7JSOwnerNtNtCs9tRDgkfeYnK_12wasm_bindgen8describe18WasmDescribeVector15describe_vector";
     assert!(name_is_bindgen_symbol(symbol));
 
     // v0 closure describe_invoke (WasmClosure trait path is backref-compressed to `NtNtBc_`)
