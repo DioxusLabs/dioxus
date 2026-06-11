@@ -129,9 +129,6 @@ impl WebviewInstance {
         let wry_bindgen = WryBindgen::new();
         let protocol = wry_bindgen.protocol_handler();
 
-        // Runs on the VirtualDom thread right after the dom is created, before it starts.
-        let on_window = cfg.on_window.take();
-
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
         {
@@ -421,6 +418,7 @@ impl WebviewInstance {
         let window_handle = Arc::new(WindowHandle {
             proxy: proxy.clone(),
             window_id,
+            window: window.clone(),
         });
 
         let desktop_context = Rc::from(DesktopService::new(
@@ -439,13 +437,8 @@ impl WebviewInstance {
             // released even if the app future is dropped before the webview ever invokes it.
             let window_handle = window_handle.clone();
             let event_tx = event_tx.clone();
-            let window = desktop_context.window.clone();
             move || async move {
-                let mut dom = dom();
-
-                if let Some(mut on_window) = on_window {
-                    on_window(window, &mut dom);
-                }
+                let dom = dom();
 
                 crate::dom_thread::run_virtual_dom_with_dom(
                     dom,

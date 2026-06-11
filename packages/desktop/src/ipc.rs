@@ -1,7 +1,10 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
-use std::sync::mpsc;
-use tao::{event_loop::EventLoopProxy, window::WindowId};
+use std::sync::{Arc, mpsc};
+use tao::{
+    event_loop::EventLoopProxy,
+    window::{Window, WindowId},
+};
 use tokio::sync::oneshot;
 
 /// Keeps a window's main-thread state ([`WebviewInstance`]) alive: the instance stays in the
@@ -13,6 +16,9 @@ use tokio::sync::oneshot;
 pub(crate) struct WindowHandle {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) window_id: WindowId,
+    /// The underlying tao window. The handle is `Send + Sync`, but most of its methods are
+    /// main-thread-only; it is exposed for thread-safe uses like raw-window-handle integrations.
+    pub(crate) window: Arc<Window>,
 }
 
 impl Drop for WindowHandle {

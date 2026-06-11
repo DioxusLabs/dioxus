@@ -1,11 +1,8 @@
-use dioxus_core::{LaunchConfig, VirtualDom};
+use dioxus_core::LaunchConfig;
+use std::borrow::Cow;
 use std::path::PathBuf;
-use std::{borrow::Cow, sync::Arc};
+use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
-use tao::{
-    event_loop::{EventLoop, EventLoopWindowTarget},
-    window::Window,
-};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
@@ -75,9 +72,6 @@ pub struct Config {
     pub(crate) additional_windows_args: Option<String>,
     pub(crate) tray_icon_show_window_on_click: bool,
     pub(crate) navigation_handler: Option<NavigationHandler>,
-
-    #[allow(clippy::type_complexity)]
-    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + Send + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -126,7 +120,6 @@ impl Config {
             custom_event_handler: None,
             disable_file_drop_handler: false,
             disable_dma_buf_on_wayland: true,
-            on_window: None,
             additional_windows_args: None,
             tray_icon_show_window_on_click: true,
             navigation_handler: None,
@@ -320,20 +313,6 @@ impl Config {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }
-        self
-    }
-
-    /// Allows modifying the window and virtual dom right after they are built, before the
-    /// VirtualDom starts running.
-    ///
-    /// This is important for z-ordering textures in child windows. The callback runs on the
-    /// VirtualDom thread (where the dom lives) and therefore must be `Send`; the window handle it
-    /// receives can be freely shared across threads.
-    pub fn with_on_window(
-        mut self,
-        f: impl FnMut(Arc<Window>, &mut VirtualDom) + Send + 'static,
-    ) -> Self {
-        self.on_window = Some(Box::new(f));
         self
     }
 

@@ -351,6 +351,16 @@ impl DesktopContext {
         self.inner.handle.window_id
     }
 
+    /// Returns the underlying [tao](tao::window::Window) window handle.
+    ///
+    /// The handle is `Send + Sync`, but most window methods are main-thread-only — call those
+    /// through the proxied methods on this context, or inside [`Self::run_on_main_thread`]. The
+    /// raw handle is mainly useful for raw-window-handle integrations, like creating a wgpu
+    /// surface on the main thread (see the `wgpu_child_window` example).
+    pub fn tao_window(&self) -> Arc<Window> {
+        self.inner.handle.window.clone()
+    }
+
     /// Look up the callback registry that belongs to **this context's window** (invocations are
     /// forwarded through this window's `dom_tx`, so callbacks must live in the same window's
     /// registry — not the calling component's). `None` if the window's VirtualDom is not running.
@@ -1141,8 +1151,7 @@ impl DesktopService {
         name: String,
         handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
-        self.asset_handlers
-            .register_handler(name, move |req, resp| handler(req, resp))
+        self.asset_handlers.register_handler(name, handler)
     }
 
     /// Removes an asset handler by its identifier.
