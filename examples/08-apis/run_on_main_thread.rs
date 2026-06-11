@@ -3,7 +3,7 @@
 //! Dioxus desktop runs your components on a dedicated thread, separate from the main thread that
 //! owns the OS event loop and every native window. Some platform and FFI APIs *must* be called
 //! from the main thread. [`window().run_on_main_thread`] hops over to the main thread, runs your
-//! closure there, and blocks until it hands the result back.
+//! closure there, and returns a future that resolves to the result.
 
 use dioxus::desktop::window;
 use dioxus::prelude::*;
@@ -20,10 +20,12 @@ fn app() -> Element {
         h1 { "run_on_main_thread" }
         p { "Components run on the DOM thread: {dom_thread}" }
         button {
-            onclick: move |_| {
+            onclick: move |_| async move {
                 // This closure runs on the main thread. Put any main-thread-only FFI / platform
                 // calls here — whatever it returns is sent back to the DOM thread.
-                let id = window().run_on_main_thread(|| format!("{:?}", std::thread::current().id()));
+                let id = window()
+                    .run_on_main_thread(|| format!("{:?}", std::thread::current().id()))
+                    .await;
                 main_thread.set(id);
             },
             "Run a closure on the main thread"

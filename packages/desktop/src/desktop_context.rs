@@ -178,12 +178,15 @@ impl DesktopContext {
         })
     }
 
-    /// Run a closure on the main thread and block until it returns its result.
+    /// Run a closure on the main thread, returning a future that resolves to its result.
     ///
     /// Dioxus desktop runs your components on a dedicated thread, while the OS event loop and every
     /// native window live on the *main* thread. Some platform and FFI APIs may only be called from
     /// the main thread; this method ships the closure over there, runs it, and hands the result
-    /// back.
+    /// back through the returned future.
+    ///
+    /// The closure is queued for the main thread immediately — the future only waits for the
+    /// result, so you can drop it if you don't need the return value.
     ///
     /// The closure and its return value must be `Send` because they cross the thread boundary. The
     /// closure takes no arguments — use the methods on [`DesktopContext`] (such as
@@ -191,11 +194,12 @@ impl DesktopContext {
     ///
     /// # Panics
     ///
-    /// Panics if the event loop has been dropped.
+    /// The future panics if the window or event loop closed before the closure could run.
     ///
-    /// Do **not** call this from code that already runs on the main thread (such as a
-    /// [`use_main_thread_wry_event_handler`](crate::use_main_thread_wry_event_handler) handler):
-    /// it would block the event loop waiting on itself and deadlock.
+    /// Do **not** block on the returned future from code that already runs on the main thread
+    /// (such as a [`use_main_thread_wry_event_handler`](crate::use_main_thread_wry_event_handler)
+    /// handler): it would block the event loop waiting on itself and deadlock. Awaiting it from
+    /// the DOM thread is always fine.
     ///
     /// # Example
     ///
@@ -203,16 +207,20 @@ impl DesktopContext {
     /// let answer = window().run_on_main_thread(|| {
     ///     // main-thread-only FFI goes here
     ///     6 * 7
-    /// });
+    /// }).await;
     /// assert_eq!(answer, 42);
     /// ```
-    pub fn run_on_main_thread<T, F>(&self, f: F) -> T
+    pub fn run_on_main_thread<T, F>(&self, f: F) -> impl Future<Output = T> + Send + 'static
     where
         T: Send + 'static,
         F: FnOnce() -> T + Send + 'static,
     {
-        self.run_with_desktop_service_blocking(move |_| f())
-            .expect("run_on_main_thread: the window or event loop has already closed")
+        let receiver = self.run_with_desktop_service(move |_| f());
+        async move {
+            receiver
+                .await
+                .expect("run_on_main_thread: the window or event loop has already closed")
+        }
     }
 
     /// Run a closure on the main thread with access to this window's [`DesktopService`], returning
