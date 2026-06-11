@@ -22,12 +22,18 @@ fn app() -> Element {
 fn Camera() -> Element {
     let mut status = use_signal(|| "Camera is stopped.".to_string());
     let mut streaming = use_signal(|| false);
+    let mut video = use_signal(|| None::<web_sys::HtmlVideoElement>);
 
     let start = move |_| {
+        let Some(video) = video.cloned() else {
+            status.set("Camera preview is not mounted yet.".to_string());
+            return;
+        };
+
         status.set("Requesting camera access...".to_string());
 
         spawn(async move {
-            match start_camera("camera-preview").await {
+            match start_camera(video).await {
                 Ok(()) => {
                     streaming.set(true);
                     status.set("Camera stream is active.".to_string());
@@ -44,9 +50,11 @@ fn Camera() -> Element {
     };
 
     let stop = move |_| {
-        stop_camera("camera-preview");
-        streaming.set(false);
-        status.set("Camera is stopped.".to_string());
+        if let Some(video) = video.cloned() {
+            stop_camera(video);
+            streaming.set(false);
+            status.set("Camera is stopped.".to_string());
+        }
     };
 
     rsx! {
@@ -57,7 +65,13 @@ fn Camera() -> Element {
                 h1 { style: "font-size: 2rem; margin: 0;", "Camera bindings" }
                 p { style: "margin: 0; color: #4b5563;", "{status}" }
                 video {
-                    id: "camera-preview",
+                    onmounted: move |event| {
+                        let element = event.as_web_event();
+                        match element.dyn_into::<web_sys::HtmlVideoElement>() {
+                            Ok(element) => video.set(Some(element)),
+                            Err(_) => status.set("Mounted element is not a video element.".to_string()),
+                        }
+                    },
                     autoplay: true,
                     muted: true,
                     playsinline: true,
@@ -83,7 +97,7 @@ fn Camera() -> Element {
     }
 }
 
-async fn start_camera(video_id: &str) -> Result<(), JsValue> {
+async fn start_camera(video: web_sys::HtmlVideoElement) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("window is not available"))?;
     let media_devices = window.navigator().media_devices()?;
 
@@ -95,18 +109,13 @@ async fn start_camera(video_id: &str) -> Result<(), JsValue> {
         .await?
         .dyn_into::<web_sys::MediaStream>()?;
 
-    let video = video_element(video_id)?;
     video.set_src_object(Some(&stream));
     JsFuture::from(video.play()?).await?;
 
     Ok(())
 }
 
-fn stop_camera(video_id: &str) {
-    let Ok(video) = video_element(video_id) else {
-        return;
-    };
-
+fn stop_camera(video: web_sys::HtmlVideoElement) {
     if let Some(stream) = video.src_object() {
         for track in stream.get_tracks().iter() {
             if let Ok(track) = track.dyn_into::<web_sys::MediaStreamTrack>() {
@@ -116,18 +125,6 @@ fn stop_camera(video_id: &str) {
     }
 
     video.set_src_object(None);
-}
-
-fn video_element(video_id: &str) -> Result<web_sys::HtmlVideoElement, JsValue> {
-    let document = web_sys::window()
-        .and_then(|window| window.document())
-        .ok_or_else(|| JsValue::from_str("document is not available"))?;
-
-    document
-        .get_element_by_id(video_id)
-        .ok_or_else(|| JsValue::from_str("video element was not found"))?
-        .dyn_into::<web_sys::HtmlVideoElement>()
-        .map_err(|_| JsValue::from_str("element is not a video element"))
 }
 
 fn js_error_message(value: JsValue) -> String {

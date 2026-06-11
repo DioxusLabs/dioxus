@@ -197,6 +197,11 @@ pub mod prelude {
         global_attributes, keyboard_types, svg_attributes, traits::*,
     };
 
+    #[cfg(any(feature = "desktop", feature = "web"))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "desktop", feature = "web"))))]
+    #[doc(inline)]
+    pub use dioxus_web_sys_events::WebEventExt;
+
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;

@@ -3181,6 +3181,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-stores",
  "dioxus-web",
+ "dioxus-web-sys-events",
  "env_logger",
  "futures-util",
  "manganis",
