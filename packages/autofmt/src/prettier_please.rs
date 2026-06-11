@@ -1,5 +1,5 @@
 use dioxus_rsx::CallBody;
-use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, visit_mut::VisitMut};
+use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, spanned::Spanned, visit_mut::VisitMut};
 
 use crate::{IndentOptions, Writer, lexstate::LexState};
 
@@ -55,20 +55,36 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
         src: &'a str,
-        formatted_stack: Vec<String>,
+        formatted_stack: Vec<(String, bool)>,
         cfg: &'a IndentOptions,
+        arm_macros: Vec<proc_macro2::LineColumn>,
+    }
+
+    fn is_rsx_macro(mac: &syn::Macro) -> bool {
+        matches!(
+            mac.path.segments.last().map(|i| i.ident.to_string()).as_deref(),
+            Some("rsx" | "render")
+        )
     }
 
     impl VisitMut for ReplaceMacros<'_> {
+        fn visit_arm_mut(&mut self, arm: &mut syn::Arm) {
+            // Remember rsx! macros that are match arm bodies written without a
+            // trailing comma: prettyplease always adds one after macro arms,
+            // but a multiline rsx! arm reads as a block and may go without
+            if let Expr::Macro(em) = &*arm.body
+                && is_rsx_macro(&em.mac)
+                && arm.comma.is_none()
+            {
+                self.arm_macros.push(em.mac.path.span().start());
+            }
+            syn::visit_mut::visit_arm_mut(self, arm);
+        }
+
         fn visit_macro_mut(&mut self, i: &mut syn::Macro) {
             // replace the macro with a block that roughly matches the macro
-            if let Some("rsx" | "render") = i
-                .path
-                .segments
-                .last()
-                .map(|i| i.ident.to_string())
-                .as_deref()
-            {
+            if is_rsx_macro(i) {
+                let is_arm_body = self.arm_macros.contains(&i.path.span().start());
                 // format the macro in place
                 // we'll use information about the macro to replace it with another formatted block
                 // once we've written out the unparsed expr from prettyplease, we can replace
@@ -111,7 +127,7 @@ fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 }
 
                 // Save this formatted block for later, when we apply it to the original expr
-                self.formatted_stack.push(formatted)
+                self.formatted_stack.push((formatted, is_arm_body))
             } else if i.tokens.to_string().contains("rsx") {
                 // Non-rsx macros like `vec![rsx! { ... }]` contain unparsed token streams that
                 // the visitor does not recurse into by default. Parse them as expression lists
@@ -137,6 +153,7 @@ fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         src,
         cfg,
         formatted_stack: vec![],
+        arm_macros: vec![],
     };
 
     // builds the expression stack
@@ -147,7 +164,7 @@ fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     let mut unparsed = unparse_inner(&modified_expr);
 
     // now we can replace the macros with the formatted blocks
-    for fmted in replacer.formatted_stack.drain(..) {
+    for (fmted, is_arm_body) in replacer.formatted_stack.drain(..) {
         let is_multiline = fmted.ends_with('}') || fmted.contains('\n');
         let is_empty = fmted.trim().is_empty();
 
@@ -196,10 +213,18 @@ fn unparse_expr_inner(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
             out_fmt.push(' ');
         }
 
-        // Replace the dioxus_autofmt_block__________ token with the formatted block
+        // Replace the marker token with the formatted block. A multiline rsx!
+        // match arm is block-like, so the comma prettyplease placed after the
+        // marker comes off along with it
         out_fmt.push('}');
-
-        unparsed = unparsed.replacen(MARKER_REPLACE, &out_fmt, 1);
+        let next_is_comma = unparsed
+            .find(MARKER_REPLACE)
+            .is_some_and(|i| unparsed[i + MARKER_REPLACE.len()..].starts_with(','));
+        if is_arm_body && is_multiline && next_is_comma {
+            unparsed = unparsed.replacen(&format!("{MARKER_REPLACE},"), &out_fmt, 1);
+        } else {
+            unparsed = unparsed.replacen(MARKER_REPLACE, &out_fmt, 1);
+        }
         continue;
     }
 
