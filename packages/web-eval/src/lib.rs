@@ -74,16 +74,21 @@ extern "C" {
     /// Get a weak reference to this channel.
     #[wasm_bindgen(method)]
     pub fn weak(this: &WebDioxusChannel) -> WeakDioxusChannel;
+
+    /// Close the channel.
+    #[wasm_bindgen(method)]
+    pub fn close(this: &WebDioxusChannel);
 }
 
 /// JavaScript wrapper that ensures async code doesn't block the Rust WASM thread.
-/// The evaluated code is wrapped in an async IIFE that calls `dioxus.close()` when done.
+/// The evaluated code is wrapped in an async IIFE, and the channel is closed when that IIFE
+/// settles so early returns still release their channel.
 const PROMISE_WRAPPER: &str = r#"
     return (async function(){
         {JS_CODE}
 
         dioxus.close();
-    })();
+    })().finally(() => dioxus.close());
 "#;
 
 type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>;
@@ -104,7 +109,7 @@ impl WebEvaluator {
     /// The JavaScript code has access to a `dioxus` object with the following methods:
     /// - `dioxus.send(data)` - Send data to Rust
     /// - `dioxus.recv()` - Receive data from Rust (returns a Promise)
-    /// - `dioxus.close()` - Close the channel (called automatically when the code finishes)
+    /// - `dioxus.close()` - Close the channel
     ///
     /// The return value of the JavaScript code will be available via `poll_join`.
     pub fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
@@ -134,9 +139,12 @@ impl WebEvaluator {
                 })
                     as Pin<Box<dyn Future<Output = result::Result<Value, EvalError>>>>
             }
-            Err(err) => Box::pin(futures_util::future::ready(Err(EvalError::InvalidJs(
-                err.as_string().unwrap_or("unknown".to_string()),
-            )))),
+            Err(err) => {
+                channels.close();
+                Box::pin(futures_util::future::ready(Err(EvalError::InvalidJs(
+                    err.as_string().unwrap_or("unknown".to_string()),
+                ))))
+            }
         };
 
         owner.insert(Box::new(Self {

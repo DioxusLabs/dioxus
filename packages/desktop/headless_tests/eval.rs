@@ -53,10 +53,22 @@ fn app() -> Element {
         EVALS_RETURNED.with_mut(|x| *x += 1);
     });
 
+    // Make sure evals that return before reaching the fall-through close do not leak channels.
+    use_future(|| async {
+        let eval = document::eval(r#"return dioxus.id;"#);
+
+        let returned_id = usize::deserialize(&eval.await.unwrap()).unwrap();
+        let is_closed = document::eval(&format!(
+            r#"return globalThis.__channels[{returned_id}] === null;"#
+        ));
+        assert!(bool::deserialize(&is_closed.await.unwrap()).unwrap());
+        EVALS_RETURNED.with_mut(|x| *x += 1);
+    });
+
     use_memo(|| {
         println!("expected 100 evals received found {}", EVALS_RECEIVED());
-        println!("expected 2 eval returned found {}", EVALS_RETURNED());
-        if EVALS_RECEIVED() == 100 && EVALS_RETURNED() == 2 {
+        println!("expected 3 eval returned found {}", EVALS_RETURNED());
+        if EVALS_RECEIVED() == 100 && EVALS_RETURNED() == 3 {
             window().close();
         }
     });
