@@ -2,12 +2,13 @@ use crate::{
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
     app::SharedContext,
     assets::AssetHandlerRegistry,
-    dom_thread::{PendingDomId, SharedCallbackRegistry, VirtualDomEvent, reserve_pending_dom},
+    dom_thread::{SharedCallbackRegistry, VirtualDomEvent},
     ipc::{DesktopServiceCallback, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
 };
 use dioxus_core::{Callback, VirtualDom};
+use send_wrapper::SendWrapper;
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -345,18 +346,25 @@ impl DesktopContext {
     /// Returns a future that resolves to the [`DesktopContext`] for the new window.
     ///
     /// Note: `Config` is not `Send`, so this method takes a closure that creates the config
-    /// on the main thread instead of accepting it directly. The [`VirtualDom`] stays on the DOM
-    /// thread where this method is called.
+    /// on the main thread instead of accepting it directly. The [`VirtualDom`] is only ever
+    /// run on this thread; it rides through the main thread inside a [`SendWrapper`].
     pub fn new_window(
         &self,
         dom: VirtualDom,
         make_cfg: impl FnOnce() -> Config + Send + 'static,
     ) -> PendingDesktopContext {
-        let pending_dom = reserve_pending_dom(dom);
+        // `VirtualDom` is `!Send`, but it starts and ends on this thread: the main thread only
+        // carries it (inside the webview's spawn closure) back to the DOM thread to run.
+        // `DesktopContext` is `!Send`, so the wrapper is always unwrapped on its home thread.
+        let dom = SendWrapper::new(dom);
         let (sender, receiver) = futures_channel::oneshot::channel();
 
         let _rx = self.run_with_desktop_service(move |desktop| {
-            desktop.new_window_from_pending_dom(pending_dom, make_cfg(), sender);
+            desktop.queue_new_window(PendingWebview::new(
+                make_cfg(),
+                Box::new(move || dom.take()),
+                sender,
+            ));
         });
 
         PendingDesktopContext { receiver }
@@ -1000,21 +1008,11 @@ impl DesktopService {
         dom: impl FnOnce() -> VirtualDom + Send + 'static,
         cfg: Config,
     ) -> PendingDesktopContext {
-        let (window, context) = PendingWebview::new(cfg, Box::new(dom));
+        let (sender, receiver) = futures_channel::oneshot::channel();
 
-        self.queue_new_window(window);
+        self.queue_new_window(PendingWebview::new(cfg, Box::new(dom), sender));
 
-        context
-    }
-
-    pub(crate) fn new_window_from_pending_dom(
-        &self,
-        dom: PendingDomId,
-        cfg: Config,
-        sender: futures_channel::oneshot::Sender<DesktopContextInner>,
-    ) {
-        let window = PendingWebview::from_pending_dom(cfg, dom, sender);
-        self.queue_new_window(window);
+        PendingDesktopContext { receiver }
     }
 
     fn queue_new_window(&self, window: PendingWebview) {

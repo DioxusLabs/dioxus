@@ -3503,6 +3503,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rfd",
  "rustc-hash 2.1.1",
+ "send_wrapper",
  "separator",
  "serde",
  "serde_json",

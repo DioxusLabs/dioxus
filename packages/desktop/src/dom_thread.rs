@@ -57,15 +57,10 @@ slotmap::new_key_type! {
 pub(crate) struct SharedCallbackRegistry(Rc<RefCell<DomCallbackRegistry>>);
 
 thread_local! {
-    static DOM_THREAD_STATE: RefCell<DomThreadState> = RefCell::new(DomThreadState::default());
-}
-
-#[derive(Default)]
-struct DomThreadState {
-    pending_doms: slab::Slab<VirtualDom>,
     /// Every window's callback registry, keyed by window id, so a `DesktopContext` for *any*
     /// window resolves the registry matching the `dom_tx` it dispatches through.
-    window_registries: HashMap<WindowId, SharedCallbackRegistry>,
+    static WINDOW_REGISTRIES: RefCell<HashMap<WindowId, SharedCallbackRegistry>> =
+        RefCell::new(HashMap::new());
 }
 
 /// Make `registry` discoverable by `window_id` until the returned guard drops (the guard lives
@@ -74,11 +69,8 @@ pub(crate) fn register_window_registry(
     window_id: WindowId,
     registry: SharedCallbackRegistry,
 ) -> WindowRegistryGuard {
-    DOM_THREAD_STATE.with(|state| {
-        state
-            .borrow_mut()
-            .window_registries
-            .insert(window_id, registry);
+    WINDOW_REGISTRIES.with(|registries| {
+        registries.borrow_mut().insert(window_id, registry);
     });
     WindowRegistryGuard { window_id }
 }
@@ -86,60 +78,24 @@ pub(crate) fn register_window_registry(
 /// Look up the callback registry for a window. Returns `None` if the window's VirtualDom is not
 /// running (window closed, not yet started) or when called off the DOM thread.
 pub(crate) fn lookup_window_registry(window_id: WindowId) -> Option<SharedCallbackRegistry> {
-    DOM_THREAD_STATE.with(|state| state.borrow().window_registries.get(&window_id).cloned())
+    WINDOW_REGISTRIES.with(|registries| registries.borrow().get(&window_id).cloned())
 }
 
-/// Removes a window's registry entry from [`DOM_THREAD_STATE`] on drop.
+/// Removes a window's registry entry from [`WINDOW_REGISTRIES`] on drop.
 pub(crate) struct WindowRegistryGuard {
     window_id: WindowId,
 }
 
 impl Drop for WindowRegistryGuard {
     fn drop(&mut self) {
-        DOM_THREAD_STATE.with(|state| {
-            state.borrow_mut().window_registries.remove(&self.window_id);
+        WINDOW_REGISTRIES.with(|registries| {
+            registries.borrow_mut().remove(&self.window_id);
         });
     }
 }
 
 /// The name of the dedicated DOM thread spawned by [`spawn_dom_thread`].
 const DOM_THREAD_NAME: &str = "dioxus-desktop-dom";
-
-/// The id of the dedicated DOM thread, recorded by [`spawn_dom_thread`]. Mirrors
-/// `MAIN_THREAD_ID` in `app.rs`.
-static DOM_THREAD_ID: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct PendingDomId(usize);
-
-/// Park a `VirtualDom` in the DOM thread's thread-local so a `Send` id for it can travel to the
-/// main thread (used by `DesktopContext::new_window`, since `VirtualDom` itself is `!Send`).
-///
-/// # Panics
-///
-/// Panics when called off the DOM thread: the dom would be parked in the wrong thread's
-/// thread-local and could never be retrieved.
-pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
-    assert_eq!(
-        Some(&std::thread::current().id()),
-        DOM_THREAD_ID.get(),
-        "DesktopContext::new_window must be called from a Dioxus component or task (the \
-         VirtualDom thread)"
-    );
-    let id = DOM_THREAD_STATE.with(|state| state.borrow_mut().pending_doms.insert(dom));
-    PendingDomId(id)
-}
-
-/// Take a parked `VirtualDom`. Returns `None` if it was already taken.
-pub(crate) fn take_pending_dom(id: PendingDomId) -> Option<VirtualDom> {
-    DOM_THREAD_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        state
-            .pending_doms
-            .contains(id.0)
-            .then(|| state.pending_doms.remove(id.0))
-    })
-}
 
 /// Registry for callbacks that live on the DOM thread.
 ///
@@ -354,7 +310,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
     let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let join_handle = std::thread::Builder::new()
+    std::thread::Builder::new()
         .name(DOM_THREAD_NAME.into())
         .spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -406,7 +362,6 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
             });
         })
         .expect("Failed to spawn VirtualDom thread");
-    let _ = DOM_THREAD_ID.set(join_handle.thread().id());
 
     DomThreadHandle { task_tx, abort_tx }
 }

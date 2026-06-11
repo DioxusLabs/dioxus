@@ -5,7 +5,7 @@ use crate::{
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent, UserWindowEventVariant},
     shortcut::ShortcutRegistry,
-    webview::{PendingDom, PendingWebview, WebviewInstance},
+    webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::VirtualDom;
 use std::{
@@ -291,12 +291,7 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(
-            cfg,
-            PendingDom::Factory(virtual_dom),
-            self.shared.clone(),
-            target,
-        );
+        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone(), target);
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);

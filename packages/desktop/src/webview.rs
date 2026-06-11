@@ -1,7 +1,6 @@
-use crate::PendingDesktopContext;
 use crate::app::MakeVirtualDom;
 use crate::desktop_context::DesktopContextInner;
-use crate::dom_thread::{PendingDomId, VirtualDomEvent};
+use crate::dom_thread::VirtualDomEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
     Config, DesktopService,
@@ -86,7 +85,7 @@ impl WebviewInstance {
     /// This webview connects to it through the event channel created below.
     pub(crate) fn new(
         mut cfg: Config,
-        dom: PendingDom,
+        dom: MakeVirtualDom,
         shared: Rc<SharedContext>,
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) -> WebviewInstance {
@@ -423,21 +422,7 @@ impl WebviewInstance {
             let event_tx = event_tx.clone();
             let window = desktop_context.window.clone();
             move || async move {
-                let mut dom = match dom {
-                    PendingDom::Factory(make_dom) => make_dom(),
-                    PendingDom::Pending(pending) => {
-                        match crate::dom_thread::take_pending_dom(pending) {
-                            Some(dom) => dom,
-                            None => {
-                                tracing::warn!(
-                                    "the pending VirtualDom for window {window_id:?} was already \
-                                     taken; the window will not render"
-                                );
-                                return;
-                            }
-                        }
-                    }
-                };
+                let mut dom = dom();
 
                 if let Some(mut on_window) = on_window {
                     on_window(window, &mut dom);
@@ -561,38 +546,18 @@ impl WebviewInstance {
 ///
 /// Each queued webview gets its own wry-bindgen runtime and driver when created.
 pub(crate) struct PendingWebview {
-    dom: PendingDom,
+    dom: MakeVirtualDom,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContextInner>,
 }
 
-pub(crate) enum PendingDom {
-    Factory(MakeVirtualDom),
-    Pending(PendingDomId),
-}
-
 impl PendingWebview {
-    pub(crate) fn new(cfg: Config, dom: MakeVirtualDom) -> (Self, PendingDesktopContext) {
-        let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self {
-            cfg,
-            sender,
-            dom: PendingDom::Factory(dom),
-        };
-        let pending = PendingDesktopContext { receiver };
-        (webview, pending)
-    }
-
-    pub(crate) fn from_pending_dom(
+    pub(crate) fn new(
         cfg: Config,
-        dom: PendingDomId,
+        dom: MakeVirtualDom,
         sender: futures_channel::oneshot::Sender<DesktopContextInner>,
     ) -> Self {
-        Self {
-            cfg,
-            sender,
-            dom: PendingDom::Pending(dom),
-        }
+        Self { cfg, sender, dom }
     }
 
     pub(crate) fn create_window(
