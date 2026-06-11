@@ -8,9 +8,7 @@ use tao::{event::Event, event_loop::EventLoopWindowTarget, window::WindowId};
 /// The unique identifier of a window event handler. This can be used to later remove the handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WryEventHandler {
-    /// `None` for handles returned when registration failed (window closed, no VirtualDom);
-    /// removing such a handle is a no-op.
-    pub(crate) id: Option<usize>,
+    pub(crate) id: usize,
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) dom_handler: Option<DomCallbackId>,
 }
@@ -18,16 +16,7 @@ pub struct WryEventHandler {
 impl WryEventHandler {
     pub(crate) fn new(id: usize) -> Self {
         Self {
-            id: Some(id),
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            dom_handler: None,
-        }
-    }
-
-    /// An inert handle returned when registration failed; `remove` does nothing.
-    pub(crate) fn noop() -> Self {
-        Self {
-            id: None,
+            id,
             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             dom_handler: None,
         }
@@ -105,9 +94,7 @@ impl WindowEventHandlers {
     }
 
     pub(crate) fn remove(&self, id: WryEventHandler) {
-        if let Some(id) = id.id {
-            self.handlers.borrow_mut().try_remove(id);
-        }
+        self.handlers.borrow_mut().try_remove(id.id);
     }
 
     pub fn apply_event<'a>(

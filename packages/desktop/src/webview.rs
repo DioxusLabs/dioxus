@@ -428,7 +428,6 @@ impl WebviewInstance {
             asset_handlers,
             cfg.window_close_behavior,
             event_tx.clone(),
-            Arc::downgrade(&window_handle),
         ));
 
         // Finally spawn the app in the virtual dom task thread
@@ -437,7 +436,7 @@ impl WebviewInstance {
             // released even if the app future is dropped before the webview ever invokes it.
             let window_handle = window_handle.clone();
             let event_tx = event_tx.clone();
-            move || async move {
+            move |callbacks| async move {
                 let dom = dom();
 
                 crate::dom_thread::run_virtual_dom_with_dom(
@@ -448,18 +447,26 @@ impl WebviewInstance {
                     webview_id,
                     window_handle,
                     file_hover,
+                    callbacks,
                 )
                 .await;
             }
         };
         let (runtime, driver) = wry_bindgen.split();
-        let future = runtime.run(run_app);
         _ = shared
             .desktop_thread_handle
             .tx
             .send(DomThreadMessage::Spawn(
                 window_id,
-                Box::new(|| Box::pin(future.into_future())),
+                Box::new(move |callbacks| {
+                    // This closure runs on the DOM thread, which hands it the callback registry
+                    // it owns. `runtime.run` builds a sendable wrapper, so its app closure must
+                    // be `Send`; the `!Send` registry rides into it through a `SendWrapper`
+                    // created and unwrapped here, on the registry's home thread.
+                    let callbacks = send_wrapper::SendWrapper::new(callbacks);
+                    let future = runtime.run(move || run_app(callbacks.take()));
+                    Box::pin(future.into_future())
+                }),
             ));
 
         // Request an initial redraw

@@ -12,10 +12,9 @@ use send_wrapper::SendWrapper;
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
-    marker::PhantomData,
     pin::Pin,
     rc::Rc,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 use tao::{
     dpi::{PhysicalPosition, PhysicalSize, Position, Size},
@@ -131,17 +130,15 @@ pub(crate) struct DesktopContextInner {
 #[derive(Clone)]
 pub struct DesktopContext {
     inner: DesktopContextInner,
-    // Keep this handle on the thread it was created for. Blocking desktop calls from the Tao event
-    // loop thread can deadlock because they send work to that same event loop and wait for it.
-    unsend: PhantomData<*const ()>,
+    // The `Rc` inside also keeps this handle on the DOM thread it was created for. Blocking
+    // desktop calls from the Tao event loop thread can deadlock because they send work to that
+    // same event loop and wait for it.
+    callbacks: SharedCallbackRegistry,
 }
 
 impl DesktopContext {
-    fn from_inner(inner: DesktopContextInner) -> Self {
-        Self {
-            inner,
-            unsend: PhantomData,
-        }
+    fn from_parts(inner: DesktopContextInner, callbacks: SharedCallbackRegistry) -> Self {
+        Self { inner, callbacks }
     }
 
     /// Create a new [`DesktopContext`].
@@ -151,8 +148,13 @@ impl DesktopContext {
     /// * `dom_tx` - Channel to send events to the DOM thread
     /// * `handle` - The window's [`WindowHandle`], which carries the event-loop proxy and window
     ///   id and keeps the window's main-thread state alive
-    pub(crate) fn new(dom_tx: UnboundedSender<VirtualDomEvent>, handle: Arc<WindowHandle>) -> Self {
-        Self::from_inner(DesktopContextInner { dom_tx, handle })
+    /// * `callbacks` - The DOM thread's callback registry
+    pub(crate) fn new(
+        dom_tx: UnboundedSender<VirtualDomEvent>,
+        handle: Arc<WindowHandle>,
+        callbacks: SharedCallbackRegistry,
+    ) -> Self {
+        Self::from_parts(DesktopContextInner { dom_tx, handle }, callbacks)
     }
 
     /// Run a closure on the main thread, returning a future that resolves to its result.
@@ -300,30 +302,60 @@ impl DesktopContext {
 
         /// Opens DevTool window.
         fn devtool(&self);
-
-        /// Remove all global shortcuts.
-        fn remove_all_shortcuts(&self);
     }
 
     /// Remove a global shortcut, including its DOM-thread callback if it was created with
     /// [`Self::create_shortcut`].
     pub fn remove_shortcut(&self, id: ShortcutHandle) {
-        if let Some(dom_handler) = id.dom_handler {
-            if let Some(registry) = self.registry_or_warn("remove the DOM-side shortcut callback") {
-                registry.remove(dom_handler);
-            }
-        }
+        self.callbacks.remove_shortcut_handler(id);
 
         drop(self.run_with_desktop_service(move |desktop| desktop.remove_shortcut(id)));
     }
 
+    /// Remove all global shortcuts, including their DOM-thread callbacks.
+    pub fn remove_all_shortcuts(&self) {
+        self.callbacks.remove_all_shortcut_handlers();
+
+        drop(self.run_with_desktop_service(move |desktop| desktop.remove_all_shortcuts()));
+    }
+
     /// Start the creation of a new window using a [`VirtualDom`] and window builder.
     ///
-    /// Returns a future that resolves to the [`DesktopContext`] for the new window.
+    /// Returns a future that resolves to the [`DesktopContext`] for the new window. You can use
+    /// it to control the new window from the current one once it is created. Be careful to not
+    /// create a cycle of windows, or you might leak memory.
     ///
     /// Note: `Config` is not `Send`, so this method takes a closure that creates the config
     /// on the main thread instead of accepting it directly. The [`VirtualDom`] is only ever
     /// run on this thread; it rides through the main thread inside a [`SendWrapper`].
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// fn popup() -> Element {
+    ///     rsx! {
+    ///         div { "This is a popup window!" }
+    ///     }
+    /// }
+    ///
+    /// # async fn app() {
+    /// // Create a new window with a component that will be rendered in the new window.
+    /// let dom = VirtualDom::new(popup);
+    /// // Create and wait for the window
+    /// let window = dioxus::desktop::window().new_window(dom, Default::default).await;
+    /// // Fullscreen the new window
+    /// window.set_fullscreen(true);
+    /// # }
+    /// ```
+    // Note: This method is asynchronous because webview2 does not support creating a new window
+    // from inside of an existing webview callback. Dioxus runs event handlers synchronously
+    // inside of a webview callback. See [this page](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/threading-model#reentrancy)
+    // for more information.
+    //
+    // Related issues:
+    // - https://github.com/tauri-apps/wry/issues/583
+    // - https://github.com/DioxusLabs/dioxus/issues/3080
     pub fn new_window(
         &self,
         dom: VirtualDom,
@@ -343,7 +375,10 @@ impl DesktopContext {
             ));
         });
 
-        PendingDesktopContext { receiver }
+        PendingDesktopContext {
+            receiver,
+            callbacks: self.callbacks.clone(),
+        }
     }
 
     /// Returns the unique identifier of the window.
@@ -361,28 +396,13 @@ impl DesktopContext {
         self.inner.handle.window.clone()
     }
 
-    /// Look up the callback registry that belongs to **this context's window** (invocations are
-    /// forwarded through this window's `dom_tx`, so callbacks must live in the same window's
-    /// registry — not the calling component's). `None` if the window's VirtualDom is not running.
-    pub(crate) fn callback_registry(&self) -> Option<SharedCallbackRegistry> {
-        crate::dom_thread::lookup_window_registry(self.inner.handle.window_id)
-    }
-
-    /// Like [`Self::callback_registry`], but warns (mentioning the failed `action`) on `None`.
-    fn registry_or_warn(&self, action: &str) -> Option<SharedCallbackRegistry> {
-        let registry = self.callback_registry();
-        if registry.is_none() {
-            tracing::warn!(
-                "cannot {action} for window {:?}: its VirtualDom is not running (window closed, \
-                 or called off the VirtualDom thread)",
-                self.inner.handle.window_id
-            );
-        }
-        registry
-    }
-
     pub(crate) fn dom_event_sender(&self) -> UnboundedSender<VirtualDomEvent> {
         self.inner.dom_tx.clone()
+    }
+
+    /// The DOM thread's callback registry.
+    pub(crate) fn callback_registry(&self) -> &SharedCallbackRegistry {
+        &self.callbacks
     }
 
     proxy_methods! { desktop.window:
@@ -676,7 +696,7 @@ impl DesktopContext {
     /// [`Self::create_main_thread_wry_event_handler`] if you need it delivered synchronously.
     ///
     /// Must be called from this window's VirtualDom thread inside the dioxus runtime (where the
-    /// handler will run); otherwise it warns and returns a handle that does nothing.
+    /// handler will run).
     #[cfg_attr(
         docsrs,
         doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
@@ -690,15 +710,15 @@ impl DesktopContext {
         let dom_handler = {
             use dioxus_core::{Runtime, current_scope_id};
 
-            let Some(registry) = self.registry_or_warn("register a wry event handler") else {
-                return WryEventHandler::noop();
-            };
             let runtime = Runtime::current();
             let scope_id = current_scope_id();
             let mut handler = handler;
-            registry.register(move |event: Event<'static, ()>| {
-                runtime.in_scope(scope_id, || handler(&event));
-            })
+            self.callbacks.register(
+                self.inner.handle.window_id,
+                move |event: Event<'static, ()>| {
+                    runtime.in_scope(scope_id, || handler(&event));
+                },
+            )
         };
         let handler = self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_raw_wry_event_handler(move |event, _target| {
@@ -743,9 +763,7 @@ impl DesktopContext {
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if let Some(dom_handler) = id.dom_handler {
-            if let Some(registry) = self.registry_or_warn("remove the DOM-side wry event handler") {
-                registry.remove(dom_handler);
-            }
+            self.callbacks.remove(dom_handler);
         }
 
         drop(self.run_with_desktop_service(move |desktop| desktop.remove_wry_event_handler(id)));
@@ -771,31 +789,29 @@ impl DesktopContext {
         name: impl Into<String>,
         handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
-        let Some(registry) = self.registry_or_warn("register an asset handler") else {
-            return;
-        };
         let name = name.into();
 
-        // Store the handler in this window's DOM registry, preserving the runtime/scope it was
-        // registered from. The main-thread registry only forwards requests back here.
+        // Store the handler in the DOM registry, preserving the runtime/scope it was registered
+        // from. The main-thread registry only forwards requests back here.
         let runtime = dioxus_core::Runtime::current();
         let scope_id = dioxus_core::current_scope_id();
-        registry.register_asset_handler(name.clone(), move |req, resp| {
-            runtime.in_scope(scope_id, || handler(req, resp));
-        });
+        let dom_id = self.callbacks.register_asset_handler(
+            self.inner.handle.window_id,
+            name.clone(),
+            move |req, resp| {
+                runtime.in_scope(scope_id, || handler(req, resp));
+            },
+        );
 
         // Set up forwarding on the main thread
         let dom_tx = self.inner.dom_tx.clone();
-        let handler_name = name.clone();
-        let main_thread_name = name.clone();
         self.run_with_desktop_service_blocking(move |desktop| {
             // Register a forwarder that sends requests to the DOM thread
             desktop.asset_handlers.register_handler(
-                main_thread_name,
+                name,
                 move |req: AssetRequest, resp: RequestAsyncResponder| {
-                    let handler_name = handler_name.clone();
                     let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                        registry.invoke_asset_handler(&handler_name, req, resp);
+                        registry.invoke(dom_id, (req, resp));
                     })));
                 },
             );
@@ -830,14 +846,9 @@ impl DesktopContext {
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
-        let registry = self.registry_or_warn("create a shortcut").ok_or_else(|| {
-            ShortcutRegistryError::Other(Arc::new(std::io::Error::other(
-                "the window's VirtualDom is not running",
-            )))
-        })?;
-
-        // Store the callback in this window's DOM registry
-        let dom_id = registry.register(callback);
+        // Store the callback in the DOM registry
+        let registry = &self.callbacks;
+        let dom_id = registry.register(self.inner.handle.window_id, callback);
 
         // Set up forwarding on the main thread
         let dom_tx = self.inner.dom_tx.clone();
@@ -850,7 +861,10 @@ impl DesktopContext {
         });
 
         match result {
-            Ok(handle) => Ok(handle.with_dom_handler(dom_id)),
+            Ok(handle) => {
+                registry.register_shortcut_handler(handle, dom_id);
+                Ok(handle)
+            }
             Err(e) => {
                 // Main-thread registration failed; undo the DOM-side registration.
                 registry.remove(dom_id);
@@ -863,9 +877,8 @@ impl DesktopContext {
     ///
     /// This removes the handler from both the DOM registry and the main thread.
     pub fn remove_asset_handler(&self, name: &str) {
-        if let Some(registry) = self.registry_or_warn("remove the DOM-side asset handler") {
-            registry.remove_asset_handler(name);
-        }
+        self.callbacks
+            .remove_asset_handler(self.inner.handle.window_id, name);
 
         let name = name.to_string();
         drop(self.run_with_desktop_service(move |desktop| {
@@ -901,11 +914,6 @@ pub struct DesktopService {
     /// Channel to send events to the DOM thread for the inverted callback pattern.
     pub(crate) dom_tx: UnboundedSender<VirtualDomEvent>,
 
-    /// The window's [`WindowHandle`], used to mint [`DesktopContext`]s in [`Self::proxy`]. Weak
-    /// on purpose: strong handles are what keep this window's main-thread state alive, so the
-    /// state itself must not hold one.
-    pub(crate) window_handle: Weak<WindowHandle>,
-
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<std::cell::RefCell<Vec<Retained<UIView>>>>,
 }
@@ -927,7 +935,6 @@ impl DesktopService {
         asset_handlers: AssetHandlerRegistry,
         close_behaviour: WindowCloseBehaviour,
         dom_tx: UnboundedSender<VirtualDomEvent>,
-        window_handle: Weak<WindowHandle>,
     ) -> Self {
         Self {
             window,
@@ -936,55 +943,9 @@ impl DesktopService {
             asset_handlers,
             close_behaviour: Rc::new(Cell::new(close_behaviour)),
             dom_tx,
-            window_handle,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
-    }
-
-    /// Start the creation of a new window using a component function and window builder.
-    ///
-    /// Returns a future that resolves to the webview handle for the new window. You can use this
-    /// to control other windows from the current window once the new window is created.
-    ///
-    /// Be careful to not create a cycle of windows, or you might leak memory.
-    ///
-    /// # Example
-    ///
-    /// ```rust, no_run
-    /// use dioxus::prelude::*;
-    /// fn popup() -> Element {
-    ///     rsx! {
-    ///         div { "This is a popup window!" }
-    ///     }
-    /// }
-    ///
-    /// # async fn app() {
-    /// // Create a new window with a component that will be rendered in the new window.
-    /// let dom = VirtualDom::new(popup);
-    /// // Create and wait for the window
-    /// let window = dioxus::desktop::window().new_window(dom, Default::default).await;
-    /// // Fullscreen the new window
-    /// window.set_fullscreen(true);
-    /// # }
-    /// ```
-    // Note: This method is asynchronous because webview2 does not support creating a new window from
-    // inside of an existing webview callback. Dioxus runs event handlers synchronously inside of a webview
-    // callback. See [this page](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/threading-model#reentrancy) for more information.
-    //
-    // Related issues:
-    // - https://github.com/tauri-apps/wry/issues/583
-    // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(
-        &self,
-        dom: impl FnOnce() -> VirtualDom + Send + 'static,
-        cfg: Config,
-    ) -> PendingDesktopContext {
-        let (sender, receiver) = futures_channel::oneshot::channel();
-
-        self.queue_new_window(PendingWebview::new(cfg, Box::new(dom), sender));
-
-        PendingDesktopContext { receiver }
     }
 
     fn queue_new_window(&self, window: PendingWebview) {
@@ -1161,28 +1122,6 @@ impl DesktopService {
         self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
-    /// Get a proxy to this [`DesktopService`] for the current VirtualDom thread.
-    ///
-    /// The proxy runs closures on the main thread via
-    /// [`run_on_main_thread`](DesktopContext::run_on_main_thread) and exposes the window/webview
-    /// methods on [`DesktopContext`].
-    ///
-    /// The returned handle's blocking methods must **not** be driven from the main/event-loop
-    /// thread: they wait on an event that same thread must process, and panic rather than
-    /// deadlock. Main-thread code can use [`DesktopService`]'s methods directly instead.
-    ///
-    /// # Panics
-    ///
-    /// Panics if every [`DesktopContext`] for this window has already dropped: at that point the
-    /// window is tearing down and a fresh handle must not resurrect it.
-    pub fn proxy(&self) -> DesktopContext {
-        let handle = self.window_handle.upgrade().expect(
-            "cannot create a DesktopContext for a window that is already tearing down \
-             (all of its existing DesktopContexts have dropped)",
-        );
-        DesktopContext::from_inner(self.proxy_inner(handle))
-    }
-
     pub(crate) fn proxy_inner(&self, handle: Arc<WindowHandle>) -> DesktopContextInner {
         DesktopContextInner {
             dom_tx: self.dom_tx.clone(),
@@ -1261,6 +1200,10 @@ fn is_main_thread() -> bool {
 /// ```
 pub struct PendingDesktopContext {
     pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContextInner>,
+    /// The DOM thread's callback registry, attached to the resolved context. Awaiting happens on
+    /// the DOM thread (the pending context is `!Send`), so the creating window's handle is the
+    /// same registry the new window uses.
+    pub(crate) callbacks: SharedCallbackRegistry,
 }
 
 impl PendingDesktopContext {
@@ -1273,7 +1216,9 @@ impl PendingDesktopContext {
 
     /// Try to resolve the pending context into a [`DesktopContext`].
     pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
-        self.receiver.await.map(DesktopContext::from_inner)
+        self.receiver
+            .await
+            .map(|inner| DesktopContext::from_parts(inner, self.callbacks))
     }
 }
 

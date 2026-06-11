@@ -103,15 +103,12 @@ fn use_dom_event_handler<T: Send + 'static>(
     use_hook_with_cleanup(
         move || {
             let window = window();
-            let Some(registry) = window.callback_registry() else {
-                tracing::warn!(
-                    "cannot register a dom event handler: this window's VirtualDom is not running"
-                );
-                return crate::WryEventHandler::noop();
-            };
-            let dom_handler = registry.register(move |event: T| {
-                runtime.in_scope(scope_id, || handler(event));
-            });
+            let dom_handler =
+                window
+                    .callback_registry()
+                    .register(window.window_id(), move |event: T| {
+                        runtime.in_scope(scope_id, || handler(event));
+                    });
             let dom_tx = window.dom_event_sender();
             window
                 .create_wry_event_handler_with_user_event(move |event, _| {
