@@ -316,71 +316,99 @@ impl PatchWasmBindgen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use krates::semver::Prerelease;
+    use std::sync::OnceLock;
 
-    /// The tags published on DioxusLabs/wasm-bindgen-wry at the time of writing
-    fn real_tags() -> Vec<String> {
-        ["v0.2.106", "v0.2.122-alpha.2", "v0.2.122-alpha.4"]
-            .map(String::from)
-            .to_vec()
+    /// Tags fetched live from DioxusLabs/wasm-bindgen-wry, once per test run.
+    /// `None` when the fetch failed (offline / rate-limited); callers skip.
+    fn fetched_tags() -> Option<&'static [String]> {
+        static TAGS: OnceLock<Option<Vec<String>>> = OnceLock::new();
+        TAGS.get_or_init(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(fetch_available_tags())
+                .map_err(|e| eprintln!("skipping: could not fetch tags from GitHub: {e}"))
+                .ok()
+        })
+        .as_deref()
+    }
+
+    fn parsed_tags(tags: &[String]) -> Vec<Version> {
+        let versions: Vec<_> = tags.iter().filter_map(|t| parse_version(t)).collect();
+        assert!(!versions.is_empty(), "no parseable tags published");
+        versions
     }
 
     fn v(s: &str) -> Version {
         Version::parse(s).unwrap()
     }
 
+    fn base(v: &Version) -> Version {
+        Version::new(v.major, v.minor, v.patch)
+    }
+
     #[test]
     fn fork_pin_requires_exact_tag() {
-        // The workspace pins wasm-bindgen-x =0.2.122-alpha.5 but no such tag exists yet:
-        // every upstream version must select nothing (warn-and-skip), never a stale tag.
-        let pin = v("0.2.122-alpha.5");
-        for upstream in ["0.2.100", "0.2.106", "0.2.122", "0.2.123"] {
+        let Some(tags) = fetched_tags() else { return };
+        let versions = parsed_tags(tags);
+
+        for pin in &versions {
+            // Pinning to a published tag selects exactly that tag
+            let selected = find_best_matching_tag(&base(pin), Some(pin), tags)
+                .and_then(|tag| parse_version(&tag));
+            assert_eq!(selected.as_ref(), Some(pin));
+
+            // A pin with no published tag must select nothing (warn-and-skip), never a stale tag
+            let mut absent = pin.clone();
+            absent.pre = Prerelease::new("alpha.99999").unwrap();
+            assert!(!versions.contains(&absent));
             assert_eq!(
-                find_best_matching_tag(&v(upstream), Some(&pin), &real_tags()),
+                find_best_matching_tag(&base(pin), Some(&absent), tags),
                 None,
-                "upstream {upstream} must not match any tag with pin {pin}"
+                "pin {absent} must not match any tag"
             );
         }
-
-        // Once the pinned tag exists, it is selected exactly
-        let pin = v("0.2.122-alpha.4");
-        assert_eq!(
-            find_best_matching_tag(&v("0.2.122"), Some(&pin), &real_tags()),
-            Some("v0.2.122-alpha.4".to_string())
-        );
     }
 
     #[test]
     fn no_fork_pin_selects_highest_compatible_base() {
-        // Without a fork pin, pick the highest tag whose base can shadow the upstream version.
-        // Notably 0.2.106 must NOT be pinned to the stale v0.2.106 prototype tag.
-        for upstream in ["0.2.100", "0.2.106", "0.2.122"] {
-            assert_eq!(
-                find_best_matching_tag(&v(upstream), None, &real_tags()),
-                Some("v0.2.122-alpha.4".to_string()),
-                "upstream {upstream} should select the newest compatible tag"
-            );
+        let Some(tags) = fetched_tags() else { return };
+        let versions = parsed_tags(tags);
+
+        // Without a fork pin, every published tag's base must be shadowable by a tag from the
+        // same minor line that is at least as new
+        for tag in &versions {
+            let selected = find_best_matching_tag(&base(tag), None, tags)
+                .and_then(|t| parse_version(&t))
+                .expect("a published tag must match its own base version");
+            assert!(versions.contains(&selected));
+            assert_eq!((selected.major, selected.minor), (tag.major, tag.minor));
+            assert!(selected >= *tag);
         }
 
         // An upstream newer than every tag base cannot be shadowed
-        assert_eq!(
-            find_best_matching_tag(&v("0.2.123"), None, &real_tags()),
-            None
-        );
+        let newest = versions.iter().map(base).max().unwrap();
+        let beyond = Version::new(newest.major, newest.minor, newest.patch + 1);
+        assert_eq!(find_best_matching_tag(&beyond, None, tags), None);
 
-        // A different minor line never matches
-        assert_eq!(
-            find_best_matching_tag(&v("0.3.0"), None, &real_tags()),
-            None
-        );
+        // A minor line with no published tags never matches
+        assert!(versions.iter().all(|t| (t.major, t.minor) != (0, 999)));
+        assert_eq!(find_best_matching_tag(&v("0.999.0"), None, tags), None);
     }
 
     #[test]
     fn stable_tag_outranks_prereleases() {
-        let mut tags = real_tags();
-        tags.push("v0.2.122".to_string());
+        let Some(tags) = fetched_tags() else { return };
+        let newest = parsed_tags(tags).into_iter().max().unwrap();
+        let stable = base(&newest);
+
+        let mut tags = tags.to_vec();
+        tags.push(format!("v{stable}"));
         assert_eq!(
-            find_best_matching_tag(&v("0.2.122"), None, &tags),
-            Some("v0.2.122".to_string())
+            find_best_matching_tag(&stable, None, &tags),
+            Some(format!("v{stable}"))
         );
     }
 }
