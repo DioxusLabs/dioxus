@@ -282,11 +282,11 @@ async fn run_virtual_dom_loop(
             // The webview applied the in-flight edits (Ok) or the connection dropped them (Err).
             // Either way we are no longer waiting, so rendering can resume.
             Some(applied) = OptionFuture::from(pending_flush.as_mut().map(|flush| &mut flush.applied)) => {
-                if let Some(flush) = pending_flush.take() {
-                    if applied.is_ok() {
-                        for id in flush.mounted_events {
-                            crate::wry_bindgen_bridge::handle_mounted_event(&dom.runtime(), id);
-                        }
+                let flush = pending_flush.take().expect("this arm only fires while a flush is pending");
+                if applied.is_ok() {
+                    let runtime = dom.runtime();
+                    for id in flush.mounted_events {
+                        crate::wry_bindgen_bridge::handle_mounted_event(&runtime, id);
                     }
                 }
             }

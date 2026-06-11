@@ -62,37 +62,31 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     let Some(patch) = WasmBindgenPatch::new(workspace) else {
         return Ok(());
     };
-    let Some(fork_pin) = patch.fork_pin.clone() else {
+    let Some(fork_pin) = patch.fork_pin.as_ref() else {
         return Ok(());
     };
 
     // Skip if already prompted about this pin for this workspace
-    if DxHints::was_prompted(&patch.workspace_root, &fork_pin) {
+    if DxHints::was_prompted(&patch.workspace_root, fork_pin) {
         return Ok(());
     }
 
-    if !patch.cargo_toml.exists() {
+    if !patch.cargo_toml().exists() {
         return Ok(());
     }
 
-    match patch.status()? {
-        PatchStatus::UpToDate => {
-            DxHints::mark_prompted(&patch.workspace_root, &fork_pin)?;
-            return Ok(());
-        }
-        PatchStatus::UserManaged => {
-            tracing::debug!(
-                "[patch.crates-io] already redirects wasm-bindgen crates to a custom source; \
-                 leaving it alone."
-            );
-            return Ok(());
-        }
-        PatchStatus::NeedsApply => {}
+    let status = patch.status(fork_pin)?;
+    if status == PatchStatus::UserManaged {
+        tracing::debug!(
+            "[patch.crates-io] already redirects wasm-bindgen crates to a custom source; \
+             leaving it alone."
+        );
+        return Ok(());
     }
 
-    // Find a usable tag *before* prompting. When the fetch fails or no published tag matches,
-    // skip quietly without marking the workspace as prompted so a future build retries once the
-    // tag exists.
+    // Find a usable tag *before* prompting or marking an existing patch up to date. When the
+    // fetch fails or no published tag matches, skip quietly without marking the workspace as
+    // prompted so a future build retries once the tag exists.
     let tag = match patch.find_tag().await {
         Ok(Some(tag)) => tag,
         Ok(None) => {
@@ -104,6 +98,21 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
             return Ok(());
         }
     };
+
+    match status {
+        PatchStatus::UpToDate => {
+            DxHints::mark_prompted(&patch.workspace_root, fork_pin)?;
+            return Ok(());
+        }
+        PatchStatus::UserManaged => {
+            tracing::debug!(
+                "[patch.crates-io] already redirects wasm-bindgen crates to a custom source; \
+                 leaving it alone."
+            );
+            return Ok(());
+        }
+        PatchStatus::NeedsApply => {}
+    }
 
     // Show prompt
     let term = console::Term::stdout();
@@ -118,14 +127,14 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 
     if !should_patch {
         // An explicit decline is sticky until the pin changes; don't ask again before then
-        DxHints::mark_prompted(&patch.workspace_root, &fork_pin)?;
+        DxHints::mark_prompted(&patch.workspace_root, fork_pin)?;
         term.write_line("Skipped. Run `dx tools patch-wasm-bindgen` later if needed.")?;
         return Ok(());
     }
 
     // Mark prompted only once the patch is actually written
     let outcome = patch.apply(&tag)?;
-    DxHints::mark_prompted(&patch.workspace_root, &fork_pin)?;
+    DxHints::mark_prompted(&patch.workspace_root, fork_pin)?;
     term.write_line(&format!(
         "✓ Patch applied to Cargo.toml (tag: {tag}; {})",
         outcome.summary()
@@ -137,31 +146,32 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
 const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
 
-/// Crates shadowed by the `[patch.crates-io]` entries. Each one exists in the fork repo as a
-/// target-switching shim with the same package name and an upstream-compatible version
-/// (wasm-bindgen 0.2.x, js-sys/web-sys 0.3.x, wasm-bindgen-futures 0.4.x), so a caret
-/// requirement on the upstream crate resolves to the shim. The shims reach the wry-bindgen
-/// stack through path dependencies inside the git source, so the wry-* crates need no entries
-/// of their own — and can't get any: their registry dependents use exact prerelease pins
-/// (`=0.2.123-alpha.N`) while the packages in the git repo carry plain versions, so a wry-*
-/// patch entry never applies and cargo warns about an unused patch on every build.
-const PATCH_CRATES: &[&str] = &["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"];
+/// Crates shadowed by the `[patch.crates-io]` entries.
+const PATCH_CRATES: &[&str] = &[
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "js-sys",
+    "web-sys",
+    "wry-bindgen-runtime",
+];
 
-/// Fork-owned `[patch.crates-io]` entries that are removed when (re)applying the patch. No git
-/// tag carries a `wry-bindgen` version that satisfies its registry dependents' exact prerelease
-/// pins, so an entry for it sits unused and makes cargo warn on every build.
-const STALE_PATCH_CRATES: &[&str] = &["wry-bindgen"];
+/// Fork-owned `[patch.crates-io]` entries that are removed when (re)applying the patch. These
+/// crates are runtime-internal dependencies of the fork shims, not the upstream crates we need to
+/// redirect.
+const STALE_PATCH_CRATES: &[&str] = &[
+    "wry-bindgen",
+    "wry-bindgen-core",
+    "wry-bindgen-macro",
+    "wry-bindgen-macro-support",
+];
 
 /// The patch as it applies to one workspace: the manifest to rewrite and the resolved versions
 /// a fork tag must shadow.
 struct WasmBindgenPatch {
     workspace_root: PathBuf,
-    cargo_toml: PathBuf,
     /// The upstream wasm-bindgen version resolved in the workspace's crate graph.
     upstream: Version,
-    /// The `wasm-bindgen-x` shim pin pulled in by dioxus-desktop, when it is in the graph. The
-    /// fork tag must match it exactly — prerelease included — or the patched git stack carries
-    /// a mismatched copy of the wry-bindgen runtime.
+    /// The `wasm-bindgen-x` shim pin pulled in by dioxus-desktop, when it is in the graph.
     fork_pin: Option<Version>,
 }
 
@@ -172,13 +182,16 @@ impl WasmBindgenPatch {
             .wasm_bindgen_version()
             .as_deref()
             .and_then(Self::parse_version)?;
-        let workspace_root = workspace.workspace_root();
         Some(Self {
-            cargo_toml: workspace_root.join("Cargo.toml"),
-            workspace_root,
+            workspace_root: workspace.workspace_root(),
             upstream,
             fork_pin: workspace.wasm_bindgen_fork_version(),
         })
+    }
+
+    /// The workspace manifest holding the `[patch.crates-io]` table.
+    fn cargo_toml(&self) -> PathBuf {
+        self.workspace_root.join("Cargo.toml")
     }
 
     /// Find the best fork tag for the workspace's resolved versions. The tag's base version must
@@ -190,15 +203,21 @@ impl WasmBindgenPatch {
     /// `Ok(None)` the caller must skip patching rather than write a known-broken patch.
     async fn find_tag(&self) -> Result<Option<String>> {
         let base = |v: &Version| Version::new(v.major, v.minor, v.patch);
-        Ok(Self::fetch_available_tags()
+        let mut candidates: Vec<_> = Self::fetch_available_tags()
             .await?
-            .iter()
-            .filter_map(|tag| Some((tag, Self::parse_version(tag)?)))
+            .into_iter()
+            .filter_map(|tag| {
+                let version = Self::parse_version(&tag)?;
+                Some((tag, version))
+            })
             .filter(|(_, v)| v.major == self.upstream.major && v.minor == self.upstream.minor)
             .filter(|(_, v)| base(v) >= base(&self.upstream))
             .filter(|(_, v)| self.fork_pin.as_ref().is_none_or(|pin| v == pin))
-            .max_by(|(_, a), (_, b)| a.cmp(b))
-            .map(|(tag, _)| tag.clone()))
+            .collect();
+
+        candidates.sort_by(|(_, a), (_, b)| b.cmp(a));
+
+        Ok(candidates.into_iter().next().map(|(tag, _)| tag))
     }
 
     /// Fetch all available tags from the GitHub repository, following pagination so exact pins
@@ -259,10 +278,9 @@ impl WasmBindgenPatch {
 
     /// Classify the manifest's patch entries against the workspace's `wasm-bindgen-x` pin. The
     /// tag written for a pinned workspace always carries the pin's exact version, so this check
-    /// needs no network round-trip. Without a pin nothing can be confirmed current, so the
-    /// manifest always counts as needing an apply.
-    fn status(&self) -> Result<PatchStatus> {
-        let content = std::fs::read_to_string(&self.cargo_toml)?;
+    /// needs no network round-trip.
+    fn status(&self, pin: &Version) -> Result<PatchStatus> {
+        let content = std::fs::read_to_string(self.cargo_toml())?;
         let doc: toml_edit::DocumentMut = content
             .parse()
             .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
@@ -282,9 +300,6 @@ impl WasmBindgenPatch {
             return Ok(PatchStatus::UserManaged);
         }
 
-        let Some(pin) = &self.fork_pin else {
-            return Ok(PatchStatus::NeedsApply);
-        };
         let up_to_date = |entry: &PatchEntry| match entry {
             PatchEntry::Fork { tag } => Self::parse_version(tag).as_ref() == Some(pin),
             _ => false,
@@ -312,7 +327,7 @@ impl WasmBindgenPatch {
     /// at another release, remove stale fork-owned entries, and leave user-managed entries
     /// untouched. The file is only rewritten when something actually changed.
     fn apply(&self, tag: &str) -> Result<PatchOutcome> {
-        let content = std::fs::read_to_string(&self.cargo_toml)?;
+        let content = std::fs::read_to_string(self.cargo_toml())?;
         let mut doc: toml_edit::DocumentMut = content
             .parse()
             .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
@@ -371,7 +386,7 @@ impl WasmBindgenPatch {
         }
 
         if outcome.changed() {
-            std::fs::write(&self.cargo_toml, doc.to_string())?;
+            std::fs::write(self.cargo_toml(), doc.to_string())?;
         }
         Ok(outcome)
     }
@@ -517,13 +532,12 @@ impl DxHints {
     /// Path to the hints file for this workspace, keyed by a hash of the workspace root under
     /// the dioxus data dir (same pattern as the component cache). Keeping it out of the cargo
     /// target dir means `cargo clean` doesn't re-arm the prompt and a shared `CARGO_TARGET_DIR`
-    /// doesn't conflate unrelated workspaces. The hash is FNV-1a because the file name must be
-    /// stable across releases and std's `DefaultHasher` makes no such guarantee.
+    /// doesn't conflate unrelated workspaces.
     fn path(workspace_root: &Path) -> PathBuf {
-        use std::hash::Hasher;
+        use std::hash::{Hash, Hasher};
 
-        let mut hasher = fnv::FnvHasher::default();
-        hasher.write(workspace_root.as_os_str().as_encoded_bytes());
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        workspace_root.hash(&mut hasher);
         let hash = hasher.finish();
         Workspace::dioxus_data_dir()
             .join("hints")

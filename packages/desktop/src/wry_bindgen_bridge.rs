@@ -19,7 +19,7 @@ export function mountedElementById(id) {
     if (!window.interpreter) {
         return null;
     }
-    const node = window.interpreter.nodes[id];
+    const node = window.interpreter.getNode(id);
     return node instanceof Element ? node : null;
 }
 "#)]

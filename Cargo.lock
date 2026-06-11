@@ -3276,7 +3276,6 @@ dependencies = [
  "dunce",
  "escargot",
  "flate2",
- "fnv",
  "fs2",
  "futures-channel",
  "futures-util",
