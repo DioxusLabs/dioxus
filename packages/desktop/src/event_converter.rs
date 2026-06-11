@@ -110,6 +110,12 @@ impl HtmlEventConverter for DesktopEventConverter {
                         }
 
                         if !values.is_empty() {
+                            let values = merge_desktop_file_values(
+                                self.inner.convert_form_data(event).values(),
+                                input_name.as_str(),
+                                values,
+                            );
+
                             return FormData::new(DesktopFormData::new(input.value(), values));
                         }
                     }
@@ -119,5 +125,80 @@ impl HtmlEventConverter for DesktopEventConverter {
 
         // Fall back to web-sys conversion
         self.inner.convert_form_data(event)
+    }
+}
+
+fn merge_desktop_file_values(
+    web_values: Vec<(String, FormValue)>,
+    input_name: &str,
+    desktop_file_values: Vec<(String, FormValue)>,
+) -> Vec<(String, FormValue)> {
+    let mut merged = Vec::with_capacity(web_values.len() + desktop_file_values.len());
+    let mut desktop_file_values = Some(desktop_file_values);
+
+    for (key, value) in web_values {
+        if key == input_name && matches!(value, FormValue::File(_)) {
+            if let Some(desktop_file_values) = desktop_file_values.take() {
+                merged.extend(desktop_file_values);
+            }
+        } else {
+            merged.push((key, value));
+        }
+    }
+
+    if let Some(desktop_file_values) = desktop_file_values {
+        merged.extend(desktop_file_values);
+    }
+
+    merged
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_file_values_replace_only_the_file_input_entries() {
+        let web_values = vec![
+            ("username".to_string(), FormValue::Text("ada".to_string())),
+            ("avatar".to_string(), FormValue::File(None)),
+            ("color".to_string(), FormValue::Text("red".to_string())),
+        ];
+        let desktop_file_values = vec![(
+            "avatar".to_string(),
+            FormValue::File(Some(FileData::new(DesktopFileData(PathBuf::from(
+                "/tmp/avatar.png",
+            ))))),
+        )];
+
+        let merged = merge_desktop_file_values(web_values, "avatar", desktop_file_values);
+
+        assert_eq!(merged.len(), 3);
+        assert_eq!(
+            merged[0],
+            ("username".to_string(), FormValue::Text("ada".to_string()))
+        );
+        assert!(matches!(merged[1].1, FormValue::File(Some(_))));
+        assert_eq!(merged[1].0, "avatar");
+        assert_eq!(
+            merged[2],
+            ("color".to_string(), FormValue::Text("red".to_string()))
+        );
+    }
+
+    #[test]
+    fn desktop_file_values_are_appended_when_web_values_have_no_file_entry() {
+        let web_values = vec![("username".to_string(), FormValue::Text("ada".to_string()))];
+        let desktop_file_values = vec![("upload".to_string(), FormValue::File(None))];
+
+        let merged = merge_desktop_file_values(web_values, "upload", desktop_file_values);
+
+        assert_eq!(
+            merged,
+            vec![
+                ("username".to_string(), FormValue::Text("ada".to_string())),
+                ("upload".to_string(), FormValue::File(None)),
+            ]
+        );
     }
 }
