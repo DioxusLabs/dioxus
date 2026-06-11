@@ -707,7 +707,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
             continue;
         };
 
-        if name.contains("wasm_bindgen4__rt8wbg_cast") && !name.contains("breaks_if_inline") {
+        if name_is_wbg_cast_symbol(name) {
             let name = name.to_string();
             let old_idx = name_to_ifunc_old
                     .get(&name)
@@ -1526,6 +1526,21 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 /// backrefs (`NtB5_` etc.) routinely compress the path away. If any of these slip through, the
 /// describe functions get pinned into the ifunc table, wasm-bindgen's GC can't delete them, and
 /// the final module ships an unsatisfiable `__wbindgen_placeholder__.__wbindgen_describe` import.
+/// Check if the name is a `wasm_bindgen::__rt::wbg_cast` instantiation (excluding its inner
+/// `breaks_if_inlined` helper). These functions need their bodies rewritten to call the base
+/// module's JS-bound versions via the ifunc table — if one slips through, the patch keeps its
+/// local copy, which calls `breaks_if_inlined` → `describe::inform` → the stubbed
+/// `__wbindgen_describe` import and traps with "null function" the first time the patched code
+/// casts a value (e.g. creating an event-listener closure).
+///
+/// In legacy mangling the path appears as `wasm_bindgen4__rt8wbg_cast`; in v0 (default since
+/// rustc 1.97) identifiers starting with `_` get a `_` separator after their length, so `__rt`
+/// encodes as `4___rt`.
+fn name_is_wbg_cast_symbol(name: &str) -> bool {
+    (name.contains("wasm_bindgen4__rt8wbg_cast") || name.contains("wasm_bindgen4___rt8wbg_cast"))
+        && !name.contains("breaks_if_inline")
+}
+
 fn name_is_bindgen_symbol(name: &str) -> bool {
     name.contains("__wbindgen_describe")
         || name.contains("__wbindgen_externref")
@@ -1587,6 +1602,25 @@ fn bindgen_symbol_catch() {
     ));
     assert!(!name_is_bindgen_symbol(
         "_RNvXs5_NtCs9tRDgkfeYnK_12wasm_bindgen5__rt5LazyINtB5_4LazyNtNtCsezy3jvZZ1sp_6js_sys6ObjectE5force"
+    ));
+}
+
+#[test]
+fn wbg_cast_symbol_catch() {
+    // legacy mangling: wbg_cast instantiation matches, its breaks_if_inlined helper does not
+    assert!(name_is_wbg_cast_symbol(
+        "_ZN12wasm_bindgen4__rt8wbg_cast17h1234567890abcdefE"
+    ));
+    assert!(!name_is_wbg_cast_symbol(
+        "_ZN12wasm_bindgen4__rt8wbg_cast17breaks_if_inlined17h1234567890abcdefE"
+    ));
+
+    // v0 mangling: `__rt` encodes as `4___rt` (length 4, `_` separator, then `__rt`)
+    assert!(name_is_wbg_cast_symbol(
+        "_RINvNtCsa7akE1TfegA_12wasm_bindgen4___rt8wbg_castINtB4_7closure12OwnedClosureDINtNtNtCs9WN6KVdqFxk_4core3ops8function5FnMutTNtNtNtCs5qlPUvWaqlJ_7web_sys8features14gen_MouseEvent10MouseEventEEp6OutputuEL_Kb1_ENtBO_9JsClosureECsjFep1nV9Dzo_32dioxus_playwright_web_patch_test"
+    ));
+    assert!(!name_is_wbg_cast_symbol(
+        "_RINvNvNtCsa7akE1TfegA_12wasm_bindgen4___rt8wbg_cast17breaks_if_inlinedINtNtB6_7closure12OwnedClosureDINtNtNtCs9WN6KVdqFxk_4core3ops8function5FnMutTNtNtNtCs5qlPUvWaqlJ_7web_sys8features14gen_MouseEvent10MouseEventEEp6OutputuEL_Kb1_ENtB19_9JsClosureECsjFep1nV9Dzo_32dioxus_playwright_web_patch_test"
     ));
 }
 
