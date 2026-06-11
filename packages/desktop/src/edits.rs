@@ -18,13 +18,11 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use crate::ipc::UserWindowEvent;
+use crate::ipc::{UserWindowEvent, UserWindowEventVariant};
 use futures_channel::oneshot;
 use rand::{RngCore, SeedableRng};
-use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::net::{TcpListener, TcpStream};
-use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{
@@ -33,23 +31,24 @@ use std::{
 };
 use tao::event_loop::EventLoopProxy;
 
-/// This handles communication between the requests that the webview makes and the interpreter.
+/// A webview's view of the edit websocket: its connection id plus the server's current
+/// location/keys (shared and internally synchronized, since the server can rebind).
 #[derive(Clone)]
 pub(crate) struct WryQueue {
-    inner: Rc<RefCell<WryQueueInner>>,
+    location: WebviewWebsocketLocation,
 }
 
 impl WryQueue {
     /// The numeric id the websocket uses to identify this webview's connection.
     pub(crate) fn webview_id(&self) -> u32 {
-        self.inner.borrow().location.webview_id
+        self.location.webview_id
     }
 
     /// Get the websocket path that the webview should connect to in order to receive edits
     pub(crate) fn edits_path(&self) -> String {
         let WebviewWebsocketLocation {
             webview_id, server, ..
-        } = &self.inner.borrow().location;
+        } = &self.location;
         let server = server.lock().unwrap();
         let port = server.port;
         let key = &server.client_key;
@@ -59,14 +58,9 @@ impl WryQueue {
 
     /// Get the key the client should expect from the server when connecting to the websocket.
     pub(crate) fn required_server_key(&self) -> String {
-        let server = &self.inner.borrow().location.server;
-        let server = server.lock().unwrap();
+        let server = self.location.server.lock().unwrap();
         encode_key_string(&server.server_key)
     }
-}
-
-pub(crate) struct WryQueueInner {
-    location: WebviewWebsocketLocation,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
@@ -159,7 +153,7 @@ impl EditWebsocket {
             // Publish the new location before waking the main thread so every webview reads the
             // fresh port/keys when it re-points its interpreter at the new socket.
             *current_location.lock().unwrap() = location;
-            _ = proxy.send_event(UserWindowEvent::reconnect_edits());
+            _ = proxy.send_event(UserWindowEventVariant::ReconnectEdits.into());
             server = new_server;
         }
     }
@@ -326,9 +320,7 @@ impl EditWebsocket {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let server = self.current_location.clone();
         WryQueue {
-            inner: Rc::new(RefCell::new(WryQueueInner {
-                location: WebviewWebsocketLocation { webview_id, server },
-            })),
+            location: WebviewWebsocketLocation { webview_id, server },
         }
     }
 

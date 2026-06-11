@@ -35,7 +35,6 @@ pub fn launch_virtual_dom_blocking(
                 if matches!(cause, StartCause::Init) {
                     app.handle_start_cause_init(event_loop);
                 }
-                app.poll_wry_bindgen_drivers();
             }
             Event::LoopDestroyed => app.handle_loop_destroyed(),
             Event::WindowEvent {

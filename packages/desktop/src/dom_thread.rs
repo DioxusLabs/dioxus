@@ -10,7 +10,7 @@ use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
 use crate::edits::EditWebsocket;
 use crate::file_upload::NativeFileHover;
-use crate::ipc::UserWindowEvent;
+use crate::ipc::{UserWindowEvent, UserWindowEventVariant};
 use dioxus_core::{ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
@@ -105,6 +105,10 @@ impl Drop for WindowRegistryGuard {
 /// The name of the dedicated DOM thread spawned by [`spawn_dom_thread`].
 const DOM_THREAD_NAME: &str = "dioxus-desktop-dom";
 
+/// The id of the dedicated DOM thread, recorded by [`spawn_dom_thread`]. Mirrors
+/// `MAIN_THREAD_ID` in `app.rs`.
+static DOM_THREAD_ID: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct PendingDomId(usize);
 
@@ -117,8 +121,8 @@ pub(crate) struct PendingDomId(usize);
 /// thread-local and could never be retrieved.
 pub(crate) fn reserve_pending_dom(dom: VirtualDom) -> PendingDomId {
     assert_eq!(
-        std::thread::current().name(),
-        Some(DOM_THREAD_NAME),
+        Some(&std::thread::current().id()),
+        DOM_THREAD_ID.get(),
         "DesktopContext::new_window must be called from a Dioxus component or task (the \
          VirtualDom thread)"
     );
@@ -232,29 +236,6 @@ impl SharedCallbackRegistry {
     }
 }
 
-/// Handle to communicate with a VirtualDom running on a dedicated thread.
-///
-/// This handle only contains the sender for sending events to the VirtualDom. The VirtualDom
-/// thread sends its rendered edits straight to the webview's edit websocket, so there is no
-/// command channel back to the main thread.
-#[derive(Clone)]
-pub(crate) struct VirtualDomHandle {
-    /// Send events to the VirtualDom thread.
-    pub event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-}
-
-impl VirtualDomHandle {
-    /// Create a new handle with the given event sender.
-    pub fn new(event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>) -> Self {
-        Self { event_tx }
-    }
-
-    /// Send an event to the VirtualDom thread.
-    pub fn send_event(&self, event: VirtualDomEvent) {
-        let _ = self.event_tx.send(event);
-    }
-}
-
 /// Run the VirtualDom's event loop until completion in the current async context (called from
 /// the wry-bindgen app task on the DOM thread). Also sets up the wasm-bindgen event handler for
 /// direct JS->Rust event calls.
@@ -321,8 +302,8 @@ async fn run_virtual_dom_loop(
                         initialized = true;
                         // Perform initial rebuild
                         dom.rebuild(&mut mutations);
-                        let edits = take_edits(&mut mutations);
-                        pending_flush = Some(websocket.send_edits(webview_id, edits));
+                        pending_flush =
+                            Some(websocket.send_edits(webview_id, mutations.export_memory()));
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
@@ -347,16 +328,10 @@ async fn run_virtual_dom_loop(
             _ = dom.wait_for_work(), if initialized && pending_flush.is_none() => {
                 // Render and send mutations straight to the webview's edit websocket
                 dom.render_immediate(&mut mutations);
-                let edits = take_edits(&mut mutations);
-                pending_flush = Some(websocket.send_edits(webview_id, edits));
+                pending_flush = Some(websocket.send_edits(webview_id, mutations.export_memory()));
             }
         }
     }
-}
-
-/// Export mutations from the MutationState.
-fn take_edits(mutations: &mut MutationState) -> Vec<u8> {
-    mutations.export_memory()
 }
 
 type SpawnTask = (
@@ -379,7 +354,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
     let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
         tokio::sync::mpsc::unbounded_channel();
 
-    std::thread::Builder::new()
+    let join_handle = std::thread::Builder::new()
         .name(DOM_THREAD_NAME.into())
         .spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -420,7 +395,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                         // on abort). Force-destroy the window: hiding a window
                                         // whose VirtualDom is gone would leave a zombie.
                                         handles.borrow_mut().remove(&window_id);
-                                        _ = proxy.send_event(UserWindowEvent::destroy_window(window_id));
+                                        _ = proxy.send_event(UserWindowEventVariant::DestroyWindow(window_id).into());
                                     });
                                     abort_handles.borrow_mut().insert(window_id, join_handle.abort_handle());
                                 }
@@ -431,6 +406,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
             });
         })
         .expect("Failed to spawn VirtualDom thread");
+    let _ = DOM_THREAD_ID.set(join_handle.thread().id());
 
     DomThreadHandle { task_tx, abort_tx }
 }

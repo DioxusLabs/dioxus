@@ -65,14 +65,6 @@ pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     setMountedHandler(mounted_closure);
 }
 
-/// Check if the event name is a drag event.
-fn is_drag_event(name: &str) -> bool {
-    matches!(
-        name,
-        "dragenter" | "dragover" | "dragleave" | "drop" | "dragend" | "drag" | "dragstart"
-    )
-}
-
 /// Handle an event from JavaScript, returning whether to prevent default.
 fn handle_event_from_js(
     runtime: &Rc<Runtime>,
@@ -102,11 +94,8 @@ fn handle_event_from_js(
 
     // For drag events, we need to inject native file paths from the file_hover context. A
     // JS-dispatched plain `Event` with a drag name (synthetic events are a supported pattern)
-    // fails the `DragEvent` cast and falls through to the generic conversion instead.
-    // For drag events, we need to inject native file paths from the file_hover context. A
-    // JS-dispatched plain `Event` with a drag name (synthetic events are a supported pattern)
     // fails the `DragEvent` cast and falls back to the generic conversion instead of panicking.
-    let platform_event: PlatformEventData = if is_drag_event(&name) {
+    let platform_event: PlatformEventData = if dioxus_web_sys_events::is_drag_event(&name) {
         match event.dyn_into::<web_sys::DragEvent>() {
             Ok(drag_event) => {
                 // Get native file paths from the file_hover

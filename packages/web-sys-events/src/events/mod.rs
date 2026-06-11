@@ -110,6 +110,16 @@ macro_rules! converter_web_type {
     };
 }
 
+/// `true` only for the converter of the drag event group; used to derive [`is_drag_event`].
+macro_rules! converter_is_drag {
+    (convert_drag_data) => {
+        true
+    };
+    ($other:ident) => {
+        false
+    };
+}
+
 macro_rules! expand_event_type_matches {
     (
         enum Event {
@@ -145,6 +155,20 @@ macro_rules! expand_event_type_matches {
                 tracing::warn!("Ignoring \"{name}\": not the expected type: {event:?}");
             }
             m
+        }
+
+        /// Whether dioxus-html routes this event name through `convert_drag_data` — derived
+        /// from the same `with_html_event_groups!` table as [`event_type_matches`], so it
+        /// cannot drift from the html crate's drag event group.
+        pub fn is_drag_event(name: &str) -> bool {
+            match name {
+                $(
+                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)? => {
+                        converter_is_drag!($converter)
+                    }
+                )*
+                _ => false,
+            }
         }
     };
 }
@@ -304,7 +328,9 @@ impl HtmlEventConverter for WebEventConverter {
         }
         #[cfg(not(feature = "mounted"))]
         {
-            panic!("mounted events are not supported without the `mounted` feature of the dioxus-web-sys-events crate (re-exported as the `mounted` feature of dioxus-web and dioxus-desktop)")
+            panic!(
+                "mounted events are not supported without the `mounted` feature of the dioxus-web-sys-events crate (re-exported as the `mounted` feature of dioxus-web and dioxus-desktop)"
+            )
         }
     }
 

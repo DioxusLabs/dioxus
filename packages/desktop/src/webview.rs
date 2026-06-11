@@ -1,11 +1,16 @@
 use crate::PendingDesktopContext;
 use crate::app::MakeVirtualDom;
 use crate::desktop_context::DesktopContextInner;
-use crate::dom_thread::{PendingDomId, VirtualDomHandle};
+use crate::dom_thread::{PendingDomId, VirtualDomEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopService, app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    Config, DesktopService,
+    app::SharedContext,
+    assets::AssetHandlerRegistry,
+    edits::WryQueue,
+    file_upload::NativeFileHover,
+    ipc::{UserWindowEvent, UserWindowEventVariant},
+    protocol,
 };
 use dioxus_hooks::to_owned;
 use std::{
@@ -21,25 +26,10 @@ use tao::{
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 use wry_bindgen_runtime::{WryBindgen, WryBindgenWebviewDriver};
 
-/// This struct manages the webview's communication with the VirtualDom thread.
-///
-/// Events are now handled via wasm-bindgen closure (see wry_bindgen_bridge.rs),
-/// not through this struct. This struct primarily manages the WryQueue for mutations.
-#[derive(Clone)]
-pub(crate) struct WebviewEdits {
-    pub wry_queue: WryQueue,
-}
-
-impl WebviewEdits {
-    fn new(wry_queue: WryQueue) -> Self {
-        Self { wry_queue }
-    }
-}
-
 pub(crate) struct WebviewInstance {
-    /// Handle to communicate with the VirtualDom running on a dedicated thread.
-    pub dom_handle: VirtualDomHandle,
-    pub edits: WebviewEdits,
+    /// Sends events to the VirtualDom running on the dedicated DOM thread.
+    pub dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
+    pub wry_queue: WryQueue,
     pub desktop_context: Rc<DesktopService>,
     wry_bindgen_driver: WryBindgenWebviewDriver,
     wry_bindgen_driver_waker: Waker,
@@ -64,15 +54,13 @@ struct WryBindgenDriverWake {
 
 impl Wake for WryBindgenDriverWake {
     fn wake(self: Arc<Self>) {
-        let _ = self
-            .proxy
-            .send_event(UserWindowEvent::wry_bindgen_driver_wake(self.window_id));
+        self.wake_by_ref();
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
         let _ = self
             .proxy
-            .send_event(UserWindowEvent::wry_bindgen_driver_wake(self.window_id));
+            .send_event(UserWindowEventVariant::WryBindgenDriverWake(self.window_id).into());
     }
 }
 
@@ -126,7 +114,7 @@ impl WebviewInstance {
 
         // Create the event channel for VirtualDom communication. The VirtualDom runs on a
         // dedicated thread and receives events from the main thread through this channel.
-        let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let wry_bindgen = WryBindgen::new();
         let protocol = wry_bindgen.protocol_handler();
@@ -166,18 +154,13 @@ impl WebviewInstance {
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
-        // Use a channel for main-thread to VirtualDom communication.
-        let event_tx = dom_event_tx;
-
-        let edits = WebviewEdits::new(edit_queue.clone());
-
         let request_handler = {
             to_owned![
                 cfg.custom_head,
                 cfg.custom_index,
                 cfg.root_name,
                 asset_handlers,
-                edits
+                edit_queue
             ];
 
             #[cfg(feature = "tokio_runtime")]
@@ -205,7 +188,7 @@ impl WebviewInstance {
                     request,
                     asset_handlers.clone(),
                     responder,
-                    &edits,
+                    &edit_queue,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
@@ -222,7 +205,7 @@ impl WebviewInstance {
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
-                    _ = proxy.send_event(UserWindowEvent::ipc(window_id, msg));
+                    _ = proxy.send_event(UserWindowEventVariant::Ipc { id: window_id, msg }.into());
                 }
             }
         };
@@ -246,15 +229,22 @@ impl WebviewInstance {
                             paths: _,
                             position: _,
                         } => {
-                            _ = proxy.send_event(UserWindowEvent::windows_drag_drop(window_id));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragDrop(window_id).into(),
+                            );
                         }
                         wry::DragDropEvent::Over { position } => {
-                            _ = proxy.send_event(UserWindowEvent::windows_drag_over(
-                                window_id, position.0, position.1,
-                            ));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragOver(
+                                    window_id, position.0, position.1,
+                                )
+                                .into(),
+                            );
                         }
                         wry::DragDropEvent::Leave => {
-                            _ = proxy.send_event(UserWindowEvent::windows_drag_leave(window_id));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragLeave(window_id).into(),
+                            );
                         }
                         _ => {}
                     }
@@ -473,9 +463,6 @@ impl WebviewInstance {
             .task_tx
             .send((window_id, Box::new(|| Box::pin(future.into_future()))));
 
-        // Create a handle to send events to this webview's VirtualDom task.
-        let dom_handle = VirtualDomHandle::new(event_tx);
-
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
@@ -490,16 +477,22 @@ impl WebviewInstance {
             window_id,
         }));
 
-        WebviewInstance {
-            dom_handle,
-            edits,
+        let mut instance = WebviewInstance {
+            dom_event_tx: event_tx,
+            wry_queue: edit_queue,
             desktop_context,
             wry_bindgen_driver,
             wry_bindgen_driver_waker,
             wry_bindgen_driver_done: false,
             _menu: menu,
             _web_context: web_context,
-        }
+        };
+
+        // Prime the wry-bindgen driver so it registers its waker; afterwards it is only polled
+        // when that waker fires (via `WryBindgenDriverWake`).
+        instance.poll_wry_bindgen_driver();
+
+        instance
     }
 
     pub(crate) fn poll_wry_bindgen_driver(&mut self) {
@@ -522,8 +515,8 @@ impl WebviewInstance {
     pub fn send_edits_location(&self) {
         _ = self.desktop_context.webview.evaluate_script(&format!(
             "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-            edits_path = self.edits.wry_queue.edits_path(),
-            expected_key = self.edits.wry_queue.required_server_key()
+            edits_path = self.wry_queue.edits_path(),
+            expected_key = self.wry_queue.required_server_key()
         ));
     }
 

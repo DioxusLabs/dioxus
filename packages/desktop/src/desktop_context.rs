@@ -2,9 +2,7 @@ use crate::{
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
     app::SharedContext,
     assets::AssetHandlerRegistry,
-    dom_thread::{
-        DomCallbackId, PendingDomId, SharedCallbackRegistry, VirtualDomEvent, reserve_pending_dom,
-    },
+    dom_thread::{PendingDomId, SharedCallbackRegistry, VirtualDomEvent, reserve_pending_dom},
     ipc::{DesktopServiceCallback, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
@@ -40,7 +38,7 @@ use objc2_ui_kit::UIView;
 use tao::platform::ios::WindowExtIOS;
 
 /// Pick the value a proxied method returns when the target window has already closed: the
-/// `=> expr` fallback declared in the proxy macros below, or `Default::default()`.
+/// `=> expr` fallback declared in the proxy macro below, or `Default::default()`.
 macro_rules! proxy_fallback {
     ($result:expr $(,)?) => {
         $result.unwrap_or_default()
@@ -50,55 +48,72 @@ macro_rules! proxy_fallback {
     };
 }
 
-/// Macro to generate proxy methods that forward to DesktopService methods.
-macro_rules! proxy_desktop_service_method {
-    ($(
+/// Generate one proxy method. Methods without a return type are fire-and-forget: they are queued
+/// to the main thread without blocking the VirtualDom thread (the proxy event queue preserves
+/// ordering with later blocking calls). Methods with a return type block until the result
+/// arrives, falling back to the `=> expr` value (or `Default::default()`) if the window closed.
+macro_rules! proxy_method {
+    // No rename: forward to the method of the same name.
+    (
+        $receivers:tt,
         $(#[$meta:meta])*
-        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)? $(=> $fallback:expr)?;
-    )*) => {
-        $(
+        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)*) $(-> $ret:ty)? $(=> $fallback:expr)?;
+    ) => {
+        proxy_method! {
+            $receivers,
             $(#[$meta])*
-            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
-                proxy_fallback!(
-                    self.run_with_desktop_service_blocking(move |desktop| desktop.$name($($arg),*))
-                    $(, $fallback)?
-                )
-            }
-        )*
+            fn $name as $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? $(=> $fallback)?;
+        }
+    };
+    // Result-less method: fire-and-forget.
+    (
+        [$(. $receiver:ident)*],
+        $(#[$meta:meta])*
+        fn $name:ident as $target:ident(&self $(, $arg:ident : $arg_ty:ty)*);
+    ) => {
+        $(#[$meta])*
+        pub fn $name(&self $(, $arg: $arg_ty)*) {
+            drop(self.run_with_desktop_service(move |desktop| {
+                desktop $(. $receiver)* . $target($($arg),*);
+            }));
+        }
+    };
+    // Method with a result: block until it arrives.
+    (
+        [$(. $receiver:ident)*],
+        $(#[$meta:meta])*
+        fn $name:ident as $target:ident(&self $(, $arg:ident : $arg_ty:ty)*) -> $ret:ty $(=> $fallback:expr)?;
+    ) => {
+        $(#[$meta])*
+        pub fn $name(&self $(, $arg: $arg_ty)*) -> $ret {
+            proxy_fallback!(
+                self.run_with_desktop_service_blocking(move |desktop| {
+                    desktop $(. $receiver)* . $target($($arg),*)
+                })
+                $(, $fallback)?
+            )
+        }
     };
 }
 
-/// Macro to generate proxy methods that forward to Window methods (via desktop.window).
-macro_rules! proxy_window_method {
-    ($(
-        $(#[$meta:meta])*
-        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)? $(=> $fallback:expr)?;
-    )*) => {
-        $(
-            $(#[$meta])*
-            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
-                proxy_fallback!(
-                    self.run_with_desktop_service_blocking(move |desktop| desktop.window.$name($($arg),*))
-                    $(, $fallback)?
-                )
-            }
-        )*
+/// Generate proxy methods that forward to the [`DesktopService`] (or a field of it, e.g.
+/// `desktop.window`) on the main thread. `fn public_name as target_name(...)` forwards under a
+/// different method name.
+macro_rules! proxy_methods {
+    // Bundle the receiver path into one token tree so it can be reused inside the per-method
+    // repetition below (metavariables from different repetitions can't mix at the same depth).
+    (desktop $(. $receiver:ident)*: $($methods:tt)*) => {
+        proxy_methods! { @bundled [$(. $receiver)*] $($methods)* }
     };
-}
-
-/// Macro to generate proxy methods that forward to WebView methods (via desktop.webview).
-macro_rules! proxy_webview_method {
-    ($(
+    (@bundled $receivers:tt $(
         $(#[$meta:meta])*
-        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)? $(=> $fallback:expr)?;
+        fn $name:ident $(as $target:ident)? (&self $(, $arg:ident : $arg_ty:ty)*) $(-> $ret:ty)? $(=> $fallback:expr)?;
     )*) => {
         $(
-            $(#[$meta])*
-            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
-                proxy_fallback!(
-                    self.run_with_desktop_service_blocking(move |desktop| desktop.webview.$name($($arg),*))
-                    $(, $fallback)?
-                )
+            proxy_method! {
+                $receivers,
+                $(#[$meta])*
+                fn $name $(as $target)? (&self $(, $arg: $arg_ty)*) $(-> $ret)? $(=> $fallback)?;
             }
         )*
     };
@@ -212,23 +227,28 @@ impl DesktopContext {
         F: FnOnce(&DesktopService) -> T + Send + 'static,
     {
         let (callback, receiver) = DesktopServiceCallback::new(f);
+        self.send_desktop_service_callback(callback);
+        receiver
+    }
 
-        if self
+    /// Queue a callback for the main thread, warning (and dropping it) if the event loop has
+    /// already shut down. Returns whether the callback was queued.
+    fn send_desktop_service_callback(&self, callback: DesktopServiceCallback) -> bool {
+        let sent = self
             .inner
             .proxy
             .send_event(UserWindowEvent::run_with_desktop_service(
                 self.inner.window_id,
                 callback,
             ))
-            .is_err()
-        {
+            .is_ok();
+        if !sent {
             tracing::warn!(
                 "the event loop has shut down; dropping a desktop call for window {:?}",
                 self.inner.window_id
             );
         }
-
-        receiver
+        sent
     }
 
     /// Run a closure on the main thread with access to this window's [`DesktopService`], blocking
@@ -246,19 +266,7 @@ impl DesktopContext {
 
         let (callback, receiver) = DesktopServiceCallback::new_blocking(f);
 
-        if self
-            .inner
-            .proxy
-            .send_event(UserWindowEvent::run_with_desktop_service(
-                self.inner.window_id,
-                callback,
-            ))
-            .is_err()
-        {
-            tracing::warn!(
-                "the event loop has shut down; dropping a desktop call for window {:?}",
-                self.inner.window_id
-            );
+        if !self.send_desktop_service_callback(callback) {
             return None;
         }
 
@@ -275,7 +283,7 @@ impl DesktopContext {
         }
     }
 
-    proxy_desktop_service_method! {
+    proxy_methods! { desktop:
         /// Trigger the drag-window event.
         ///
         /// Moves the window with the left mouse button until the button is released.
@@ -308,11 +316,20 @@ impl DesktopContext {
         /// Opens DevTool window.
         fn devtool(&self);
 
-        /// Remove a global shortcut.
-        fn remove_shortcut(&self, id: ShortcutHandle);
-
         /// Remove all global shortcuts.
         fn remove_all_shortcuts(&self);
+    }
+
+    /// Remove a global shortcut, including its DOM-thread callback if it was created with
+    /// [`Self::create_shortcut`].
+    pub fn remove_shortcut(&self, id: ShortcutHandle) {
+        if let Some(dom_handler) = id.dom_handler {
+            if let Some(registry) = self.registry_or_warn("remove the DOM-side shortcut callback") {
+                registry.remove(dom_handler);
+            }
+        }
+
+        drop(self.run_with_desktop_service(move |desktop| desktop.remove_shortcut(id)));
     }
 
     /// Start the creation of a new window using a [`VirtualDom`] and window builder.
@@ -366,7 +383,7 @@ impl DesktopContext {
         self.inner.dom_tx.clone()
     }
 
-    proxy_window_method! {
+    proxy_methods! { desktop.window:
         /// Returns the scale factor of the window.
         fn scale_factor(&self) -> f64 => 1.0;
 
@@ -536,8 +553,7 @@ impl DesktopContext {
     /// Modifies the title of the window.
     pub fn set_title(&self, title: &str) {
         let title = title.to_string();
-        self.run_with_desktop_service_blocking(move |desktop| desktop.window.set_title(&title))
-            .unwrap_or_default()
+        drop(self.run_with_desktop_service(move |desktop| desktop.window.set_title(&title)));
     }
 
     /// Returns the list of all the monitors available on the system.
@@ -548,7 +564,7 @@ impl DesktopContext {
         .unwrap_or_default()
     }
 
-    proxy_webview_method! {
+    proxy_methods! { desktop.webview:
         /// Get the current URL of the webview.
         fn url(&self) -> wry::Result<String> => Err(wry::Error::MessageSender);
 
@@ -572,44 +588,24 @@ impl DesktopContext {
 
         /// Check if the developer tools window is open.
         fn is_devtools_open(&self) -> bool;
-    }
 
-    /// Set the background color of the webview.
-    pub fn set_webview_background_color(&self, background_color: WebViewRGBA) -> wry::Result<()> {
-        self.run_with_desktop_service_blocking(move |desktop| {
-            desktop.webview.set_background_color(background_color)
-        })
-        .unwrap_or(Err(wry::Error::MessageSender))
-    }
+        /// Set the background color of the webview.
+        fn set_webview_background_color as set_background_color(&self, background_color: WebViewRGBA) -> wry::Result<()> => Err(wry::Error::MessageSender);
 
-    /// Get the bounds of the webview.
-    pub fn webview_bounds(&self) -> wry::Result<Rect> {
-        self.run_with_desktop_service_blocking(|desktop| desktop.webview.bounds())
-            .unwrap_or(Err(wry::Error::MessageSender))
-    }
+        /// Get the bounds of the webview.
+        fn webview_bounds as bounds(&self) -> wry::Result<Rect> => Err(wry::Error::MessageSender);
 
-    /// Set the bounds of the webview.
-    pub fn set_webview_bounds(&self, bounds: Rect) -> wry::Result<()> {
-        self.run_with_desktop_service_blocking(move |desktop| desktop.webview.set_bounds(bounds))
-            .unwrap_or(Err(wry::Error::MessageSender))
-    }
+        /// Set the bounds of the webview.
+        fn set_webview_bounds as set_bounds(&self, bounds: Rect) -> wry::Result<()> => Err(wry::Error::MessageSender);
 
-    /// Set the visibility of the webview.
-    pub fn set_webview_visible(&self, visible: bool) -> wry::Result<()> {
-        self.run_with_desktop_service_blocking(move |desktop| desktop.webview.set_visible(visible))
-            .unwrap_or(Err(wry::Error::MessageSender))
-    }
+        /// Set the visibility of the webview.
+        fn set_webview_visible as set_visible(&self, visible: bool) -> wry::Result<()> => Err(wry::Error::MessageSender);
 
-    /// Focus the webview.
-    pub fn webview_focus(&self) -> wry::Result<()> {
-        self.run_with_desktop_service_blocking(|desktop| desktop.webview.focus())
-            .unwrap_or(Err(wry::Error::MessageSender))
-    }
+        /// Focus the webview.
+        fn webview_focus as focus(&self) -> wry::Result<()> => Err(wry::Error::MessageSender);
 
-    /// Launch the print modal for the webview content.
-    pub fn webview_print(&self) -> wry::Result<()> {
-        self.run_with_desktop_service_blocking(|desktop| desktop.webview.print())
-            .unwrap_or(Err(wry::Error::MessageSender))
+        /// Launch the print modal for the webview content.
+        fn webview_print as print(&self) -> wry::Result<()> => Err(wry::Error::MessageSender);
     }
 
     /// Load a URL in the webview.
@@ -662,7 +658,7 @@ impl DesktopContext {
         self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_main_thread_wry_event_handler(handler)
         })
-        .unwrap_or_else(|| WryEventHandler::new(usize::MAX))
+        .unwrap_or_else(WryEventHandler::noop)
     }
 
     pub(crate) fn create_wry_event_handler_with_user_event(
@@ -674,7 +670,7 @@ impl DesktopContext {
         self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_wry_event_handler_with_user_event(handler)
         })
-        .unwrap_or_else(|| WryEventHandler::new(usize::MAX))
+        .unwrap_or_else(WryEventHandler::noop)
     }
 
     /// Register a wry event handler whose closure stays on the VirtualDom thread (no `Send` bound).
@@ -700,7 +696,7 @@ impl DesktopContext {
             use dioxus_core::{Runtime, current_scope_id};
 
             let Some(registry) = self.registry_or_warn("register a wry event handler") else {
-                return WryEventHandler::new(usize::MAX);
+                return WryEventHandler::noop();
             };
             let runtime = Runtime::current();
             let scope_id = current_scope_id();
@@ -749,7 +745,7 @@ impl DesktopContext {
             if let Some(registry) = self.callback_registry() {
                 registry.remove(dom_handler);
             }
-            return WryEventHandler::new(usize::MAX);
+            return WryEventHandler::noop();
         };
         handler.with_dom_handler(dom_handler)
     }
@@ -764,8 +760,7 @@ impl DesktopContext {
             }
         }
 
-        self.run_with_desktop_service_blocking(move |desktop| desktop.remove_wry_event_handler(id))
-            .unwrap_or_default()
+        drop(self.run_with_desktop_service(move |desktop| desktop.remove_wry_event_handler(id)));
     }
 
     /// Register an asset handler using the inverted callback pattern.
@@ -832,15 +827,14 @@ impl DesktopContext {
     ///
     /// # Returns
     ///
-    /// A tuple of `(ShortcutHandle, DomCallbackId)` on success. The `ShortcutHandle`
-    /// can be used with `remove_shortcut` on the main thread, and `DomCallbackId`
-    /// can be used to remove the callback from the DOM registry.
+    /// A [`ShortcutHandle`] on success. Passing it to [`Self::remove_shortcut`] (or calling
+    /// [`ShortcutHandle::remove`]) removes both the main-thread shortcut and the DOM callback.
     ///
     /// # Example
     ///
     /// ```rust, ignore
     /// let ctx = consume_context::<DesktopContext>();
-    /// let (handle, dom_id) = ctx.create_shortcut(hotkey, |state| {
+    /// let handle = ctx.create_shortcut(hotkey, |state| {
     ///     // Handle shortcut
     /// })?;
     /// ```
@@ -848,7 +842,7 @@ impl DesktopContext {
         &self,
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
-    ) -> Result<(ShortcutHandle, DomCallbackId), ShortcutRegistryError> {
+    ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         let registry = self.registry_or_warn("create a shortcut").ok_or_else(|| {
             ShortcutRegistryError::Other(Arc::new(std::io::Error::other(
                 "the window's VirtualDom is not running",
@@ -869,7 +863,7 @@ impl DesktopContext {
         });
 
         match result {
-            Some(Ok(handle)) => Ok((handle, dom_id)),
+            Some(Ok(handle)) => Ok(handle.with_dom_handler(dom_id)),
             other => {
                 // Main-thread registration failed or the window closed first; undo the DOM-side
                 // registration.
@@ -893,19 +887,9 @@ impl DesktopContext {
         }
 
         let name = name.to_string();
-        _ = self.run_with_desktop_service_blocking(move |desktop| {
+        drop(self.run_with_desktop_service(move |desktop| {
             desktop.asset_handlers.remove_handler(&name);
-        });
-    }
-
-    /// Remove a shortcut that was created with the inverted callback pattern (`create_shortcut`).
-    ///
-    /// This removes both the main thread shortcut and the DOM callback.
-    pub fn remove_dom_shortcut(&self, handle: ShortcutHandle, dom_id: DomCallbackId) {
-        if let Some(registry) = self.registry_or_warn("remove the DOM-side shortcut callback") {
-            registry.remove(dom_id);
-        }
-        handle.remove();
+        }));
     }
 }
 
@@ -1028,7 +1012,7 @@ impl DesktopService {
     fn queue_new_window(&self, window: PendingWebview) {
         self.shared
             .proxy
-            .send_event(UserWindowEvent::new_window())
+            .send_event(crate::ipc::UserWindowEventVariant::NewWindow.into())
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -1066,7 +1050,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent::close_window(self.id()));
+            .send_event(crate::ipc::UserWindowEventVariant::CloseWindow(self.id()).into());
     }
 
     /// Close a particular window, given its ID
@@ -1074,7 +1058,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent::close_window(id));
+            .send_event(crate::ipc::UserWindowEventVariant::CloseWindow(id).into());
     }
 
     /// change window to fullscreen

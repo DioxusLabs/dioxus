@@ -8,8 +8,6 @@ use dioxus_document::{EvalError, Evaluator};
 use futures_util::FutureExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -190,7 +188,7 @@ impl Evaluator for WebEvaluator {
 
 /// We don't use serde-wasm-bindgen here because we need to make sure this works on desktop as well which
 /// requires using wasm-bindgen-x instead of wasm-bindgen directly.
-fn value_from_js_value<T: DeserializeOwned>(value: &JsValue) -> Result<T, EvalError> {
+fn value_from_js_value(value: &JsValue) -> Result<Value, EvalError> {
     let stringified = js_sys::JSON::stringify(value)
         .map_err(|e| EvalError::Communication(format!("Failed to stringify result - {:?}", e)))?;
     if !stringified.is_undefined() && stringified.is_valid_utf16() {
@@ -204,7 +202,7 @@ fn value_from_js_value<T: DeserializeOwned>(value: &JsValue) -> Result<T, EvalEr
     }
 }
 
-fn value_to_js_value<T: Serialize>(value: &T) -> Result<JsValue, EvalError> {
+fn value_to_js_value(value: &Value) -> Result<JsValue, EvalError> {
     let json_string = serde_json::to_string(value)
         .map_err(|e| EvalError::Communication(format!("Failed to serialize value - {}", e)))?;
     js_sys::JSON::parse(&json_string)

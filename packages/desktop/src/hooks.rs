@@ -90,10 +90,13 @@ pub fn use_main_thread_wry_event_handler(
     )
 }
 
+/// Register a handler on the VirtualDom thread for main-thread events selected by
+/// `forward_event`. The selected payload is sent across threads (hence `T: Send`), while
+/// `handler` stays on the VirtualDom thread and runs in the calling component's scope.
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-fn use_dom_event_handler(
-    mut handler: impl FnMut(UserWindowEvent) + 'static,
-    mut forward_event: impl FnMut(&UserWindowEvent) -> Option<UserWindowEvent> + Send + 'static,
+fn use_dom_event_handler<T: Send + 'static>(
+    mut handler: impl FnMut(T) + 'static,
+    mut forward_event: impl FnMut(&UserWindowEvent) -> Option<T> + Send + 'static,
 ) -> WryEventHandler {
     let runtime = Runtime::current();
     let scope_id = current_scope_id();
@@ -104,9 +107,9 @@ fn use_dom_event_handler(
                 tracing::warn!(
                     "cannot register a dom event handler: this window's VirtualDom is not running"
                 );
-                return crate::WryEventHandler::new(usize::MAX);
+                return crate::WryEventHandler::noop();
             };
-            let dom_handler = registry.register(move |event: UserWindowEvent| {
+            let dom_handler = registry.register(move |event: T| {
                 runtime.in_scope(scope_id, || handler(event));
             });
             let dom_tx = window.dom_event_sender();
@@ -139,15 +142,9 @@ pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_dom_event_handler(
-        move |event| {
-            if let UserWindowEventVariant::MudaMenuEvent(event) = event.variant() {
-                handler(event);
-            }
-        },
+        move |event| handler(&event),
         |event| match event.variant() {
-            UserWindowEventVariant::MudaMenuEvent(event) => {
-                Some(UserWindowEvent::muda_menu_event(event.clone()))
-            }
+            UserWindowEventVariant::MudaMenuEvent(event) => Some(event.clone()),
             _ => None,
         },
     )
@@ -164,15 +161,9 @@ pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_dom_event_handler(
-        move |event| {
-            if let UserWindowEventVariant::TrayMenuEvent(event) = event.variant() {
-                handler(event);
-            }
-        },
+        move |event| handler(&event),
         |event| match event.variant() {
-            UserWindowEventVariant::TrayMenuEvent(event) => {
-                Some(UserWindowEvent::tray_menu_event(event.clone()))
-            }
+            UserWindowEventVariant::TrayMenuEvent(event) => Some(event.clone()),
             _ => None,
         },
     )
@@ -191,15 +182,9 @@ pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
     use_dom_event_handler(
-        move |event| {
-            if let UserWindowEventVariant::TrayIconEvent(event) = event.variant() {
-                handler(event);
-            }
-        },
+        move |event| handler(&event),
         |event| match event.variant() {
-            UserWindowEventVariant::TrayIconEvent(event) => {
-                Some(UserWindowEvent::tray_icon_event(event.clone()))
-            }
+            UserWindowEventVariant::TrayIconEvent(event) => Some(event.clone()),
             _ => None,
         },
     )
@@ -240,10 +225,9 @@ pub fn use_global_shortcut(
         #[allow(clippy::redundant_closure)]
         move || window().create_shortcut(accelerator.accelerator(), move |state| cb(state)),
         |handle| {
-            if let Ok((shortcut_handle, dom_id)) = handle {
-                window().remove_dom_shortcut(shortcut_handle, dom_id);
+            if let Ok(handle) = handle {
+                handle.remove();
             }
         },
     )
-    .map(|(handle, _)| handle)
 }

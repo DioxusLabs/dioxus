@@ -57,7 +57,6 @@ pub use desktop_context::{DesktopContext, DesktopService, PendingDesktopContext,
 // Re-export the pieces of the shared web-sys-events crate users need to downcast desktop
 // events (e.g. `as_web_event`). The rest of the crate is an implementation detail.
 pub use dioxus_web_sys_events::{Synthetic, WebEventExt};
-pub use dom_thread::DomCallbackId;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

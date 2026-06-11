@@ -72,6 +72,10 @@ async-stream = "0.3.6"
 
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
+# These pin the *upstream* wasm-bindgen ecosystem instead of inheriting the workspace's
+# wry-bindgen fork (`wasm-bindgen-x` etc.): this crate interops with gloo-net/wasm-streams,
+# which compile against upstream wasm-bindgen, and mixing the two in one graph fails to
+# compile. Do not switch these back to `workspace = true`.
 web-sys = { version = "0.3.100", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
 gloo-net = "0.6.0"
 js-sys = "0.3.100"

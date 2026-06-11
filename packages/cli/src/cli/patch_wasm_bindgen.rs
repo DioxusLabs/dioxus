@@ -139,10 +139,19 @@ pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// Path to the hints file that stores CLI state for this workspace, inside the resolved cargo
-/// target directory (which honors `CARGO_TARGET_DIR` and the cargo config's `build.target-dir`).
-fn hints_file_path(target_dir: &Path) -> PathBuf {
-    target_dir.join("dx").join(".dx-hints")
+/// Path to the hints file that stores CLI state for this workspace, keyed by a hash of the
+/// workspace root under the dioxus data dir (same pattern as the component cache). Keeping it
+/// out of the cargo target dir means `cargo clean` doesn't re-arm the prompt and a shared
+/// `CARGO_TARGET_DIR` doesn't conflate unrelated workspaces.
+fn hints_file_path(workspace_root: &Path) -> PathBuf {
+    use std::hash::Hasher;
+
+    let mut hasher = std::hash::DefaultHasher::new();
+    std::hash::Hash::hash(workspace_root, &mut hasher);
+    let hash = hasher.finish();
+    Workspace::dioxus_data_dir()
+        .join("hints")
+        .join(format!("{hash:016x}.json"))
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -151,16 +160,16 @@ struct DxHints {
     wasm_bindgen_prompted: bool,
 }
 
-fn load_hints(target_dir: &Path) -> DxHints {
-    let path = hints_file_path(target_dir);
+fn load_hints(workspace_root: &Path) -> DxHints {
+    let path = hints_file_path(workspace_root);
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-fn save_hints(target_dir: &Path, hints: &DxHints) -> Result<()> {
-    let path = hints_file_path(target_dir);
+fn save_hints(workspace_root: &Path, hints: &DxHints) -> Result<()> {
+    let path = hints_file_path(workspace_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -170,15 +179,15 @@ fn save_hints(target_dir: &Path, hints: &DxHints) -> Result<()> {
 }
 
 /// Check if we've already prompted the user for this workspace
-pub(crate) fn was_prompted(target_dir: &Path) -> bool {
-    load_hints(target_dir).wasm_bindgen_prompted
+pub(crate) fn was_prompted(workspace_root: &Path) -> bool {
+    load_hints(workspace_root).wasm_bindgen_prompted
 }
 
 /// Mark that we've prompted the user for this workspace
-pub(crate) fn mark_prompted(target_dir: &Path) -> Result<()> {
-    let mut hints = load_hints(target_dir);
+pub(crate) fn mark_prompted(workspace_root: &Path) -> Result<()> {
+    let mut hints = load_hints(workspace_root);
     hints.wasm_bindgen_prompted = true;
-    save_hints(target_dir, &hints)
+    save_hints(workspace_root, &hints)
 }
 
 /// Apply the wasm-bindgen patch to a Cargo.toml file
@@ -227,7 +236,7 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
         return Ok(());
     }
 
-    let target_dir = workspace.resolved_target_dir();
+    let workspace_root = workspace.workspace_root();
 
     // Only try to patch if we have an upstream wasm-bindgen version
     let Some(upstream) = workspace
@@ -239,15 +248,15 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     };
 
     // Skip if already prompted for this workspace
-    if was_prompted(&target_dir) {
+    if was_prompted(&workspace_root) {
         return Ok(());
     }
 
-    let cargo_toml = workspace.workspace_root().join("Cargo.toml");
+    let cargo_toml = workspace_root.join("Cargo.toml");
 
     // Skip if patch already exists in Cargo.toml
     if !needs_wasm_bindgen_patch(&cargo_toml)? {
-        mark_prompted(&target_dir)?;
+        mark_prompted(&workspace_root)?;
         return Ok(());
     }
 
@@ -264,7 +273,7 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 
     if !should_patch {
         // An explicit decline is sticky; don't ask again for this workspace
-        mark_prompted(&target_dir)?;
+        mark_prompted(&workspace_root)?;
         term.write_line("Skipped. Run `dx tools patch-wasm-bindgen` later if needed.")?;
         return Ok(());
     }
@@ -276,7 +285,7 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
         Some(tag) => {
             // Mark prompted only once the patch is actually written
             apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
-            mark_prompted(&target_dir)?;
+            mark_prompted(&workspace_root)?;
             term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
         }
         // No suitable tag exists yet: warn-and-skip, and leave the prompt armed so it re-asks

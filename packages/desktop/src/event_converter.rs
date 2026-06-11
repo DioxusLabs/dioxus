@@ -10,6 +10,17 @@ use dioxus_web_sys_events::{GenericWebSysEvent, WebEventConverter};
 use std::path::PathBuf;
 use web_sys::wasm_bindgen::JsCast;
 
+/// Implement `HtmlEventConverter` methods by forwarding to `self.inner`.
+macro_rules! delegate_to_inner {
+    ($($method:ident => $ret:ty),* $(,)?) => {
+        $(
+            fn $method(&self, event: &PlatformEventData) -> $ret {
+                self.inner.$method(event)
+            }
+        )*
+    };
+}
+
 /// Desktop-specific event converter that wraps WebEventConverter.
 ///
 /// This converter handles desktop-specific event types that are created
@@ -45,28 +56,27 @@ impl HtmlEventConverter for DesktopEventConverter {
     }
 
     // Delegate all other methods to inner
-    fn convert_animation_data(&self, event: &PlatformEventData) -> dioxus_html::AnimationData {
-        self.inner.convert_animation_data(event)
-    }
-
-    fn convert_before_input_data(&self, event: &PlatformEventData) -> dioxus_html::BeforeInputData {
-        self.inner.convert_before_input_data(event)
-    }
-
-    fn convert_cancel_data(&self, event: &PlatformEventData) -> dioxus_html::CancelData {
-        self.inner.convert_cancel_data(event)
-    }
-
-    fn convert_clipboard_data(&self, event: &PlatformEventData) -> dioxus_html::ClipboardData {
-        self.inner.convert_clipboard_data(event)
-    }
-
-    fn convert_composition_data(&self, event: &PlatformEventData) -> dioxus_html::CompositionData {
-        self.inner.convert_composition_data(event)
-    }
-
-    fn convert_focus_data(&self, event: &PlatformEventData) -> dioxus_html::FocusData {
-        self.inner.convert_focus_data(event)
+    delegate_to_inner! {
+        convert_animation_data => dioxus_html::AnimationData,
+        convert_before_input_data => dioxus_html::BeforeInputData,
+        convert_cancel_data => dioxus_html::CancelData,
+        convert_clipboard_data => dioxus_html::ClipboardData,
+        convert_composition_data => dioxus_html::CompositionData,
+        convert_focus_data => dioxus_html::FocusData,
+        convert_image_data => dioxus_html::ImageData,
+        convert_keyboard_data => dioxus_html::KeyboardData,
+        convert_media_data => dioxus_html::MediaData,
+        convert_mounted_data => dioxus_html::MountedData,
+        convert_mouse_data => dioxus_html::MouseData,
+        convert_pointer_data => dioxus_html::PointerData,
+        convert_resize_data => dioxus_html::ResizeData,
+        convert_scroll_data => dioxus_html::ScrollData,
+        convert_selection_data => dioxus_html::SelectionData,
+        convert_toggle_data => dioxus_html::ToggleData,
+        convert_touch_data => dioxus_html::TouchData,
+        convert_transition_data => dioxus_html::TransitionData,
+        convert_visible_data => dioxus_html::VisibleData,
+        convert_wheel_data => dioxus_html::WheelData,
     }
 
     fn convert_form_data(&self, event: &PlatformEventData) -> dioxus_html::FormData {
@@ -109,61 +119,5 @@ impl HtmlEventConverter for DesktopEventConverter {
 
         // Fall back to web-sys conversion
         self.inner.convert_form_data(event)
-    }
-
-    fn convert_image_data(&self, event: &PlatformEventData) -> dioxus_html::ImageData {
-        self.inner.convert_image_data(event)
-    }
-
-    fn convert_keyboard_data(&self, event: &PlatformEventData) -> dioxus_html::KeyboardData {
-        self.inner.convert_keyboard_data(event)
-    }
-
-    fn convert_media_data(&self, event: &PlatformEventData) -> dioxus_html::MediaData {
-        self.inner.convert_media_data(event)
-    }
-
-    fn convert_mounted_data(&self, event: &PlatformEventData) -> dioxus_html::MountedData {
-        self.inner.convert_mounted_data(event)
-    }
-
-    fn convert_mouse_data(&self, event: &PlatformEventData) -> dioxus_html::MouseData {
-        self.inner.convert_mouse_data(event)
-    }
-
-    fn convert_pointer_data(&self, event: &PlatformEventData) -> dioxus_html::PointerData {
-        self.inner.convert_pointer_data(event)
-    }
-
-    fn convert_resize_data(&self, event: &PlatformEventData) -> dioxus_html::ResizeData {
-        self.inner.convert_resize_data(event)
-    }
-
-    fn convert_scroll_data(&self, event: &PlatformEventData) -> dioxus_html::ScrollData {
-        self.inner.convert_scroll_data(event)
-    }
-
-    fn convert_selection_data(&self, event: &PlatformEventData) -> dioxus_html::SelectionData {
-        self.inner.convert_selection_data(event)
-    }
-
-    fn convert_toggle_data(&self, event: &PlatformEventData) -> dioxus_html::ToggleData {
-        self.inner.convert_toggle_data(event)
-    }
-
-    fn convert_touch_data(&self, event: &PlatformEventData) -> dioxus_html::TouchData {
-        self.inner.convert_touch_data(event)
-    }
-
-    fn convert_transition_data(&self, event: &PlatformEventData) -> dioxus_html::TransitionData {
-        self.inner.convert_transition_data(event)
-    }
-
-    fn convert_visible_data(&self, event: &PlatformEventData) -> dioxus_html::VisibleData {
-        self.inner.convert_visible_data(event)
-    }
-
-    fn convert_wheel_data(&self, event: &PlatformEventData) -> dioxus_html::WheelData {
-        self.inner.convert_wheel_data(event)
     }
 }

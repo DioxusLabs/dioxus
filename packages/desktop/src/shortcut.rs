@@ -26,9 +26,20 @@ use tao::keyboard::ModifiersState;
 pub struct ShortcutHandle {
     id: u32,
     number: usize,
+    /// The DOM-thread callback registered by `DesktopContext::create_shortcut`, removed together
+    /// with the main-thread shortcut.
+    pub(crate) dom_handler: Option<crate::dom_thread::DomCallbackId>,
 }
 
 impl ShortcutHandle {
+    pub(crate) fn with_dom_handler(
+        mut self,
+        dom_handler: crate::dom_thread::DomCallbackId,
+    ) -> Self {
+        self.dom_handler = Some(dom_handler);
+        self
+    }
+
     /// Remove the shortcut.
     pub fn remove(&self) {
         window().remove_shortcut(*self);
@@ -86,6 +97,7 @@ impl ShortcutRegistry {
             return Ok(ShortcutHandle {
                 id: accelerator_id,
                 number: callbacks.callbacks.insert(callback),
+                dom_handler: None,
             });
         };
 
@@ -108,6 +120,7 @@ impl ShortcutRegistry {
         Ok(ShortcutHandle {
             id: accelerator_id,
             number: id,
+            dom_handler: None,
         })
     }
 

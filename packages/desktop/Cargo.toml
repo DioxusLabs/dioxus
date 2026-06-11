@@ -19,7 +19,6 @@ dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
-generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 dioxus-web-sys-events = { workspace = true, features = ["mounted"] }
 
@@ -47,7 +46,6 @@ slotmap = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
-tokio-util = { workspace = true, features = ["rt"] }
 percent-encoding = { workspace = true }
 async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
@@ -131,7 +129,6 @@ reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
-wasm-bindgen-futures = { workspace = true }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

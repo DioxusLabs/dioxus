@@ -25,7 +25,6 @@ dioxus-interpreter-js = { workspace = true, features = [
 ] }
 dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true }
 dioxus-web-sys-events = { workspace = true }
-generational-box = { workspace = true }
 
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
@@ -93,10 +92,6 @@ hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
     "dioxus-web-sys-events/mounted",
     "web-sys/Element",
-    "web-sys/DomRect",
-    "web-sys/ScrollIntoViewOptions",
-    "web-sys/ScrollLogicalPosition",
-    "web-sys/ScrollBehavior",
     "web-sys/HtmlElement",
 ]
 devtools = [
