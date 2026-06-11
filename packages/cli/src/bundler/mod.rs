@@ -364,6 +364,7 @@ impl<'a> BundleContext<'a> {
     pub(crate) fn copy_resources(&self, dest: &Path) -> Result<()> {
         fn copy_entries(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
             if src.is_dir() {
+                std::fs::create_dir_all(dst)?;
                 for entry in src.read_dir()? {
                     let entry = entry?;
                     let dst = dst.join(entry.file_name());
