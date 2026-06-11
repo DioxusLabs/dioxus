@@ -495,3 +495,26 @@ impl NativeFileData for DesktopFileData {
 }
 
 pub struct DesktopDataTransfer {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_file_hover_keeps_paths_for_over_and_leave_events() {
+        let hover = NativeFileHover::default();
+        let paths = vec![PathBuf::from("/tmp/dioxus-hover-file.txt")];
+
+        hover.set(DragDropEvent::Enter {
+            paths: paths.clone(),
+            position: (1, 2),
+        });
+        assert_eq!(hover.current_paths(), paths);
+
+        hover.set(DragDropEvent::Over { position: (3, 4) });
+        assert_eq!(hover.current_paths(), paths);
+
+        hover.set(DragDropEvent::Leave);
+        assert_eq!(hover.current_paths(), paths);
+    }
+}

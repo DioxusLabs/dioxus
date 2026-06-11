@@ -270,10 +270,10 @@ impl EditWebsocket {
 
                 let msg = queued_message.take().expect("Message should be set here");
 
-                // Notify that the edits have been applied
-                if msg.response.send(()).is_err() {
-                    tracing::error!("Error sending edits applied notification");
-                }
+                // Notify that the edits have been applied. A dropped receiver just means the
+                // VirtualDom stopped waiting for this flush — its task ends (window close)
+                // while the webview is still applying edits.
+                let _ = msg.response.send(());
             }
             tracing::trace!("Webview {} closed the connection", location.webview_id);
             let mut connection = WebviewConnectionState::default();

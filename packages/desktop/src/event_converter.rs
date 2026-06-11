@@ -80,77 +80,103 @@ impl HtmlEventConverter for DesktopEventConverter {
     }
 
     fn convert_form_data(&self, event: &PlatformEventData) -> dioxus_html::FormData {
-        // Check for web-sys events (from wry-bindgen bridge)
+        let form_data = self.inner.convert_form_data(event);
+        let mut values = form_data.values();
+        let mut has_desktop_file_values = false;
+
         if let Some(web_event) = event.downcast::<GenericWebSysEvent>() {
-            // Check if this is a file input
-            if let Some(input) = web_event.element.dyn_ref::<web_sys::HtmlInputElement>() {
-                if input.type_() == "file" {
-                    // Get files from the input - the filenames contain the native paths
-                    if let Some(file_list) = input.files() {
-                        let mut values = Vec::new();
-                        let input_name = input.name();
+            for input in file_inputs_for_event(&web_event.element) {
+                let desktop_file_values = desktop_file_values_from_input(&input);
 
-                        for i in 0..file_list.length() {
-                            if let Some(file) = file_list.get(i) {
-                                // The filename is actually the native path
-                                let path = PathBuf::from(file.name());
-                                if path.exists() {
-                                    let file_data = FileData::new(DesktopFileData(path));
-                                    values.push((
-                                        input_name.clone(),
-                                        FormValue::File(Some(file_data)),
-                                    ));
-                                } else {
-                                    tracing::warn!(
-                                        "skipping file input entry whose name is not an existing \
-                                         native path: {path:?}"
-                                    );
-                                }
-                            }
-                        }
-
-                        if !values.is_empty() {
-                            let values = merge_desktop_file_values(
-                                self.inner.convert_form_data(event).values(),
-                                input_name.as_str(),
-                                values,
-                            );
-
-                            return FormData::new(DesktopFormData::new(input.value(), values));
-                        }
-                    }
+                if !desktop_file_values.is_empty() {
+                    replace_file_values(&mut values, input.name().as_str(), desktop_file_values);
+                    has_desktop_file_values = true;
                 }
             }
         }
 
-        // Fall back to web-sys conversion
-        self.inner.convert_form_data(event)
+        if has_desktop_file_values {
+            FormData::new(DesktopFormData::new(form_data.value(), values))
+        } else {
+            form_data
+        }
     }
 }
 
-fn merge_desktop_file_values(
-    web_values: Vec<(String, FormValue)>,
-    input_name: &str,
-    desktop_file_values: Vec<(String, FormValue)>,
-) -> Vec<(String, FormValue)> {
-    let mut merged = Vec::with_capacity(web_values.len() + desktop_file_values.len());
-    let mut desktop_file_values = Some(desktop_file_values);
+fn file_inputs_for_event(element: &web_sys::Element) -> Vec<web_sys::HtmlInputElement> {
+    if let Some(input) = element.dyn_ref::<web_sys::HtmlInputElement>() {
+        return (input.type_() == "file")
+            .then(|| input.clone())
+            .into_iter()
+            .collect();
+    }
 
-    for (key, value) in web_values {
-        if key == input_name && matches!(value, FormValue::File(_)) {
-            if let Some(desktop_file_values) = desktop_file_values.take() {
-                merged.extend(desktop_file_values);
-            }
-        } else {
-            merged.push((key, value));
+    let Ok(Some(form)) = element.closest("form") else {
+        return Vec::new();
+    };
+
+    let Ok(inputs) = form.query_selector_all("input[type='file']") else {
+        return Vec::new();
+    };
+
+    let mut file_inputs = Vec::new();
+    for index in 0..inputs.length() {
+        if let Some(input) = inputs
+            .item(index)
+            .and_then(|node| node.dyn_into::<web_sys::HtmlInputElement>().ok())
+        {
+            file_inputs.push(input);
         }
     }
 
-    if let Some(desktop_file_values) = desktop_file_values {
-        merged.extend(desktop_file_values);
+    file_inputs
+}
+
+fn desktop_file_values_from_input(input: &web_sys::HtmlInputElement) -> Vec<(String, FormValue)> {
+    let mut values = Vec::new();
+    let input_name = input.name();
+
+    let Some(file_list) = input.files() else {
+        return values;
+    };
+
+    for i in 0..file_list.length() {
+        if let Some(file) = file_list.get(i) {
+            // The filename is actually the native path.
+            let path = PathBuf::from(file.name());
+            if let Some(file_data) = desktop_file_data_from_path(path.clone()) {
+                values.push((input_name.clone(), FormValue::File(Some(file_data))));
+            } else {
+                tracing::warn!(
+                    "skipping file input entry whose name is not an existing native path: {path:?}"
+                );
+            }
+        }
     }
 
-    merged
+    values
+}
+
+fn desktop_file_data_from_path(path: PathBuf) -> Option<FileData> {
+    path.exists().then(|| FileData::new(DesktopFileData(path)))
+}
+
+fn replace_file_values(
+    values: &mut Vec<(String, FormValue)>,
+    input_name: &str,
+    desktop_file_values: Vec<(String, FormValue)>,
+) {
+    let mut desktop_file_values = desktop_file_values.into_iter();
+
+    for (key, value) in values.iter_mut() {
+        if key == input_name && matches!(value, FormValue::File(_)) {
+            if let Some((_, desktop_file_value)) = desktop_file_values.next() {
+                *value = desktop_file_value;
+            }
+        }
+    }
+
+    values.extend(desktop_file_values);
 }
 
 #[cfg(test)]
@@ -158,47 +184,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn desktop_file_values_replace_only_the_file_input_entries() {
-        let web_values = vec![
+    fn desktop_file_values_replace_empty_file_placeholders() {
+        let avatar_path = test_file_path("avatar", b"avatar");
+
+        let mut values = vec![
             ("username".to_string(), FormValue::Text("ada".to_string())),
             ("avatar".to_string(), FormValue::File(None)),
             ("color".to_string(), FormValue::Text("red".to_string())),
         ];
         let desktop_file_values = vec![(
             "avatar".to_string(),
-            FormValue::File(Some(FileData::new(DesktopFileData(PathBuf::from(
-                "/tmp/avatar.png",
-            ))))),
+            FormValue::File(Some(FileData::new(DesktopFileData(avatar_path.clone())))),
         )];
 
-        let merged = merge_desktop_file_values(web_values, "avatar", desktop_file_values);
+        replace_file_values(&mut values, "avatar", desktop_file_values);
 
-        assert_eq!(merged.len(), 3);
+        assert_eq!(values.len(), 3);
         assert_eq!(
-            merged[0],
+            values[0],
             ("username".to_string(), FormValue::Text("ada".to_string()))
         );
-        assert!(matches!(merged[1].1, FormValue::File(Some(_))));
-        assert_eq!(merged[1].0, "avatar");
+        assert_file_value(&values[1], "avatar", avatar_path.as_path(), 6);
         assert_eq!(
-            merged[2],
+            values[2],
             ("color".to_string(), FormValue::Text("red".to_string()))
         );
     }
 
-    #[test]
-    fn desktop_file_values_are_appended_when_web_values_have_no_file_entry() {
-        let web_values = vec![("username".to_string(), FormValue::Text("ada".to_string()))];
-        let desktop_file_values = vec![("upload".to_string(), FormValue::File(None))];
+    fn test_file_path(name: &str, contents: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "dioxus-desktop-event-converter-{name}-{}",
+            std::process::id()
+        ));
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
 
-        let merged = merge_desktop_file_values(web_values, "upload", desktop_file_values);
+    fn assert_file_value(
+        value: &(String, FormValue),
+        expected_name: &str,
+        expected_path: &std::path::Path,
+        expected_size: u64,
+    ) {
+        assert_eq!(value.0, expected_name);
 
-        assert_eq!(
-            merged,
-            vec![
-                ("username".to_string(), FormValue::Text("ada".to_string())),
-                ("upload".to_string(), FormValue::File(None)),
-            ]
-        );
+        let FormValue::File(Some(file)) = &value.1 else {
+            panic!("expected file value");
+        };
+
+        assert_eq!(file.path(), expected_path);
+        assert_eq!(file.size(), expected_size);
     }
 }

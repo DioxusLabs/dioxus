@@ -1,6 +1,6 @@
 use crate::app::MakeVirtualDom;
 use crate::desktop_context::DesktopContextInner;
-use crate::dom_thread::VirtualDomEvent;
+use crate::dom_thread::{DomThreadMessage, VirtualDomEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
     Config, DesktopService,
@@ -8,11 +8,12 @@ use crate::{
     assets::AssetHandlerRegistry,
     edits::WryQueue,
     file_upload::NativeFileHover,
-    ipc::{UserWindowEvent, UserWindowEventVariant},
+    ipc::{UserWindowEvent, UserWindowEventVariant, WindowHandle},
     protocol,
 };
 use dioxus_hooks::to_owned;
 use std::{
+    cell::Cell,
     rc::Rc,
     sync::Arc,
     task::{Context, Poll, Wake, Waker},
@@ -30,6 +31,11 @@ pub(crate) struct WebviewInstance {
     pub dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
     pub wry_queue: WryQueue,
     pub desktop_context: Rc<DesktopService>,
+    /// Set once this window starts closing (its VirtualDom task is aborted or finished). The
+    /// instance stays in the `App::webviews` map until every [`WindowHandle`] drops, so proxied
+    /// calls on handles held elsewhere keep working; this flag stops the closing window from
+    /// being re-shown (tray click, webview reload) in the meantime.
+    pub closing: Cell<bool>,
     wry_bindgen_driver: WryBindgenWebviewDriver,
     wry_bindgen_driver_waker: Waker,
     wry_bindgen_driver_done: bool,
@@ -83,12 +89,17 @@ impl WebviewInstance {
     ///
     /// The VirtualDom runs on the DOM thread inside this webview's wry-bindgen runtime.
     /// This webview connects to it through the event channel created below.
+    /// Returns the instance together with a strong [`WindowHandle`]: the caller either moves it
+    /// into a [`DesktopContextInner`] for the window's creator (see
+    /// [`PendingWebview::create_window`]) or drops it. The instance itself holds only a weak
+    /// reference, so handle holders — not the webviews map — decide how long the window's
+    /// main-thread state lives.
     pub(crate) fn new(
         mut cfg: Config,
         dom: MakeVirtualDom,
         shared: Rc<SharedContext>,
         target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) -> WebviewInstance {
+    ) -> (WebviewInstance, Arc<WindowHandle>) {
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -170,9 +181,9 @@ impl WebviewInstance {
                   responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
-                let _lock = crate::android_sync_lock::android_runtime_lock();
 
                 if is_wry_bindgen_request(&request) {
+                    let _lock = crate::android_sync_lock::android_runtime_lock();
                     let responder = move |response| responder.respond(response);
                     let Some(responder) = protocol.handle_request("dioxus", &request, responder)
                     else {
@@ -406,6 +417,12 @@ impl WebviewInstance {
         };
         let webview = webview.unwrap();
 
+        let window_id = window.id();
+        let window_handle = Arc::new(WindowHandle {
+            proxy: proxy.clone(),
+            window_id,
+        });
+
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -413,12 +430,14 @@ impl WebviewInstance {
             asset_handlers,
             cfg.window_close_behavior,
             event_tx.clone(),
+            Arc::downgrade(&window_handle),
         ));
 
         // Finally spawn the app in the virtual dom task thread
-        let window_id = desktop_context.window.id();
         let run_app = {
-            let proxy = proxy.clone();
+            // Captured in the closure environment (not just the async body) so the handle is
+            // released even if the app future is dropped before the webview ever invokes it.
+            let window_handle = window_handle.clone();
             let event_tx = event_tx.clone();
             let window = desktop_context.window.clone();
             move || async move {
@@ -434,8 +453,7 @@ impl WebviewInstance {
                     event_tx,
                     websocket,
                     webview_id,
-                    proxy,
-                    window_id,
+                    window_handle,
                     file_hover,
                 )
                 .await;
@@ -443,10 +461,10 @@ impl WebviewInstance {
         };
         let (runtime, driver) = wry_bindgen.split();
         let future = runtime.run(run_app);
-        _ = shared
-            .desktop_thread_handle
-            .task_tx
-            .send((window_id, Box::new(|| Box::pin(future.into_future()))));
+        _ = shared.desktop_thread_handle.tx.send(DomThreadMessage::Spawn(
+            window_id,
+            Box::new(|| Box::pin(future.into_future())),
+        ));
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
@@ -466,6 +484,7 @@ impl WebviewInstance {
             dom_event_tx: event_tx,
             wry_queue: edit_queue,
             desktop_context,
+            closing: Cell::new(false),
             wry_bindgen_driver,
             wry_bindgen_driver_waker,
             wry_bindgen_driver_done: false,
@@ -477,7 +496,7 @@ impl WebviewInstance {
         // when that waker fires (via `WryBindgenDriverWake`).
         instance.poll_wry_bindgen_driver();
 
-        instance
+        (instance, window_handle)
     }
 
     pub(crate) fn poll_wry_bindgen_driver(&mut self) {
@@ -565,10 +584,13 @@ impl PendingWebview {
         shared: &Rc<SharedContext>,
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
+        let (window, window_handle) = WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
 
-        // Return the desktop service proxy to the pending future
-        _ = self.sender.send(window.desktop_context.proxy_inner());
+        // Return the desktop service proxy to the pending future. The strong window handle moves
+        // into it: the resolved DesktopContext keeps the window's main-thread state alive.
+        _ = self
+            .sender
+            .send(window.desktop_context.proxy_inner(window_handle));
 
         window
     }

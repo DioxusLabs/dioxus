@@ -1,4 +1,3 @@
-use dioxus_core::Callback;
 use rustc_hash::FxHashMap;
 use std::{cell::RefCell, rc::Rc};
 use wry::{RequestAsyncResponder, http::Request};
@@ -7,7 +6,7 @@ use wry::{RequestAsyncResponder, http::Request};
 pub type AssetRequest = Request<Vec<u8>>;
 
 pub struct AssetHandler {
-    f: Callback<(AssetRequest, RequestAsyncResponder)>,
+    f: Box<dyn FnMut(AssetRequest, RequestAsyncResponder)>,
 }
 
 #[derive(Clone)]
@@ -32,25 +31,46 @@ impl AssetHandlerRegistry {
         request: AssetRequest,
         responder: RequestAsyncResponder,
     ) {
-        if let Some(handler) = self.handlers.borrow().get(name) {
-            // Avoid handler being already borrowed on android
-            #[cfg(target_os = "android")]
-            let _lock = crate::android_sync_lock::android_runtime_lock();
+        let Some(mut handler) = self.handlers.borrow_mut().remove(name) else {
+            return;
+        };
 
-            // And run the handler in the scope of the component that created it
-            handler.f.call((request, responder));
+        // Avoid handler being already borrowed on android
+        #[cfg(target_os = "android")]
+        let _lock = crate::android_sync_lock::android_runtime_lock();
+
+        (handler.f)(request, responder);
+
+        if !self.handlers.borrow().contains_key(name) {
+            self.handlers.borrow_mut().insert(name.to_string(), handler);
         }
     }
 
     pub fn register_handler(
         &self,
         name: String,
-        f: Callback<(AssetRequest, RequestAsyncResponder)>,
+        f: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
-        self.handlers.borrow_mut().insert(name, AssetHandler { f });
+        self.handlers
+            .borrow_mut()
+            .insert(name, AssetHandler { f: Box::new(f) });
     }
 
     pub fn remove_handler(&self, name: &str) -> Option<AssetHandler> {
         self.handlers.borrow_mut().remove(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AssetHandlerRegistry;
+
+    #[test]
+    fn register_handler_does_not_require_dioxus_runtime() {
+        let registry = AssetHandlerRegistry::new();
+
+        registry.register_handler("custom".to_string(), |_request, _responder| {});
+
+        assert!(registry.has_handler("custom"));
     }
 }

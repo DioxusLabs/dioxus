@@ -12,45 +12,65 @@ pub(crate) struct PatchWasmBindgen {}
 const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
 const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
 
-const PATCH_CRATES: &[&str] = &[
-    "wasm-bindgen",
-    "wasm-bindgen-futures",
-    "js-sys",
-    "web-sys",
-    "wry-bindgen",
-];
+/// Crates shadowed by the `[patch.crates-io]` entries. Each one exists in the fork repo as a
+/// target-switching shim with the same package name and an upstream-compatible version
+/// (wasm-bindgen 0.2.x, js-sys/web-sys 0.3.x, wasm-bindgen-futures 0.4.x), so a caret
+/// requirement on the upstream crate resolves to the shim. The shims reach the wry-bindgen
+/// stack through path dependencies inside the git source, so the wry-* crates need no entries
+/// of their own — and can't get any: their registry dependents use exact prerelease pins
+/// (`=0.2.123-alpha.N`) while the packages in the git repo carry plain versions, so a wry-*
+/// patch entry never applies and cargo warns about an unused patch on every build.
+const PATCH_CRATES: &[&str] = &["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"];
 
-/// Fetch available tags from the GitHub repository
+/// Fork-owned `[patch.crates-io]` entries that are removed when (re)applying the patch. No git
+/// tag carries a `wry-bindgen` version that satisfies its registry dependents' exact prerelease
+/// pins, so an entry for it sits unused and makes cargo warn on every build.
+const STALE_PATCH_CRATES: &[&str] = &["wry-bindgen"];
+
+/// Fetch all available tags from the GitHub repository, following pagination so exact pins stay
+/// findable once the repo has more than a page of tags. Capped at 10 pages (1000 tags) to bound
+/// the number of API calls.
 async fn fetch_available_tags() -> Result<Vec<String>> {
-    let url = format!(
-        "https://api.github.com/repos/{}/tags?per_page=100",
-        PATCH_GITHUB_REPO
-    );
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-    let mut request = client.get(&url).header("User-Agent", "dioxus-cli");
-    // Use the user's token when available to dodge the 60 req/hr unauthenticated rate limit
-    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
-        request = request.header("Authorization", format!("Bearer {token}"));
-    }
-    let response = request.send().await?;
-
-    if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
-            "Failed to fetch tags from GitHub: {}",
-            response.status()
-        ));
-    }
+    const PER_PAGE: usize = 100;
+    const MAX_PAGES: usize = 10;
 
     #[derive(serde::Deserialize)]
     struct Tag {
         name: String,
     }
 
-    let tags: Vec<Tag> = response.json().await?;
-    Ok(tags.into_iter().map(|t| t.name).collect())
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+
+    let mut tags = Vec::new();
+    for page in 1..=MAX_PAGES {
+        let url = format!(
+            "https://api.github.com/repos/{PATCH_GITHUB_REPO}/tags?per_page={PER_PAGE}&page={page}"
+        );
+
+        let mut request = client.get(&url).header("User-Agent", "dioxus-cli");
+        // Use the user's token when available to dodge the 60 req/hr unauthenticated rate limit
+        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+            request = request.header("Authorization", format!("Bearer {token}"));
+        }
+        let response = request.send().await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Failed to fetch tags from GitHub: {}",
+                response.status()
+            ));
+        }
+
+        let page_tags: Vec<Tag> = response.json().await?;
+        let page_len = page_tags.len();
+        tags.extend(page_tags.into_iter().map(|t| t.name));
+        if page_len < PER_PAGE {
+            break;
+        }
+    }
+    Ok(tags)
 }
 
 /// Parse a version string, stripping the leading 'v' if present
@@ -85,7 +105,7 @@ fn find_best_matching_tag(
 ///
 /// `Err` means the tag list could not be fetched (network failure); `Ok(None)` means no published
 /// tag is compatible — the two cases warrant different handling at the prompt.
-pub(crate) async fn get_matching_patch_tag(
+async fn get_matching_patch_tag(
     upstream_version: &Version,
     fork_pin: Option<&Version>,
 ) -> Result<Option<String>> {
@@ -110,33 +130,126 @@ fn no_matching_tag_message(upstream: &Version, fork_pin: Option<&Version>) -> St
     )
 }
 
-/// Check if the wasm-bindgen patch is needed (i.e., not all patches are applied)
-pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
-    if !cargo_toml_path.exists() {
-        return Ok(false);
-    }
+/// Whether a `git` value in a patch entry points at the dioxus fork repo, tolerating the usual
+/// URL spellings (`.git` suffix, trailing slash, different casing).
+fn is_fork_url(url: &str) -> bool {
+    let normalized = url
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .trim_end_matches('/');
+    normalized.eq_ignore_ascii_case(PATCH_GIT_URL)
+}
 
+/// How a single `[patch.crates-io]` entry relates to the dioxus fork.
+#[derive(Debug, PartialEq)]
+enum PatchEntry {
+    /// No entry for this crate
+    Missing,
+    /// Points at the dioxus fork, pinned by `tag`: ours to update or remove
+    Fork { tag: String },
+    /// Anything else: another git URL, a path, or a fork checkout pinned by branch/rev. The user
+    /// manages this entry; never overwrite it.
+    UserManaged,
+}
+
+fn classify_entry(crates_io: Option<&dyn toml_edit::TableLike>, crate_name: &str) -> PatchEntry {
+    let Some(item) = crates_io.and_then(|table| table.get(crate_name)) else {
+        return PatchEntry::Missing;
+    };
+    let entry = item.as_table_like();
+    let git = entry
+        .and_then(|table| table.get("git"))
+        .and_then(|item| item.as_str());
+    if !git.is_some_and(is_fork_url) {
+        return PatchEntry::UserManaged;
+    }
+    match entry
+        .and_then(|table| table.get("tag"))
+        .and_then(|item| item.as_str())
+    {
+        Some(tag) => PatchEntry::Fork {
+            tag: tag.to_string(),
+        },
+        None => PatchEntry::UserManaged,
+    }
+}
+
+/// The `[patch.crates-io]` table of a parsed manifest, if present in any TOML spelling.
+fn patch_crates_io_table(doc: &toml_edit::DocumentMut) -> Option<&dyn toml_edit::TableLike> {
+    doc.get("patch")?
+        .as_table_like()?
+        .get("crates-io")?
+        .as_table_like()
+}
+
+/// The aggregate state of our `[patch.crates-io]` entries in a manifest.
+#[derive(Debug, PartialEq)]
+enum PatchStatus {
+    /// Every entry is present, fork-owned, and pinned to the wanted release; nothing to do.
+    UpToDate,
+    /// Entries are missing, fork-owned entries point at another release, or stale fork-owned
+    /// entries linger: applying would change the manifest.
+    NeedsApply,
+    /// At least one entry redirects part of the wasm-bindgen stack to a user-managed source;
+    /// writing the remaining entries against the dioxus fork would mix two incompatible copies,
+    /// so leave the manifest alone entirely.
+    UserManaged,
+}
+
+/// Classify the manifest's patch entries against the workspace's `wasm-bindgen-x` pin. The tag
+/// written for a pinned workspace always carries the pin's exact version, so this check needs no
+/// network round-trip.
+fn wasm_bindgen_patch_status(cargo_toml_path: &Path, fork_pin: &Version) -> Result<PatchStatus> {
     let content = std::fs::read_to_string(cargo_toml_path)?;
     let doc: toml_edit::DocumentMut = content
         .parse()
         .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
+    let crates_io = patch_crates_io_table(&doc);
 
-    // Check if [patch.crates-io] has all of our crates
-    if let Some(patch) = doc.get("patch") {
-        if let Some(crates_io) = patch.get("crates-io") {
-            if let Some(table) = crates_io.as_table() {
-                let all_patched = PATCH_CRATES
-                    .iter()
-                    .all(|crate_name| table.contains_key(crate_name));
-                if all_patched {
-                    return Ok(false);
-                }
-            }
-        }
+    let entries: Vec<_> = PATCH_CRATES
+        .iter()
+        .map(|crate_name| classify_entry(crates_io, crate_name))
+        .collect();
+
+    if entries.contains(&PatchEntry::UserManaged) {
+        return Ok(PatchStatus::UserManaged);
     }
 
-    // Some patches are missing, it's needed
-    Ok(true)
+    let up_to_date = |entry: &PatchEntry| match entry {
+        PatchEntry::Fork { tag } => parse_version(tag).as_ref() == Some(fork_pin),
+        _ => false,
+    };
+    if !entries.iter().all(up_to_date) {
+        return Ok(PatchStatus::NeedsApply);
+    }
+
+    // Lingering fork-owned entries (e.g. written by older CLI versions) make cargo warn about an
+    // unused patch on every build; applying removes them.
+    let stale = STALE_PATCH_CRATES.iter().any(|crate_name| {
+        matches!(
+            classify_entry(crates_io, crate_name),
+            PatchEntry::Fork { .. }
+        )
+    });
+    if stale {
+        return Ok(PatchStatus::NeedsApply);
+    }
+
+    Ok(PatchStatus::UpToDate)
+}
+
+/// FNV-1a over the path bytes. Implemented inline because the hints file name must be stable
+/// across releases, and std's `DefaultHasher` makes no such guarantee.
+fn stable_path_hash(path: &Path) -> u64 {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET;
+    for &byte in path.as_os_str().as_encoded_bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
 }
 
 /// Path to the hints file that stores CLI state for this workspace, keyed by a hash of the
@@ -144,11 +257,7 @@ pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
 /// out of the cargo target dir means `cargo clean` doesn't re-arm the prompt and a shared
 /// `CARGO_TARGET_DIR` doesn't conflate unrelated workspaces.
 fn hints_file_path(workspace_root: &Path) -> PathBuf {
-    use std::hash::Hasher;
-
-    let mut hasher = std::hash::DefaultHasher::new();
-    std::hash::Hash::hash(workspace_root, &mut hasher);
-    let hash = hasher.finish();
+    let hash = stable_path_hash(workspace_root);
     Workspace::dioxus_data_dir()
         .join("hints")
         .join(format!("{hash:016x}.json"))
@@ -156,8 +265,11 @@ fn hints_file_path(workspace_root: &Path) -> PathBuf {
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 struct DxHints {
+    /// The `wasm-bindgen-x` pin the user last answered a patch prompt for. The prompt re-arms
+    /// when the workspace moves to a different pin (e.g. a dioxus upgrade) so the patch can be
+    /// updated on consent.
     #[serde(default)]
-    wasm_bindgen_prompted: bool,
+    wasm_bindgen_prompted: Option<String>,
 }
 
 fn load_hints(workspace_root: &Path) -> DxHints {
@@ -178,20 +290,58 @@ fn save_hints(workspace_root: &Path, hints: &DxHints) -> Result<()> {
     Ok(())
 }
 
-/// Check if we've already prompted the user for this workspace
-pub(crate) fn was_prompted(workspace_root: &Path) -> bool {
-    load_hints(workspace_root).wasm_bindgen_prompted
+/// Check if we've already prompted the user about this pin for this workspace
+fn was_prompted(workspace_root: &Path, fork_pin: &Version) -> bool {
+    load_hints(workspace_root).wasm_bindgen_prompted.as_deref()
+        == Some(fork_pin.to_string().as_str())
 }
 
-/// Mark that we've prompted the user for this workspace
-pub(crate) fn mark_prompted(workspace_root: &Path) -> Result<()> {
+/// Mark that we've prompted the user about this pin for this workspace
+fn mark_prompted(workspace_root: &Path, fork_pin: &Version) -> Result<()> {
     let mut hints = load_hints(workspace_root);
-    hints.wasm_bindgen_prompted = true;
+    hints.wasm_bindgen_prompted = Some(fork_pin.to_string());
     save_hints(workspace_root, &hints)
 }
 
-/// Apply the wasm-bindgen patch to a Cargo.toml file
-pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Result<()> {
+/// What [`apply_wasm_bindgen_patch`] did to the manifest.
+#[derive(Debug, Default, PartialEq)]
+struct PatchOutcome {
+    /// Entries newly written against the fork
+    added: Vec<&'static str>,
+    /// Fork-owned entries whose tag was moved
+    updated: Vec<&'static str>,
+    /// Stale fork-owned entries that were removed
+    removed: Vec<&'static str>,
+    /// Entries left alone because they point at a user-managed source
+    skipped: Vec<&'static str>,
+}
+
+impl PatchOutcome {
+    /// Whether the manifest on disk was rewritten
+    fn changed(&self) -> bool {
+        !(self.added.is_empty() && self.updated.is_empty() && self.removed.is_empty())
+    }
+
+    /// Human-readable list of what changed, e.g. "added js-sys, web-sys; updated wasm-bindgen"
+    fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        for (verb, crates) in [
+            ("added", &self.added),
+            ("updated", &self.updated),
+            ("removed", &self.removed),
+        ] {
+            if !crates.is_empty() {
+                parts.push(format!("{verb} {}", crates.join(", ")));
+            }
+        }
+        parts.join("; ")
+    }
+}
+
+/// Apply the wasm-bindgen patch to a Cargo.toml file: add missing entries, retag fork-owned
+/// entries that point at another release, remove stale fork-owned entries, and leave
+/// user-managed entries untouched. The file is only rewritten when something actually changed.
+fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Result<PatchOutcome> {
     let content = std::fs::read_to_string(cargo_toml_path)?;
     let mut doc: toml_edit::DocumentMut = content
         .parse()
@@ -212,33 +362,71 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Res
         .entry("crates-io")
         .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
     let crates_io_table = crates_io
-        .as_table_mut()
+        .as_table_like_mut()
         .ok_or_else(|| anyhow::anyhow!("[patch.crates-io] is not a table"))?;
 
+    let mut outcome = PatchOutcome::default();
     for &crate_name in PATCH_CRATES {
-        if !crates_io_table.contains_key(crate_name) {
-            let mut inline = toml_edit::InlineTable::new();
-            inline.insert("git", PATCH_GIT_URL.into());
-            inline.insert("tag", tag.into());
-            crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
+        match classify_entry(Some(&*crates_io_table), crate_name) {
+            PatchEntry::Missing => {
+                let mut inline = toml_edit::InlineTable::new();
+                inline.insert("git", PATCH_GIT_URL.into());
+                inline.insert("tag", tag.into());
+                crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
+                outcome.added.push(crate_name);
+            }
+            PatchEntry::Fork { tag: existing } => {
+                if existing != tag {
+                    crates_io_table
+                        .get_mut(crate_name)
+                        .and_then(|item| item.as_table_like_mut())
+                        .expect("fork entries are table-like")
+                        .insert("tag", toml_edit::value(tag));
+                    outcome.updated.push(crate_name);
+                }
+            }
+            PatchEntry::UserManaged => outcome.skipped.push(crate_name),
         }
     }
 
-    std::fs::write(cargo_toml_path, doc.to_string())?;
-    Ok(())
+    for &crate_name in STALE_PATCH_CRATES {
+        if matches!(
+            classify_entry(Some(&*crates_io_table), crate_name),
+            PatchEntry::Fork { .. }
+        ) {
+            crates_io_table.remove(crate_name);
+            outcome.removed.push(crate_name);
+        }
+    }
+
+    if outcome.changed() {
+        std::fs::write(cargo_toml_path, doc.to_string())?;
+    }
+    Ok(outcome)
 }
 
 /// Check if we should prompt the user to apply the wasm-bindgen patch.
 /// Called during desktop builds to offer patching.
 pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Result<()> {
-    // Only prompt in interactive TUI mode (not in CI or piped)
-    if CliSettings::is_ci() || !std::io::stdout().is_terminal() {
+    let verbosity = crate::logging::verbosity_or_default();
+
+    // Only prompt in interactive TUI mode: never in CI, when output is piped or machine-read
+    // JSON, or when the user asked to stay off the network.
+    if CliSettings::is_ci()
+        || verbosity.json_output
+        || verbosity.offline
+        || !std::io::stdout().is_terminal()
+    {
         return Ok(());
     }
 
-    let workspace_root = workspace.workspace_root();
-
-    // Only try to patch if we have an upstream wasm-bindgen version
+    // Only patch projects that actually run wasm-bindgen code through the wry-bindgen runtime:
+    // dioxus-desktop pulls in the `wasm-bindgen-x` shim. Projects that merely have upstream
+    // wasm-bindgen somewhere in their graph (reqwest, chrono, web-time, ...) don't need — and
+    // must not get — the patch.
+    let Some(fork_pin) = workspace.wasm_bindgen_fork_version() else {
+        return Ok(());
+    };
     let Some(upstream) = workspace
         .wasm_bindgen_version()
         .as_deref()
@@ -247,18 +435,47 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
         return Ok(());
     };
 
-    // Skip if already prompted for this workspace
-    if was_prompted(&workspace_root) {
+    let workspace_root = workspace.workspace_root();
+
+    // Skip if already prompted about this pin for this workspace
+    if was_prompted(&workspace_root, &fork_pin) {
         return Ok(());
     }
 
     let cargo_toml = workspace_root.join("Cargo.toml");
-
-    // Skip if patch already exists in Cargo.toml
-    if !needs_wasm_bindgen_patch(&cargo_toml)? {
-        mark_prompted(&workspace_root)?;
+    if !cargo_toml.exists() {
         return Ok(());
     }
+
+    match wasm_bindgen_patch_status(&cargo_toml, &fork_pin)? {
+        PatchStatus::UpToDate => {
+            mark_prompted(&workspace_root, &fork_pin)?;
+            return Ok(());
+        }
+        PatchStatus::UserManaged => {
+            tracing::debug!(
+                "[patch.crates-io] already redirects wasm-bindgen crates to a custom source; \
+                 leaving it alone."
+            );
+            return Ok(());
+        }
+        PatchStatus::NeedsApply => {}
+    }
+
+    // Find a usable tag *before* prompting. When the fetch fails or no published tag matches,
+    // skip quietly without marking the workspace as prompted so a future build retries once the
+    // tag exists.
+    let tag = match get_matching_patch_tag(&upstream, Some(&fork_pin)).await {
+        Ok(Some(tag)) => tag,
+        Ok(None) => {
+            tracing::debug!("{}", no_matching_tag_message(&upstream, Some(&fork_pin)));
+            return Ok(());
+        }
+        Err(err) => {
+            tracing::debug!("Could not fetch wasm-bindgen-wry tags: {err}");
+            return Ok(());
+        }
+    };
 
     // Show prompt
     let term = console::Term::stdout();
@@ -272,26 +489,19 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     let should_patch = input.trim().is_empty() || input.trim().eq_ignore_ascii_case("y");
 
     if !should_patch {
-        // An explicit decline is sticky; don't ask again for this workspace
-        mark_prompted(&workspace_root)?;
+        // An explicit decline is sticky until the pin changes; don't ask again before then
+        mark_prompted(&workspace_root, &fork_pin)?;
         term.write_line("Skipped. Run `dx tools patch-wasm-bindgen` later if needed.")?;
         return Ok(());
     }
 
-    // A network failure propagates *without* marking the workspace as prompted, so the user is
-    // asked again on the next build instead of silently never getting the patch.
-    let fork_pin = workspace.wasm_bindgen_fork_version();
-    match get_matching_patch_tag(&upstream, fork_pin.as_ref()).await? {
-        Some(tag) => {
-            // Mark prompted only once the patch is actually written
-            apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
-            mark_prompted(&workspace_root)?;
-            term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
-        }
-        // No suitable tag exists yet: warn-and-skip, and leave the prompt armed so it re-asks
-        // once a matching fork release is published.
-        None => term.write_line(&no_matching_tag_message(&upstream, fork_pin.as_ref()))?,
-    }
+    // Mark prompted only once the patch is actually written
+    let outcome = apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+    mark_prompted(&workspace_root, &fork_pin)?;
+    term.write_line(&format!(
+        "✓ Patch applied to Cargo.toml (tag: {tag}; {})",
+        outcome.summary()
+    ))?;
 
     Ok(())
 }
@@ -311,12 +521,24 @@ impl PatchWasmBindgen {
         };
 
         let fork_pin = workspace.wasm_bindgen_fork_version();
-        match get_matching_patch_tag(&upstream, fork_pin.as_ref()).await? {
-            Some(tag) => {
-                apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
-                tracing::info!("Patch applied to Cargo.toml (tag: {})", tag);
-            }
-            None => tracing::warn!("{}", no_matching_tag_message(&upstream, fork_pin.as_ref())),
+        let Some(tag) = get_matching_patch_tag(&upstream, fork_pin.as_ref()).await? else {
+            tracing::warn!("{}", no_matching_tag_message(&upstream, fork_pin.as_ref()));
+            return Ok(StructuredOutput::Success);
+        };
+
+        let outcome = apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+        for crate_name in &outcome.skipped {
+            tracing::info!(
+                "Left `{crate_name}` alone: [patch.crates-io] already redirects it to a custom source."
+            );
+        }
+        if outcome.changed() {
+            tracing::info!(
+                "Patch applied to Cargo.toml (tag: {tag}; {})",
+                outcome.summary()
+            );
+        } else {
+            tracing::info!("Cargo.toml is already patched (tag: {tag}); nothing to change.");
         }
         Ok(StructuredOutput::Success)
     }
@@ -358,6 +580,33 @@ mod tests {
         Version::new(v.major, v.minor, v.patch)
     }
 
+    /// Write `content` to a Cargo.toml in a fresh temp dir, returning the dir and the path
+    fn manifest(content: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Cargo.toml");
+        std::fs::write(&path, content).unwrap();
+        (dir, path)
+    }
+
+    fn status(content: &str, pin: &str) -> PatchStatus {
+        let (_dir, path) = manifest(content);
+        wasm_bindgen_patch_status(&path, &v(pin)).unwrap()
+    }
+
+    const BARE_MANIFEST: &str =
+        "# top comment\n[package]\nname = \"demo\" # trailing comment\nversion = \"0.1.0\"\n";
+
+    fn fork_entry(tag: &str) -> String {
+        format!("{{ git = \"{PATCH_GIT_URL}\", tag = \"{tag}\" }}")
+    }
+
+    fn fully_patched(tag: &str) -> String {
+        let entry = fork_entry(tag);
+        format!(
+            "{BARE_MANIFEST}\n[patch.crates-io]\nwasm-bindgen = {entry}\nwasm-bindgen-futures = {entry}\njs-sys = {entry}\nweb-sys = {entry}\n"
+        )
+    }
+
     #[test]
     fn fork_pin_requires_exact_tag() {
         let Some(tags) = fetched_tags() else { return };
@@ -369,7 +618,7 @@ mod tests {
                 .and_then(|tag| parse_version(&tag));
             assert_eq!(selected.as_ref(), Some(pin));
 
-            // A pin with no published tag must select nothing (warn-and-skip), never a stale tag
+            // A pin with no published tag must select nothing (skip), never a stale tag
             let mut absent = pin.clone();
             absent.pre = Prerelease::new("alpha.99999").unwrap();
             assert!(!versions.contains(&absent));

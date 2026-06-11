@@ -1,8 +1,28 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
-use tao::window::WindowId;
+use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::oneshot;
+
+/// Keeps a window's main-thread state ([`WebviewInstance`]) alive: the instance stays in the
+/// `App::webviews` map until every [`DesktopContext`] holding an `Arc` of this drops. That is the
+/// invariant that lets proxied window/webview calls assume their target window always exists.
+///
+/// [`WebviewInstance`]: crate::webview::WebviewInstance
+/// [`DesktopContext`]: crate::DesktopContext
+pub(crate) struct WindowHandle {
+    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
+    pub(crate) window_id: WindowId,
+}
+
+impl Drop for WindowHandle {
+    fn drop(&mut self) {
+        // Fails only when the event loop is gone, i.e. the process is already exiting.
+        let _ = self
+            .proxy
+            .send_event(UserWindowEventVariant::AllWindowHandlesDropped(self.window_id).into());
+    }
+}
 
 type DesktopServiceCallbackFn = Box<dyn FnOnce(&DesktopService) + Send>;
 
@@ -123,13 +143,18 @@ pub(crate) enum UserWindowEventVariant {
     /// Close a given window (could be any window!)
     CloseWindow(WindowId),
 
-    /// Destroy a window unconditionally, ignoring [`WindowCloseBehaviour`].
+    /// Begin tearing down a window unconditionally, ignoring [`WindowCloseBehaviour`].
     ///
     /// Sent when a window's VirtualDom task has finished: hiding such a window
     /// (`WindowCloseBehaviour::WindowHides`) would leave an unrecoverable zombie.
     ///
     /// [`WindowCloseBehaviour`]: crate::WindowCloseBehaviour
     DestroyWindow(WindowId),
+
+    /// The last [`WindowHandle`] for this window dropped: no [`crate::DesktopContext`] for it
+    /// exists anymore, so its main-thread state can be removed. This is the only event that
+    /// removes a window from the `App::webviews` map.
+    AllWindowHandlesDropped(WindowId),
 
     /// Gracefully shutdown the entire app
     Shutdown,

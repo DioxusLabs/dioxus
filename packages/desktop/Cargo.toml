@@ -64,6 +64,10 @@ web-sys = { workspace = true, features = [
     "Element",
     "Event",
     "EventTarget",
+    "File",
+    "FileList",
+    "HtmlInputElement",
+    "NodeList",
     "Window",
 ] }
 
@@ -150,4 +154,9 @@ harness = false
 [[test]]
 name = "check_eval"
 path = "headless_tests/eval.rs"
+harness = false
+
+[[test]]
+name = "check_window_teardown"
+path = "headless_tests/window_teardown.rs"
 harness = false

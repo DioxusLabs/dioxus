@@ -10,7 +10,7 @@ use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
 use crate::edits::EditWebsocket;
 use crate::file_upload::NativeFileHover;
-use crate::ipc::{UserWindowEvent, UserWindowEventVariant};
+use crate::ipc::{UserWindowEvent, UserWindowEventVariant, WindowHandle};
 use dioxus_core::{ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
@@ -19,6 +19,7 @@ use futures_util::FutureExt;
 use futures_util::future::OptionFuture;
 use slotmap::SlotMap;
 use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
@@ -202,13 +203,13 @@ pub(crate) async fn run_virtual_dom_with_dom(
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
     websocket: EditWebsocket,
     webview_id: u32,
-    proxy: EventLoopProxy<UserWindowEvent>,
-    window_id: WindowId,
+    window_handle: Arc<WindowHandle>,
     file_hover: NativeFileHover,
 ) {
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime(), file_hover);
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    let desktop_service_proxy = DesktopContext::new(proxy, window_id, event_tx);
+    let window_id = window_handle.window_id;
+    let desktop_service_proxy = DesktopContext::new(event_tx, window_handle);
 
     // Create the callback registry for the inverted callback pattern and make it discoverable
     // by window id for the lifetime of this VirtualDom task (the guard cleans up on abort too).
@@ -290,25 +291,27 @@ async fn run_virtual_dom_loop(
     }
 }
 
-type SpawnTask = (
-    WindowId,
-    Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
-);
-type TaskSender = UnboundedSender<SpawnTask>;
+/// Messages for the dom thread. Spawns and aborts share one channel so they arrive in the order
+/// the main thread sent them: an abort can never overtake its window's spawn message and get
+/// dropped, which would leave an unabortable task (and its window) alive forever.
+pub(crate) enum DomThreadMessage {
+    /// Spawn the VirtualDom task for a window.
+    Spawn(
+        WindowId,
+        Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
+    ),
+    /// Abort the VirtualDom task for a window.
+    Abort(WindowId),
+}
 
 /// Handle to spawn tasks on the dom thread and abort them by window ID.
 pub(crate) struct DomThreadHandle {
-    /// Channel to send tasks to spawn (with associated window ID).
-    pub task_tx: TaskSender,
-    /// Channel to request task abortion by window ID.
-    pub abort_tx: UnboundedSender<WindowId>,
+    pub tx: UnboundedSender<DomThreadMessage>,
 }
 
 /// Spawn a thread that runs async tasks and supports aborting them by window ID.
 pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThreadHandle {
-    let (task_tx, mut task_rx): (TaskSender, _) = tokio::sync::mpsc::unbounded_channel();
-    let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
-        tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     std::thread::Builder::new()
         .name(DOM_THREAD_NAME.into())
@@ -324,32 +327,25 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                         let abort_handles: Rc<RefCell<HashMap<WindowId, AbortHandle>>> =
                             Rc::new(RefCell::new(HashMap::new()));
 
-                        loop {
-                            tokio::select! {
-                                biased;
-
-                                // Handle abort requests with priority
-                                Some(window_id) = abort_rx.recv() => {
+                        while let Some(message) = rx.recv().await {
+                            match message {
+                                DomThreadMessage::Abort(window_id) => {
+                                    // A missing handle means the task already finished naturally.
                                     let handle = abort_handles.borrow_mut().remove(&window_id);
                                     if let Some(handle) = handle {
                                         handle.abort();
                                     }
                                 }
 
-                                // Handle new task spawns
-                                spawn_result = task_rx.recv() => {
-                                    let Some((window_id, spawn_task)) = spawn_result else {
-                                        // Channel closed, exit the loop
-                                        break;
-                                    };
+                                DomThreadMessage::Spawn(window_id, spawn_task) => {
                                     let fut = spawn_task();
                                     let proxy = proxy.clone();
                                     let handles = abort_handles.clone();
                                     let join_handle = tokio::task::spawn_local(async move {
                                         _ = AssertUnwindSafe(fut).catch_unwind().await;
                                         // Runs when the VirtualDom task finishes or panics (never
-                                        // on abort). Force-destroy the window: hiding a window
-                                        // whose VirtualDom is gone would leave a zombie.
+                                        // on abort). Start tearing down the window: hiding a
+                                        // window whose VirtualDom is gone would leave a zombie.
                                         handles.borrow_mut().remove(&window_id);
                                         _ = proxy.send_event(UserWindowEventVariant::DestroyWindow(window_id).into());
                                     });
@@ -363,5 +359,5 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
         })
         .expect("Failed to spawn VirtualDom thread");
 
-    DomThreadHandle { task_tx, abort_tx }
+    DomThreadHandle { tx }
 }

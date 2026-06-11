@@ -98,19 +98,11 @@ fn handle_event_from_js(
     let platform_event: PlatformEventData = if dioxus_web_sys_events::is_drag_event(&name) {
         match event.dyn_into::<web_sys::DragEvent>() {
             Ok(drag_event) => {
-                // Get native file paths from the file_hover
-                let native_files = file_hover
-                    .current()
-                    .map(|evt| match evt {
-                        wry::DragDropEvent::Drop { paths, .. } => paths,
-                        wry::DragDropEvent::Enter { paths, .. } => paths,
-                        _ => vec![],
-                    })
-                    .unwrap_or_default();
-
                 // Create a DesktopFileDragEvent with native file paths
-                let desktop_drag =
-                    DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
+                let desktop_drag = DesktopFileDragEvent::new(
+                    Synthetic::new(drag_event),
+                    file_hover.current_paths(),
+                );
                 PlatformEventData::new(Box::new(desktop_drag))
             }
             Err(event) => virtual_event_from_websys_event(event, target),
