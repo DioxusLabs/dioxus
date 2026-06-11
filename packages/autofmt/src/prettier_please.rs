@@ -1,7 +1,7 @@
 use dioxus_rsx::CallBody;
 use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, visit_mut::VisitMut};
 
-use crate::{IndentOptions, Writer};
+use crate::{IndentOptions, Writer, lexstate::LexState};
 
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
@@ -57,12 +57,16 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
                 // Push out the indent level of the formatted block if it's multiline
                 if multiline || formatted.contains('\n') {
+                    let mut state = LexState::default();
                     formatted = formatted
                         .lines()
                         .map(|line| {
+                            let in_string = state.is_in_string();
+                            state.advance(line);
                             // Don't add indentation to blank lines (avoid trailing whitespace)
-                            if line.is_empty() {
-                                String::new()
+                            // or to the contents of multiline string literals
+                            if line.is_empty() || in_string {
+                                line.to_string()
                             } else {
                                 format!("{}{line}", self.cfg.indent_str())
                             }
@@ -73,6 +77,20 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
                 // Save this formatted block for later, when we apply it to the original expr
                 self.formatted_stack.push(formatted)
+            } else if i.tokens.to_string().contains("rsx") {
+                // Non-rsx macros like `vec![rsx! { ... }]` contain unparsed token streams that
+                // the visitor does not recurse into by default. Parse them as expression lists
+                // so any nested rsx! macros are formatted too instead of being emitted as
+                // raw token streams.
+                use syn::punctuated::Punctuated;
+                if let Ok(mut exprs) =
+                    Punctuated::<Expr, syn::Token![,]>::parse_terminated.parse2(i.tokens.clone())
+                {
+                    for expr in exprs.iter_mut() {
+                        self.visit_expr_mut(expr);
+                    }
+                    i.tokens = quote::quote! { #exprs };
+                }
             }
 
             syn::visit_mut::visit_macro_mut(self, i);
@@ -115,10 +133,15 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         }
 
         let mut lines = fmted.lines().enumerate().peekable();
+        let mut state = LexState::default();
 
         while let Some((_idx, fmt_line)) = lines.next() {
-            // Push the indentation (but not for blank lines - avoid trailing whitespace)
-            if is_multiline && !fmt_line.is_empty() {
+            let in_string = state.is_in_string();
+            state.advance(fmt_line);
+
+            // Push the indentation (but not for blank lines - avoid trailing whitespace -
+            // and not for the contents of multiline string literals)
+            if is_multiline && !fmt_line.is_empty() && !in_string {
                 out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
             }
 
@@ -195,13 +218,24 @@ pub fn unparse_pat(pat: &syn::Pat) -> String {
 
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
+    let mut state = LexState::default();
     let mut o = raw
         .strip_prefix("fn main() {\n")
         .unwrap()
         .strip_suffix("}\n")
         .unwrap()
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
+        .map(|line| {
+            // Lines inside multiline string literals are not indented by prettyplease
+            // and must be preserved verbatim
+            let in_string = state.is_in_string();
+            state.advance(line);
+            if in_string {
+                line
+            } else {
+                line.strip_prefix("    ").unwrap_or_default() // todo: set this to tab level
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
 

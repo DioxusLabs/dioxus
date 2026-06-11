@@ -10,6 +10,7 @@ use syn::parse::Parser;
 mod buffer;
 mod collect_macros;
 mod indent;
+mod lexstate;
 mod prettier_please;
 mod writer;
 

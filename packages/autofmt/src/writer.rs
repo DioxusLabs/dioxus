@@ -1,4 +1,4 @@
-use crate::{IndentOptions, buffer::Buffer};
+use crate::{IndentOptions, buffer::Buffer, lexstate::LexState};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -9,6 +9,12 @@ use std::{
     fmt::{Result, Write},
 };
 use syn::{Expr, spanned::Spanned, token::Brace};
+
+/// Whether a trimmed source line is a comment (`//` line comment, or the start
+/// or end of a `/* */` block comment)
+fn is_comment_line(trimmed: &str) -> bool {
+    trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.ends_with("*/")
+}
 
 #[derive(Debug)]
 pub struct Writer<'a> {
@@ -42,7 +48,10 @@ impl<'a> Writer<'a> {
             return Ok(());
         }
 
-        if Self::is_short_rsx_call(&body.body.roots) {
+        if Self::is_short_rsx_call(&body.body.roots)
+            && !self.children_have_comments(&body.body.roots)
+            && !self.body_has_trailing_comments(body)
+        {
             write!(self.out, " ")?;
             self.write_ident(&body.body.roots[0])?;
             write!(self.out, " ")?;
@@ -55,13 +64,23 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    fn body_has_trailing_comments(&mut self, body: &CallBody) -> bool {
+        let Some(span) = body.span else {
+            return false;
+        };
+        let comments = self.accumulate_full_line_comments(span.span().end());
+        comments
+            .iter()
+            .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())))
+    }
+
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
         if let Some(span) = body.span {
             self.out.indent_level += 1;
             let comments = self.accumulate_full_line_comments(span.span().end());
             let has_real_comment = comments
                 .iter()
-                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+                .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())));
             if has_real_comment {
                 self.out.new_line()?;
                 self.apply_line_comments(comments)?;
@@ -262,7 +281,7 @@ impl<'a> Writer<'a> {
                 let comments = self.accumulate_full_line_comments(child.span().start());
                 let has_real_comment = comments
                     .iter()
-                    .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+                    .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())));
                 if has_real_comment || !is_first {
                     self.apply_line_comments(comments)?;
                 }
@@ -442,7 +461,7 @@ impl<'a> Writer<'a> {
             let comments = self.accumulate_full_line_comments(brace.span.span().end());
             let has_real_comment = comments
                 .iter()
-                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+                .any(|&id| self.src.get(id).is_some_and(|l| is_comment_line(l.trim())));
             if has_real_comment {
                 // Undo the tab from tabbed_line(). It positioned for the closing
                 // brace, but trailing comments need child-level indentation
@@ -737,13 +756,24 @@ impl<'a> Writer<'a> {
         };
 
         // We go backwards to collect comments and empty lines. We only want to keep one empty line,
-        // the rest should be `//` comments
+        // the rest should be `//` comments or `/* */` block comments
         let mut last_line_was_empty = false;
+        let mut in_block_comment = false;
         for (id, line) in lines.iter().enumerate().rev() {
             let trimmed = line.trim();
-            if trimmed.starts_with("//") {
+            if in_block_comment {
                 comments.push_front(id);
                 last_line_was_empty = false;
+                if trimmed.starts_with("/*") {
+                    in_block_comment = false;
+                }
+            } else if trimmed.starts_with("//") {
+                comments.push_front(id);
+                last_line_was_empty = false;
+            } else if trimmed.ends_with("*/") {
+                comments.push_front(id);
+                last_line_was_empty = false;
+                in_block_comment = !trimmed.starts_with("/*");
             } else if trimmed.is_empty() {
                 if !last_line_was_empty {
                     comments.push_front(id);
@@ -869,7 +899,7 @@ impl<'a> Writer<'a> {
                 && let Some(lines) = self.src.get(..attr.span().start().line - 1)
             {
                 'line: for line in lines.iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
+                    match (is_comment_line(line.trim()), line.is_empty()) {
                         (true, _) => return 100000,
                         (_, true) => continue 'line,
                         _ => break 'line,
@@ -1082,8 +1112,20 @@ impl<'a> Writer<'a> {
 
                 // Handle multi-line method chains
                 if let Some(mut ml) = multiline {
+                    // Compact a source line, ignoring any trailing line comment
+                    let compact_src = |s: &str| {
+                        let code = COMMENT_REGEX.with(|r| {
+                            match r.captures(s).and_then(|c| c.get(1)) {
+                                Some(m) => s[..m.start()].to_string(),
+                                None => s.to_string(),
+                            }
+                        });
+                        code.replace(" ", "").replace(",", "")
+                    };
+
                     src_lines.next();
-                    let mut acc = ml[0].replace(" ", "").replace(",", "");
+                    let mut acc = compact_src(ml[0]);
+                    let mut matched = acc == compacted;
 
                     while let Some(src) = src_lines.peek() {
                         let t = src.trim();
@@ -1097,10 +1139,11 @@ impl<'a> Writer<'a> {
                             continue;
                         }
 
-                        acc.push_str(&src.replace(" ", "").replace(",", ""));
+                        acc.push_str(&compact_src(src));
                         ml.push(src);
 
-                        if acc.contains(&compacted) {
+                        if acc == compacted {
+                            matched = true;
                             src_lines.next();
                             break;
                         }
@@ -1115,6 +1158,14 @@ impl<'a> Writer<'a> {
                             continue;
                         }
                         break;
+                    }
+
+                    // The source lines must compact to exactly the pretty line, otherwise
+                    // emitting them verbatim would corrupt the expression. Fall back to the
+                    // pretty line if the match failed.
+                    if !matched {
+                        out.push_str(line);
+                        continue;
                     }
 
                     // Write multi-line with adjusted indentation
@@ -1149,8 +1200,14 @@ impl<'a> Writer<'a> {
                         && let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
                         && let Some(c) = cap.get(1)
                     {
-                        out.push_str(" // ");
-                        out.push_str(c.as_str().replace("//", "").trim());
+                        // Only attach the comment if the source line's code actually matches
+                        // the pretty line, otherwise the iterators have drifted apart and the
+                        // comment belongs somewhere else
+                        let src_code = src_line[..c.start()].replace(" ", "").replace(",", "");
+                        if src_code == compacted {
+                            out.push_str(" // ");
+                            out.push_str(c.as_str().replace("//", "").trim());
+                        }
                     }
                 }
             }
@@ -1171,10 +1228,16 @@ impl<'a> Writer<'a> {
         } else {
             writeln!(self.out, "{first}")?;
 
+            let mut state = LexState::default();
+            state.advance(first);
+
             while let Some(line) = lines.next() {
-                if !line.trim().is_empty() {
+                // Never indent lines that start inside a multiline string literal -
+                // the string contents must be preserved verbatim
+                if !line.trim().is_empty() && !state.is_in_string() {
                     self.out.tab()?;
                 }
+                state.advance(line);
 
                 write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
@@ -1261,7 +1324,7 @@ impl<'a> Writer<'a> {
         for child in children {
             if self.current_span_is_primary(child.span().start()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
+                    match (is_comment_line(line.trim()), line.is_empty()) {
                         (true, _) => return true,
                         (_, true) => continue 'line,
                         _ => break 'line,
@@ -1380,7 +1443,7 @@ impl<'a> Writer<'a> {
             let offset = 0;
             whitespace = whitespace[offset..].trim();
 
-            if whitespace.starts_with("//") {
+            if whitespace.starts_with("//") || whitespace.starts_with("/*") {
                 return true;
             }
 
