@@ -1637,9 +1637,9 @@ fn warmup_portal_target_switch() {
     dom.render_immediate(&mut writer);
 
     // mode 2: switch back to first target with NO oracle attached for it.
-    // `render_target_should_write` still returns true (target is Real), but
-    // the writer reports it unready — this drives the `render_to` filter
-    // chain and the `if let Some(to) = render_to` alternative branches.
+    // `target_ready` reports both targets writerless, so the retarget arm
+    // runs its removal and mount with `render_to` = None — the
+    // `should_mount` / `if let Some(to) = render_to` false arms fire.
     let _ = writer.take(first);
     let _ = writer.take(second);
     MODE.with(|c| c.set(2));
@@ -1652,13 +1652,13 @@ fn warmup_portal_target_switch() {
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut writer);
 
-    // Separate dom: switch to a NOOP target so `render_target_should_write`
-    // returns false and the `should_mount` / `if let Some(to)` false arms
-    // of the target-switch branch fire.
+    // Separate dom: switch to a target that never gets a writer so
+    // `target_ready` reports false and the `should_mount` / `if let Some(to)`
+    // false arms of the target-switch branch fire.
     drop(dom);
     let mut dom = VirtualDom::new(app);
     let first = dom.runtime().create_render_target();
-    let noop = dom.runtime().create_noop_render_target();
+    let noop = dom.runtime().create_render_target();
     FIRST_TARGET.with(|c| c.set(first.0 as u64));
     SECOND_TARGET.with(|c| c.set(noop.0 as u64));
     MODE.with(|c| c.set(0));

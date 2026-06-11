@@ -29,17 +29,6 @@ impl RenderTargetId {
     pub const ROOT: Self = Self(0);
 }
 
-/// The kind of renderer backing a target.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RenderTargetKind {
-    /// A target backed by a real renderer.
-    Real,
-
-    /// A target that can keep logical tree state alive without materializing
-    /// renderer nodes or running mount effects.
-    Noop,
-}
-
 /// Renderer-local mounted state for one logical mount.
 #[derive(Debug)]
 pub(crate) struct MountedNodeState {
@@ -68,19 +57,17 @@ impl MountedNodeState {
 /// Renderer-local state for a render target.
 #[derive(Debug)]
 pub(crate) struct RenderTargetState {
-    pub(crate) kind: RenderTargetKind,
     pub(crate) elements: Slab<Option<ElementRef>>,
     pub(crate) mounts: Vec<Option<MountedNodeState>>,
 }
 
 impl RenderTargetState {
-    pub(crate) fn new(kind: RenderTargetKind) -> Self {
+    pub(crate) fn new() -> Self {
         let mut elements = Slab::default();
         // The root element is always renderer-local element ID 0.
         elements.insert(None);
 
         Self {
-            kind,
             elements,
             mounts: Vec::new(),
         }
@@ -205,14 +192,6 @@ impl VirtualDom {
             .and_then(|mount| mount.as_ref())
             .map(|mount| mount.mounted_dynamic_nodes.len())
             .unwrap_or(0)
-    }
-
-    pub(crate) fn render_target_should_write(&self, target_id: RenderTargetId) -> bool {
-        self.runtime
-            .render_targets
-            .borrow()
-            .get(target_id.0)
-            .is_some_and(|target| target.kind == RenderTargetKind::Real)
     }
 
     pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> ElementId {

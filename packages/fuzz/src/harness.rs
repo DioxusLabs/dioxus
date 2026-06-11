@@ -107,7 +107,7 @@ enum MutationTrace {
     CreateTextNode { len: usize, id: ElementId },
     LoadTemplate { index: usize, id: ElementId },
     ReplaceNodeWith { id: ElementId, m: usize },
-    InsertChildrenAtPath { path: &'static [u8], m: usize },
+    InsertChildrenAtPath { id: ElementId, path: &'static [u8], m: usize },
     InsertNodesAfter { id: ElementId, m: usize },
     InsertNodesBefore { id: ElementId, m: usize },
     SetAttribute { name: &'static str, id: ElementId },
@@ -116,7 +116,6 @@ enum MutationTrace {
     RemoveEventListener { name: &'static str, id: ElementId },
     RemoveNode { id: ElementId },
     PushRoot { id: ElementId },
-    PopRoot,
 }
 
 impl fmt::Display for MutationTrace {
@@ -137,8 +136,8 @@ impl fmt::Display for MutationTrace {
             Self::ReplaceNodeWith { id, m } => {
                 write!(f, "replace_node_with(id: {id:?}, m: {m})")
             }
-            Self::InsertChildrenAtPath { path, m } => {
-                write!(f, "insert_children_at_path(path: {path:?}, m: {m})")
+            Self::InsertChildrenAtPath { id, path, m } => {
+                write!(f, "insert_children_at_path(id: {id:?}, path: {path:?}, m: {m})")
             }
             Self::InsertNodesAfter { id, m } => {
                 write!(f, "insert_nodes_after(id: {id:?}, m: {m})")
@@ -160,7 +159,6 @@ impl fmt::Display for MutationTrace {
             }
             Self::RemoveNode { id } => write!(f, "remove_node(id: {id:?})"),
             Self::PushRoot { id } => write!(f, "push_root(id: {id:?})"),
-            Self::PopRoot => write!(f, "pop_root()"),
         }
     }
 }
@@ -271,9 +269,9 @@ impl WriteMutations for TargetedRendererOracle {
         self.current_renderer().replace_node_with(id, m)
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.record_mutation(MutationTrace::InsertChildrenAtPath { path, m });
-        self.current_renderer().insert_children_at_path(path, m)
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
+        self.record_mutation(MutationTrace::InsertChildrenAtPath { id, path, m });
+        self.current_renderer().insert_children_at_path(id, path, m)
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -325,11 +323,6 @@ impl WriteMutations for TargetedRendererOracle {
     fn push_root(&mut self, id: ElementId) {
         self.record_mutation(MutationTrace::PushRoot { id });
         self.current_renderer().push_root(id)
-    }
-
-    fn pop_root(&mut self) {
-        self.record_mutation(MutationTrace::PopRoot);
-        self.current_renderer().pop_root()
     }
 }
 

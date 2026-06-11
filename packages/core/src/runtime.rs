@@ -4,7 +4,7 @@ use crate::scope_context::SuspenseLocation;
 use crate::{AttributeValue, ElementId, Event, RenderTargetId};
 use crate::{
     CapturedError,
-    arena::{ElementRef, RenderTargetKind, RenderTargetState},
+    arena::{ElementRef, RenderTargetState},
 };
 use crate::{
     SuspenseContext,
@@ -95,7 +95,7 @@ impl Drop for SuspenseLocationGuard<'_> {
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         let mut render_targets = Slab::default();
-        let root = render_targets.insert(RenderTargetState::new(RenderTargetKind::Real));
+        let root = render_targets.insert(RenderTargetState::new());
         debug_assert_eq!(root, RenderTargetId::ROOT.0);
 
         Rc::new(Self {
@@ -198,40 +198,22 @@ fn MyComponent() -> Element {{
             .unwrap_or(RenderTargetId::ROOT)
     }
 
-    /// Create a new real renderer target with an isolated [`ElementId`](crate::ElementId) arena.
+    /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
+    ///
+    /// Content only materializes into the target while the host's
+    /// [`MultiWriter`](crate::MultiWriter) serves a writer for it. While no
+    /// writer is attached, scopes rendered into the target keep their logical
+    /// state alive without allocating renderer elements or running mount
+    /// effects.
     pub fn create_render_target(&self) -> RenderTargetId {
         let mut targets = self.render_targets.borrow_mut();
-        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Real)))
+        RenderTargetId(targets.insert(RenderTargetState::new()))
     }
 
     /// Drain every pending effect, in `ScopeOrder` (height-asc, id-asc).
     pub(crate) fn drain_remaining_effects(&self) -> Vec<Effect> {
         let mut pending = self.pending_effects.borrow_mut();
         std::mem::take(&mut *pending).into_iter().collect()
-    }
-
-    /// Create a new no-op renderer target.
-    ///
-    /// Scopes rendered into this target can keep logical state alive, but they
-    /// will not materialize renderer nodes or run mount effects.
-    pub fn create_noop_render_target(&self) -> RenderTargetId {
-        let mut targets = self.render_targets.borrow_mut();
-        RenderTargetId(targets.insert(RenderTargetState::new(RenderTargetKind::Noop)))
-    }
-
-    /// Mark a real render target as dropped.
-    ///
-    /// The target arena is kept so existing mounted mounts can be cleaned up by
-    /// the normal diff path, but future renders into the target will not emit
-    /// mutations or mount effects.
-    pub fn drop_render_target(&self, target_id: RenderTargetId) {
-        if target_id == RenderTargetId::ROOT {
-            return;
-        }
-
-        if let Some(target) = self.render_targets.borrow_mut().get_mut(target_id.0) {
-            target.kind = RenderTargetKind::Noop;
-        }
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.

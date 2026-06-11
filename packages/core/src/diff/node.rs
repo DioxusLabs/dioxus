@@ -3,9 +3,7 @@ use crate::{
     TemplateNode, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     diff::{
-        anchor::{
-            Anchor, ElementEdge, anchor_before, anchor_for_slot, at_anchor, create_at_anchor,
-        },
+        anchor::{Anchor, ElementEdge, anchor_at, anchor_for_slot, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
     },
     innerlude::{ElementPath, ElementRef, MountId, ScopeOrder},
@@ -68,8 +66,6 @@ impl VNode {
     ///     }
     /// };
     /// ```
-    ///
-    /// IMPORTANT: This function assumes that root node is the top node on the stack
     pub(super) fn load_dynamic_slots(
         &self,
         mount: MountId,
@@ -106,8 +102,9 @@ impl VNode {
             if m > 0
                 && let Some(to) = state.to.as_deref_mut()
             {
+                let root_id = state.dom.get_mounted_root_node(mount, root_idx as usize);
                 let path = &self.template.node_paths()[dynamic_node_id][1..];
-                to.insert_children_at_path(path, m);
+                to.insert_children_at_path(root_id, path, m);
             }
         }
     }
@@ -219,8 +216,9 @@ impl<'a> DiffFrame<'a> {
         let current_mount = self.mount;
         let writes_enabled = state.dom.mount_should_render(current_mount)
             && state
-                .dom
-                .render_target_should_write(state.dom.mount_target_id(current_mount));
+                .to
+                .as_mut()
+                .is_some_and(|to| to.target_ready(state.dom.mount_target_id(current_mount)));
         let mut state = state.reborrow_with_writes(writes_enabled);
 
         // If the templates are different, we need to replace the entire template
@@ -414,12 +412,7 @@ impl VNode {
     }
 
     pub(crate) fn find_first_element(&self, dom: &VirtualDom) -> Option<ElementId> {
-        self.find_element_in_roots(
-            dom,
-            dom.current_render_target_id(),
-            0..self.template.roots().len(),
-            ElementEdge::First,
-        )
+        self.find_element_in_roots(dom, dom.current_render_target_id(), ElementEdge::First)
     }
 
     pub(super) fn find_element_at_root_via_mount(
@@ -460,18 +453,13 @@ impl VNode {
             Some((_, Fragment(children))) => find_fragment_edge(children, dom, target_id, edge),
             Some((id, Component(_))) => {
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, id));
-                find_node_edge(live_component_root(dom, scope_id), dom, target_id, edge)
+                live_component_root(dom, scope_id).find_element_in_roots(dom, target_id, edge)
             }
         }
     }
 
     pub(crate) fn find_last_element(&self, dom: &VirtualDom) -> Option<ElementId> {
-        self.find_element_in_roots(
-            dom,
-            dom.current_render_target_id(),
-            (0..self.template.roots().len()).rev(),
-            ElementEdge::Last,
-        )
+        self.find_element_in_roots(dom, dom.current_render_target_id(), ElementEdge::Last)
     }
 
     fn has_live_dom(&self, dom: &VirtualDom) -> bool {
@@ -511,16 +499,19 @@ impl VNode {
         &self,
         dom: &VirtualDom,
         target_id: crate::RenderTargetId,
-        mut roots: impl Iterator<Item = usize>,
         edge: ElementEdge,
     ) -> Option<ElementId> {
         let mount = self.mount.get();
         // The diff only walks the roots of a vnode whose mount matches its
         // template, so `find_element_at_root_in_target` indexes the mount's
         // renderer ids directly (its `debug_assert!`s document that invariant).
-        roots.find_map(|root_idx| {
-            self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge)
-        })
+        let find =
+            |root_idx| self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge);
+        let len = self.template.roots().len();
+        match edge {
+            ElementEdge::First => (0..len).find_map(find),
+            ElementEdge::Last => (0..len).rev().find_map(find),
+        }
     }
 
     pub(crate) fn replace(
@@ -562,7 +553,13 @@ impl VNode {
         // mount slots populated — otherwise the caller (e.g. suspense's
         // background diff) may later read a mount that was never set.
         let suppress_mutations = self.should_suppress_mutations(state.dom, destroy_component_state);
-        let anchor = anchor_before(self, &own_mounts, state.dom, state.context());
+        let anchor = anchor_at(
+            ElementEdge::First,
+            self,
+            &own_mounts,
+            state.dom,
+            state.context(),
+        );
         let mut to_for_create = state.to.as_deref_mut();
         if suppress_mutations {
             to_for_create = None;
@@ -774,7 +771,7 @@ impl VNode {
                 // by the time we get here.
                 let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
                 let root = live_component_root(dom, scope_id);
-                find_node_edge(root, dom, target_id, ElementEdge::First)
+                root.find_element_in_roots(dom, target_id, ElementEdge::First)
             }
             Text(_) => live_element_id(dom.get_mounted_dyn_node(mount, idx))
                 .filter(|id| dom.element_exists_in_target(target_id, *id)),
@@ -856,8 +853,9 @@ impl VNode {
         let mount = self.mount.get();
         if !state.dom.mount_should_render(mount)
             || !state
-                .dom
-                .render_target_should_write(state.dom.mount_target_id(mount))
+                .to
+                .as_mut()
+                .is_some_and(|to| to.target_ready(state.dom.mount_target_id(mount)))
         {
             state.to = None;
         }
@@ -892,7 +890,6 @@ impl VNode {
                         if let Some(to) = state.to.as_deref_mut() {
                             self.write_attrs(mount, &mut attrs, root_idx as u8, state.dom, to);
                         }
-                        // This operation relies on the fact that the root node is the top node on the stack so we need to do it here
                         self.load_dynamic_slots(mount, &mut nodes, root_idx as u8, &mut state);
                     }
 
@@ -919,7 +916,7 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 }
 
 /// Look up the rendered root VNode for a component scope, for walking with
-/// `find_node_edge` during anchor placement.
+/// `find_element_in_roots` during anchor placement.
 ///
 /// The diff only resolves a component's rendered root once it has established
 /// the component is live and rendered — anchor resolution walks mounted
@@ -942,35 +939,9 @@ fn find_fragment_edge(
     target_id: crate::RenderTargetId,
     edge: ElementEdge,
 ) -> Option<ElementId> {
+    let find = |child: &VNode| child.find_element_in_roots(dom, target_id, edge);
     match edge {
-        ElementEdge::First => children
-            .iter()
-            .find_map(|child| find_node_edge(child, dom, target_id, edge)),
-        ElementEdge::Last => children
-            .iter()
-            .rev()
-            .find_map(|child| find_node_edge(child, dom, target_id, edge)),
-    }
-}
-
-fn find_node_edge(
-    node: &VNode,
-    dom: &VirtualDom,
-    target_id: crate::RenderTargetId,
-    edge: ElementEdge,
-) -> Option<ElementId> {
-    match edge {
-        ElementEdge::First => node.find_element_in_roots(
-            dom,
-            target_id,
-            0..node.template.roots().len(),
-            ElementEdge::First,
-        ),
-        ElementEdge::Last => node.find_element_in_roots(
-            dom,
-            target_id,
-            (0..node.template.roots().len()).rev(),
-            ElementEdge::Last,
-        ),
+        ElementEdge::First => children.iter().find_map(find),
+        ElementEdge::Last => children.iter().rev().find_map(find),
     }
 }

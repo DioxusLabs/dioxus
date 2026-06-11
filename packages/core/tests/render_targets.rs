@@ -308,13 +308,15 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
 }
 
 #[test]
-fn noop_targets_do_not_mount_effects() {
+fn writerless_targets_do_not_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
 
     let mut dom = VirtualDom::new_with_props(noop_app, AppProps { target: RenderTargetId(1) });
-    let target = dom.runtime().create_noop_render_target();
+    let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
+    // A plain writer serves only the root target, so the portal's target has
+    // no writer: its content keeps logical state alive without mounting.
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.process_events();
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -402,7 +404,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
 }
 
 #[test]
-fn dropped_targets_do_not_write_or_mount_effects() {
+fn detached_targets_do_not_write_or_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
@@ -411,14 +413,22 @@ fn dropped_targets_do_not_write_or_mount_effects() {
     let target = dom.runtime().create_render_target();
     assert_eq!(target, RenderTargetId(1));
 
-    let edits = rebuild_to_targeted_vec(&mut dom);
+    // The target's writer is attached for the rebuild, then gone for the
+    // next pass — the host stopped serving it, like a closed desktop window.
+    let mut writer = MultiTargetWriter::<Mutations>::new();
+    writer.insert(RenderTargetId::ROOT, Mutations::default());
+    writer.insert(target, Mutations::default());
+    dom.rebuild(&mut writer);
+    let edits = drain_targets(writer);
     let show_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
-    dom.runtime().drop_render_target(target);
     dom.runtime()
         .handle_event("click", click_event(), show_button);
 
-    let edits = render_immediate_to_targeted_vec(&mut dom);
+    let mut writer = MultiTargetWriter::<Mutations>::new();
+    writer.insert(RenderTargetId::ROOT, Mutations::default());
+    dom.render_immediate(&mut writer);
+    let edits = drain_targets(writer);
 
     assert!(!edits.contains_key(&target));
     dom.process_events();

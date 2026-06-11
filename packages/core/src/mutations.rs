@@ -51,12 +51,13 @@ pub trait WriteMutations {
     fn replace_node_with(&mut self, id: ElementId, m: usize);
 
     /// Insert the topmost m nodes on the stack at the given dynamic slot path within
-    /// the template root currently on top of the stack.
+    /// the template root with the given ID.
     ///
-    /// Path: The path within the template to a dynamic slot. A path of `[]` is the root itself,
+    /// Id: The ID of the template root element whose subtree contains the slot.
+    /// Path: The path within that root to a dynamic slot. A path of `[]` is the root itself,
     /// `[0]` is the first child, `[0,1,2]` is the 1st child's 2nd child's 3rd child.
     /// M: The number of nodes on the stack to insert at the slot's position.
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize);
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize);
 
     /// Insert a number of nodes after a given node.
     ///
@@ -109,12 +110,25 @@ pub trait WriteMutations {
 
     /// Push the given root node onto our stack.
     ///
+    /// Every pushed root is consumed by a later insertion operation
+    /// (`append_children`, `insert_nodes_before/after`, `replace_node_with`,
+    /// `insert_children_at_path`), so the stack drains itself.
+    ///
     /// Id: The ID of the root node to push.
     fn push_root(&mut self, id: ElementId);
 
-    /// Pop the topmost entry off the renderer's stack without modifying the DOM.
-    /// Used to clean up temporary roots pushed for path-based insertions during diff transitions.
-    fn pop_root(&mut self);
+    /// Whether writes routed to `target` currently reach a live writer.
+    ///
+    /// The diff consults this before materializing a subtree into a render
+    /// target: when it returns `false` the subtree still updates logically,
+    /// but no renderer elements are allocated, no writes are emitted, and no
+    /// mount effects run. A plain writer accepts every write it is handed, so
+    /// the default is `true`; the diff's target router answers from the
+    /// host's [`MultiWriter::writer_for`].
+    fn target_ready(&mut self, target: RenderTargetId) -> bool {
+        let _ = target;
+        true
+    }
 }
 
 /// Forward through a mutable reference so writer-generic code can be
@@ -140,8 +154,8 @@ impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
         (**self).replace_node_with(id, m)
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        (**self).insert_children_at_path(path, m)
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
+        (**self).insert_children_at_path(id, path, m)
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -182,8 +196,8 @@ impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
         (**self).push_root(id)
     }
 
-    fn pop_root(&mut self) {
-        (**self).pop_root()
+    fn target_ready(&mut self, target: RenderTargetId) -> bool {
+        (**self).target_ready(target)
     }
 }
 
@@ -199,10 +213,13 @@ pub trait MultiWriter {
     /// The writer type serving each individual target.
     type Writer: WriteMutations;
 
-    /// The writer for `id`, or `None` to skip writes for a target with no
-    /// attached host. The logical tree still updates either way — the host
-    /// can attach a writer and re-render later (the desktop `Window`
-    /// component does exactly this while its webview is being created).
+    /// The writer for `id`, or `None` for a target with no attached host.
+    ///
+    /// A target without a writer is dormant: its logical tree stays alive,
+    /// but the diff skips its writes, allocates no renderer elements, and
+    /// runs no mount effects. The host can attach a writer later and
+    /// re-render to materialize the content (the desktop `Window` component
+    /// does exactly this while its webview is being created).
     fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Self::Writer>;
 }
 
@@ -271,9 +288,9 @@ impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
         }
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
         if let Some(w) = self.current() {
-            w.insert_children_at_path(path, m);
+            w.insert_children_at_path(id, path, m);
         }
     }
 
@@ -331,10 +348,8 @@ impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
         }
     }
 
-    fn pop_root(&mut self) {
-        if let Some(w) = self.current() {
-            w.pop_root();
-        }
+    fn target_ready(&mut self, target: RenderTargetId) -> bool {
+        self.to.writer_for(target).is_some()
     }
 }
 
@@ -407,11 +422,14 @@ pub enum Mutation {
     },
 
     /// Insert the topmost m nodes on the stack at the given dynamic slot path within
-    /// the template root currently on top of the stack.
+    /// the template root with the given ID.
     InsertChildrenAtPath {
-        /// The path within the template to a dynamic slot.
+        /// The ID of the template root element whose subtree contains the slot.
+        id: ElementId,
+
+        /// The path within that root to a dynamic slot.
         ///
-        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// A path of `[]` represents the root itself. A path of `[0]` represents the first child.
         /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
         path: &'static [u8],
 
@@ -491,9 +509,6 @@ pub enum Mutation {
         /// The ID of the root node to push.
         id: ElementId,
     },
-
-    /// Pop the topmost entry off the renderer's stack without modifying the DOM.
-    PopRoot,
 }
 
 /// A static list of mutations that can be applied to the DOM. Note: this list does not contain any `Any` attribute values
@@ -527,8 +542,8 @@ impl WriteMutations for Mutations {
         self.edits.push(Mutation::ReplaceWith { id, m })
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.edits.push(Mutation::InsertChildrenAtPath { path, m })
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
+        self.edits.push(Mutation::InsertChildrenAtPath { id, path, m })
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -583,10 +598,6 @@ impl WriteMutations for Mutations {
     fn push_root(&mut self, id: ElementId) {
         self.edits.push(Mutation::PushRoot { id })
     }
-
-    fn pop_root(&mut self) {
-        self.edits.push(Mutation::PopRoot)
-    }
 }
 
 /// A struct that ignores all mutations
@@ -603,7 +614,7 @@ impl WriteMutations for NoOpMutations {
 
     fn replace_node_with(&mut self, _: ElementId, _: usize) {}
 
-    fn insert_children_at_path(&mut self, _: &'static [u8], _: usize) {}
+    fn insert_children_at_path(&mut self, _: ElementId, _: &'static [u8], _: usize) {}
 
     fn insert_nodes_after(&mut self, _: ElementId, _: usize) {}
 
@@ -627,6 +638,4 @@ impl WriteMutations for NoOpMutations {
     fn remove_node(&mut self, _: ElementId) {}
 
     fn push_root(&mut self, _: ElementId) {}
-
-    fn pop_root(&mut self) {}
 }

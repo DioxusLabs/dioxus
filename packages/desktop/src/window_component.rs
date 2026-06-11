@@ -108,7 +108,6 @@ struct WindowProviders {
 #[derive(Clone)]
 struct WindowState {
     target_id: RenderTargetId,
-    runtime: Rc<Runtime>,
     providers: Rc<RefCell<Option<WindowProviders>>>,
     closed: Rc<Cell<bool>>,
     onclose: Rc<RefCell<Option<EventHandler<()>>>>,
@@ -116,10 +115,6 @@ struct WindowState {
 }
 
 impl WindowState {
-    fn drop_render_target(&self) {
-        self.runtime.drop_render_target(self.target_id);
-    }
-
     fn remove_close_handler(&self) {
         let Some(handler) = self.close_handler.borrow_mut().take() else {
             return;
@@ -133,6 +128,9 @@ impl WindowState {
         }
     }
 
+    /// Close the underlying window. Closing drops the app-side webview and
+    /// its `WryQueue`, so later render passes see the target writerless and
+    /// skip its writes.
     fn close_window(&self) {
         self.remove_close_handler();
         if let Some(providers) = self.providers.borrow_mut().take() {
@@ -140,13 +138,11 @@ impl WindowState {
                 providers.context.close();
             }
         }
-        self.drop_render_target();
     }
 
     fn release_closed_window(&self) {
         self.remove_close_handler();
         self.providers.borrow_mut().take();
-        self.drop_render_target();
     }
 }
 
@@ -200,7 +196,6 @@ pub fn Window(props: WindowProps) -> Element {
 
             WindowState {
                 target_id,
-                runtime,
                 providers,
                 closed,
                 onclose,

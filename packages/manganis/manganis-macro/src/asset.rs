@@ -121,7 +121,6 @@ impl AssetParser {
 
                 manganis::Asset::new(
                     || unsafe { std::ptr::read_volatile(&__LINK_SECTION) },
-                    || unsafe { std::ptr::read_volatile(&__LEGACY_LINK_SECTION) }
                 )
             }
         }

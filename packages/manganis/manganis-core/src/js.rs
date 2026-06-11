@@ -1,5 +1,4 @@
-use const_serialize_07 as const_serialize;
-use const_serialize_08::SerializeConst;
+use const_serialize::SerializeConst;
 
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 
@@ -13,11 +12,9 @@ use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
     Copy,
     Hash,
     SerializeConst,
-    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
-#[const_serialize(crate = const_serialize_08)]
 pub struct JsAssetOptions {
     minify: bool,
     preload: bool,

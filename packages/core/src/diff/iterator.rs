@@ -1,16 +1,14 @@
 use crate::{
     DynamicNode, ElementId, ScopeId, VirtualDom,
     diff::{
-        anchor::{Anchor, anchor_after, anchor_before, at_anchor, create_at_anchor},
-        context::{DiffContext, DiffFrame, DiffState},
+        anchor::{ElementEdge, anchor_at, at_anchor, create_at_anchor},
+        context::{DiffFrame, DiffState},
     },
     innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
-
-type AnchorFn = for<'a> fn(&VNode, &[MountId], &VirtualDom, Option<DiffContext<'a>>) -> Anchor;
 
 impl<M: WriteMutations> DiffState<'_, M> {
     pub(crate) fn diff_non_empty_fragment(
@@ -44,9 +42,12 @@ impl<M: WriteMutations> DiffState<'_, M> {
             Ordering::Greater => self
                 .dom
                 .remove_nodes(self.to.as_deref_mut(), &old[new.len()..]),
-            Ordering::Less => {
-                self.create_and_insert(anchor_after, &new[old.len()..], old.last().unwrap(), parent)
-            }
+            Ordering::Less => self.create_and_insert(
+                ElementEdge::Last,
+                &new[old.len()..],
+                old.last().unwrap(),
+                parent,
+            ),
             Ordering::Equal => {}
         }
 
@@ -70,7 +71,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
                 // The right-edge pairs were already diffed by
                 // `diff_keyed_ends`, so the matching new vnode has its mount.
                 self.create_and_insert(
-                    anchor_before,
+                    ElementEdge::First,
                     new_middle,
                     &new[new.len() - right_offset],
                     parent,
@@ -83,7 +84,12 @@ impl<M: WriteMutations> DiffState<'_, M> {
                 // to. (Anchoring against the unmounted new sibling falls
                 // through to `Anchor::AppendTo(ROOT)` and lands the new
                 // content past unrelated root siblings.)
-                self.create_and_insert(anchor_after, new_middle, &old[left_offset - 1], parent);
+                self.create_and_insert(
+                    ElementEdge::Last,
+                    new_middle,
+                    &old[left_offset - 1],
+                    parent,
+                );
             }
             self.dom.remove_nodes(self.to.as_deref_mut(), old_middle);
         } else {
@@ -124,14 +130,14 @@ impl<M: WriteMutations> DiffState<'_, M> {
             self.diff_shared_prefix(old, new, left_offset);
             if left_offset == old.len() {
                 self.create_and_insert(
-                    anchor_after,
+                    ElementEdge::Last,
                     &new[left_offset..],
                     &new[left_offset - 1],
                     parent,
                 );
             } else if right_offset == old.len() {
                 self.create_and_insert(
-                    anchor_before,
+                    ElementEdge::First,
                     &new[..new.len() - right_offset],
                     &new[new.len() - right_offset],
                     parent,
@@ -143,7 +149,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
                 );
             } else {
                 self.create_and_insert(
-                    anchor_before,
+                    ElementEdge::First,
                     &new[left_offset..new.len() - right_offset],
                     &new[new.len() - right_offset],
                     parent,
@@ -194,7 +200,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
 
         if shared_keys.is_empty() {
             let first_old = old.first().unwrap();
-            let anchor = anchor_before(first_old, &[], self.dom, self.context());
+            let anchor = anchor_at(ElementEdge::First, first_old, &[], self.dom, self.context());
             create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
             self.dom.remove_nodes(self.to.as_deref_mut(), old);
             return;
@@ -232,7 +238,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         let last = *lis_sequence.first().unwrap();
         if last < (new.len() - 1) {
             self.splice_around_diffing(
-                anchor_after,
+                ElementEdge::Last,
                 new,
                 old,
                 &new[last],
@@ -246,7 +252,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             let (last, next) = (pair[0], pair[1]);
             if last - next > 1 {
                 self.splice_around_diffing(
-                    anchor_before,
+                    ElementEdge::First,
                     new,
                     old,
                     &new[last],
@@ -260,7 +266,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         let first_lis = *lis_sequence.last().unwrap();
         if first_lis > 0 {
             self.splice_around_diffing(
-                anchor_before,
+                ElementEdge::First,
                 new,
                 old,
                 &new[first_lis],
@@ -273,7 +279,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
 
     fn splice_around_diffing(
         &mut self,
-        anchor: AnchorFn,
+        edge: ElementEdge,
         new: &[VNode],
         old: &[VNode],
         sibling: &VNode,
@@ -283,7 +289,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
     ) {
         let skip = collect_splice_mounts(old, new_index_to_old_index, range.clone());
         let context = self.context();
-        let anchor = anchor(sibling, &skip, self.dom, context);
+        let anchor = anchor_at(edge, sibling, &skip, self.dom, context);
         let dom = &mut *self.dom;
         let to = self.to.as_deref_mut();
         at_anchor(anchor, to, |to| {
@@ -318,12 +324,18 @@ impl<M: WriteMutations> DiffState<'_, M> {
 
     fn create_and_insert(
         &mut self,
-        anchor: AnchorFn,
+        edge: ElementEdge,
         new: &[VNode],
         sibling: &VNode,
         parent: Option<ElementRef>,
     ) {
-        let anchor = anchor(sibling, &collect_mounts(new), self.dom, self.context());
+        let anchor = anchor_at(
+            edge,
+            sibling,
+            &collect_mounts(new),
+            self.dom,
+            self.context(),
+        );
         create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
     }
 }

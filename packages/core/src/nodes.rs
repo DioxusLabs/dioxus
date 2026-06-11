@@ -15,322 +15,6 @@ use std::{
     fmt::{Arguments, Debug},
 };
 
-/// A trait that allows various items to be converted into a dynamic node for the rsx macro
-pub trait IntoDynNode<A = ()> {
-    /// Consume this item and produce a DynamicNode
-    fn into_dyn_node(self) -> DynamicNode;
-}
-
-impl IntoDynNode for () {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::default()
-    }
-}
-impl IntoDynNode for VNode {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Fragment(vec![self])
-    }
-}
-impl IntoDynNode for DynamicNode {
-    fn into_dyn_node(self) -> DynamicNode {
-        self
-    }
-}
-impl<T: IntoDynNode> IntoDynNode for Option<T> {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self {
-            Some(val) => val.into_dyn_node(),
-            None => DynamicNode::default(),
-        }
-    }
-}
-impl IntoDynNode for &Element {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self.as_ref() {
-            Ok(val) => val.into_dyn_node(),
-            _ => DynamicNode::default(),
-        }
-    }
-}
-impl IntoDynNode for Element {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self {
-            Ok(val) => val.into_dyn_node(),
-            _ => DynamicNode::default(),
-        }
-    }
-}
-impl IntoDynNode for &Option<VNode> {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_dyn_node(),
-            _ => DynamicNode::default(),
-        }
-    }
-}
-impl IntoDynNode for &str {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
-    }
-}
-impl IntoDynNode for String {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText { value: self })
-    }
-}
-impl IntoDynNode for Arguments<'_> {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
-    }
-}
-impl IntoDynNode for &VNode {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Fragment(vec![self.clone()])
-    }
-}
-
-pub trait IntoVNode {
-    fn into_vnode(self) -> VNode;
-}
-impl IntoVNode for VNode {
-    fn into_vnode(self) -> VNode {
-        self
-    }
-}
-impl IntoVNode for &VNode {
-    fn into_vnode(self) -> VNode {
-        self.clone()
-    }
-}
-impl IntoVNode for Element {
-    fn into_vnode(self) -> VNode {
-        match self {
-            Ok(val) => val.into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-impl IntoVNode for &Element {
-    fn into_vnode(self) -> VNode {
-        match self {
-            Ok(val) => val.into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-impl IntoVNode for Option<VNode> {
-    fn into_vnode(self) -> VNode {
-        match self {
-            Some(val) => val.into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-impl IntoVNode for &Option<VNode> {
-    fn into_vnode(self) -> VNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-impl IntoVNode for Option<Element> {
-    fn into_vnode(self) -> VNode {
-        match self {
-            Some(val) => val.into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-impl IntoVNode for &Option<Element> {
-    fn into_vnode(self) -> VNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_vnode(),
-            _ => VNode::default(),
-        }
-    }
-}
-
-// Note that we're using the E as a generic but this is never crafted anyways.
-pub struct FromNodeIterator;
-impl<T, I> IntoDynNode<FromNodeIterator> for T
-where
-    T: Iterator<Item = I>,
-    I: IntoVNode,
-{
-    fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
-        }
-    }
-}
-
-/// A value that can be converted into an attribute value
-pub trait IntoAttributeValue<T = ()> {
-    /// Convert into an attribute value
-    fn into_value(self) -> AttributeValue;
-}
-
-impl IntoAttributeValue for AttributeValue {
-    fn into_value(self) -> AttributeValue {
-        self
-    }
-}
-
-impl IntoAttributeValue for &str {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
-
-impl IntoAttributeValue for String {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self)
-    }
-}
-
-impl IntoAttributeValue for f32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self as _)
-    }
-}
-impl IntoAttributeValue for f64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self)
-    }
-}
-
-impl IntoAttributeValue for i8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self)
-    }
-}
-impl IntoAttributeValue for isize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-
-impl IntoAttributeValue for u8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for usize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-
-impl IntoAttributeValue for bool {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Bool(self)
-    }
-}
-
-impl IntoAttributeValue for Arguments<'_> {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
-
-impl IntoAttributeValue for Rc<dyn AnyValue> {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Any(self)
-    }
-}
-
-impl<T> IntoAttributeValue for ListenerCallback<T> {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Listener(self.erase())
-    }
-}
-
-impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
-    fn into_value(self) -> AttributeValue {
-        match self {
-            Some(val) => val.into_value(),
-            None => AttributeValue::None,
-        }
-    }
-}
-
-impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
-    fn into_value(self) -> AttributeValue {
-        self.to_owned().into_value()
-    }
-}
-
-pub struct AnyFmtMarker;
-impl<T> IntoAttributeValue<AnyFmtMarker> for T
-where
-    T: DioxusFormattable,
-{
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.format().to_string())
-    }
-}
-
-/// A trait for anything that has a dynamic list of attributes
-pub trait HasAttributes {
-    /// Push an attribute onto the list of attributes
-    fn push_attribute<T>(
-        self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        attr: impl IntoAttributeValue<T>,
-        volatile: bool,
-    ) -> Self;
-}
-
 /// A reference to a template along with any context needed to hydrate it
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
@@ -1378,4 +1062,320 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// A trait that allows various items to be converted into a dynamic node for the rsx macro
+pub trait IntoDynNode<A = ()> {
+    /// Consume this item and produce a DynamicNode
+    fn into_dyn_node(self) -> DynamicNode;
+}
+
+impl IntoDynNode for () {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::default()
+    }
+}
+impl IntoDynNode for VNode {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Fragment(vec![self])
+    }
+}
+impl IntoDynNode for DynamicNode {
+    fn into_dyn_node(self) -> DynamicNode {
+        self
+    }
+}
+impl<T: IntoDynNode> IntoDynNode for Option<T> {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self {
+            Some(val) => val.into_dyn_node(),
+            None => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for &Element {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self.as_ref() {
+            Ok(val) => val.into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for Element {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self {
+            Ok(val) => val.into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for &Option<VNode> {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for &str {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Text(VText {
+            value: self.to_string(),
+        })
+    }
+}
+impl IntoDynNode for String {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Text(VText { value: self })
+    }
+}
+impl IntoDynNode for Arguments<'_> {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Text(VText {
+            value: self.to_string(),
+        })
+    }
+}
+impl IntoDynNode for &VNode {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Fragment(vec![self.clone()])
+    }
+}
+
+pub trait IntoVNode {
+    fn into_vnode(self) -> VNode;
+}
+impl IntoVNode for VNode {
+    fn into_vnode(self) -> VNode {
+        self
+    }
+}
+impl IntoVNode for &VNode {
+    fn into_vnode(self) -> VNode {
+        self.clone()
+    }
+}
+impl IntoVNode for Element {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Ok(val) => val.into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+impl IntoVNode for &Element {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Ok(val) => val.into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+impl IntoVNode for Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+impl IntoVNode for &Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+impl IntoVNode for Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+impl IntoVNode for &Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
+            _ => VNode::default(),
+        }
+    }
+}
+
+// Note that we're using the E as a generic but this is never crafted anyways.
+pub struct FromNodeIterator;
+impl<T, I> IntoDynNode<FromNodeIterator> for T
+where
+    T: Iterator<Item = I>,
+    I: IntoVNode,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
+
+        if children.is_empty() {
+            DynamicNode::default()
+        } else {
+            DynamicNode::Fragment(children)
+        }
+    }
+}
+
+/// A value that can be converted into an attribute value
+pub trait IntoAttributeValue<T = ()> {
+    /// Convert into an attribute value
+    fn into_value(self) -> AttributeValue;
+}
+
+impl IntoAttributeValue for AttributeValue {
+    fn into_value(self) -> AttributeValue {
+        self
+    }
+}
+
+impl IntoAttributeValue for &str {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.to_string())
+    }
+}
+
+impl IntoAttributeValue for String {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self)
+    }
+}
+
+impl IntoAttributeValue for f32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Float(self as _)
+    }
+}
+impl IntoAttributeValue for f64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Float(self)
+    }
+}
+
+impl IntoAttributeValue for i8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self)
+    }
+}
+impl IntoAttributeValue for isize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+
+impl IntoAttributeValue for u8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for usize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+
+impl IntoAttributeValue for bool {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Bool(self)
+    }
+}
+
+impl IntoAttributeValue for Arguments<'_> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.to_string())
+    }
+}
+
+impl IntoAttributeValue for Rc<dyn AnyValue> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Any(self)
+    }
+}
+
+impl<T> IntoAttributeValue for ListenerCallback<T> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Listener(self.erase())
+    }
+}
+
+impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
+    fn into_value(self) -> AttributeValue {
+        match self {
+            Some(val) => val.into_value(),
+            None => AttributeValue::None,
+        }
+    }
+}
+
+impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
+    fn into_value(self) -> AttributeValue {
+        self.to_owned().into_value()
+    }
+}
+
+pub struct AnyFmtMarker;
+impl<T> IntoAttributeValue<AnyFmtMarker> for T
+where
+    T: DioxusFormattable,
+{
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.format().to_string())
+    }
+}
+
+/// A trait for anything that has a dynamic list of attributes
+pub trait HasAttributes {
+    /// Push an attribute onto the list of attributes
+    fn push_attribute<T>(
+        self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        attr: impl IntoAttributeValue<T>,
+        volatile: bool,
+    ) -> Self;
 }

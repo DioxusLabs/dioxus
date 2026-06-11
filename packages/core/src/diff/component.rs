@@ -88,7 +88,7 @@ impl VirtualDom {
             let target_id = self.runtime.get_state(scope).target_id();
             let mut render_to = to
                 .filter(|_| self.scope_should_write_now(scope))
-                .filter(|_| self.render_target_should_write(target_id));
+                .and_then(|to| to.target_ready(target_id).then_some(to));
             let mut state =
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             DiffFrame::new(old.mount.get(), &old, new_real_nodes).diff_into(&mut state);
@@ -119,7 +119,7 @@ impl VirtualDom {
             let target_id = self.runtime.get_state(scope).target_id();
             let mut render_to = to
                 .filter(|_| self.scope_should_write_now(scope))
-                .filter(|_| self.render_target_should_write(target_id));
+                .and_then(|to| to.target_ready(target_id).then_some(to));
 
             // Create the node
             let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());

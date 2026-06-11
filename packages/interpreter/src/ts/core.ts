@@ -484,17 +484,24 @@ export class BaseInterpreter {
     (node as ChildNode).remove();
   }
 
-  // Resolves `path` to either a real DOM node (attribute target, etc.) or to
-  // a pre-built virtual placeholder sentinel (a Dynamic slot). When the
-  // result is a slot anchor we `applyChunk` at its `(parent, before)` instead
-  // of trying to remove a DOM node — the marker no longer exists.
-  replacePlaceholderPath(ptr: number, len: number, m: number) {
+  // Resolves `path` within the template root `nodes[id]` to either a real
+  // DOM node (attribute target, etc.) or to a pre-built virtual placeholder
+  // sentinel (a Dynamic slot). When the result is a slot anchor we
+  // `applyChunk` at its `(parent, before)` instead of trying to remove a DOM
+  // node — the marker no longer exists.
+  insertChildrenAtPath(id: number, ptr: number, len: number, m: number) {
     const items = this.stack.splice(this.stack.length - m);
-    const node = this.loadChild(ptr, len);
-    this.replaceAtResolvedTarget(node, items);
+    const root = this.nodes[id] as TemplateClone;
+    const target = this.walkSlotPath(
+      root,
+      (i) => this.m.getUint8(ptr + i),
+      len,
+      true
+    ) as NodeOrVirtual;
+    this.replaceAtResolvedTarget(target, items);
   }
 
-  // Internal shared between `replacePlaceholderPath` (ptr+len) and the
+  // Internal shared between `insertChildrenAtPath` (ptr+len) and the
   // binary-protocol byte-array variant.
   replaceAtResolvedTarget(
     target: NodeOrVirtual,
@@ -589,9 +596,15 @@ export class BaseInterpreter {
     ) as NodeOrVirtual;
   }
 
-  replacePlaceholderPathBytes(array: Uint8Array | number[], n: number) {
+  insertChildrenAtPathBytes(id: number, array: Uint8Array | number[], n: number) {
     const items = this.stack.splice(this.stack.length - n);
-    const target = this.loadChildBytes(array);
+    const root = this.nodes[id] as TemplateClone;
+    const target = this.walkSlotPath(
+      root,
+      (i) => array[i],
+      array.length,
+      true
+    ) as NodeOrVirtual;
     this.replaceAtResolvedTarget(target, items);
   }
 

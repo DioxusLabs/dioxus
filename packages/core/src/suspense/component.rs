@@ -301,9 +301,10 @@ impl RenderDriver for SuspenseDriver {
         mut to: Option<&mut dyn WriteMutations>,
     ) {
         let target_id = dom.runtime.get_state(scope_id).target_id();
-        let should_write =
-            dom.scope_should_write_now(scope_id) && dom.render_target_should_write(target_id);
-        let mut render_to = if should_write { to.as_mut() } else { None };
+        let mut render_to = to
+            .as_mut()
+            .filter(|_| dom.scope_should_write_now(scope_id))
+            .and_then(|to| to.target_ready(target_id).then_some(to));
         suspense_diff(self, scope_id, dom, render_to.as_mut())
     }
 

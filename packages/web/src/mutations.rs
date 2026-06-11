@@ -178,12 +178,16 @@ impl WriteMutations for WebsysDom {
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
         if self.skip_mutations() {
             return;
         }
-        self.interpreter
-            .replace_placeholder(path.as_ptr() as u32, path.len() as u8, m as u16)
+        self.interpreter.insert_children_at_path(
+            id.0 as u32,
+            path.as_ptr() as u32,
+            path.len() as u8,
+            m as u16,
+        )
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -287,12 +291,5 @@ impl WriteMutations for WebsysDom {
             return;
         }
         self.interpreter.push_root(id.0 as u32)
-    }
-
-    fn pop_root(&mut self) {
-        if self.skip_mutations() {
-            return;
-        }
-        self.interpreter.pop_root()
     }
 }

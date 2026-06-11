@@ -870,15 +870,12 @@ impl WriteMutations for RendererOracle {
         self.insert_detached(parent, index, nodes, ti);
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
         self.edit_counters.inserts += 1;
         let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
-        let top = *self
-            .stack
-            .last()
-            .expect("renderer stack unexpectedly empty during insert_children_at_path");
-        let (parent, slot_ti) = self.walk_to_slot_parent(top, path);
+        let root = self.lookup(id);
+        let (parent, slot_ti) = self.walk_to_slot_parent(root, path);
         let insert_index = self.slot_insert_position(parent, slot_ti);
         self.insert_detached(parent, insert_index, nodes, slot_ti);
     }
@@ -979,12 +976,6 @@ impl WriteMutations for RendererOracle {
         self.stack.push(node);
     }
 
-    fn pop_root(&mut self) {
-        if self.stack.len() <= 1 {
-            panic!("dioxus emitted PopRoot with no pushed root on the renderer stack");
-        }
-        self.stack.pop();
-    }
 }
 
 /// The steps for a [`Sequence`], handed to the source app via a root context so

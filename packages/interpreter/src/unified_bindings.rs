@@ -64,9 +64,6 @@ mod js {
     fn append_children(id: u32, many: u16) {
         "{this.appendChildren($id$, $many$);}"
     }
-    fn pop_root() {
-        "{this.stack.pop();}"
-    }
     fn replace_with(id: u32, n: u16) {
         "{this.replaceWithChunk($id$,$n$);}"
     }
@@ -138,8 +135,8 @@ mod js {
         // sentinel from `prepareTemplateClone`. `loadChild` handles both.
         "{this.nodes[$id$] = this.loadChild($ptr$, $len$);}"
     }
-    fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{this.replacePlaceholderPath($ptr$,$len$,$n$);}"
+    fn insert_children_at_path(id: u32, ptr: u32, len: u8, n: u16) {
+        "{this.insertChildrenAtPath($id$,$ptr$,$len$,$n$);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
         // Clone the saved template root and prepare it for slot-aware path
@@ -236,7 +233,7 @@ mod js {
     }
 
     #[cfg(feature = "binary-protocol")]
-    fn replace_placeholder_ref(array: &[u8], n: u16) {
-        "{this.replacePlaceholderPathBytes($array$, $n$);}"
+    fn insert_children_at_path_ref(id: u32, array: &[u8], n: u16) {
+        "{this.insertChildrenAtPathBytes($id$, $array$, $n$);}"
     }
 }

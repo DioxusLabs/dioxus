@@ -148,13 +148,11 @@ impl WriteMutations for MutationWriter<'_> {
         self.docm.replace_node_with(anchor_node_id, &new_node_ids);
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        trace!("insert_children_at_path path:{:?} m:{}", path, m);
-        // WARNING: DO NOT REORDER
-        // The order of the following two lines is very important as "m_stack_nodes" mutates
-        // the stack and then "load_child" reads from the top of the stack.
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
+        trace!("insert_children_at_path id:{} path:{:?} m:{}", id.0, path, m);
         let new_node_ids = self.state.m_stack_nodes(m);
-        let anchor_node_id = self.load_child(path);
+        let root_node_id = self.state.element_to_node_id(id);
+        let anchor_node_id = self.docm.node_at_path(root_node_id, path);
         self.docm.replace_node_with(anchor_node_id, &new_node_ids);
     }
 
@@ -168,11 +166,6 @@ impl WriteMutations for MutationWriter<'_> {
         trace!("push_root id:{}", id.0);
         let node_id = self.state.element_to_node_id(id);
         self.state.stack.push(node_id);
-    }
-
-    fn pop_root(&mut self) {
-        trace!("pop_root");
-        self.state.stack.pop();
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {

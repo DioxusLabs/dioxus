@@ -90,8 +90,8 @@ impl WriteMutations for WryQueue {
         self.with_mutation_state(|state| state.replace_node_with(id, m));
     }
 
-    fn insert_children_at_path(&mut self, path: &'static [u8], m: usize) {
-        self.with_mutation_state(|state| state.insert_children_at_path(path, m));
+    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
+        self.with_mutation_state(|state| state.insert_children_at_path(id, path, m));
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -130,10 +130,6 @@ impl WriteMutations for WryQueue {
 
     fn push_root(&mut self, id: ElementId) {
         self.with_mutation_state(|state| state.push_root(id));
-    }
-
-    fn pop_root(&mut self) {
-        self.with_mutation_state(|state| state.pop_root());
     }
 }
 

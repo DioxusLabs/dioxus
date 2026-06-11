@@ -242,9 +242,9 @@ impl App {
         self.close_window(id, is_shared_dom, target_id);
     }
 
-    /// Tear down one webview: fire close callbacks, drop its render target,
-    /// re-render the shared DOM, and exit if it was the last window (or the
-    /// root target of a shared DOM).
+    /// Tear down one webview: fire close callbacks, drop the webview (and
+    /// with it the target's writer), re-render the shared DOM, and exit if it
+    /// was the last window (or the root target of a shared DOM).
     fn close_window(&mut self, id: WindowId, is_shared_dom: bool, target_id: RenderTargetId) {
         if self.exit_on_last_window_close && is_shared_dom && target_id == RenderTargetId::ROOT {
             self.control_flow = ControlFlow::Exit;

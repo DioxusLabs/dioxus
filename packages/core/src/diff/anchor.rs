@@ -35,37 +35,28 @@ impl Anchor {
             Anchor::Before(id) => to.insert_nodes_before(*id, m),
             Anchor::After(id) => to.insert_nodes_after(*id, m),
             Anchor::AppendTo(id) => to.append_children(*id, m),
-            Anchor::Slot { path, .. } => to.insert_children_at_path(path, m),
+            Anchor::Slot { parent, path } => to.insert_children_at_path(*parent, path, m),
         }
     }
 }
 
-pub(crate) fn anchor_before(
+/// Anchor new content at the given edge of `vnode`'s live DOM: before its
+/// first element, or after its last. Falls back to the slot-level anchor when
+/// the vnode has no live DOM.
+pub(super) fn anchor_at(
+    edge: ElementEdge,
     vnode: &VNode,
     skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Anchor {
-    vnode
-        .find_first_element(dom)
-        .map(Anchor::Before)
-        .unwrap_or_else(|| {
-            anchor_for_with_key(vnode.mount.get(), vnode.key.as_deref(), skip, dom, context)
-        })
-}
-
-pub(crate) fn anchor_after(
-    vnode: &VNode,
-    skip: &[MountId],
-    dom: &VirtualDom,
-    context: Option<DiffContext<'_>>,
-) -> Anchor {
-    vnode
-        .find_last_element(dom)
-        .map(Anchor::After)
-        .unwrap_or_else(|| {
-            anchor_for_with_key(vnode.mount.get(), vnode.key.as_deref(), skip, dom, context)
-        })
+    let at_edge = match edge {
+        ElementEdge::First => vnode.find_first_element(dom).map(Anchor::Before),
+        ElementEdge::Last => vnode.find_last_element(dom).map(Anchor::After),
+    };
+    at_edge.unwrap_or_else(|| {
+        anchor_for_with_key(vnode.mount.get(), vnode.key.as_deref(), skip, dom, context)
+    })
 }
 
 pub(crate) fn anchor_for_slot(
@@ -118,23 +109,9 @@ pub(crate) fn at_anchor<M: WriteMutations>(
     mut to: Option<&mut M>,
     create: impl FnOnce(Option<&mut M>) -> usize,
 ) -> usize {
-    let stack_parent = match &anchor {
-        Anchor::Slot { parent, .. } => Some(*parent),
-        _ => None,
-    };
-    if let Some(parent) = stack_parent {
-        if let Some(to_ref) = to.as_deref_mut() {
-            to_ref.push_root(parent);
-        }
-    }
     let m = create(to.as_deref_mut());
-    if let Some(to_ref) = to.as_deref_mut() {
+    if let Some(to_ref) = to {
         anchor.place(m, to_ref);
-    }
-    if stack_parent.is_some() {
-        if let Some(to_ref) = to {
-            to_ref.pop_root();
-        }
     }
     m
 }

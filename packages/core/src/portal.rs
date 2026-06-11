@@ -144,7 +144,7 @@ fn mount_children<M: WriteMutations>(
         target_id,
         "portal mount runs inside the portal scope, whose target_id routes its writes"
     );
-    let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+    let mut render_to = to.and_then(|to| to.target_ready(target_id).then_some(to));
     let should_mount = render_to.is_some();
     let m = dom.create_children_with_parents(
         render_to.as_deref_mut(),
@@ -239,7 +239,7 @@ impl RenderDriver for PortalDriver {
 
                 let render_to = to
                     .as_mut()
-                    .filter(|_| dom.render_target_should_write(old_target_id));
+                    .and_then(|to| to.target_ready(old_target_id).then_some(to));
                 old_children.remove_node_inner(dom, render_to, true);
 
                 // Ordering is correctness-critical: writes route through the
@@ -261,7 +261,7 @@ impl RenderDriver for PortalDriver {
 
             let mut render_to = to
                 .filter(|_| dom.runtime.scope_should_render(scope_id))
-                .filter(|_| dom.render_target_should_write(target_id));
+                .and_then(|to| to.target_ready(target_id).then_some(to));
             old_children.diff_node(&new_children, dom, render_to.as_mut());
             dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
             if render_to.is_some() {
@@ -279,7 +279,7 @@ impl RenderDriver for PortalDriver {
     ) {
         let target_id = dom.runtime.get_state(scope_id).target_id();
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let mut render_to = to.filter(|_| dom.render_target_should_write(target_id));
+            let mut render_to = to.and_then(|to| to.target_ready(target_id).then_some(to));
             // `PortalDriver::create` always sets `last_rendered_node` before
             // returning, and removal only fires after a scope has gone
             // through `create`, so the clone is always `Some`.
