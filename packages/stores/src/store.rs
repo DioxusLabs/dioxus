@@ -204,7 +204,7 @@ where
 impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
     for ReadStore<T, S>
 where
-    Lens: Writable<Storage = S> + 'static,
+    Lens: Readable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
     S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,

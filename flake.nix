@@ -27,7 +27,10 @@
             ];
           };
           lib = pkgs.lib;
-          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          # Keep in sync with `rust_stable` in .github/workflows/main.yml
+          # (the workspace also declares rust-version = "1.93.0", so anything
+          # below 1.93 will fail to build).
+          rustToolchain = pkgs.rust-bin.stable."1.94.0".default.override {
             extensions = [
               "rust-src"
               "rust-analyzer"
@@ -70,7 +73,7 @@
             // {
               src = cargoSrc;
               pname = "dioxus-deps";
-              version = cargoToml.package.version;
+              version = cargoToml.workspace.package.version;
             }
           );
 
@@ -84,7 +87,7 @@
               commonArgs
               // {
                 pname = package;
-                version = cargoToml.package.version;
+                version = cargoToml.workspace.package.version;
                 inherit cargoArtifacts;
                 cargoExtraArgs = "--locked --package ${package} ${
                   lib.concatStringsSep " " (map (f: "--features ${f}") features)
