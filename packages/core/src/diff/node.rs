@@ -43,7 +43,7 @@ impl<'a> DiffFrame<'a> {
         state.enter_context(prev_mount, old, new);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
-        if old == new && !old.has_dirty_component_descendant(prev_mount, state.dom) {
+        if old == new {
             state.dom.commit_mount(prev_mount, new);
             return;
         }
@@ -69,23 +69,6 @@ impl<'a> DiffFrame<'a> {
 }
 
 impl VNode {
-    fn has_dirty_component_descendant(&self, mount: MountId, dom: &VirtualDom) -> bool {
-        self.dynamic_nodes
-            .iter()
-            .enumerate()
-            .any(|(idx, node)| match node {
-                Component(_) => {
-                    let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
-                    dom.is_dirty(scope_id)
-                }
-                Fragment(nodes) => nodes.iter().any(|node| {
-                    node.mounted_id()
-                        .is_some_and(|mount| node.has_dirty_component_descendant(mount, dom))
-                }),
-                Text(_) => false,
-            })
-    }
-
     fn diff_dynamic_node(
         &self,
         mount: MountId,
