@@ -75,6 +75,7 @@ features = [
     "ResizeObserverSize",
     "ScrollRestoration",
     "ScrollToOptions",
+    "Selection",
     "Text",
     "Touch",
     "TouchEvent",

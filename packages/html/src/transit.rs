@@ -72,6 +72,7 @@ impl HtmlEvent {
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum EventData {
+    BeforeInput(SerializedBeforeInputData),
     Cancel(SerializedCancelData),
     Mouse(SerializedMouseData),
     Clipboard(SerializedClipboardData),
@@ -98,6 +99,9 @@ pub enum EventData {
 impl EventData {
     pub fn into_any(self) -> Rc<dyn Any> {
         match self {
+            EventData::BeforeInput(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
             EventData::Cancel(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
@@ -162,6 +166,36 @@ impl EventData {
 }
 
 #[test]
+fn beforeinput_event_deserializes_from_interpreter_payload() {
+    let raw = r#"
+{
+    "element": 0,
+    "name": "beforeinput",
+    "bubbles": true,
+    "data": {
+        "input_type": "insertText",
+        "data": "x",
+        "is_composing": false,
+        "value": "hello"
+    }
+}
+    "#;
+
+    let event: HtmlEvent = serde_json::from_str(raw).unwrap();
+    assert_eq!(event.name, "beforeinput");
+    assert!(event.bubbles);
+    match event.data {
+        EventData::BeforeInput(data) => {
+            assert_eq!(data.input_type, "insertText");
+            assert_eq!(data.data.as_deref(), Some("x"));
+            assert!(!data.is_composing);
+            assert_eq!(data.value, "hello");
+        }
+        other => panic!("expected EventData::BeforeInput, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_back_and_forth() {
     let data = HtmlEvent {
         element: ElementId(0),
@@ -208,6 +242,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData {
         event
             .downcast::<SerializedAnimationData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_before_input_data(&self, event: &PlatformEventData) -> BeforeInputData {
+        event
+            .downcast::<SerializedBeforeInputData>()
             .cloned()
             .unwrap()
             .into()
