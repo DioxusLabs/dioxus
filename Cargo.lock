@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "Inflector"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
-dependencies = [
- "lazy_static",
- "regex",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3603,7 +3593,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.3",
  "http-range",
- "ouroboros 0.5.1",
+ "ouroboros",
  "pollster",
  "rand 0.9.0",
  "reqwest 0.12.28",
@@ -9382,35 +9372,13 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc04551635026d3ac7bc646698ea1836a85ed2a26b7094fe1d15d8b14854c4a2"
-dependencies = [
- "ouroboros_macro 0.5.1",
- "stable_deref_trait",
-]
-
-[[package]]
-name = "ouroboros"
 version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0f050db9c44b97a94723127e6be766ac5c340c48f2c4bb3ffa11713744be59"
 dependencies = [
  "aliasable",
- "ouroboros_macro 0.18.5",
+ "ouroboros_macro",
  "static_assertions",
-]
-
-[[package]]
-name = "ouroboros_macro"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cec33dfceabec83cd0e95a5ce9d20e76ab3a5cbfef59659b8c927f69b93ed8ae"
-dependencies = [
- "Inflector",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -16006,7 +15974,7 @@ dependencies = [
  "cfg-if",
  "inventory",
  "lazy-js-bundle 0.7.9",
- "ouroboros 0.18.5",
+ "ouroboros",
  "wry-bindgen-core",
  "wry-bindgen-macro",
 ]
@@ -16056,7 +16024,7 @@ dependencies = [
  "inventory",
  "lazy-js-bundle 0.7.9",
  "once_cell",
- "ouroboros 0.18.5",
+ "ouroboros",
 ]
 
 [[package]]

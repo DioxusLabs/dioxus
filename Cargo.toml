@@ -454,7 +454,7 @@ base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5" }
 wgpu = { workspace = true, optional = true }
 winit = { workspace = true, optional = true }
-ouroboros = { version = "*", optional = true }
+ouroboros = { version = "0.18.5", optional = true }
 wasm-splitter = { workspace = true }
 
 sqlx = { version = "0.8.6", features = [
