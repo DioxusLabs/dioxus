@@ -30,7 +30,7 @@ impl VirtualDom {
             .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
         let entry = self.scopes.vacant_entry();
-        let id = ScopeId(entry.key());
+        let id = ScopeId::new(entry.key());
 
         let scope_runtime = Scope::new(
             name,
@@ -68,7 +68,7 @@ impl VirtualDom {
         crate::Runtime::current();
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
-            let scope = &self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id.index()];
             let output = {
                 let scope_state = scope.state();
 

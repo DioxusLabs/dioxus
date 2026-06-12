@@ -56,7 +56,8 @@ async fn values_memoize_in_place() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
             _ = dom.wait_for_work() => {}
@@ -101,7 +102,8 @@ fn cloning_event_handler_components_work() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -210,7 +212,8 @@ fn cloning_read_signal_components_work() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);

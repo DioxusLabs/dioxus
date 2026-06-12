@@ -164,7 +164,7 @@ fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys::Element)> {
             current_target_element,
         ) {
             // This node is an element, and has a dioxus id, so we can stop walking
-            (Some(Ok(id)), Some(target)) => return Some((ElementId(id), target)),
+            (Some(Ok(id)), Some(target)) => return Some((ElementId::from_raw(id), target)),
 
             // Walk the tree upwards until we actually find an event target
             (None, target_element) => {

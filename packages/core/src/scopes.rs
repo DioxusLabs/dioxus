@@ -10,7 +10,7 @@ use std::{cell::Ref, rc::Rc};
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ScopeId(pub usize);
+pub struct ScopeId(usize);
 
 impl std::fmt::Debug for ScopeId {
     #[allow(unused_mut)]
@@ -60,6 +60,14 @@ impl ScopeId {
     pub const ROOT: ScopeId = ScopeId(0);
 
     pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
+
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
 
     pub(crate) fn is_placeholder(&self) -> bool {
         *self == Self::PLACEHOLDER

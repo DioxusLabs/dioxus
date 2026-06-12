@@ -184,7 +184,7 @@ fn mount_children<M: WriteMutations>(
     if let Some(to) = render_to {
         to.append_children(ElementId::ROOT, m);
     }
-    dom.scopes[scope_id.0].last_rendered_node = Some(children);
+    dom.scopes[scope_id.index()].last_rendered_node = Some(children);
     if should_mount {
         dom.runtime.get_state(scope_id).mount(&dom.runtime);
     }
@@ -227,7 +227,7 @@ impl RenderDriver for PortalDriver {
             // mount-accurate (mounts land on the clone the first create
             // rendered), so re-create from the mounted output and the scope's
             // current target. Pending prop changes apply on the next `diff`.
-            let children = dom.scopes[scope_id.0]
+            let children = dom.scopes[scope_id.index()]
                 .last_rendered_node
                 .clone()
                 .expect("portal scope must have rendered before re-create");
@@ -250,7 +250,10 @@ impl RenderDriver for PortalDriver {
         let (target_id, new_children) = self.props();
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let old_children = dom.scopes[scope_id.0].last_rendered_node.take().unwrap();
+            let old_children = dom.scopes[scope_id.index()]
+                .last_rendered_node
+                .take()
+                .unwrap();
             let old_target_id = dom.runtime.get_state(scope_id).target_id();
 
             if old_target_id != target_id {
@@ -283,7 +286,7 @@ impl RenderDriver for PortalDriver {
                 .filter(|_| dom.runtime.scope_should_render(scope_id))
                 .and_then(|to| to.target_ready(target_id).then_some(to));
             old_children.diff_node(&new_children, dom, render_to.as_mut());
-            dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
+            dom.scopes[scope_id.index()].last_rendered_node = Some(new_children);
             if render_to.is_some() {
                 dom.runtime.get_state(scope_id).mount(&dom.runtime);
             }
@@ -303,7 +306,7 @@ impl RenderDriver for PortalDriver {
             // `PortalDriver::create` always sets `last_rendered_node` before
             // returning, and removal only fires after a scope has gone
             // through `create`, so the clone is always `Some`.
-            let node = dom.scopes[scope_id.0]
+            let node = dom.scopes[scope_id.index()]
                 .last_rendered_node
                 .clone()
                 .expect("portal scope must have rendered before remove");

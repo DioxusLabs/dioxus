@@ -182,7 +182,7 @@ impl WebsysDom {
         // Always emit `hy_map_element` so JS can verify the tag and handle
         // parser-inserted wrappers (e.g. `<tbody>`). id == 0 indicates the
         // element doesn't need a mapping but still needs a positional anchor.
-        let id_arg = mounted_id.map(|i| i.0 as u32).unwrap_or(0);
+        let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
         channel.hy_map_element(tag, id_arg);
 
         for (name, bubbles) in listeners {
@@ -364,12 +364,12 @@ fn emit_text_leaf(
             Some(last) => i < last,
         };
         if before_cursor {
-            channel.hy_synth_text(id.0 as u32);
+            channel.hy_synth_text(id.raw() as u32);
         } else {
-            channel.hy_synth_text_after(id.0 as u32);
+            channel.hy_synth_text_after(id.raw() as u32);
         }
     } else {
-        let id_arg = id.map(|i| i.0 as u32).unwrap_or(0);
+        let id_arg = id.map(|i| i.raw() as u32).unwrap_or(0);
         let split_after = matches!(last_nonempty, Some(last) if i < last)
             || (split_tail && Some(i) == last_nonempty);
         channel.hy_text_contrib(len, id_arg, if split_after { 1 } else { 0 });

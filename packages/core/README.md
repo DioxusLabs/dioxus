@@ -13,7 +13,7 @@ loop {
     tokio::select! {
         evt = real_dom.event() => {
             let evt = Event::new(evt, true);
-            vdom.runtime().handle_event("onclick", evt, ElementId(0))
+            vdom.runtime().handle_event("onclick", evt, ElementId::from_raw(0))
         },
         _ = vdom.wait_for_work() => {}
     }

@@ -36,14 +36,14 @@ fn create_signals_global() {
             &muts.edits[i],
             &Mutation::CreateTextNode {
                 value: ("hello world".to_string()),
-                id: ElementId(i + 1)
+                id: ElementId::from_raw(i + 1)
             }
         );
     }
     assert_eq!(
         &muts.edits[10],
         &Mutation::AppendChildren {
-            id: ElementId(0),
+            id: ElementId::from_raw(0),
             m: 10
         }
     )

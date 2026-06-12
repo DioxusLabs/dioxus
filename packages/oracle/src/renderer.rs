@@ -106,7 +106,7 @@ impl Default for RendererOracle {
 }
 
 impl RendererOracle {
-    /// Create an empty document with `ElementId(0)` mapped to the document root.
+    /// Create an empty document with `ElementId::from_raw(0)` mapped to the document root.
     pub fn new() -> Self {
         let root = 0;
         Self {
@@ -262,7 +262,7 @@ impl RendererOracle {
     /// share a tag).
     ///
     /// This is the entry point for firing synthetic events without naming a
-    /// specific `ElementId(N)` literal in test code: look up the target
+    /// specific `ElementId::from_raw(N)` literal in test code: look up the target
     /// semantically (by tag or by attribute), then pass the returned id to
     /// `vdom.runtime().handle_event(...)`.
     pub fn element_id_by_tag(&self, tag: &str) -> ElementId {
@@ -334,7 +334,7 @@ impl RendererOracle {
     fn element_id_for_node(&self, node: NodeId) -> Option<ElementId> {
         for (idx, mapped) in self.element_to_node.iter().enumerate() {
             if *mapped == Some(node) {
-                return Some(ElementId(idx));
+                return Some(ElementId::from_raw(idx));
             }
         }
         None
@@ -419,33 +419,38 @@ impl RendererOracle {
     }
 
     fn set_element_mapping(&mut self, id: ElementId, node: NodeId) {
-        if id.0 == usize::MAX {
-            panic!("renderer cannot map ElementId(usize::MAX)");
+        if id.raw() == usize::MAX {
+            panic!("renderer cannot map ElementId::from_raw(usize::MAX)");
         }
-        if self.element_to_node.len() <= id.0 {
-            self.element_to_node.resize(id.0 + 1, None);
+        if self.element_to_node.len() <= id.raw() {
+            self.element_to_node.resize(id.raw() + 1, None);
         }
-        if let Some(old) = self.element_to_node[id.0] {
+        if let Some(old) = self.element_to_node[id.raw()] {
             if old != node && self.arena.get(old).is_some_and(Option::is_some) {
                 if self.node(old).parent.is_none() {
                     self.drop_subtree(old);
                 } else {
                     panic!(
-                        "renderer remapped live ElementId({}) from node {old} to node {node}",
-                        id.0
+                        "renderer remapped live ElementId::from_raw({}) from node {old} to node {node}",
+                        id.raw()
                     );
                 }
             }
         }
-        self.element_to_node[id.0] = Some(node);
+        self.element_to_node[id.raw()] = Some(node);
     }
 
     fn lookup(&self, id: ElementId) -> NodeId {
         self.element_to_node
-            .get(id.0)
+            .get(id.raw())
             .and_then(|id| *id)
             .filter(|&node| self.arena.get(node).is_some_and(Option::is_some))
-            .unwrap_or_else(|| panic!("renderer asked for unknown ElementId({})", id.0))
+            .unwrap_or_else(|| {
+                panic!(
+                    "renderer asked for unknown ElementId::from_raw({})",
+                    id.raw()
+                )
+            })
     }
 
     /// Recursively materialize a template node. Returns the new node id for static
@@ -916,8 +921,8 @@ impl WriteMutations for RendererOracle {
 
     fn remove_node(&mut self, id: ElementId) {
         self.edit_counters.removes += 1;
-        if id.0 == 0 {
-            panic!("renderer cannot remove document root ElementId(0)");
+        if id.raw() == 0 {
+            panic!("renderer cannot remove document root ElementId::from_raw(0)");
         }
         let node = self.lookup(id);
         self.detach(node);
@@ -926,11 +931,11 @@ impl WriteMutations for RendererOracle {
 
     fn push_root(&mut self, id: ElementId) {
         self.edit_counters.pushes += 1;
-        if id.0 == 0 {
-            panic!("dioxus emitted PushRoot {{ id: ElementId(0) }}");
+        if id.raw() == 0 {
+            panic!("dioxus emitted PushRoot {{ id: ElementId::from_raw(0) }}");
         }
-        if id.0 == usize::MAX {
-            panic!("dioxus emitted PushRoot {{ id: ElementId(usize::MAX) }}");
+        if id.raw() == usize::MAX {
+            panic!("dioxus emitted PushRoot {{ id: ElementId::from_raw(usize::MAX) }}");
         }
         let node = self.lookup(id);
         self.stack.push(node);

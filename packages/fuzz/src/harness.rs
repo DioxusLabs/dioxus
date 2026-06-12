@@ -96,7 +96,7 @@ impl Ord for EventListenerTarget {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name
             .cmp(other.name)
-            .then_with(|| self.id.0.cmp(&other.id.0))
+            .then_with(|| self.id.raw().cmp(&other.id.raw()))
     }
 }
 

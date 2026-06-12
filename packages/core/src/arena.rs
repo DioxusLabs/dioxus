@@ -8,13 +8,37 @@ use slab::Slab;
 /// `ElementId` may be reused for a new component in that target.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct ElementId(pub usize);
+pub struct ElementId(usize);
 
 impl ElementId {
     /// The root element within a render target.
     pub const ROOT: Self = Self(0);
 
     pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+
+    /// Create an element id from its raw renderer-local index.
+    ///
+    /// Renderers use this when translating platform event targets back into
+    /// Dioxus element ids.
+    pub const fn from_raw(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Return this element id's raw renderer-local index.
+    ///
+    /// Renderers use this to store Dioxus element ids in their backing DOM or
+    /// interpreter node maps.
+    pub const fn raw(self) -> usize {
+        self.0
+    }
 
     pub(crate) fn as_live(self) -> Option<Self> {
         (self != Self::ROOT && self != Self::PLACEHOLDER).then_some(self)
@@ -27,11 +51,19 @@ impl ElementId {
 /// renderers share one logical [`VirtualDom`] while reusing renderer-local ids.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct RenderTargetId(pub usize);
+pub struct RenderTargetId(usize);
 
 impl RenderTargetId {
     /// The root/default render target.
     pub const ROOT: Self = Self(0);
+
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
 }
 
 /// Renderer-local mounted state for one logical mount.
@@ -48,13 +80,14 @@ pub(crate) struct MountedNodeState {
     /// typed dynamic-slot helpers so callers do not need to interpret the raw
     /// value as either a `ScopeId` or an `ElementId`.
     pub(crate) mounted_dynamic_nodes: Box<[usize]>,
+
 }
 
 impl MountedNodeState {
     pub(crate) fn new(root_count: usize, attr_count: usize, dynamic_count: usize) -> Self {
         Self {
-            root_ids: vec![ElementId(0); root_count].into(),
-            mounted_attributes: vec![ElementId(0); attr_count].into(),
+            root_ids: vec![ElementId::new(0); root_count].into(),
+            mounted_attributes: vec![ElementId::new(0); attr_count].into(),
             mounted_dynamic_nodes: vec![usize::MAX; dynamic_count].into(),
         }
     }
@@ -154,9 +187,9 @@ impl VirtualDom {
     pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> ElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
-            .get_mut(target_id.0)
+            .get_mut(target_id.index())
             .expect("render target should exist while allocating an element");
-        ElementId(target.elements.insert(None))
+        ElementId::new(target.elements.insert(None))
     }
 
     pub(crate) fn set_element_ref_for_mount(
@@ -168,7 +201,7 @@ impl VirtualDom {
         let target_id = self.mount_target_id(mount);
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
-            .get_mut(target_id.0)
+            .get_mut(target_id.index())
             .expect("render target should exist while assigning an element ref");
         let element = target
             .elements
@@ -200,7 +233,7 @@ impl VirtualDom {
 
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
-            .get_mut(target_id.0)
+            .get_mut(target_id.index())
             .expect("reclaim target must still be registered");
         target.elements.try_remove(el.0).is_some()
     }
@@ -221,7 +254,7 @@ impl VirtualDom {
         self.runtime
             .render_targets
             .borrow()
-            .get(target_id.0)
+            .get(target_id.index())
             .is_some_and(|target| target.elements.get(el.0).is_some())
     }
 
@@ -260,7 +293,7 @@ impl VirtualDom {
             .collect();
 
         self.mark_clean(id);
-        let _scope = self.scopes.remove(id.0);
+        let _scope = self.scopes.remove(id.index());
 
         for order in stale_dirty_scopes {
             self.dirty_scopes.remove(&order);

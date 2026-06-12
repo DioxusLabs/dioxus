@@ -3,6 +3,7 @@ use dioxus_core::{ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtim
 use dioxus_renderer_oracle::MultiTargetWriter;
 use std::{
     any::Any,
+    cell::Cell,
     collections::BTreeMap,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
@@ -41,27 +42,50 @@ static SHOW_PORTAL: AtomicUsize = AtomicUsize::new(0);
 #[derive(Clone)]
 struct SharedContext(&'static str);
 
+#[derive(Clone)]
+struct TargetSlot(Rc<Cell<RenderTargetId>>);
+
+impl PartialEq for TargetSlot {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl TargetSlot {
+    fn new() -> Self {
+        Self(Rc::new(Cell::new(RenderTargetId::ROOT)))
+    }
+
+    fn get(&self) -> RenderTargetId {
+        self.0.get()
+    }
+
+    fn set(&self, id: RenderTargetId) {
+        self.0.set(id);
+    }
+}
+
 #[derive(Clone, PartialEq, Props)]
 struct AppProps {
-    target: RenderTargetId,
+    target: TargetSlot,
 }
 
 #[derive(Clone, PartialEq, Props)]
 struct RetargetProps {
-    first: RenderTargetId,
-    second: RenderTargetId,
+    first: TargetSlot,
+    second: TargetSlot,
 }
 
 #[derive(Clone, PartialEq, Props)]
 struct ReopenProps {
-    first: RenderTargetId,
-    second: RenderTargetId,
+    first: TargetSlot,
+    second: TargetSlot,
 }
 
 fn noop_app(props: AppProps) -> Element {
     rsx! {
         Portal {
-            target: props.target,
+            target: props.target.get(),
             EffectChild {}
         }
     }
@@ -72,15 +96,15 @@ fn context_app(props: AppProps) -> Element {
 
     rsx! {
         Portal {
-            target: props.target,
+            target: props.target.get(),
             ContextChild {}
         }
     }
 }
 
 fn retarget_app(props: RetargetProps) -> Element {
-    let mut target = use_signal(|| props.first);
-    let second = props.second;
+    let mut target = use_signal(|| props.first.get());
+    let second = props.second.get();
 
     rsx! {
         div {
@@ -111,7 +135,7 @@ fn dropped_target_app(props: AppProps) -> Element {
         }
         if show() {
             Portal {
-                target: props.target,
+                target: props.target.get(),
                 EffectChild {}
             }
         }
@@ -130,7 +154,11 @@ fn reopen_after_close_app(props: ReopenProps) -> Element {
         for id in 0..window_count() {
             CloseablePortal {
                 key: "{id}",
-                target: if id == 0 { props.first } else { props.second },
+                target: if id == 0 {
+                    props.first.get()
+                } else {
+                    props.second.get()
+                },
             }
         }
     }
@@ -195,7 +223,7 @@ fn DynamicCloseablePortal() -> Element {
 fn replace_portal_app(props: AppProps) -> Element {
     if SHOW_PORTAL.load(Ordering::SeqCst) != 0 {
         rsx! {
-            PortalWrapper { target: props.target }
+            PortalWrapper { target: props.target.get() }
         }
     } else {
         rsx! {
@@ -266,7 +294,7 @@ fn app(props: AppProps) -> Element {
                 ROOT_CLICKS.fetch_add(1, Ordering::SeqCst);
             },
             Portal {
-                target: props.target,
+                target: props.target.get(),
                 button {
                     onclick: move |_| {
                         PORTAL_CLICKS.fetch_add(1, Ordering::SeqCst);
@@ -284,25 +312,26 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     PORTAL_CLICKS.store(0, Ordering::SeqCst);
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
-    let mut dom = VirtualDom::new_with_props(app, AppProps { target: RenderTargetId(1) });
+    let target_slot = TargetSlot::new();
+    let mut dom = VirtualDom::new_with_props(app, AppProps { target: target_slot.clone() });
     let target = dom.runtime().create_render_target();
-    assert_eq!(target, RenderTargetId(1));
+    target_slot.set(target);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
 
     let root_edits = edits.get(&RenderTargetId::ROOT).unwrap();
     let portal_edits = edits.get(&target).unwrap();
 
-    assert!(has_click_listener(root_edits, ElementId(1)));
-    assert!(has_click_listener(portal_edits, ElementId(1)));
+    assert!(has_click_listener(root_edits, ElementId::from_raw(1)));
+    assert!(has_click_listener(portal_edits, ElementId::from_raw(1)));
 
     dom.runtime()
-        .handle_event("click", click_event(), ElementId(1));
+        .handle_event("click", click_event(), ElementId::from_raw(1));
     assert_eq!(ROOT_CLICKS.load(Ordering::SeqCst), 1);
     assert_eq!(PORTAL_CLICKS.load(Ordering::SeqCst), 0);
 
     dom.runtime()
-        .handle_event_for_target(target, "click", click_event(), ElementId(1));
+        .handle_event_for_target(target, "click", click_event(), ElementId::from_raw(1));
     assert_eq!(PORTAL_CLICKS.load(Ordering::SeqCst), 1);
     assert_eq!(ROOT_CLICKS.load(Ordering::SeqCst), 2);
 }
@@ -311,9 +340,10 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
 fn writerless_targets_do_not_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
 
-    let mut dom = VirtualDom::new_with_props(noop_app, AppProps { target: RenderTargetId(1) });
+    let target_slot = TargetSlot::new();
+    let mut dom = VirtualDom::new_with_props(noop_app, AppProps { target: target_slot.clone() });
     let target = dom.runtime().create_render_target();
-    assert_eq!(target, RenderTargetId(1));
+    target_slot.set(target);
 
     // A plain writer serves only the root target, so the portal's target has
     // no writer: its content keeps logical state alive without mounting.
@@ -326,9 +356,10 @@ fn writerless_targets_do_not_mount_effects() {
 
 #[test]
 fn portal_children_keep_scope_context() {
-    let mut dom = VirtualDom::new_with_props(context_app, AppProps { target: RenderTargetId(1) });
+    let target_slot = TargetSlot::new();
+    let mut dom = VirtualDom::new_with_props(context_app, AppProps { target: target_slot.clone() });
     let target = dom.runtime().create_render_target();
-    assert_eq!(target, RenderTargetId(1));
+    target_slot.set(target);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
     assert!(edits.contains_key(&target));
@@ -339,38 +370,38 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     RETARGET_CLICKS.store(0, Ordering::SeqCst);
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
+    let first_slot = TargetSlot::new();
+    let second_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(
         retarget_app,
-        RetargetProps { first: RenderTargetId(1), second: RenderTargetId(2) },
+        RetargetProps { first: first_slot.clone(), second: second_slot.clone() },
     );
     let first = dom.runtime().create_render_target();
     let second = dom.runtime().create_render_target();
-    assert_eq!(first, RenderTargetId(1));
-    assert_eq!(second, RenderTargetId(2));
+    first_slot.set(first);
+    second_slot.set(second);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
-    assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
-
-    dom.runtime()
-        .handle_event("click", click_event(), ElementId(2));
-
-    let edits = render_immediate_to_targeted_vec(&mut dom);
-
-    assert!(
-        edits
-            .get(&first)
-            .unwrap()
-            .edits
-            .iter()
-            .any(|mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId(1)))
-    );
     assert!(has_click_listener(
-        edits.get(&second).unwrap(),
-        ElementId(1)
+        edits.get(&first).unwrap(),
+        ElementId::from_raw(1)
     ));
 
     dom.runtime()
-        .handle_event_for_target(second, "click", click_event(), ElementId(1));
+        .handle_event("click", click_event(), ElementId::from_raw(2));
+
+    let edits = render_immediate_to_targeted_vec(&mut dom);
+
+    assert!(edits.get(&first).unwrap().edits.iter().any(
+        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    ));
+    assert!(has_click_listener(
+        edits.get(&second).unwrap(),
+        ElementId::from_raw(1)
+    ));
+
+    dom.runtime()
+        .handle_event_for_target(second, "click", click_event(), ElementId::from_raw(1));
     assert_eq!(RETARGET_CLICKS.load(Ordering::SeqCst), 1);
 }
 
@@ -378,14 +409,15 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
 fn replacing_portal_with_local_node_removes_old_target_subtree() {
     SHOW_PORTAL.store(1, Ordering::SeqCst);
 
+    let target_slot = TargetSlot::new();
     let mut dom =
-        VirtualDom::new_with_props(replace_portal_app, AppProps { target: RenderTargetId(1) });
+        VirtualDom::new_with_props(replace_portal_app, AppProps { target: target_slot.clone() });
     let target = dom.runtime().create_render_target();
-    assert_eq!(target, RenderTargetId(1));
+    target_slot.set(target);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
     assert!(edits.get(&target).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::LoadTemplate { id, .. } if *id == ElementId(1))
+        |mutation| matches!(mutation, Mutation::LoadTemplate { id, .. } if *id == ElementId::from_raw(1))
     ));
 
     SHOW_PORTAL.store(0, Ordering::SeqCst);
@@ -393,14 +425,9 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
 
-    assert!(
-        edits
-            .get(&target)
-            .unwrap()
-            .edits
-            .iter()
-            .any(|mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId(1)))
-    );
+    assert!(edits.get(&target).unwrap().edits.iter().any(
+        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    ));
 }
 
 #[test]
@@ -408,10 +435,11 @@ fn detached_targets_do_not_write_or_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
+    let target_slot = TargetSlot::new();
     let mut dom =
-        VirtualDom::new_with_props(dropped_target_app, AppProps { target: RenderTargetId(1) });
+        VirtualDom::new_with_props(dropped_target_app, AppProps { target: target_slot.clone() });
     let target = dom.runtime().create_render_target();
-    assert_eq!(target, RenderTargetId(1));
+    target_slot.set(target);
 
     // The target's writer is attached for the rebuild, then gone for the
     // next pass — the host stopped serving it, like a closed desktop window.
@@ -439,14 +467,16 @@ fn detached_targets_do_not_write_or_mount_effects() {
 fn can_open_new_portal_after_closing_previous_keyed_portal() {
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
+    let first_slot = TargetSlot::new();
+    let second_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(
         reopen_after_close_app,
-        ReopenProps { first: RenderTargetId(1), second: RenderTargetId(2) },
+        ReopenProps { first: first_slot.clone(), second: second_slot.clone() },
     );
     let first = dom.runtime().create_render_target();
     let second = dom.runtime().create_render_target();
-    assert_eq!(first, RenderTargetId(1));
-    assert_eq!(second, RenderTargetId(2));
+    first_slot.set(first);
+    second_slot.set(second);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
     let open_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
@@ -455,20 +485,18 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
         .handle_event("click", click_event(), open_button);
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
-    assert!(has_click_listener(edits.get(&first).unwrap(), ElementId(1)));
+    assert!(has_click_listener(
+        edits.get(&first).unwrap(),
+        ElementId::from_raw(1)
+    ));
 
     dom.runtime()
-        .handle_event_for_target(first, "click", click_event(), ElementId(1));
+        .handle_event_for_target(first, "click", click_event(), ElementId::from_raw(1));
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
-    assert!(
-        edits
-            .get(&first)
-            .unwrap()
-            .edits
-            .iter()
-            .any(|mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId(1)))
-    );
+    assert!(edits.get(&first).unwrap().edits.iter().any(
+        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    ));
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
@@ -477,7 +505,7 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
 
     assert!(has_click_listener(
         edits.get(&second).unwrap(),
-        ElementId(1)
+        ElementId::from_raw(1)
     ));
 }
 
@@ -494,32 +522,39 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
         .handle_event("click", click_event(), open_button);
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
+    let first_target = *edits
+        .keys()
+        .find(|id| **id != RenderTargetId::ROOT)
+        .expect("first dynamic portal target should render");
     assert!(has_click_listener(
-        edits.get(&RenderTargetId(1)).unwrap(),
-        ElementId(1)
+        edits.get(&first_target).unwrap(),
+        ElementId::from_raw(1)
     ));
 
-    dom.runtime()
-        .handle_event_for_target(RenderTargetId(1), "click", click_event(), ElementId(1));
+    dom.runtime().handle_event_for_target(
+        first_target,
+        "click",
+        click_event(),
+        ElementId::from_raw(1),
+    );
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
-    assert!(
-        edits
-            .get(&RenderTargetId(1))
-            .unwrap()
-            .edits
-            .iter()
-            .any(|mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId(1)))
-    );
+    assert!(edits.get(&first_target).unwrap().edits.iter().any(
+        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    ));
 
     dom.runtime()
         .handle_event("click", click_event(), open_button);
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
+    let second_target = *edits
+        .keys()
+        .find(|id| **id != RenderTargetId::ROOT && **id != first_target)
+        .expect("second dynamic portal target should render");
 
     assert!(has_click_listener(
-        edits.get(&RenderTargetId(2)).unwrap(),
-        ElementId(1)
+        edits.get(&second_target).unwrap(),
+        ElementId::from_raw(1)
     ));
 }
 
@@ -532,7 +567,7 @@ fn suspended_portal_app(props: AppProps) -> Element {
             fallback: |_| rsx! { "fallback" },
             SuspendingChild {}
             Portal {
-                target: props.target,
+                target: props.target.get(),
                 PortalStateChild {}
             }
         }
@@ -582,12 +617,13 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
         .build()
         .unwrap()
         .block_on(async {
+            let target_slot = TargetSlot::new();
             let mut dom = VirtualDom::new_with_props(
                 suspended_portal_app,
-                AppProps { target: RenderTargetId(1) },
+                AppProps { target: target_slot.clone() },
             );
             let target = dom.runtime().create_render_target();
-            assert_eq!(target, RenderTargetId(1));
+            target_slot.set(target);
 
             let edits = rebuild_to_targeted_vec(&mut dom);
             // The boundary suspends: the fallback renders on the main target
@@ -622,7 +658,7 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
             )));
             assert!(portal_edits.edits.iter().any(|mutation| matches!(
                 mutation,
-                Mutation::AppendChildren { id: ElementId(0), .. }
+                Mutation::AppendChildren { id: ElementId::ROOT, .. }
             )));
             // The live portal subtree was reused, not re-created from scratch.
             assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);

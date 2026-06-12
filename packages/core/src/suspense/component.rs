@@ -416,14 +416,14 @@ fn suspense_create<M: WriteMutations>(
                     (suspense_placeholder, nodes_created)
                 });
 
-            dom.scopes[scope_id.0].last_rendered_node = Some(node);
+            dom.scopes[scope_id.index()].last_rendered_node = Some(node);
             nodes_created
         } else {
             // Otherwise just render the children in the real dom
             debug_assert!(children.mount.get().mounted());
             let nodes_created = suspense_context
                 .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
-            dom.scopes[scope_id.0].last_rendered_node = Some(children);
+            dom.scopes[scope_id.index()].last_rendered_node = Some(children);
             suspense_context.take_suspended_branch();
             mark_suspense_resolved(&suspense_context, dom, scope_id);
 
@@ -446,7 +446,7 @@ impl SuspenseBoundaryProps {
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let _runtime = RuntimeGuard::new(dom.runtime());
-            let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
+            let Some(scope_state) = dom.scopes.get_mut(scope_id.index()) else {
                 return;
             };
 
@@ -506,7 +506,7 @@ fn suspense_diff<M: WriteMutations>(
     mut to: Option<&mut M>,
 ) {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
-        let scope = &mut dom.scopes[scope_id.0];
+        let scope = &mut dom.scopes[scope_id.index()];
         let last_rendered_node = scope.last_rendered_node.clone().unwrap();
         let children = driver.children();
         let fallback = driver.fallback();
@@ -537,7 +537,7 @@ fn suspense_diff<M: WriteMutations>(
                             last_rendered_node.diff_node(&new_placeholder, dom, to);
                             new_placeholder
                         });
-                    dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
+                    dom.scopes[scope_id.index()].last_rendered_node = Some(new_placeholder);
                     let branch = SuspenseBranch::new(new_suspended_nodes);
                     store_suspended_branch(driver, dom, &branch);
                     suspense_context.set_suspended_branch(branch);
@@ -604,7 +604,7 @@ fn suspense_diff<M: WriteMutations>(
                     let branch = SuspenseBranch::new(new_children);
                     store_suspended_branch(driver, dom, &branch);
                     // Set the last rendered node to the new suspense placeholder
-                    dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
+                    dom.scopes[scope_id.index()].last_rendered_node = Some(new_placeholder);
                     suspense_context.set_suspended_branch(branch);
 
                     un_resolve_suspense(dom, scope_id);
@@ -645,7 +645,7 @@ fn set_rendered_children(
     children: LastRenderedNode,
 ) {
     driver.store_children(&children);
-    dom.scopes[scope_id.0].last_rendered_node = Some(children);
+    dom.scopes[scope_id.index()].last_rendered_node = Some(children);
 }
 
 fn store_suspended_branch(driver: &SuspenseDriver, dom: &mut VirtualDom, branch: &SuspenseBranch) {
@@ -747,7 +747,7 @@ fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom
                     dom.run_and_diff_scope(None::<&mut M>, scope_id);
                 }
 
-                if let Some(rendered) = dom.scopes[scope_id.0].last_rendered_node.clone() {
+                if let Some(rendered) = dom.scopes[scope_id.index()].last_rendered_node.clone() {
                     promote_suspense_mounts_to_foreground::<M>(dom, &rendered);
                 }
             }

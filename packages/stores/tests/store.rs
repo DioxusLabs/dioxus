@@ -59,7 +59,7 @@ fn children_see_parent_write() {
         edits.edits,
         [SetText {
             value: "x = 1".into(),
-            id: ElementId(1)
+            id: ElementId::from_raw(1)
         }]
     );
 }

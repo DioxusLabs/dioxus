@@ -1454,7 +1454,12 @@ fn warmup_suspense_hidden_paths() {
 /// pass instead of being re-run afterwards.
 fn warmup_deferred_subtree_check() {
     use dioxus::prelude::*;
-    use dioxus_core::{ScopeId, VirtualDom};
+    use dioxus_core::{ScopeId, VirtualDom, current_scope_id};
+    use std::cell::RefCell;
+
+    thread_local! {
+        static CHILD_SCOPES: RefCell<Vec<ScopeId>> = RefCell::new(Vec::new());
+    }
 
     #[derive(Clone, PartialEq, Props)]
     struct ChildProps {
@@ -1463,6 +1468,13 @@ fn warmup_deferred_subtree_check() {
 
     #[allow(non_snake_case)]
     fn Child(props: ChildProps) -> Element {
+        CHILD_SCOPES.with(|scopes| {
+            let id = current_scope_id();
+            let mut scopes = scopes.borrow_mut();
+            if !scopes.contains(&id) {
+                scopes.push(id);
+            }
+        });
         rsx! { span { "{props.value}" } }
     }
 
@@ -1475,12 +1487,12 @@ fn warmup_deferred_subtree_check() {
     }
 
     let mut dom = VirtualDom::new(app);
+    CHILD_SCOPES.with(|scopes| scopes.borrow_mut().clear());
     dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
-    // Cover all plausible scope ids for the Child instances. Unmounted ids
-    // are silently ignored by `mark_dirty`.
-    for scope_idx in 1usize..=10 {
-        dom.mark_dirty(ScopeId(scope_idx));
+    let child_scopes = CHILD_SCOPES.with(|scopes| scopes.borrow().clone());
+    for scope in child_scopes {
+        dom.mark_dirty(scope);
     }
     drive_render(&mut dom);
 }
@@ -1602,15 +1614,15 @@ fn warmup_portal_target_switch() {
 
     thread_local! {
         static MODE: Cell<u32> = const { Cell::new(0) };
-        static FIRST_TARGET: Cell<u64> = const { Cell::new(0) };
-        static SECOND_TARGET: Cell<u64> = const { Cell::new(0) };
+        static FIRST_TARGET: Cell<RenderTargetId> = const { Cell::new(RenderTargetId::ROOT) };
+        static SECOND_TARGET: Cell<RenderTargetId> = const { Cell::new(RenderTargetId::ROOT) };
     }
 
     fn app() -> Element {
         let mode = MODE.with(|c| c.get());
         let target = match mode {
-            0 | 2 => RenderTargetId(FIRST_TARGET.with(|c| c.get()) as usize),
-            _ => RenderTargetId(SECOND_TARGET.with(|c| c.get()) as usize),
+            0 | 2 => FIRST_TARGET.with(|c| c.get()),
+            _ => SECOND_TARGET.with(|c| c.get()),
         };
         rsx! {
             Portal {
@@ -1623,8 +1635,8 @@ fn warmup_portal_target_switch() {
     let mut dom = VirtualDom::new(app);
     let first = dom.runtime().create_render_target();
     let second = dom.runtime().create_render_target();
-    FIRST_TARGET.with(|c| c.set(first.0 as u64));
-    SECOND_TARGET.with(|c| c.set(second.0 as u64));
+    FIRST_TARGET.with(|c| c.set(first));
+    SECOND_TARGET.with(|c| c.set(second));
     let mut writer = MultiTargetWriter::<RendererOracle>::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(first, RendererOracle::new());
@@ -1659,8 +1671,8 @@ fn warmup_portal_target_switch() {
     let mut dom = VirtualDom::new(app);
     let first = dom.runtime().create_render_target();
     let noop = dom.runtime().create_render_target();
-    FIRST_TARGET.with(|c| c.set(first.0 as u64));
-    SECOND_TARGET.with(|c| c.set(noop.0 as u64));
+    FIRST_TARGET.with(|c| c.set(first));
+    SECOND_TARGET.with(|c| c.set(noop));
     MODE.with(|c| c.set(0));
     let mut writer = MultiTargetWriter::<RendererOracle>::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
@@ -1898,11 +1910,11 @@ fn warmup_portal_dynamic_text_root() {
     use std::cell::Cell;
 
     thread_local! {
-        static TARGET: Cell<u64> = const { Cell::new(0) };
+        static TARGET: Cell<RenderTargetId> = const { Cell::new(RenderTargetId::ROOT) };
     }
 
     fn app() -> Element {
-        let target = RenderTargetId(TARGET.with(|c| c.get()) as usize);
+        let target = TARGET.with(|c| c.get());
         // Reverse a fully-keyed list (shared keys, no shared prefix/suffix) so
         // `diff_keyed_middle` *moves* most entries through its splice. Each
         // moved entry is re-pushed via `push_all_root_nodes`, which recurses
@@ -1922,7 +1934,7 @@ fn warmup_portal_dynamic_text_root() {
     WARMUP_GEN.with(|c| c.set(0));
     let mut dom = VirtualDom::new(app);
     let target = dom.runtime().create_render_target();
-    TARGET.with(|c| c.set(target.0 as u64));
+    TARGET.with(|c| c.set(target));
     let mut writer = MultiTargetWriter::<RendererOracle>::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(target, RendererOracle::new());

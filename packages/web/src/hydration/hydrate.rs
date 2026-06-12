@@ -131,7 +131,11 @@ impl WebsysDom {
                 first_dynamic_root_element_id(root_scope, dom),
                 empty_bootstrap_anchor.as_ref(),
             ) {
-                claim_hydration_virtual_root(self.interpreter.base(), claim_id.0 as u32, anchor);
+                claim_hydration_virtual_root(
+                    self.interpreter.base(),
+                    claim_id.raw() as u32,
+                    anchor,
+                );
             }
             self.collect_suspense_only(root_scope, dom);
         } else {

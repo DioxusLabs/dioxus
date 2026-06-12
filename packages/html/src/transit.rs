@@ -198,7 +198,7 @@ fn beforeinput_event_deserializes_from_interpreter_payload() {
 #[test]
 fn test_back_and_forth() {
     let data = HtmlEvent {
-        element: ElementId(0),
+        element: ElementId::from_raw(0),
         data: EventData::Mouse(SerializedMouseData::default()),
         name: "click".to_string(),
         bubbles: true,

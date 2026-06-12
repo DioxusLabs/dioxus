@@ -98,7 +98,7 @@ pub(crate) fn remove_rendered_output(
     // Removal only fires after the scope has rendered at least once via
     // `create`, which sets `last_rendered_node` to `Some`. A scope that
     // never rendered is dropped without going through this path.
-    let node = dom.scopes[scope_id.0]
+    let node = dom.scopes[scope_id.index()]
         .last_rendered_node
         .clone()
         .expect("scope being removed should have last_rendered_node set");
@@ -205,7 +205,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         // A new scope runs once to get the initial state
         if new {
             let body = dom.run_scope_with(scope_id, || self.render());
-            dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(body));
+            dom.scopes[scope_id.index()].last_rendered_node = Some(LastRenderedNode::new(body));
         }
 
         // If our scope landed in `dirty_scopes` during its initial render
@@ -213,7 +213,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         // entry now so we don't re-process the same scope after creation.
         dom.mark_clean(scope_id);
 
-        let new_node = dom.scopes[scope_id.0]
+        let new_node = dom.scopes[scope_id.index()]
             .last_rendered_node
             .clone()
             .expect("Component to be mounted");

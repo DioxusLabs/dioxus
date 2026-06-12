@@ -33,7 +33,7 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
         .iter()
         .find(|attr| *attr.name.local == *"data-dioxus-id")
         .and_then(|attr| attr.value.parse::<usize>().ok())
-        .map(ElementId)
+        .map(ElementId::from_raw)
 }
 
 /// Integrates [`BaseDocument`] from  [`blitz-dom`](blitz_dom)  with [`VirtualDom`] from [`dioxus-core`](dioxus_core)

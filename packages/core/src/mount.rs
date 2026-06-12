@@ -94,7 +94,7 @@ impl VirtualDom {
         ));
         drop(mounts);
 
-        self.runtime.render_targets.borrow_mut()[target_id.0].create_mounted_node(
+        self.runtime.render_targets.borrow_mut()[target_id.index()].create_mounted_node(
             mount,
             root_count,
             attr_count,
@@ -106,7 +106,7 @@ impl VirtualDom {
 
     pub(crate) fn remove_mount(&mut self, mount: MountId) {
         let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow_mut()[target_id.0].remove_mounted_node(mount);
+        self.runtime.render_targets.borrow_mut()[target_id.index()].remove_mounted_node(mount);
         self.runtime.mounts.borrow_mut().remove(mount.0);
     }
 
@@ -203,7 +203,7 @@ impl VirtualDom {
         mount: MountId,
         dyn_node_idx: usize,
     ) -> ElementId {
-        ElementId(self.get_mounted_dynamic_node_slot(mount, dyn_node_idx).0)
+        ElementId::new(self.get_mounted_dynamic_node_slot(mount, dyn_node_idx).0)
     }
 
     pub(crate) fn set_mounted_dynamic_text_node(
@@ -212,7 +212,11 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: ElementId,
     ) {
-        self.set_mounted_dynamic_node_slot(mount, dyn_node_idx, MountedDynamicNodeSlot(value.0));
+        self.set_mounted_dynamic_node_slot(
+            mount,
+            dyn_node_idx,
+            MountedDynamicNodeSlot(value.index()),
+        );
     }
 
     pub(crate) fn clear_mounted_dynamic_text_node(&self, mount: MountId, dyn_node_idx: usize) {
@@ -224,7 +228,7 @@ impl VirtualDom {
         mount: MountId,
         dyn_node_idx: usize,
     ) -> ScopeId {
-        ScopeId(self.get_mounted_dynamic_node_slot(mount, dyn_node_idx).0)
+        ScopeId::new(self.get_mounted_dynamic_node_slot(mount, dyn_node_idx).0)
     }
 
     pub(crate) fn set_mounted_dynamic_component_scope(
@@ -233,7 +237,11 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: ScopeId,
     ) {
-        self.set_mounted_dynamic_node_slot(mount, dyn_node_idx, MountedDynamicNodeSlot(value.0));
+        self.set_mounted_dynamic_node_slot(
+            mount,
+            dyn_node_idx,
+            MountedDynamicNodeSlot(value.index()),
+        );
     }
 
     pub(crate) fn clear_mounted_dynamic_component_scope(
@@ -323,7 +331,7 @@ impl VirtualDom {
         let target_id = self.mount_target_id(mount);
         let targets = self.runtime.render_targets.borrow();
         targets
-            .get(target_id.0)
+            .get(target_id.index())
             .and_then(|target| target.mounts.get(mount.0))
             .and_then(|mount| mount.as_ref())
             .map(with_state)
@@ -346,7 +354,7 @@ impl VirtualDom {
         let target_id = self.mount_target_id(mount);
         let mut targets = self.runtime.render_targets.borrow_mut();
         let state = targets
-            .get_mut(target_id.0)
+            .get_mut(target_id.index())
             .and_then(|target| target.mounts.get_mut(mount.0))
             .and_then(|mount| mount.as_mut())
             .expect("mounted mount state should exist");

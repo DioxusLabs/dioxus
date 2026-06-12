@@ -79,15 +79,15 @@ impl MutationState {
 
 impl WriteMutations for MutationState {
     fn append_children(&mut self, id: dioxus_core::ElementId, m: usize) {
-        self.channel.append_children(id.0 as u32, m as u16);
+        self.channel.append_children(id.raw() as u32, m as u16);
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: dioxus_core::ElementId) {
-        self.channel.assign_id_ref(path, id.0 as u32);
+        self.channel.assign_id_ref(path, id.raw() as u32);
     }
 
     fn create_text_node(&mut self, value: &str, id: dioxus_core::ElementId) {
-        self.channel.create_text_node(value, id.0 as u32);
+        self.channel.create_text_node(value, id.raw() as u32);
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: dioxus_core::ElementId) {
@@ -107,11 +107,11 @@ impl WriteMutations for MutationState {
         });
 
         self.channel
-            .load_template(tmpl_id, index as u16, id.0 as u32);
+            .load_template(tmpl_id, index as u16, id.raw() as u32);
     }
 
     fn replace_node_with(&mut self, id: dioxus_core::ElementId, m: usize) {
-        self.channel.replace_with(id.0 as u32, m as u16);
+        self.channel.replace_with(id.raw() as u32, m as u16);
     }
 
     fn insert_children_at_path(
@@ -121,15 +121,15 @@ impl WriteMutations for MutationState {
         m: usize,
     ) {
         self.channel
-            .insert_children_at_path_ref(id.0 as u32, path, m as u16);
+            .insert_children_at_path_ref(id.raw() as u32, path, m as u16);
     }
 
     fn insert_nodes_after(&mut self, id: dioxus_core::ElementId, m: usize) {
-        self.channel.insert_after(id.0 as u32, m as u16);
+        self.channel.insert_after(id.raw() as u32, m as u16);
     }
 
     fn insert_nodes_before(&mut self, id: dioxus_core::ElementId, m: usize) {
-        self.channel.insert_before(id.0 as u32, m as u16);
+        self.channel.insert_before(id.raw() as u32, m as u16);
     }
 
     fn set_attribute(
@@ -142,55 +142,55 @@ impl WriteMutations for MutationState {
         match value {
             dioxus_core::AttributeValue::Text(txt) => {
                 self.channel
-                    .set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
+                    .set_attribute(id.raw() as u32, name, txt, ns.unwrap_or_default())
             }
             dioxus_core::AttributeValue::Float(f) => self.channel.set_attribute(
-                id.0 as u32,
+                id.raw() as u32,
                 name,
                 &f.to_string(),
                 ns.unwrap_or_default(),
             ),
             dioxus_core::AttributeValue::Int(n) => self.channel.set_attribute(
-                id.0 as u32,
+                id.raw() as u32,
                 name,
                 &n.to_string(),
                 ns.unwrap_or_default(),
             ),
             dioxus_core::AttributeValue::Bool(b) => self.channel.set_attribute(
-                id.0 as u32,
+                id.raw() as u32,
                 name,
                 if *b { "true" } else { "false" },
                 ns.unwrap_or_default(),
             ),
             dioxus_core::AttributeValue::None => {
                 self.channel
-                    .remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
+                    .remove_attribute(id.raw() as u32, name, ns.unwrap_or_default())
             }
             _ => unreachable!("Any attributes are not supported by the current renderer"),
         }
     }
 
     fn set_node_text(&mut self, value: &str, id: dioxus_core::ElementId) {
-        self.channel.set_text(id.0 as u32, value);
+        self.channel.set_text(id.raw() as u32, value);
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
         // note that we use the foreign event listener here instead of the native one
         // the native method assumes we have direct access to the dom, which we don't.
         self.channel
-            .foreign_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+            .foreign_event_listener(name, id.raw() as u32, event_bubbles(name) as u8);
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
         self.channel
-            .remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+            .remove_event_listener(name, id.raw() as u32, event_bubbles(name) as u8);
     }
 
     fn remove_node(&mut self, id: dioxus_core::ElementId) {
-        self.channel.remove(id.0 as u32);
+        self.channel.remove(id.raw() as u32);
     }
 
     fn push_root(&mut self, id: dioxus_core::ElementId) {
-        self.channel.push_root(id.0 as _);
+        self.channel.push_root(id.raw() as _);
     }
 }

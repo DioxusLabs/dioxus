@@ -42,7 +42,10 @@ impl DioxusState {
 
     /// Attempt to convert an ElementId to a NodeId. This will return None if the ElementId is not in the RealDom.
     pub fn try_element_to_node_id(&self, element_id: ElementId) -> Option<NodeId> {
-        self.node_id_mapping.get(element_id.0).copied().flatten()
+        self.node_id_mapping
+            .get(element_id.raw())
+            .copied()
+            .flatten()
     }
 
     pub(crate) fn anchor_and_nodes(&mut self, id: ElementId, m: usize) -> (usize, Vec<usize>) {
@@ -80,7 +83,7 @@ impl<'a> MutationWriter<'a> {
 impl MutationWriter<'_> {
     /// Update an ElementId -> NodeId mapping
     fn set_id_mapping(&mut self, node_id: NodeId, element_id: ElementId) {
-        let element_id: usize = element_id.0;
+        let element_id: usize = element_id.raw();
 
         // Ensure node_id_mapping is large enough to contain element_id
         if self.state.node_id_mapping.len() <= element_id {
@@ -106,7 +109,7 @@ impl MutationWriter<'_> {
 
 impl WriteMutations for MutationWriter<'_> {
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        trace!("assign_node_id path:{:?} id:{}", path, id.0);
+        trace!("assign_node_id path:{:?} id:{}", path, id.raw());
 
         // If there is an existing node already mapped to that ID and it has no parent, then drop it
         // TODO: more automated GC/ref-counted semantics for node lifetimes
@@ -119,31 +122,31 @@ impl WriteMutations for MutationWriter<'_> {
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        trace!("create_text_node id:{} text:{}", id.0, value);
+        trace!("create_text_node id:{} text:{}", id.raw(), value);
         let node_id = self.docm.create_text_node(value);
         self.map_new_node(node_id, id);
     }
 
     fn append_children(&mut self, id: ElementId, m: usize) {
-        trace!("append_children id:{} m:{}", id.0, m);
+        trace!("append_children id:{} m:{}", id.raw(), m);
         let (parent_id, child_node_ids) = self.state.anchor_and_nodes(id, m);
         self.docm.append_children(parent_id, &child_node_ids);
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_after id:{} m:{}", id.0, m);
+        trace!("insert_nodes_after id:{} m:{}", id.raw(), m);
         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
         self.docm.insert_nodes_after(anchor_node_id, &new_node_ids);
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_before id:{} m:{}", id.0, m);
+        trace!("insert_nodes_before id:{} m:{}", id.raw(), m);
         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
         self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        trace!("replace_node_with id:{} m:{}", id.0, m);
+        trace!("replace_node_with id:{} m:{}", id.raw(), m);
         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
         self.docm.replace_node_with(anchor_node_id, &new_node_ids);
     }
@@ -151,7 +154,9 @@ impl WriteMutations for MutationWriter<'_> {
     fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
         trace!(
             "insert_children_at_path id:{} path:{:?} m:{}",
-            id.0, path, m
+            id.raw(),
+            path,
+            m
         );
         let new_node_ids = self.state.m_stack_nodes(m);
         let root_node_id = self.state.element_to_node_id(id);
@@ -160,19 +165,19 @@ impl WriteMutations for MutationWriter<'_> {
     }
 
     fn remove_node(&mut self, id: ElementId) {
-        trace!("remove_node id:{}", id.0);
+        trace!("remove_node id:{}", id.raw());
         let node_id = self.state.element_to_node_id(id);
         self.docm.remove_node(node_id);
     }
 
     fn push_root(&mut self, id: ElementId) {
-        trace!("push_root id:{}", id.0);
+        trace!("push_root id:{}", id.raw());
         let node_id = self.state.element_to_node_id(id);
         self.state.stack.push(node_id);
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
-        trace!("set_node_text id:{} value:{}", id.0, value);
+        trace!("set_node_text id:{} value:{}", id.raw(), value);
         let node_id = self.state.element_to_node_id(id);
         self.docm.set_node_text(node_id, value);
     }
@@ -292,7 +297,7 @@ impl WriteMutations for MutationWriter<'_> {
         self.set_attribute(name, None, &value, id);
 
         // Also set the data-dioxus-id attribute so we can find the element later
-        let value = AttributeValue::Text(id.0.to_string());
+        let value = AttributeValue::Text(id.raw().to_string());
         self.set_attribute("data-dioxus-id", None, &value, id);
 
         // node.add_event_listener(name);

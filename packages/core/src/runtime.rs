@@ -96,7 +96,7 @@ impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         let mut render_targets = Slab::default();
         let root = render_targets.insert(RenderTargetState::new());
-        debug_assert_eq!(root, RenderTargetId::ROOT.0);
+        debug_assert_eq!(root, RenderTargetId::ROOT.index());
 
         Rc::new(Self {
             sender,
@@ -207,7 +207,7 @@ fn MyComponent() -> Element {{
     /// effects.
     pub fn create_render_target(&self) -> RenderTargetId {
         let mut targets = self.render_targets.borrow_mut();
-        RenderTargetId(targets.insert(RenderTargetState::new()))
+        RenderTargetId::new(targets.insert(RenderTargetState::new()))
     }
 
     /// Drain every pending effect, in `ScopeOrder` (height-asc, id-asc).
@@ -220,16 +220,16 @@ fn MyComponent() -> Element {{
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
         let mut scopes = self.scope_states.borrow_mut();
-        if scopes.len() <= id.0 {
-            scopes.resize_with(id.0 + 1, Default::default);
+        if scopes.len() <= id.index() {
+            scopes.resize_with(id.index() + 1, Default::default);
         }
-        scopes[id.0] = Some(context);
+        scopes[id.index()] = Some(context);
     }
 
     pub(crate) fn remove_scope(self: &Rc<Self>, id: ScopeId) {
         {
             let borrow = self.scope_states.borrow();
-            if let Some(scope) = &borrow[id.0] {
+            if let Some(scope) = &borrow[id.index()] {
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.in_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
@@ -253,7 +253,7 @@ fn MyComponent() -> Element {{
                 });
             }
         }
-        self.scope_states.borrow_mut()[id.0].take();
+        self.scope_states.borrow_mut()[id.index()].take();
     }
 
     /// Get the owner for the current scope.
@@ -320,7 +320,7 @@ fn MyComponent() -> Element {{
         let suspense_location = self
             .scope_states
             .borrow()
-            .get(scope.0)
+            .get(scope.index())
             .and_then(|s| s.as_ref())
             .map(|s| s.suspense_location())
             .unwrap_or_default();
@@ -339,7 +339,7 @@ fn MyComponent() -> Element {{
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn get_state(&self, id: ScopeId) -> Ref<'_, Scope> {
         Ref::filter_map(self.scope_states.borrow(), |scopes| {
-            scopes.get(id.0).and_then(|f| f.as_ref())
+            scopes.get(id.index()).and_then(|f| f.as_ref())
         })
         .ok()
         .unwrap()
@@ -350,7 +350,7 @@ fn MyComponent() -> Element {{
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn try_get_state(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
         Ref::filter_map(self.scope_states.borrow(), |contexts| {
-            contexts.get(id.0).and_then(|f| f.as_ref())
+            contexts.get(id.index()).and_then(|f| f.as_ref())
         })
         .ok()
     }
@@ -394,7 +394,7 @@ fn MyComponent() -> Element {{
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
         let scopes = self.scope_states.borrow();
-        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        let scope = &scopes[scope_id.index()].as_ref().unwrap();
         let location = scope.suspense_location();
         if self.suspended_tasks.get() == 0 {
             return !matches!(
@@ -437,11 +437,11 @@ fn MyComponent() -> Element {{
     ) {
         let _runtime = RuntimeGuard::new(self.clone());
         let targets = self.render_targets.borrow();
-        let Some(target) = targets.get(target_id.0) else {
+        let Some(target) = targets.get(target_id.index()) else {
             return;
         };
 
-        let parent_path = target.elements.get(element.0).copied().flatten();
+        let parent_path = target.elements.get(element.index()).copied().flatten();
         drop(targets);
 
         if let Some(parent_path) = parent_path {
@@ -755,7 +755,7 @@ mod tests {
         let runtime = runtime();
 
         catch_expected_panic(|| {
-            runtime.with_scope_on_stack(ScopeId(7), || panic!("forced panic"));
+            runtime.with_scope_on_stack(ScopeId::new(7), || panic!("forced panic"));
         });
 
         assert_eq!(runtime.try_current_scope_id(), None);

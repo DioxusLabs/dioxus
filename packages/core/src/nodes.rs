@@ -794,7 +794,7 @@ impl VComponent {
 
         let scope_id = dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index);
 
-        dom.scopes.get(scope_id.0)
+        dom.scopes.get(scope_id.index())
     }
 }
 

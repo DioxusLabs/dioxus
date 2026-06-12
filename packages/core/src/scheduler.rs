@@ -173,7 +173,7 @@ impl VirtualDom {
 
         // The scope that owns the effect should still exist. We can't just ignore the task if the scope doesn't exist
         // because the scope id may have been reallocated
-        debug_assert!(self.scopes.contains(tasks.order.id.0));
+        debug_assert!(self.scopes.contains(tasks.order.id.index()));
 
         let mut tasks = tasks.tasks_queued.borrow_mut();
         let task = tasks.pop_front()?;
@@ -190,7 +190,7 @@ impl VirtualDom {
         // Make sure the top dirty scope is valid
         #[cfg(debug_assertions)]
         if let Some(scope) = dirty_scope {
-            assert!(self.scopes.contains(scope.id.0));
+            assert!(self.scopes.contains(scope.id.index()));
         }
 
         // Find the height of the highest dirty scope

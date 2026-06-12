@@ -71,14 +71,18 @@ impl VirtualDom {
                 return;
             };
             // Load the old and new rendered nodes
-            let old = self.scopes[scope.0].last_rendered_node.take().unwrap();
+            let old = self.scopes[scope.index()]
+                .last_rendered_node
+                .take()
+                .unwrap();
 
             if !old.mount.get().mounted() {
                 // The previous output was never materialized (it is awaiting
                 // the foreground re-create pass of a resolving suspense
                 // boundary). There is nothing to diff against: adopt the body
                 // output; the create pass mounts it.
-                self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+                self.scopes[scope.index()].last_rendered_node =
+                    Some(LastRenderedNode::new(new_nodes));
                 return;
             }
 
@@ -93,7 +97,7 @@ impl VirtualDom {
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             DiffFrame::new(old.mount.get(), &old, new_real_nodes).diff_into(&mut state);
 
-            self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+            self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
@@ -125,7 +129,7 @@ impl VirtualDom {
             let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
 
             // Then set the new node as the last rendered node
-            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+            self.scopes[scope.index()].last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
@@ -202,7 +206,7 @@ impl VNode {
         // DOM, that DOM is our insertion neighbor; otherwise we splice into
         // the dynamic slot itself.
         let slot_path: &[u8] = parent.as_ref().map_or(&[], |p| p.path.path);
-        let anchor = state.dom.scopes[scope.0]
+        let anchor = state.dom.scopes[scope.index()]
             .last_rendered_node
             .as_ref()
             .and_then(|n| n.find_first_element(state.dom))

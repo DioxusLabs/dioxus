@@ -318,10 +318,8 @@ fn suspense_tracks_resolved() {
 
             dom.render_suspense_immediate().await;
             dom.wait_for_suspense_work().await;
-            assert_eq!(
-                dom.render_suspense_immediate().await,
-                vec![ScopeId(ScopeId::APP.0 + 1)]
-            );
+            let resolved = dom.render_suspense_immediate().await;
+            assert_eq!(resolved.len(), 1);
         });
 
     fn app() -> Element {

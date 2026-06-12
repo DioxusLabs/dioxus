@@ -103,7 +103,7 @@ use tracing::instrument;
 /// # let mut vdom = VirtualDom::new(app);
 /// # let runtime = vdom.runtime();
 /// let event = Event::new(std::rc::Rc::new(0) as std::rc::Rc<dyn std::any::Any>, true);
-/// runtime.handle_event("onclick", event, ElementId(0));
+/// runtime.handle_event("onclick", event, ElementId::from_raw(0));
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
@@ -174,7 +174,7 @@ use tracing::instrument;
 ///         _ = dom.wait_for_work() => {}
 ///         evt = real_dom.wait_for_event() => {
 ///             let evt = dioxus_core::Event::new(evt, true);
-///             dom.runtime().handle_event("onclick", evt, ElementId(0))
+///             dom.runtime().handle_event("onclick", evt, ElementId::from_raw(0))
 ///         },
 ///     }
 ///
@@ -334,7 +334,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
+        self.scopes.get(id.index())
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
