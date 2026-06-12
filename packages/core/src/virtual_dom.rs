@@ -378,14 +378,14 @@ impl VirtualDom {
 
     /// Mark all scopes as dirty. Each scope will be re-rendered.
     pub fn mark_all_dirty(&mut self) {
-        let mut orders = vec![];
+        let mut ids = vec![];
 
         for (_idx, scope) in self.scopes.iter() {
-            orders.push(ScopeOrder::new(scope.state().height(), scope.id()));
+            ids.push(scope.id());
         }
 
-        for order in orders {
-            self.queue_scope(order);
+        for id in ids {
+            self.queue_scope(id);
         }
     }
 
@@ -398,9 +398,8 @@ impl VirtualDom {
         };
 
         tracing::event!(tracing::Level::TRACE, "Marking scope {:?} as dirty", id);
-        let order = ScopeOrder::new(scope.height(), id);
         drop(scope);
-        self.queue_scope(order);
+        self.queue_scope(id);
     }
 
     /// Mark a task as dirty

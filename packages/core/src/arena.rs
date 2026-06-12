@@ -1,4 +1,3 @@
-use crate::innerlude::ScopeOrder;
 use crate::{ScopeId, virtual_dom::VirtualDom};
 use slab::Slab;
 
@@ -14,6 +13,12 @@ pub struct ElementId(pub usize);
 impl ElementId {
     /// The root element within a render target.
     pub const ROOT: Self = Self(0);
+
+    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+
+    pub(crate) fn as_live(self) -> Option<Self> {
+        (self != Self::ROOT && self != Self::PLACEHOLDER).then_some(self)
+    }
 }
 
 /// A renderer target's unique identifier.
@@ -39,8 +44,9 @@ pub(crate) struct MountedNodeState {
     /// The element in the renderer that each dynamic attribute is mounted to.
     pub(crate) mounted_attributes: Box<[ElementId]>,
 
-    /// For components: the `ScopeId` the component is mounted to.
-    /// For other dynamic nodes: the renderer element id each dynamic node owns.
+    /// Backing storage for dynamic slots. Access this through `VirtualDom`'s
+    /// typed dynamic-slot helpers so callers do not need to interpret the raw
+    /// value as either a `ScopeId` or an `ElementId`.
     pub(crate) mounted_dynamic_nodes: Box<[usize]>,
 }
 
@@ -138,60 +144,6 @@ pub struct ElementPath {
 impl VirtualDom {
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
         self.runtime.current_render_target_id()
-    }
-
-    pub(crate) fn mount_target_id(&self, mount: MountId) -> RenderTargetId {
-        // Every caller has a live `mount` — either freshly allocated via
-        // `next_element_for_mount` / mount creation, or the result of
-        // `claim_mount` on a previously-mounted vnode. A PLACEHOLDER
-        // here would indicate a stray ref the diff never produces.
-        debug_assert!(mount.mounted(), "mount_target_id requires a live MountId");
-        self.runtime
-            .mounts
-            .borrow()
-            .get(mount.0)
-            .map(|mount| mount.target_id)
-            .unwrap_or(RenderTargetId::ROOT)
-    }
-
-    /// Number of template roots this `mount`'s mount was created with.
-    /// Anchor lookups that walk a view's `template.roots()` may iterate
-    /// beyond what the mount actually has — e.g. when the view was a clone
-    /// whose template grew between renders — and the underlying
-    /// `MountedNodeState::root_ids` would panic on out-of-range indexing.
-    pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        debug_assert!(
-            mount.mounted(),
-            "mounted_root_count requires a live MountId"
-        );
-        let target_id = self.mount_target_id(mount);
-        self.runtime
-            .render_targets
-            .borrow()
-            .get(target_id.0)
-            .and_then(|target| target.mounts.get(mount.0))
-            .and_then(|mount| mount.as_ref())
-            .map(|mount| mount.root_ids.len())
-            .unwrap_or(0)
-    }
-
-    /// Number of dynamic-node slots this `mount`'s mount was created with.
-    /// Same guard rail as [`Self::mounted_root_count`], but for
-    /// `MountedNodeState::mounted_dynamic_nodes`.
-    pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
-        debug_assert!(
-            mount.mounted(),
-            "mounted_dyn_node_count requires a live MountId"
-        );
-        let target_id = self.mount_target_id(mount);
-        self.runtime
-            .render_targets
-            .borrow()
-            .get(target_id.0)
-            .and_then(|target| target.mounts.get(mount.0))
-            .and_then(|mount| mount.as_ref())
-            .map(|mount| mount.mounted_dynamic_nodes.len())
-            .unwrap_or(0)
     }
 
     pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> ElementId {
@@ -307,11 +259,9 @@ impl VirtualDom {
             })
             .collect();
 
-        let scope = self.scopes.remove(id.0);
-        let context = scope.state();
-        let height = context.height;
+        self.mark_clean(id);
+        let _scope = self.scopes.remove(id.0);
 
-        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
         for order in stale_dirty_scopes {
             self.dirty_scopes.remove(&order);
         }

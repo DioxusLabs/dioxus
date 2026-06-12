@@ -457,13 +457,7 @@ impl SuspenseBoundaryProps {
             // Get the parent of the suspense boundary to later create children with the right parent
             let currently_rendered = scope_state.last_rendered_node.clone().unwrap();
             let mount = currently_rendered.mount.get();
-            let parent = dom
-                .runtime
-                .mounts
-                .borrow()
-                .get(mount.0)
-                .expect("suspense placeholder is not mounted")
-                .render_parent;
+            let parent = dom.mounted_render_parent(mount);
 
             let driver = suspense_driver(dom, scope_id);
             let driver = as_suspense(&driver);
@@ -748,16 +742,9 @@ fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom
     for (idx, dynamic) in vnode.dynamic_nodes.iter().enumerate() {
         match dynamic {
             DynamicNode::Component(_) => {
-                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                if let Some(height) = dom
-                    .runtime
-                    .try_get_state(scope_id)
-                    .map(|scope| scope.height)
-                {
-                    let order = ScopeOrder::new(height, scope_id);
-                    if dom.dirty_scopes.remove(&order) {
-                        dom.run_and_diff_scope(None::<&mut M>, scope_id);
-                    }
+                let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
+                if dom.mark_clean(scope_id) {
+                    dom.run_and_diff_scope(None::<&mut M>, scope_id);
                 }
 
                 if let Some(rendered) = dom.scopes[scope_id.0].last_rendered_node.clone() {

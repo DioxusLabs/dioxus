@@ -1,5 +1,6 @@
 use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 
+/// State required for diffing operations
 pub(crate) struct DiffState<'a, M: WriteMutations> {
     pub(crate) dom: &'a mut VirtualDom,
     pub(crate) to: Option<&'a mut M>,
@@ -29,6 +30,34 @@ impl<'a, M: WriteMutations> DiffState<'a, M> {
 
     pub(crate) fn context(&self) -> Option<DiffContext<'a>> {
         self.context
+    }
+
+    /// Create replacement content in an empty dynamic slot, then optionally
+    /// restore the old slot while removing the previous live node.
+    pub(crate) fn with_mounted_dynamic_node_slot_replaced<R>(
+        &mut self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        restore_old_slot_for_removal: bool,
+        create_new: impl FnOnce(&mut DiffState<'_, M>) -> R,
+        remove_old: impl FnOnce(&mut DiffState<'_, M>),
+    ) -> R {
+        let old_slot = self.dom.get_mounted_dynamic_node_slot(mount, dyn_node_idx);
+        self.dom
+            .clear_mounted_dynamic_node_slot(mount, dyn_node_idx);
+
+        let result = create_new(self);
+        let new_slot = self.dom.get_mounted_dynamic_node_slot(mount, dyn_node_idx);
+
+        if restore_old_slot_for_removal {
+            self.dom
+                .set_mounted_dynamic_node_slot(mount, dyn_node_idx, old_slot);
+            remove_old(self);
+        }
+
+        self.dom
+            .set_mounted_dynamic_node_slot(mount, dyn_node_idx, new_slot);
+        result
     }
 
     pub(crate) fn enter_context(&mut self, mount: MountId, old: &'a VNode, new: &'a VNode) {

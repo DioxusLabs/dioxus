@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     Element, ReactiveContext,
-    innerlude::{RenderError, ScopeOrder, ScopeState},
+    innerlude::{RenderError, ScopeState},
     render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
@@ -107,16 +107,17 @@ impl VirtualDom {
                 })
             };
 
-            let scope_state = scope.state();
+            {
+                let scope_state = scope.state();
 
-            // Run all post-render hooks
-            for post_run in scope_state.after_render.borrow_mut().iter_mut() {
-                post_run();
+                // Run all post-render hooks
+                for post_run in scope_state.after_render.borrow_mut().iter_mut() {
+                    post_run();
+                }
             }
 
             // remove this scope from dirty scopes
-            self.dirty_scopes
-                .remove(&ScopeOrder::new(scope_state.height, scope_id));
+            self.mark_clean(scope_id);
             output
         })
     }

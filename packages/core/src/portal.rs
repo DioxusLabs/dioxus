@@ -255,16 +255,7 @@ impl RenderDriver for PortalDriver {
 
             if old_target_id != target_id {
                 let old_mount = old_children.as_vnode().mount.get();
-                let logical_parent = old_mount
-                    .mounted()
-                    .then_some(old_mount.0)
-                    .and_then(|mount| {
-                        dom.runtime
-                            .mounts
-                            .borrow()
-                            .get(mount)
-                            .and_then(|mount| mount.logical_parent)
-                    });
+                let logical_parent = dom.get_mounted_logical_parent(old_mount);
 
                 let render_to = to
                     .as_mut()

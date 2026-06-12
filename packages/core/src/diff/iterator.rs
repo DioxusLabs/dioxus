@@ -1,5 +1,5 @@
 use crate::{
-    DynamicNode, ElementId, ScopeId, VirtualDom,
+    DynamicNode, ElementId, VirtualDom,
     diff::{
         anchor::{ElementEdge, anchor_at, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
@@ -499,14 +499,14 @@ impl VNode {
                         .map(|node| node.push_all_root_nodes(dom, to))
                         .sum(),
                     Some((idx, DynamicNode::Component(_))) => dom
-                        .get_scope(ScopeId(dom.get_mounted_dyn_node(mount, idx)))
+                        .get_scope(dom.get_mounted_dynamic_component_scope(mount, idx))
                         .unwrap()
                         .root_node()
                         .push_all_root_nodes(dom, to),
                     // For a single dynamic node of Text, push its element id
                     Some((idx, DynamicNode::Text(_))) => {
                         if dom.mount_target_id(mount) == target_id {
-                            let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
+                            let id = dom.get_mounted_dynamic_text_node(mount, idx);
                             push_live_root(to, id)
                         } else {
                             0
@@ -529,7 +529,7 @@ impl VNode {
 
 fn push_live_root(to: &mut impl WriteMutations, id: ElementId) -> usize {
     // Callers (`push_all_root_nodes`) only reach this with `id` values just
-    // read from `get_mounted_root_node`/`get_mounted_dyn_node` for a vnode
+    // read from `get_mounted_root_node`/`get_mounted_dynamic_text_node` for a vnode
     // whose mount target already matches `target_id`, so the live element id
     // has been allocated in that target by `load_template_root` /
     // `assign_node_id`.

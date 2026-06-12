@@ -6,8 +6,7 @@ use crate::{
         anchor::{Anchor, ElementEdge, anchor_at, anchor_for_slot, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
     },
-    innerlude::{ElementPath, ElementRef, MountId, ScopeOrder},
-    mount::Mount,
+    innerlude::{ElementPath, ElementRef, MountId},
     nodes::DynamicNode,
     scopes::ScopeId,
 };
@@ -80,11 +79,8 @@ impl VNode {
             .enumerate()
             .any(|(idx, node)| match node {
                 Component(_) => {
-                    let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                    dom.runtime.try_get_state(scope_id).is_some_and(|scope| {
-                        dom.dirty_scopes
-                            .contains(&ScopeOrder::new(scope.height(), scope_id))
-                    })
+                    let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
+                    dom.is_dirty(scope_id)
                 }
                 Fragment(nodes) => nodes.iter().any(|node| {
                     let mount = node.mount.get();
@@ -110,13 +106,13 @@ impl VNode {
                 {
                     to.set_node_text(
                         &new.value,
-                        ElementId(state.dom.get_mounted_dyn_node(mount, idx)),
+                        state.dom.get_mounted_dynamic_text_node(mount, idx),
                     );
                 }
             }
             (Fragment(old), Fragment(new)) => self.diff_fragment(mount, idx, old, new, state),
             (Component(old), Component(new)) => {
-                let scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
+                let scope_id = state.dom.get_mounted_dynamic_component_scope(mount, idx);
                 self.diff_vcomponent(
                     mount,
                     idx,
@@ -139,7 +135,6 @@ impl VNode {
         new: &DynamicNode,
         state: &mut DiffState<'_, M>,
     ) {
-        let old_mount_value = state.dom.get_mounted_dyn_node(mount, idx);
         let old_has_live_dom = self.dynamic_node_has_live_dom(mount, idx, old, state.dom);
         if !old_has_live_dom {
             // Pass `None::<&mut M>` (the caller's writer type) instead of
@@ -167,22 +162,23 @@ impl VNode {
                 state.context(),
             ),
         };
-        state.dom.set_mounted_dyn_node(mount, idx, usize::MAX);
-        {
-            let dom = &mut *state.dom;
-            let to = state.to.as_deref_mut();
-            at_anchor(anchor, to, |to| {
-                let mut state = DiffState::new(dom, to);
-                self.create_dynamic_node(new, mount, idx, &mut state)
-            });
-        }
 
-        let new_mount_value = state.dom.get_mounted_dyn_node(mount, idx);
-        if old_has_live_dom {
-            state.dom.set_mounted_dyn_node(mount, idx, old_mount_value);
-            self.remove_dynamic_node(mount, state.dom, state.to.as_deref_mut(), true, idx, old);
-        }
-        state.dom.set_mounted_dyn_node(mount, idx, new_mount_value);
+        state.with_mounted_dynamic_node_slot_replaced(
+            mount,
+            idx,
+            old_has_live_dom,
+            |state| {
+                let dom = &mut *state.dom;
+                let to = state.to.as_deref_mut();
+                at_anchor(anchor, to, |to| {
+                    let mut state = DiffState::new(dom, to);
+                    self.create_dynamic_node(new, mount, idx, &mut state)
+                });
+            },
+            |state| {
+                self.remove_dynamic_node(mount, state.dom, state.to.as_deref_mut(), true, idx, old);
+            },
+        );
     }
 
     /// Diff two fragments at a dynamic slot. Handles empty <-> non-empty transitions
@@ -258,18 +254,18 @@ impl VNode {
     ) -> Option<ElementId> {
         match self.get_dynamic_root_node_and_id(root_idx) {
             None if dom.mount_target_id(mount) == target_id => {
-                live_element_id(dom.get_mounted_root_node(mount, root_idx).0)
+                live_element_id(dom.get_mounted_root_node(mount, root_idx))
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             None => None,
             Some((idx, Text(_))) if dom.mount_target_id(mount) == target_id => {
-                live_element_id(dom.get_mounted_dyn_node(mount, idx))
+                live_element_id(dom.get_mounted_dynamic_text_node(mount, idx))
                     .filter(|id| dom.element_exists_in_target(target_id, *id))
             }
             Some((_, Text(_))) => None,
             Some((_, Fragment(children))) => find_fragment_edge(children, dom, target_id, edge),
             Some((id, Component(_))) => {
-                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, id));
+                let scope_id = dom.get_mounted_dynamic_component_scope(mount, id);
                 live_component_root(dom, scope_id).find_element_in_roots(dom, target_id, edge)
             }
         }
@@ -286,24 +282,23 @@ impl VNode {
     }
 
     fn root_has_live_dom(&self, root_idx: usize, mount: MountId, dom: &VirtualDom) -> bool {
-        // `mounted_root_count` / `mounted_dyn_node_count` are 0 when the
-        // mount state is gone (stale clone), which keeps the underlying
-        // `get_mounted_*` calls in-bounds.
+        // Count checks keep stale vnode templates from indexing past the
+        // slots that were allocated for this live mount.
         match self.get_dynamic_root_node_and_id(root_idx) {
             None => {
                 root_idx < dom.mounted_root_count(mount)
-                    && live_element_id(dom.get_mounted_root_node(mount, root_idx).0)
+                    && live_element_id(dom.get_mounted_root_node(mount, root_idx))
                         .is_some_and(|id| dom.element_exists_for_mount(mount, id))
             }
             Some((idx, Text(_))) => {
                 idx < dom.mounted_dyn_node_count(mount)
-                    && live_element_id(dom.get_mounted_dyn_node(mount, idx))
+                    && live_element_id(dom.get_mounted_dynamic_text_node(mount, idx))
                         .is_some_and(|id| dom.element_exists_for_mount(mount, id))
             }
             Some((_, Fragment(children))) => children.iter().any(|node| node.has_live_dom(dom)),
             Some((idx, Component(_))) => {
                 idx < dom.mounted_dyn_node_count(mount) && {
-                    let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                    let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
                     dom.get_scope(scope_id)
                         .and_then(|scope| scope.try_root_node())
                         .is_some_and(|node| node.has_live_dom(dom))
@@ -449,10 +444,7 @@ impl VNode {
 
         if destroy_component_state {
             let mount = self.mount.take();
-            let target_id = dom.mount_target_id(mount);
-            dom.runtime.render_targets.borrow_mut()[target_id.0].remove_mounted_node(mount);
-            // Remove the mount information
-            dom.runtime.mounts.borrow_mut().remove(mount.0);
+            dom.remove_mount(mount);
         }
     }
 
@@ -528,11 +520,12 @@ impl VNode {
     ) {
         match node {
             Component(_comp) => {
-                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
                 dom.remove_component_node(to, destroy_component_state, scope_id);
             }
             Text(_) => {
-                let Some(id) = live_element_id(dom.get_mounted_dyn_node(mount, idx)) else {
+                let Some(id) = live_element_id(dom.get_mounted_dynamic_text_node(mount, idx))
+                else {
                     // No DOM was ever materialized for this text (e.g. it was rendered
                     // into a background-suspended subtree) or it was already reclaimed
                     // via a prior `move_node_to_background`. Skip emission/reclaim.
@@ -542,7 +535,7 @@ impl VNode {
                     to.remove_node(id);
                 }
                 dom.reclaim_for_mount(mount, id);
-                dom.set_mounted_dyn_node(mount, idx, usize::MAX);
+                dom.clear_mounted_dynamic_text_node(mount, idx);
             }
             Fragment(nodes) => {
                 for node in nodes.iter() {
@@ -561,12 +554,12 @@ impl VNode {
     ) -> bool {
         match node {
             Component(_) => {
-                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
                 dom.get_scope(scope_id)
                     .and_then(|scope| scope.try_root_node())
                     .is_some_and(|node| node.has_live_dom(dom))
             }
-            Text(_) => live_element_id(dom.get_mounted_dyn_node(mount, idx))
+            Text(_) => live_element_id(dom.get_mounted_dynamic_text_node(mount, idx))
                 .is_some_and(|id| dom.element_exists_for_mount(mount, id)),
             Fragment(nodes) => nodes.iter().any(|node| node.has_live_dom(dom)),
         }
@@ -588,11 +581,11 @@ impl VNode {
                 // after `get_scope(_).and_then(try_root_node).is_some_and(...)`
                 // already returned true. So the scope is live and rendered
                 // by the time we get here.
-                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
                 let root = live_component_root(dom, scope_id);
                 root.find_element_in_roots(dom, target_id, ElementEdge::First)
             }
-            Text(_) => live_element_id(dom.get_mounted_dyn_node(mount, idx))
+            Text(_) => live_element_id(dom.get_mounted_dynamic_text_node(mount, idx))
                 .filter(|id| dom.element_exists_in_target(target_id, *id)),
             Fragment(nodes) => find_fragment_edge(nodes, dom, target_id, ElementEdge::First),
         }
@@ -640,22 +633,10 @@ impl VNode {
 
         // Initialize the mount information for this vnode if it isn't already mounted
         if !self.mount.get().mounted() {
-            let target_id = render_parent
-                .map(|parent| state.dom.mount_target_id(parent.mount))
-                .unwrap_or_else(|| state.dom.current_render_target_id());
-            let mut mounts = state.dom.runtime.mounts.borrow_mut();
-            let entry = mounts.vacant_entry();
-            let mount = MountId(entry.key());
-            self.mount.set(mount);
-            entry.insert(Mount::new(
-                self.clone(),
+            state.dom.create_mount(
+                self,
                 render_parent,
                 logical_parent,
-                target_id,
-            ));
-            drop(mounts);
-            state.dom.runtime.render_targets.borrow_mut()[target_id.0].create_mounted_node(
-                mount,
                 template.roots().len(),
                 template.attr_paths().len(),
                 template.node_paths().len(),
@@ -754,7 +735,7 @@ impl VNode {
                 // If we are diffing suspended nodes and are not outputting mutations, we can skip it
                 if let Some(to) = state.to.as_deref_mut() {
                     let id = state.dom.next_element_for_mount(mount);
-                    state.dom.set_mounted_dyn_node(mount, idx, id.0);
+                    state.dom.set_mounted_dynamic_text_node(mount, idx, id);
                     to.create_text_node(&text.value, id);
                     1
                 } else {
@@ -931,8 +912,8 @@ fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> &VNode {
         .root_node()
 }
 
-fn live_element_id(raw: usize) -> Option<ElementId> {
-    (raw != 0 && raw != usize::MAX).then_some(ElementId(raw))
+fn live_element_id(id: ElementId) -> Option<ElementId> {
+    id.as_live()
 }
 
 fn find_fragment_edge(

@@ -10,10 +10,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    ElementId,
-    arena::MountId,
     innerlude::{ElementRef, WriteMutations},
-    mount::RenderMode,
     nodes::VNode,
     virtual_dom::VirtualDom,
 };
@@ -48,109 +45,6 @@ impl VirtualDom {
                 child.create_with_parents(self, render_parent, logical_parent, to.as_deref_mut())
             })
             .sum()
-    }
-
-    pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
-        let mounts = self.runtime.mounts.borrow();
-        mounts.get(mount.0).and_then(|mount| mount.render_parent)
-    }
-
-    pub(crate) fn get_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize) -> usize {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow()[target_id.0].mounts[mount.0]
-            .as_ref()
-            .expect("mounted mount state should exist")
-            .mounted_dynamic_nodes[dyn_node_idx]
-    }
-
-    pub(crate) fn set_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize, value: usize) {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow_mut()[target_id.0].mounts[mount.0]
-            .as_mut()
-            .expect("mounted mount state should exist")
-            .mounted_dynamic_nodes[dyn_node_idx] = value;
-    }
-
-    pub(crate) fn get_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) -> ElementId {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow()[target_id.0].mounts[mount.0]
-            .as_ref()
-            .expect("mounted mount state should exist")
-            .mounted_attributes[dyn_attr_idx]
-    }
-
-    pub(crate) fn set_mounted_dyn_attr(
-        &self,
-        mount: MountId,
-        dyn_attr_idx: usize,
-        value: ElementId,
-    ) {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow_mut()[target_id.0].mounts[mount.0]
-            .as_mut()
-            .expect("mounted mount state should exist")
-            .mounted_attributes[dyn_attr_idx] = value;
-    }
-
-    pub(crate) fn get_mounted_root_node(&self, mount: MountId, root_idx: usize) -> ElementId {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow()[target_id.0].mounts[mount.0]
-            .as_ref()
-            .expect("mounted mount state should exist")
-            .root_ids[root_idx]
-    }
-
-    pub(crate) fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow_mut()[target_id.0].mounts[mount.0]
-            .as_mut()
-            .expect("mounted mount state should exist")
-            .root_ids[root_idx] = value;
-    }
-
-    pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
-        let mounts = self.runtime.mounts.borrow();
-        // Hand out a deep clone so anchor lookups that descend into the
-        // returned tree can't observe descendant mount cells being mutated
-        // by a sibling diff's `claim_mount`.
-        mounts
-            .get(mount.0)
-            .map(|mount| mount.node.deep_clone_preserving_mounts())
-    }
-
-    pub(crate) fn set_mount_mode(&self, mount: MountId, mode: RenderMode) {
-        self.runtime.mounts.borrow_mut()[mount.0].mode = mode;
-    }
-
-    pub(crate) fn mount_should_render(&self, mount: MountId) -> bool {
-        // For an unmounted `mount` (`mount.0 == usize::MAX`),
-        // `mounts.get(mount.0)` returns `None` and the `is_none_or` predicate
-        // short-circuits to `true` — same answer as an explicit early return,
-        // so the explicit branch isn't needed.
-        self.runtime
-            .mounts
-            .borrow()
-            .get(mount.0)
-            .is_none_or(|mount| mount.mode == RenderMode::Foreground)
-    }
-
-    pub(crate) fn claim_mount(&self, old: &VNode, new: &VNode) -> MountId {
-        let mount = old.mount.take();
-        new.mount.set(mount);
-        mount
-    }
-
-    pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
-        // Every caller commits work on a `mount` that's just been claimed via
-        // `claim_mount` or freshly allocated in `create_with_parents` —
-        // both produce live `MountId`s, never `PLACEHOLDER`. A `PLACEHOLDER`
-        // here would index past the mount slab below and panic regardless.
-        // Deep-clone so the committed snapshot owns its own per-vnode
-        // `Cell<MountId>` slots. A subsequent diff that calls
-        // `claim_mount` on descendant `old` vnodes would otherwise
-        // mutate the shared `Rc<VNodeInner>` here too, and anchor lookups
-        // that walk `mount.node` would see those descendants as unmounted.
-        self.runtime.mounts.borrow_mut()[mount.0].node = node.deep_clone_preserving_mounts();
     }
 
     /// Remove these nodes from the dom

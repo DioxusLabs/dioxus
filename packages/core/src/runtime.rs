@@ -495,7 +495,7 @@ fn MyComponent() -> Element {{
                     return;
                 };
 
-                let el_ref = &mount.node;
+                let el_ref = mount.node();
                 let node_template = el_ref.template;
                 let target_path = path.path;
                 let m = el_ref.mount.get();
@@ -544,7 +544,7 @@ fn MyComponent() -> Element {{
                 self.mounts
                     .borrow()
                     .get(id)
-                    .and_then(|el| el.logical_parent)
+                    .and_then(|el| el.logical_parent())
             });
         }
     }
@@ -561,7 +561,7 @@ fn MyComponent() -> Element {{
             // If the node is suspended and not mounted, we can just ignore the event
             return;
         };
-        let el_ref = &mount.node;
+        let el_ref = mount.node();
         let node_template = el_ref.template;
         let target_path = node.path;
 

@@ -4,7 +4,7 @@ use crate::{
         anchor::{Anchor, anchor_for_slot, at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
     },
-    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
+    innerlude::{ElementRef, MountId, VComponent, WriteMutations},
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
@@ -177,8 +177,6 @@ impl VNode {
         // If the props are static, then we try to memoize by setting the new with the old
         // The scope's driver still owns the live props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
-        let height = state.dom.runtime.get_state(scope_id).height;
-
         let scope_driver = state.dom.runtime.get_state(scope_id).render_driver();
         if scope_driver.memoize(new.driver.as_any()) {
             // The scope's driver still owns the live props; memoizing here
@@ -186,7 +184,7 @@ impl VNode {
             return;
         }
 
-        state.dom.queue_scope(ScopeOrder::new(height, scope_id));
+        state.dom.queue_scope(scope_id);
     }
 
     fn replace_vcomponent<M: WriteMutations>(
@@ -197,7 +195,7 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, M>,
     ) {
-        let scope = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
+        let scope = state.dom.get_mounted_dynamic_component_scope(mount, idx);
 
         // Compute the anchor BEFORE freeing the scope slot — we need the OLD
         // scope's rendered vnode to anchor against. If the OLD scope rendered
@@ -212,9 +210,7 @@ impl VNode {
             .unwrap_or_else(|| anchor_for_slot(mount, slot_path, &[], state.dom, state.context()));
 
         // Free the scope slot so `create_component_node` allocates a new scope.
-        state
-            .dom
-            .set_mounted_dyn_node(mount, idx, ScopeId::PLACEHOLDER.0);
+        state.dom.clear_mounted_dynamic_component_scope(mount, idx);
 
         {
             let dom = &mut *state.dom;
@@ -240,7 +236,7 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, impl WriteMutations>,
     ) -> usize {
-        let mut scope_id = ScopeId(state.dom.get_mounted_dyn_node(mount, idx));
+        let mut scope_id = state.dom.get_mounted_dynamic_component_scope(mount, idx);
         let new = scope_id.is_placeholder();
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
@@ -255,7 +251,9 @@ impl VNode {
                 .id;
 
             // Store the scope id for the next render
-            state.dom.set_mounted_dyn_node(mount, idx, scope_id.0);
+            state
+                .dom
+                .set_mounted_dynamic_component_scope(mount, idx, scope_id);
         }
 
         let driver = state.dom.runtime.get_state(scope_id).render_driver();

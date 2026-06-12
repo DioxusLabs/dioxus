@@ -220,7 +220,7 @@ impl VNode {
 
         match &self.dynamic_nodes[dynamic_node_idx] {
             DynamicNode::Text(_) => {
-                Some(ElementId(dom.get_mounted_dyn_node(mount, dynamic_node_idx)))
+                Some(dom.get_mounted_dynamic_text_node(mount, dynamic_node_idx))
             }
             _ => None,
         }
@@ -773,9 +773,7 @@ impl VComponent {
             return None;
         }
 
-        let scope_id = dom.get_mounted_dyn_node(mount, dynamic_node_index);
-
-        Some(ScopeId(scope_id))
+        Some(dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index))
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -794,9 +792,9 @@ impl VComponent {
             return None;
         }
 
-        let scope_id = dom.get_mounted_dyn_node(mount, dynamic_node_index);
+        let scope_id = dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index);
 
-        dom.scopes.get(scope_id)
+        dom.scopes.get(scope_id.0)
     }
 }
 

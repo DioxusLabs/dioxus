@@ -121,6 +121,12 @@ impl Hash for ScopeOrder {
 }
 
 impl VirtualDom {
+    fn scope_order(&self, id: ScopeId) -> Option<ScopeOrder> {
+        self.runtime
+            .try_get_state(id)
+            .map(|scope| ScopeOrder::new(scope.height(), id))
+    }
+
     /// Queue a task to be polled
     pub(crate) fn queue_task(&mut self, task: Task, order: ScopeOrder) {
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
@@ -135,8 +141,24 @@ impl VirtualDom {
     }
 
     /// Queue a scope to be rerendered
-    pub(crate) fn queue_scope(&mut self, order: ScopeOrder) {
-        self.dirty_scopes.insert(order);
+    pub(crate) fn queue_scope(&mut self, id: ScopeId) -> bool {
+        let Some(order) = self.scope_order(id) else {
+            return false;
+        };
+
+        self.dirty_scopes.insert(order)
+    }
+
+    /// Check if a scope is queued to rerender
+    pub(crate) fn is_dirty(&self, id: ScopeId) -> bool {
+        self.scope_order(id)
+            .is_some_and(|order| self.dirty_scopes.contains(&order))
+    }
+
+    /// Remove a scope from the rerender queue
+    pub(crate) fn mark_clean(&mut self, id: ScopeId) -> bool {
+        self.scope_order(id)
+            .is_some_and(|order| self.dirty_scopes.remove(&order))
     }
 
     /// Check if there are any dirty scopes

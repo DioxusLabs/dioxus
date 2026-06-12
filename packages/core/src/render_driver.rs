@@ -3,7 +3,7 @@ use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 use crate::{
     ComponentFunction, Element, WriteMutations,
     diff::context::DiffContext,
-    innerlude::{CapturedPanic, ElementRef, ScopeOrder},
+    innerlude::{CapturedPanic, ElementRef},
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -211,8 +211,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         // If our scope landed in `dirty_scopes` during its initial render
         // (e.g. a hook synchronously queued an update for itself), drain the
         // entry now so we don't re-process the same scope after creation.
-        let height = dom.runtime.get_state(scope_id).height;
-        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+        dom.mark_clean(scope_id);
 
         let new_node = dom.scopes[scope_id.0]
             .last_rendered_node
