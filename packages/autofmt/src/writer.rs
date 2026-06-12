@@ -498,6 +498,8 @@ impl<'a> Writer<'a> {
                 }
                 _ => false,
             };
+        let break_before_inline_child =
+            !spreads.is_empty() && matches!(children, [BodyNode::RawExpr(_)]);
 
         let attrs_have_comments = self.attrs_have_comments(attributes, spreads, brace);
 
@@ -510,6 +512,7 @@ impl<'a> Writer<'a> {
         let attrs_fit = attr_len + attr_indent < 80;
         let force_inline = children_inline
             && attrs_fit
+            && !(has_children && !spreads.is_empty())
             && !attrs_have_comments
             && !self.comment_pending
             && trailing_comments.is_none()
@@ -582,7 +585,9 @@ impl<'a> Writer<'a> {
                 self.write_attr_comments(brace, attr_span)?;
 
                 match attr {
-                    AttrType::Attr(attr) => self.write_attribute(attr)?,
+                    AttrType::Attr(attr) => {
+                        self.write_attribute(attr, force_split && !glue_single_attr)?
+                    }
                     AttrType::Spread(attr) => self.write_spread_attribute(&attr.expr)?,
                 }
 
@@ -615,6 +620,8 @@ impl<'a> Writer<'a> {
             for child in children {
                 if force_inline {
                     self.inline_space();
+                } else if break_before_inline_child {
+                    self.hard_break();
                 } else if children_inline {
                     self.space_break();
                 } else {
@@ -720,7 +727,7 @@ impl<'a> Writer<'a> {
             .any(|line| line.trim().starts_with("//"))
     }
 
-    fn write_attribute(&mut self, attr: &Attribute) -> Result {
+    fn write_attribute(&mut self, attr: &Attribute, starts_line: bool) -> Result {
         self.write_attribute_name(&attr.name)?;
 
         if !attr.can_be_shorthand() {
@@ -729,7 +736,8 @@ impl<'a> Writer<'a> {
                 let line_budget = 80usize.saturating_sub(self.depth * 4);
                 if inline_len > line_budget {
                     self.word(":");
-                    self.out.cbox(0);
+                    let value_indent = if starts_line { self.w() } else { 0 };
+                    self.out.cbox(value_indent);
                     self.hard_break();
                     self.write_attribute_if_chain_multiline(if_chain)?;
                     self.out.end();
@@ -1308,7 +1316,14 @@ impl<'a> Writer<'a> {
                         }
                     }
 
-                    // Non-matching line - clear pending and skip
+                    // Non-matching line. If we already found standalone
+                    // comments, keep them attached to the current pretty line
+                    // instead of dropping them due to iterator drift.
+                    if !pending_comments.is_empty() {
+                        break;
+                    }
+
+                    // Otherwise skip the drifting source line.
                     pending_comments.clear();
                     had_empty = false;
                     src_lines.next();
@@ -1481,8 +1496,101 @@ impl<'a> Writer<'a> {
             }
         }
 
+        self.restore_source_indentation_if_linewise_match(&mut out, &source);
+        self.restore_missing_standalone_comments(&mut out, &source);
         self.write_verbatim_multiline(out)?;
         Ok(())
+    }
+
+    fn restore_source_indentation_if_linewise_match(&self, out: &mut String, source: &str) {
+        if !source.trim_start().starts_with('{') {
+            return;
+        }
+
+        let out_lines = out.lines().collect::<Vec<_>>();
+        let source_lines = source.lines().collect::<Vec<_>>();
+        if out_lines.len() < 2 || out_lines.len() != source_lines.len() {
+            return;
+        }
+
+        if !out_lines
+            .iter()
+            .zip(&source_lines)
+            .all(|(out, source)| out.trim() == source.trim())
+        {
+            return;
+        }
+
+        let mut state = LexState::default();
+        for line in &source_lines {
+            if state.is_in_string() {
+                return;
+            }
+            state.advance(line);
+        }
+
+        let Some(base_indent) = source_lines
+            .iter()
+            .skip(1)
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+            .min()
+        else {
+            return;
+        };
+
+        *out = source_lines
+            .iter()
+            .enumerate()
+            .map(|(idx, line)| {
+                if idx == 0 {
+                    line.trim_start().to_string()
+                } else {
+                    line.chars().skip(base_indent).collect::<String>()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    fn restore_missing_standalone_comments(&self, out: &mut String, source: &str) {
+        let missing = source
+            .lines()
+            .map(str::trim)
+            .filter(|line| is_standalone_comment(line) && !out.contains(line))
+            .collect::<Vec<_>>();
+
+        if missing.is_empty() {
+            return;
+        }
+
+        let trimmed_len = out.trim_end().len();
+        if let Some(last_line_start) = out[..trimmed_len].rfind('\n') {
+            let last_line = &out[last_line_start + 1..trimmed_len];
+            if last_line.trim_start().starts_with('}') {
+                let closing_indent = last_line
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .collect::<String>();
+                let mut comments = String::new();
+                for comment in missing {
+                    comments.push_str(&closing_indent);
+                    comments.push_str(self.indent.indent_str());
+                    comments.push_str(comment);
+                    comments.push('\n');
+                }
+                out.insert_str(last_line_start + 1, &comments);
+                return;
+            }
+        }
+
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        for comment in missing {
+            out.push_str(comment);
+            out.push('\n');
+        }
     }
 
     /// Emit a pre-formatted, potentially multi-line chunk of Rust code. The

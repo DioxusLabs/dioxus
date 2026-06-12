@@ -24,7 +24,9 @@ prettyplease = { workspace = true }
 regex = "1.12.3"
 
 [dev-dependencies]
+arbitrary = "1.4.2"
 pretty_assertions = { workspace = true }
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

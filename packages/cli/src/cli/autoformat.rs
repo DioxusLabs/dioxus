@@ -283,3 +283,53 @@ async fn test_auto_fmt() {
 
     fmt.autoformat().await.unwrap();
 }
+
+#[test]
+fn check_mode_does_not_write_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("main.rs");
+    let original = r#"fn main(){rsx!{div{class:"open","content"}}}"#;
+    std::fs::write(&file, original).unwrap();
+
+    let result = autoformat_project(true, false, false, dir.path());
+
+    assert!(
+        result.is_err(),
+        "check mode should report formatting changes"
+    );
+    pretty_assertions::assert_eq!(original, std::fs::read_to_string(file).unwrap());
+}
+
+#[test]
+fn all_code_handles_unicode_string_literals() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("main.rs");
+    std::fs::write(
+        &file,
+        r#"
+fn main() {
+    rsx! {
+        Input {
+            r#type: "password",
+            placeholder: "••••••••",
+        }
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    let result = std::panic::catch_unwind(|| {
+        format_file(
+            &file,
+            IndentOptions::new(IndentType::Spaces, 4, false),
+            true,
+        )
+    });
+
+    assert!(
+        result.is_ok(),
+        "formatting with --all-code should not panic on unicode string literals"
+    );
+    result.unwrap().unwrap();
+}

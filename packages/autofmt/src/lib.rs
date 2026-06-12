@@ -110,6 +110,11 @@ pub fn try_fmt_file(
         let mut formatted = writer.take_output();
         let start = collect_macros::byte_offset(contents, span.start()) + 1;
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
+        let current = &contents[start..end];
+
+        if current.trim() == "{}" && formatted.trim() == "{}" {
+            continue;
+        }
 
         // The writer leaves the cursor at the end of the last ident or comment.
         // Multi-line bodies need a closing newline so the `}` lands back at the
@@ -125,7 +130,7 @@ pub fn try_fmt_file(
 
         end_span = span.end();
 
-        if contents[start..end] == formatted {
+        if current == formatted {
             continue;
         }
 
