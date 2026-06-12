@@ -16,7 +16,7 @@ use std::{
     cell::RefCell,
     rc::Rc,
     sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Wake, Waker},
     time::Duration,
 };
 use tao::{
@@ -33,7 +33,6 @@ pub(crate) struct WebviewInstance {
     pub desktop_context: Rc<DesktopService>,
     wry_bindgen_driver: WryBindgenWebviewDriver,
     wry_bindgen_driver_waker: Waker,
-    wry_bindgen_driver_done: bool,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -480,7 +479,6 @@ impl WebviewInstance {
             desktop_context,
             wry_bindgen_driver,
             wry_bindgen_driver_waker,
-            wry_bindgen_driver_done: false,
             _menu: menu,
             _web_context: web_context,
         };
@@ -493,14 +491,8 @@ impl WebviewInstance {
     }
 
     pub(crate) fn poll_wry_bindgen_driver(&mut self) {
-        if self.wry_bindgen_driver_done {
-            return;
-        }
-
         let mut cx = Context::from_waker(&self.wry_bindgen_driver_waker);
-        if matches!(self.wry_bindgen_driver.poll(&mut cx), Poll::Ready(())) {
-            self.wry_bindgen_driver_done = true;
-        }
+        _ = self.wry_bindgen_driver.poll(&mut cx);
     }
 
     /// Re-point the webview's interpreter at the edit websocket's current location.
