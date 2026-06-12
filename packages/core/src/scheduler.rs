@@ -149,12 +149,6 @@ impl VirtualDom {
         self.dirty_scopes.insert(order)
     }
 
-    /// Check if a scope is queued to rerender
-    pub(crate) fn is_dirty(&self, id: ScopeId) -> bool {
-        self.scope_order(id)
-            .is_some_and(|order| self.dirty_scopes.contains(&order))
-    }
-
     /// Remove a scope from the rerender queue
     pub(crate) fn mark_clean(&mut self, id: ScopeId) -> bool {
         self.scope_order(id)
