@@ -33,7 +33,7 @@ use std::{
 };
 
 const MAX_STEPS: usize = 512;
-const PRIMITIVE_MUTATION_COUNT: u32 = 20;
+const PRIMITIVE_MUTATION_COUNT: u32 = 21;
 
 /// Fold every attribute name into a 16-slot pool so static and dynamic
 /// attributes on the same element collide on the same `(name, namespace)`
@@ -385,14 +385,7 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
         14 => ready_suspense_node_op(&facts, vnode, selector),
         15 if facts.has_suspense() => Op::wake_suspense(facts.select_suspense(selector)),
         15 => ready_suspense_node_op(&facts, vnode, selector),
-        16 => Op::fire_event(
-            selector,
-            if value & 1 == 0 {
-                EventBehaviorSpec::Noop
-            } else {
-                EventBehaviorSpec::DispatchNestedEvent { target: selector }
-            },
-        ),
+        16 => Op::fire_event(selector, biased_event_behavior(selector, value)),
         17 if model.can_grow() => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -416,6 +409,7 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
                 kind: TemplateNodeKind::Dynamic(biased_leaf_dynamic_kind(value)),
             },
         ),
+        20 => Op::RenderDirty,
         _ => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -423,6 +417,21 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
                 kind: TemplateNodeKind::Dynamic(biased_leaf_dynamic_kind(value)),
             },
         ),
+    }
+}
+
+fn biased_event_behavior(selector: u8, value: u8) -> EventBehaviorSpec {
+    match value % 10 {
+        0 => EventBehaviorSpec::Noop,
+        1 => EventBehaviorSpec::DispatchNestedEvent { target: selector },
+        2 => EventBehaviorSpec::ScheduleUpdate,
+        3 => EventBehaviorSpec::ScheduleUpdateAny,
+        4 => EventBehaviorSpec::NeedsUpdate,
+        5 => EventBehaviorSpec::NeedsUpdateAny,
+        6 => EventBehaviorSpec::ContextRoundTrip,
+        7 => EventBehaviorSpec::RootContextRoundTrip,
+        8 => EventBehaviorSpec::QueueEffect,
+        _ => EventBehaviorSpec::SpawnIsomorphic,
     }
 }
 
@@ -1608,8 +1617,8 @@ fn warmup_suspense_then_remove() {
 /// `use_hook`, so this branch is otherwise unreachable.
 fn warmup_portal_target_switch() {
     use dioxus::prelude::*;
-    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
+    use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
     use std::cell::Cell;
 
     thread_local! {
@@ -1649,9 +1658,8 @@ fn warmup_portal_target_switch() {
     dom.render_immediate(&mut writer);
 
     // mode 2: switch back to first target with NO oracle attached for it.
-    // `target_ready` reports both targets writerless, so the retarget arm
-    // runs its removal and mount with `render_to` = None — the
-    // `should_mount` / `if let Some(to) = render_to` false arms fire.
+    // The target router drops mutations for the missing target while the
+    // retarget arm still runs its removal and mount logic.
     let _ = writer.take(first);
     let _ = writer.take(second);
     MODE.with(|c| c.set(2));
@@ -1664,9 +1672,8 @@ fn warmup_portal_target_switch() {
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut writer);
 
-    // Separate dom: switch to a target that never gets a writer so
-    // `target_ready` reports false and the `should_mount` / `if let Some(to)`
-    // false arms of the target-switch branch fire.
+    // Separate dom: switch to a target that never gets a writer so the
+    // missing-writer routing branch fires during a target switch.
     drop(dom);
     let mut dom = VirtualDom::new(app);
     let first = dom.runtime().create_render_target();
@@ -1905,8 +1912,8 @@ fn warmup_attribute_value_to_listener() {
 /// from the list's target, driving the cross-target dynamic-text-root branch.
 fn warmup_portal_dynamic_text_root() {
     use dioxus::prelude::*;
-    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
-    use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
+    use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
     use std::cell::Cell;
 
     thread_local! {
@@ -2387,6 +2394,11 @@ mod tests {
                 ops.push(Op::Rerender);
                 ops
             }),
+            case("scope_event_behaviors", scope_event_behaviors()),
+            case(
+                "hidden_suspense_component_dirty_task",
+                hidden_suspense_component_dirty_task(),
+            ),
         ]
     }
 
@@ -2443,6 +2455,60 @@ mod tests {
                 kind: TemplateNodeKind::Dynamic(kind),
             },
         )
+    }
+
+    fn mount_root_listener() -> Vec<Op> {
+        vec![
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic(Vec::new()),
+                    },
+                },
+            ),
+            Op::dynamic_attrs(
+                0,
+                0,
+                ListEdit::Insert {
+                    index: 0,
+                    item: AttrSpec {
+                        name: 1,
+                        namespace: None,
+                        value: AttrValueSpec::Listener,
+                        volatile: false,
+                    },
+                },
+            ),
+            Op::Rerender,
+        ]
+    }
+
+    fn scope_event_behaviors() -> Vec<Op> {
+        let mut ops = mount_root_listener();
+        ops.extend([
+            Op::fire_event(0, EventBehaviorSpec::ContextRoundTrip),
+            Op::fire_event(0, EventBehaviorSpec::RootContextRoundTrip),
+            Op::fire_event(0, EventBehaviorSpec::QueueEffect),
+            Op::fire_event(0, EventBehaviorSpec::SpawnIsomorphic),
+            Op::fire_event(0, EventBehaviorSpec::ScheduleUpdate),
+            Op::fire_event(0, EventBehaviorSpec::ScheduleUpdateAny),
+            Op::fire_event(0, EventBehaviorSpec::NeedsUpdate),
+            Op::fire_event(0, EventBehaviorSpec::NeedsUpdateAny),
+        ]);
+        ops
+    }
+
+    fn hidden_suspense_component_dirty_task() -> Vec<Op> {
+        vec![
+            set_root_dynamic(),
+            Op::dynamic(0, 0, suspense_kind(SuspenseMode::Pending)),
+            set_vnode_root_dynamic(1, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::RenderDirty,
+        ]
     }
 
     fn non_keyed_append_remove_equal() -> Vec<Op> {

@@ -9,9 +9,7 @@ mod sequence;
 mod snapshot;
 mod vdom_snapshot;
 
-pub use renderer::{
-    EditSummary, EventListenerTarget, MultiTargetWriter, OracleNodeId, RendererOracle,
-};
+pub use renderer::{EditSummary, EventListenerTarget, OracleNodeId, RendererOracle};
 pub use sequence::Sequence;
 pub use snapshot::{SnapshotAttr, SnapshotNode};
 pub use vdom_snapshot::{

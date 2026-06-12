@@ -48,6 +48,12 @@ struct GeneratedPortalProps {
     child: VNodeSpec,
 }
 
+#[derive(Clone, Copy)]
+struct RenderScopeContext;
+
+#[derive(Clone, Copy)]
+struct RenderRootContext;
+
 fn GeneratedPortal(props: GeneratedPortalProps) -> Element {
     // Each generated portal scope allocates its own real render target. We
     // intentionally never register a `WriteMutations` writer for that target
@@ -79,6 +85,7 @@ fn GeneratedComponent(props: GeneratedProps) -> Element {
         props.id,
         &props.suspense_ancestors,
     );
+    exercise_scope_render_apis(!props.suspense_ancestors.is_empty());
     Ok(build_vnode_with_suspense(
         &context,
         &props.node,
@@ -94,6 +101,7 @@ fn OtherGeneratedComponent(props: GeneratedProps) -> Element {
         props.id,
         &props.suspense_ancestors,
     );
+    exercise_scope_render_apis(!props.suspense_ancestors.is_empty());
     Ok(build_vnode_with_suspense(
         &context,
         &props.node,
@@ -294,6 +302,38 @@ fn track_lifecycle(
         move || context.lifecycle.track(role, id, &suspense_ancestors)
     });
     guard.update(role, id, &suspense_ancestors);
+}
+
+fn exercise_scope_render_apis(schedule_task_update: bool) {
+    let scope = dioxus_core::current_scope_id();
+    let _ = format!("{scope:?}");
+    let _ = dioxus_core::generation();
+
+    dioxus_core::provide_context(RenderScopeContext);
+    dioxus_core::provide_context(RenderScopeContext);
+    let _ = dioxus_core::has_context::<RenderScopeContext>();
+    let _ = dioxus_core::try_consume_context::<RenderScopeContext>();
+    let _ = dioxus_core::consume_context::<RenderScopeContext>();
+    let _ = dioxus_core::consume_context_from_scope::<RenderScopeContext>(scope);
+
+    dioxus_core::provide_root_context(RenderRootContext);
+    dioxus_core::provide_root_context(RenderRootContext);
+    let _ = dioxus_core::try_consume_context::<RenderRootContext>();
+    let _ =
+        dioxus_core::consume_context_from_scope::<RenderRootContext>(dioxus_core::ScopeId::ROOT);
+
+    let _ = dioxus_core::schedule_update();
+    let _ = dioxus_core::schedule_update_any();
+    let _: Task = use_hook(move || {
+        dioxus_core::queue_effect(|| {});
+        if schedule_task_update {
+            dioxus_core::spawn_isomorphic(async {
+                dioxus_core::needs_update();
+            })
+        } else {
+            dioxus_core::spawn_isomorphic(async {})
+        }
+    });
 }
 
 fn build_suspense_child_vnode(

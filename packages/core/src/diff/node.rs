@@ -30,11 +30,7 @@ impl<'a> DiffFrame<'a> {
         let new = self.new;
 
         let current_mount = self.mount;
-        let writes_enabled = state.dom.mount_should_render(current_mount)
-            && state
-                .to
-                .as_mut()
-                .is_some_and(|to| to.target_ready(state.dom.mount_target_id(current_mount)));
+        let writes_enabled = state.dom.mount_should_render(current_mount) && state.to.is_some();
         let mut state = state.reborrow_with_writes(writes_enabled);
 
         // If the templates are different, we need to replace the entire template
@@ -632,7 +628,7 @@ impl VNode {
         let template = self.template;
 
         // Initialize the mount information for this vnode if it isn't already mounted
-        if !self.mount.get().mounted() {
+        if self.mounted_id().is_none() {
             state.dom.create_mount(
                 self,
                 render_parent,
@@ -650,13 +646,10 @@ impl VNode {
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
-        let mount = self.mount.get();
-        if !state.dom.mount_should_render(mount)
-            || !state
-                .to
-                .as_mut()
-                .is_some_and(|to| to.target_ready(state.dom.mount_target_id(mount)))
-        {
+        let mount = self
+            .mounted_id()
+            .expect("VNode should have a mount after create_mount");
+        if !state.dom.mount_should_render(mount) {
             state.to = None;
         }
 

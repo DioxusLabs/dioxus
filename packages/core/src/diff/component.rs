@@ -76,7 +76,7 @@ impl VirtualDom {
                 .take()
                 .unwrap();
 
-            if !old.mount.get().mounted() {
+            let Some(old_mount) = old.mounted_id() else {
                 // The previous output was never materialized (it is awaiting
                 // the foreground re-create pass of a resolving suspense
                 // boundary). There is nothing to diff against: adopt the body
@@ -84,18 +84,15 @@ impl VirtualDom {
                 self.scopes[scope.index()].last_rendered_node =
                     Some(LastRenderedNode::new(new_nodes));
                 return;
-            }
+            };
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let target_id = self.runtime.get_state(scope).target_id();
-            let mut render_to = to
-                .filter(|_| self.scope_should_write_now(scope))
-                .and_then(|to| to.target_ready(target_id).then_some(to));
+            let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
             let mut state =
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
-            DiffFrame::new(old.mount.get(), &old, new_real_nodes).diff_into(&mut state);
+            DiffFrame::new(old_mount, &old, new_real_nodes).diff_into(&mut state);
 
             self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
@@ -120,10 +117,7 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let target_id = self.runtime.get_state(scope).target_id();
-            let mut render_to = to
-                .filter(|_| self.scope_should_write_now(scope))
-                .and_then(|to| to.target_ready(target_id).then_some(to));
+            let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
             // Create the node
             let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());

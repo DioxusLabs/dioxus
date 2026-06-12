@@ -80,7 +80,6 @@ pub(crate) struct MountedNodeState {
     /// typed dynamic-slot helpers so callers do not need to interpret the raw
     /// value as either a `ScopeId` or an `ElementId`.
     pub(crate) mounted_dynamic_nodes: Box<[usize]>,
-
 }
 
 impl MountedNodeState {

@@ -3,8 +3,8 @@ use crate::snapshot::{
 };
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
 use dioxus_core::{
-    AttributeValue, Element, ElementId, MultiWriter, RenderTargetId, Template, TemplateAttribute,
-    TemplateNode, VirtualDom, WriteMutations,
+    AttributeValue, Element, ElementId, Template, TemplateAttribute, TemplateNode, VirtualDom,
+    WriteMutations,
 };
 use std::fmt;
 
@@ -719,72 +719,6 @@ impl RendererOracle {
             }),
             NodeKind::Text(text) => Some(SnapshotNode::Text(text.clone())),
         }
-    }
-}
-
-/// Holds one writer per [`RenderTargetId`], for tests that assert on portal
-/// output. Each target's writes land in that target's writer.
-///
-/// Built with [`Self::with_factory`], unknown targets get a fresh writer on
-/// first use; built with [`Self::new`], only explicitly inserted targets have
-/// a writer and everything else is skipped by the diff.
-pub struct MultiTargetWriter<W> {
-    targets: std::collections::BTreeMap<RenderTargetId, W>,
-    factory: Option<fn() -> W>,
-}
-
-impl<W: WriteMutations> MultiTargetWriter<W> {
-    pub fn new() -> Self {
-        Self {
-            targets: Default::default(),
-            factory: None,
-        }
-    }
-
-    pub fn with_factory(factory: fn() -> W) -> Self {
-        Self {
-            targets: Default::default(),
-            factory: Some(factory),
-        }
-    }
-
-    pub fn insert(&mut self, id: RenderTargetId, writer: W) {
-        self.targets.insert(id, writer);
-    }
-
-    pub fn take(&mut self, id: RenderTargetId) -> Option<W> {
-        self.targets.remove(&id)
-    }
-
-    pub fn get(&self, id: RenderTargetId) -> Option<&W> {
-        self.targets.get(&id)
-    }
-
-    pub fn targets(&self) -> impl Iterator<Item = (RenderTargetId, &W)> {
-        self.targets.iter().map(|(id, w)| (*id, w))
-    }
-
-    pub fn into_targets(self) -> std::collections::BTreeMap<RenderTargetId, W> {
-        self.targets
-    }
-}
-
-impl<W: WriteMutations> Default for MultiTargetWriter<W> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<W: WriteMutations> MultiWriter for MultiTargetWriter<W> {
-    type Writer = W;
-
-    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut W> {
-        if let Some(factory) = self.factory
-            && !self.targets.contains_key(&id)
-        {
-            self.targets.insert(id, factory());
-        }
-        self.targets.get_mut(&id)
     }
 }
 

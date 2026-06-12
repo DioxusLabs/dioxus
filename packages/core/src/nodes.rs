@@ -207,16 +207,19 @@ impl VNode {
             .map(|id| &self.dynamic_nodes[id])
     }
 
+    /// Get the mount id for this node if it has been mounted.
+    pub(crate) fn mounted_id(&self) -> Option<MountId> {
+        let mount = self.mount.get();
+        mount.mounted().then_some(mount)
+    }
+
     /// Get the mounted id for a dynamic node index
     pub fn mounted_dynamic_node(
         &self,
         dynamic_node_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mount.get();
-        if !mount.mounted() {
-            return None;
-        }
+        let mount = self.mounted_id()?;
 
         match &self.dynamic_nodes[dynamic_node_idx] {
             DynamicNode::Text(_) => {
@@ -228,10 +231,7 @@ impl VNode {
 
     /// Get the mounted id for a root node index
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        let mount = self.mount.get();
-        if !mount.mounted() {
-            return None;
-        }
+        let mount = self.mounted_id()?;
 
         Some(dom.get_mounted_root_node(mount, root_idx))
     }
@@ -242,10 +242,7 @@ impl VNode {
         dynamic_attribute_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mount.get();
-        if !mount.mounted() {
-            return None;
-        }
+        let mount = self.mounted_id()?;
 
         Some(dom.get_mounted_dyn_attr(mount, dynamic_attribute_idx))
     }
@@ -768,10 +765,7 @@ impl VComponent {
         vnode: &VNode,
         dom: &VirtualDom,
     ) -> Option<ScopeId> {
-        let mount = vnode.mount.get();
-        if !mount.mounted() {
-            return None;
-        }
+        let mount = vnode.mounted_id()?;
 
         Some(dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index))
     }
@@ -787,10 +781,7 @@ impl VComponent {
         vnode: &VNode,
         dom: &'a VirtualDom,
     ) -> Option<&'a ScopeState> {
-        let mount = vnode.mount.get();
-        if !mount.mounted() {
-            return None;
-        }
+        let mount = vnode.mounted_id()?;
 
         let scope_id = dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index);
 

@@ -330,11 +330,7 @@ impl RenderDriver for SuspenseDriver {
         _parent_context: Option<DiffContext<'_>>,
         mut to: Option<&mut dyn WriteMutations>,
     ) {
-        let target_id = dom.runtime.get_state(scope_id).target_id();
-        let mut render_to = to
-            .as_mut()
-            .filter(|_| dom.scope_should_write_now(scope_id))
-            .and_then(|to| to.target_ready(target_id).then_some(to));
+        let mut render_to = to.as_mut().filter(|_| dom.scope_should_write_now(scope_id));
         suspense_diff(self, scope_id, dom, render_to.as_mut())
     }
 
@@ -420,7 +416,7 @@ fn suspense_create<M: WriteMutations>(
             nodes_created
         } else {
             // Otherwise just render the children in the real dom
-            debug_assert!(children.mount.get().mounted());
+            debug_assert!(children.mounted_id().is_some());
             let nodes_created = suspense_context
                 .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
             dom.scopes[scope_id.index()].last_rendered_node = Some(children);
@@ -497,8 +493,8 @@ impl SuspenseBoundaryProps {
 /// Diff a suspense boundary scope against its current children/fallback
 /// props.
 ///
-/// `to` is the pre-gated writer: [`SuspenseDriver::diff`] applies the
-/// scope/target write gate before calling in.
+/// `to` is the pre-gated writer: [`SuspenseDriver::diff`] applies the scope
+/// write gate before calling in.
 fn suspense_diff<M: WriteMutations>(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
@@ -733,10 +729,9 @@ fn mark_suspense_resolved(
 }
 
 fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom, vnode: &VNode) {
-    let mount = vnode.mount.get();
-    if !mount.mounted() {
+    let Some(mount) = vnode.mounted_id() else {
         return;
-    }
+    };
     dom.set_mount_mode(mount, RenderMode::Foreground);
 
     for (idx, dynamic) in vnode.dynamic_nodes.iter().enumerate() {

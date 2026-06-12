@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom};
-use dioxus_renderer_oracle::MultiTargetWriter;
+use dioxus_core::{
+    ElementId, MultiTargetWriter, MultiWriter, Mutation, Mutations, Portal, RenderTargetId,
+    Runtime, VirtualDom,
+};
 use std::{
     any::Any,
     cell::Cell,
@@ -13,21 +15,44 @@ use std::{
 /// the diff lazily get a fresh `Mutations` collector; untouched targets are
 /// dropped so tests can assert absence with `get(..) == None`.
 fn rebuild_to_targeted_vec(dom: &mut VirtualDom) -> BTreeMap<RenderTargetId, Mutations> {
-    let mut writer = MultiTargetWriter::<Mutations>::with_factory(Mutations::default);
+    let mut writer = CollectingTargetWriter::new();
     dom.rebuild(&mut writer);
-    drain_targets(writer)
+    drain_targets(writer.into_targets())
 }
 
 /// [`rebuild_to_targeted_vec`], but for one `render_immediate` pass.
 fn render_immediate_to_targeted_vec(dom: &mut VirtualDom) -> BTreeMap<RenderTargetId, Mutations> {
-    let mut writer = MultiTargetWriter::<Mutations>::with_factory(Mutations::default);
+    let mut writer = CollectingTargetWriter::new();
     dom.render_immediate(&mut writer);
-    drain_targets(writer)
+    drain_targets(writer.into_targets())
 }
 
-fn drain_targets(writer: MultiTargetWriter<Mutations>) -> BTreeMap<RenderTargetId, Mutations> {
-    writer
-        .into_targets()
+struct CollectingTargetWriter {
+    targets: BTreeMap<RenderTargetId, Mutations>,
+}
+
+impl CollectingTargetWriter {
+    fn new() -> Self {
+        Self { targets: BTreeMap::new() }
+    }
+
+    fn into_targets(self) -> BTreeMap<RenderTargetId, Mutations> {
+        self.targets
+    }
+}
+
+impl MultiWriter for CollectingTargetWriter {
+    type Writer = Mutations;
+
+    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Mutations> {
+        Some(self.targets.entry(id).or_default())
+    }
+}
+
+fn drain_targets(
+    targets: BTreeMap<RenderTargetId, Mutations>,
+) -> BTreeMap<RenderTargetId, Mutations> {
+    targets
         .into_iter()
         .filter(|(_, m)| !m.edits.is_empty())
         .collect()
@@ -337,7 +362,7 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
 }
 
 #[test]
-fn writerless_targets_do_not_mount_effects() {
+fn writerless_targets_drop_writes_but_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
 
     let target_slot = TargetSlot::new();
@@ -345,13 +370,14 @@ fn writerless_targets_do_not_mount_effects() {
     let target = dom.runtime().create_render_target();
     target_slot.set(target);
 
-    // A plain writer serves only the root target, so the portal's target has
-    // no writer: its content keeps logical state alive without mounting.
+    // A plain writer serves only the root target, so the portal target's
+    // mutations are dropped by the target router. The portal still mounts
+    // logically and runs effects.
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.process_events();
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
-    assert_eq!(EFFECTS.load(Ordering::SeqCst), 0);
+    assert_eq!(EFFECTS.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -431,7 +457,7 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
 }
 
 #[test]
-fn detached_targets_do_not_write_or_mount_effects() {
+fn detached_targets_drop_writes_but_mount_effects() {
     EFFECTS.store(0, Ordering::SeqCst);
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
@@ -441,13 +467,13 @@ fn detached_targets_do_not_write_or_mount_effects() {
     let target = dom.runtime().create_render_target();
     target_slot.set(target);
 
-    // The target's writer is attached for the rebuild, then gone for the
-    // next pass — the host stopped serving it, like a closed desktop window.
+    // The target's writer is attached for the rebuild, then gone for the next
+    // pass. Targeted mutations are dropped, but logical mounting still runs.
     let mut writer = MultiTargetWriter::<Mutations>::new();
     writer.insert(RenderTargetId::ROOT, Mutations::default());
     writer.insert(target, Mutations::default());
     dom.rebuild(&mut writer);
-    let edits = drain_targets(writer);
+    let edits = drain_targets(writer.into_targets());
     let show_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
@@ -456,11 +482,11 @@ fn detached_targets_do_not_write_or_mount_effects() {
     let mut writer = MultiTargetWriter::<Mutations>::new();
     writer.insert(RenderTargetId::ROOT, Mutations::default());
     dom.render_immediate(&mut writer);
-    let edits = drain_targets(writer);
+    let edits = drain_targets(writer.into_targets());
 
     assert!(!edits.contains_key(&target));
     dom.process_events();
-    assert_eq!(EFFECTS.load(Ordering::SeqCst), 0);
+    assert!(EFFECTS.load(Ordering::SeqCst) > 0);
 }
 
 #[test]

@@ -23,6 +23,7 @@ pub(crate) enum Op {
         behavior: EventBehaviorSpec,
     },
     Mutate(ModelEdit),
+    RenderDirty,
 }
 
 impl Op {
@@ -81,6 +82,14 @@ impl Op {
 pub(crate) enum EventBehaviorSpec {
     Noop,
     DispatchNestedEvent { target: u8 },
+    ScheduleUpdate,
+    ScheduleUpdateAny,
+    NeedsUpdate,
+    NeedsUpdateAny,
+    ContextRoundTrip,
+    RootContextRoundTrip,
+    QueueEffect,
+    SpawnIsomorphic,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Mutate)]
@@ -396,14 +405,13 @@ impl Future for SuspenseReadyFuture {
 }
 
 pub(crate) fn apply_strategy_op_to_model(model: &mut Model, op: &Op) {
-    if matches!(op, Op::Rerender | Op::FireEvent { .. }) {
+    if matches!(op, Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty) {
         return;
     }
 
     let can_grow = model.can_grow();
     match op {
-        Op::Rerender => {}
-        Op::FireEvent { .. } => {}
+        Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty => {}
         Op::WakeSuspense { suspense } => {
             if let Some(key) = model.selected_ready_suspense_key(*suspense) {
                 model.wake_ready_suspense(key);

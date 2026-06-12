@@ -1,8 +1,8 @@
 use std::cell::Cell;
 
 use dioxus::prelude::*;
-use dioxus_core::{Portal, RenderTargetId, VirtualDom};
-use dioxus_renderer_oracle::{MultiTargetWriter, RendererOracle};
+use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, VirtualDom};
+use dioxus_renderer_oracle::RendererOracle;
 
 /// Reordering a keyed list whose entries are `Portal`s exercises the
 /// cross-render-target paths in `push_all_root_nodes`: the keyed-middle

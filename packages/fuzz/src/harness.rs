@@ -22,6 +22,12 @@ pub(crate) struct Harness {
     strict_lifecycle_errors: bool,
 }
 
+#[derive(Clone, Copy)]
+struct EventScopeContext;
+
+#[derive(Clone, Copy)]
+struct EventRootContext;
+
 impl Harness {
     pub(crate) fn fresh() -> Self {
         Self::fresh_with_strict_options(cfg!(fuzzing), cfg!(fuzzing))
@@ -542,6 +548,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
         Op::FireEvent { target, behavior } => {
             fire_selected_event_listener(state, *target, *behavior)
         }
+        Op::RenderDirty => render_dirty_and_assert(state),
         Op::Mutate(_) => {
             state.context.apply_to_model(op);
             state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
@@ -603,6 +610,40 @@ fn fire_selected_event_listener(
                 nested_runtime.handle_event(target.name, event, target.id)
             });
         }
+        EventBehaviorSpec::ScheduleUpdate => {
+            let update = dioxus_core::schedule_update();
+            update();
+        }
+        EventBehaviorSpec::ScheduleUpdateAny => {
+            let id = dioxus_core::current_scope_id();
+            let update_any = dioxus_core::schedule_update_any();
+            update_any(id);
+        }
+        EventBehaviorSpec::NeedsUpdate => dioxus_core::needs_update(),
+        EventBehaviorSpec::NeedsUpdateAny => {
+            let id = dioxus_core::current_scope_id();
+            dioxus_core::needs_update_any(id);
+        }
+        EventBehaviorSpec::ContextRoundTrip => {
+            let id = dioxus_core::current_scope_id();
+            dioxus_core::provide_context(EventScopeContext);
+            dioxus_core::provide_context(EventScopeContext);
+            let _ = dioxus_core::has_context::<EventScopeContext>();
+            let _ = dioxus_core::try_consume_context::<EventScopeContext>();
+            let _ = dioxus_core::consume_context::<EventScopeContext>();
+            let _ = dioxus_core::consume_context_from_scope::<EventScopeContext>(id);
+        }
+        EventBehaviorSpec::RootContextRoundTrip => {
+            dioxus_core::provide_root_context(EventRootContext);
+            dioxus_core::provide_root_context(EventRootContext);
+            let _ = dioxus_core::try_consume_context::<EventRootContext>();
+            let _ = dioxus_core::consume_context::<EventRootContext>();
+            let _ = dioxus_core::consume_context_from_scope::<EventRootContext>(ScopeId::ROOT);
+        }
+        EventBehaviorSpec::QueueEffect => dioxus_core::queue_effect(|| {}),
+        EventBehaviorSpec::SpawnIsomorphic => {
+            let _ = dioxus_core::spawn_isomorphic(async {});
+        }
     });
 
     events.with_listener_driver(behavior, listener_driver, || {
@@ -613,7 +654,23 @@ fn fire_selected_event_listener(
         runtime.handle_event(target.name, event, target.id);
     });
 
-    Ok(())
+    if event_behavior_queues_work(behavior) {
+        render_dirty_and_assert(state)
+    } else {
+        Ok(())
+    }
+}
+
+fn event_behavior_queues_work(behavior: EventBehaviorSpec) -> bool {
+    matches!(
+        behavior,
+        EventBehaviorSpec::ScheduleUpdate
+            | EventBehaviorSpec::ScheduleUpdateAny
+            | EventBehaviorSpec::NeedsUpdate
+            | EventBehaviorSpec::NeedsUpdateAny
+            | EventBehaviorSpec::QueueEffect
+            | EventBehaviorSpec::SpawnIsomorphic
+    )
 }
 
 fn render_once(state: &mut Harness, assert_lifecycle_matches_fresh: bool) -> Result<(), String> {

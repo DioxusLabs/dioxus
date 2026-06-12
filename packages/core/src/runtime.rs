@@ -200,11 +200,9 @@ fn MyComponent() -> Element {{
 
     /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
     ///
-    /// Content only materializes into the target while the host's
-    /// [`MultiWriter`](crate::MultiWriter) serves a writer for it. While no
-    /// writer is attached, scopes rendered into the target keep their logical
-    /// state alive without allocating renderer elements or running mount
-    /// effects.
+    /// Renderer mutations for the target are routed through the host's
+    /// [`MultiWriter`](crate::MultiWriter). If the host does not serve a
+    /// writer for the target, those mutations are skipped.
     pub fn create_render_target(&self) -> RenderTargetId {
         let mut targets = self.render_targets.borrow_mut();
         RenderTargetId::new(targets.insert(RenderTargetState::new()))

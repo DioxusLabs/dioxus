@@ -18,9 +18,7 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{
-    AttributeValue, ElementId, MultiWriter, RenderTargetId, Template, WriteMutations,
-};
+use dioxus_core::{AttributeValue, ElementId, Template, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
@@ -130,29 +128,6 @@ impl WriteMutations for WryQueue {
 
     fn push_root(&mut self, id: ElementId) {
         self.with_mutation_state(|state| state.push_root(id));
-    }
-}
-
-/// Routes one shared-VirtualDom render pass across the per-window
-/// [`WryQueue`]s: each render target's writes land in that window's queue.
-/// Targets without a window (e.g. a `Window` whose webview is still being
-/// created) have no writer, so the diff skips their writes and the component
-/// re-renders once the webview attaches.
-pub(crate) struct SharedDomWriter {
-    queues: std::collections::BTreeMap<RenderTargetId, WryQueue>,
-}
-
-impl SharedDomWriter {
-    pub(crate) fn new(queues: std::collections::BTreeMap<RenderTargetId, WryQueue>) -> Self {
-        Self { queues }
-    }
-}
-
-impl MultiWriter for SharedDomWriter {
-    type Writer = WryQueue;
-
-    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut WryQueue> {
-        self.queues.get_mut(&id)
     }
 }
 

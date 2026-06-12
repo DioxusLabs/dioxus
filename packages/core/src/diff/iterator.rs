@@ -453,11 +453,7 @@ fn has_shared_key(old: &[VNode], new: &[VNode]) -> bool {
 }
 
 fn collect_mounts(nodes: &[VNode]) -> Vec<MountId> {
-    nodes
-        .iter()
-        .map(|v| v.mount.get())
-        .filter(|m| m.mounted())
-        .collect()
+    nodes.iter().filter_map(VNode::mounted_id).collect()
 }
 
 fn collect_splice_mounts(
