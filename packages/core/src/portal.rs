@@ -95,12 +95,41 @@ impl PortalPropsBuilder<((RenderTargetId,), (Element,))> {
     }
 }
 
-/// Render children into another render target while keeping logical ancestry.
+/// Render children into another renderer target while keeping their logical parent.
 ///
-/// This function exists as a unique fn-pointer identity that `rsx!` uses when
-/// constructing a `VComponent`; [`PortalProps::into_vcomponent`] attaches a
-/// [`PortalDriver`] that owns the scope's rendered output, so this body never
-/// runs.
+/// ## Details
+///
+/// A portal changes where renderer mutations for its children are written. It does not change
+/// component ownership, context, or event propagation. Children rendered through a portal can still
+/// consume context from their logical ancestors, and events from the portal target bubble through
+/// the same Dioxus component tree.
+///
+/// Each render target has its own [`ElementId`] arena. Hosts create targets with
+/// [`Runtime::create_render_target`] and serve them with a [`MultiWriter`]. If the host is not
+/// currently serving the target, the portal subtree keeps its logical state alive, but it will not
+/// allocate renderer elements or run mount effects until a writer is attached.
+///
+/// ## Example
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn App(target: RenderTargetId) -> Element {
+///     rsx! {
+///         main { "Main view" }
+///         Portal {
+///             target,
+///             aside { "Rendered in another target" }
+///         }
+///     }
+/// }
+/// ```
+///
+/// ## Usage
+///
+/// Use `Portal` when a renderer exposes more than one target, such as a desktop child window,
+/// overlay root, or another renderer-owned mount point. For ordinary layout within the current
+/// target, render children directly instead.
 #[allow(non_snake_case)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub fn Portal(__props: PortalProps) -> Element {

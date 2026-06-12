@@ -239,10 +239,6 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 ///     }
 /// }
 /// ```
-/// This function exists as a unique fn-pointer identity that `rsx!` uses when
-/// constructing a `VComponent`; `SuspenseBoundaryPropsWithOwner::into_vcomponent`
-/// attaches a [`SuspenseDriver`] that owns the scope's rendered output, so this
-/// body never runs.
 #[allow(non_snake_case)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {

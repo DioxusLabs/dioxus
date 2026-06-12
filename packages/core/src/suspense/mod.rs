@@ -102,7 +102,7 @@ impl SuspenseContext {
         self.inner.id.set(scope);
     }
 
-    /// Get the suspense boundary's hidden primary branch as a vnode.
+    /// Get the suspense boundary's suspended nodes
     pub fn suspended_nodes(&self) -> Option<VNode> {
         self.suspended_branch().map(|branch| branch.root())
     }
