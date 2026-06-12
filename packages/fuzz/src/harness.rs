@@ -18,8 +18,7 @@ use std::{
     future::Future,
     panic,
     rc::Rc,
-    sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 type TargetSnapshots = Vec<SnapshotNode>;
@@ -39,12 +38,6 @@ struct EventScopeContext;
 struct EventRootContext;
 
 struct AnyRootContext;
-
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
 
 impl Harness {
     pub(crate) fn fresh() -> Self {
@@ -788,8 +781,7 @@ fn render_suspense_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
 }
 
 fn poll_render_suspense_immediate(dom: &mut VirtualDom) -> Result<(), String> {
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut cx = Context::from_waker(&waker);
+    let mut cx = Context::from_waker(Waker::noop());
     let mut future = std::pin::pin!(dom.render_suspense_immediate());
     for _ in 0..4096 {
         match Future::poll(future.as_mut(), &mut cx) {
@@ -890,7 +882,19 @@ fn lifecycle_role_is_strict(key: LifecycleKey) -> bool {
 fn expected_model_lifecycle_snapshot(context: &HarnessContext) -> LifecycleSnapshot {
     let model = context.read_model();
     let mut out = LifecycleSnapshot::new();
-    collect_vnode_lifecycle(&model.root, &mut out);
+    model.root.visit(&mut |visit, _| match visit {
+        ModelVisit::Dynamic(DynamicSpec::ComponentA(component)) => {
+            add_lifecycle_key(&mut out, LifecycleRole::ComponentA, component.id);
+        }
+        ModelVisit::Dynamic(DynamicSpec::ComponentB(component)) => {
+            add_lifecycle_key(&mut out, LifecycleRole::ComponentB, component.id);
+        }
+        ModelVisit::Dynamic(DynamicSpec::Suspense(spec)) => {
+            add_lifecycle_key(&mut out, LifecycleRole::SuspenseBoundary, spec.id);
+            add_lifecycle_key(&mut out, LifecycleRole::SuspenseChild, spec.id);
+        }
+        _ => {}
+    });
     out
 }
 
@@ -905,7 +909,11 @@ fn retaining_suspense_ids(
     // Core suspense can retain previous child state while a reused boundary
     // moves between fallback and resolved output, even if the model suspense is
     // currently resolved. Bound retained extras by current boundary ancestry.
-    collect_current_suspense_ids(&current_model.root, &mut out);
+    current_model.root.visit(&mut |visit, _| {
+        if let ModelVisit::Dynamic(DynamicSpec::Suspense(spec)) = visit {
+            out.insert(spec.id);
+        }
+    });
 
     for (key, count) in incremental {
         if key.role != LifecycleRole::SuspenseChild {
@@ -922,198 +930,32 @@ fn retaining_suspense_ids(
     out
 }
 
+/// Lifecycle keys for generated components that live under one of the given
+/// suspense boundary ids, in the current model.
 fn model_lifecycle_with_suspense_ancestor_snapshot(
     context: &HarnessContext,
     suspense_ids: &BTreeSet<u64>,
 ) -> LifecycleSnapshot {
     let model = context.read_model();
     let mut out = LifecycleSnapshot::new();
-    collect_model_lifecycle_with_suspense_ancestor(&model.root, false, suspense_ids, &mut out);
+    model.root.visit(&mut |visit, suspense_ancestors| {
+        let (role, id) = match visit {
+            ModelVisit::Dynamic(DynamicSpec::ComponentA(component)) => {
+                (LifecycleRole::ComponentA, component.id)
+            }
+            ModelVisit::Dynamic(DynamicSpec::ComponentB(component)) => {
+                (LifecycleRole::ComponentB, component.id)
+            }
+            _ => return,
+        };
+        if suspense_ancestors
+            .iter()
+            .any(|ancestor| suspense_ids.contains(ancestor))
+        {
+            add_lifecycle_key(&mut out, role, id);
+        }
+    });
     out
-}
-
-fn collect_current_suspense_ids(vnode: &VNodeSpec, out: &mut BTreeSet<u64>) {
-    collect_template_current_suspense_ids(&vnode.template.roots, out);
-}
-
-fn collect_template_current_suspense_ids(nodes: &[TemplateNodeSpec], out: &mut BTreeSet<u64>) {
-    for node in nodes {
-        match node {
-            TemplateNodeSpec::Element { children, .. } => {
-                collect_template_current_suspense_ids(children, out);
-            }
-            TemplateNodeSpec::Text(_) => {}
-            TemplateNodeSpec::Dynamic(dynamic) => {
-                collect_dynamic_current_suspense_ids(dynamic, out)
-            }
-        }
-    }
-}
-
-fn collect_dynamic_current_suspense_ids(dynamic: &DynamicSpec, out: &mut BTreeSet<u64>) {
-    match dynamic {
-        DynamicSpec::Fragment(nodes) => {
-            for node in nodes {
-                collect_current_suspense_ids(node, out);
-            }
-        }
-        DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component) => {
-            collect_current_suspense_ids(&component.child, out);
-        }
-        DynamicSpec::Suspense(spec) => {
-            out.insert(spec.id);
-            collect_current_suspense_ids(&spec.child, out);
-        }
-        DynamicSpec::Portal(child) => {
-            collect_current_suspense_ids(child, out);
-        }
-        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
-    }
-}
-
-fn collect_model_lifecycle_with_suspense_ancestor(
-    vnode: &VNodeSpec,
-    within_retaining_suspense: bool,
-    suspense_ids: &BTreeSet<u64>,
-    out: &mut LifecycleSnapshot,
-) {
-    collect_model_template_lifecycle_with_suspense_ancestor(
-        &vnode.template.roots,
-        within_retaining_suspense,
-        suspense_ids,
-        out,
-    );
-}
-
-fn collect_model_template_lifecycle_with_suspense_ancestor(
-    nodes: &[TemplateNodeSpec],
-    within_retaining_suspense: bool,
-    suspense_ids: &BTreeSet<u64>,
-    out: &mut LifecycleSnapshot,
-) {
-    for node in nodes {
-        match node {
-            TemplateNodeSpec::Element { children, .. } => {
-                collect_model_template_lifecycle_with_suspense_ancestor(
-                    children,
-                    within_retaining_suspense,
-                    suspense_ids,
-                    out,
-                );
-            }
-            TemplateNodeSpec::Text(_) => {}
-            TemplateNodeSpec::Dynamic(dynamic) => {
-                collect_model_dynamic_lifecycle_with_suspense_ancestor(
-                    dynamic,
-                    within_retaining_suspense,
-                    suspense_ids,
-                    out,
-                );
-            }
-        }
-    }
-}
-
-fn collect_model_dynamic_lifecycle_with_suspense_ancestor(
-    dynamic: &DynamicSpec,
-    within_retaining_suspense: bool,
-    suspense_ids: &BTreeSet<u64>,
-    out: &mut LifecycleSnapshot,
-) {
-    match dynamic {
-        DynamicSpec::Fragment(nodes) => {
-            for node in nodes {
-                collect_model_lifecycle_with_suspense_ancestor(
-                    node,
-                    within_retaining_suspense,
-                    suspense_ids,
-                    out,
-                );
-            }
-        }
-        DynamicSpec::ComponentA(component) => {
-            if within_retaining_suspense {
-                add_lifecycle_key(out, LifecycleRole::ComponentA, component.id);
-            }
-            collect_model_lifecycle_with_suspense_ancestor(
-                &component.child,
-                within_retaining_suspense,
-                suspense_ids,
-                out,
-            );
-        }
-        DynamicSpec::ComponentB(component) => {
-            if within_retaining_suspense {
-                add_lifecycle_key(out, LifecycleRole::ComponentB, component.id);
-            }
-            collect_model_lifecycle_with_suspense_ancestor(
-                &component.child,
-                within_retaining_suspense,
-                suspense_ids,
-                out,
-            );
-        }
-        DynamicSpec::Suspense(spec) => {
-            collect_model_lifecycle_with_suspense_ancestor(
-                &spec.child,
-                within_retaining_suspense || suspense_ids.contains(&spec.id),
-                suspense_ids,
-                out,
-            );
-        }
-        DynamicSpec::Portal(child) => {
-            collect_model_lifecycle_with_suspense_ancestor(
-                child,
-                within_retaining_suspense,
-                suspense_ids,
-                out,
-            );
-        }
-        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
-    }
-}
-
-fn collect_vnode_lifecycle(vnode: &VNodeSpec, out: &mut LifecycleSnapshot) {
-    collect_template_lifecycle(&vnode.template.roots, out);
-}
-
-fn collect_template_lifecycle(nodes: &[TemplateNodeSpec], out: &mut LifecycleSnapshot) {
-    for node in nodes {
-        match node {
-            TemplateNodeSpec::Element { children, .. } => {
-                collect_template_lifecycle(children, out);
-            }
-            TemplateNodeSpec::Text(_) => {}
-            TemplateNodeSpec::Dynamic(dynamic) => collect_dynamic_lifecycle(dynamic, out),
-        }
-    }
-}
-
-fn collect_dynamic_lifecycle(dynamic: &DynamicSpec, out: &mut LifecycleSnapshot) {
-    match dynamic {
-        DynamicSpec::Fragment(nodes) => {
-            for node in nodes {
-                collect_vnode_lifecycle(node, out);
-            }
-        }
-        DynamicSpec::ComponentA(component) => {
-            add_lifecycle_key(out, LifecycleRole::ComponentA, component.id);
-            collect_vnode_lifecycle(&component.child, out);
-        }
-        DynamicSpec::ComponentB(component) => {
-            add_lifecycle_key(out, LifecycleRole::ComponentB, component.id);
-            collect_vnode_lifecycle(&component.child, out);
-        }
-        DynamicSpec::Suspense(spec) => {
-            add_lifecycle_key(out, LifecycleRole::SuspenseBoundary, spec.id);
-            add_lifecycle_key(out, LifecycleRole::SuspenseChild, spec.id);
-            collect_vnode_lifecycle(&spec.child, out);
-        }
-        DynamicSpec::Portal(child) => {
-            collect_vnode_lifecycle(child, out);
-        }
-        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
-    }
 }
 
 fn add_lifecycle_key(out: &mut LifecycleSnapshot, role: LifecycleRole, id: u64) {

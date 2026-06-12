@@ -60,12 +60,32 @@ cargo +nightly fuzz coverage vdom_ops
 
 `fuzz/fuzz_targets/vdom_ops.rs` decodes the raw libFuzzer bytes as a postcard
 encoded `FuzzCase`. Invalid raw inputs are ignored by the target. The custom
-`fuzz_mutator!` hook decodes the current case, falls back to a valid iterator
-branch-sweep seed when decoding fails, calls this crate's structured mutator,
-and writes the encoded case back to libFuzzer's input buffer.
+`fuzz_mutator!` hook decodes the current case (starting from an empty case
+when decoding fails), calls this crate's structured mutator, and writes the
+encoded case back to libFuzzer's input buffer.
+
+The structured mutator (`src/mutator.rs`) combines field-level mutations of
+encoded ops with a table of model-aware op strategies: it replays the ops
+before a splice point, summarizes the resulting model, and inserts op
+sequences that target vnodes, fragments, attribute slots, and suspense
+boundaries that actually exist at that point. Strategies whose target
+structure is missing emit their own prerequisite ops first.
 
 Cases are capped at the crate-internal step limit so mutated corpus inputs
 cannot produce unbounded replay work.
+
+Crate layout:
+
+- `src/case.rs` — encoded op stream, replay, failure reporting
+- `src/ops.rs` — the operation grammar and how ops apply to the model
+- `src/model.rs` — the spec tree the generated app renders from
+- `src/mutator.rs` — structure-aware mutation (the op strategy table)
+- `src/reducer.rs` — structured shrinking of failing cases
+- `src/harness.rs` — incremental-vs-fresh renderer oracle and lifecycle checks
+- `src/vdom.rs` — compiles model specs into real `VNode`s/`Template`s
+- `src/warmup.rs` — one-shot scenarios for paths replay cannot reach
+- `src/targeted.rs` — hand-built recipes replayed as tests and exportable as
+  corpus seeds
 
 ## Failures
 

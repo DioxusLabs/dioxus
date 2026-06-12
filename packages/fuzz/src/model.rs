@@ -4,7 +4,10 @@
 use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
 use serde::{Deserialize, Serialize};
 
-use crate::ATTR_NAME_POOL_MASK;
+/// Fold every attribute name into a 16-slot pool so static and dynamic
+/// attributes on the same element collide on the same `(name, namespace)`
+/// key often enough for `remove_attribute_or_write_fallback` to fire.
+pub(crate) const ATTR_NAME_POOL_MASK: u8 = 0x0F;
 
 pub(crate) const MAX_ROOTS: usize = 8;
 pub(crate) const MAX_CHILDREN: usize = 8;
@@ -33,9 +36,8 @@ impl Model {
 
     pub(crate) fn selected_vnode_mut(&mut self, selector: u8) -> &mut VNodeSpec {
         let count = self.root.vnode_count();
-        let mut index = selector as usize % count;
         self.root
-            .nth_vnode_mut(&mut index)
+            .nth_vnode_mut(selector as usize % count)
             .expect("vnode selector should resolve into the root tree")
     }
 
@@ -50,12 +52,7 @@ impl Model {
     }
 
     pub(crate) fn set_selected_suspense_mode(&mut self, selector: u8, mode: SuspenseMode) {
-        let count = self.root.suspense_count();
-        if count == 0 {
-            return;
-        }
-        let mut index = selector as usize % count;
-        if let Some(suspense) = self.root.nth_suspense_mut(&mut index) {
+        if let Some(suspense) = self.selected_suspense_mut(selector) {
             suspense.set_mode(mode);
         }
     }
@@ -65,14 +62,17 @@ impl Model {
         selector: u8,
         mutation: WakeMutationSpec,
     ) {
-        let count = self.root.suspense_count();
-        if count == 0 {
-            return;
-        }
-        let mut index = selector as usize % count;
-        if let Some(suspense) = self.root.nth_suspense_mut(&mut index) {
+        if let Some(suspense) = self.selected_suspense_mut(selector) {
             suspense.set_wake_mutation(mutation);
         }
+    }
+
+    fn selected_suspense_mut(&mut self, selector: u8) -> Option<&mut SuspenseSpec> {
+        let count = self.root.suspense_count();
+        if count == 0 {
+            return None;
+        }
+        self.root.nth_suspense_mut(selector as usize % count)
     }
 
     pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
@@ -117,43 +117,310 @@ impl VNodeSpec {
         self.template.normalize_in_place();
     }
 
-    pub(crate) fn vnode_count(&self) -> usize {
-        1 + self.template.vnode_count()
+    /// Walk this vnode tree depth-first in document order, reporting every
+    /// vnode and dynamic slot together with the ids of the suspense
+    /// boundaries that enclose it.
+    ///
+    /// This is the single traversal that all whole-model queries are built
+    /// on, so every consumer agrees on ordering and numbering.
+    pub(crate) fn visit<'a>(&'a self, f: &mut impl FnMut(ModelVisit<'a>, &[u64])) {
+        let mut suspense_ancestors = Vec::new();
+        visit_vnode(self, &mut suspense_ancestors, f);
     }
 
-    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
-        if *index == 0 {
-            return Some(self);
-        }
-        *index -= 1;
-        self.template.nth_vnode_mut(index)
+    pub(crate) fn vnode_count(&self) -> usize {
+        let mut count = 0;
+        self.visit(&mut |visit, _| {
+            if matches!(visit, ModelVisit::VNode(_)) {
+                count += 1;
+            }
+        });
+        count
+    }
+
+    pub(crate) fn nth_vnode_mut(&mut self, mut index: usize) -> Option<&mut VNodeSpec> {
+        find_vnode_mut(self, &mut |_| match index.checked_sub(1) {
+            Some(remaining) => {
+                index = remaining;
+                false
+            }
+            None => true,
+        })
     }
 
     pub(crate) fn node_count(&self) -> u64 {
-        1 + self.template.node_count()
+        let mut total = 0;
+        self.visit(&mut |visit, _| match visit {
+            ModelVisit::VNode(vnode) => total += 1 + template_local_cost(&vnode.template.roots),
+            ModelVisit::Dynamic(DynamicSpec::Suspense(spec)) => {
+                total += u64::from(spec.wake_mutation.adds_root());
+            }
+            ModelVisit::Dynamic(_) => {}
+        });
+        total
     }
 
     pub(crate) fn suspense_count(&self) -> usize {
-        self.template.suspense_count()
+        let mut count = 0;
+        self.visit(&mut |visit, _| {
+            if matches!(visit, ModelVisit::Dynamic(DynamicSpec::Suspense(_))) {
+                count += 1;
+            }
+        });
+        count
     }
 
-    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
-        self.template.nth_suspense_mut(index)
+    pub(crate) fn nth_suspense_mut(&mut self, mut index: usize) -> Option<&mut SuspenseSpec> {
+        find_suspense_mut(self, &mut |_| match index.checked_sub(1) {
+            Some(remaining) => {
+                index = remaining;
+                false
+            }
+            None => true,
+        })
     }
 
     pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
-        self.template.collect_ready_suspense_keys(out);
+        self.visit(&mut |visit, _| {
+            if let ModelVisit::Dynamic(DynamicSpec::Suspense(spec)) = visit {
+                if spec.mode.is_ready() {
+                    out.push(spec.ready_key());
+                }
+            }
+        });
     }
 
     pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        self.template.wake_ready_suspense(key);
+        find_suspense_mut(self, &mut |spec| {
+            if spec.mode.is_ready() && spec.ready_key() == key {
+                spec.wake_ready();
+            }
+            false
+        });
     }
 
     pub(crate) fn wake_mutation_for_ready_key(
         &self,
         key: SuspenseReadyKey,
     ) -> Option<WakeMutationSpec> {
-        self.template.wake_mutation_for_ready_key(key)
+        let mut found = None;
+        self.visit(&mut |visit, _| {
+            if let ModelVisit::Dynamic(DynamicSpec::Suspense(spec)) = visit {
+                if found.is_none() && spec.ready_key() == key {
+                    found = Some(spec.wake_mutation);
+                }
+            }
+        });
+        found
+    }
+}
+
+/// A single event from [`VNodeSpec::visit`]'s depth-first walk.
+pub(crate) enum ModelVisit<'a> {
+    /// Entered a vnode (the root vnode itself or any nested vnode).
+    VNode(&'a VNodeSpec),
+    /// Encountered a dynamic slot inside the current template.
+    Dynamic(&'a DynamicSpec),
+}
+
+fn visit_vnode<'a>(
+    vnode: &'a VNodeSpec,
+    suspense_ancestors: &mut Vec<u64>,
+    f: &mut impl FnMut(ModelVisit<'a>, &[u64]),
+) {
+    f(ModelVisit::VNode(vnode), suspense_ancestors);
+    visit_template_nodes(&vnode.template.roots, suspense_ancestors, f);
+}
+
+fn visit_template_nodes<'a>(
+    nodes: &'a [TemplateNodeSpec],
+    suspense_ancestors: &mut Vec<u64>,
+    f: &mut impl FnMut(ModelVisit<'a>, &[u64]),
+) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                visit_template_nodes(children, suspense_ancestors, f);
+            }
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => {
+                f(ModelVisit::Dynamic(dynamic), suspense_ancestors);
+                let entered_suspense = if let DynamicSpec::Suspense(spec) = dynamic {
+                    suspense_ancestors.push(spec.id);
+                    true
+                } else {
+                    false
+                };
+                for child in dynamic.child_vnodes() {
+                    visit_vnode(child, suspense_ancestors, f);
+                }
+                if entered_suspense {
+                    suspense_ancestors.pop();
+                }
+            }
+        }
+    }
+}
+
+/// The model cost of one template's own nodes, excluding nested vnodes
+/// (which are accounted for by their own [`ModelVisit::VNode`] events).
+fn template_local_cost(nodes: &[TemplateNodeSpec]) -> u64 {
+    nodes
+        .iter()
+        .map(|node| match node {
+            TemplateNodeSpec::Element {
+                attrs, children, ..
+            } => {
+                1 + attrs.len() as u64
+                    + attrs
+                        .iter()
+                        .map(|attr| match attr {
+                            TemplateAttrSpec::Static { .. } => 0,
+                            TemplateAttrSpec::Dynamic(attrs) => attrs.len() as u64,
+                        })
+                        .sum::<u64>()
+                    + template_local_cost(children)
+            }
+            TemplateNodeSpec::Text(_) => 1,
+            // One for the template slot itself plus one for the dynamic value.
+            TemplateNodeSpec::Dynamic(_) => 2,
+        })
+        .sum()
+}
+
+/// Find the first vnode (pre-order, including `vnode` itself) for which `f`
+/// returns true. `f` may mutate the vnodes it inspects, so this also serves
+/// as a visit-all walker when `f` always returns false.
+fn find_vnode_mut<'a>(
+    vnode: &'a mut VNodeSpec,
+    f: &mut impl FnMut(&mut VNodeSpec) -> bool,
+) -> Option<&'a mut VNodeSpec> {
+    if f(vnode) {
+        return Some(vnode);
+    }
+    find_vnode_in_template_mut(&mut vnode.template.roots, f)
+}
+
+fn find_vnode_in_template_mut<'a>(
+    nodes: &'a mut [TemplateNodeSpec],
+    f: &mut impl FnMut(&mut VNodeSpec) -> bool,
+) -> Option<&'a mut VNodeSpec> {
+    for node in nodes {
+        let nested = match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                if let Some(found) = find_vnode_in_template_mut(children, f) {
+                    return Some(found);
+                }
+                continue;
+            }
+            TemplateNodeSpec::Text(_) => continue,
+            TemplateNodeSpec::Dynamic(dynamic) => dynamic.child_vnodes_mut(),
+        };
+        for child in nested {
+            if let Some(found) = find_vnode_mut(child, f) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+/// Find the first suspense spec (pre-order) for which `f` returns true. `f`
+/// may mutate the specs it inspects, so this also serves as a visit-all
+/// walker when `f` always returns false.
+fn find_suspense_mut<'a>(
+    vnode: &'a mut VNodeSpec,
+    f: &mut impl FnMut(&mut SuspenseSpec) -> bool,
+) -> Option<&'a mut SuspenseSpec> {
+    find_suspense_in_template_mut(&mut vnode.template.roots, f)
+}
+
+fn find_suspense_in_template_mut<'a>(
+    nodes: &'a mut [TemplateNodeSpec],
+    f: &mut impl FnMut(&mut SuspenseSpec) -> bool,
+) -> Option<&'a mut SuspenseSpec> {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => {
+                if let Some(found) = find_suspense_in_template_mut(children, f) {
+                    return Some(found);
+                }
+            }
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(DynamicSpec::Suspense(spec)) => {
+                if f(spec) {
+                    return Some(spec);
+                }
+                if let Some(found) = find_suspense_mut(&mut spec.child, f) {
+                    return Some(found);
+                }
+            }
+            TemplateNodeSpec::Dynamic(dynamic) => {
+                for child in dynamic.child_vnodes_mut() {
+                    if let Some(found) = find_suspense_mut(child, f) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn collect_dynamics<'a>(nodes: &'a [TemplateNodeSpec], out: &mut Vec<&'a DynamicSpec>) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => collect_dynamics(children, out),
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => out.push(dynamic),
+        }
+    }
+}
+
+fn collect_dynamics_mut<'a>(nodes: &'a mut [TemplateNodeSpec], out: &mut Vec<&'a mut DynamicSpec>) {
+    for node in nodes {
+        match node {
+            TemplateNodeSpec::Element { children, .. } => collect_dynamics_mut(children, out),
+            TemplateNodeSpec::Text(_) => {}
+            TemplateNodeSpec::Dynamic(dynamic) => out.push(dynamic),
+        }
+    }
+}
+
+fn collect_dynamic_attr_lists<'a>(nodes: &'a [TemplateNodeSpec], out: &mut Vec<&'a [AttrSpec]>) {
+    for node in nodes {
+        let TemplateNodeSpec::Element {
+            attrs, children, ..
+        } = node
+        else {
+            continue;
+        };
+        for attr in attrs {
+            if let TemplateAttrSpec::Dynamic(attrs) = attr {
+                out.push(attrs);
+            }
+        }
+        collect_dynamic_attr_lists(children, out);
+    }
+}
+
+fn collect_dynamic_attr_lists_mut<'a>(
+    nodes: &'a mut [TemplateNodeSpec],
+    out: &mut Vec<&'a mut Vec<AttrSpec>>,
+) {
+    for node in nodes {
+        let TemplateNodeSpec::Element {
+            attrs, children, ..
+        } = node
+        else {
+            continue;
+        };
+        for attr in attrs {
+            if let TemplateAttrSpec::Dynamic(attrs) = attr {
+                out.push(attrs);
+            }
+        }
+        collect_dynamic_attr_lists_mut(children, out);
     }
 }
 
@@ -186,84 +453,35 @@ impl TemplateSpec {
         }
     }
 
-    pub(crate) fn dynamic_count(&self) -> usize {
-        self.roots.iter().map(TemplateNodeSpec::dynamic_count).sum()
+    /// This template's dynamic node slots in document order. The indices in
+    /// the returned list are the slot numbers used by selector-based ops.
+    pub(crate) fn dynamics(&self) -> Vec<&DynamicSpec> {
+        let mut out = Vec::new();
+        collect_dynamics(&self.roots, &mut out);
+        out
     }
 
-    pub(crate) fn attr_count(&self) -> usize {
-        self.roots.iter().map(TemplateNodeSpec::attr_count).sum()
+    /// Mutable variant of [`Self::dynamics`] with identical ordering.
+    pub(crate) fn dynamics_mut(&mut self) -> Vec<&mut DynamicSpec> {
+        let mut out = Vec::new();
+        collect_dynamics_mut(&mut self.roots, &mut out);
+        out
     }
 
-    pub(crate) fn node_count(&self) -> u64 {
-        self.roots.iter().map(TemplateNodeSpec::node_count).sum()
+    /// This template's dynamic attribute lists in document order. The
+    /// indices in the returned list are the attribute slot numbers used by
+    /// selector-based ops.
+    pub(crate) fn dynamic_attr_lists(&self) -> Vec<&[AttrSpec]> {
+        let mut out = Vec::new();
+        collect_dynamic_attr_lists(&self.roots, &mut out);
+        out
     }
 
-    pub(crate) fn vnode_count(&self) -> usize {
-        self.roots.iter().map(TemplateNodeSpec::vnode_count).sum()
-    }
-
-    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
-        for root in &mut self.roots {
-            if let Some(found) = root.nth_vnode_mut(index) {
-                return Some(found);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn nth_dynamic_mut(&mut self, index: &mut usize) -> Option<&mut DynamicSpec> {
-        for root in &mut self.roots {
-            if let Some(found) = root.nth_dynamic_mut(index) {
-                return Some(found);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn nth_dynamic_attr_mut(&mut self, index: &mut usize) -> Option<&mut Vec<AttrSpec>> {
-        for root in &mut self.roots {
-            if let Some(found) = root.nth_dynamic_attr_mut(index) {
-                return Some(found);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn suspense_count(&self) -> usize {
-        self.roots
-            .iter()
-            .map(TemplateNodeSpec::suspense_count)
-            .sum()
-    }
-
-    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
-        for root in &mut self.roots {
-            if let Some(found) = root.nth_suspense_mut(index) {
-                return Some(found);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
-        for root in &self.roots {
-            root.collect_ready_suspense_keys(out);
-        }
-    }
-
-    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        for root in &mut self.roots {
-            root.wake_ready_suspense(key);
-        }
-    }
-
-    pub(crate) fn wake_mutation_for_ready_key(
-        &self,
-        key: SuspenseReadyKey,
-    ) -> Option<WakeMutationSpec> {
-        self.roots
-            .iter()
-            .find_map(|root| root.wake_mutation_for_ready_key(key))
+    /// Mutable variant of [`Self::dynamic_attr_lists`] with identical ordering.
+    pub(crate) fn dynamic_attr_lists_mut(&mut self) -> Vec<&mut Vec<AttrSpec>> {
+        let mut out = Vec::new();
+        collect_dynamic_attr_lists_mut(&mut self.roots, &mut out);
+        out
     }
 
     pub(crate) fn cache_key(&self) -> TemplateCacheKey {
@@ -412,185 +630,6 @@ impl TemplateNodeSpec {
         }
     }
 
-    pub(crate) fn dynamic_count(&self) -> usize {
-        match self {
-            Self::Element { children, .. } => {
-                children.iter().map(TemplateNodeSpec::dynamic_count).sum()
-            }
-            Self::Text(_) => 0,
-            Self::Dynamic(_) => 1,
-        }
-    }
-
-    pub(crate) fn attr_count(&self) -> usize {
-        match self {
-            Self::Element {
-                attrs, children, ..
-            } => {
-                attrs
-                    .iter()
-                    .filter(|attr| matches!(attr, TemplateAttrSpec::Dynamic(_)))
-                    .count()
-                    + children
-                        .iter()
-                        .map(TemplateNodeSpec::attr_count)
-                        .sum::<usize>()
-            }
-            Self::Text(_) | Self::Dynamic(_) => 0,
-        }
-    }
-
-    pub(crate) fn node_count(&self) -> u64 {
-        match self {
-            Self::Element {
-                attrs, children, ..
-            } => {
-                1 + attrs.len() as u64
-                    + attrs.iter().map(TemplateAttrSpec::node_count).sum::<u64>()
-                    + children
-                        .iter()
-                        .map(TemplateNodeSpec::node_count)
-                        .sum::<u64>()
-            }
-            Self::Text(_) => 1,
-            Self::Dynamic(dynamic) => 1 + dynamic.node_count(),
-        }
-    }
-
-    pub(crate) fn vnode_count(&self) -> usize {
-        match self {
-            Self::Element { children, .. } => {
-                children.iter().map(TemplateNodeSpec::vnode_count).sum()
-            }
-            Self::Text(_) => 0,
-            Self::Dynamic(dynamic) => dynamic.vnode_count(),
-        }
-    }
-
-    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
-        match self {
-            Self::Element { children, .. } => {
-                for child in children {
-                    if let Some(found) = child.nth_vnode_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-            Self::Text(_) => None,
-            Self::Dynamic(dynamic) => dynamic.nth_vnode_mut(index),
-        }
-    }
-
-    pub(crate) fn nth_dynamic_mut(&mut self, index: &mut usize) -> Option<&mut DynamicSpec> {
-        match self {
-            Self::Element { children, .. } => {
-                for child in children {
-                    if let Some(found) = child.nth_dynamic_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-            Self::Text(_) => None,
-            Self::Dynamic(dynamic) => {
-                if *index == 0 {
-                    return Some(dynamic);
-                }
-                *index -= 1;
-                None
-            }
-        }
-    }
-
-    pub(crate) fn nth_dynamic_attr_mut(&mut self, index: &mut usize) -> Option<&mut Vec<AttrSpec>> {
-        match self {
-            Self::Element {
-                attrs, children, ..
-            } => {
-                for attr in attrs {
-                    let TemplateAttrSpec::Dynamic(attrs) = attr else {
-                        continue;
-                    };
-                    if *index == 0 {
-                        return Some(attrs);
-                    }
-                    *index -= 1;
-                }
-
-                for child in children {
-                    if let Some(found) = child.nth_dynamic_attr_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-            Self::Text(_) | Self::Dynamic(_) => None,
-        }
-    }
-
-    pub(crate) fn suspense_count(&self) -> usize {
-        match self {
-            Self::Element { children, .. } => {
-                children.iter().map(TemplateNodeSpec::suspense_count).sum()
-            }
-            Self::Text(_) => 0,
-            Self::Dynamic(dynamic) => dynamic.suspense_count(),
-        }
-    }
-
-    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
-        match self {
-            Self::Element { children, .. } => {
-                for child in children {
-                    if let Some(found) = child.nth_suspense_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-            Self::Text(_) => None,
-            Self::Dynamic(dynamic) => dynamic.nth_suspense_mut(index),
-        }
-    }
-
-    pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
-        match self {
-            Self::Element { children, .. } => {
-                for child in children {
-                    child.collect_ready_suspense_keys(out);
-                }
-            }
-            Self::Text(_) => {}
-            Self::Dynamic(dynamic) => dynamic.collect_ready_suspense_keys(out),
-        }
-    }
-
-    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        match self {
-            Self::Element { children, .. } => {
-                for child in children {
-                    child.wake_ready_suspense(key);
-                }
-            }
-            Self::Text(_) => {}
-            Self::Dynamic(dynamic) => dynamic.wake_ready_suspense(key),
-        }
-    }
-
-    pub(crate) fn wake_mutation_for_ready_key(
-        &self,
-        key: SuspenseReadyKey,
-    ) -> Option<WakeMutationSpec> {
-        match self {
-            Self::Element { children, .. } => children
-                .iter()
-                .find_map(|child| child.wake_mutation_for_ready_key(key)),
-            Self::Text(_) => None,
-            Self::Dynamic(dynamic) => dynamic.wake_mutation_for_ready_key(key),
-        }
-    }
-
     pub(crate) fn descendant_mut(&mut self, path: &[usize]) -> Option<&mut TemplateNodeSpec> {
         let Some((&index, rest)) = path.split_first() else {
             return Some(self);
@@ -659,13 +698,6 @@ impl TemplateAttrSpec {
                 namespace: *namespace,
             },
             Self::Dynamic(_) => TemplateAttrShape::Dynamic,
-        }
-    }
-
-    fn node_count(&self) -> u64 {
-        match self {
-            Self::Static { .. } => 0,
-            Self::Dynamic(attrs) => attrs.len() as u64,
         }
     }
 }
@@ -904,151 +936,30 @@ impl DynamicSpec {
         }
     }
 
-    pub(crate) fn vnode_count(&self) -> usize {
+    /// The nested vnodes directly owned by this dynamic slot, in document
+    /// order.
+    pub(crate) fn child_vnodes(&self) -> &[VNodeSpec] {
         match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => 0,
-            Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::vnode_count).sum(),
+            Self::Empty | Self::Text(_) | Self::Placeholder => &[],
+            Self::Fragment(nodes) => nodes,
             Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.vnode_count()
+                std::slice::from_ref(&component.child)
             }
-            Self::Suspense(spec) => spec.child.vnode_count(),
-            Self::Portal(child) => child.vnode_count(),
+            Self::Suspense(spec) => std::slice::from_ref(&spec.child),
+            Self::Portal(child) => std::slice::from_ref(&**child),
         }
     }
 
-    pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
+    /// Mutable variant of [`Self::child_vnodes`] with identical ordering.
+    pub(crate) fn child_vnodes_mut(&mut self) -> &mut [VNodeSpec] {
         match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => None,
-            Self::Fragment(nodes) => {
-                for node in nodes {
-                    if let Some(found) = node.nth_vnode_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
+            Self::Empty | Self::Text(_) | Self::Placeholder => &mut [],
+            Self::Fragment(nodes) => nodes,
             Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.nth_vnode_mut(index)
+                std::slice::from_mut(&mut component.child)
             }
-            Self::Suspense(spec) => spec.child.nth_vnode_mut(index),
-            Self::Portal(child) => child.nth_vnode_mut(index),
-        }
-    }
-
-    pub(crate) fn node_count(&self) -> u64 {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => 1,
-            Self::Fragment(nodes) => 1 + nodes.iter().map(VNodeSpec::node_count).sum::<u64>(),
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                1 + component.child.node_count()
-            }
-            Self::Suspense(spec) => {
-                let wake_roots = if spec.wake_mutation.adds_root() { 1 } else { 0 };
-                1 + wake_roots + spec.child.node_count()
-            }
-            Self::Portal(child) => 1 + child.node_count(),
-        }
-    }
-
-    pub(crate) fn suspense_count(&self) -> usize {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => 0,
-            Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::suspense_count).sum(),
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.suspense_count()
-            }
-            Self::Suspense(spec) => 1 + spec.child.suspense_count(),
-            Self::Portal(child) => child.suspense_count(),
-        }
-    }
-
-    pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => None,
-            Self::Fragment(nodes) => {
-                for node in nodes {
-                    if let Some(found) = node.nth_suspense_mut(index) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.nth_suspense_mut(index)
-            }
-            Self::Suspense(spec) => {
-                if *index == 0 {
-                    return Some(spec);
-                }
-                *index -= 1;
-                spec.child.nth_suspense_mut(index)
-            }
-            Self::Portal(child) => child.nth_suspense_mut(index),
-        }
-    }
-
-    pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => {}
-            Self::Fragment(nodes) => {
-                for node in nodes {
-                    node.collect_ready_suspense_keys(out);
-                }
-            }
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.collect_ready_suspense_keys(out)
-            }
-            Self::Suspense(spec) => {
-                if spec.mode.is_ready() {
-                    out.push(spec.ready_key());
-                }
-                spec.child.collect_ready_suspense_keys(out);
-            }
-            Self::Portal(child) => child.collect_ready_suspense_keys(out),
-        }
-    }
-
-    pub(crate) fn wake_ready_suspense(&mut self, key: SuspenseReadyKey) {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => {}
-            Self::Fragment(nodes) => {
-                for node in nodes {
-                    node.wake_ready_suspense(key);
-                }
-            }
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.wake_ready_suspense(key)
-            }
-            Self::Suspense(spec) => {
-                if spec.mode.is_ready() && spec.ready_key() == key {
-                    spec.wake_ready();
-                }
-                spec.child.wake_ready_suspense(key);
-            }
-            Self::Portal(child) => child.wake_ready_suspense(key),
-        }
-    }
-
-    pub(crate) fn wake_mutation_for_ready_key(
-        &self,
-        key: SuspenseReadyKey,
-    ) -> Option<WakeMutationSpec> {
-        match self {
-            Self::Empty | Self::Text(_) | Self::Placeholder => None,
-            Self::Fragment(nodes) => nodes
-                .iter()
-                .find_map(|node| node.wake_mutation_for_ready_key(key)),
-            Self::ComponentA(component) | Self::ComponentB(component) => {
-                component.child.wake_mutation_for_ready_key(key)
-            }
-            Self::Suspense(spec) => {
-                if spec.ready_key() == key {
-                    Some(spec.wake_mutation)
-                } else {
-                    spec.child.wake_mutation_for_ready_key(key)
-                }
-            }
-            Self::Portal(child) => child.wake_mutation_for_ready_key(key),
+            Self::Suspense(spec) => std::slice::from_mut(&mut spec.child),
+            Self::Portal(child) => std::slice::from_mut(child),
         }
     }
 }

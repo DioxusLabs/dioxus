@@ -1,11 +1,10 @@
 use crate::{
-    FuzzCase, FuzzFailure, encode_case_vec,
+    case::{FuzzCase, FuzzFailure, encode_case_vec, run_case},
     model::{
         AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
         TemplateNodeKind, WakeMutationSpec,
     },
     ops::{EventBehaviorSpec, FragmentEdit, ListEdit, ModelEdit, Op, SuspenseEdit, TemplateEdit},
-    run_case,
 };
 use std::{
     collections::HashSet,
@@ -72,7 +71,7 @@ enum ReductionRun {
     Panicked,
 }
 
-pub(crate) fn reduce_case_to_encoded_vec(
+pub fn reduce_case_to_encoded_vec(
     case: &FuzzCase,
     encoded_len: usize,
     max_size: usize,
