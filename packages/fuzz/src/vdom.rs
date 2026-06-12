@@ -77,6 +77,11 @@ fn GeneratedPortal(props: GeneratedPortalProps) -> Element {
     }
 }
 
+fn GeneratedSuspenseFallback() -> Element {
+    exercise_scope_render_apis(false);
+    rsx! { "suspense-fallback" }
+}
+
 fn GeneratedComponent(props: GeneratedProps) -> Element {
     let context = props.context;
     track_lifecycle(
@@ -129,7 +134,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     if vnode_contains_suspense(&child_spec) {
         return rsx! {
             SuspenseBoundary {
-                fallback: |_| rsx! { "suspense-fallback" },
+                fallback: |_| rsx! { GeneratedSuspenseFallback {} },
                 GeneratedSuspenseChild {
                     context,
                     id,
@@ -156,7 +161,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
     );
     rsx! {
         SuspenseBoundary {
-            fallback: |_| rsx! { "suspense-fallback" },
+            fallback: |_| rsx! { GeneratedSuspenseFallback {} },
             GeneratedSuspenseChild {
                 context: context.clone(),
                 id,

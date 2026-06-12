@@ -10,7 +10,17 @@ use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
-use std::{any::Any, cell::RefCell, collections::BTreeSet, fmt, panic, rc::Rc};
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::BTreeSet,
+    fmt,
+    future::Future,
+    panic,
+    rc::Rc,
+    sync::Arc,
+    task::{Context, Poll, Wake, Waker},
+};
 
 type TargetSnapshots = Vec<SnapshotNode>;
 
@@ -27,6 +37,14 @@ struct EventScopeContext;
 
 #[derive(Clone, Copy)]
 struct EventRootContext;
+
+struct AnyRootContext;
+
+struct NoopWake;
+
+impl Wake for NoopWake {
+    fn wake(self: Arc<Self>) {}
+}
 
 impl Harness {
     pub(crate) fn fresh() -> Self {
@@ -55,10 +73,17 @@ impl Harness {
             App,
             context.clone(),
         )));
+        {
+            let mut dom = vdom.borrow_mut();
+            inspect_scope_state_accessors(&dom);
+            dom.insert_any_root_context(Box::new(AnyRootContext));
+            dom.insert_any_root_context(Box::new(AnyRootContext));
+        }
         let incremental = Rc::new(RefCell::new(TargetedRendererOracle::new()));
         context.lifecycle.with_run(LifecycleRun::Incremental, || {
             vdom.borrow_mut().rebuild(&mut *incremental.borrow_mut())
         });
+        inspect_scope_state_accessors(&vdom.borrow());
         incremental.borrow().assert_stack_clean();
         let state = Self {
             vdom,
@@ -72,6 +97,25 @@ impl Harness {
             check_lifecycle_matches_fresh_snapshot(&state.context, &fresh_lifecycle).unwrap();
         }
         state
+    }
+}
+
+fn inspect_scope_state_accessors(dom: &VirtualDom) {
+    for id in [
+        ScopeId::ROOT,
+        ScopeId::ROOT_SUSPENSE_BOUNDARY,
+        ScopeId::ROOT_ERROR_BOUNDARY,
+        ScopeId::APP,
+    ] {
+        let Some(scope) = dom.get_scope(id) else {
+            continue;
+        };
+        let id = scope.id();
+        let _ = format!("{id:?}");
+        let _ = scope.height();
+        if scope.try_root_node().is_some() {
+            let _ = scope.root_node();
+        }
     }
 }
 
@@ -549,6 +593,7 @@ fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
             fire_selected_event_listener(state, *target, *behavior)
         }
         Op::RenderDirty => render_dirty_and_assert(state),
+        Op::RenderSuspenseDirty => render_suspense_dirty_and_assert(state),
         Op::Mutate(_) => {
             state.context.apply_to_model(op);
             state.vdom.borrow_mut().mark_dirty(ScopeId::APP);
@@ -726,6 +771,33 @@ fn render_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
     let compare_lifecycle = state.strict_lifecycle_errors;
     let result = render_once(state, compare_lifecycle);
     render_result_to_fuzz_failure(state, result)
+}
+
+fn render_suspense_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
+    fire_historical_event_listeners(state)?;
+    let result = state
+        .context
+        .lifecycle
+        .with_run(LifecycleRun::Incremental, || {
+            let mut dom = state.vdom.borrow_mut();
+            poll_render_suspense_immediate(&mut dom)
+        });
+    let compare_lifecycle = state.strict_lifecycle_errors;
+    let result = result.and_then(|()| check_incremental_state(state, compare_lifecycle));
+    render_result_to_fuzz_failure(state, result)
+}
+
+fn poll_render_suspense_immediate(dom: &mut VirtualDom) -> Result<(), String> {
+    let waker = Waker::from(Arc::new(NoopWake));
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(dom.render_suspense_immediate());
+    for _ in 0..4096 {
+        match Future::poll(future.as_mut(), &mut cx) {
+            Poll::Ready(_) => return Ok(()),
+            Poll::Pending => {}
+        }
+    }
+    Err("render_suspense_immediate did not complete after 4096 polls".to_string())
 }
 
 fn build_fresh_check(

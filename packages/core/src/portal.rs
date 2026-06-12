@@ -256,7 +256,7 @@ impl RenderDriver for PortalDriver {
             let old_target_id = dom.runtime.get_state(scope_id).target_id();
 
             if old_target_id != target_id {
-                let old_mount = old_children.as_vnode().mount.get();
+                let old_mount = old_children.as_vnode().unchecked_mounted_id();
                 let logical_parent = dom.get_mounted_logical_parent(old_mount);
 
                 old_children.remove_node_inner(dom, to.as_mut(), true);

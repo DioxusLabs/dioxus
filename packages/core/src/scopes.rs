@@ -59,18 +59,12 @@ impl ScopeId {
     // ScopeId(0) is the root scope wrapper
     pub const ROOT: ScopeId = ScopeId(0);
 
-    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
-
     pub(crate) const fn new(index: usize) -> Self {
         Self(index)
     }
 
     pub(crate) const fn index(self) -> usize {
         self.0
-    }
-
-    pub(crate) fn is_placeholder(&self) -> bool {
-        *self == Self::PLACEHOLDER
     }
 }
 

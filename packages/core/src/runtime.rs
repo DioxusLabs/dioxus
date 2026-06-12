@@ -496,8 +496,7 @@ fn MyComponent() -> Element {{
                 let el_ref = mount.node();
                 let node_template = el_ref.template;
                 let target_path = path.path;
-                let m = el_ref.mount.get();
-                mount_id = m.mounted().then_some(m.0);
+                mount_id = el_ref.unchecked_mounted_id().0;
 
                 // Accumulate listeners into the listener list bottom to top
                 for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
@@ -538,12 +537,11 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            parent = mount_id.and_then(|id| {
-                self.mounts
-                    .borrow()
-                    .get(id)
-                    .and_then(|el| el.logical_parent())
-            });
+            parent = self
+                .mounts
+                .borrow()
+                .get(mount_id)
+                .and_then(|el| el.logical_parent());
         }
     }
 

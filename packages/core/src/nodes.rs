@@ -78,8 +78,11 @@ pub struct VNodeInner {
 pub struct VNode {
     vnode: Rc<VNodeInner>,
 
-    /// The mount information for this template
-    pub(crate) mount: Cell<MountId>,
+    /// The raw mount slot for this template.
+    ///
+    /// `usize::MAX` means this vnode is not mounted. Convert this raw slot to
+    /// `MountId` through `mounted_id` or `unchecked_mounted_id`.
+    mount: Cell<usize>,
 }
 
 impl Default for VNode {
@@ -103,6 +106,8 @@ impl Deref for VNode {
 }
 
 impl VNode {
+    const UNMOUNTED_MOUNT: usize = usize::MAX;
+
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
@@ -128,7 +133,7 @@ impl VNode {
         });
         Self {
             vnode,
-            mount: Default::default(),
+            mount: Cell::new(Self::UNMOUNTED_MOUNT),
         }
     }
 
@@ -155,7 +160,7 @@ impl VNode {
         });
         Self {
             vnode,
-            mount: Default::default(),
+            mount: Cell::new(Self::UNMOUNTED_MOUNT),
         }
     }
 
@@ -194,7 +199,7 @@ impl VNode {
                 dynamic_nodes,
                 dynamic_attrs,
             }),
-            mount: Default::default(),
+            mount: Cell::new(Self::UNMOUNTED_MOUNT),
         }
     }
 
@@ -210,7 +215,29 @@ impl VNode {
     /// Get the mount id for this node if it has been mounted.
     pub(crate) fn mounted_id(&self) -> Option<MountId> {
         let mount = self.mount.get();
-        mount.mounted().then_some(mount)
+        (mount != Self::UNMOUNTED_MOUNT).then_some(MountId(mount))
+    }
+
+    /// Get the mount id for this node.
+    ///
+    /// Callers must already know this vnode is mounted.
+    pub(crate) fn unchecked_mounted_id(&self) -> MountId {
+        MountId(self.mount.get())
+    }
+
+    /// Set this node's mount id.
+    pub(crate) fn set_mounted_id(&self, mount: MountId) {
+        self.mount.set(mount.0);
+    }
+
+    /// Take this node's mount id, leaving it unmounted.
+    pub(crate) fn take_mounted_id(&self) -> MountId {
+        MountId(self.mount.replace(Self::UNMOUNTED_MOUNT))
+    }
+
+    /// Clear this node's mount id.
+    pub(crate) fn clear_mounted_id(&self) {
+        self.mount.set(Self::UNMOUNTED_MOUNT);
     }
 
     /// Get the mounted id for a dynamic node index
@@ -222,18 +249,39 @@ impl VNode {
         let mount = self.mounted_id()?;
 
         match &self.dynamic_nodes[dynamic_node_idx] {
-            DynamicNode::Text(_) => {
-                Some(dom.get_mounted_dynamic_text_node(mount, dynamic_node_idx))
-            }
+            DynamicNode::Text(_) => dom
+                .mounted_dynamic_text_node(mount, dynamic_node_idx)
+                .map(|id| id.element_id()),
             _ => None,
         }
+    }
+
+    /// Get the mounted id for a dynamic text node index.
+    ///
+    /// Panics if this vnode or dynamic text slot is not mounted.
+    pub fn unchecked_mounted_dynamic_node(
+        &self,
+        dynamic_node_idx: usize,
+        dom: &VirtualDom,
+    ) -> ElementId {
+        self.mounted_dynamic_node(dynamic_node_idx, dom)
+            .expect("dynamic text node slot should be mounted")
     }
 
     /// Get the mounted id for a root node index
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mounted_id()?;
 
-        Some(dom.get_mounted_root_node(mount, root_idx))
+        dom.mounted_root_node(mount, root_idx)
+            .map(|id| id.element_id())
+    }
+
+    /// Get the mounted id for a root node index.
+    ///
+    /// Panics if this vnode or root slot is not mounted.
+    pub fn unchecked_mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> ElementId {
+        self.mounted_root(root_idx, dom)
+            .expect("root node slot should be mounted")
     }
 
     /// Get the mounted id for a dynamic attribute index
@@ -244,7 +292,20 @@ impl VNode {
     ) -> Option<ElementId> {
         let mount = self.mounted_id()?;
 
-        Some(dom.get_mounted_dyn_attr(mount, dynamic_attribute_idx))
+        dom.mounted_dyn_attr(mount, dynamic_attribute_idx)
+            .map(|id| id.element_id())
+    }
+
+    /// Get the mounted id for a dynamic attribute index.
+    ///
+    /// Panics if this vnode or dynamic attribute slot is not mounted.
+    pub fn unchecked_mounted_dynamic_attribute(
+        &self,
+        dynamic_attribute_idx: usize,
+        dom: &VirtualDom,
+    ) -> ElementId {
+        self.mounted_dynamic_attribute(dynamic_attribute_idx, dom)
+            .expect("dynamic attribute slot should be mounted")
     }
 
     /// Create a deep clone of this VNode
@@ -275,13 +336,13 @@ impl VNode {
                     })
                     .collect(),
             }),
-            mount: Default::default(),
+            mount: Cell::new(Self::UNMOUNTED_MOUNT),
         }
     }
 
-    /// Deep-clone the tree while preserving every per-node `MountId`. Each
+    /// Deep-clone the tree while preserving every per-node raw mount slot. Each
     /// `VNodeInner` is freshly allocated so the resulting tree's per-node
-    /// `Cell<MountId>` slots are independent from this one — diffing against
+    /// `Cell<usize>` slots are independent from this one — diffing against
     /// the clone won't mutate this tree's mount state via the shared `Rc`.
     ///
     /// Used by `SuspenseBranch::root` to hand out a fresh tree per diff pass
@@ -767,7 +828,21 @@ impl VComponent {
     ) -> Option<ScopeId> {
         let mount = vnode.mounted_id()?;
 
-        Some(dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index))
+        dom.mounted_dynamic_component_scope(mount, dynamic_node_index)
+    }
+
+    /// Get the [`ScopeId`] this node is mounted to.
+    ///
+    /// Panics if the vnode or component slot is not mounted.
+    pub fn unchecked_mounted_scope_id(
+        &self,
+        dynamic_node_index: usize,
+        vnode: &VNode,
+        dom: &VirtualDom,
+    ) -> ScopeId {
+        let mount = vnode.unchecked_mounted_id();
+
+        dom.unchecked_mounted_dynamic_component_scope(mount, dynamic_node_index)
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -783,9 +858,25 @@ impl VComponent {
     ) -> Option<&'a ScopeState> {
         let mount = vnode.mounted_id()?;
 
-        let scope_id = dom.get_mounted_dynamic_component_scope(mount, dynamic_node_index);
+        let scope_id = dom.mounted_dynamic_component_scope(mount, dynamic_node_index)?;
 
         dom.scopes.get(scope_id.index())
+    }
+
+    /// Get the scope this node is mounted to.
+    ///
+    /// Panics if the vnode or component slot is not mounted.
+    pub fn unchecked_mounted_scope<'a>(
+        &self,
+        dynamic_node_index: usize,
+        vnode: &VNode,
+        dom: &'a VirtualDom,
+    ) -> &'a ScopeState {
+        let scope_id = self.unchecked_mounted_scope_id(dynamic_node_index, vnode, dom);
+
+        dom.scopes
+            .get(scope_id.index())
+            .expect("component scope should be live")
     }
 }
 

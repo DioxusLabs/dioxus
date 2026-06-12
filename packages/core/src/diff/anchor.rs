@@ -55,7 +55,13 @@ pub(super) fn anchor_at(
         ElementEdge::Last => vnode.find_last_element(dom).map(Anchor::After),
     };
     at_edge.unwrap_or_else(|| {
-        anchor_for_with_key(vnode.mount.get(), vnode.key.as_deref(), skip, dom, context)
+        anchor_for_with_key(
+            vnode.unchecked_mounted_id(),
+            vnode.key.as_deref(),
+            skip,
+            dom,
+            context,
+        )
     })
 }
 
@@ -83,10 +89,11 @@ pub(crate) fn anchor_for_slot(
     // context. If the enclosing root has been reclaimed for any reason we
     // fall through to the slot-level anchor instead of trying to refer to a
     // stale element id.
-    let enclosing = dom.get_mounted_root_node(parent_mount, path[0] as usize);
-    if enclosing != ElementId::default() && dom.element_exists_for_mount(parent_mount, enclosing) {
+    if let Some(enclosing) = dom.mounted_root_node(parent_mount, path[0] as usize)
+        && dom.element_exists_for_mount(parent_mount, enclosing)
+    {
         return Anchor::Slot {
-            parent: enclosing,
+            parent: enclosing.element_id(),
             path: &path[1..],
         };
     }
@@ -222,7 +229,7 @@ fn fragment_children_at_path<'a>(vnode: &'a VNode, path: &'static [u8]) -> Optio
 
 fn locate_in_fragment(children: &[VNode], mount: MountId, key: Option<&str>) -> Option<usize> {
     key.and_then(|k| children.iter().position(|c| c.key.as_deref() == Some(k)))
-        .or_else(|| children.iter().position(|c| c.mount.get() == mount))
+        .or_else(|| children.iter().position(|c| c.mounted_id() == Some(mount)))
 }
 
 fn first_live_sibling_after(
@@ -233,8 +240,8 @@ fn first_live_sibling_after(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     children.iter().skip(position + 1).find_map(|child| {
-        let m = child.mount.get();
-        if !m.mounted() || skip.contains(&m) || m == mount {
+        let m = child.mounted_id()?;
+        if skip.contains(&m) || m == mount {
             return None;
         }
         child.find_first_element(dom)

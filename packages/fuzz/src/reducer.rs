@@ -296,9 +296,12 @@ pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
     if !matches!(op, Op::RenderDirty) {
         out.insert(Op::RenderDirty);
     }
+    if !matches!(op, Op::RenderSuspenseDirty) {
+        out.insert(Op::RenderSuspenseDirty);
+    }
 
     match op {
-        Op::Rerender | Op::RenderDirty => {}
+        Op::Rerender | Op::RenderDirty | Op::RenderSuspenseDirty => {}
         Op::WakeSuspense { suspense } => {
             for suspense in simpler_u8_values(*suspense) {
                 out.insert(Op::wake_suspense(suspense));

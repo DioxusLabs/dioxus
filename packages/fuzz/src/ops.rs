@@ -24,6 +24,7 @@ pub(crate) enum Op {
     },
     Mutate(ModelEdit),
     RenderDirty,
+    RenderSuspenseDirty,
 }
 
 impl Op {
@@ -405,13 +406,16 @@ impl Future for SuspenseReadyFuture {
 }
 
 pub(crate) fn apply_strategy_op_to_model(model: &mut Model, op: &Op) {
-    if matches!(op, Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty) {
+    if matches!(
+        op,
+        Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty | Op::RenderSuspenseDirty
+    ) {
         return;
     }
 
     let can_grow = model.can_grow();
     match op {
-        Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty => {}
+        Op::Rerender | Op::FireEvent { .. } | Op::RenderDirty | Op::RenderSuspenseDirty => {}
         Op::WakeSuspense { suspense } => {
             if let Some(key) = model.selected_ready_suspense_key(*suspense) {
                 model.wake_ready_suspense(key);

@@ -33,7 +33,7 @@ use std::{
 };
 
 const MAX_STEPS: usize = 512;
-const PRIMITIVE_MUTATION_COUNT: u32 = 21;
+const PRIMITIVE_MUTATION_COUNT: u32 = 22;
 
 /// Fold every attribute name into a 16-slot pool so static and dynamic
 /// attributes on the same element collide on the same `(name, namespace)`
@@ -410,6 +410,7 @@ fn biased_primitive_op(model: &Model, which: u32, selector: u8, value: u8) -> Op
             },
         ),
         20 => Op::RenderDirty,
+        21 => Op::RenderSuspenseDirty,
         _ => Op::template(
             vnode,
             TemplateEdit::SetNode {
@@ -1341,7 +1342,7 @@ fn warmup_batched_component_props_diff() {
 
 /// Drive a keyed shuffle of >FRAGMENT_WORK_BATCH items so
 /// `diff_keyed_middle`'s `collect_splice_mounts` walks survivors that exercise
-/// the `if old_mount.mounted()` branch on the slice picked by the LIS-based
+/// the unchecked mount transfer path on the slice picked by the LIS-based
 /// splice.
 fn warmup_keyed_reorder() {
     use dioxus::prelude::*;
@@ -1377,7 +1378,7 @@ fn warmup_keyed_reorder() {
 
 /// Drive a `SuspenseBoundary` through suspend/resolve transitions so the
 /// "hidden subtree" defensive paths fire: vnodes whose mount is
-/// `PLACEHOLDER` because they live in the suspended branch and were never
+/// unmounted because they live in the suspended branch and were never
 /// materialized in the renderer arena.
 fn warmup_suspense_hidden_paths() {
     use dioxus::prelude::*;
@@ -1407,7 +1408,7 @@ fn warmup_suspense_hidden_paths() {
     }
 
     // Scenario A: suspend on first render, then re-render so the boundary
-    // re-diffs its background children whose mounts may be `PLACEHOLDER`.
+    // re-diffs its background children whose mount slots may still be unmounted.
     {
         SUSPEND_GEN.with(|c| c.set(0));
         fn app_a() -> Element {
@@ -1425,9 +1426,8 @@ fn warmup_suspense_hidden_paths() {
 
     // Scenario B: render normally, then suspend, then re-render with a
     // reversed key order. The keyed-reorder path observes children in the
-    // suspended branch with non-mounted state, exercising the defensive
-    // `mounted()` checks in `collect_splice_mounts` and the
-    // `mount.as_usize()?` early return in `component_props_update`.
+    // suspended branch with unmounted state, exercising checked `mounted_id()`
+    // paths that skip children whose DOM never materialized.
     {
         SUSPEND_GEN.with(|c| c.set(1));
         SHUFFLE_GEN.with(|c| c.set(2));
@@ -1561,10 +1561,9 @@ fn warmup_dropped_scope_anchor_lookup() {
 
 /// Suspense + removal: render a suspense boundary, suspend its child, then
 /// fully remove the boundary so the hidden subtree's vnodes get removed via
-/// `remove_node_inner` with `PLACEHOLDER` mounts. Exercises the
-/// `!mount.mounted()` early-return in `remove_node_inner` plus the `?`
-/// operators in `dynamic_node_first_element`/`find_element_at_root_in_target`
-/// when scopes get dropped mid-diff.
+/// `remove_node_inner` after being parked in the background. Exercises the
+/// mounted-id lookup paths in `dynamic_node_first_element` /
+/// `find_element_at_root_in_target` when scopes get dropped mid-diff.
 fn warmup_suspense_then_remove() {
     use dioxus::prelude::*;
 
@@ -1599,8 +1598,7 @@ fn warmup_suspense_then_remove() {
 
     // generation 1: re-render, boundary stays suspended; generation 2:
     // replace the boundary with plain text — removes the suspended subtree,
-    // exercising remove_node_inner on `PLACEHOLDER` mounts in the hidden
-    // children.
+    // exercising remove_node_inner on unmounted hidden children.
     run_generations(app, 3);
 }
 
@@ -2399,6 +2397,14 @@ mod tests {
                 "hidden_suspense_component_dirty_task",
                 hidden_suspense_component_dirty_task(),
             ),
+            case(
+                "hidden_suspense_component_suspense_immediate",
+                hidden_suspense_component_suspense_immediate(),
+            ),
+            case(
+                "nonsuspense_scope_suspense_immediate",
+                nonsuspense_scope_suspense_immediate(),
+            ),
         ]
     }
 
@@ -2508,6 +2514,29 @@ mod tests {
             set_vnode_root_dynamic(1, DynamicKind::ComponentA),
             Op::Rerender,
             Op::RenderDirty,
+        ]
+    }
+
+    fn hidden_suspense_component_suspense_immediate() -> Vec<Op> {
+        vec![
+            set_root_dynamic(),
+            Op::dynamic(0, 0, suspense_kind(SuspenseMode::Pending)),
+            set_vnode_root_dynamic(1, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::RenderSuspenseDirty,
+        ]
+    }
+
+    fn nonsuspense_scope_suspense_immediate() -> Vec<Op> {
+        vec![
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Text(42),
+                },
+            ),
+            Op::RenderSuspenseDirty,
         ]
     }
 

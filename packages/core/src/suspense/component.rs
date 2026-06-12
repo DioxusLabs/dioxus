@@ -416,7 +416,6 @@ fn suspense_create<M: WriteMutations>(
             nodes_created
         } else {
             // Otherwise just render the children in the real dom
-            debug_assert!(children.mounted_id().is_some());
             let nodes_created = suspense_context
                 .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
             dom.scopes[scope_id.index()].last_rendered_node = Some(children);
@@ -452,7 +451,7 @@ impl SuspenseBoundaryProps {
 
             // Get the parent of the suspense boundary to later create children with the right parent
             let currently_rendered = scope_state.last_rendered_node.clone().unwrap();
-            let mount = currently_rendered.mount.get();
+            let mount = currently_rendered.unchecked_mounted_id();
             let parent = dom.mounted_render_parent(mount);
 
             let driver = suspense_driver(dom, scope_id);
@@ -475,7 +474,7 @@ impl SuspenseBoundaryProps {
             // Switch to only writing templates
             only_write_templates(to);
 
-            children.mount.take();
+            children.clear_mounted_id();
 
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
             suspense_context.under_suspense_boundary(&dom.runtime(), || {
@@ -569,7 +568,7 @@ fn suspense_diff<M: WriteMutations>(
                     LastRenderedNode::new(fallback.call(suspense_context.clone()));
 
                 // Move the children to the background
-                let parent = dom.get_mounted_parent(old_children.mount.get());
+                let parent = dom.get_mounted_parent(old_children.unchecked_mounted_id());
 
                 suspense_context.in_suspense_placeholder(&dom.runtime(), || {
                     old_children.move_node_to_background(
@@ -581,7 +580,7 @@ fn suspense_diff<M: WriteMutations>(
                 });
 
                 // Then diff the new children in the background
-                dom.set_mount_mode(old_children.mount.get(), RenderMode::Background);
+                dom.set_mount_mode(old_children.unchecked_mounted_id(), RenderMode::Background);
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
                     old_children.diff_node(&new_children, dom, to.as_deref_mut());
                 });
@@ -645,7 +644,6 @@ fn set_rendered_children(
 }
 
 fn store_suspended_branch(driver: &SuspenseDriver, dom: &mut VirtualDom, branch: &SuspenseBranch) {
-    debug_assert!(branch.root_mount().mounted());
     dom.set_mount_mode(branch.root_mount(), RenderMode::Background);
     driver.store_children(&LastRenderedNode::Real(branch.root()));
 }
@@ -663,7 +661,7 @@ fn promote_resolved_children<M: WriteMutations>(
     dom: &mut VirtualDom,
     to: Option<&mut M>,
 ) {
-    dom.set_mount_mode(children.mount.get(), RenderMode::Foreground);
+    dom.set_mount_mode(children.unchecked_mounted_id(), RenderMode::Foreground);
     replace_suspense_nodes(suspense_context, placeholder, &children, dom, to, |dom| {
         children.remove_node_inner(dom, None::<&mut M>, false);
     });
@@ -682,7 +680,7 @@ fn replace_suspense_nodes<M: WriteMutations>(
     suspense_context.under_suspense_boundary(&dom.runtime(), || {
         prepare(dom);
         let children = dom
-            .current_mounted_view(children.mount.get())
+            .current_mounted_view(children.unchecked_mounted_id())
             .unwrap_or_else(|| children.clone());
         replace_placeholder_with(placeholder, &children, dom, to);
     });
@@ -694,7 +692,7 @@ fn replace_placeholder_with<M: WriteMutations>(
     dom: &mut VirtualDom,
     mut to: Option<&mut M>,
 ) {
-    let parent = dom.get_mounted_parent(placeholder.mount.get());
+    let parent = dom.get_mounted_parent(placeholder.unchecked_mounted_id());
     if let Some(to_ref) = to.as_deref_mut() {
         let placeholder_vnode = placeholder.as_vnode();
         if let Some(id) = placeholder_vnode.mounted_root(0, dom) {
@@ -729,15 +727,13 @@ fn mark_suspense_resolved(
 }
 
 fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom, vnode: &VNode) {
-    let Some(mount) = vnode.mounted_id() else {
-        return;
-    };
+    let mount = vnode.unchecked_mounted_id();
     dom.set_mount_mode(mount, RenderMode::Foreground);
 
     for (idx, dynamic) in vnode.dynamic_nodes.iter().enumerate() {
         match dynamic {
             DynamicNode::Component(_) => {
-                let scope_id = dom.get_mounted_dynamic_component_scope(mount, idx);
+                let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                 if dom.mark_clean(scope_id) {
                     dom.run_and_diff_scope(None::<&mut M>, scope_id);
                 }

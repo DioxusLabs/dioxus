@@ -26,7 +26,7 @@ fn drive<M: WriteMutations, R>(
     let depth = dom.runtime.scope_stack_depth();
     let result = f(&mut *dom, to);
     #[cfg(debug_assertions)]
-    debug_assert_eq!(
+    dioxus_debug_assert_eq!(
         depth,
         dom.runtime.scope_stack_depth(),
         "render driver left the runtime scope stack unbalanced"
@@ -76,15 +76,7 @@ impl VirtualDom {
                 .take()
                 .unwrap();
 
-            let Some(old_mount) = old.mounted_id() else {
-                // The previous output was never materialized (it is awaiting
-                // the foreground re-create pass of a resolving suspense
-                // boundary). There is nothing to diff against: adopt the body
-                // output; the create pass mounts it.
-                self.scopes[scope.index()].last_rendered_node =
-                    Some(LastRenderedNode::new(new_nodes));
-                return;
-            };
+            let old_mount = old.unchecked_mounted_id();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
@@ -193,7 +185,9 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, M>,
     ) {
-        let scope = state.dom.get_mounted_dynamic_component_scope(mount, idx);
+        let scope = state
+            .dom
+            .unchecked_mounted_dynamic_component_scope(mount, idx);
 
         // Compute the anchor BEFORE freeing the scope slot — we need the OLD
         // scope's rendered vnode to anchor against. If the OLD scope rendered
@@ -234,26 +228,29 @@ impl VNode {
         parent: Option<ElementRef>,
         state: &mut DiffState<'_, impl WriteMutations>,
     ) -> usize {
-        let mut scope_id = state.dom.get_mounted_dynamic_component_scope(mount, idx);
-        let new = scope_id.is_placeholder();
+        let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
+        let new = scope_id.is_none();
 
-        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
+        // If the scope id is missing, we need to load up a new scope for this
+        // vcomponent. If it's already mounted, then we can just use that.
         if new {
             // The scope adopts a duplicate of the vnode's driver so the live
             // scope never aliases props with a vnode (a cached rsx element
             // hands out the same driver instance every render).
-            scope_id = state
+            let new_scope_id = state
                 .dom
                 .new_scope(component.name, component.driver.duplicate())
                 .state()
                 .id;
+            scope_id = Some(new_scope_id);
 
             // Store the scope id for the next render
             state
                 .dom
-                .set_mounted_dynamic_component_scope(mount, idx, scope_id);
+                .set_mounted_dynamic_component_scope(mount, idx, new_scope_id);
         }
 
+        let scope_id = scope_id.expect("component scope should be mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         drive(state, |dom, to| {
             driver.create(dom, scope_id, new, parent, to)

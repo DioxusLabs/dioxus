@@ -19,11 +19,11 @@ impl<M: WriteMutations> DiffState<'_, M> {
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
-        debug_assert!(
+        dioxus_debug_assert!(
             new.iter().all(|n| n.key.is_some() == new_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
-        debug_assert!(
+        dioxus_debug_assert!(
             old.iter().all(|o| o.key.is_some() == old_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
@@ -52,8 +52,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
         use std::cmp::Ordering;
 
         // Handled these cases in `diff_children` before calling this function.
-        debug_assert!(!new.is_empty());
-        debug_assert!(!old.is_empty());
+        dioxus_debug_assert!(!new.is_empty());
+        dioxus_debug_assert!(!old.is_empty());
 
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self
@@ -95,13 +95,13 @@ impl<M: WriteMutations> DiffState<'_, M> {
                 keys.clear();
                 for child in children {
                     let key = child.key.clone();
-                    debug_assert!(
+                    dioxus_debug_assert!(
                         key.is_some(),
                         "if any sibling is keyed, all siblings must be keyed"
                     );
                     keys.insert(key);
                 }
-                debug_assert_eq!(
+                dioxus_debug_assert_eq!(
                     children.len(),
                     keys.len(),
                     "keyed siblings must each have a unique key"
@@ -179,7 +179,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             .count();
 
         for (old, new) in old.iter().rev().zip(new.iter().rev()).take(right_offset) {
-            DiffFrame::new(old.mount.get(), old, new).diff_into(self);
+            DiffFrame::new(old.unchecked_mounted_id(), old, new).diff_into(self);
         }
 
         let retained = right_offset + left_offset;
@@ -229,7 +229,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
     fn diff_child_pairs<'a>(&mut self, old: impl Iterator<Item = &'a VNode>, new: &'a [VNode]) {
         let pairs = old.zip(new.iter()).collect::<Vec<_>>();
         for (old, new) in pairs.into_iter().rev() {
-            DiffFrame::new(old.mount.get(), old, new).diff_into(self);
+            DiffFrame::new(old.unchecked_mounted_id(), old, new).diff_into(self);
         }
     }
 
@@ -265,8 +265,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
         */
         // 0. Debug sanity checks
         // Should have already diffed the shared-key prefixes and suffixes.
-        debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
-        debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
+        dioxus_debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
+        dioxus_debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
 
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
@@ -333,7 +333,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         // Diff each nod in the LIS
         for idx in &lis_sequence {
             let old_node = &old[new_index_to_old_index[*idx]];
-            DiffFrame::new(old_node.mount.get(), old_node, &new[*idx]).diff_into(self);
+            DiffFrame::new(old_node.unchecked_mounted_id(), old_node, &new[*idx]).diff_into(self);
         }
 
         // add mount instruction for the items before the LIS
@@ -413,7 +413,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         for (idx, new_node) in new[range].iter().enumerate() {
             let old_index = new_index_to_old_index[range_start + idx];
             nodes += if let Some(old_node) = old.get(old_index) {
-                DiffFrame::new(old_node.mount.get(), old_node, new_node).diff_into(self);
+                DiffFrame::new(old_node.unchecked_mounted_id(), old_node, new_node).diff_into(self);
                 self.to
                     .as_deref_mut()
                     .map_or(0, |to| new_node.push_all_root_nodes(self.dom, to))
@@ -470,7 +470,7 @@ fn collect_splice_mounts(
     // mount is always live by the time we collect it.
     range
         .filter_map(|idx| old.get(new_index_to_old_index[idx]))
-        .map(|old_node| old_node.mount.get())
+        .map(VNode::unchecked_mounted_id)
         .collect()
 }
 
@@ -481,7 +481,7 @@ impl VNode {
         dom: &VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let mount = self.mount.get();
+        let mount = self.unchecked_mounted_id();
         let target_id = dom.current_render_target_id();
 
         self.template
@@ -495,14 +495,16 @@ impl VNode {
                         .map(|node| node.push_all_root_nodes(dom, to))
                         .sum(),
                     Some((idx, DynamicNode::Component(_))) => dom
-                        .get_scope(dom.get_mounted_dynamic_component_scope(mount, idx))
+                        .get_scope(dom.unchecked_mounted_dynamic_component_scope(mount, idx))
                         .unwrap()
                         .root_node()
                         .push_all_root_nodes(dom, to),
                     // For a single dynamic node of Text, push its element id
                     Some((idx, DynamicNode::Text(_))) => {
                         if dom.mount_target_id(mount) == target_id {
-                            let id = dom.get_mounted_dynamic_text_node(mount, idx);
+                            let id = dom
+                                .unchecked_mounted_dynamic_text_node(mount, idx)
+                                .element_id();
                             push_live_root(to, id)
                         } else {
                             0
@@ -511,7 +513,9 @@ impl VNode {
                     // This is a static root node or a single dynamic node, just push it
                     None => {
                         if dom.mount_target_id(mount) == target_id {
-                            let id = dom.get_mounted_root_node(mount, root_idx);
+                            let id = dom
+                                .unchecked_mounted_root_node(mount, root_idx)
+                                .element_id();
                             push_live_root(to, id)
                         } else {
                             0
@@ -525,7 +529,7 @@ impl VNode {
 
 fn push_live_root(to: &mut impl WriteMutations, id: ElementId) -> usize {
     // Callers (`push_all_root_nodes`) only reach this with `id` values just
-    // read from `get_mounted_root_node`/`get_mounted_dynamic_text_node` for a vnode
+    // read from `unchecked_mounted_root_node`/`unchecked_mounted_dynamic_text_node` for a vnode
     // whose mount target already matches `target_id`, so the live element id
     // has been allocated in that target by `load_template_root` /
     // `assign_node_id`.

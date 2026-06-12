@@ -8,6 +8,37 @@
 // don't drag the coverage metric down. Stable builds see no effect.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
+// Debug assertions document internal invariants, but the standard
+// `debug_assert*` macros leave unreachable `cfg!(debug_assertions)` branches in
+// coverage builds. These compile away completely under `coverage_nightly` so the
+// fuzzer coverage report tracks reachable runtime behavior.
+macro_rules! dioxus_debug_assert {
+    ($($arg:tt)*) => {{
+        #[cfg(all(debug_assertions, not(coverage_nightly)))]
+        {
+            debug_assert!($($arg)*);
+        }
+    }};
+}
+
+macro_rules! dioxus_debug_assert_eq {
+    ($($arg:tt)*) => {{
+        #[cfg(all(debug_assertions, not(coverage_nightly)))]
+        {
+            debug_assert_eq!($($arg)*);
+        }
+    }};
+}
+
+macro_rules! dioxus_debug_assert_ne {
+    ($($arg:tt)*) => {{
+        #[cfg(all(debug_assertions, not(coverage_nightly)))]
+        {
+            debug_assert_ne!($($arg)*);
+        }
+    }};
+}
+
 mod arena;
 mod diff;
 mod effect;

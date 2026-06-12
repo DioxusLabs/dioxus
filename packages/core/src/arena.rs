@@ -7,14 +7,12 @@ use slab::Slab;
 /// unique across targets or time. If a component is unmounted, then the
 /// `ElementId` may be reused for a new component in that target.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElementId(usize);
 
 impl ElementId {
     /// The root element within a render target.
     pub const ROOT: Self = Self(0);
-
-    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
 
     pub(crate) const fn new(index: usize) -> Self {
         Self(index)
@@ -39,9 +37,27 @@ impl ElementId {
     pub const fn raw(self) -> usize {
         self.0
     }
+}
 
-    pub(crate) fn as_live(self) -> Option<Self> {
-        (self != Self::ROOT && self != Self::PLACEHOLDER).then_some(self)
+/// An allocated, non-root renderer element id.
+///
+/// This type is used inside mounted-state tables so absence is represented by
+/// `Option<MountedElementId>` instead of sentinel `ElementId` values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct MountedElementId(ElementId);
+
+impl MountedElementId {
+    pub(crate) fn new_unchecked(id: ElementId) -> Self {
+        debug_assert!(id != ElementId::ROOT);
+        Self(id)
+    }
+
+    pub(crate) fn element_id(self) -> ElementId {
+        self.0
+    }
+
+    pub(crate) fn index(self) -> usize {
+        self.0.index()
     }
 }
 
@@ -71,25 +87,31 @@ impl RenderTargetId {
 pub(crate) struct MountedNodeState {
     /// The IDs for the roots of this template, used when moving or removing
     /// roots from the renderer.
-    pub(crate) root_ids: Box<[ElementId]>,
+    pub(crate) root_ids: Box<[Option<MountedElementId>]>,
 
     /// The element in the renderer that each dynamic attribute is mounted to.
-    pub(crate) mounted_attributes: Box<[ElementId]>,
+    pub(crate) mounted_attributes: Box<[Option<MountedElementId>]>,
 
-    /// Backing storage for dynamic slots. Access this through `VirtualDom`'s
-    /// typed dynamic-slot helpers so callers do not need to interpret the raw
-    /// value as either a `ScopeId` or an `ElementId`.
-    pub(crate) mounted_dynamic_nodes: Box<[usize]>,
+    /// The mounted target for each dynamic node slot.
+    pub(crate) mounted_dynamic_nodes: Box<[MountedDynamicNodeSlot]>,
 }
 
 impl MountedNodeState {
     pub(crate) fn new(root_count: usize, attr_count: usize, dynamic_count: usize) -> Self {
         Self {
-            root_ids: vec![ElementId::new(0); root_count].into(),
-            mounted_attributes: vec![ElementId::new(0); attr_count].into(),
-            mounted_dynamic_nodes: vec![usize::MAX; dynamic_count].into(),
+            root_ids: vec![None; root_count].into(),
+            mounted_attributes: vec![None; attr_count].into(),
+            mounted_dynamic_nodes: vec![MountedDynamicNodeSlot::Empty; dynamic_count].into(),
         }
     }
+}
+
+/// The mounted target for one dynamic node slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MountedDynamicNodeSlot {
+    Empty,
+    Text(MountedElementId),
+    Component(ScopeId),
 }
 
 /// Renderer-local state for a render target.
@@ -136,28 +158,13 @@ impl RenderTargetState {
     }
 }
 
-/// A mounted mount's unique identifier.
+/// A live mount's unique identifier.
 ///
 /// `MountId` is a `usize` that is unique across the current `VirtualDom` - but not unique across time. If a mount is
 /// unmounted, then the `MountId` may be reused for a new mount.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MountId(pub(crate) usize);
-
-impl Default for MountId {
-    fn default() -> Self {
-        Self::PLACEHOLDER
-    }
-}
-
-impl MountId {
-    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
-
-    #[allow(unused)]
-    pub(crate) fn mounted(self) -> bool {
-        self != Self::PLACEHOLDER
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ElementRef {
@@ -178,23 +185,23 @@ impl VirtualDom {
         self.runtime.current_render_target_id()
     }
 
-    pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> ElementId {
+    pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> MountedElementId {
         let target_id = self.mount_target_id(mount);
         self.next_element_in_target(target_id)
     }
 
-    pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> ElementId {
+    pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
             .get_mut(target_id.index())
             .expect("render target should exist while allocating an element");
-        ElementId::new(target.elements.insert(None))
+        MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)))
     }
 
     pub(crate) fn set_element_ref_for_mount(
         &self,
         mount: MountId,
-        el: ElementId,
+        el: MountedElementId,
         path: &'static [u8],
     ) {
         let target_id = self.mount_target_id(mount);
@@ -204,7 +211,7 @@ impl VirtualDom {
             .expect("render target should exist while assigning an element ref");
         let element = target
             .elements
-            .get_mut(el.0)
+            .get_mut(el.index())
             .expect("element should exist while assigning an element ref");
         *element = Some(ElementRef {
             path: ElementPath { path },
@@ -212,7 +219,7 @@ impl VirtualDom {
         });
     }
 
-    pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: ElementId) {
+    pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {
         let target_id = self.mount_target_id(mount);
         self.try_reclaim_in_target(target_id, el);
     }
@@ -220,41 +227,29 @@ impl VirtualDom {
     pub(crate) fn try_reclaim_in_target(
         &mut self,
         target_id: RenderTargetId,
-        el: ElementId,
+        el: MountedElementId,
     ) -> bool {
-        // Callers (`reclaim_for_mount` from diff/node.rs and the recursive
-        // remove path) always pre-filter `ElementId::default()` and only fire
-        // on real, allocated element ids. PLACEHOLDER ids are never reclaimed.
-        debug_assert!(
-            el.0 != 0 && el.0 != usize::MAX,
-            "try_reclaim_in_target should never see ROOT or PLACEHOLDER ids",
-        );
-
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
             .get_mut(target_id.index())
             .expect("reclaim target must still be registered");
-        target.elements.try_remove(el.0).is_some()
+        target.elements.try_remove(el.index()).is_some()
     }
 
-    pub(crate) fn element_exists_for_mount(&self, mount: MountId, el: ElementId) -> bool {
+    pub(crate) fn element_exists_for_mount(&self, mount: MountId, el: MountedElementId) -> bool {
         self.element_exists_in_target(self.mount_target_id(mount), el)
     }
 
     pub(crate) fn element_exists_in_target(
         &self,
         target_id: RenderTargetId,
-        el: ElementId,
+        el: MountedElementId,
     ) -> bool {
-        // Callers in diff/anchor.rs and diff/node.rs always pre-filter
-        // `ElementId::default()` (ROOT) before calling, so we never see id 0.
-        debug_assert!(el.0 != 0, "element_exists_in_target should never see ROOT");
-
         self.runtime
             .render_targets
             .borrow()
             .get(target_id.index())
-            .is_some_and(|target| target.elements.get(el.0).is_some())
+            .is_some_and(|target| target.elements.get(el.index()).is_some())
     }
 
     // Drop a scope without dropping its children
