@@ -77,9 +77,10 @@ const DOM_THREAD_NAME: &str = "dioxus-desktop-dom";
 /// and the DOM thread looks them up and executes them.
 #[derive(Default)]
 pub(crate) struct DomCallbackRegistry {
-    /// Callback storage, tagged with the owning window so [`Self::remove_window`] can purge a
-    /// window's callbacks wholesale. A slot's callback is `None` while it is checked out for
-    /// invocation; the entry stays in the map so the id remains reserved until it is restored.
+    /// Callback storage, tagged with the owning window so
+    /// [`SharedCallbackRegistry::remove_window`] can purge a window's callbacks wholesale. A
+    /// slot's callback is `None` while it is checked out for invocation; the entry stays in the
+    /// map so the id remains reserved until it is restored.
     callbacks: SlotMap<DomCallbackId, (WindowId, Option<StoredCallback>)>,
     /// Asset handler names point into the shared callback map. Names are per window: two windows
     /// may register handlers under the same name without clobbering each other.
