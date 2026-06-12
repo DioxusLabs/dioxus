@@ -8,6 +8,7 @@ use crate::{
     webview::PendingWebview,
 };
 use dioxus_core::VirtualDom;
+use futures_channel::{mpsc::UnboundedSender, oneshot};
 use send_wrapper::SendWrapper;
 use std::{
     cell::Cell,
@@ -27,7 +28,6 @@ use tao::{
         Theme, UserAttentionType, Window, WindowId, WindowSizeConstraints,
     },
 };
-use tokio::sync::{mpsc::UnboundedSender, oneshot};
 use wry::{RGBA as WebViewRGBA, Rect, RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
@@ -202,8 +202,7 @@ impl DesktopContext {
     }
 
     /// Run a closure on the main thread with access to this window's [`DesktopService`], returning
-    /// a receiver for the result. Await it or call
-    /// [`blocking_recv`](tokio::sync::oneshot::Receiver::blocking_recv).
+    /// a receiver for the result. Await the receiver to get the result.
     ///
     /// If the window has closed (or the event loop has shut down), the closure is dropped and the
     /// receiver resolves with an error.
@@ -238,15 +237,11 @@ impl DesktopContext {
     ///
     /// Panics if the window has already closed (or the event loop has shut down): the context is
     /// a weak reference and does not keep the window alive.
-    ///
-    /// Also panics if called from the main/event-loop thread, which would otherwise deadlock.
     fn run_with_desktop_service_blocking<T, F>(&self, f: F) -> T
     where
         T: Send + 'static,
         F: FnOnce(&DesktopService) -> T + Send + 'static,
     {
-        crate::app::assert_not_main_thread();
-
         let (callback, receiver) = DesktopServiceCallback::new_blocking(f);
 
         if self.send_desktop_service_callback(callback) {
@@ -748,7 +743,7 @@ impl DesktopContext {
                 let callback = move |registry: &SharedCallbackRegistry| {
                     registry.invoke(dom_handler, event);
                 };
-                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(callback)));
+                let _ = dom_tx.unbounded_send(VirtualDomEvent::RunCallback(Box::new(callback)));
 
                 return_event
                     .map_nonuser_event()
@@ -810,9 +805,11 @@ impl DesktopContext {
             desktop.asset_handlers.register_handler(
                 name,
                 move |req: AssetRequest, resp: RequestAsyncResponder| {
-                    let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                        registry.invoke(dom_id, (req, resp));
-                    })));
+                    let _ = dom_tx.unbounded_send(VirtualDomEvent::RunCallback(Box::new(
+                        move |registry| {
+                            registry.invoke(dom_id, (req, resp));
+                        },
+                    )));
                 },
             );
         });
@@ -854,9 +851,11 @@ impl DesktopContext {
         let dom_tx = self.inner.dom_tx.clone();
         let result = self.run_with_desktop_service_blocking(move |desktop| {
             desktop.create_shortcut(hotkey, move |state| {
-                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                    registry.invoke(dom_id, state);
-                })));
+                let _ = dom_tx.unbounded_send(VirtualDomEvent::RunCallback(Box::new(
+                    move |registry| {
+                        registry.invoke(dom_id, state);
+                    },
+                )));
             })
         });
 

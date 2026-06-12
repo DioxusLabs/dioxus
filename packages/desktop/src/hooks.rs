@@ -117,9 +117,11 @@ fn use_dom_event_handler<T: Send + 'static>(
                 let Some(event) = forward_event(event) else {
                     return;
                 };
-                let _ = dom_tx.send(VirtualDomEvent::RunCallback(Box::new(move |registry| {
-                    registry.invoke(dom_handler, event);
-                })));
+                let _ = dom_tx.unbounded_send(VirtualDomEvent::RunCallback(Box::new(
+                    move |registry| {
+                        registry.invoke(dom_handler, event);
+                    },
+                )));
             });
             window
                 .callback_registry()

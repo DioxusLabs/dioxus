@@ -17,15 +17,15 @@ use dioxus_core::{ElementId, ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use dioxus_web_sys_events::QueueMountedEvents;
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use futures_channel::oneshot;
-use futures_util::FutureExt;
-use futures_util::future::OptionFuture;
+use futures_util::future::{AbortHandle, Abortable, OptionFuture};
+use futures_util::stream::FuturesUnordered;
+use futures_util::{FutureExt, StreamExt};
 use slotmap::SlotMap;
 use std::panic::AssertUnwindSafe;
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
-use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
-use tokio::task::AbortHandle;
 use wry::RequestAsyncResponder;
 
 /// Events sent from the main thread to the VirtualDom thread.
@@ -237,8 +237,8 @@ impl SharedCallbackRegistry {
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_virtual_dom_with_dom(
     dom: VirtualDom,
-    event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
+    event_rx: UnboundedReceiver<VirtualDomEvent>,
+    event_tx: UnboundedSender<VirtualDomEvent>,
     websocket: EditWebsocket,
     webview_id: u32,
     window_handle: WindowHandle,
@@ -261,7 +261,7 @@ pub(crate) async fn run_virtual_dom_with_dom(
 /// The main event loop for the VirtualDom running on its dedicated thread.
 async fn run_virtual_dom_loop(
     mut dom: VirtualDom,
-    mut event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
+    mut event_rx: UnboundedReceiver<VirtualDomEvent>,
     websocket: EditWebsocket,
     webview_id: u32,
     callback_registry: SharedCallbackRegistry,
@@ -275,12 +275,19 @@ async fn run_virtual_dom_loop(
     let mut initialized = false;
 
     loop {
-        // Normal operation: wait for work or events
-        tokio::select! {
-            biased;
+        // Normal operation: wait for work or events. `select_biased!` polls the arms in
+        // priority order: main-thread events first, then the in-flight edit ack, then
+        // VirtualDom work (only while initialized and not waiting on a flush — an arm whose
+        // `OptionFuture` is `None` counts as terminated, so it is never polled).
+        //
+        // The arm futures must be written inline: the macro binds inline expressions in a
+        // scope that ends before the arm bodies run, so their borrows of `dom` and
+        // `pending_flush` are released by the time the bodies use them.
+        let waiting_for_work = initialized && pending_flush.is_none();
 
+        futures_util::select_biased! {
             // Check for incoming events from main thread first
-            event = event_rx.recv() => {
+            event = event_rx.next() => {
                 let Some(event) = event else {
                     // Channel closed
                     return;
@@ -292,11 +299,7 @@ async fn run_virtual_dom_loop(
                         initialized = true;
                         // Perform initial rebuild
                         dom.rebuild(&mut mutations);
-                        pending_flush = Some(send_edits(
-                            &websocket,
-                            webview_id,
-                            &mut mutations,
-                        ));
+                        pending_flush = Some(send_edits(&websocket, webview_id, &mut mutations));
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
@@ -313,8 +316,11 @@ async fn run_virtual_dom_loop(
 
             // The webview applied the in-flight edits (Ok) or the connection dropped them (Err).
             // Either way we are no longer waiting, so rendering can resume.
-            Some(applied) = OptionFuture::from(pending_flush.as_mut().map(|flush| &mut flush.applied)) => {
-                let flush = pending_flush.take().expect("this arm only fires while a flush is pending");
+            applied = OptionFuture::from(pending_flush.as_mut().map(|flush| &mut flush.applied)) => {
+                let applied = applied.expect("this arm only fires while a flush is pending");
+                let flush = pending_flush
+                    .take()
+                    .expect("this arm only fires while a flush is pending");
                 if applied.is_ok() {
                     let runtime = dom.runtime();
                     for id in flush.mounted_events {
@@ -324,14 +330,10 @@ async fn run_virtual_dom_loop(
             }
 
             // Wait for the VirtualDom to have work ready
-            _ = dom.wait_for_work(), if initialized && pending_flush.is_none() => {
+            _ = OptionFuture::from(waiting_for_work.then(|| dom.wait_for_work().fuse())) => {
                 // Render and send mutations straight to the webview's edit websocket
                 dom.render_immediate(&mut mutations);
-                pending_flush = Some(send_edits(
-                    &websocket,
-                    webview_id,
-                    &mut mutations,
-                ));
+                pending_flush = Some(send_edits(&websocket, webview_id, &mut mutations));
             }
         }
     }
@@ -377,28 +379,59 @@ pub(crate) struct DomThreadHandle {
     pub tx: UnboundedSender<DomThreadMessage>,
 }
 
+/// The DOM thread's main loop as a future, handed to a [`Config::with_dom_thread_driver`]
+/// closure to drive on the executor of its choice. The future is `!Send`: it must be driven on
+/// the thread the closure is called on, to completion.
+///
+/// [`Config::with_dom_thread_driver`]: crate::Config::with_dom_thread_driver
+pub type DomThreadFuture = Pin<Box<dyn Future<Output = ()>>>;
+
+/// The executor for the DOM thread (see [`DomThreadFuture`]).
+pub(crate) type DomThreadDriver = Box<dyn FnOnce(DomThreadFuture) + Send>;
+
+/// The default DOM thread driver: a dedicated current-thread Tokio runtime, so component
+/// futures can use Tokio timers and IO.
+#[cfg(feature = "tokio_runtime")]
+pub(crate) fn default_tokio_driver() -> DomThreadDriver {
+    Box::new(|main_loop| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build the Tokio runtime for the DOM thread")
+            .block_on(main_loop)
+    })
+}
+
 /// Spawn a thread that runs async tasks and supports aborting them by window ID.
-pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThreadHandle {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+///
+/// The thread's whole workload is a single future: the message loop multiplexes the window
+/// VirtualDom tasks itself instead of spawning them on an executor, so `driver` can run it on
+/// any runtime that blocks the thread on a `!Send` future.
+pub(crate) fn spawn_dom_thread(
+    proxy: EventLoopProxy<UserWindowEvent>,
+    driver: DomThreadDriver,
+) -> DomThreadHandle {
+    let (tx, mut rx) = unbounded();
 
     std::thread::Builder::new()
         .name(DOM_THREAD_NAME.into())
         .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to create Tokio runtime for VirtualDom thread");
+            let main_loop: DomThreadFuture = Box::pin(async move {
+                // The callback registry for every window, owned by this loop and handed
+                // to each spawned task (see [`SharedCallbackRegistry`]).
+                let callbacks = SharedCallbackRegistry::default();
+                let abort_handles: Rc<RefCell<HashMap<WindowId, AbortHandle>>> =
+                    Rc::new(RefCell::new(HashMap::new()));
+                // The window VirtualDom tasks.
+                let mut tasks = FuturesUnordered::new();
 
-            runtime.block_on(async move {
-                tokio::task::LocalSet::new()
-                    .run_until(async {
-                        // The callback registry for every window, owned by this loop and handed
-                        // to each spawned task (see [`SharedCallbackRegistry`]).
-                        let callbacks = SharedCallbackRegistry::default();
-                        let abort_handles: Rc<RefCell<HashMap<WindowId, AbortHandle>>> =
-                            Rc::new(RefCell::new(HashMap::new()));
-
-                        while let Some(message) = rx.recv().await {
+                loop {
+                    futures_util::select_biased! {
+                        message = rx.next() => {
+                            let Some(message) = message else {
+                                // Channel closed: the app is shutting down.
+                                return;
+                            };
                             match message {
                                 DomThreadMessage::Abort(window_id) => {
                                     // A missing handle means the task already finished naturally.
@@ -412,19 +445,27 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                     let fut = spawn_task(callbacks.clone());
                                     let proxy = proxy.clone();
                                     let handles = abort_handles.clone();
-                                    let join_handle = tokio::task::spawn_local(async move {
-                                        _ = AssertUnwindSafe(fut).catch_unwind().await;
-                                        // Runs when the VirtualDom task finishes or panics (never
-                                        // on abort). Start tearing down the window: hiding a
-                                        // window whose VirtualDom is gone would leave a zombie.
-                                        handles.borrow_mut().remove(&window_id);
-                                        _ = proxy.send_event(
-                                            UserWindowEventVariant::DestroyWindow(window_id).into(),
-                                        );
-                                    });
-                                    abort_handles
-                                        .borrow_mut()
-                                        .insert(window_id, join_handle.abort_handle());
+                                    let (abort_handle, abort_registration) = AbortHandle::new_pair();
+                                    tasks.push(
+                                        async move {
+                                            let result = Abortable::new(
+                                                AssertUnwindSafe(fut).catch_unwind(),
+                                                abort_registration,
+                                            )
+                                            .await;
+                                            // Runs when the VirtualDom task finishes or panics (never
+                                            // on abort). Start tearing down the window: hiding a
+                                            // window whose VirtualDom is gone would leave a zombie.
+                                            if result.is_ok() {
+                                                handles.borrow_mut().remove(&window_id);
+                                                _ = proxy.send_event(
+                                                    UserWindowEventVariant::DestroyWindow(window_id).into(),
+                                                );
+                                            }
+                                        }
+                                        .boxed_local(),
+                                    );
+                                    abort_handles.borrow_mut().insert(window_id, abort_handle);
                                 }
 
                                 DomThreadMessage::RemoveWindowCallbacks(window_id) => {
@@ -432,9 +473,16 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                 }
                             }
                         }
-                    })
-                    .await;
+
+                        // A window task finished; its wrapper above already queued the window
+                        // teardown. An empty `FuturesUnordered` counts as terminated, so this
+                        // arm is skipped while no window is running.
+                        _ = tasks.next() => {}
+                    }
+                }
             });
+
+            driver(main_loop);
         })
         .expect("Failed to spawn VirtualDom thread");
 

@@ -26,21 +26,6 @@ use tao::{
 /// not the VirtualDom itself.
 pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 
-/// The thread the tao event loop runs on, recorded when the [`App`] is created.
-static MAIN_THREAD_ID: std::sync::OnceLock<std::thread::ThreadId> = std::sync::OnceLock::new();
-
-/// Blocking [`DesktopContext`](crate::DesktopContext) calls wait on an event the main thread must
-/// process; calling them *from* the main thread would deadlock, so panic with a clear message.
-pub(crate) fn assert_not_main_thread() {
-    if MAIN_THREAD_ID.get() == Some(&std::thread::current().id()) {
-        panic!(
-            "blocking DesktopContext methods cannot be called from the main/event-loop thread: \
-             they wait on an event that same thread must process, which would deadlock. Use the \
-             DesktopService methods directly instead."
-        );
-    }
-}
-
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
@@ -52,9 +37,6 @@ pub(crate) struct App {
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
-    /// A shutdown was requested: every window is closed and the loop exits once the webviews
-    /// map drains. A second shutdown request while this is set forces an immediate exit.
-    pub(crate) shutting_down: bool,
     pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
@@ -79,24 +61,23 @@ pub(crate) struct SharedContext {
 
 impl App {
     pub fn new(mut cfg: Config, virtual_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
-        // Record the event loop thread so blocking DesktopContext calls can detect (and refuse)
-        // being driven from it, which would deadlock.
-        _ = MAIN_THREAD_ID.set(std::thread::current().id());
-
         let event_loop = cfg
             .event_loop
             .take()
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let proxy = event_loop.create_proxy();
-        let desktop_thread_handle = spawn_dom_thread(proxy.clone());
+        let dom_thread_driver = cfg
+            .dom_thread_driver
+            .take()
+            .expect("every Config constructor provides a DOM thread driver");
+        let desktop_thread_handle = spawn_dom_thread(proxy.clone(), dom_thread_driver);
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
             disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
             is_visible_before_start: true,
-            shutting_down: false,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             unmounted_dom: Cell::new(Some(virtual_dom)),
@@ -260,32 +241,17 @@ impl App {
             .shared
             .desktop_thread_handle
             .tx
-            .send(DomThreadMessage::Abort(id));
+            .unbounded_send(DomThreadMessage::Abort(id));
         let _ = self
             .shared
             .desktop_thread_handle
             .tx
-            .send(DomThreadMessage::RemoveWindowCallbacks(id));
+            .unbounded_send(DomThreadMessage::RemoveWindowCallbacks(id));
         self.shared.event_handlers.remove_window(id);
         self.shared.shortcut_manager.remove_window(id);
 
-        if (self.exit_on_last_window_close || self.shutting_down) && self.webviews.is_empty() {
+        if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
-        }
-    }
-
-    /// Gracefully shut the app down: close every window, then exit.
-    /// A repeated request (e.g. a second Ctrl-C) forces an immediate exit.
-    pub fn handle_shutdown(&mut self) {
-        if self.shutting_down || self.webviews.is_empty() {
-            self.control_flow = ControlFlow::Exit;
-            return;
-        }
-
-        self.shutting_down = true;
-        let ids: Vec<_> = self.webviews.keys().copied().collect();
-        for id in ids {
-            self.close_window(id);
         }
     }
 
@@ -361,7 +327,9 @@ impl App {
 
         // Send Initialize event to VirtualDom thread. The VirtualDom thread renders and sends
         // its edits straight to the webview's websocket, so no further poll is needed here.
-        let _ = view.dom_event_tx.send(VirtualDomEvent::Initialize);
+        let _ = view
+            .dom_event_tx
+            .unbounded_send(VirtualDomEvent::Initialize);
 
         #[cfg(not(target_os = "linux"))]
         {
@@ -385,7 +353,7 @@ impl App {
                 for webview in self.webviews.values() {
                     let _ = webview
                         .dom_event_tx
-                        .send(VirtualDomEvent::HotReload(hr_msg.clone()));
+                        .unbounded_send(VirtualDomEvent::HotReload(hr_msg.clone()));
                 }
 
                 if !hr_msg.assets.is_empty() {
@@ -437,7 +405,7 @@ impl App {
                 false,
             ),
             DevserverMsg::Shutdown => {
-                self.handle_shutdown();
+                self.control_flow = ControlFlow::Exit;
             }
             _ => {}
         }

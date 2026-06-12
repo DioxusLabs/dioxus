@@ -28,7 +28,7 @@ use wry_bindgen_runtime::{WryBindgen, WryBindgenWebviewDriver};
 
 pub(crate) struct WebviewInstance {
     /// Sends events to the VirtualDom running on the dedicated DOM thread.
-    pub dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
+    pub dom_event_tx: futures_channel::mpsc::UnboundedSender<VirtualDomEvent>,
     pub wry_queue: WryQueue,
     pub desktop_context: Rc<DesktopService>,
     wry_bindgen_driver: WryBindgenWebviewDriver,
@@ -102,7 +102,7 @@ impl WebviewInstance {
 
         // Create the event channel for VirtualDom communication. The VirtualDom runs on a
         // dedicated thread and receives events from the main thread through this channel.
-        let (event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (event_tx, dom_event_rx) = futures_channel::mpsc::unbounded();
 
         let wry_bindgen = WryBindgen::new();
         let protocol = wry_bindgen.protocol_handler();
@@ -447,7 +447,7 @@ impl WebviewInstance {
         _ = shared
             .desktop_thread_handle
             .tx
-            .send(DomThreadMessage::Spawn(
+            .unbounded_send(DomThreadMessage::Spawn(
                 window_id,
                 Box::new(move |callbacks| {
                     // This closure runs on the DOM thread, which hands it the callback registry

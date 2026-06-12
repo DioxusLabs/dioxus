@@ -1,11 +1,11 @@
 use crate::DesktopService;
+use futures_channel::oneshot;
 use serde::{Deserialize, Serialize};
 use std::sync::{Weak, mpsc};
 use tao::{
     event_loop::EventLoopProxy,
     window::{Window, WindowId},
 };
-use tokio::sync::oneshot;
 
 /// A weak reference to a window: the event-loop proxy and window id used to reach it. Holding
 /// one (e.g. through a [`DesktopContext`]) does not keep the window alive — once the window

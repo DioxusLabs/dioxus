@@ -50,7 +50,9 @@ pub fn launch_virtual_dom_blocking(
                 UserWindowEventVariant::NewWindow => app.handle_new_window(event_loop),
                 UserWindowEventVariant::CloseWindow(id) => app.handle_close_requested(id),
                 UserWindowEventVariant::DestroyWindow(id) => app.close_window(id),
-                UserWindowEventVariant::Shutdown => app.handle_shutdown(),
+                UserWindowEventVariant::Shutdown => {
+                    app.control_flow = tao::event_loop::ControlFlow::Exit
+                }
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 UserWindowEventVariant::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
@@ -177,9 +179,14 @@ pub fn launch(
         virtual_dom
     });
 
-    let platform_config = *platform_config
+    let platform_config = platform_config
         .into_iter()
-        .find_map(|cfg| cfg.downcast::<Config>().ok())
-        .unwrap_or_default();
-    launch_virtual_dom(make_dom, platform_config)
+        .find_map(|cfg| cfg.downcast::<Config>().ok());
+    #[cfg(feature = "tokio_runtime")]
+    let platform_config = platform_config.unwrap_or_default();
+    #[cfg(not(feature = "tokio_runtime"))]
+    let platform_config = platform_config.expect(
+        "without the tokio_runtime feature, launch requires a Config built with `Config::new_with_dom_thread_driver`",
+    );
+    launch_virtual_dom(make_dom, *platform_config)
 }

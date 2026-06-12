@@ -30,12 +30,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 wry = { workspace = true, default-features = false, features = ["os-webview", "protocol"] }
 futures-channel = { workspace = true }
-tokio = { workspace = true, features = [
-  "sync",
+tokio = { workspace = true, optional = true, features = [
   "rt-multi-thread",
   "rt",
-  "time",
-  "macros",
   "fs",
   "io-util",
 ] }
@@ -45,7 +42,7 @@ slotmap = { workspace = true }
 send_wrapper = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
-futures-util = { workspace = true }
+futures-util = { workspace = true, features = ["std", "async-await"] }
 percent-encoding = { workspace = true }
 async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
@@ -107,7 +104,7 @@ objc2-app-kit = { workspace = true, features = ["NSView"] }
 
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]
-tokio_runtime = []
+tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
 transparent = ["wry/transparent"]
