@@ -10,12 +10,20 @@ use crate::{
 };
 
 /// Properties for the [`SuspenseBoundary()`] component.
-#[derive(Clone, PartialEq)]
 #[allow(non_camel_case_types)]
 pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,
     /// The children of the suspense boundary
     children: LastRenderedNode,
+}
+
+impl Clone for SuspenseBoundaryProps {
+    fn clone(&self) -> Self {
+        Self {
+            fallback: self.fallback,
+            children: self.children.clone(),
+        }
+    }
 }
 
 impl SuspenseBoundaryProps {
@@ -29,7 +37,7 @@ impl SuspenseBoundaryProps {
         SuspenseBoundaryPropsBuilder {
             owner: Owner::default(),
             fields: ((), ()),
-            _phantom: (),
+            _phantom: ::core::default::Default::default(),
         }
     }
 }
@@ -41,7 +49,10 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
-impl Properties for SuspenseBoundaryProps {
+impl Properties for SuspenseBoundaryProps
+where
+    Self: Clone,
+{
     type Builder = SuspenseBoundaryPropsBuilder<((), ())>;
     fn builder() -> Self::Builder {
         SuspenseBoundaryProps::builder()
@@ -74,8 +85,9 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
         self,
         fallback: impl SuperInto<Callback<SuspenseContext, Element>, __Marker>,
     ) -> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)> {
-        let owner = self.owner.clone();
-        let fallback = (with_owner(owner, move || fallback.super_into()),);
+        let fallback = (with_owner(self.owner.clone(), move || {
+            SuperInto::super_into(fallback)
+        }),);
         let (_, children) = self.fields;
         SuspenseBoundaryPropsBuilder {
             owner: self.owner,
@@ -106,10 +118,11 @@ impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, ())> {
         self,
         children: Element,
     ) -> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
+        let children = (children,);
         let (fallback, _) = self.fields;
         SuspenseBoundaryPropsBuilder {
             owner: self.owner,
-            fields: (fallback, (children,)),
+            fields: (fallback, children),
             _phantom: self._phantom,
         }
     }
@@ -144,15 +157,25 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     }
 }
 #[doc(hidden)]
-#[derive(Clone)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 pub struct SuspenseBoundaryPropsWithOwner {
     inner: SuspenseBoundaryProps,
     owner: Owner,
 }
+#[automatically_derived]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl ::core::clone::Clone for SuspenseBoundaryPropsWithOwner {
+    #[inline]
+    fn clone(&self) -> SuspenseBoundaryPropsWithOwner {
+        SuspenseBoundaryPropsWithOwner {
+            inner: ::core::clone::Clone::clone(&self.inner),
+            owner: ::core::clone::Clone::clone(&self.owner),
+        }
+    }
+}
 impl PartialEq for SuspenseBoundaryPropsWithOwner {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
+        self.inner.eq(&other.inner)
     }
 }
 impl SuspenseBoundaryPropsWithOwner {
@@ -180,15 +203,26 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
 {
     pub fn build(self) -> SuspenseBoundaryPropsWithOwner {
         let (fallback, children) = self.fields;
+        let fallback = fallback.0;
+        let children = SuspenseBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
         SuspenseBoundaryPropsWithOwner {
             inner: SuspenseBoundaryProps {
-                fallback: fallback.0,
-                children: LastRenderedNode::new(children.into_value(VNode::empty)),
+                fallback,
+                children: LastRenderedNode::new(children),
             },
             owner: self.owner,
         }
     }
 }
+#[automatically_derived]
+#[allow(non_camel_case_types)]
+impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
+    #[inline]
+    fn eq(&self, other: &SuspenseBoundaryProps) -> bool {
+        self.fallback == other.fallback && self.children == other.children
+    }
+}
+
 /// Suspense Boundaries let you render a fallback UI while a child component is suspended.
 ///
 /// # Example
@@ -774,7 +808,10 @@ impl SuspenseContext {
 
     /// The suspense context owned by `scope_id`, if that scope is a
     /// suspense boundary.
-    pub fn of_scope(runtime: &Runtime, scope_id: ScopeId) -> Option<Self> {
+    pub fn downcast_suspense_boundary_from_scope(
+        runtime: &Runtime,
+        scope_id: ScopeId,
+    ) -> Option<Self> {
         runtime.try_get_state(scope_id)?.suspense_boundary()
     }
 
@@ -783,7 +820,7 @@ impl SuspenseContext {
         scope_id: ScopeId,
         destroy_component_state: bool,
     ) {
-        if let Some(scope) = Self::of_scope(&dom.runtime, scope_id)
+        if let Some(scope) = Self::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
             && let Some(branch) = scope.take_suspended_branch()
         {
             branch

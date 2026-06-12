@@ -19,6 +19,14 @@ impl<M: WriteMutations> DiffState<'_, M> {
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
+        debug_assert!(
+            new.iter().all(|n| n.key.is_some() == new_is_keyed),
+            "all siblings must be keyed or all siblings must be non-keyed"
+        );
+        debug_assert!(
+            old.iter().all(|o| o.key.is_some() == old_is_keyed),
+            "all siblings must be keyed or all siblings must be non-keyed"
+        );
 
         if new_is_keyed && old_is_keyed {
             self.diff_keyed_children(old, new, parent);
@@ -27,6 +35,14 @@ impl<M: WriteMutations> DiffState<'_, M> {
         }
     }
 
+    // Diff children that are not keyed.
+    //
+    // The parent must be on the top of the change list stack when entering this
+    // function:
+    //
+    //     [... parent]
+    //
+    // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(
         &mut self,
         old: &[VNode],
@@ -35,6 +51,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
     ) {
         use std::cmp::Ordering;
 
+        // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
@@ -54,7 +71,46 @@ impl<M: WriteMutations> DiffState<'_, M> {
         self.diff_child_pairs(old.iter(), new);
     }
 
+    // Diffing "keyed" children.
+    //
+    // With keyed children, we care about whether we delete, move, or create nodes
+    // versus mutate existing nodes in place. Presumably there is some sort of CSS
+    // transition animation that makes the virtual DOM diffing algorithm
+    // observable. By specifying keys for nodes, we know which virtual DOM nodes
+    // must reuse (or not reuse) the same physical DOM nodes.
+    //
+    // This is loosely based on Inferno's keyed patching implementation. However, we
+    // have to modify the algorithm since we are compiling the diff down into change
+    // list instructions that will be executed later, rather than applying the
+    // changes to the DOM directly as we compare virtual DOMs.
+    //
+    // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
+    //
+    // The stack is empty upon entry.
     fn diff_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: Option<ElementRef>) {
+        #[cfg(debug_assertions)]
+        {
+            let mut keys = rustc_hash::FxHashSet::default();
+            let mut assert_unique_keys = |children: &[VNode]| {
+                keys.clear();
+                for child in children {
+                    let key = child.key.clone();
+                    debug_assert!(
+                        key.is_some(),
+                        "if any sibling is keyed, all siblings must be keyed"
+                    );
+                    keys.insert(key);
+                }
+                debug_assert_eq!(
+                    children.len(),
+                    keys.len(),
+                    "keyed siblings must each have a unique key"
+                );
+            };
+            assert_unique_keys(old);
+            assert_unique_keys(new);
+        }
+
         let Some((left_offset, right_offset)) = self.diff_keyed_ends(old, new, parent) else {
             return;
         };
@@ -98,6 +154,11 @@ impl<M: WriteMutations> DiffState<'_, M> {
         self.diff_shared_prefix(old, new, left_offset);
     }
 
+    /// Diff both ends of the children that share keys.
+    ///
+    /// Returns a left offset and right offset of that indicates a smaller section to pass onto the middle diffing.
+    ///
+    /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
         old: &[VNode],
@@ -172,11 +233,44 @@ impl<M: WriteMutations> DiffState<'_, M> {
         }
     }
 
+    // The most-general, expensive code path for keyed children diffing.
+    //
+    // We find the longest subsequence within `old` of children that are relatively
+    // ordered the same way in `new` (via finding a longest-increasing-subsequence
+    // of the old child's index within `new`). The children that are elements of
+    // this subsequence will remain in place, minimizing the number of DOM moves we
+    // will have to do.
     #[allow(clippy::too_many_lines)]
     fn diff_keyed_middle(&mut self, old: &[VNode], new: &[VNode], parent: Option<ElementRef>) {
+        /*
+        1. Map the old keys into a numerical ordering based on indices.
+        2. Create a map of old key to its index
+        3. Map each new key to the old key, carrying over the old index.
+            - IE if we have ABCD becomes BACD, our sequence would be 1,0,2,3
+            - if we have ABCD to ABDE, our sequence would be 0,1,3,MAX because E doesn't exist
+
+        now, we should have a list of integers that indicates where in the old list the new items map to.
+
+        4. Compute the LIS of this list
+            - this indicates the longest list of new children that won't need to be moved.
+
+        5. Identify which nodes need to be removed
+        6. Identify which nodes will need to be diffed
+
+        7. Going along each item in the new list, create it and insert it before the next closest item in the LIS.
+            - if the item already existed, just move it to the right place.
+
+        8. Finally, generate instructions to remove any old children.
+        9. Generate instructions to finally diff children that are the same between both
+        */
+        // 0. Debug sanity checks
+        // Should have already diffed the shared-key prefixes and suffixes.
         debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
         debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
 
+        // 1. Map the old keys into a numerical ordering based on indices.
+        // 2. Create a map of old key to its index
+        // IE if the keys were A B C, then we would have (A, 0) (B, 1) (C, 2).
         let old_key_to_old_index = old
             .iter()
             .enumerate()
@@ -185,6 +279,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
 
         let mut shared_keys = FxHashSet::default();
 
+        // 3. Map each new key to the old key, carrying over the old index.
         let new_index_to_old_index = new
             .iter()
             .map(|node| {
@@ -198,6 +293,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
             })
             .collect::<Box<[_]>>();
 
+        // If none of the old keys are reused by the new children, then we remove all the remaining old children and
+        // create the new children afresh.
         if shared_keys.is_empty() {
             let first_old = old.first().unwrap();
             let anchor = anchor_at(ElementEdge::First, first_old, &[], self.dom, self.context());
@@ -206,6 +303,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             return;
         }
 
+        // remove any old children that are not shared
         for child_to_remove in old
             .iter()
             .filter(|child| !shared_keys.contains(child.key.as_ref().unwrap()))
@@ -213,6 +311,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             child_to_remove.remove_node(self.dom, self.to.as_deref_mut());
         }
 
+        // 4. Compute the LIS of this list
         let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
 
         let mut allocation = vec![0; new_index_to_old_index.len() * 2];
@@ -226,15 +325,18 @@ impl<M: WriteMutations> DiffState<'_, M> {
             starts,
         );
 
+        // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
         if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(usize::MAX) {
             lis_sequence.remove(0);
         }
 
+        // Diff each nod in the LIS
         for idx in &lis_sequence {
             let old_node = &old[new_index_to_old_index[*idx]];
             DiffFrame::new(old_node.mount.get(), old_node, &new[*idx]).diff_into(self);
         }
 
+        // add mount instruction for the items before the LIS
         let last = *lis_sequence.first().unwrap();
         if last < (new.len() - 1) {
             self.splice_around_diffing(

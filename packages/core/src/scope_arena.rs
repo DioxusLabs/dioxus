@@ -21,9 +21,10 @@ impl VirtualDom {
     ) -> &mut ScopeState {
         let target_id = self.runtime.current_render_target_id();
         let parent_id = self.runtime.try_current_scope_id();
-        let height = parent_id
-            .and_then(|id| self.runtime.try_get_state(id))
-            .map_or(0, |parent| parent.height() + 1);
+        let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
+            Some(parent) => parent.height() + 1,
+            None => 0,
+        };
         let suspense_boundary = self
             .runtime
             .current_suspense_location()
@@ -78,7 +79,7 @@ impl VirtualDom {
                     pre_run();
                 }
 
-                let span = tracing::trace_span!("render");
+                let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
                         let render_return = render();
@@ -113,9 +114,9 @@ impl VirtualDom {
                 post_run();
             }
 
-            // remove this scope from the dirty set
-            let order = ScopeOrder::new(scope_state.height, scope_id);
-            self.dirty_scopes.remove(&order);
+            // remove this scope from dirty scopes
+            self.dirty_scopes
+                .remove(&ScopeOrder::new(scope_state.height, scope_id));
             output
         })
     }

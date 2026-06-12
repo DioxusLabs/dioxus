@@ -483,7 +483,7 @@ pub enum Mutation {
     /// Create a new Event Listener.
     NewEventListener {
         /// The name of the event to listen for.
-        name: &'static str,
+        name: String,
 
         /// The ID of the node to attach the listener to.
         id: ElementId,
@@ -492,7 +492,7 @@ pub enum Mutation {
     /// Remove an existing Event Listener.
     RemoveEventListener {
         /// The name of the event to remove.
-        name: &'static str,
+        name: String,
 
         /// The ID of the node to remove.
         id: ElementId,
@@ -585,11 +585,17 @@ impl WriteMutations for Mutations {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.edits.push(Mutation::NewEventListener { name, id })
+        self.edits.push(Mutation::NewEventListener {
+            name: name.into(),
+            id,
+        })
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.edits.push(Mutation::RemoveEventListener { name, id })
+        self.edits.push(Mutation::RemoveEventListener {
+            name: name.into(),
+            id,
+        })
     }
 
     fn remove_node(&mut self, id: ElementId) {

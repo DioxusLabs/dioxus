@@ -500,9 +500,11 @@ impl VNode {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
+        let template = self.template;
         for (idx, dyn_node) in self.dynamic_nodes.iter().enumerate() {
+            let path_len = template.node_paths().get(idx).map(|path| path.len());
             // Roots are cleaned up automatically above; non-root nested dynamic nodes get cleaned here.
-            if self.template.node_paths()[idx].len() > 1 {
+            if let Some(2..) = path_len {
                 self.remove_dynamic_node(
                     mount,
                     dom,
@@ -597,7 +599,7 @@ impl VNode {
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
-        let mut reclaimed_id = None;
+        let mut next_id = None;
         for (idx, path) in self.template.attr_paths().iter().enumerate() {
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
@@ -605,10 +607,10 @@ impl VNode {
             }
 
             // only reclaim the new element if it's different from the previous one
-            let id = dom.get_mounted_dyn_attr(mount, idx);
-            if id != ElementId::default() && Some(id) != reclaimed_id {
-                dom.reclaim_for_mount(mount, id);
-                reclaimed_id = Some(id);
+            let new_id = dom.get_mounted_dyn_attr(mount, idx);
+            if new_id != ElementId::default() && Some(new_id) != next_id {
+                dom.reclaim_for_mount(mount, new_id);
+                next_id = Some(new_id);
             }
             dom.set_mounted_dyn_attr(mount, idx, ElementId::default());
         }

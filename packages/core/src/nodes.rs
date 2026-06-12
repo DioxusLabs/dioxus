@@ -37,6 +37,10 @@ pub struct VNodeInner {
     /// This is a list of positions in the template where dynamic attributes can be inserted.
     ///
     /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
+    /// More than one slot can point at the same template element when named dynamic attributes and
+    /// spread attributes are mixed. Creation writes those slots in order, and diffing groups slots
+    /// with the same attribute path so duplicate keys keep the same last-write-wins behavior and
+    /// removed dynamic overrides can reveal the static template attribute underneath.
     ///
     /// For example:
     /// ```rust
@@ -162,6 +166,27 @@ impl VNode {
         dynamic_nodes: Box<[DynamicNode]>,
         dynamic_attrs: Box<[Box<[Attribute]>]>,
     ) -> Self {
+        // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
+        // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
+        // and the only realistic source of violations.
+        #[cfg(debug_assertions)]
+        for slot in &dynamic_attrs {
+            for pair in slot.windows(2) {
+                let left = (pair[0].name, pair[0].namespace);
+                let right = (pair[1].name, pair[1].namespace);
+                if left > right {
+                    tracing::warn!(
+                        "spread attributes in `rsx!` must be sorted by (name, namespace); \
+                         found {:?} before {:?}. The diff assumes sorted input and may produce \
+                         incorrect updates otherwise.",
+                        left,
+                        right,
+                    );
+                    break;
+                }
+            }
+        }
+
         Self {
             vnode: Rc::new(VNodeInner {
                 key,
@@ -401,17 +426,12 @@ impl Template {
                     attrs,
                     children,
                 } => {
-                    let mut h = xxh64(&[0xE0], seed);
-                    h = xxh64(tag.as_bytes(), h);
+                    let mut h = xxh64(tag.as_bytes(), seed);
                     if let Some(ns) = *namespace {
-                        h = xxh64(&[0xE1], h);
                         h = xxh64(ns.as_bytes(), h);
-                    } else {
-                        h = xxh64(&[0xE2], h);
                     }
 
                     // Hash attributes (already in deterministic order from macro)
-                    h = xxh64(&[0xE3], h);
                     let mut i = 0;
                     while i < attrs.len() {
                         h = match &attrs[i] {
@@ -420,37 +440,32 @@ impl Template {
                                 value,
                                 namespace,
                             } => {
-                                let mut new_h = xxh64(&[0xE4], h);
-                                new_h = xxh64(name.as_bytes(), new_h);
+                                let mut new_h = xxh64(name.as_bytes(), h);
                                 new_h = xxh64(value.as_bytes(), new_h);
                                 if let Some(ns) = *namespace {
-                                    new_h = xxh64(&[0xE5], new_h);
                                     new_h = xxh64(ns.as_bytes(), new_h);
-                                } else {
-                                    new_h = xxh64(&[0xE6], new_h);
                                 }
                                 new_h
                             }
                             TemplateAttribute::Dynamic { id } => {
-                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xE7], h))
+                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFE], h))
                             }
                         };
                         i += 1;
                     }
 
                     // Hash children
-                    h = xxh64(&[0xE8], h);
                     let mut i = 0;
                     while i < children.len() {
                         h = hash_template_node(&children[i], h);
                         i += 1;
                     }
 
-                    xxh64(&[0xE9], h)
+                    h
                 }
-                TemplateNode::Text { text } => xxh64(text.as_bytes(), xxh64(&[0xEA], seed)),
+                TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
                 TemplateNode::Dynamic { id } => {
-                    xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xEB], seed))
+                    xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
                 }
             }
         }
@@ -460,7 +475,6 @@ impl Template {
         // Hash roots
         let mut i = 0;
         while i < roots.len() {
-            hash = xxh64(&[0xEC], hash);
             hash = hash_template_node(&roots[i], hash);
             i += 1;
         }
@@ -649,67 +663,6 @@ impl TemplateNode {
         };
         attrs
     }
-}
-
-/// Sort the static prefix of a template's attribute list by attribute name. This is invoked from
-/// the `rsx!` macro so that the diff layer can binary-search the static attribute prefix at
-/// runtime. The dynamic suffix is preserved in template order because dynamic attribute slots are
-/// indexed by id from the VNode's `dynamic_attrs` list.
-pub const fn sort_template_attributes<const N: usize>(
-    mut attrs: [TemplateAttribute; N],
-) -> [TemplateAttribute; N] {
-    // The macro emits static attrs first and dynamic attrs second. Only the static prefix is
-    // sorted because dynamic attrs are addressed by id from the VNode's dynamic attribute list.
-    let mut static_len = 0;
-    while static_len < N {
-        match attrs[static_len] {
-            TemplateAttribute::Static { .. } => static_len += 1,
-            TemplateAttribute::Dynamic { .. } => break,
-        }
-    }
-
-    // Attribute lists are small, and insertion sort is const-friendly on stable Rust.
-    let mut i = 1;
-    while i < static_len {
-        let mut j = i;
-        while j > 0 && template_attribute_name_less(attrs[j], attrs[j - 1]) {
-            let previous = attrs[j - 1];
-            attrs[j - 1] = attrs[j];
-            attrs[j] = previous;
-            j -= 1;
-        }
-        i += 1;
-    }
-
-    attrs
-}
-
-const fn template_attribute_name_less(left: TemplateAttribute, right: TemplateAttribute) -> bool {
-    match (left, right) {
-        (
-            TemplateAttribute::Static { name: left, .. },
-            TemplateAttribute::Static { name: right, .. },
-        ) => static_str_less(left, right),
-        _ => false,
-    }
-}
-
-const fn static_str_less(left: StaticStr, right: StaticStr) -> bool {
-    let left = left.as_bytes();
-    let right = right.as_bytes();
-    let mut idx = 0;
-
-    while idx < left.len() && idx < right.len() {
-        if left[idx] < right[idx] {
-            return true;
-        }
-        if left[idx] > right[idx] {
-            return false;
-        }
-        idx += 1;
-    }
-
-    left.len() < right.len()
 }
 
 /// A node created at runtime
@@ -920,6 +873,70 @@ pub enum TemplateAttribute {
         /// The index
         id: usize,
     },
+}
+
+#[doc(hidden)]
+/// Sort static template attributes by their emitted name while leaving dynamic attributes in place.
+///
+/// The diffing code binary-searches the static prefix by `TemplateAttribute::Static::name` when a
+/// dynamic spread stops overriding a static value. The RSX syntax name is not always the emitted
+/// DOM name (`r#as` emits `as`, `http_equiv` emits `http-equiv`), so this runs after macro
+/// expansion has produced the actual static names.
+pub const fn sort_template_attributes<const N: usize>(
+    mut attrs: [TemplateAttribute; N],
+) -> [TemplateAttribute; N] {
+    // The macro emits static attrs first and dynamic attrs second. Only the static prefix is
+    // sorted because dynamic attrs are addressed by id from the VNode's dynamic attribute list.
+    let mut static_len = 0;
+    while static_len < N {
+        match attrs[static_len] {
+            TemplateAttribute::Static { .. } => static_len += 1,
+            TemplateAttribute::Dynamic { .. } => break,
+        }
+    }
+
+    // Attribute lists are small, and insertion sort is const-friendly on stable Rust.
+    let mut i = 1;
+    while i < static_len {
+        let mut j = i;
+        while j > 0 && template_attribute_name_less(attrs[j], attrs[j - 1]) {
+            let previous = attrs[j - 1];
+            attrs[j - 1] = attrs[j];
+            attrs[j] = previous;
+            j -= 1;
+        }
+        i += 1;
+    }
+
+    attrs
+}
+
+const fn template_attribute_name_less(left: TemplateAttribute, right: TemplateAttribute) -> bool {
+    match (left, right) {
+        (
+            TemplateAttribute::Static { name: left, .. },
+            TemplateAttribute::Static { name: right, .. },
+        ) => static_str_less(left, right),
+        _ => false,
+    }
+}
+
+const fn static_str_less(left: StaticStr, right: StaticStr) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    let mut idx = 0;
+
+    while idx < left.len() && idx < right.len() {
+        if left[idx] < right[idx] {
+            return true;
+        }
+        if left[idx] > right[idx] {
+            return false;
+        }
+        idx += 1;
+    }
+
+    left.len() < right.len()
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
@@ -1212,13 +1229,7 @@ where
     I: IntoVNode,
 {
     fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
-        }
+        DynamicNode::Fragment(self.into_iter().map(|node| node.into_vnode()).collect())
     }
 }
 

@@ -131,6 +131,10 @@ use tracing::instrument;
 ///
 /// vdom.render_immediate(&mut mutations);
 /// ```
+///
+/// To not wait for suspense while diffing the VirtualDom, call [`VirtualDom::render_immediate`].
+///
+///
 /// ## Building an event loop around Dioxus:
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
@@ -138,9 +142,14 @@ use tracing::instrument;
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
 /// # struct RealDom;
+/// # struct Event {}
 /// # impl RealDom {
-/// #     fn new() -> Self { Self }
-/// #     fn flush(&mut self, _: &Mutations) {}
+/// #     fn new() -> Self {
+/// #         Self {}
+/// #     }
+/// #     fn apply(&mut self) -> Mutations {
+/// #         unimplemented!()
+/// #     }
 /// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
 /// #         unimplemented!()
 /// #     }
@@ -157,10 +166,8 @@ use tracing::instrument;
 /// }
 ///
 /// let mut dom = VirtualDom::new(app);
-/// let mut edits = Mutations::default();
 ///
-/// dom.rebuild(&mut edits);
-/// real_dom.flush(&edits);
+/// dom.rebuild(&mut real_dom.apply());
 ///
 /// loop {
 ///     tokio::select! {
@@ -171,9 +178,7 @@ use tracing::instrument;
 ///         },
 ///     }
 ///
-///     edits = Mutations::default();
-///     dom.render_immediate(&mut edits);
-///     real_dom.flush(&edits);
+///     dom.render_immediate(&mut real_dom.apply());
 /// }
 /// # });
 /// ```
@@ -443,7 +448,7 @@ impl VirtualDom {
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.process_events();
 
-            // Now that we have collected all queued work, check whether any mounts need diffing.
+            // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
             if self.has_dirty_scopes() {
                 return;
             }
@@ -472,7 +477,7 @@ impl VirtualDom {
     }
 
     /// Queue any pending events
-    pub(crate) fn queue_events(&mut self) {
+    fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
@@ -489,7 +494,7 @@ impl VirtualDom {
     pub fn process_events(&mut self) {
         self.queue_events();
 
-        // Now that we have collected all queued work, check whether any mounts need diffing.
+        // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
         if self.has_dirty_scopes() {
             return;
         }
@@ -690,7 +695,7 @@ impl VirtualDom {
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.queue_events();
 
-            // Now that we have collected all queued work, check whether any mounts need diffing.
+            // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
             if self.has_dirty_scopes() {
                 break;
             }

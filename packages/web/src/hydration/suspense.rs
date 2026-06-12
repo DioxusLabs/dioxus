@@ -154,7 +154,8 @@ impl WebsysDom {
     }
 
     fn track_suspense_for_scope(&mut self, scope: &ScopeState, dom: &VirtualDom) {
-        if let Some(suspense) = SuspenseContext::of_scope(&dom.runtime(), scope.id())
+        if let Some(suspense) =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
             && suspense.has_suspended_tasks()
         {
             self.suspense_hydration_ids

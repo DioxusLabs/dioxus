@@ -361,7 +361,10 @@ impl SsrRendererPool {
                         stream.render(resolved_chunk);
                         // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
                         if let Some(suspense) =
-                            SuspenseContext::of_scope(&virtual_dom.runtime(), scope)
+                            SuspenseContext::downcast_suspense_boundary_from_scope(
+                                &virtual_dom.runtime(),
+                                scope,
+                            )
                         {
                             suspense.freeze();
                             // Go to every child suspense boundary and add an error boundary. Since we cannot rerun any nodes above the child suspense boundary,
@@ -442,9 +445,10 @@ impl SsrRendererPool {
         // The stack starts with the root scope because the root is a suspense boundary
         let pending_suspense_boundaries_stack = RwLock::new(vec![]);
         move |renderer, to, vdom, scope| {
-            let is_suspense_boundary = SuspenseContext::of_scope(&vdom.runtime(), scope)
-                .filter(|s| s.has_suspended_tasks())
-                .is_some();
+            let is_suspense_boundary =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope)
+                    .filter(|s| s.has_suspended_tasks())
+                    .is_some();
             if is_suspense_boundary {
                 let mount = stream.render_placeholder(
                     |to| {
@@ -549,7 +553,8 @@ impl SsrRendererPool {
         // then continue to any children
         if let Some(scope) = vdom.get_scope(scope) {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
-            if let Some(suspense_boundary) = SuspenseContext::of_scope(&vdom.runtime(), scope.id())
+            if let Some(suspense_boundary) =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
                 && let Some(node) = suspense_boundary.suspended_nodes()
             {
                 Self::take_from_vnode(context, vdom, &node);
