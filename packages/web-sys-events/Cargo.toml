@@ -59,6 +59,8 @@ features = [
     "FileReader",
     "FormData",
     "Blob",
+    "Element",
+    "EventTarget",
 ]
 
 [features]

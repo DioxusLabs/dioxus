@@ -6,7 +6,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use std::{any::Any, rc::Rc};
+use std::rc::Rc;
 
 use dioxus_core::Runtime;
 use dioxus_core::{ElementId, Template};
@@ -29,9 +29,6 @@ pub struct WebsysDom {
 
     #[cfg(feature = "mounted")]
     pub(crate) runtime: Rc<Runtime>,
-
-    #[cfg(feature = "mounted")]
-    pub(crate) queued_mounted_events: Vec<ElementId>,
 
     // We originally started with a different `WriteMutations` for collecting templates during hydration.
     // When profiling the binary size of web applications, this caused a large increase in binary size
@@ -107,11 +104,14 @@ impl WebsysDom {
 
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
-                let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
-                runtime.handle_event(name.as_str(), event.clone(), element);
-
                 // Prevent the default action if the user set prevent default on the event
-                let prevent_default = !event.default_action_enabled();
+                let prevent_default = dioxus_web_sys_events::dispatch_event_to_runtime(
+                    &runtime,
+                    name.as_str(),
+                    data,
+                    element,
+                    bubbles,
+                );
                 if prevent_default {
                     web_sys_event.prevent_default();
                 }
@@ -134,8 +134,6 @@ impl WebsysDom {
             templates: FxHashMap::default(),
             #[cfg(feature = "mounted")]
             runtime,
-            #[cfg(feature = "mounted")]
-            queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]
             skip_mutations: false,
             #[cfg(feature = "hydrate")]

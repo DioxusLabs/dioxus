@@ -755,7 +755,8 @@ impl DesktopContext {
                     .expect("non-user event stays non-user after being queued for the handler")
             })
         });
-        self.callbacks.register_wry_event_handler(handler, dom_handler);
+        self.callbacks
+            .register_wry_event_handler(handler, dom_handler);
         handler
     }
 

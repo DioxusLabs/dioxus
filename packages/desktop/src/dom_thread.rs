@@ -16,6 +16,7 @@ use crate::shortcut::ShortcutHandle;
 use dioxus_core::{ElementId, ScopeId, VirtualDom, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
+use dioxus_web_sys_events::QueueMountedEvents;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use futures_util::future::OptionFuture;
@@ -267,8 +268,7 @@ async fn run_virtual_dom_loop(
     webview_id: u32,
     callback_registry: SharedCallbackRegistry,
 ) {
-    let mut mutations = MutationState::default();
-    mutations.queue_mounted_events();
+    let mut mutations = QueueMountedEvents::new(MutationState::default());
     // The receiver for the edits we are currently waiting on the webview to apply. While this is
     // `Some`, we hold off rendering new work so effects don't run before the DOM has updated. The
     // websocket worker resolves it once the webview acks the edits (or drops it if the connection
@@ -320,7 +320,7 @@ async fn run_virtual_dom_loop(
                 if applied.is_ok() {
                     let runtime = dom.runtime();
                     for id in flush.mounted_events {
-                        crate::wry_bindgen_bridge::handle_mounted_event(&runtime, id);
+                        dioxus_web_sys_events::handle_mounted_event(&runtime, id);
                     }
                 }
             }
@@ -347,7 +347,7 @@ struct PendingFlush {
 fn send_edits(
     websocket: &EditWebsocket,
     webview_id: u32,
-    mutations: &mut MutationState,
+    mutations: &mut QueueMountedEvents<MutationState>,
 ) -> PendingFlush {
     let edits = mutations.export_memory();
     let mounted_events = mutations.take_mounted_events();

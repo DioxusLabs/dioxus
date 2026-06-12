@@ -98,8 +98,13 @@ impl SuspenseHydrationIds {
 }
 
 impl WebsysDom {
-    pub fn rehydrate_streaming(&mut self, message: SuspenseMessage, dom: &mut VirtualDom) {
-        if let Err(err) = self.rehydrate_streaming_inner(message, dom) {
+    pub fn rehydrate_streaming(
+        &mut self,
+        message: SuspenseMessage,
+        dom: &mut VirtualDom,
+        mounted_events: &mut Vec<ElementId>,
+    ) {
+        if let Err(err) = self.rehydrate_streaming_inner(message, dom, mounted_events) {
             tracing::error!("Rehydration failed. {:?}", err);
         }
     }
@@ -108,6 +113,7 @@ impl WebsysDom {
         &mut self,
         message: SuspenseMessage,
         dom: &mut VirtualDom,
+        mounted_events: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         let SuspenseMessage {
             suspense_path,
@@ -167,7 +173,7 @@ impl WebsysDom {
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
-        self.flush_edits();
+        self.interpreter.flush();
 
         // Remove the streaming div
         resolved_suspense_element.remove();
@@ -181,7 +187,7 @@ impl WebsysDom {
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        self.start_hydration_at_scope(root_scope, dom, children)?;
+        self.start_hydration_at_scope(root_scope, dom, children, mounted_events)?;
 
         Ok(())
     }
@@ -191,19 +197,14 @@ impl WebsysDom {
         scope: &ScopeState,
         dom: &VirtualDom,
         under: Vec<web_sys::Node>,
+        mounted_events: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         let mut ids = Vec::new();
-        let mut to_mount = Vec::new();
 
         // Recursively rehydrate the nodes under the scope
-        self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount)?;
+        self.rehydrate_scope(scope, dom, &mut ids, mounted_events)?;
 
         self.interpreter.base().hydrate(ids, under);
-
-        #[cfg(feature = "mounted")]
-        for id in to_mount {
-            self.send_mount_event(id);
-        }
 
         Ok(())
     }
@@ -211,6 +212,7 @@ impl WebsysDom {
     pub fn rehydrate(
         &mut self,
         vdom: &VirtualDom,
+        mounted_events: &mut Vec<ElementId>,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
         let closure =
@@ -236,7 +238,12 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone()])?;
+        self.start_hydration_at_scope(
+            vdom.base_scope(),
+            vdom,
+            vec![self.root.clone()],
+            mounted_events,
+        )?;
 
         Ok(rx)
     }

@@ -7,6 +7,7 @@
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_web_sys_events::QueueMountedEvents;
 use dom::WebsysDom;
 use futures_util::{FutureExt, StreamExt, pin_mut, select};
 
@@ -63,7 +64,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     // If the hydrate feature is enabled, launch the client with hydration enabled
     let should_hydrate = web_config.hydrate || cfg!(feature = "hydrate");
 
-    let mut websys_dom = WebsysDom::new(web_config, runtime);
+    let mut websys_dom = QueueMountedEvents::new(WebsysDom::new(web_config, runtime));
 
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
@@ -138,18 +139,20 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
-                virtual_dom.rebuild(&mut websys_dom);
+                // Rebuild with the bare writer: `skip_mutations` drops everything (including
+                // mounted listeners), and rehydration collects the mounted events itself below.
+                virtual_dom.rebuild(&mut *websys_dom);
             });
             websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            let mut mounted_events = Vec::new();
+            let rx = websys_dom
+                .rehydrate(&virtual_dom, &mut mounted_events)
+                .unwrap();
             hydration_receiver = Some(rx);
 
-            #[cfg(feature = "mounted")]
-            {
-                // Flush any mounted events that were queued up while hydrating
-                websys_dom.flush_queued_mounted_events();
-            }
+            // Now that the dom nodes are hydrated, dispatch the mounted events collected along the way
+            websys_dom.dispatch_mounted_events(mounted_events);
         }
         #[cfg(not(feature = "hydrate"))]
         {
@@ -158,7 +161,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     } else {
         virtual_dom.rebuild(&mut websys_dom);
 
-        websys_dom.flush_edits();
+        mutations::flush_edits(&mut websys_dom);
     }
 
     loop {
@@ -236,7 +239,9 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(feature = "hydrate")]
         if let Some(hydration_data) = hydration_work {
-            websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
+            let mut mounted_events = Vec::new();
+            websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom, &mut mounted_events);
+            websys_dom.dispatch_mounted_events(mounted_events);
         }
 
         // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
@@ -256,6 +261,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // wait for the animation frame to fire so we can apply our changes
         // work_loop.wait_for_raf().await;
 
-        websys_dom.flush_edits();
+        mutations::flush_edits(&mut websys_dom);
     }
 }
