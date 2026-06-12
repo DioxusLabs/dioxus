@@ -132,8 +132,10 @@ fn use_dom_event_handler<T: Send + 'static>(
     )
 }
 
-/// Register an event handler that runs when a muda event is processed. Unlike most callback hooks, this
-/// will run outside of the virtual dom context
+/// Register an event handler that runs when a muda event is processed.
+///
+/// The handler is registered from the current component and runs asynchronously on the
+/// VirtualDom thread inside that component's scope.
 #[cfg_attr(
     docsrs,
     doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
@@ -151,8 +153,10 @@ pub fn use_muda_event_handler(
     )
 }
 
-/// Register an event handler that runs when a tray icon menu event is processed. Unlike most callback hooks, this
-/// will run outside of the virtual dom context
+/// Register an event handler that runs when a tray icon menu event is processed.
+///
+/// The handler is registered from the current component and runs asynchronously on the
+/// VirtualDom thread inside that component's scope.
 #[cfg_attr(
     docsrs,
     doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
@@ -170,10 +174,12 @@ pub fn use_tray_menu_event_handler(
     )
 }
 
-/// Register an event handler that runs when a tray icon event is processed. Unlike most callback hooks, this
-/// will run outside of the virtual dom context
-/// This is only for tray icon and not it's menus.
-/// If you want to register tray icon menus handler use `use_tray_menu_event_handler` instead.
+/// Register an event handler that runs when a tray icon event is processed.
+///
+/// The handler is registered from the current component and runs asynchronously on the
+/// VirtualDom thread inside that component's scope.
+///
+/// For tray icon menu events, use [`use_tray_menu_event_handler`].
 #[cfg_attr(
     docsrs,
     doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
@@ -193,8 +199,8 @@ pub fn use_tray_icon_event_handler(
 
 /// Provide a callback to handle asset loading yourself.
 ///
-/// The callback takes a path as requested by the web view, and it should return `Some(response)`
-/// if you want to load the asset, and `None` if you want to fallback on the default behavior.
+/// Requests whose first path segment matches `name` are routed to the callback. Call
+/// [`RequestAsyncResponder::respond`] to complete the request with a custom response.
 pub fn use_asset_handler(
     name: &str,
     mut handler: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
@@ -214,7 +220,9 @@ pub fn use_asset_handler(
     );
 }
 
-/// Get a closure that executes any JavaScript in the WebView context.
+/// Register a global shortcut while the current component is mounted.
+///
+/// The handler runs asynchronously on the VirtualDom thread when the shortcut is triggered.
 pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
     handler: impl FnMut(HotKeyState) + 'static,

@@ -379,11 +379,11 @@ pub(crate) struct DomThreadHandle {
     pub tx: UnboundedSender<DomThreadMessage>,
 }
 
-/// The DOM thread's main loop as a future, handed to a [`Config::with_dom_thread_driver`]
+/// The DOM thread's main loop as a future, handed to a [`Config::new_with_dom_thread_driver`]
 /// closure to drive on the executor of its choice. The future is `!Send`: it must be driven on
 /// the thread the closure is called on, to completion.
 ///
-/// [`Config::with_dom_thread_driver`]: crate::Config::with_dom_thread_driver
+/// [`Config::new_with_dom_thread_driver`]: crate::Config::new_with_dom_thread_driver
 pub type DomThreadFuture = Pin<Box<dyn Future<Output = ()>>>;
 
 /// The executor for the DOM thread (see [`DomThreadFuture`]).
