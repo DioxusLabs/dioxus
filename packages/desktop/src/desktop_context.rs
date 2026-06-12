@@ -40,8 +40,8 @@ use tao::platform::ios::WindowExtIOS;
 /// Generate one proxy method. Methods without a return type are fire-and-forget: they are queued
 /// to the main thread without blocking the VirtualDom thread (the proxy event queue preserves
 /// ordering with later blocking calls). Methods with a return type block until the result
-/// arrives. Both always reach their window: it stays alive while this context exists (see
-/// [`crate::ipc::WindowHandle`]).
+/// arrives. The context is a weak reference to the window: after the window closes,
+/// fire-and-forget calls are dropped and blocking calls panic.
 macro_rules! proxy_method {
     // No rename: forward to the method of the same name.
     (
@@ -119,11 +119,9 @@ pub fn window() -> DesktopContext {
 pub(crate) struct DesktopContextInner {
     /// Channel to send events to the DOM thread for the inverted callback pattern.
     dom_tx: UnboundedSender<VirtualDomEvent>,
-    /// Carries the event-loop proxy and window id used to reach the window, and keeps the
-    /// window's main-thread state alive: the [`crate::webview::WebviewInstance`] is removed from
-    /// the webviews map only after the last clone of this drops, so a proxied call can never find
-    /// its window missing.
-    handle: Arc<WindowHandle>,
+    /// Carries the event-loop proxy and window id used to reach the window. A weak reference:
+    /// it does not keep the window alive.
+    handle: WindowHandle,
 }
 
 /// A handle to the [`DesktopService`] for the current VirtualDom thread.
@@ -147,11 +145,11 @@ impl DesktopContext {
     ///
     /// * `dom_tx` - Channel to send events to the DOM thread
     /// * `handle` - The window's [`WindowHandle`], which carries the event-loop proxy and window
-    ///   id and keeps the window's main-thread state alive
+    ///   id used to reach the window
     /// * `callbacks` - The DOM thread's callback registry
     pub(crate) fn new(
         dom_tx: UnboundedSender<VirtualDomEvent>,
-        handle: Arc<WindowHandle>,
+        handle: WindowHandle,
         callbacks: SharedCallbackRegistry,
     ) -> Self {
         Self::from_parts(DesktopContextInner { dom_tx, handle }, callbacks)
@@ -173,8 +171,8 @@ impl DesktopContext {
     ///
     /// # Panics
     ///
-    /// The future panics if the event loop shut down before the closure could run, which can
-    /// only happen while the process is force-exiting.
+    /// The future panics if the window closed (or the event loop shut down) before the closure
+    /// could run.
     ///
     /// Do **not** block on the returned future from code that already runs on the main thread
     /// (such as a [`use_main_thread_wry_event_handler`](crate::use_main_thread_wry_event_handler)
@@ -199,7 +197,7 @@ impl DesktopContext {
         async move {
             receiver
                 .await
-                .expect("run_on_main_thread: the event loop has already shut down")
+                .expect("run_on_main_thread: the window has closed or the event loop has shut down")
         }
     }
 
@@ -207,8 +205,8 @@ impl DesktopContext {
     /// a receiver for the result. Await it or call
     /// [`blocking_recv`](tokio::sync::oneshot::Receiver::blocking_recv).
     ///
-    /// If the event loop has already shut down, the closure is dropped and the receiver resolves
-    /// with an error.
+    /// If the window has closed (or the event loop has shut down), the closure is dropped and the
+    /// receiver resolves with an error.
     fn run_with_desktop_service<T, F>(&self, f: F) -> oneshot::Receiver<T>
     where
         T: Send + 'static,
@@ -220,8 +218,8 @@ impl DesktopContext {
     }
 
     /// Queue a callback for the main thread. Returns whether the callback was queued; sending
-    /// fails only when the event loop is gone, which (because the loop runs as long as any
-    /// window state — and therefore any `DesktopContext` — exists) means the process is exiting.
+    /// fails only when the event loop is gone. A queued callback is still dropped on the main
+    /// thread if its window has already closed.
     fn send_desktop_service_callback(&self, callback: DesktopServiceCallback) -> bool {
         self.inner
             .handle
@@ -236,13 +234,12 @@ impl DesktopContext {
     /// Run a closure on the main thread with access to this window's [`DesktopService`], blocking
     /// until the result arrives.
     ///
-    /// This always produces a result: the window's main-thread state outlives every
-    /// `DesktopContext` for it (see [`WindowHandle`]), so the callback cannot miss its window.
-    /// The result only fails to arrive when the event loop itself is gone — i.e. the process is
-    /// force-exiting — in which case this parks the calling thread until the process dies rather
-    /// than fabricating a value.
+    /// # Panics
     ///
-    /// Panics if called from the main/event-loop thread, which would otherwise deadlock.
+    /// Panics if the window has already closed (or the event loop has shut down): the context is
+    /// a weak reference and does not keep the window alive.
+    ///
+    /// Also panics if called from the main/event-loop thread, which would otherwise deadlock.
     fn run_with_desktop_service_blocking<T, F>(&self, f: F) -> T
     where
         T: Send + 'static,
@@ -258,16 +255,10 @@ impl DesktopContext {
             }
         }
 
-        // The event loop is shutting down. It only exits once every DesktopContext is gone, so
-        // this is reachable only while the process force-exits (e.g. repeated Ctrl-C) or the
-        // main thread is panicking; there is no caller left to return to.
-        tracing::debug!(
-            "the event loop is gone; parking a desktop call for window {:?} until process exit",
+        panic!(
+            "cannot reach window {:?}: it has closed (or the event loop has shut down)",
             self.inner.handle.window_id
         );
-        loop {
-            std::thread::park();
-        }
     }
 
     proxy_methods! { desktop:
@@ -322,8 +313,8 @@ impl DesktopContext {
     /// Start the creation of a new window using a [`VirtualDom`] and window builder.
     ///
     /// Returns a future that resolves to the [`DesktopContext`] for the new window. You can use
-    /// it to control the new window from the current one once it is created. Be careful to not
-    /// create a cycle of windows, or you might leak memory.
+    /// it to control the new window from the current one once it is created. The context is a
+    /// weak reference: it does not keep the new window alive.
     ///
     /// Note: `Config` is not `Send`, so this method takes a closure that creates the config
     /// on the main thread instead of accepting it directly. The [`VirtualDom`] is only ever
@@ -392,8 +383,17 @@ impl DesktopContext {
     /// through the proxied methods on this context, or inside [`Self::run_on_main_thread`]. The
     /// raw handle is mainly useful for raw-window-handle integrations, like creating a wgpu
     /// surface on the main thread (see the `wgpu_child_window` example).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the window has already closed: the context is a weak reference and does not
+    /// keep the window alive.
     pub fn tao_window(&self) -> Arc<Window> {
-        self.inner.handle.window.clone()
+        self.inner
+            .handle
+            .window
+            .upgrade()
+            .expect("the window has already closed")
     }
 
     pub(crate) fn dom_event_sender(&self) -> UnboundedSender<VirtualDomEvent> {
@@ -1122,7 +1122,7 @@ impl DesktopService {
         self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
-    pub(crate) fn proxy_inner(&self, handle: Arc<WindowHandle>) -> DesktopContextInner {
+    pub(crate) fn proxy_inner(&self, handle: WindowHandle) -> DesktopContextInner {
         DesktopContextInner {
             dom_tx: self.dom_tx.clone(),
             handle,

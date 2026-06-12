@@ -114,9 +114,9 @@ impl ShortcutRegistry {
     }
 
     /// Drop every shortcut `window_id` registered, unregistering OS-level hotkeys that no other
-    /// window still uses. Runs once the last [`WindowHandle`](crate::ipc::WindowHandle) for the
-    /// window has dropped: the shortcut can only forward into that window's dead channel, so
-    /// keeping it registered would block the key combination system-wide for no effect.
+    /// window still uses. Runs when the window closes: the shortcut can only forward into that
+    /// window's dead channel, so keeping it registered would block the key combination
+    /// system-wide for no effect.
     pub(crate) fn remove_window(&self, window_id: WindowId) {
         let mut shortcuts = self.shortcuts.borrow_mut();
         let mut removed: HashMap<u32, HotKey> = HashMap::new();

@@ -78,8 +78,7 @@ impl WindowEventHandlers {
         self.handlers.borrow_mut().remove(id);
     }
 
-    /// Drop every handler `window_id` registered. Runs once the last
-    /// [`WindowHandle`](crate::ipc::WindowHandle) for the window has dropped, mirroring the
+    /// Drop every handler `window_id` registered. Runs when the window closes, mirroring the
     /// DOM-side callback purge.
     pub(crate) fn remove_window(&self, window_id: WindowId) {
         self.handlers

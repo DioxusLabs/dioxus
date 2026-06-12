@@ -52,7 +52,7 @@ pub(crate) struct App {
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
-    /// A shutdown was requested: every window is closing and the loop exits once the webviews
+    /// A shutdown was requested: every window is closed and the loop exits once the webviews
     /// map drains. A second shutdown request while this is set forces an immediate exit.
     pub(crate) shutting_down: bool,
     pub(crate) disable_dma_buf_on_wayland: bool,
@@ -201,7 +201,7 @@ impl App {
         } = event
         {
             if button == tray_icon::MouseButton::Left && self.tray_icon_show_window_on_click {
-                for webview in self.alive_webviews() {
+                for webview in self.webviews.values() {
                     webview.desktop_context.window.set_visible(true);
                     webview.desktop_context.window.set_focus();
                 }
@@ -225,24 +225,8 @@ impl App {
         }
     }
 
-    /// Look up a window that hasn't started closing. A closing window stays in the map only so
-    /// proxied calls can find it (see [`Self::begin_window_close`]); everything user-facing must
-    /// treat it as already gone, which this lookup encodes.
-    fn alive_webview(&self, id: WindowId) -> Option<&WebviewInstance> {
-        self.webviews
-            .get(&id)
-            .filter(|webview| !webview.closing.get())
-    }
-
-    /// Iterate the windows that haven't started closing — see [`Self::alive_webview`].
-    fn alive_webviews(&self) -> impl Iterator<Item = &WebviewInstance> + '_ {
-        self.webviews
-            .values()
-            .filter(|webview| !webview.closing.get())
-    }
-
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        let Some(window) = self.alive_webview(id) else {
+        let Some(window) = self.webviews.get(&id) else {
             return;
         };
 
@@ -256,35 +240,27 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.begin_window_close(id);
+                self.close_window(id);
             }
         };
     }
 
-    /// Begin closing a window: hide it and abort its VirtualDom task. The instance stays in the
-    /// webviews map — and the native window stays alive, hidden — until every
-    /// [`DesktopContext`](crate::DesktopContext) for it has dropped
-    /// ([`Self::window_handles_dropped`]), so proxied calls through handles held elsewhere (e.g.
-    /// by another window's components) always find their window.
-    pub fn begin_window_close(&mut self, id: WindowId) {
-        let Some(window) = self.alive_webview(id) else {
+    /// Close a window: drop its main-thread state (which destroys the native window) and abort
+    /// its VirtualDom task. [`DesktopContext`](crate::DesktopContext)s for the window are weak
+    /// references and may outlive it; proxied calls through them are dropped (fire-and-forget)
+    /// or panic (blocking) from here on.
+    pub fn close_window(&mut self, id: WindowId) {
+        if self.webviews.remove(&id).is_none() {
             return;
-        };
-        window.closing.set(true);
+        }
 
-        window.desktop_context.window.set_visible(false);
+        // The abort is queued before the callback purge, so hook cleanup running while the task
+        // drops still sees its callbacks.
         let _ = self
             .shared
             .desktop_thread_handle
             .tx
             .send(DomThreadMessage::Abort(id));
-    }
-
-    /// The last [`DesktopContext`](crate::DesktopContext) for this window dropped: nothing can
-    /// reach it anymore, so drop its main-thread state. This is the only place a window leaves
-    /// the webviews map — that is what guarantees proxied desktop calls can never miss their
-    /// window.
-    pub fn window_handles_dropped(&mut self, id: WindowId) {
         let _ = self
             .shared
             .desktop_thread_handle
@@ -292,14 +268,13 @@ impl App {
             .send(DomThreadMessage::RemoveWindowCallbacks(id));
         self.shared.event_handlers.remove_window(id);
         self.shared.shortcut_manager.remove_window(id);
-        self.webviews.remove(&id);
 
         if (self.exit_on_last_window_close || self.shutting_down) && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
     }
 
-    /// Gracefully shut the app down: close every window, then exit once their handles drain.
+    /// Gracefully shut the app down: close every window, then exit.
     /// A repeated request (e.g. a second Ctrl-C) forces an immediate exit.
     pub fn handle_shutdown(&mut self) {
         if self.shutting_down || self.webviews.is_empty() {
@@ -310,7 +285,7 @@ impl App {
         self.shutting_down = true;
         let ids: Vec<_> = self.webviews.keys().copied().collect();
         for id in ids {
-            self.begin_window_close(id);
+            self.close_window(id);
         }
     }
 
@@ -350,9 +325,8 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        // The root window has no creator to hand a DesktopContext to, so its strong window
-        // handle is dropped here; the handles held by the window's own VirtualDom task keep it
-        // alive from now on.
+        // The root window has no creator to hand a DesktopContext to, so its window handle is
+        // dropped here.
         let (webview, _window_handle) =
             WebviewInstance::new(cfg, virtual_dom, self.shared.clone(), target);
 
@@ -379,9 +353,9 @@ impl App {
     ///
     /// Send the Initialize event to the VirtualDom thread to trigger initial rebuild
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        // A closing window's webview may still reload and re-send Initialize; ignore it rather
+        // A closed window's webview may still reload and re-send Initialize; ignore it rather
         // than restarting or re-showing the window.
-        let Some(view) = self.alive_webview(id) else {
+        let Some(view) = self.webviews.get(&id) else {
             return;
         };
 
@@ -563,7 +537,7 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        if let Some(webview) = self.alive_webviews().next() {
+        if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
             let Some(monitor) = window.current_monitor() else {

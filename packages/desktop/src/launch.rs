@@ -41,7 +41,7 @@ pub fn launch_virtual_dom_blocking(
                 event, window_id, ..
             } => match event {
                 WindowEvent::CloseRequested => app.handle_close_requested(window_id),
-                WindowEvent::Destroyed { .. } => app.begin_window_close(window_id),
+                WindowEvent::Destroyed { .. } => app.close_window(window_id),
                 WindowEvent::Resized(new_size) => app.resize_window(window_id, new_size),
                 _ => {}
             },
@@ -49,10 +49,7 @@ pub fn launch_virtual_dom_blocking(
             Event::UserEvent(event) => match event.into_variant() {
                 UserWindowEventVariant::NewWindow => app.handle_new_window(event_loop),
                 UserWindowEventVariant::CloseWindow(id) => app.handle_close_requested(id),
-                UserWindowEventVariant::DestroyWindow(id) => app.begin_window_close(id),
-                UserWindowEventVariant::AllWindowHandlesDropped(id) => {
-                    app.window_handles_dropped(id)
-                }
+                UserWindowEventVariant::DestroyWindow(id) => app.close_window(id),
                 UserWindowEventVariant::Shutdown => app.handle_shutdown(),
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -115,14 +112,12 @@ pub fn launch_virtual_dom_blocking(
                     window_id,
                     callback,
                 } => {
-                    // Every sender holds a strong WindowHandle and the window only leaves the
-                    // map after the last handle drops (AllWindowHandlesDropped), so the lookup
-                    // cannot miss. A miss is a dioxus-desktop teardown-ordering bug.
-                    let webview = app
-                        .webviews
-                        .get(&window_id)
-                        .expect("a window's main-thread state outlives all of its DesktopContexts");
-                    callback.run(&webview.desktop_context);
+                    // DesktopContexts are weak references, so the window may already be closed.
+                    // Dropping the callback closes its response channel, which blocking callers
+                    // turn into a panic.
+                    if let Some(webview) = app.webviews.get(&window_id) {
+                        callback.run(&webview.desktop_context);
+                    }
                 }
             },
             _ => {}

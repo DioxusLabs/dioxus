@@ -1,33 +1,24 @@
 use crate::DesktopService;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, mpsc};
+use std::sync::{Weak, mpsc};
 use tao::{
     event_loop::EventLoopProxy,
     window::{Window, WindowId},
 };
 use tokio::sync::oneshot;
 
-/// Keeps a window's main-thread state ([`WebviewInstance`]) alive: the instance stays in the
-/// `App::webviews` map until every [`DesktopContext`] holding an `Arc` of this drops. That is the
-/// invariant that lets proxied window/webview calls assume their target window always exists.
+/// A weak reference to a window: the event-loop proxy and window id used to reach it. Holding
+/// one (e.g. through a [`DesktopContext`]) does not keep the window alive — once the window
+/// closes, fire-and-forget proxied calls are dropped and blocking ones panic.
 ///
-/// [`WebviewInstance`]: crate::webview::WebviewInstance
 /// [`DesktopContext`]: crate::DesktopContext
+#[derive(Clone)]
 pub(crate) struct WindowHandle {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) window_id: WindowId,
     /// The underlying tao window. The handle is `Send + Sync`, but most of its methods are
     /// main-thread-only; it is exposed for thread-safe uses like raw-window-handle integrations.
-    pub(crate) window: Arc<Window>,
-}
-
-impl Drop for WindowHandle {
-    fn drop(&mut self) {
-        // Fails only when the event loop is gone, i.e. the process is already exiting.
-        let _ = self
-            .proxy
-            .send_event(UserWindowEventVariant::AllWindowHandlesDropped(self.window_id).into());
-    }
+    pub(crate) window: Weak<Window>,
 }
 
 type DesktopServiceCallbackFn = Box<dyn FnOnce(&DesktopService) + Send>;
@@ -149,18 +140,13 @@ pub(crate) enum UserWindowEventVariant {
     /// Close a given window (could be any window!)
     CloseWindow(WindowId),
 
-    /// Begin tearing down a window unconditionally, ignoring [`WindowCloseBehaviour`].
+    /// Tear down a window unconditionally, ignoring [`WindowCloseBehaviour`].
     ///
     /// Sent when a window's VirtualDom task has finished: hiding such a window
     /// (`WindowCloseBehaviour::WindowHides`) would leave an unrecoverable zombie.
     ///
     /// [`WindowCloseBehaviour`]: crate::WindowCloseBehaviour
     DestroyWindow(WindowId),
-
-    /// The last [`WindowHandle`] for this window dropped: no [`crate::DesktopContext`] for it
-    /// exists anymore, so its main-thread state can be removed. This is the only event that
-    /// removes a window from the `App::webviews` map.
-    AllWindowHandlesDropped(WindowId),
 
     /// Gracefully shutdown the entire app
     Shutdown,

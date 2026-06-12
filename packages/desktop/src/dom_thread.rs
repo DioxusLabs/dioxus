@@ -22,7 +22,6 @@ use futures_util::FutureExt;
 use futures_util::future::OptionFuture;
 use slotmap::SlotMap;
 use std::panic::AssertUnwindSafe;
-use std::sync::Arc;
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
@@ -160,9 +159,8 @@ impl SharedCallbackRegistry {
     /// Drop every callback `window_id` registered and prune the indexes that pointed at them.
     ///
     /// A window's callbacks intentionally outlive its VirtualDom task: hook cleanup runs while
-    /// the task is being dropped, and handles held by other windows may remove callbacks after
-    /// this window starts closing. This runs once the last [`WindowHandle`] for the window has
-    /// dropped, when nothing that could reach the callbacks remains.
+    /// the task is being dropped, so this runs after the abort message for the window, and
+    /// removing an already-purged callback is a no-op.
     pub fn remove_window(&self, window_id: WindowId) {
         let mut registry = self.0.borrow_mut();
         let DomCallbackRegistry {
@@ -243,7 +241,7 @@ pub(crate) async fn run_virtual_dom_with_dom(
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
     websocket: EditWebsocket,
     webview_id: u32,
-    window_handle: Arc<WindowHandle>,
+    window_handle: WindowHandle,
     file_hover: NativeFileHover,
     callbacks: SharedCallbackRegistry,
 ) {
@@ -370,7 +368,7 @@ pub(crate) enum DomThreadMessage {
     Spawn(WindowId, SpawnTask),
     /// Abort the VirtualDom task for a window.
     Abort(WindowId),
-    /// Drop a window's callbacks after the last [`WindowHandle`] for it has dropped.
+    /// Drop a window's callbacks once the window has closed.
     RemoveWindowCallbacks(WindowId),
 }
 
