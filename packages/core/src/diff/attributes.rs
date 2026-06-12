@@ -23,7 +23,6 @@ use crate::innerlude::MountId;
 use crate::{
     Attribute, AttributeValue, TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
-    innerlude::{ElementPath, ElementRef},
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -309,12 +308,7 @@ impl VNode {
     ) {
         match &attribute.value {
             AttributeValue::Listener(_) => {
-                let target_id = dom.mount_target_id(mount);
-                dom.runtime.render_targets.borrow_mut()[target_id.0].elements[id.0] =
-                    Some(ElementRef {
-                        path: ElementPath { path },
-                        mount,
-                    });
+                dom.set_element_ref_for_mount(mount, id, path);
                 to.create_event_listener(&attribute.name[2..], id);
             }
             _ => {

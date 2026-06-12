@@ -802,8 +802,7 @@ impl SuspenseContext {
         )
     }
 
-    /// The suspense context owned by `scope_id`, if that scope is a
-    /// suspense boundary.
+    /// Try to get a suspense boundary from a scope id
     pub fn downcast_suspense_boundary_from_scope(
         runtime: &Runtime,
         scope_id: ScopeId,

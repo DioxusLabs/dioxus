@@ -207,6 +207,27 @@ impl VirtualDom {
         ElementId(target.elements.insert(None))
     }
 
+    pub(crate) fn set_element_ref_for_mount(
+        &self,
+        mount: MountId,
+        el: ElementId,
+        path: &'static [u8],
+    ) {
+        let target_id = self.mount_target_id(mount);
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets
+            .get_mut(target_id.0)
+            .expect("render target should exist while assigning an element ref");
+        let element = target
+            .elements
+            .get_mut(el.0)
+            .expect("element should exist while assigning an element ref");
+        *element = Some(ElementRef {
+            path: ElementPath { path },
+            mount,
+        });
+    }
+
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: ElementId) {
         let target_id = self.mount_target_id(mount);
         self.try_reclaim_in_target(target_id, el);
