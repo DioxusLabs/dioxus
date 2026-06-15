@@ -376,9 +376,14 @@ impl<'a> BundleContext<'a> {
             if let Some(parent) = dest_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(&src_path, &dest_path).with_context(|| {
-                format!("Failed to copy resource {src} -> {}", dest_path.display())
-            })?;
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dest_path)
+            } else {
+                std::fs::copy(&src_path, &dest_path)
+                    .map(|_| ())
+                    .map_err(Into::into)
+            }
+            .with_context(|| format!("Failed to copy resource {src} -> {}", dest_path.display()))?;
         }
         Ok(())
     }
