@@ -128,8 +128,6 @@ impl Renderer {
                                 write_attribute(buf, attr)?;
                             }
                         } else if !matches!(attr.value, AttributeValue::Listener(_)) {
-                            // Listeners aren't rendered into HTML; with markerless hydration
-                            // they're attached client-side via the walk script.
                             write_attribute(buf, attr)?;
                         }
                     }

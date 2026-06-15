@@ -28,11 +28,6 @@
 //!     }
 //! };
 //!```
-//!
-//! The output HTML carries no hydration markers — no `data-node-hydration` attributes,
-//! no placeholder comments, no text-boundary comments. The web hydrator instead walks
-//! the rebuilt VDOM in lockstep with the existing DOM, generating a byte-coded walk
-//! script that maps each `ElementId` to a DOM node by position.
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
 use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
