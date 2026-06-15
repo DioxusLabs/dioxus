@@ -67,10 +67,36 @@ pub fn assert_no_mutations(vdom: &mut VirtualDom) {
 }
 
 fn vnode_snapshot(vdom: &VirtualDom, vnode: &VNode) -> Vec<SnapshotNode> {
+    template_children_snapshot(vdom, vnode, &[], vnode.template.roots())
+}
+
+fn template_children_snapshot(
+    vdom: &VirtualDom,
+    vnode: &VNode,
+    parent_cursor: &[u8],
+    children: &[TemplateNode],
+) -> Vec<SnapshotNode> {
     let mut out = Vec::new();
-    for (root_idx, root) in vnode.template.roots().iter().enumerate() {
-        let path = [root_idx as u8];
-        out.extend(template_node_snapshot(vdom, vnode, root, &path));
+    for child_idx in 0..=children.len() {
+        for (dynamic_idx, _) in vnode
+            .template
+            .node_cursors()
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, cursor)| {
+                let (slot_parent, insertion_index) = cursor.split_slot();
+                slot_parent == parent_cursor && insertion_index == child_idx
+            })
+        {
+            out.extend(dynamic_node_snapshot(vdom, vnode, dynamic_idx));
+        }
+
+        if let Some(child) = children.get(child_idx) {
+            let mut child_cursor = parent_cursor.to_vec();
+            child_cursor.push(child_idx as u8);
+            out.extend(template_node_snapshot(vdom, vnode, child, &child_cursor));
+        }
     }
     out
 }
@@ -79,7 +105,7 @@ fn template_node_snapshot(
     vdom: &VirtualDom,
     vnode: &VNode,
     node: &TemplateNode,
-    path: &[u8],
+    cursor: &[u8],
 ) -> Vec<SnapshotNode> {
     match node {
         TemplateNode::Element {
@@ -107,21 +133,15 @@ fn template_node_snapshot(
                 }
             }
 
-            for (idx, attr_path) in vnode.template.attr_paths().iter().enumerate() {
-                if *attr_path == path {
+            for (idx, attr_cursor) in vnode.template.attr_cursors().iter().enumerate() {
+                if attr_cursor.as_slice() == cursor {
                     for attr in &*vnode.dynamic_attrs[idx] {
                         apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
                     }
                 }
             }
 
-            let mut rendered_children = Vec::new();
-            for (child_idx, child) in children.iter().enumerate() {
-                let mut child_path = Vec::with_capacity(path.len() + 1);
-                child_path.extend_from_slice(path);
-                child_path.push(child_idx as u8);
-                rendered_children.extend(template_node_snapshot(vdom, vnode, child, &child_path));
-            }
+            let rendered_children = template_children_snapshot(vdom, vnode, cursor, children);
 
             vec![SnapshotNode::Element {
                 tag: (*tag).to_string(),
@@ -132,7 +152,6 @@ fn template_node_snapshot(
             }]
         }
         TemplateNode::Text { text } => vec![SnapshotNode::Text((*text).to_string())],
-        TemplateNode::Dynamic { id } => dynamic_node_snapshot(vdom, vnode, *id),
     }
 }
 

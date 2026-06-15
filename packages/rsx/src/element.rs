@@ -163,33 +163,14 @@ impl ToTokens for Element {
             .chain(dynamic_attrs)
             .collect::<Vec<_>>();
 
-        // Render either the child
-        let children = el.children.iter().map(|c| match c {
-            BodyNode::Element(el) => quote! { #el },
+        // Render static children. Dynamic children are represented by template cursors.
+        let children = el.children.iter().filter_map(|c| match c {
+            BodyNode::Element(el) => Some(quote! { #el }),
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+                Some(quote! { dioxus_core::TemplateNode::Text { text: #text } })
             }
-            BodyNode::Text(text) => {
-                let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::ForLoop(floop) => {
-                let id = floop.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::RawExpr(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::Component(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::IfChain(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
+            _ => None,
         });
 
         let ns = ns(quote!(NAME_SPACE));

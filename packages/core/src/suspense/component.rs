@@ -5,6 +5,7 @@ use crate::{
     diff::context::DiffContext,
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
+    mutations::{reborrow_writer, replace_id_with},
     render_driver::{RenderDriver, remove_rendered_output},
     scope_context::SuspenseLocation,
 };
@@ -320,7 +321,7 @@ impl RenderDriver for SuspenseDriver {
             scope_state.set_suspense_boundary(suspense_context.clone());
             suspense_context.mount(scope_id);
         }
-        suspense_create(self, scope_id, parent, dom, to.as_mut())
+        suspense_create(self, scope_id, parent, dom, reborrow_writer(&mut to))
     }
 
     fn diff(
@@ -328,10 +329,10 @@ impl RenderDriver for SuspenseDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         _parent_context: Option<DiffContext<'_>>,
-        mut to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut dyn WriteMutations>,
     ) {
-        let mut render_to = to.as_mut().filter(|_| dom.scope_should_write_now(scope_id));
-        suspense_diff(self, scope_id, dom, render_to.as_mut())
+        let render_to = to.filter(|_| dom.scope_should_write_now(scope_id));
+        suspense_diff(self, scope_id, dom, render_to)
     }
 
     fn remove(
@@ -348,11 +349,7 @@ impl RenderDriver for SuspenseDriver {
         // are still its background state. Keep them so the nested boundary
         // can resume or continue diffing while hidden.
         if destroy_component_state {
-            SuspenseContext::remove_suspended_nodes::<&mut dyn WriteMutations>(
-                dom,
-                scope_id,
-                destroy_component_state,
-            );
+            SuspenseContext::remove_suspended_nodes(dom, scope_id, destroy_component_state);
         }
 
         // The scope's rendered output (children or fallback) is removed the
@@ -377,12 +374,12 @@ use generational_box::Owner;
 /// Mount a suspense boundary scope: render the children in the background
 /// first, then mount either the children or the fallback depending on whether
 /// anything suspended.
-fn suspense_create<M: WriteMutations>(
+fn suspense_create(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
     parent: Option<ElementRef>,
     dom: &mut VirtualDom,
-    to: Option<&mut M>,
+    to: Option<&mut dyn WriteMutations>,
 ) -> usize {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let suspense_context = dom.runtime.get_state(scope_id).suspense_boundary().unwrap();
@@ -391,7 +388,7 @@ fn suspense_create<M: WriteMutations>(
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         suspense_context.under_suspense_boundary(&dom.runtime(), || {
-            children.create(dom, parent, None::<&mut M>);
+            children.create(dom, parent, None);
         });
 
         driver.store_children(&children);
@@ -437,7 +434,7 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         to: &mut M,
         only_write_templates: impl FnOnce(&mut M),
-        replace_with: usize,
+        push_replacements: impl FnOnce(&mut M) -> usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let _runtime = RuntimeGuard::new(dom.runtime());
@@ -461,15 +458,16 @@ impl SuspenseBoundaryProps {
             let children = driver.children();
             // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
             if let Some(branch) = suspense_context.take_suspended_branch() {
-                branch.into_root().remove_node(&mut *dom, None::<&mut M>);
+                branch.into_root().remove_node(&mut *dom, None);
             }
 
-            // Streaming has pre-pushed `replace_with` items on the renderer stack.
+            // Streaming replacements are pushed after the placeholder target
+            // so `replace_with` can stay stack-only.
             let id = currently_rendered
                 .find_first_element(dom)
                 .expect("suspense placeholders should keep a DOM anchor");
-            to.replace_node_with(id, replace_with);
-            currently_rendered.remove_node(&mut *dom, Some(to));
+            replace_id_with(to, id, push_replacements);
+            currently_rendered.remove_node(&mut *dom, None);
 
             // Switch to only writing templates
             only_write_templates(to);
@@ -494,11 +492,11 @@ impl SuspenseBoundaryProps {
 ///
 /// `to` is the pre-gated writer: [`SuspenseDriver::diff`] applies the scope
 /// write gate before calling in.
-fn suspense_diff<M: WriteMutations>(
+fn suspense_diff(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
     dom: &mut VirtualDom,
-    mut to: Option<&mut M>,
+    mut to: Option<&mut dyn WriteMutations>,
 ) {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let scope = &mut dom.scopes[scope_id.index()];
@@ -520,7 +518,7 @@ fn suspense_diff<M: WriteMutations>(
                 // child may cancel its suspend (e.g. a signal flipped a `mode` flag)
                 // and we want to observe that before committing to a fallback render.
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    suspended_nodes.diff_node(&new_suspended_nodes, dom, to.as_deref_mut());
+                    suspended_nodes.diff_node(&new_suspended_nodes, dom, reborrow_writer(&mut to));
                 });
 
                 if !suspense_context.suspended_futures().is_empty() {
@@ -547,7 +545,7 @@ fn suspense_diff<M: WriteMutations>(
                         new_suspended_nodes,
                         scope_id,
                         dom,
-                        to.as_deref_mut(),
+                        reborrow_writer(&mut to),
                     );
                 }
             }
@@ -575,14 +573,14 @@ fn suspense_diff<M: WriteMutations>(
                         std::slice::from_ref(&new_placeholder),
                         parent,
                         dom,
-                        to.as_deref_mut(),
+                        reborrow_writer(&mut to),
                     );
                 });
 
                 // Then diff the new children in the background
                 dom.set_mount_mode(old_children.unchecked_mounted_id(), RenderMode::Background);
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    old_children.diff_node(&new_children, dom, to.as_deref_mut());
+                    old_children.diff_node(&new_children, dom, reborrow_writer(&mut to));
                 });
 
                 if suspense_context.suspended_futures().is_empty() {
@@ -593,7 +591,7 @@ fn suspense_diff<M: WriteMutations>(
                         new_children,
                         scope_id,
                         dom,
-                        to.as_deref_mut(),
+                        reborrow_writer(&mut to),
                     );
                 } else {
                     let branch = SuspenseBranch::new(new_children);
@@ -620,8 +618,8 @@ fn suspense_diff<M: WriteMutations>(
                     dom,
                     to,
                     |dom| {
-                        old_suspended_nodes.diff_node(&children, dom, None::<&mut M>);
-                        promote_suspense_mounts_to_foreground::<M>(dom, &children);
+                        old_suspended_nodes.diff_node(&children, dom, None);
+                        promote_suspense_mounts_to_foreground(dom, &children);
                     },
                 );
 
@@ -652,29 +650,29 @@ fn store_suspended_branch(driver: &SuspenseDriver, dom: &mut VirtualDom, branch:
 /// `placeholder`, record them as the boundary's rendered output, and mark the
 /// boundary resolved. Shared by the two diff arms that observe a suspension
 /// clearing while a fallback is on screen.
-fn promote_resolved_children<M: WriteMutations>(
+fn promote_resolved_children(
     driver: &SuspenseDriver,
     suspense_context: &SuspenseContext,
     placeholder: &LastRenderedNode,
     children: VNode,
     scope_id: ScopeId,
     dom: &mut VirtualDom,
-    to: Option<&mut M>,
+    to: Option<&mut dyn WriteMutations>,
 ) {
     dom.set_mount_mode(children.unchecked_mounted_id(), RenderMode::Foreground);
     replace_suspense_nodes(suspense_context, placeholder, &children, dom, to, |dom| {
-        children.remove_node_inner(dom, None::<&mut M>, false);
+        children.remove_node_inner(dom, None, false);
     });
     set_rendered_children(driver, dom, scope_id, LastRenderedNode::Real(children));
     mark_suspense_resolved(suspense_context, dom, scope_id);
 }
 
-fn replace_suspense_nodes<M: WriteMutations>(
+fn replace_suspense_nodes(
     suspense_context: &SuspenseContext,
     placeholder: &LastRenderedNode,
     children: &VNode,
     dom: &mut VirtualDom,
-    to: Option<&mut M>,
+    to: Option<&mut dyn WriteMutations>,
     prepare: impl FnOnce(&mut VirtualDom),
 ) {
     suspense_context.under_suspense_boundary(&dom.runtime(), || {
@@ -686,14 +684,14 @@ fn replace_suspense_nodes<M: WriteMutations>(
     });
 }
 
-fn replace_placeholder_with<M: WriteMutations>(
+fn replace_placeholder_with(
     placeholder: &LastRenderedNode,
     children: &VNode,
     dom: &mut VirtualDom,
-    mut to: Option<&mut M>,
+    mut to: Option<&mut dyn WriteMutations>,
 ) {
     let parent = dom.get_mounted_parent(placeholder.unchecked_mounted_id());
-    if let Some(to_ref) = to.as_deref_mut() {
+    if let Some(to_ref) = reborrow_writer(&mut to) {
         let placeholder_vnode = placeholder.as_vnode();
         if let Some(id) = placeholder_vnode.mounted_root(0, dom) {
             let child_owns_placeholder_id = (0..children.template.roots().len()).any(|root_idx| {
@@ -703,10 +701,10 @@ fn replace_placeholder_with<M: WriteMutations>(
             });
 
             if !child_owns_placeholder_id {
-                let created =
-                    dom.create_children(Some(&mut *to_ref), std::slice::from_ref(children), parent);
-                to_ref.replace_node_with(id, created);
-                placeholder.remove_node_inner(dom, None::<&mut M>, true);
+                replace_id_with(to_ref, id, |to| {
+                    dom.create_children(Some(to), std::slice::from_ref(children), parent)
+                });
+                placeholder.remove_node_inner(dom, None, true);
                 return;
             }
         }
@@ -726,7 +724,7 @@ fn mark_suspense_resolved(
     suspense_context.run_resolved_closures(&dom.runtime);
 }
 
-fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom, vnode: &VNode) {
+fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode) {
     let mount = vnode.unchecked_mounted_id();
     dom.set_mount_mode(mount, RenderMode::Foreground);
 
@@ -735,16 +733,16 @@ fn promote_suspense_mounts_to_foreground<M: WriteMutations>(dom: &mut VirtualDom
             DynamicNode::Component(_) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                 if dom.mark_clean(scope_id) {
-                    dom.run_and_diff_scope(None::<&mut M>, scope_id);
+                    dom.run_and_diff_scope(None, scope_id);
                 }
 
                 if let Some(rendered) = dom.scopes[scope_id.index()].last_rendered_node.clone() {
-                    promote_suspense_mounts_to_foreground::<M>(dom, &rendered);
+                    promote_suspense_mounts_to_foreground(dom, &rendered);
                 }
             }
             DynamicNode::Fragment(nodes) => {
                 for node in nodes {
-                    promote_suspense_mounts_to_foreground::<M>(dom, node);
+                    promote_suspense_mounts_to_foreground(dom, node);
                 }
             }
             DynamicNode::Text(_) => {}
@@ -788,7 +786,7 @@ impl SuspenseContext {
         runtime.try_get_state(scope_id)?.suspense_boundary()
     }
 
-    pub(crate) fn remove_suspended_nodes<M: WriteMutations>(
+    pub(crate) fn remove_suspended_nodes(
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         destroy_component_state: bool,
@@ -798,7 +796,7 @@ impl SuspenseContext {
         {
             branch
                 .into_root()
-                .remove_node_inner(dom, None::<&mut M>, destroy_component_state)
+                .remove_node_inner(dom, None, destroy_component_state)
         }
     }
 }

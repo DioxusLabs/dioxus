@@ -6,9 +6,7 @@ use crate::{
     ops::{EventBehaviorSpec, Op},
     vdom::App,
 };
-use dioxus_core::{
-    AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
-};
+use dioxus_core::{AttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use std::{
     any::Any,
@@ -123,9 +121,9 @@ struct TargetedRendererOracle {
 
 const RECENT_MUTATION_LIMIT: usize = 16;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct EventListenerTarget {
-    name: &'static str,
+    name: String,
     id: ElementId,
 }
 
@@ -138,114 +136,54 @@ impl PartialOrd for EventListenerTarget {
 impl Ord for EventListenerTarget {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name
-            .cmp(other.name)
+            .cmp(&other.name)
             .then_with(|| self.id.raw().cmp(&other.id.raw()))
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 enum MutationTrace {
-    AppendChildren {
-        id: ElementId,
-        m: usize,
-    },
-    AssignNodeId {
-        path: &'static [u8],
-        id: ElementId,
-    },
-    CreateTextNode {
-        len: usize,
-        id: ElementId,
-    },
-    LoadTemplate {
-        index: usize,
-        id: ElementId,
-    },
-    ReplaceNodeWith {
-        id: ElementId,
-        m: usize,
-    },
-    InsertChildrenAtPath {
-        id: ElementId,
-        path: &'static [u8],
-        m: usize,
-    },
-    InsertNodesAfter {
-        id: ElementId,
-        m: usize,
-    },
-    InsertNodesBefore {
-        id: ElementId,
-        m: usize,
-    },
-    SetAttribute {
-        name: &'static str,
-        id: ElementId,
-    },
-    SetNodeText {
-        len: usize,
-        id: ElementId,
-    },
-    CreateEventListener {
-        name: &'static str,
-        id: ElementId,
-    },
-    RemoveEventListener {
-        name: &'static str,
-        id: ElementId,
-    },
-    RemoveNode {
-        id: ElementId,
-    },
-    PushRoot {
-        id: ElementId,
-    },
+    PushId { id: ElementId },
+    PopId { id: ElementId },
+    Child { index: usize },
+    Pop,
+    CreateElement { tag: String },
+    CreateText { len: usize },
+    Clone,
+    AppendChildren { m: usize },
+    ReplaceWith { m: usize },
+    InsertAfter { m: usize },
+    InsertBefore { m: usize },
+    SetAttribute { name: String },
+    SetText { len: usize },
+    AddEventListener { name: String, id: Option<ElementId> },
+    RemoveEventListener { name: String, id: Option<ElementId> },
+    Remove,
 }
 
 impl fmt::Display for MutationTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AppendChildren { id, m } => {
-                write!(f, "append_children(id: {id:?}, m: {m})")
-            }
-            Self::AssignNodeId { path, id } => {
-                write!(f, "assign_node_id(path: {path:?}, id: {id:?})")
-            }
-            Self::CreateTextNode { len, id } => {
-                write!(f, "create_text_node(len: {len}, id: {id:?})")
-            }
-            Self::LoadTemplate { index, id } => {
-                write!(f, "load_template(index: {index}, id: {id:?})")
-            }
-            Self::ReplaceNodeWith { id, m } => {
-                write!(f, "replace_node_with(id: {id:?}, m: {m})")
-            }
-            Self::InsertChildrenAtPath { id, path, m } => {
-                write!(
-                    f,
-                    "insert_children_at_path(id: {id:?}, path: {path:?}, m: {m})"
-                )
-            }
-            Self::InsertNodesAfter { id, m } => {
-                write!(f, "insert_nodes_after(id: {id:?}, m: {m})")
-            }
-            Self::InsertNodesBefore { id, m } => {
-                write!(f, "insert_nodes_before(id: {id:?}, m: {m})")
-            }
-            Self::SetAttribute { name, id } => {
-                write!(f, "set_attribute(name: {name:?}, id: {id:?})")
-            }
-            Self::SetNodeText { len, id } => {
-                write!(f, "set_node_text(len: {len}, id: {id:?})")
-            }
-            Self::CreateEventListener { name, id } => {
-                write!(f, "create_event_listener(name: {name:?}, id: {id:?})")
+            Self::PushId { id } => write!(f, "push_id(id: {id:?})"),
+            Self::PopId { id } => write!(f, "pop_id(id: {id:?})"),
+            Self::Child { index } => write!(f, "child(index: {index})"),
+            Self::Pop => write!(f, "pop()"),
+            Self::CreateElement { tag } => write!(f, "create_element(tag: {tag:?})"),
+            Self::CreateText { len } => write!(f, "create_text(len: {len})"),
+            Self::Clone => write!(f, "clone()"),
+            Self::AppendChildren { m } => write!(f, "append_children(m: {m})"),
+            Self::ReplaceWith { m } => write!(f, "replace_with(m: {m})"),
+            Self::InsertAfter { m } => write!(f, "insert_after(m: {m})"),
+            Self::InsertBefore { m } => write!(f, "insert_before(m: {m})"),
+            Self::SetAttribute { name } => write!(f, "set_attribute(name: {name:?})"),
+            Self::SetText { len } => write!(f, "set_text(len: {len})"),
+            Self::AddEventListener { name, id } => {
+                write!(f, "add_event_listener(name: {name:?}, id: {id:?})")
             }
             Self::RemoveEventListener { name, id } => {
                 write!(f, "remove_event_listener(name: {name:?}, id: {id:?})")
             }
-            Self::RemoveNode { id } => write!(f, "remove_node(id: {id:?})"),
-            Self::PushRoot { id } => write!(f, "push_root(id: {id:?})"),
+            Self::Remove => write!(f, "remove()"),
         }
     }
 }
@@ -256,7 +194,7 @@ impl TargetedRendererOracle {
             renderer: RendererOracle::new(),
             historical_event_listener_targets: BTreeSet::new(),
             last_mutation: None,
-            recent_mutations: [None; RECENT_MUTATION_LIMIT],
+            recent_mutations: std::array::from_fn(|_| None),
             recent_mutation_start: 0,
             recent_mutation_len: 0,
         }
@@ -267,7 +205,7 @@ impl TargetedRendererOracle {
     }
 
     fn record_mutation(&mut self, mutation: MutationTrace) {
-        self.last_mutation = Some(mutation);
+        self.last_mutation = Some(mutation.clone());
         if self.recent_mutation_len < RECENT_MUTATION_LIMIT {
             let index =
                 (self.recent_mutation_start + self.recent_mutation_len) % RECENT_MUTATION_LIMIT;
@@ -283,7 +221,7 @@ impl TargetedRendererOracle {
         let mut out = String::new();
         for offset in 0..self.recent_mutation_len {
             let index = (self.recent_mutation_start + offset) % RECENT_MUTATION_LIMIT;
-            if let Some(mutation) = self.recent_mutations[index] {
+            if let Some(mutation) = self.recent_mutations[index].as_ref() {
                 if !out.is_empty() {
                     out.push_str("\n  ");
                 }
@@ -322,94 +260,109 @@ impl TargetedRendererOracle {
     fn historical_event_listener_targets(&self) -> Vec<EventListenerTarget> {
         self.historical_event_listener_targets
             .iter()
-            .copied()
+            .cloned()
             .collect()
     }
 }
 
 impl WriteMutations for TargetedRendererOracle {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(MutationTrace::AppendChildren { id, m });
-        self.current_renderer().append_children(id, m)
+    fn push_id(&mut self, id: ElementId) {
+        self.record_mutation(MutationTrace::PushId { id });
+        self.current_renderer().push_id(id);
     }
 
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.record_mutation(MutationTrace::AssignNodeId { path, id });
-        self.current_renderer().assign_node_id(path, id)
+    fn pop_id(&mut self, id: ElementId) {
+        self.record_mutation(MutationTrace::PopId { id });
+        self.current_renderer().pop_id(id);
     }
 
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.record_mutation(MutationTrace::CreateTextNode {
-            len: value.len(),
+    fn child(&mut self, index: usize) {
+        self.record_mutation(MutationTrace::Child { index });
+        self.current_renderer().child(index);
+    }
+
+    fn pop(&mut self) {
+        self.record_mutation(MutationTrace::Pop);
+        self.current_renderer().pop();
+    }
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        self.record_mutation(MutationTrace::CreateElement {
+            tag: tag.to_string(),
+        });
+        self.current_renderer().create_element(tag, ns);
+    }
+
+    fn create_text(&mut self, value: &str) {
+        self.record_mutation(MutationTrace::CreateText { len: value.len() });
+        self.current_renderer().create_text(value);
+    }
+
+    fn clone(&mut self) {
+        self.record_mutation(MutationTrace::Clone);
+        WriteMutations::clone(self.current_renderer());
+    }
+
+    fn append_children(&mut self, m: usize) {
+        self.record_mutation(MutationTrace::AppendChildren { m });
+        self.current_renderer().append_children(m);
+    }
+
+    fn replace_with(&mut self, m: usize) {
+        self.record_mutation(MutationTrace::ReplaceWith { m });
+        self.current_renderer().replace_with(m);
+    }
+
+    fn insert_after(&mut self, m: usize) {
+        self.record_mutation(MutationTrace::InsertAfter { m });
+        self.current_renderer().insert_after(m);
+    }
+
+    fn insert_before(&mut self, m: usize) {
+        self.record_mutation(MutationTrace::InsertBefore { m });
+        self.current_renderer().insert_before(m);
+    }
+
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        self.record_mutation(MutationTrace::SetAttribute {
+            name: name.to_string(),
+        });
+        self.current_renderer().set_attribute(name, ns, value);
+    }
+
+    fn set_text(&mut self, value: &str) {
+        self.record_mutation(MutationTrace::SetText { len: value.len() });
+        self.current_renderer().set_text(value);
+    }
+
+    fn add_event_listener(&mut self, name: &str) {
+        let id = self.renderer.current_stack_element_id();
+        self.record_mutation(MutationTrace::AddEventListener {
+            name: name.to_string(),
             id,
         });
-        self.current_renderer().create_text_node(value, id)
+        self.current_renderer().add_event_listener(name);
+        if let Some(id) = id {
+            self.historical_event_listener_targets
+                .insert(EventListenerTarget {
+                    name: name.to_string(),
+                    id,
+                });
+        }
     }
 
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.record_mutation(MutationTrace::LoadTemplate { index, id });
-        self.current_renderer().load_template(template, index, id)
-    }
-
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(MutationTrace::ReplaceNodeWith { id, m });
-        self.current_renderer().replace_node_with(id, m)
-    }
-
-    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
-        self.record_mutation(MutationTrace::InsertChildrenAtPath { id, path, m });
-        self.current_renderer().insert_children_at_path(id, path, m)
-    }
-
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(MutationTrace::InsertNodesAfter { id, m });
-        self.current_renderer().insert_nodes_after(id, m)
-    }
-
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.record_mutation(MutationTrace::InsertNodesBefore { id, m });
-        self.current_renderer().insert_nodes_before(id, m)
-    }
-
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.record_mutation(MutationTrace::SetAttribute { name, id });
-        self.current_renderer().set_attribute(name, ns, value, id)
-    }
-
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.record_mutation(MutationTrace::SetNodeText {
-            len: value.len(),
+    fn remove_event_listener(&mut self, name: &str) {
+        let id = self.renderer.current_stack_element_id();
+        self.record_mutation(MutationTrace::RemoveEventListener {
+            name: name.to_string(),
             id,
         });
-        self.current_renderer().set_node_text(value, id)
+        self.current_renderer().remove_event_listener(name);
     }
 
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation(MutationTrace::CreateEventListener { name, id });
-        self.current_renderer().create_event_listener(name, id);
-        self.historical_event_listener_targets
-            .insert(EventListenerTarget { name, id });
-    }
-
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.record_mutation(MutationTrace::RemoveEventListener { name, id });
-        self.current_renderer().remove_event_listener(name, id)
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        self.record_mutation(MutationTrace::RemoveNode { id });
-        self.current_renderer().remove_node(id)
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        self.record_mutation(MutationTrace::PushRoot { id });
-        self.current_renderer().push_root(id)
+    fn remove(&mut self) {
+        self.record_mutation(MutationTrace::Remove);
+        self.current_renderer().remove();
     }
 }
 
@@ -610,7 +563,7 @@ fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
             Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
             true,
         );
-        runtime.handle_event(target.name, event, target.id);
+        runtime.handle_event(&target.name, event, target.id);
     }
     Ok(())
 }
@@ -628,7 +581,7 @@ fn fire_selected_event_listener(
         return Ok(());
     }
 
-    let target = targets[target_selector as usize % targets.len()];
+    let target = targets[target_selector as usize % targets.len()].clone();
     let runtime = state.vdom.borrow().runtime();
     let nested_runtime = runtime.clone();
     let nested_targets = targets.clone();
@@ -645,7 +598,7 @@ fn fire_selected_event_listener(
                 true,
             );
             nested_events.with_listener_driver(EventBehaviorSpec::Noop, Rc::new(|_| {}), || {
-                nested_runtime.handle_event(target.name, event, target.id)
+                nested_runtime.handle_event(&target.name, event, target.id)
             });
         }
         EventBehaviorSpec::ScheduleUpdate => {
@@ -689,7 +642,7 @@ fn fire_selected_event_listener(
             Rc::new(String::from("fuzzer explicit event")) as Rc<dyn Any>,
             true,
         );
-        runtime.handle_event(target.name, event, target.id);
+        runtime.handle_event(&target.name, event, target.id);
     });
 
     if event_behavior_queues_work(behavior) {
@@ -733,6 +686,7 @@ fn check_incremental_state(
     incremental.check_stack_clean().map_err(|err| {
         let last_mutation = incremental
             .last_mutation
+            .as_ref()
             .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
         let recent_mutations = incremental.recent_mutations_text();
         format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
@@ -744,6 +698,7 @@ fn check_incremental_state(
             |err| {
                 let last_mutation = incremental
                     .last_mutation
+                    .as_ref()
                     .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
                 let recent_mutations = incremental.recent_mutations_text();
                 format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")

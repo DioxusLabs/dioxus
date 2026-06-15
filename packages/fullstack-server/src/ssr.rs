@@ -566,40 +566,43 @@ impl SsrRendererPool {
     }
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
-        let template = &vnode.template;
-        let mut dynamic_nodes_iter = template.node_paths().iter().copied().enumerate().peekable();
-        for (root_idx, node) in template.roots().iter().enumerate() {
-            match node {
-                TemplateNode::Element { .. } => {
-                    // dioxus core runs nodes in an odd order to not mess up template order. We need to match
-                    // that order here
-                    let (start, end) =
-                        match Self::collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8)
-                        {
-                            Some((a, b)) => (a, b),
-                            None => continue,
-                        };
+        let template = vnode.template;
+        let mut dynamic_nodes_iter = template
+            .node_cursors()
+            .iter()
+            .copied()
+            .enumerate()
+            .peekable();
+        for root_idx in 0..=template.roots().len() {
+            while let Some((dynamic_node_id, _)) = dynamic_nodes_iter
+                .next_if(|(_, cursor)| cursor.as_slice() == [root_idx as u8].as_slice())
+            {
+                let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
+                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dynamic_node_id);
+            }
 
-                    let reversed_iter = (start..=end).rev();
+            if matches!(
+                template.roots().get(root_idx),
+                Some(TemplateNode::Element { .. })
+            ) {
+                // dioxus core runs nested nodes in reverse order while anchoring them into a
+                // cloned static root. We need to match that order here.
+                let (start, end) =
+                    match Self::collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8) {
+                        Some((a, b)) => (a, b),
+                        None => continue,
+                    };
 
-                    for dynamic_node_id in reversed_iter {
-                        let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
-                        Self::take_from_dynamic_node(
-                            context,
-                            vdom,
-                            vnode,
-                            dynamic_node,
-                            dynamic_node_id,
-                        );
-                    }
+                for dynamic_node_id in (start..=end).rev() {
+                    let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
+                    Self::take_from_dynamic_node(
+                        context,
+                        vdom,
+                        vnode,
+                        dynamic_node,
+                        dynamic_node_id,
+                    );
                 }
-                TemplateNode::Dynamic { id } => {
-                    // Take a dynamic node off the depth first iterator
-                    _ = dynamic_nodes_iter.next().unwrap();
-                    let dynamic_node = &vnode.dynamic_nodes[*id];
-                    Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, *id);
-                }
-                _ => {}
             }
         }
     }
@@ -629,23 +632,23 @@ impl SsrRendererPool {
     // This should have the same behavior as the collect_dyn_node_range method in core
     // Find the index of the first and last dynamic node under a root index
     fn collect_dyn_node_range(
-        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, dioxus_core::TemplateCursor)>>,
         root_idx: u8,
     ) -> Option<(usize, usize)> {
         let start = match dynamic_nodes.peek() {
-            Some((idx, [first, ..])) if *first == root_idx => *idx,
+            Some((idx, cursor))
+                if cursor.as_slice().first() == Some(&root_idx) && !cursor.is_root_level_slot() =>
+            {
+                *idx
+            }
             _ => return None,
         };
 
         let mut end = start;
 
-        while let Some((idx, p)) =
-            dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
-        {
-            if p.len() == 1 {
-                continue;
-            }
-
+        while let Some((idx, _)) = dynamic_nodes.next_if(|(_, cursor)| {
+            cursor.as_slice().first() == Some(&root_idx) && !cursor.is_root_level_slot()
+        }) {
             end = idx;
         }
 

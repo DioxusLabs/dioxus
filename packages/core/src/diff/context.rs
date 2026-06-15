@@ -1,34 +1,43 @@
-use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
+use crate::{
+    VirtualDom, WriteMutations, innerlude::MountId, mutations::reborrow_writer, nodes::VNode,
+};
 
 /// State required for diffing operations
-pub(crate) struct DiffState<'a, M: WriteMutations> {
-    pub(crate) dom: &'a mut VirtualDom,
-    pub(crate) to: Option<&'a mut M>,
-    pub(crate) context: Option<DiffContext<'a>>,
+pub(crate) struct DiffState<'dom, 'ctx, 'writer> {
+    pub(crate) dom: &'dom mut VirtualDom,
+    pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+    pub(crate) context: Option<DiffContext<'ctx>>,
 }
 
-impl<'a, M: WriteMutations> DiffState<'a, M> {
-    pub(crate) fn new(dom: &'a mut VirtualDom, to: Option<&'a mut M>) -> Self {
+impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
+    pub(crate) fn new(
+        dom: &'dom mut VirtualDom,
+        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+    ) -> Self {
         Self::new_with_context(dom, to, None)
     }
 
     pub(crate) fn new_with_context(
-        dom: &'a mut VirtualDom,
-        to: Option<&'a mut M>,
-        context: Option<DiffContext<'a>>,
+        dom: &'dom mut VirtualDom,
+        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+        context: Option<DiffContext<'ctx>>,
     ) -> Self {
         Self { dom, to, context }
     }
 
-    pub(crate) fn reborrow_with_writes(&mut self, write: bool) -> DiffState<'_, M> {
+    pub(crate) fn reborrow_with_writes(&mut self, write: bool) -> DiffState<'_, 'ctx, '_> {
         DiffState {
             dom: &mut *self.dom,
-            to: if write { self.to.as_deref_mut() } else { None },
+            to: if write {
+                reborrow_writer(&mut self.to)
+            } else {
+                None
+            },
             context: self.context,
         }
     }
 
-    pub(crate) fn context(&self) -> Option<DiffContext<'a>> {
+    pub(crate) fn context(&self) -> Option<DiffContext<'ctx>> {
         self.context
     }
 
@@ -39,8 +48,8 @@ impl<'a, M: WriteMutations> DiffState<'a, M> {
         mount: MountId,
         dyn_node_idx: usize,
         restore_old_slot_for_removal: bool,
-        create_new: impl FnOnce(&mut DiffState<'_, M>) -> R,
-        remove_old: impl FnOnce(&mut DiffState<'_, M>),
+        create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_>) -> R,
+        remove_old: impl FnOnce(&mut DiffState<'_, 'ctx, '_>),
     ) -> R {
         let old_slot = self.dom.get_mounted_dynamic_node_slot(mount, dyn_node_idx);
         self.dom
@@ -60,7 +69,7 @@ impl<'a, M: WriteMutations> DiffState<'a, M> {
         result
     }
 
-    pub(crate) fn enter_context(&mut self, mount: MountId, old: &'a VNode, new: &'a VNode) {
+    pub(crate) fn enter_context(&mut self, mount: MountId, old: &'ctx VNode, new: &'ctx VNode) {
         let context = self.context.map_or_else(
             || DiffContext::new(mount, old, new),
             |context| context.enter(mount, old, new),

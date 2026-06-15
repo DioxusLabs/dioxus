@@ -1,5 +1,5 @@
 use crate::{
-    DynamicNode, Element, ErrorBoundary, Properties, SuspenseBoundary, Template, TemplateNode,
+    DynamicNode, Element, ErrorBoundary, Properties, SuspenseBoundary, Template, TemplateCursor,
     VComponent, VNode, fc_to_builder, properties::RootProps,
 };
 
@@ -7,8 +7,7 @@ use crate::{
 #[allow(non_snake_case)]
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
-    static TEMPLATE: Template =
-        Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
+    static TEMPLATE: Template = Template::new(&[], &[TemplateCursor::new(&[0u8])], &[]);
     Element::Ok(VNode::new(
         None,
         TEMPLATE,

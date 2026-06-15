@@ -4,6 +4,7 @@ use crate::{
     ComponentFunction, Element, WriteMutations,
     diff::context::DiffContext,
     innerlude::{CapturedPanic, ElementRef},
+    mutations::reborrow_writer,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -102,7 +103,7 @@ pub(crate) fn remove_rendered_output(
         .last_rendered_node
         .clone()
         .expect("scope being removed should have last_rendered_node set");
-    node.remove_node_inner(dom, to.as_mut(), destroy_component_state);
+    node.remove_node_inner(dom, reborrow_writer(&mut to), destroy_component_state);
 
     if destroy_component_state {
         // Now drop all the resources
@@ -218,7 +219,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
             .clone()
             .expect("Component to be mounted");
 
-        dom.create_scope(to.as_mut(), scope_id, new_node, parent)
+        dom.create_scope(reborrow_writer(&mut to), scope_id, new_node, parent)
     }
 
     fn diff(
@@ -229,7 +230,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         mut to: Option<&mut dyn WriteMutations>,
     ) {
         let body = dom.run_scope_with(scope_id, || self.render());
-        dom.diff_scope(to.as_mut(), scope_id, body, parent_context);
+        dom.diff_scope(reborrow_writer(&mut to), scope_id, body, parent_context);
     }
 
     fn remove(

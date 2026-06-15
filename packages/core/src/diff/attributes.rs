@@ -1,7 +1,7 @@
 //! Diffing for dynamic attributes.
 //!
 //! Templates keep static attributes in `TemplateNode::Element` and store runtime attributes in
-//! `VNode::dynamic_attrs`. Each entry in `template.attr_paths()` points at the element that owns
+//! `VNode::dynamic_attrs`. Each entry in `template.attr_cursors()` points at the element that owns
 //! the corresponding dynamic attribute slot. Several adjacent slots may point at the same element
 //! when RSX mixes named dynamic attributes and spreads.
 //!
@@ -10,7 +10,7 @@
 //! can reveal an earlier dynamic attribute with the same key, or the static template attribute that
 //! was loaded with the template. To preserve those "last write wins" semantics, the diff:
 //!
-//! 1. groups all adjacent dynamic attribute slots for the same element path;
+//! 1. groups all adjacent dynamic attribute slots for the same element cursor;
 //! 2. flattens the old and new slots for that element;
 //! 3. reduces each side to the effective attribute for each `(name, namespace)` key, keeping the
 //!    last matching attribute; and
@@ -21,8 +21,10 @@ use core::{cmp::Ordering, iter::Peekable, ops::Range};
 
 use crate::innerlude::MountId;
 use crate::{
-    Attribute, AttributeValue, TemplateAttribute, TemplateNode, VNode, VirtualDom, WriteMutations,
-    arena::{ElementId, MountedElementId},
+    Attribute, AttributeValue, TemplateAttribute, TemplateCursor, VNode, VirtualDom,
+    WriteMutations,
+    arena::{ElementLocation, MountedElementId},
+    mutations::{LazyScope, with_id},
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -44,16 +46,16 @@ impl VNode {
         &self,
         new: &VNode,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
     ) {
         let mount_id = new.unchecked_mounted_id();
-        let attr_paths = self.template.attr_paths();
+        let attr_cursors = self.template.attr_cursors();
 
         let mut idx = 0;
         let mut scratch = AttributeDiffScratch::default();
 
-        while idx < attr_paths.len() {
-            let path = attr_paths[idx];
+        while idx < attr_cursors.len() {
+            let cursor = attr_cursors[idx];
             // Multiple dynamic attribute slots can target the same element. Diff them as a single
             // group so duplicate keys obey the same overwrite order they used during creation.
             let attr_group = self.dynamic_attribute_group_starting_at(idx);
@@ -62,7 +64,7 @@ impl VNode {
             let attribute_id = dom.unchecked_mounted_dyn_attr(mount_id, idx);
             self.diff_attribute_list(
                 new,
-                path,
+                cursor,
                 attribute_id,
                 mount_id,
                 attr_group.clone(),
@@ -77,20 +79,20 @@ impl VNode {
 
     /// Diff all dynamic attributes that can affect one mounted element.
     ///
-    /// `from` and `to_attrs` are the flattened dynamic slots for the same template path. They may
+    /// `from` and `to_attrs` are the flattened dynamic slots for the same template cursor. They may
     /// contain duplicate keys from multiple spreads or from a spread overriding a named attribute.
     /// Before we compare sides, each side is reduced to its effective, last-written attribute per
     /// key.
     fn diff_attribute_list<'a>(
         &'a self,
         new: &'a VNode,
-        path: &'static [u8],
+        cursor: TemplateCursor,
         id: MountedElementId,
         mount: MountId,
         attr_group: Range<usize>,
         scratch: &mut AttributeDiffScratch<'a>,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
     ) {
         let AttributeDiffScratch {
             old_ranges,
@@ -118,8 +120,10 @@ impl VNode {
         )
         .peekable();
 
+        let element_id = id.element_id();
+        let mut to = LazyScope::new(to, move |to| to.push_id(element_id));
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
-            self.diff_dynamic_attribute(path, key, id, mount, old, new, dom, to);
+            self.diff_dynamic_attribute(cursor, key, id, mount, old, new, dom, &mut to);
         }
     }
 
@@ -162,14 +166,14 @@ impl VNode {
 
     fn diff_dynamic_attribute(
         &self,
-        path: &'static [u8],
+        cursor: TemplateCursor,
         key: AttributeKey,
         id: MountedElementId,
         mount: MountId,
         old: Option<&Attribute>,
         new: Option<&Attribute>,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
     ) {
         let old_listener = matches!(old.map(|a| &a.value), Some(AttributeValue::Listener(_)));
         let new_listener = matches!(new.map(|a| &a.value), Some(AttributeValue::Listener(_)));
@@ -190,10 +194,12 @@ impl VNode {
         // are torn down explicitly, and installing a listener doesn't clear a prior attribute.
         match (old_listener, new_listener, old) {
             // This used to be a listener but no longer is, so remove the old listener.
-            (true, _, Some(old)) => to.remove_event_listener(&old.name[2..], id.element_id()),
+            (true, _, Some(old)) => {
+                to.remove_event_listener(&old.name[2..]);
+            }
             // This used to be a value but is now a listener, so clear the old value that won't be overwritten by the new listener.
             (false, true, Some(_)) => {
-                to.set_attribute(key.0, key.1, &AttributeValue::None, id.element_id());
+                to.set_attribute(key.0, key.1, &AttributeValue::None);
             }
             _ => {}
         }
@@ -201,9 +207,9 @@ impl VNode {
         // Write the new value, or restore the static template attribute, or clear the DOM
         // attribute. A removed listener has nothing attribute-shaped left to clear.
         if let Some(new) = new {
-            self.write_attribute(path, new, id, mount, dom, to);
+            self.write_attribute_to_current(cursor, new, id, mount, dom, to);
         } else if !old_listener {
-            self.remove_attribute_or_write_fallback(path, key, id.element_id(), to)
+            self.remove_attribute_or_write_fallback(cursor, key, to)
         }
     }
 
@@ -217,16 +223,16 @@ impl VNode {
         Self::attribute_key(left).cmp(&Self::attribute_key(right))
     }
 
-    /// Return the contiguous run of dynamic attribute slots mounted to the same template path.
+    /// Return the contiguous run of dynamic attribute slots mounted to the same template cursor.
     ///
-    /// Attribute paths are emitted in template order, so all slots for a single element are
+    /// Attribute cursors are emitted in template order, so all slots for a single element are
     /// adjacent. Grouping them here is what lets the diff handle duplicate keys across spreads.
     fn dynamic_attribute_group_starting_at(&self, start: usize) -> Range<usize> {
-        let attr_paths = self.template.attr_paths();
-        let path = attr_paths[start];
+        let attr_cursors = self.template.attr_cursors();
+        let cursor = attr_cursors[start];
         let mut end = start + 1;
 
-        while end < attr_paths.len() && attr_paths[end] == path {
+        while end < attr_cursors.len() && attr_cursors[end] == cursor {
             end += 1;
         }
 
@@ -240,26 +246,29 @@ impl VNode {
     /// it on a previous render.
     fn remove_attribute_or_write_fallback(
         &self,
-        path: &'static [u8],
+        cursor: TemplateCursor,
         key: AttributeKey,
-        id: ElementId,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
     ) {
-        if let Some(value) = self.static_template_attribute_value(path, key) {
+        if let Some(value) = self.static_template_attribute_value(cursor, key) {
             let value = AttributeValue::Text(value.to_string());
-            to.set_attribute(key.0, key.1, &value, id);
+            to.set_attribute(key.0, key.1, &value);
         } else {
-            to.set_attribute(key.0, key.1, &AttributeValue::None, id);
+            to.set_attribute(key.0, key.1, &AttributeValue::None);
         }
     }
 
     /// Find the static template attribute value for a given key, if it exists.
     fn static_template_attribute_value(
         &self,
-        path: &'static [u8],
+        cursor: TemplateCursor,
         key: AttributeKey,
     ) -> Option<&'static str> {
-        let attrs = self.template_node_at_path(path).element_attrs();
+        let attrs = self
+            .template
+            .node_at_cursor(cursor)
+            .expect("template attribute path must resolve to an element")
+            .element_attrs();
         // Static attributes are stored first and sorted by name. Search only that prefix, then
         // filter by namespace because the ordering guarantee is by name.
         let start = attrs.partition_point(|attr| match attr {
@@ -281,45 +290,40 @@ impl VNode {
             .last()
     }
 
-    /// Resolve the template element that owns a dynamic attribute path.
-    fn template_node_at_path(&self, path: &'static [u8]) -> &'static TemplateNode {
-        let (root_idx, child_path) = path
-            .split_first()
-            .expect("template attribute paths should not be empty");
-        let mut node = &self.template.roots()[*root_idx as usize];
-
-        for child_idx in child_path {
-            node = node.element_child(*child_idx as usize);
-        }
-
-        node
-    }
-
     /// Write one dynamic attribute to an already mounted element.
     ///
     /// Listener attributes also need an `ElementRef` in the runtime so event dispatch can find
     /// the VNode that owns the handler.
     pub(crate) fn write_attribute(
         &self,
-        path: &'static [u8],
+        cursor: TemplateCursor,
         attribute: &Attribute,
         id: MountedElementId,
         mount: MountId,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
+    ) {
+        with_id(to, id.element_id(), |to| {
+            self.write_attribute_to_current(cursor, attribute, id, mount, dom, to);
+        });
+    }
+
+    fn write_attribute_to_current(
+        &self,
+        cursor: TemplateCursor,
+        attribute: &Attribute,
+        id: MountedElementId,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        to: &mut dyn WriteMutations,
     ) {
         match &attribute.value {
             AttributeValue::Listener(_) => {
-                dom.set_element_ref_for_mount(mount, id, path);
-                to.create_event_listener(&attribute.name[2..], id.element_id());
+                dom.set_element_ref_for_mount(mount, id, ElementLocation::Static(cursor));
+                to.add_event_listener(&attribute.name[2..]);
             }
             _ => {
-                to.set_attribute(
-                    attribute.name,
-                    attribute.namespace,
-                    &attribute.value,
-                    id.element_id(),
-                );
+                to.set_attribute(attribute.name, attribute.namespace, &attribute.value);
             }
         }
     }

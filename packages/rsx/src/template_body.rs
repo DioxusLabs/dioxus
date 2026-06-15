@@ -60,8 +60,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::parse_quote;
 
-type NodePath = Vec<u8>;
-type AttributePath = Vec<u8>;
+type NodeCursor = Vec<u8>;
+type AttributeCursor = Vec<u8>;
 
 /// A set of nodes in a template position
 ///
@@ -77,8 +77,8 @@ type AttributePath = Vec<u8>;
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: DynIdx,
-    pub node_paths: Vec<NodePath>,
-    pub attr_paths: Vec<(AttributePath, usize)>,
+    pub node_cursors: Vec<NodeCursor>,
+    pub attr_cursors: Vec<(AttributeCursor, usize)>,
     pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
 }
@@ -113,9 +113,14 @@ impl ToTokens for TemplateBody {
 
         let roots = node.quote_roots();
 
-        // Print paths is easy - just print the paths
-        let node_paths = node.node_paths.iter().map(|it| quote!(&[#(#it),*]));
-        let attr_paths = node.attr_paths.iter().map(|(it, _)| quote!(&[#(#it),*]));
+        let node_cursors = node
+            .node_cursors
+            .iter()
+            .map(|it| quote!(dioxus_core::TemplateCursor::new(&[#(#it),*])));
+        let attr_cursors = node
+            .attr_cursors
+            .iter()
+            .map(|(it, _)| quote!(dioxus_core::TemplateCursor::new(&[#(#it),*])));
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
@@ -194,6 +199,10 @@ impl ToTokens for TemplateBody {
                 let __dynamic_attributes: [Box<[dioxus_core::Attribute]>; #dynamic_attr_len] = [ #( #dyn_attr_printer ),* ];
                 #[doc(hidden)]
                 static __TEMPLATE_ROOTS: &[dioxus_core::TemplateNode] = &[ #( #roots ),* ];
+                #[doc(hidden)]
+                static __TEMPLATE_NODE_CURSORS: &[dioxus_core::TemplateCursor] = &[ #( #node_cursors ),* ];
+                #[doc(hidden)]
+                static __TEMPLATE_ATTR_CURSORS: &[dioxus_core::TemplateCursor] = &[ #( #attr_cursors ),* ];
 
                 #[cfg(debug_assertions)]
                 {
@@ -209,8 +218,8 @@ impl ToTokens for TemplateBody {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
                     static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template::new(
                         __TEMPLATE_ROOTS,
-                        &[ #( #node_paths ),* ],
-                        &[ #( #attr_paths ),* ],
+                        __TEMPLATE_NODE_CURSORS,
+                        __TEMPLATE_ATTR_CURSORS,
                     );
 
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
@@ -237,8 +246,8 @@ impl TemplateBody {
         let mut body = Self {
             roots: vec![],
             template_idx: DynIdx::default(),
-            node_paths: Vec::new(),
-            attr_paths: Vec::new(),
+            node_cursors: Vec::new(),
+            attr_cursors: Vec::new(),
             dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
         };
@@ -320,42 +329,66 @@ impl TemplateBody {
         warnings
     }
 
-    pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {
-        let mut node = self.roots.get(path[0] as usize).unwrap();
-        for idx in path.iter().skip(1) {
-            node = node.element_children().get(*idx as usize).unwrap();
+    pub fn get_static_node(&self, cursor: &[u8]) -> &BodyNode {
+        let mut node = Self::nth_static_node(&self.roots, cursor[0] as usize).unwrap();
+        for idx in cursor.iter().skip(1) {
+            node = Self::nth_static_node(node.element_children(), *idx as usize).unwrap();
         }
         node
     }
 
-    pub fn get_dyn_attr(&self, path: &AttributePath, idx: usize) -> &Attribute {
-        match self.get_dyn_node(path) {
+    fn nth_static_node(nodes: &[BodyNode], idx: usize) -> Option<&BodyNode> {
+        nodes
+            .iter()
+            .filter(|node| Self::is_static_template_node(node))
+            .nth(idx)
+    }
+
+    fn is_static_template_node(node: &BodyNode) -> bool {
+        match node {
+            BodyNode::Element(_) => true,
+            BodyNode::Text(text) => text.is_static(),
+            _ => false,
+        }
+    }
+
+    pub fn get_dyn_attr(&self, cursor: &AttributeCursor, idx: usize) -> &Attribute {
+        match self.get_static_node(cursor) {
             BodyNode::Element(el) => &el.merged_attributes[idx],
             _ => unreachable!(),
         }
     }
 
     pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = &Attribute> {
-        self.attr_paths
+        self.attr_cursors
             .iter()
-            .map(|(path, idx)| self.get_dyn_attr(path, *idx))
+            .map(|(cursor, idx)| self.get_dyn_attr(cursor, *idx))
     }
 
     pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = &BodyNode> {
-        self.node_paths.iter().map(|path| self.get_dyn_node(path))
+        let mut dynamic_nodes = Vec::new();
+        Self::collect_dynamic_nodes(&self.roots, &mut dynamic_nodes);
+        dynamic_nodes.into_iter()
+    }
+
+    fn collect_dynamic_nodes<'a>(nodes: &'a [BodyNode], dynamic_nodes: &mut Vec<&'a BodyNode>) {
+        for node in nodes {
+            match node {
+                BodyNode::Element(el) => Self::collect_dynamic_nodes(&el.children, dynamic_nodes),
+                BodyNode::Text(text) if text.is_static() => {}
+                _ => dynamic_nodes.push(node),
+            }
+        }
     }
 
     fn quote_roots(&self) -> impl Iterator<Item = TokenStream2> + '_ {
-        self.roots.iter().map(|node| match node {
-            BodyNode::Element(el) => quote! { #el },
+        self.roots.iter().filter_map(|node| match node {
+            BodyNode::Element(el) => Some(quote! { #el }),
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+                Some(quote! { dioxus_core::TemplateNode::Text { text: #text } })
             }
-            _ => {
-                let id = node.get_dyn_idx();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
+            _ => None,
         })
     }
 
@@ -406,6 +439,8 @@ impl TemplateBody {
                 vec![ #( #dyn_attr_printer ),* ],
                 vec![ #( #component_values ),* ],
                 __TEMPLATE_ROOTS,
+                __TEMPLATE_NODE_CURSORS,
+                __TEMPLATE_ATTR_CURSORS,
             )
         }
     }

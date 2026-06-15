@@ -292,10 +292,10 @@ fn click_event() -> Event<dyn Any> {
 }
 
 fn has_click_listener(mutations: &Mutations, id: ElementId) -> bool {
-    mutations.edits.iter().any(|mutation| {
+    mutations.edits.windows(2).any(|window| {
         matches!(
-            mutation,
-            Mutation::NewEventListener { name, id: listener_id }
+            (&window[0], &window[1]),
+            (Mutation::PushId { id: listener_id }, Mutation::NewEventListener { name })
                 if *name == "click" && *listener_id == id
         )
     })
@@ -304,12 +304,69 @@ fn has_click_listener(mutations: &Mutations, id: ElementId) -> bool {
 fn first_click_listener(mutations: &Mutations) -> ElementId {
     mutations
         .edits
-        .iter()
-        .find_map(|mutation| match mutation {
-            Mutation::NewEventListener { name, id } if *name == "click" => Some(*id),
+        .windows(2)
+        .find_map(|window| match (&window[0], &window[1]) {
+            (Mutation::PushId { id }, Mutation::NewEventListener { name }) if *name == "click" => {
+                Some(*id)
+            }
             _ => None,
         })
         .unwrap()
+}
+
+fn removes_id(mutations: &Mutations, id: ElementId) -> bool {
+    mutations.edits.windows(2).any(|window| {
+        matches!(
+            (&window[0], &window[1]),
+            (Mutation::PushId { id: removed_id }, Mutation::Remove) if *removed_id == id
+        )
+    })
+}
+
+fn maps_id(mutations: &Mutations, id: ElementId) -> bool {
+    mutations
+        .edits
+        .iter()
+        .any(|mutation| matches!(mutation, Mutation::PopId { id: mapped_id } if *mapped_id == id))
+}
+
+fn appends_to_root(mutations: &Mutations) -> bool {
+    let mut stack_depth = 0usize;
+    let mut root_depth = None;
+
+    for mutation in &mutations.edits {
+        match mutation {
+            Mutation::PushId { id } if *id == ElementId::ROOT => {
+                root_depth = Some(stack_depth);
+                stack_depth += 1;
+            }
+            Mutation::PushId { .. }
+            | Mutation::CreateElement { .. }
+            | Mutation::CreateText { .. } => {
+                stack_depth += 1;
+            }
+            Mutation::AppendChildren { m } => {
+                if root_depth.is_some_and(|depth| stack_depth.checked_sub(*m + 1) == Some(depth)) {
+                    return true;
+                }
+                stack_depth -= *m;
+            }
+            Mutation::InsertAfter { m } | Mutation::InsertBefore { m } => {
+                stack_depth -= *m;
+            }
+            Mutation::ReplaceWith { m } => {
+                stack_depth -= *m + 1;
+            }
+            Mutation::PopId { .. } | Mutation::Pop | Mutation::Remove => {
+                stack_depth -= 1;
+                if root_depth.is_some_and(|depth| depth >= stack_depth) {
+                    root_depth = None;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn app(props: AppProps) -> Element {
@@ -408,26 +465,28 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     second_slot.set(second);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
+    let move_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
+    let first_portal_button = first_click_listener(edits.get(&first).unwrap());
     assert!(has_click_listener(
         edits.get(&first).unwrap(),
-        ElementId::from_raw(1)
+        first_portal_button
     ));
 
     dom.runtime()
-        .handle_event("click", click_event(), ElementId::from_raw(2));
+        .handle_event("click", click_event(), move_button);
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
 
-    assert!(edits.get(&first).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
-    ));
-    assert!(has_click_listener(
-        edits.get(&second).unwrap(),
-        ElementId::from_raw(1)
-    ));
+    let first_edits = edits
+        .get(&first)
+        .unwrap_or_else(|| panic!("missing first target edits: {edits:#?}"));
+    assert!(removes_id(first_edits, first_portal_button));
+    let second_edits = edits.get(&second).unwrap();
+    let second_portal_button = first_click_listener(second_edits);
+    assert!(has_click_listener(second_edits, second_portal_button));
 
     dom.runtime()
-        .handle_event_for_target(second, "click", click_event(), ElementId::from_raw(1));
+        .handle_event_for_target(second, "click", click_event(), second_portal_button);
     assert_eq!(RETARGET_CLICKS.load(Ordering::SeqCst), 1);
 }
 
@@ -442,17 +501,16 @@ fn replacing_portal_with_local_node_removes_old_target_subtree() {
     target_slot.set(target);
 
     let edits = rebuild_to_targeted_vec(&mut dom);
-    assert!(edits.get(&target).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::LoadTemplate { id, .. } if *id == ElementId::from_raw(1))
-    ));
+    assert!(maps_id(edits.get(&target).unwrap(), ElementId::from_raw(1)));
 
     SHOW_PORTAL.store(0, Ordering::SeqCst);
     dom.mark_dirty(ScopeId::APP);
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
 
-    assert!(edits.get(&target).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    assert!(removes_id(
+        edits.get(&target).unwrap(),
+        ElementId::from_raw(1)
     ));
 }
 
@@ -520,8 +578,9 @@ fn can_open_new_portal_after_closing_previous_keyed_portal() {
         .handle_event_for_target(first, "click", click_event(), ElementId::from_raw(1));
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
-    assert!(edits.get(&first).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    assert!(removes_id(
+        edits.get(&first).unwrap(),
+        ElementId::from_raw(1)
     ));
 
     dom.runtime()
@@ -565,8 +624,9 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
     );
 
     let edits = render_immediate_to_targeted_vec(&mut dom);
-    assert!(edits.get(&first_target).unwrap().edits.iter().any(
-        |mutation| matches!(mutation, Mutation::Remove { id } if *id == ElementId::from_raw(1))
+    assert!(removes_id(
+        edits.get(&first_target).unwrap(),
+        ElementId::from_raw(1)
     ));
 
     dom.runtime()
@@ -680,12 +740,9 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
             let portal_edits = edits.get(&target).unwrap();
             assert!(portal_edits.edits.iter().any(|mutation| matches!(
                 mutation,
-                Mutation::CreateTextNode { value, .. } if value.as_str() == "1"
+                Mutation::CreateText { value } if value.as_str() == "1"
             )));
-            assert!(portal_edits.edits.iter().any(|mutation| matches!(
-                mutation,
-                Mutation::AppendChildren { id: ElementId::ROOT, .. }
-            )));
+            assert!(appends_to_root(portal_edits), "{portal_edits:#?}");
             // The live portal subtree was reused, not re-created from scratch.
             assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);
         });

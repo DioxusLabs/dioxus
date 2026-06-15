@@ -8,12 +8,10 @@
 
 use std::{any::Any, rc::Rc};
 
-use dioxus_core::Runtime;
-use dioxus_core::{ElementId, Template};
+use dioxus_core::{ElementId, Runtime};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
-use rustc_hash::FxHashMap;
 use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Event, Node};
+use web_sys::{Event, Node};
 
 use crate::{
     Config, WebEventConverter, event_type_matches, load_document, virtual_event_from_websys_event,
@@ -22,8 +20,6 @@ use crate::{
 pub struct WebsysDom {
     #[allow(dead_code)]
     pub(crate) root: Node,
-    pub(crate) document: Document,
-    pub(crate) templates: FxHashMap<Template, u16>,
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
@@ -32,7 +28,7 @@ pub struct WebsysDom {
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
 
-    // We originally started with a different `WriteMutations` for collecting templates during hydration.
+    // We originally started with a different `WriteMutations` for suppressing DOM writes during hydration.
     // When profiling the binary size of web applications, this caused a large increase in binary size
     // because diffing code in core is generic over the `WriteMutation` object.
     //
@@ -40,7 +36,7 @@ pub struct WebsysDom {
     // because we can directly write mutations to sledgehammer and avoid the runtime and binary size overhead
     // of dynamic dispatch
     //
-    // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
+    // Instead we now store a flag to see if hydration should skip DOM/event writes.
     // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
     //
     // NOTE: running the virtual dom with the `write_mutations` flag set to true is different from running
@@ -54,7 +50,7 @@ pub struct WebsysDom {
 
 impl WebsysDom {
     pub fn new(cfg: Config, runtime: Rc<Runtime>) -> Self {
-        let (document, root) = match cfg.root {
+        let root = match cfg.root {
             crate::cfg::ConfigRoot::RootName(rootname) => {
                 // eventually, we just want to let the interpreter do all the work of decoding events into our event type
                 // a match here in order to avoid some error during runtime browser test
@@ -69,15 +65,9 @@ impl WebsysDom {
                         document.create_element("body").ok().unwrap()
                     }
                 };
-                (document, root.unchecked_into())
+                root.unchecked_into()
             }
-            crate::cfg::ConfigRoot::RootNode(root) => {
-                let document = match root.owner_document() {
-                    Some(document) => document,
-                    None => load_document(),
-                };
-                (document, root)
-            }
+            crate::cfg::ConfigRoot::RootNode(root) => root,
         };
 
         let interpreter = Interpreter::default();
@@ -127,10 +117,8 @@ impl WebsysDom {
         handler.forget();
 
         Self {
-            document,
             root,
             interpreter,
-            templates: FxHashMap::default(),
             #[cfg(feature = "mounted")]
             runtime,
             #[cfg(feature = "mounted")]

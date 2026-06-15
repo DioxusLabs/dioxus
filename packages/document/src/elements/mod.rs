@@ -77,16 +77,18 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // 2. rsx! { "title: {dynamic_text}" }
     let template = vnode.template;
     let roots = template.roots();
-    let node_paths = template.node_paths();
-    let attr_paths = template.attr_paths();
+    let node_cursors = template.node_cursors();
+    let attr_cursors = template.attr_cursors();
 
     // rsx! { "static text" }
-    if let ([TemplateNode::Text { text }], [], []) = (roots, node_paths, attr_paths) {
+    if let ([TemplateNode::Text { text }], [], []) = (roots, node_cursors, attr_cursors) {
         return Ok(text.to_string());
     }
     // rsx! { "title: {dynamic_text}" }
-    if let (&[TemplateNode::Dynamic { id }], &[&[0]], &[]) = (roots, node_paths, attr_paths) {
-        let node = &vnode.dynamic_nodes[id];
+    if let ([], [cursor], []) = (roots, node_cursors, attr_cursors)
+        && cursor.as_slice() == [0].as_slice()
+    {
+        let node = &vnode.dynamic_nodes[0];
         return match node {
             DynamicNode::Text(text) => Ok(text.value.clone()),
             _ => Err(ExtractSingleTextNodeError::NonTextNode),

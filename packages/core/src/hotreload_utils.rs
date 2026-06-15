@@ -6,7 +6,7 @@ use std::{
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
 use crate::{
-    Attribute, AttributeValue, DynamicNode, Template, TemplateAttribute, TemplateNode, VNode, VText,
+    Attribute, AttributeValue, DynamicNode, Template, TemplateCursor, TemplateNode, VNode, VText,
 };
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -123,8 +123,8 @@ pub enum FmtSegment {
 //     Template {
 //         name: "...",
 //         roots: &[...],
-//         node_paths: &[..],
-//         attr_paths: &[...],
+//         node_cursors: &[..],
+//         attr_cursors: &[...],
 //     },
 //     Box::new([...]),
 //     Box::new([...]),
@@ -262,7 +262,6 @@ impl DynamicValuePool {
     }
 
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
-        // Get the node_paths from a depth first traversal of the template
         let key = hot_reload
             .key
             .as_ref()
@@ -358,6 +357,16 @@ pub struct HotReloadedTemplate {
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
     pub roots: StaticTemplateArray,
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "crate::nodes::deserialize_cursors_leaky")
+    )]
+    pub node_cursors: &'static [TemplateCursor],
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "crate::nodes::deserialize_cursors_leaky")
+    )]
+    pub attr_cursors: &'static [TemplateCursor],
     /// The template that is computed from the hot reload roots
     template: Template,
 }
@@ -369,77 +378,20 @@ impl HotReloadedTemplate {
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         roots: &'static [TemplateNode],
+        node_cursors: &'static [TemplateCursor],
+        attr_cursors: &'static [TemplateCursor],
     ) -> Self {
-        let node_paths = Self::node_paths(roots);
-        let attr_paths = Self::attr_paths(roots);
-
-        let template = Template::new(roots, node_paths, attr_paths);
+        let template = Template::new(roots, node_cursors, attr_cursors);
         Self {
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
             roots,
+            node_cursors,
+            attr_cursors,
             template,
         }
-    }
-
-    fn node_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
-        fn add_node_paths(
-            roots: &[TemplateNode],
-            node_paths: &mut Vec<&'static [u8]>,
-            current_path: Vec<u8>,
-        ) {
-            for (idx, node) in roots.iter().enumerate() {
-                let mut path = current_path.clone();
-                path.push(idx as u8);
-                match node {
-                    TemplateNode::Element { children, .. } => {
-                        add_node_paths(children, node_paths, path);
-                    }
-                    TemplateNode::Text { .. } => {}
-                    TemplateNode::Dynamic { id } => {
-                        debug_assert_eq!(node_paths.len(), *id);
-                        node_paths.push(Box::leak(path.into_boxed_slice()));
-                    }
-                }
-            }
-        }
-
-        let mut node_paths = Vec::new();
-        add_node_paths(roots, &mut node_paths, Vec::new());
-        let leaked: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
-        leaked
-    }
-
-    fn attr_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
-        fn add_attr_paths(
-            roots: &[TemplateNode],
-            attr_paths: &mut Vec<&'static [u8]>,
-            current_path: Vec<u8>,
-        ) {
-            for (idx, node) in roots.iter().enumerate() {
-                let mut path = current_path.clone();
-                path.push(idx as u8);
-                if let TemplateNode::Element {
-                    children, attrs, ..
-                } = node
-                {
-                    for attr in *attrs {
-                        if let TemplateAttribute::Dynamic { id } = attr {
-                            debug_assert_eq!(attr_paths.len(), *id);
-                            attr_paths.push(Box::leak(path.clone().into_boxed_slice()));
-                        }
-                    }
-                    add_attr_paths(children, attr_paths, path);
-                }
-            }
-        }
-
-        let mut attr_paths = Vec::new();
-        add_attr_paths(roots, &mut attr_paths, Vec::new());
-        let leaked: &'static [&'static [u8]] = Box::leak(attr_paths.into_boxed_slice());
-        leaked
     }
 }
 

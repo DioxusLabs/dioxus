@@ -5,12 +5,13 @@
 //! - Diffing nodes that are not mounted
 //! - Mounted nodes that have already been created
 //!
-//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut impl WriteMutations>
+//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut dyn WriteMutations>
 
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
     innerlude::{ElementRef, WriteMutations},
+    mutations::reborrow_writer,
     nodes::VNode,
     virtual_dom::VirtualDom,
 };
@@ -21,11 +22,12 @@ mod component;
 pub(crate) mod context;
 mod iterator;
 pub(crate) mod node;
+mod template_path;
 
 impl VirtualDom {
     pub(crate) fn create_children(
         &mut self,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut dyn WriteMutations>,
         nodes: &[VNode],
         parent: Option<ElementRef>,
     ) -> usize {
@@ -34,7 +36,7 @@ impl VirtualDom {
 
     pub(crate) fn create_children_with_parents(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut dyn WriteMutations>,
         nodes: &[VNode],
         render_parent: Option<ElementRef>,
         logical_parent: Option<ElementRef>,
@@ -42,16 +44,21 @@ impl VirtualDom {
         nodes
             .iter()
             .map(|child| {
-                child.create_with_parents(self, render_parent, logical_parent, to.as_deref_mut())
+                child.create_with_parents(
+                    self,
+                    render_parent,
+                    logical_parent,
+                    reborrow_writer(&mut to),
+                )
             })
             .sum()
     }
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, mut to: Option<&mut impl WriteMutations>, nodes: &[VNode]) {
+    fn remove_nodes(&mut self, mut to: Option<&mut dyn WriteMutations>, nodes: &[VNode]) {
         for node in nodes.iter().rev() {
-            node.remove_node(self, to.as_deref_mut());
+            node.remove_node(self, reborrow_writer(&mut to));
         }
     }
 }

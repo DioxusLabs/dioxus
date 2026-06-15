@@ -68,7 +68,10 @@ fn records_historical_event_listener_targets() {
                 seen_id.set(Some(id));
                 assert_eq!(
                     oracle.historical_event_listener_targets(),
-                    &[EventListenerTarget { name: "click", id }]
+                    &[EventListenerTarget {
+                        name: "click".to_string(),
+                        id
+                    }]
                 );
             }
         })
@@ -81,7 +84,10 @@ fn records_historical_event_listener_targets() {
                 let id = seen_id.get().expect("listener id should be captured");
                 assert_eq!(
                     oracle.historical_event_listener_targets(),
-                    &[EventListenerTarget { name: "click", id }]
+                    &[EventListenerTarget {
+                        name: "click".to_string(),
+                        id
+                    }]
                 );
             }
         })
@@ -112,7 +118,10 @@ fn keeps_historical_event_listener_targets_after_node_removal() {
                 let id = seen_id.get().expect("listener id should be captured");
                 assert_eq!(
                     oracle.historical_event_listener_targets(),
-                    &[EventListenerTarget { name: "click", id }]
+                    &[EventListenerTarget {
+                        name: "click".to_string(),
+                        id
+                    }]
                 );
             }
         })
@@ -221,7 +230,7 @@ fn sequence_identity_check_catches_recreation() {
 #[test]
 fn edit_summary_counts_rebuild_then_in_place_patch() {
     // First step builds the tree; rerender with the same shape but a
-    // different *dynamic* text body should patch in place — same template,
+    // different *dynamic* text body should patch in place — same static shape,
     // just a new value for the dynamic slot.
     fn body(value: &str) -> Element {
         rsx! { div { id: "0", "{value}" } }
@@ -230,10 +239,13 @@ fn edit_summary_counts_rebuild_then_in_place_patch() {
         .step(body("alpha"))
         .step(body("beta"))
         .assert_edit_summary(0, |s| {
-            assert!(s.loads >= 1, "rebuild should load at least one template");
+            assert!(s.loads >= 1, "rebuild should clone at least one prototype");
         })
         .assert_edit_summary(1, |s| {
-            assert_eq!(s.loads, 0, "in-place text patch should not load templates");
+            assert_eq!(
+                s.loads, 0,
+                "in-place text patch should not clone prototypes"
+            );
             assert_eq!(s.set_texts, 1, "exactly one text patch expected");
             assert_eq!(s.removes, 0);
             assert_eq!(s.replaces, 0);

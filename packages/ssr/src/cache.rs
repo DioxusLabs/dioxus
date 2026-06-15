@@ -137,9 +137,13 @@ impl StringCache {
     pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
-        for root in template.template.roots().iter() {
-            from_template_recursive(root, EscapeText::ParentEscape, &mut chain)?;
-        }
+        from_template_children(
+            template,
+            &[],
+            template.template.roots(),
+            EscapeText::ParentEscape,
+            &mut chain,
+        )?;
 
         Ok(Self {
             segments: chain.segments,
@@ -147,8 +151,45 @@ impl StringCache {
     }
 }
 
+fn from_template_children(
+    vnode: &VNode,
+    parent_cursor: &[u8],
+    children: &[TemplateNode],
+    escape_text: EscapeText,
+    chain: &mut StringChain,
+) -> Result<(), std::fmt::Error> {
+    for child_idx in 0..=children.len() {
+        for (dynamic_idx, _) in vnode
+            .template
+            .node_cursors()
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, cursor)| {
+                let (slot_parent, insertion_index) = cursor.split_slot();
+                slot_parent == parent_cursor && insertion_index == child_idx
+            })
+        {
+            *chain += Segment::Node {
+                index: dynamic_idx,
+                escape_text,
+            };
+        }
+
+        if let Some(child) = children.get(child_idx) {
+            let mut child_cursor = parent_cursor.to_vec();
+            child_cursor.push(child_idx as u8);
+            from_template_recursive(vnode, child, &child_cursor, escape_text, chain)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn from_template_recursive(
+    vnode: &VNode,
     root: &TemplateNode,
+    cursor: &[u8],
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
@@ -239,9 +280,7 @@ fn from_template_recursive(
                     _ => EscapeText::Escape,
                 };
 
-                for child in *children {
-                    from_template_recursive(child, escape_text, chain)?;
-                }
+                from_template_children(vnode, cursor, children, escape_text, chain)?;
                 write!(chain, "</{tag}>")?;
             }
         }
@@ -271,12 +310,6 @@ fn from_template_recursive(
                 };
             }
         },
-        TemplateNode::Dynamic { id: idx } => {
-            *chain += Segment::Node {
-                index: *idx,
-                escape_text,
-            }
-        }
     }
 
     Ok(())

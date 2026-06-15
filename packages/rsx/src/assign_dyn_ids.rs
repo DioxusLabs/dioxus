@@ -3,10 +3,10 @@ use crate::{
     AttributeValue, BodyNode, HotLiteral, HotReloadFormattedSegment, Segment, TemplateBody,
 };
 
-/// A visitor that assigns dynamic ids to nodes and attributes and accumulates paths to dynamic nodes and attributes
+/// A visitor that assigns dynamic ids to nodes and attributes and accumulates cursors to dynamic nodes and attributes
 struct DynIdVisitor<'a> {
     body: &'a mut TemplateBody,
-    current_path: Vec<u8>,
+    current_cursor: Vec<u8>,
     dynamic_text_index: usize,
     component_literal_index: usize,
 }
@@ -15,17 +15,29 @@ impl<'a> DynIdVisitor<'a> {
     fn new(body: &'a mut TemplateBody) -> Self {
         Self {
             body,
-            current_path: Vec::new(),
+            current_cursor: Vec::new(),
             dynamic_text_index: 0,
             component_literal_index: 0,
         }
     }
 
     fn visit_children(&mut self, children: &[BodyNode]) {
-        for (idx, node) in children.iter().enumerate() {
-            self.current_path.push(idx as u8);
+        let mut static_idx = 0u8;
+        for node in children {
+            self.current_cursor.push(static_idx);
             self.visit(node);
-            self.current_path.pop();
+            self.current_cursor.pop();
+            if Self::is_static_template_node(node) {
+                static_idx += 1;
+            }
+        }
+    }
+
+    fn is_static_template_node(node: &BodyNode) -> bool {
+        match node {
+            BodyNode::Element(_) => true,
+            BodyNode::Text(text) => text.is_static(),
+            _ => false,
         }
     }
 
@@ -52,17 +64,17 @@ impl<'a> DynIdVisitor<'a> {
             // Text nodes are dynamic if they contain dynamic segments
             BodyNode::Text(txt) => {
                 if !txt.is_static() {
-                    self.assign_path_to_node(node);
+                    self.assign_cursor_to_node(node);
                     self.assign_formatted_segment(&txt.input);
                 }
             }
 
             // Raw exprs are always dynamic
             BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
-                self.assign_path_to_node(node)
+                self.assign_cursor_to_node(node)
             }
             BodyNode::Component(component) => {
-                self.assign_path_to_node(node);
+                self.assign_cursor_to_node(node);
                 let mut index = 0;
                 for property in &component.fields {
                     if let AttributeValue::AttrLiteral(literal) = &property.value {
@@ -97,17 +109,16 @@ impl<'a> DynIdVisitor<'a> {
         }
     }
 
-    /// Assign a path to a node and give it its dynamic index
+    /// Assign a cursor to a node and give it its dynamic index
     /// This simplifies the ToTokens implementation for the macro to be a little less centralized
-    fn assign_path_to_node(&mut self, node: &BodyNode) {
-        // Assign the TemplateNode::Dynamic index to the node
-        node.set_dyn_idx(self.body.node_paths.len());
+    fn assign_cursor_to_node(&mut self, node: &BodyNode) {
+        node.set_dyn_idx(self.body.node_cursors.len());
 
-        // And then save the current path as the corresponding path
-        self.body.node_paths.push(self.current_path.clone());
+        // And then save the current cursor as the corresponding cursor
+        self.body.node_cursors.push(self.current_cursor.clone());
     }
 
-    /// Assign a path to a attribute and give it its dynamic index
+    /// Assign a cursor to a attribute and give it its dynamic index
     /// This simplifies the ToTokens implementation for the macro to be a little less centralized
     pub(crate) fn assign_path_to_attribute(
         &mut self,
@@ -115,12 +126,12 @@ impl<'a> DynIdVisitor<'a> {
         attribute_index: usize,
     ) {
         // Assign the dynamic index to the attribute
-        attribute.set_dyn_idx(self.body.attr_paths.len());
+        attribute.set_dyn_idx(self.body.attr_cursors.len());
 
-        // And then save the current path as the corresponding path
+        // And then save the current cursor as the corresponding cursor
         self.body
-            .attr_paths
-            .push((self.current_path.clone(), attribute_index));
+            .attr_cursors
+            .push((self.current_cursor.clone(), attribute_index));
     }
 }
 

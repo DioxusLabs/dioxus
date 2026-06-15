@@ -1,5 +1,5 @@
 //! When hydrating streaming components:
-//! 1. Just hydrate the template on the outside
+//! 1. Hydrate the already-rendered DOM on the outside
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
@@ -7,8 +7,8 @@ use crate::dom::WebsysDom;
 use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
 use dioxus_interpreter_js::hydration_bindings::{
-    HydrationChannel, claim_hydration_anchor_root, install_hydration_state,
-    push_hydration_anchor_root,
+    HydrationChannel, claim_hydration_virtual_root, install_hydration_state,
+    push_hydration_virtual_root,
 };
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
@@ -62,13 +62,13 @@ impl WebsysDom {
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
-        // Push the new nodes onto the stack
+        // Collect the new nodes. `resolve_suspense` pushes them after it
+        // pushes the placeholder target so replacement stays stack-only.
         let mut current_child = resolved_suspense_element.first_child();
         let mut children = Vec::new();
         while let Some(node) = current_child {
             children.push(node.clone());
             current_child = node.next_sibling();
-            self.interpreter.base().push_root(node);
         }
 
         // Empty errored chunks use an anchor ref as the
@@ -76,9 +76,7 @@ impl WebsysDom {
         // `parent`/`before` from the loading slot; hydration later binds the
         // new scope's placeholder ElementId to that same anchor.
         let empty_bootstrap = children.is_empty();
-        let empty_bootstrap_anchor =
-            empty_bootstrap.then(|| push_hydration_anchor_root(self.interpreter.base()));
-        let replace_count = if empty_bootstrap { 1 } else { children.len() };
+        let mut empty_bootstrap_anchor = None;
 
         #[cfg(not(debug_assertions))]
         let debug_types = None;
@@ -97,10 +95,21 @@ impl WebsysDom {
                 dom,
                 self,
                 |to| {
-                    // Switch to only writing templates
+                    // Resolve the VDOM bookkeeping without writing duplicate DOM nodes.
                     to.skip_mutations = true;
                 },
-                replace_count,
+                |to| {
+                    if empty_bootstrap {
+                        empty_bootstrap_anchor =
+                            Some(push_hydration_virtual_root(to.interpreter.base()));
+                        1
+                    } else {
+                        for node in &children {
+                            to.interpreter.base().push_root(node.clone());
+                        }
+                        children.len()
+                    }
+                },
             );
             self.skip_mutations = false;
         });
@@ -131,7 +140,11 @@ impl WebsysDom {
                 first_dynamic_root_element_id(root_scope, dom),
                 empty_bootstrap_anchor.as_ref(),
             ) {
-                claim_hydration_anchor_root(self.interpreter.base(), claim_id.raw() as u32, anchor);
+                claim_hydration_virtual_root(
+                    self.interpreter.base(),
+                    claim_id.raw() as u32,
+                    anchor,
+                );
             }
             self.collect_suspense_only(root_scope, dom);
         } else {
@@ -210,7 +223,7 @@ impl WebsysDom {
         );
         closure.forget();
 
-        // EnterRoot(i) parks the cursor on under[i], so pass the rendered template
+        // EnterRoot(i) parks the cursor on under[i], so pass the rendered app
         // roots. The dx build injects `<script>` tags before/after the app for
         // hydration-data plumbing; those are not part of the rendered app.
         let mut roots: Vec<web_sys::Node> = Vec::new();

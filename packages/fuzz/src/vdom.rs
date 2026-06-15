@@ -9,7 +9,7 @@ use crate::{
 use dioxus::prelude::*;
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, Portal, Runtime, Task, Template, TemplateAttribute,
-    TemplateNode, VComponent, VNode, VText,
+    TemplateCursor, TemplateNode, VComponent, VNode, VText,
 };
 use std::future::pending;
 
@@ -566,8 +566,8 @@ fn compile_template_uncached(spec: &TemplateSpec) -> Template {
         .collect::<Vec<_>>();
     Template::new(
         intern_template_node_slice(&shapes, 0, 0),
-        intern_path_list(collect_node_paths(&spec.roots)),
-        intern_path_list(collect_attr_paths(&spec.roots)),
+        intern_cursor_list(collect_node_cursors(&spec.roots)),
+        intern_cursor_list(collect_attr_cursors(&spec.roots)),
     )
 }
 
@@ -611,7 +611,9 @@ fn intern_template_node_slice(
         let mut attr_base = attr_base;
         let mut nodes = Vec::with_capacity(specs.len());
         for spec in specs {
-            nodes.push(intern_template_node(spec, dynamic_base, attr_base));
+            if !matches!(spec, TemplateNodeShape::Dynamic) {
+                nodes.push(intern_template_node(spec, dynamic_base, attr_base));
+            }
             dynamic_base += spec.dynamic_count();
             attr_base += spec.attr_count();
         }
@@ -657,9 +659,7 @@ fn compile_template_node(key: &TemplateNodeCacheKey) -> TemplateNode {
         TemplateNodeShape::Text(value) => TemplateNode::Text {
             text: text_value(*value),
         },
-        TemplateNodeShape::Dynamic => TemplateNode::Dynamic {
-            id: key.dynamic_base,
-        },
+        TemplateNodeShape::Dynamic => unreachable!("dynamic nodes are not stored in templates"),
     }
 }
 
@@ -734,39 +734,69 @@ fn dynamic_attr_count(attrs: &[TemplateAttrShape]) -> usize {
         .count()
 }
 
-fn collect_node_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
+fn collect_node_cursors(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
-    for (index, root) in roots.iter().enumerate() {
-        let path = vec![index as u8];
-        collect_node_paths_from_node(root, path, &mut out);
-    }
+    collect_node_cursors_from_children(roots, Vec::new(), &mut out);
     out
 }
 
-fn collect_node_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mut Vec<Vec<u8>>) {
+fn collect_node_cursors_from_children(
+    children: &[TemplateNodeSpec],
+    parent_cursor: Vec<u8>,
+    out: &mut Vec<Vec<u8>>,
+) {
+    let mut static_idx = 0u8;
+    for child in children {
+        let mut cursor = parent_cursor.clone();
+        cursor.push(static_idx);
+        collect_node_cursors_from_node(child, cursor, out);
+        if is_static_template_spec(child) {
+            static_idx += 1;
+        }
+    }
+}
+
+fn collect_node_cursors_from_node(
+    node: &TemplateNodeSpec,
+    cursor: Vec<u8>,
+    out: &mut Vec<Vec<u8>>,
+) {
     match node {
-        TemplateNodeSpec::Dynamic(_) => out.push(path),
+        TemplateNodeSpec::Dynamic(_) => out.push(cursor),
         TemplateNodeSpec::Element { children, .. } => {
-            for (index, child) in children.iter().enumerate() {
-                let mut child_path = path.clone();
-                child_path.push(index as u8);
-                collect_node_paths_from_node(child, child_path, out);
-            }
+            collect_node_cursors_from_children(children, cursor, out);
         }
         TemplateNodeSpec::Text(_) => {}
     }
 }
 
-fn collect_attr_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
+fn collect_attr_cursors(roots: &[TemplateNodeSpec]) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
-    for (index, root) in roots.iter().enumerate() {
-        let path = vec![index as u8];
-        collect_attr_paths_from_node(root, path, &mut out);
-    }
+    collect_attr_cursors_from_children(roots, Vec::new(), &mut out);
     out
 }
 
-fn collect_attr_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mut Vec<Vec<u8>>) {
+fn collect_attr_cursors_from_children(
+    children: &[TemplateNodeSpec],
+    parent_cursor: Vec<u8>,
+    out: &mut Vec<Vec<u8>>,
+) {
+    let mut static_idx = 0u8;
+    for child in children {
+        let mut cursor = parent_cursor.clone();
+        cursor.push(static_idx);
+        collect_attr_cursors_from_node(child, cursor, out);
+        if is_static_template_spec(child) {
+            static_idx += 1;
+        }
+    }
+}
+
+fn collect_attr_cursors_from_node(
+    node: &TemplateNodeSpec,
+    cursor: Vec<u8>,
+    out: &mut Vec<Vec<u8>>,
+) {
     let TemplateNodeSpec::Element {
         attrs, children, ..
     } = node
@@ -776,37 +806,44 @@ fn collect_attr_paths_from_node(node: &TemplateNodeSpec, path: Vec<u8>, out: &mu
 
     for attr in attrs {
         if matches!(attr, TemplateAttrSpec::Dynamic(_)) {
-            out.push(path.clone());
+            out.push(cursor.clone());
         }
     }
 
-    for (index, child) in children.iter().enumerate() {
-        let mut child_path = path.clone();
-        child_path.push(index as u8);
-        collect_attr_paths_from_node(child, child_path, out);
-    }
+    collect_attr_cursors_from_children(children, cursor, out);
 }
 
-fn intern_path_list(paths: Vec<Vec<u8>>) -> &'static [&'static [u8]] {
-    if paths.is_empty() {
+fn is_static_template_spec(node: &TemplateNodeSpec) -> bool {
+    matches!(
+        node,
+        TemplateNodeSpec::Element { .. } | TemplateNodeSpec::Text(_)
+    )
+}
+
+fn intern_cursor_list(cursors: Vec<Vec<u8>>) -> &'static [TemplateCursor] {
+    if cursors.is_empty() {
         return &[];
     }
 
-    static CACHE: InternMap<Vec<Vec<u8>>, &'static [&'static [u8]]> = InternMap::new();
-    CACHE.get_or_insert_with(paths.as_slice(), || {
-        let leaked = paths.iter().cloned().map(intern_path).collect::<Vec<_>>();
+    static CACHE: InternMap<Vec<Vec<u8>>, &'static [TemplateCursor]> = InternMap::new();
+    CACHE.get_or_insert_with(cursors.as_slice(), || {
+        let leaked = cursors
+            .iter()
+            .cloned()
+            .map(|cursor| TemplateCursor::new(intern_cursor(cursor)))
+            .collect::<Vec<_>>();
         Box::leak(leaked.into_boxed_slice())
     })
 }
 
-fn intern_path(path: Vec<u8>) -> &'static [u8] {
-    if path.is_empty() {
+fn intern_cursor(cursor: Vec<u8>) -> &'static [u8] {
+    if cursor.is_empty() {
         return &[];
     }
 
     static CACHE: InternMap<Vec<u8>, &'static [u8]> = InternMap::new();
-    CACHE.get_or_insert_with(path.as_slice(), || {
-        Box::leak(path.clone().into_boxed_slice())
+    CACHE.get_or_insert_with(cursor.as_slice(), || {
+        Box::leak(cursor.clone().into_boxed_slice())
     })
 }
 
@@ -885,8 +922,8 @@ mod tests {
         let second = compile_template(&spec);
 
         assert!(ptr::eq(first.roots(), second.roots()));
-        assert!(ptr::eq(first.node_paths(), second.node_paths()));
-        assert!(ptr::eq(first.attr_paths(), second.attr_paths()));
+        assert!(ptr::eq(first.node_cursors(), second.node_cursors()));
+        assert!(ptr::eq(first.attr_cursors(), second.attr_cursors()));
     }
 
     #[test]
@@ -928,33 +965,23 @@ mod tests {
     }
 
     #[test]
-    fn dynamic_subtrees_include_dynamic_base_in_key() {
+    fn dynamic_children_are_represented_by_cursors() {
         let spec = element(
             1,
             Vec::new(),
             vec![TemplateNodeSpec::Dynamic(DynamicSpec::Empty)],
         );
 
-        let base_zero = intern_template_node(&spec.shape(), 0, 0);
-        let base_one = intern_template_node(&spec.shape(), 1, 0);
+        let template = compile_template(&TemplateSpec {
+            cache_key: None,
+            roots: vec![spec],
+        });
 
-        let TemplateNode::Element {
-            children: [TemplateNode::Dynamic { id: zero_id }],
-            ..
-        } = base_zero
-        else {
-            panic!("expected base zero dynamic child");
-        };
-        let TemplateNode::Element {
-            children: [TemplateNode::Dynamic { id: one_id }],
-            ..
-        } = base_one
-        else {
-            panic!("expected base one dynamic child");
+        let TemplateNode::Element { children: [], .. } = template.roots()[0] else {
+            panic!("expected static element with no dynamic template children");
         };
 
-        assert_eq!(*zero_id, 0);
-        assert_eq!(*one_id, 1);
+        assert_eq!(template.node_cursors(), &[TemplateCursor::new(&[0, 0])]);
     }
 
     #[test]

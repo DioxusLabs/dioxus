@@ -3,7 +3,7 @@ use crate::{
 };
 use dioxus_core::{
     DynamicNode, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime, SuperInto,
-    Template, TemplateNode, VComponent, VNode, fc_to_builder, provide_context, schedule_update,
+    Template, TemplateCursor, VComponent, VNode, fc_to_builder, provide_context, schedule_update,
     spawn, use_hook, use_hook_with_cleanup,
 };
 use dioxus_document::Document;
@@ -324,7 +324,7 @@ fn portal_element(target: RenderTargetId, children: Element) -> Element {
 }
 
 fn component_element(component: VComponent) -> Element {
-    static TEMPLATE: Template = Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]);
+    static TEMPLATE: Template = Template::new(&[], &[TemplateCursor::new(&[0])], &[]);
 
     Ok(VNode::new(
         None,

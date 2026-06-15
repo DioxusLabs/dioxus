@@ -174,7 +174,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         #[cfg(all(feature = "devtools", debug_assertions))]
-        let template;
+        let hotreload;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
 
@@ -193,13 +193,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 let mut devtools_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
-                        template = None;
+                        hotreload = None;
                     },
-                    new_template = devtools_next => {
-                        template = Some(new_template);
+                    new_hotreload = devtools_next => {
+                        hotreload = Some(new_hotreload);
                     },
                     hydration_data = rx_hydration => {
-                        template = None;
+                        hotreload = None;
                         #[cfg(feature = "hydrate")]
                         {
                             hydration_work = Some(hydration_data);
@@ -224,8 +224,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         #[cfg(all(feature = "devtools", debug_assertions))]
-        if let Some(hr_msg) = template {
-            // Replace all templates
+        if let Some(hr_msg) = hotreload {
+            // Apply hot-reload metadata to the VirtualDom.
             dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {

@@ -2,21 +2,19 @@
 use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
 use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
 use blitz_traits::events::DomEventKind;
-use dioxus_core::{
-    AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
-};
+use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use rustc_hash::FxHashMap;
 use std::str::FromStr as _;
 
 /// The state of the Dioxus integration with the RealDom
 #[derive(Debug)]
 pub struct DioxusState {
-    /// Store of templates keyed by unique name
-    pub(crate) templates: FxHashMap<Template, Vec<NodeId>>,
     /// Stack machine state for applying dioxus mutations
     pub(crate) stack: Vec<NodeId>,
     /// Mapping from vdom ElementId -> rdom NodeId
     pub(crate) node_id_mapping: Vec<Option<NodeId>>,
+    /// Mapping from rdom NodeId -> vdom ElementId
+    pub(crate) element_id_mapping: FxHashMap<NodeId, ElementId>,
     /// Count of each handler type
     pub(crate) event_handler_counts: [u32; 32],
     /// Mounted events queued as elements are mounted
@@ -26,10 +24,12 @@ pub struct DioxusState {
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
     pub fn create(root_id: usize) -> Self {
+        let mut element_id_mapping = FxHashMap::default();
+        element_id_mapping.insert(root_id, ElementId::ROOT);
         Self {
-            templates: FxHashMap::default(),
             stack: vec![root_id],
             node_id_mapping: vec![Some(root_id)],
+            element_id_mapping,
             event_handler_counts: [0; 32],
             queued_mounted_events: Vec::new(),
         }
@@ -46,12 +46,6 @@ impl DioxusState {
             .get(element_id.raw())
             .copied()
             .flatten()
-    }
-
-    pub(crate) fn anchor_and_nodes(&mut self, id: ElementId, m: usize) -> (usize, Vec<usize>) {
-        let anchor_node_id = self.element_to_node_id(id);
-        let new_nodes = self.m_stack_nodes(m);
-        (anchor_node_id, new_nodes)
     }
 
     pub(crate) fn m_stack_nodes(&mut self, m: usize) -> Vec<usize> {
@@ -92,104 +86,124 @@ impl MutationWriter<'_> {
 
         // Set the new mapping
         self.state.node_id_mapping[element_id] = Some(node_id);
+        self.state
+            .element_id_mapping
+            .insert(node_id, ElementId::from_raw(element_id));
     }
 
-    /// Create a ElementId -> NodeId mapping and push the node to the stack
-    fn map_new_node(&mut self, node_id: NodeId, element_id: ElementId) {
-        self.set_id_mapping(node_id, element_id);
-        self.state.stack.push(node_id);
-    }
-
-    /// Find a child in the document by child index path
-    fn load_child(&self, path: &[u8]) -> NodeId {
+    /// Find the current stack node's `index`th child.
+    fn nth_child(&self, index: usize) -> NodeId {
         let top_of_stack_node_id = *self.state.stack.last().unwrap();
-        self.docm.node_at_path(top_of_stack_node_id, path)
+        self.docm.node_at_path(top_of_stack_node_id, &[index as u8])
+    }
+
+    fn top_node(&self) -> NodeId {
+        *self.state.stack.last().unwrap()
+    }
+
+    fn top_element_id(&self) -> ElementId {
+        *self
+            .state
+            .element_id_mapping
+            .get(&self.top_node())
+            .expect("top node must be mapped to an ElementId")
+    }
+
+    fn clear_node_mapping(&mut self, node_id: NodeId) {
+        if let Some(element_id) = self.state.element_id_mapping.remove(&node_id)
+            && let Some(slot) = self.state.node_id_mapping.get_mut(element_id.raw())
+        {
+            *slot = None;
+        }
     }
 }
 
 impl WriteMutations for MutationWriter<'_> {
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        trace!("assign_node_id path:{:?} id:{}", path, id.raw());
-
-        // If there is an existing node already mapped to that ID and it has no parent, then drop it
-        // TODO: more automated GC/ref-counted semantics for node lifetimes
-        if let Some(node_id) = self.state.try_element_to_node_id(id) {
-            self.docm.remove_node_if_unparented(node_id);
-        }
-
-        // Map the node at specified path
-        self.set_id_mapping(self.load_child(path), id);
-    }
-
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        trace!("create_text_node id:{} text:{}", id.raw(), value);
-        let node_id = self.docm.create_text_node(value);
-        self.map_new_node(node_id, id);
-    }
-
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        trace!("append_children id:{} m:{}", id.raw(), m);
-        let (parent_id, child_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.append_children(parent_id, &child_node_ids);
-    }
-
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_after id:{} m:{}", id.raw(), m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.insert_nodes_after(anchor_node_id, &new_node_ids);
-    }
-
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_before id:{} m:{}", id.raw(), m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
-    }
-
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        trace!("replace_node_with id:{} m:{}", id.raw(), m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
-    }
-
-    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
-        trace!(
-            "insert_children_at_path id:{} path:{:?} m:{}",
-            id.raw(),
-            path,
-            m
-        );
-        let new_node_ids = self.state.m_stack_nodes(m);
-        let root_node_id = self.state.element_to_node_id(id);
-        let anchor_node_id = self.docm.node_at_path(root_node_id, path);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        trace!("remove_node id:{}", id.raw());
-        let node_id = self.state.element_to_node_id(id);
-        self.docm.remove_node(node_id);
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        trace!("push_root id:{}", id.raw());
+    fn push_id(&mut self, id: ElementId) {
+        trace!("push_id id:{}", id.raw());
         let node_id = self.state.element_to_node_id(id);
         self.state.stack.push(node_id);
     }
 
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        trace!("set_node_text id:{} value:{}", id.raw(), value);
-        let node_id = self.state.element_to_node_id(id);
+    fn pop_id(&mut self, id: ElementId) {
+        trace!("pop_id id:{}", id.raw());
+        let node_id = self.state.stack.pop().unwrap();
+        self.set_id_mapping(node_id, id);
+    }
+
+    fn child(&mut self, index: usize) {
+        trace!("child index:{index}");
+        let child = self.nth_child(index);
+        *self.state.stack.last_mut().unwrap() = child;
+    }
+
+    fn pop(&mut self) {
+        trace!("pop");
+        self.state.stack.pop();
+    }
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        trace!("create_element tag:{tag} ns:{ns:?}");
+        let node_id = self.docm.create_element(qual_name(tag, ns), Vec::new());
+        self.state.stack.push(node_id);
+    }
+
+    fn create_text(&mut self, value: &str) {
+        trace!("create_text text:{}", value);
+        let node_id = self.docm.create_text_node(value);
+        self.state.stack.push(node_id);
+    }
+
+    fn clone(&mut self) {
+        trace!("clone");
+        let node_id = self.top_node();
+        *self.state.stack.last_mut().unwrap() = self.docm.deep_clone_node(node_id);
+    }
+
+    fn append_children(&mut self, m: usize) {
+        trace!("append_children m:{m}");
+        let child_node_ids = self.state.m_stack_nodes(m);
+        let parent_id = self.top_node();
+        self.docm.append_children(parent_id, &child_node_ids);
+    }
+
+    fn replace_with(&mut self, m: usize) {
+        trace!("replace_with m:{m}");
+        let new_node_ids = self.state.m_stack_nodes(m);
+        let target = self.state.stack.pop().unwrap();
+        self.docm.replace_node_with(target, &new_node_ids);
+        self.clear_node_mapping(target);
+    }
+
+    fn insert_after(&mut self, m: usize) {
+        trace!("insert_after m:{m}");
+        let new_node_ids = self.state.m_stack_nodes(m);
+        let anchor = self.top_node();
+        self.docm.insert_nodes_after(anchor, &new_node_ids);
+    }
+
+    fn insert_before(&mut self, m: usize) {
+        trace!("insert_before m:{m}");
+        let new_node_ids = self.state.m_stack_nodes(m);
+        let anchor = self.top_node();
+        self.docm.insert_nodes_before(anchor, &new_node_ids);
+    }
+
+    fn remove(&mut self) {
+        trace!("remove");
+        let node_id = self.state.stack.pop().unwrap();
+        self.docm.remove_node(node_id);
+        self.clear_node_mapping(node_id);
+    }
+
+    fn set_text(&mut self, value: &str) {
+        trace!("set_text value:{}", value);
+        let node_id = self.top_node();
         self.docm.set_node_text(node_id, value);
     }
 
-    fn set_attribute(
-        &mut self,
-        local_name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        let node_id = self.state.element_to_node_id(id);
+    fn set_attribute(&mut self, local_name: &str, ns: Option<&str>, value: &AttributeValue) {
+        let node_id = self.top_node();
         fn is_falsy(val: &AttributeValue) -> bool {
             match val {
                 AttributeValue::None => true,
@@ -265,26 +279,8 @@ impl WriteMutations for MutationWriter<'_> {
         };
     }
 
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        // TODO: proper template node support
-        let template_entry = self.state.templates.entry(template).or_insert_with(|| {
-            let template_root_ids: Vec<NodeId> = template
-                .roots()
-                .iter()
-                .map(|root| create_template_node(&mut self.docm, root))
-                .collect();
-
-            template_root_ids
-        });
-
-        let template_node_id = template_entry[index];
-        let clone_id = self.docm.deep_clone_node(template_node_id);
-
-        trace!("load_template template_node_id:{template_node_id} clone_id:{clone_id}");
-        self.map_new_node(clone_id, id);
-    }
-
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+    fn add_event_listener(&mut self, name: &str) {
+        let id = self.top_element_id();
         // Mounted events are fired immediately after the element is mounted.
         if name == "mounted" {
             self.state.queue_mount_event(id);
@@ -294,11 +290,11 @@ impl WriteMutations for MutationWriter<'_> {
         // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
         // we might actually just want to attach the attribute to the root element (delegation)
         let value = AttributeValue::Text("<rust func>".into());
-        self.set_attribute(name, None, &value, id);
+        self.set_attribute(name, None, &value);
 
         // Also set the data-dioxus-id attribute so we can find the element later
         let value = AttributeValue::Text(id.raw().to_string());
-        self.set_attribute("data-dioxus-id", None, &value, id);
+        self.set_attribute("data-dioxus-id", None, &value);
 
         // node.add_event_listener(name);
 
@@ -308,7 +304,7 @@ impl WriteMutations for MutationWriter<'_> {
         }
     }
 
-    fn remove_event_listener(&mut self, name: &'static str, _id: ElementId) {
+    fn remove_event_listener(&mut self, name: &str) {
         if let Ok(kind) = DomEventKind::from_str(name) {
             let idx = kind.discriminant() as usize;
             self.state.event_handler_counts[idx] -= 1;
@@ -316,53 +312,10 @@ impl WriteMutations for MutationWriter<'_> {
     }
 }
 
-fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> NodeId {
-    match node {
-        TemplateNode::Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-        } => {
-            let name = qual_name(tag, *namespace);
-            // let attrs = attrs.iter().filter_map(map_template_attr).collect();
-            let node_id = docm.create_element(name, Vec::new());
-
-            for attr in attrs.iter() {
-                let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                else {
-                    continue;
-                };
-                let falsy = *value == "false";
-                set_attribute_inner(docm, name, *namespace, Some(value), falsy, node_id);
-            }
-
-            let child_ids: Vec<NodeId> = children
-                .iter()
-                .map(|child| create_template_node(docm, child))
-                .collect();
-
-            docm.append_children(node_id, &child_ids);
-
-            node_id
-        }
-        TemplateNode::Text { text } => docm.create_text_node(text),
-        // Dynamic slots are positional anchors inside a template — a comment
-        // node fills the slot in the cloned template without participating
-        // in layout or text-run construction. The slot is always replaced
-        // (via `insert_children_at_path`) before render.
-        TemplateNode::Dynamic { .. } => docm.create_comment_node(),
-    }
-}
-
 fn set_attribute_inner(
     docm: &mut DocumentMutator<'_>,
-    local_name: &'static str,
-    ns: Option<&'static str>,
+    local_name: &str,
+    ns: Option<&str>,
     value: Option<&str>,
     is_falsy: bool,
     node_id: usize,

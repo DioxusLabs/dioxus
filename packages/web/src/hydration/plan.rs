@@ -33,10 +33,44 @@ impl WebsysDom {
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        for (i, root) in vnode.template.roots().iter().enumerate() {
-            let root_id = vnode.mounted_root(i, dom);
-            self.collect_template_node_leaves(vnode, root, root_id, dom, out)?;
+        self.collect_template_child_leaves(vnode, &[], vnode.template.roots(), dom, out)?;
+        Ok(())
+    }
+
+    fn collect_template_child_leaves<'a>(
+        &mut self,
+        vnode: &'a VNode,
+        parent_cursor: &[u8],
+        children: &'a [TemplateNode],
+        dom: &'a VirtualDom,
+        out: &mut Vec<Leaf<'a>>,
+    ) -> Result<(), RehydrationError> {
+        for child_idx in 0..=children.len() {
+            for (dynamic_idx, _) in vnode
+                .template
+                .node_cursors()
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(_, cursor)| {
+                    let (slot_parent, insertion_index) = cursor.split_slot();
+                    slot_parent == parent_cursor && insertion_index == child_idx
+                })
+            {
+                self.collect_dynamic_node_leaves(vnode, dynamic_idx, dom, out)?;
+            }
+
+            if let Some(child) = children.get(child_idx) {
+                let mut cursor = parent_cursor.to_vec();
+                cursor.push(child_idx as u8);
+                let root_id = parent_cursor
+                    .is_empty()
+                    .then(|| vnode.mounted_root(child_idx, dom))
+                    .flatten();
+                self.collect_template_node_leaves(vnode, child, cursor, root_id, out)?;
+            }
         }
+
         Ok(())
     }
 
@@ -44,8 +78,8 @@ impl WebsysDom {
         &mut self,
         vnode: &'a VNode,
         node: &'a TemplateNode,
+        cursor: Vec<u8>,
         root_id: Option<ElementId>,
-        dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
         match node {
@@ -53,14 +87,12 @@ impl WebsysDom {
                 out.push(Leaf::Element {
                     vnode,
                     node,
+                    cursor,
                     root_id,
                 });
             }
             TemplateNode::Text { text } => {
                 out.push(Leaf::StaticText { text, id: root_id });
-            }
-            TemplateNode::Dynamic { id } => {
-                self.collect_dynamic_node_leaves(vnode, *id, dom, out)?;
             }
         }
         Ok(())
@@ -117,7 +149,7 @@ impl WebsysDom {
             }
             prev_consumed = match step {
                 EmitStep::Element(leaf) => {
-                    self.emit_element(*leaf, channel, dom, to_mount)?;
+                    self.emit_element(leaf, channel, dom, to_mount)?;
                     1
                 }
                 EmitStep::TextRun(run) => {
@@ -131,7 +163,7 @@ impl WebsysDom {
 
     fn emit_element<'a>(
         &mut self,
-        leaf: Leaf<'a>,
+        leaf: &Leaf<'a>,
         channel: &mut HydrationChannel,
         dom: &VirtualDom,
         to_mount: &mut Vec<ElementId>,
@@ -139,6 +171,7 @@ impl WebsysDom {
         let Leaf::Element {
             vnode,
             node,
+            cursor,
             root_id,
         } = leaf
         else {
@@ -156,7 +189,7 @@ impl WebsysDom {
 
         // Resolve mounted ElementId (root_id is overridden by the dynamic attr
         // id when present) and collect dynamic listeners + onmounted events.
-        let mut mounted_id = root_id;
+        let mut mounted_id = *root_id;
         let mut listeners: Vec<(&'static str, bool)> = Vec::new();
         for attr in *attrs {
             if let TemplateAttribute::Dynamic { id } = attr {
@@ -192,11 +225,9 @@ impl WebsysDom {
         // Descend only if the subtree contains any dynamic content. Pure-
         // static subtrees need no hydration walk — `hy_advance(1)` past the
         // mapped element steps over them at the parent level.
-        if children.iter().any(template_node_has_dynamic_content) {
+        if template_children_have_dynamic_content(vnode, cursor, children) {
             let mut child_leaves: Vec<Leaf<'_>> = Vec::new();
-            for child in *children {
-                self.collect_template_node_leaves(vnode, child, None, dom, &mut child_leaves)?;
-            }
+            self.collect_template_child_leaves(vnode, cursor, children, dom, &mut child_leaves)?;
             channel.hy_begin_children();
             self.emit_leaves(&child_leaves, channel, dom, to_mount)?;
             channel.hy_end_children();
@@ -208,7 +239,7 @@ impl WebsysDom {
 
 /// A flattened item at one DOM level. Components and fragments are
 /// transparent — expanded into their constituent leaves.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) enum Leaf<'a> {
     /// Static literal text from a `TemplateNode::Text`. `id` is `Some` only
     /// when this text is a *root* of some VNode.
@@ -223,6 +254,7 @@ pub(super) enum Leaf<'a> {
     Element {
         vnode: &'a VNode,
         node: &'a TemplateNode,
+        cursor: Vec<u8>,
         root_id: Option<ElementId>,
     },
 }
@@ -236,7 +268,7 @@ impl Leaf<'_> {
 /// One emit-level step. Text runs group adjacent text leaves so they can be
 /// addressed against the browser-merged DOM text node with `splitText` offsets.
 enum EmitStep<'a, 'b> {
-    Element(Leaf<'a>),
+    Element(&'b Leaf<'a>),
     TextRun(&'b [Leaf<'a>]),
 }
 
@@ -273,7 +305,7 @@ fn group_steps<'a, 'b>(leaves: &'b [Leaf<'a>]) -> Vec<EmitStep<'a, 'b>> {
             i = end;
         } else {
             match leaves[i] {
-                Leaf::Element { .. } => steps.push(EmitStep::Element(leaves[i])),
+                Leaf::Element { .. } => steps.push(EmitStep::Element(&leaves[i])),
                 Leaf::StaticText { .. } | Leaf::DynamicText { .. } => {
                     unreachable!("text leaves handled above")
                 }
@@ -384,11 +416,26 @@ fn leaf_text_is_non_empty(leaf: &Leaf<'_>) -> bool {
     }
 }
 
-/// True if this template subtree contains any `Dynamic` slot or any
-/// `Dynamic` attribute. Pure-static subtrees need no descent during
-/// hydration — the parent's mapped element handles wrapper detection, and
-/// the cursor steps over the subtree via `hy_advance(1)`.
-fn template_node_has_dynamic_content(node: &TemplateNode) -> bool {
+/// True if this template children list contains any dynamic slot or any dynamic
+/// attribute. Pure-static subtrees need no descent during hydration — the
+/// parent's mapped element handles wrapper detection, and the cursor steps over
+/// the subtree via `hy_advance(1)`.
+fn template_children_have_dynamic_content(
+    vnode: &VNode,
+    parent_cursor: &[u8],
+    children: &[TemplateNode],
+) -> bool {
+    vnode.template.node_cursors().iter().copied().any(|cursor| {
+        let (slot_parent, _) = cursor.split_slot();
+        slot_parent == parent_cursor
+    }) || children.iter().enumerate().any(|(idx, child)| {
+        let mut child_cursor = parent_cursor.to_vec();
+        child_cursor.push(idx as u8);
+        template_node_has_dynamic_content(vnode, &child_cursor, child)
+    })
+}
+
+fn template_node_has_dynamic_content(vnode: &VNode, cursor: &[u8], node: &TemplateNode) -> bool {
     match node {
         TemplateNode::Element {
             attrs, children, ..
@@ -396,10 +443,9 @@ fn template_node_has_dynamic_content(node: &TemplateNode) -> bool {
             attrs
                 .iter()
                 .any(|a| matches!(a, TemplateAttribute::Dynamic { .. }))
-                || children.iter().any(template_node_has_dynamic_content)
+                || template_children_have_dynamic_content(vnode, cursor, children)
         }
         TemplateNode::Text { .. } => false,
-        TemplateNode::Dynamic { .. } => true,
     }
 }
 

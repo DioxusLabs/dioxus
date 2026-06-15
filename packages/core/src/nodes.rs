@@ -120,13 +120,15 @@ impl VNode {
         thread_local! {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
+        static EMPTY_NODE_CURSORS: &[TemplateCursor] = &[TemplateCursor::new(&[0])];
+        static EMPTY_TEMPLATE: Template = Template::new(&[], EMPTY_NODE_CURSORS, &[]);
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     key: None,
                     dynamic_nodes: Box::new([DynamicNode::Fragment(Vec::new())]),
                     dynamic_attrs: Box::new([]),
-                    template: Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
+                    template: EMPTY_TEMPLATE,
                 })
             })
             .clone()
@@ -145,6 +147,8 @@ impl VNode {
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
+        static ERROR_ANCHOR_NODE_CURSORS: &[TemplateCursor] = &[TemplateCursor::new(&[0])];
+        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(&[], ERROR_ANCHOR_NODE_CURSORS, &[]);
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -153,7 +157,7 @@ impl VNode {
                         value: String::new(),
                     })]),
                     dynamic_attrs: Box::new([]),
-                    template: Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
+                    template: ERROR_ANCHOR_TEMPLATE,
                 })
             })
             .clone()
@@ -203,13 +207,15 @@ impl VNode {
         }
     }
 
-    /// Load a dynamic root at the given index
+    /// Load a root-level dynamic node slot at the given dynamic node index
     ///
-    /// Returns [`None`] if the root is actually a static node (Element/Text)
+    /// Returns [`None`] if the dynamic node is mounted under a static template node.
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.roots()[idx]
-            .dynamic_id()
-            .map(|id| &self.dynamic_nodes[id])
+        self.template
+            .node_cursors()
+            .get(idx)
+            .filter(|cursor| cursor.is_root_level_slot())
+            .map(|_| &self.dynamic_nodes[idx])
     }
 
     /// Get the mount id for this node if it has been mounted.
@@ -271,6 +277,9 @@ impl VNode {
     /// Get the mounted id for a root node index
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mounted_id()?;
+        if root_idx >= dom.mounted_root_count(mount) {
+            return None;
+        }
 
         dom.mounted_root_node(mount, root_idx)
             .map(|id| id.element_id())
@@ -383,9 +392,72 @@ impl VNode {
 }
 
 type StaticStr = &'static str;
-type StaticPathArray = &'static [&'static [u8]];
+type StaticCursorArray = &'static [TemplateCursor];
 type StaticTemplateArray = &'static [TemplateNode];
 type StaticTemplateAttributeArray = &'static [TemplateAttribute];
+
+/// A cursor into a template's static children, or into a dynamic insertion slot.
+///
+/// For a static node, every segment indexes the nth static child at that depth.
+/// For a dynamic node slot, the final segment is the insertion index among the
+/// static children of the parent identified by the preceding segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
+pub struct TemplateCursor(
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "deserialize_byte_slice_leaky")
+    )]
+    &'static [u8],
+);
+
+impl TemplateCursor {
+    /// Create a new template cursor from a static byte slice.
+    pub const fn new(cursor: &'static [u8]) -> Self {
+        Self(cursor)
+    }
+
+    /// Return the cursor as a slice.
+    pub const fn as_slice(self) -> &'static [u8] {
+        self.0
+    }
+
+    /// Return true if this cursor points at a root-level dynamic slot.
+    pub const fn is_root_level_slot(self) -> bool {
+        self.0.len() == 1
+    }
+
+    /// Split this dynamic slot cursor into `(parent_cursor, insertion_index)`.
+    pub fn split_slot(self) -> (&'static [u8], usize) {
+        let (index, parent) = self
+            .0
+            .split_last()
+            .expect("dynamic slot cursors must include an insertion index");
+        (parent, *index as usize)
+    }
+
+    /// Return the parent cursor of this dynamic slot.
+    pub fn slot_parent(self) -> &'static [u8] {
+        self.split_slot().0
+    }
+
+    /// Return true if this static cursor is equal to or beneath `ancestor`.
+    pub fn is_descendant_of_static(self, ancestor: TemplateCursor) -> bool {
+        let ancestor = ancestor.as_slice();
+        ancestor.len() <= self.0.len() && ancestor == &self.0[..ancestor.len()]
+    }
+
+    /// Return true if this dynamic slot is mounted inside `ancestor`.
+    pub fn slot_is_inside_static(self, ancestor: TemplateCursor) -> bool {
+        let ancestor = ancestor.as_slice();
+        let parent = self.slot_parent();
+        ancestor.len() <= parent.len() && ancestor == &parent[..ancestor.len()]
+    }
+}
 
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
 ///
@@ -401,25 +473,19 @@ pub struct Template {
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
     roots: StaticTemplateArray,
 
-    /// The paths of each node relative to the root of the template.
-    ///
-    /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
-    /// topmost element, not the `roots` field.
+    /// The insertion cursor for each dynamic node.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
+        serde(deserialize_with = "deserialize_cursors_leaky")
     )]
-    node_paths: StaticPathArray,
+    node_cursors: StaticCursorArray,
 
-    /// The paths of each dynamic attribute relative to the root of the template
-    ///
-    /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
-    /// topmost element, not the `roots` field.
+    /// The static-node cursor for each dynamic attribute.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky", bound = "")
+        serde(deserialize_with = "deserialize_cursors_leaky", bound = "")
     )]
-    attr_paths: StaticPathArray,
+    attr_cursors: StaticCursorArray,
 
     /// Compile-time hash of template content for reliable cross-crate comparison.
     /// This ensures identical templates compare equal regardless of optimization levels.
@@ -437,18 +503,18 @@ pub struct Template {
 }
 
 impl Template {
-    /// Create a new Template with the given roots, node_paths, and attr_paths.
+    /// Create a new Template with the given roots, node cursors, and attribute cursors.
     /// The hash is computed automatically from the template content.
     pub const fn new(
         roots: &'static [TemplateNode],
-        node_paths: &'static [&'static [u8]],
-        attr_paths: &'static [&'static [u8]],
+        node_cursors: &'static [TemplateCursor],
+        attr_cursors: &'static [TemplateCursor],
     ) -> Self {
         Self {
             roots,
-            node_paths,
-            attr_paths,
-            hash: Self::compute_hash(roots, node_paths, attr_paths),
+            node_cursors,
+            attr_cursors,
+            hash: Self::compute_hash(roots, node_cursors, attr_cursors),
         }
     }
 
@@ -457,22 +523,29 @@ impl Template {
         self.roots
     }
 
-    /// Get the paths of each dynamic node relative to the root of the template.
-    pub const fn node_paths(&self) -> &'static [&'static [u8]] {
-        self.node_paths
+    /// Get the insertion cursors for each dynamic node.
+    pub const fn node_cursors(&self) -> &'static [TemplateCursor] {
+        self.node_cursors
     }
 
-    /// Get the paths of each dynamic attribute relative to the root of the template.
-    pub const fn attr_paths(&self) -> &'static [&'static [u8]] {
-        self.attr_paths
+    /// Get the static-node cursors for each dynamic attribute.
+    pub const fn attr_cursors(&self) -> &'static [TemplateCursor] {
+        self.attr_cursors
+    }
+
+    pub(crate) fn node_at_cursor(&self, cursor: TemplateCursor) -> Option<&'static TemplateNode> {
+        let (root_idx, child_cursor) = cursor.as_slice().split_first()?;
+        self.roots
+            .get(*root_idx as usize)?
+            .node_at_child_cursor(child_cursor)
     }
 
     /// Compute a content-based hash of template structure.
     /// This is const so it can be used both at compile time and runtime.
     const fn compute_hash(
         roots: &[TemplateNode],
-        node_paths: &[&[u8]],
-        attr_paths: &[&[u8]],
+        node_cursors: &[TemplateCursor],
+        attr_cursors: &[TemplateCursor],
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
@@ -522,9 +595,6 @@ impl Template {
                     h
                 }
                 TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
-                TemplateNode::Dynamic { id } => {
-                    xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
-                }
             }
         }
 
@@ -537,19 +607,19 @@ impl Template {
             i += 1;
         }
 
-        // Hash node paths (mixed with a section marker so they can't collapse into attr_paths)
+        // Hash node cursors (mixed with a section marker so they can't collapse into attr_cursors)
         hash = xxh64(&[0xA1], hash);
         let mut i = 0;
-        while i < node_paths.len() {
-            hash = xxh64(node_paths[i], hash);
+        while i < node_cursors.len() {
+            hash = xxh64(node_cursors[i].as_slice(), hash);
             i += 1;
         }
 
-        // Hash attr paths
+        // Hash attr cursors
         hash = xxh64(&[0xA2], hash);
         let mut i = 0;
-        while i < attr_paths.len() {
-            hash = xxh64(attr_paths[i], hash);
+        while i < attr_cursors.len() {
+            hash = xxh64(attr_cursors[i].as_slice(), hash);
             i += 1;
         }
 
@@ -583,9 +653,20 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_bytes_leaky<'a, 'de, D>(
+fn deserialize_byte_slice_leaky<'a, 'de, D>(deserializer: D) -> Result<&'static [u8], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = Vec::<u8>::deserialize(deserializer)?;
+    Ok(&*Box::leak(deserialized.into_boxed_slice()))
+}
+
+#[cfg(feature = "serialize")]
+pub(crate) fn deserialize_cursors_leaky<'a, 'de, D>(
     deserializer: D,
-) -> Result<&'static [&'static [u8]], D::Error>
+) -> Result<&'static [TemplateCursor], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -594,7 +675,7 @@ where
     let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
     let deserialized = deserialized
         .into_iter()
-        .map(|v| &*Box::leak(v.into_boxed_slice()))
+        .map(|v| TemplateCursor(&*Box::leak(v.into_boxed_slice())))
         .collect::<Vec<_>>();
     Ok(&*Box::leak(deserialized.into_boxed_slice()))
 }
@@ -629,8 +710,7 @@ impl Template {
     ///
     /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
     pub fn is_completely_dynamic(&self) -> bool {
-        use TemplateNode::*;
-        self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
+        self.roots.is_empty()
     }
 }
 
@@ -690,24 +770,9 @@ pub enum TemplateNode {
         )]
         text: StaticStr,
     },
-
-    /// This template node is unknown, and needs to be created at runtime.
-    Dynamic {
-        /// The index of the dynamic node in the VNode's dynamic_nodes list
-        id: usize,
-    },
 }
 
 impl TemplateNode {
-    /// Try to load the dynamic node at the given index
-    pub fn dynamic_id(&self) -> Option<usize> {
-        use TemplateNode::*;
-        match self {
-            Dynamic { id } => Some(*id),
-            _ => None,
-        }
-    }
-
     pub(crate) fn element_child(&self, child_idx: usize) -> &'static TemplateNode {
         let TemplateNode::Element { children, .. } = self else {
             unreachable!("template attribute paths only pass through elements")
@@ -720,6 +785,20 @@ impl TemplateNode {
             unreachable!("template attribute paths only point to elements")
         };
         attrs
+    }
+
+    pub(crate) fn node_at_child_cursor(
+        &'static self,
+        cursor: &[u8],
+    ) -> Option<&'static TemplateNode> {
+        let mut node = self;
+        for child_idx in cursor {
+            let TemplateNode::Element { children, .. } = node else {
+                return None;
+            };
+            node = children.get(*child_idx as usize)?;
+        }
+        Some(node)
     }
 }
 

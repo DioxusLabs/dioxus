@@ -18,7 +18,7 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_core::{AttributeValue, ElementId, Template, WriteMutations};
+use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
@@ -68,66 +68,68 @@ impl WryQueue {
 }
 
 impl WriteMutations for WryQueue {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.with_mutation_state(|state| state.append_children(id, m));
+    fn push_id(&mut self, id: ElementId) {
+        self.with_mutation_state(|state| state.push_id(id));
     }
 
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.with_mutation_state(|state| state.assign_node_id(path, id));
+    fn pop_id(&mut self, id: ElementId) {
+        self.with_mutation_state(|state| state.pop_id(id));
     }
 
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.with_mutation_state(|state| state.create_text_node(value, id));
+    fn child(&mut self, index: usize) {
+        self.with_mutation_state(|state| state.child(index));
     }
 
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.with_mutation_state(|state| state.load_template(template, index, id));
+    fn pop(&mut self) {
+        self.with_mutation_state(WriteMutations::pop);
     }
 
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.with_mutation_state(|state| state.replace_node_with(id, m));
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        self.with_mutation_state(|state| state.create_element(tag, ns));
     }
 
-    fn insert_children_at_path(&mut self, id: ElementId, path: &'static [u8], m: usize) {
-        self.with_mutation_state(|state| state.insert_children_at_path(id, path, m));
+    fn create_text(&mut self, value: &str) {
+        self.with_mutation_state(|state| state.create_text(value));
     }
 
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.with_mutation_state(|state| state.insert_nodes_after(id, m));
+    fn clone(&mut self) {
+        self.with_mutation_state(WriteMutations::clone);
     }
 
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.with_mutation_state(|state| state.insert_nodes_before(id, m));
+    fn append_children(&mut self, m: usize) {
+        self.with_mutation_state(|state| state.append_children(m));
     }
 
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.with_mutation_state(|state| state.set_attribute(name, ns, value, id));
+    fn replace_with(&mut self, m: usize) {
+        self.with_mutation_state(|state| state.replace_with(m));
     }
 
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.with_mutation_state(|state| state.set_node_text(value, id));
+    fn insert_after(&mut self, m: usize) {
+        self.with_mutation_state(|state| state.insert_after(m));
     }
 
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.with_mutation_state(|state| state.create_event_listener(name, id));
+    fn insert_before(&mut self, m: usize) {
+        self.with_mutation_state(|state| state.insert_before(m));
     }
 
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.with_mutation_state(|state| state.remove_event_listener(name, id));
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        self.with_mutation_state(|state| state.set_attribute(name, ns, value));
     }
 
-    fn remove_node(&mut self, id: ElementId) {
-        self.with_mutation_state(|state| state.remove_node(id));
+    fn set_text(&mut self, value: &str) {
+        self.with_mutation_state(|state| state.set_text(value));
     }
 
-    fn push_root(&mut self, id: ElementId) {
-        self.with_mutation_state(|state| state.push_root(id));
+    fn add_event_listener(&mut self, name: &str) {
+        self.with_mutation_state(|state| state.add_event_listener(name));
+    }
+
+    fn remove_event_listener(&mut self, name: &str) {
+        self.with_mutation_state(|state| state.remove_event_listener(name));
+    }
+
+    fn remove(&mut self) {
+        self.with_mutation_state(WriteMutations::remove);
     }
 }
 

@@ -481,30 +481,31 @@ fn MyComponent() -> Element {{
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
         let mut parent = Some(parent);
-        while let Some(path) = parent {
+        while let Some(parent_ref) = parent {
             let mut listeners = vec![];
             let mount_id;
 
             // We do this in its own block to prevent mount borrows from staying open while we call user code
             {
                 let mounts = self.mounts.borrow();
-                let Some(mount) = mounts.get(path.mount.0) else {
+                let Some(mount) = mounts.get(parent_ref.mount.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
                 };
 
                 let el_ref = mount.node();
                 let node_template = el_ref.template;
-                let target_path = path.path;
+                let target_location = parent_ref.location;
                 mount_id = el_ref.unchecked_mounted_id().0;
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
+                for (idx, this_cursor) in node_template.attr_cursors().iter().copied().enumerate() {
                     let attrs = &*el_ref.dynamic_attrs[idx];
 
                     for attr in attrs.iter() {
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path)
+                        if attr.name.get(2..) == Some(name)
+                            && target_location.is_under_attr(this_cursor)
                         {
                             if let AttributeValue::Listener(listener) = &attr.value {
                                 listeners.push(listener.clone());
@@ -513,7 +514,7 @@ fn MyComponent() -> Element {{
                             // Break if this is the exact target element.
                             // This means we won't call two listeners with the same name on the same element. This should be
                             // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
+                            if target_location.is_exact_static(this_cursor) {
                                 break;
                             }
                         }
@@ -559,15 +560,16 @@ fn MyComponent() -> Element {{
         };
         let el_ref = mount.node();
         let node_template = el_ref.template;
-        let target_path = node.path;
+        let target_location = node.location;
 
-        for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
+        for (idx, this_cursor) in node_template.attr_cursors().iter().copied().enumerate() {
             let attrs = &*el_ref.dynamic_attrs[idx];
 
             for attr in attrs.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 // Only call the listener if this is the exact target element.
-                if attr.name.get(2..) == Some(name) && target_path == this_path {
+                if attr.name.get(2..) == Some(name) && target_location.is_exact_static(this_cursor)
+                {
                     if let AttributeValue::Listener(listener) = &attr.value {
                         listener.call(uievent.clone());
                         break;

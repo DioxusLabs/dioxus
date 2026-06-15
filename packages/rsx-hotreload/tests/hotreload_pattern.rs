@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    Template, TemplateAttribute, TemplateNode, VNode,
+    Template, TemplateAttribute, TemplateCursor, TemplateNode, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
@@ -160,11 +160,12 @@ fn valid_reorder() {
             tag: "div",
             namespace: None,
             attrs: &[],
-            children: &[
-                TemplateNode::Dynamic { id: 0 },
-                TemplateNode::Dynamic { id: 1 }
-            ]
+            children: &[]
         }]
+    );
+    assert_eq!(
+        template.node_cursors,
+        &[TemplateCursor::new(&[0, 0]), TemplateCursor::new(&[0, 0])]
     );
     assert_eq!(
         template.dynamic_nodes,
@@ -330,7 +331,8 @@ fn valid_move_dynamic_segment_between_nodes() {
     let template = &templates[&1];
 
     // We should have a new dynamic node and no attributes
-    assert_eq!(template.roots, &[TemplateNode::Dynamic { id: 0 }]);
+    assert_eq!(template.roots, &[]);
+    assert_eq!(template.node_cursors, &[TemplateCursor::new(&[0])]);
 
     // The new dynamic node should be created from the formatted segments pool
     assert_eq!(
@@ -456,9 +458,10 @@ fn invalid_cases() {
             tag: "div",
             namespace: None,
             attrs: &[],
-            children: &[TemplateNode::Dynamic { id: 0 }]
+            children: &[]
         }]
     );
+    assert_eq!(template.node_cursors, &[TemplateCursor::new(&[0, 0])]);
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 
     // Adding a new dynamic node should not be hot reloadable
@@ -856,7 +859,8 @@ fn assigns_ids() {
 
     let parsed = syn::parse2::<CallBody>(toks).unwrap();
 
-    let node = parsed.body.get_dyn_node(&[0, 1]);
+    assert_eq!(parsed.body.node_cursors, &[vec![0, 1]]);
+    let node = parsed.body.dynamic_nodes().next().unwrap();
     dbg!(node);
 }
 

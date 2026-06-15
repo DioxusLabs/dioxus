@@ -5,6 +5,7 @@ use crate::{
         context::{DiffContext, DiffFrame, DiffState},
     },
     innerlude::{ElementRef, MountId, VComponent, WriteMutations},
+    mutations::reborrow_writer,
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
@@ -13,15 +14,12 @@ use crate::{
 /// Invoke a scope's render driver with the writer erased to
 /// `dyn WriteMutations`, checking that the driver leaves the runtime scope
 /// stack balanced.
-fn drive<M: WriteMutations, R>(
-    state: &mut DiffState<'_, M>,
+fn drive<R>(
+    state: &mut DiffState<'_, '_, '_>,
     f: impl FnOnce(&mut VirtualDom, Option<&mut dyn WriteMutations>) -> R,
 ) -> R {
     let dom = &mut *state.dom;
-    let to = state
-        .to
-        .as_deref_mut()
-        .map(|m| m as &mut dyn WriteMutations);
+    let to = reborrow_writer(&mut state.to);
     #[cfg(debug_assertions)]
     let depth = dom.runtime.scope_stack_depth();
     let result = f(&mut *dom, to);
@@ -35,17 +33,17 @@ fn drive<M: WriteMutations, R>(
 }
 
 impl VirtualDom {
-    pub(crate) fn run_and_diff_scope<M: WriteMutations>(
+    pub(crate) fn run_and_diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut dyn WriteMutations>,
         scope_id: ScopeId,
     ) {
         self.run_and_diff_scope_with_context(to, scope_id, None);
     }
 
-    pub(crate) fn run_and_diff_scope_with_context<M: WriteMutations>(
+    pub(crate) fn run_and_diff_scope_with_context(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut dyn WriteMutations>,
         scope_id: ScopeId,
         parent_context: Option<DiffContext<'_>>,
     ) {
@@ -58,9 +56,9 @@ impl VirtualDom {
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
-    pub(crate) fn diff_scope<M: WriteMutations>(
+    pub(crate) fn diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut dyn WriteMutations>,
         scope: ScopeId,
         new_nodes: Element,
         parent_context: Option<DiffContext<'_>>,
@@ -83,7 +81,7 @@ impl VirtualDom {
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
             let mut state =
-                DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
+                DiffState::new_with_context(self, reborrow_writer(&mut render_to), parent_context);
             DiffFrame::new(old_mount, &old, new_real_nodes).diff_into(&mut state);
 
             self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
@@ -98,9 +96,9 @@ impl VirtualDom {
     ///
     /// Returns the number of nodes created on the stack
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
-    pub(crate) fn create_scope<M: WriteMutations>(
+    pub(crate) fn create_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut dyn WriteMutations>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
         parent: Option<ElementRef>,
@@ -112,7 +110,7 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
             // Create the node
-            let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
+            let nodes = new_nodes.create(self, parent, reborrow_writer(&mut render_to));
 
             // Then set the new node as the last rendered node
             self.scopes[scope.index()].last_rendered_node = Some(new_nodes);
@@ -133,9 +131,9 @@ impl VirtualDom {
                 .is_some_and(|location| location.should_write())
     }
 
-    pub(crate) fn remove_component_node<M: WriteMutations>(
+    pub(crate) fn remove_component_node(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut dyn WriteMutations>,
         destroy_component_state: bool,
         scope_id: ScopeId,
     ) {
@@ -148,7 +146,7 @@ impl VirtualDom {
 }
 
 impl VNode {
-    pub(crate) fn diff_vcomponent<M: WriteMutations>(
+    pub(crate) fn diff_vcomponent(
         &self,
         mount: MountId,
         idx: usize,
@@ -156,7 +154,7 @@ impl VNode {
         old: &VComponent,
         scope_id: ScopeId,
         parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
+        state: &mut DiffState<'_, '_, '_>,
     ) {
         // Replace components whose drivers identify different components
         // (different driver type, or a different body function value)
@@ -177,13 +175,13 @@ impl VNode {
         state.dom.queue_scope(scope_id);
     }
 
-    fn replace_vcomponent<M: WriteMutations>(
+    fn replace_vcomponent(
         &self,
         mount: MountId,
         idx: usize,
         new: &VComponent,
         parent: Option<ElementRef>,
-        state: &mut DiffState<'_, M>,
+        state: &mut DiffState<'_, '_, '_>,
     ) {
         let scope = state
             .dom
@@ -193,28 +191,34 @@ impl VNode {
         // scope's rendered vnode to anchor against. If the OLD scope rendered
         // DOM, that DOM is our insertion neighbor; otherwise we splice into
         // the dynamic slot itself.
-        let slot_path: &[u8] = parent.as_ref().map_or(&[], |p| p.path.path);
         let anchor = state.dom.scopes[scope.index()]
             .last_rendered_node
             .as_ref()
             .and_then(|n| n.find_first_element(state.dom))
             .map(Anchor::Before)
-            .unwrap_or_else(|| anchor_for_slot(mount, slot_path, &[], state.dom, state.context()));
+            .unwrap_or_else(|| {
+                let (slot_id, cursor) = parent
+                    .as_ref()
+                    .and_then(|p| p.location.slot())
+                    .expect("component parent must be a dynamic slot");
+                anchor_for_slot(mount, slot_id, cursor, &[], state.dom, state.context())
+            });
 
         // Free the scope slot so `create_component_node` allocates a new scope.
         state.dom.clear_mounted_dynamic_component_scope(mount, idx);
 
         {
+            let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to = state.to.as_deref_mut();
-            at_anchor(anchor, to, |to| {
+            let to = reborrow_writer(&mut state.to);
+            at_anchor(anchor, to, runtime, |to| {
                 let mut state = DiffState::new(dom, to);
                 self.create_component_node(mount, idx, new, parent, &mut state)
             });
         }
         state
             .dom
-            .remove_component_node(state.to.as_deref_mut(), true, scope);
+            .remove_component_node(reborrow_writer(&mut state.to), true, scope);
     }
 
     /// Create a new component (if it doesn't already exist) node and then mount the [`crate::ScopeState`] for a component
@@ -226,7 +230,7 @@ impl VNode {
         idx: usize,
         component: &VComponent,
         parent: Option<ElementRef>,
-        state: &mut DiffState<'_, impl WriteMutations>,
+        state: &mut DiffState<'_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
         let new = scope_id.is_none();

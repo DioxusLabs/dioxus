@@ -233,9 +233,27 @@ impl HotReloadResult {
         let roots: Vec<_> = new
             .roots
             .iter()
-            .map(|node| to_template_node::<Ctx>(node))
+            .filter_map(|node| to_template_node::<Ctx>(node))
             .collect();
         let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
+        let node_cursors: Vec<_> = new
+            .node_cursors
+            .iter()
+            .map(|cursor| {
+                let cursor: &'static [u8] = Box::leak(cursor.clone().into_boxed_slice());
+                dioxus_core::TemplateCursor::new(cursor)
+            })
+            .collect();
+        let node_cursors: &[dioxus_core::TemplateCursor] = intern(&*node_cursors);
+        let attr_cursors: Vec<_> = new
+            .attr_cursors
+            .iter()
+            .map(|(cursor, _)| {
+                let cursor: &'static [u8] = Box::leak(cursor.clone().into_boxed_slice());
+                dioxus_core::TemplateCursor::new(cursor)
+            })
+            .collect();
+        let attr_cursors: &[dioxus_core::TemplateCursor] = intern(&*attr_cursors);
 
         let template = HotReloadedTemplate::new(
             key,
@@ -243,6 +261,8 @@ impl HotReloadResult {
             new_dynamic_attributes,
             literal_component_properties,
             roots,
+            node_cursors,
+            attr_cursors,
         );
 
         self.templates

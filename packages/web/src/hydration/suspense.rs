@@ -1,6 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
-    DynamicNode, ElementId, ScopeId, ScopeState, SuspenseContext, TemplateNode, VNode, VirtualDom,
+    DynamicNode, ElementId, ScopeId, ScopeState, SuspenseContext, VNode, VirtualDom,
 };
 use std::fmt::Write;
 
@@ -86,18 +86,24 @@ pub(super) fn first_dynamic_root_element_id(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     fn from_vnode(vnode: &VNode, dom: &VirtualDom) -> Option<ElementId> {
-        for (root_idx, root) in vnode.template.roots().iter().enumerate() {
-            match root {
-                TemplateNode::Element { .. } | TemplateNode::Text { .. } => {
-                    if let Some(id) = vnode.mounted_root(root_idx, dom) {
-                        return Some(id);
-                    }
+        for cursor_idx in 0..=vnode.template.roots().len() {
+            for (dyn_idx, _) in vnode
+                .template
+                .node_cursors()
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(_, cursor)| cursor.as_slice() == [cursor_idx as u8].as_slice())
+            {
+                if let Some(id) = from_dynamic(vnode, dyn_idx, dom) {
+                    return Some(id);
                 }
-                TemplateNode::Dynamic { id: dyn_idx } => {
-                    if let Some(id) = from_dynamic(vnode, *dyn_idx, dom) {
-                        return Some(id);
-                    }
-                }
+            }
+
+            if cursor_idx < vnode.template.roots().len()
+                && let Some(id) = vnode.mounted_root(cursor_idx, dom)
+            {
+                return Some(id);
             }
         }
         None

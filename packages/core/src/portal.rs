@@ -1,7 +1,11 @@
 use std::{any::Any, cell::RefCell, rc::Rc};
 
 use crate::{
-    RenderTargetId, diff::context::DiffContext, innerlude::*, render_driver::RenderDriver,
+    RenderTargetId,
+    diff::context::DiffContext,
+    innerlude::*,
+    mutations::{append_children_to, reborrow_writer},
+    render_driver::RenderDriver,
 };
 
 /// Properties for the [`Portal()`] component.
@@ -159,13 +163,13 @@ impl PortalDriver {
 /// Create `children` inside `target_id`, record them as the scope's
 /// rendered output, and fire mount lifecycle when writes are enabled.
 /// Shared by initial creation and the retarget arm of `diff`.
-fn mount_children<M: WriteMutations>(
+fn mount_children(
     scope_id: ScopeId,
     target_id: RenderTargetId,
     children: LastRenderedNode,
     parent: Option<ElementRef>,
     dom: &mut VirtualDom,
-    to: Option<&mut M>,
+    to: Option<&mut dyn WriteMutations>,
 ) {
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
@@ -174,14 +178,22 @@ fn mount_children<M: WriteMutations>(
     );
     let mut render_to = to;
     let should_mount = render_to.is_some();
-    let m = dom.create_children_with_parents(
-        render_to.as_deref_mut(),
-        std::slice::from_ref(children.as_vnode()),
-        None,
-        parent,
-    );
-    if let Some(to) = render_to {
-        to.append_children(ElementId::ROOT, m);
+    if let Some(to) = reborrow_writer(&mut render_to) {
+        append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
+            dom.create_children_with_parents(
+                Some(to),
+                std::slice::from_ref(children.as_vnode()),
+                None,
+                parent,
+            )
+        });
+    } else {
+        dom.create_children_with_parents(
+            None,
+            std::slice::from_ref(children.as_vnode()),
+            None,
+            parent,
+        );
     }
     dom.scopes[scope_id.index()].last_rendered_node = Some(children);
     if should_mount {
@@ -234,7 +246,14 @@ impl RenderDriver for PortalDriver {
         };
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            mount_children(scope_id, target_id, children, parent, dom, to.as_mut());
+            mount_children(
+                scope_id,
+                target_id,
+                children,
+                parent,
+                dom,
+                reborrow_writer(&mut to),
+            );
             0
         })
     }
@@ -259,7 +278,7 @@ impl RenderDriver for PortalDriver {
                 let old_mount = old_children.as_vnode().unchecked_mounted_id();
                 let logical_parent = dom.get_mounted_logical_parent(old_mount);
 
-                old_children.remove_node_inner(dom, to.as_mut(), true);
+                old_children.remove_node_inner(dom, reborrow_writer(&mut to), true);
 
                 // Ordering is correctness-critical: writes route through the
                 // portal scope's `target_id`, so the removal above resolves
@@ -273,13 +292,13 @@ impl RenderDriver for PortalDriver {
                     new_children,
                     logical_parent,
                     dom,
-                    to.as_mut(),
+                    reborrow_writer(&mut to),
                 );
                 return;
             }
 
             let mut render_to = to.filter(|_| dom.runtime.scope_should_render(scope_id));
-            old_children.diff_node(&new_children, dom, render_to.as_mut());
+            old_children.diff_node(&new_children, dom, reborrow_writer(&mut render_to));
             dom.scopes[scope_id.index()].last_rendered_node = Some(new_children);
             if render_to.is_some() {
                 dom.runtime.get_state(scope_id).mount(&dom.runtime);
@@ -303,7 +322,11 @@ impl RenderDriver for PortalDriver {
                 .last_rendered_node
                 .clone()
                 .expect("portal scope must have rendered before remove");
-            node.remove_node_inner(dom, render_to.as_mut(), destroy_component_state);
+            node.remove_node_inner(
+                dom,
+                reborrow_writer(&mut render_to),
+                destroy_component_state,
+            );
         });
 
         if destroy_component_state {

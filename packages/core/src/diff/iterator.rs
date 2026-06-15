@@ -5,12 +5,13 @@ use crate::{
         context::{DiffFrame, DiffState},
     },
     innerlude::{ElementRef, MountId, WriteMutations},
+    mutations::reborrow_writer,
     nodes::VNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-impl<M: WriteMutations> DiffState<'_, M> {
+impl DiffState<'_, '_, '_> {
     pub(crate) fn diff_non_empty_fragment(
         &mut self,
         old: &[VNode],
@@ -58,7 +59,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self
                 .dom
-                .remove_nodes(self.to.as_deref_mut(), &old[new.len()..]),
+                .remove_nodes(reborrow_writer(&mut self.to), &old[new.len()..]),
             Ordering::Less => self.create_and_insert(
                 ElementEdge::Last,
                 &new[old.len()..],
@@ -147,7 +148,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
                     parent,
                 );
             }
-            self.dom.remove_nodes(self.to.as_deref_mut(), old_middle);
+            self.dom
+                .remove_nodes(reborrow_writer(&mut self.to), old_middle);
         } else {
             self.diff_keyed_middle(old_middle, new_middle, parent);
         }
@@ -205,7 +207,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
                 );
             } else if retained == new.len() {
                 self.dom.remove_nodes(
-                    self.to.as_deref_mut(),
+                    reborrow_writer(&mut self.to),
                     &old[left_offset..old.len() - right_offset],
                 );
             } else {
@@ -298,8 +300,8 @@ impl<M: WriteMutations> DiffState<'_, M> {
         if shared_keys.is_empty() {
             let first_old = old.first().unwrap();
             let anchor = anchor_at(ElementEdge::First, first_old, &[], self.dom, self.context());
-            create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
-            self.dom.remove_nodes(self.to.as_deref_mut(), old);
+            create_at_anchor(new, parent, anchor, self.dom, reborrow_writer(&mut self.to));
+            self.dom.remove_nodes(reborrow_writer(&mut self.to), old);
             return;
         }
 
@@ -308,7 +310,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             .iter()
             .filter(|child| !shared_keys.contains(child.key.as_ref().unwrap()))
         {
-            child_to_remove.remove_node(self.dom, self.to.as_deref_mut());
+            child_to_remove.remove_node(self.dom, reborrow_writer(&mut self.to));
         }
 
         // 4. Compute the LIS of this list
@@ -392,9 +394,10 @@ impl<M: WriteMutations> DiffState<'_, M> {
         let skip = collect_splice_mounts(old, new_index_to_old_index, range.clone());
         let context = self.context();
         let anchor = anchor_at(edge, sibling, &skip, self.dom, context);
+        let runtime = self.dom.runtime.clone();
         let dom = &mut *self.dom;
-        let to = self.to.as_deref_mut();
-        at_anchor(anchor, to, |to| {
+        let to = reborrow_writer(&mut self.to);
+        at_anchor(anchor, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, to, context);
             state.create_or_diff_range(new, old, parent, new_index_to_old_index, range)
         });
@@ -414,11 +417,10 @@ impl<M: WriteMutations> DiffState<'_, M> {
             let old_index = new_index_to_old_index[range_start + idx];
             nodes += if let Some(old_node) = old.get(old_index) {
                 DiffFrame::new(old_node.unchecked_mounted_id(), old_node, new_node).diff_into(self);
-                self.to
-                    .as_deref_mut()
+                reborrow_writer(&mut self.to)
                     .map_or(0, |to| new_node.push_all_root_nodes(self.dom, to))
             } else {
-                new_node.create(self.dom, parent, self.to.as_deref_mut())
+                new_node.create(self.dom, parent, reborrow_writer(&mut self.to))
             };
         }
         nodes
@@ -438,7 +440,7 @@ impl<M: WriteMutations> DiffState<'_, M> {
             self.dom,
             self.context(),
         );
-        create_at_anchor(new, parent, anchor, self.dom, self.to.as_deref_mut());
+        create_at_anchor(new, parent, anchor, self.dom, reborrow_writer(&mut self.to));
     }
 }
 
@@ -479,60 +481,73 @@ impl VNode {
     pub(crate) fn push_all_root_nodes(
         &self,
         dom: &VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut dyn WriteMutations,
     ) -> usize {
         let mount = self.unchecked_mounted_id();
         let target_id = dom.current_render_target_id();
 
-        self.template
-            .roots()
-            .iter()
-            .enumerate()
-            .map(
-                |(root_idx, _)| match self.get_dynamic_root_node_and_id(root_idx) {
-                    Some((_, DynamicNode::Fragment(nodes))) => nodes
-                        .iter()
-                        .map(|node| node.push_all_root_nodes(dom, to))
-                        .sum(),
-                    Some((idx, DynamicNode::Component(_))) => dom
-                        .get_scope(dom.unchecked_mounted_dynamic_component_scope(mount, idx))
-                        .unwrap()
-                        .root_node()
-                        .push_all_root_nodes(dom, to),
-                    // For a single dynamic node of Text, push its element id
-                    Some((idx, DynamicNode::Text(_))) => {
-                        if dom.mount_target_id(mount) == target_id {
-                            let id = dom
-                                .unchecked_mounted_dynamic_text_node(mount, idx)
-                                .element_id();
-                            push_live_root(to, id)
-                        } else {
-                            0
-                        }
-                    }
-                    // This is a static root node or a single dynamic node, just push it
-                    None => {
-                        if dom.mount_target_id(mount) == target_id {
-                            let id = dom
-                                .unchecked_mounted_root_node(mount, root_idx)
-                                .element_id();
-                            push_live_root(to, id)
-                        } else {
-                            0
-                        }
-                    }
-                },
-            )
-            .sum()
+        let mut count = 0;
+        for cursor_idx in 0..=self.template.roots().len() {
+            for (dynamic_idx, _) in self
+                .template
+                .node_cursors()
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(_, cursor)| cursor.as_slice() == [cursor_idx as u8].as_slice())
+            {
+                count += self.push_dynamic_root_node(dynamic_idx, mount, target_id, dom, to);
+            }
+
+            if cursor_idx < self.template.roots().len() && dom.mount_target_id(mount) == target_id {
+                let id = dom
+                    .unchecked_mounted_root_node(mount, cursor_idx)
+                    .element_id();
+                count += push_live_root(to, id);
+            }
+        }
+
+        count
+    }
+
+    fn push_dynamic_root_node(
+        &self,
+        idx: usize,
+        mount: MountId,
+        target_id: crate::RenderTargetId,
+        dom: &VirtualDom,
+        to: &mut dyn WriteMutations,
+    ) -> usize {
+        match &self.dynamic_nodes[idx] {
+            DynamicNode::Fragment(nodes) => nodes
+                .iter()
+                .map(|node| node.push_all_root_nodes(dom, to))
+                .sum(),
+            DynamicNode::Component(_) => dom
+                .get_scope(dom.unchecked_mounted_dynamic_component_scope(mount, idx))
+                .unwrap()
+                .root_node()
+                .push_all_root_nodes(dom, to),
+            DynamicNode::Text(_) => {
+                if dom.mount_target_id(mount) == target_id {
+                    let id = dom
+                        .unchecked_mounted_dynamic_text_node(mount, idx)
+                        .element_id();
+                    push_live_root(to, id)
+                } else {
+                    0
+                }
+            }
+        }
     }
 }
 
-fn push_live_root(to: &mut impl WriteMutations, id: ElementId) -> usize {
+fn push_live_root(to: &mut dyn WriteMutations, id: ElementId) -> usize {
     // Callers (`push_all_root_nodes`) only reach this with `id` values just
     // read from `unchecked_mounted_root_node`/`unchecked_mounted_dynamic_text_node` for a vnode
     // whose mount target already matches `target_id`, so the live element id
     // has been allocated in that target by `load_template_root` /
     // `assign_node_id`.
-    to.push_root(id);
+    to.push_id(id);
     1
 }

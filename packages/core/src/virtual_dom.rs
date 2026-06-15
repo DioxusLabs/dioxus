@@ -9,6 +9,7 @@ use crate::{
     ComponentFunction, Element, Mutations, NoOpMutations,
     arena::ElementId,
     innerlude::{SchedulerMsg, ScopeOrder, ScopeState, WriteMutations},
+    mutations::append_children_to,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
 };
@@ -563,6 +564,7 @@ impl VirtualDom {
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl crate::MultiWriter) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
+        self.clear_template_roots();
         let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
         self.rebuild_with_writer(&mut router);
         self.drain_remaining_effects();
@@ -585,21 +587,22 @@ impl VirtualDom {
         self.runtime.finish_render();
     }
 
-    fn rebuild_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
+    fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
-        let m = self.runtime.clone().while_rendering(|| {
-            driver.create(
-                self,
-                ScopeId::ROOT,
-                true,
-                None,
-                Some(to as &mut dyn WriteMutations),
-            )
+        append_children_to(to, ElementId::ROOT, self.runtime.clone(), |to| {
+            self.runtime.clone().while_rendering(|| {
+                driver.create(
+                    self,
+                    ScopeId::ROOT,
+                    true,
+                    None,
+                    Some(to as &mut dyn WriteMutations),
+                )
+            })
         });
-        to.append_children(ElementId::ROOT, m);
     }
 
-    fn render_immediate_with_writer<M: WriteMutations>(&mut self, to: &mut M) {
+    fn render_immediate_with_writer(&mut self, to: &mut dyn WriteMutations) {
         // Tasks notified before this render are polled as part of it; tasks
         // first spawned *by* this render wait for the next scheduler pass.
         // Without the cutoff, a task that wakes itself on every poll would
@@ -628,7 +631,7 @@ impl VirtualDom {
                 Work::PollTask(task) => deferred_tasks.push(task),
                 Work::RerunScope(scope) => {
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(to), scope.id);
+                        self.run_and_diff_scope(Some(to as &mut dyn WriteMutations), scope.id);
                     });
                 }
             }
@@ -758,7 +761,7 @@ impl VirtualDom {
                     if run_scope {
                         // Run the scope and diff it without writing mutations.
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            self.run_and_diff_scope(None, scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);

@@ -81,10 +81,12 @@ pub fn to_template_attribute<Ctx: HotReloadingContext>(
     }
 }
 
-/// Convert this BodyNode into a TemplateNode.
+/// Convert this static BodyNode into a TemplateNode.
 ///
 /// dioxus-core uses this to understand templates at compiletime
-pub fn to_template_node<Ctx: HotReloadingContext>(node: &BodyNode) -> dioxus_core::TemplateNode {
+pub fn to_template_node<Ctx: HotReloadingContext>(
+    node: &BodyNode,
+) -> Option<dioxus_core::TemplateNode> {
     use dioxus_core::TemplateNode;
     match node {
         BodyNode::Element(el) => {
@@ -93,40 +95,30 @@ pub fn to_template_node<Ctx: HotReloadingContext>(node: &BodyNode) -> dioxus_cor
             let (tag, namespace) =
                 Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
 
-            TemplateNode::Element {
+            Some(TemplateNode::Element {
                 tag,
                 namespace,
                 children: intern(
                     el.children
                         .iter()
-                        .map(|c| to_template_node::<Ctx>(c))
+                        .filter_map(|c| to_template_node::<Ctx>(c))
                         .collect::<Vec<_>>(),
                 ),
                 attrs: intern(sorted_template_attributes::<Ctx>(&el.merged_attributes)),
-            }
+            })
         }
         BodyNode::Text(text) => text_to_template_node(text),
-        BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
-            id: exp.dyn_idx.get(),
-        },
-        BodyNode::Component(comp) => TemplateNode::Dynamic {
-            id: comp.dyn_idx.get(),
-        },
-        BodyNode::ForLoop(floop) => TemplateNode::Dynamic {
-            id: floop.dyn_idx.get(),
-        },
-        BodyNode::IfChain(chain) => TemplateNode::Dynamic {
-            id: chain.dyn_idx.get(),
-        },
+        BodyNode::RawExpr(_)
+        | BodyNode::Component(_)
+        | BodyNode::ForLoop(_)
+        | BodyNode::IfChain(_) => None,
     }
 }
-pub fn text_to_template_node(node: &TextNode) -> TemplateNode {
+pub fn text_to_template_node(node: &TextNode) -> Option<TemplateNode> {
     match node.input.to_static() {
-        Some(text) => TemplateNode::Text {
+        Some(text) => Some(TemplateNode::Text {
             text: intern(text.as_str()),
-        },
-        None => TemplateNode::Dynamic {
-            id: node.dyn_idx.get(),
-        },
+        }),
+        None => None,
     }
 }

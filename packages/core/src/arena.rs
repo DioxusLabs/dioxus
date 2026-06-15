@@ -1,5 +1,6 @@
-use crate::{ScopeId, virtual_dom::VirtualDom};
+use crate::{ScopeId, Template, TemplateCursor, virtual_dom::VirtualDom};
 use slab::Slab;
+use std::collections::HashMap;
 
 /// An Element's unique identifier.
 ///
@@ -119,6 +120,7 @@ pub(crate) enum MountedDynamicNodeSlot {
 pub(crate) struct RenderTargetState {
     pub(crate) elements: Slab<Option<ElementRef>>,
     pub(crate) mounts: Vec<Option<MountedNodeState>>,
+    pub(crate) template_roots: HashMap<(Template, usize), MountedElementId>,
 }
 
 impl RenderTargetState {
@@ -130,6 +132,7 @@ impl RenderTargetState {
         Self {
             elements,
             mounts: Vec::new(),
+            template_roots: HashMap::new(),
         }
     }
 
@@ -168,16 +171,17 @@ pub(crate) struct MountId(pub(crate) usize);
 
 #[derive(Debug, Clone, Copy)]
 pub struct ElementRef {
-    // the pathway of the real element inside the template
-    pub(crate) path: ElementPath,
+    // the template location of the real element
+    pub(crate) location: ElementLocation,
 
     // The actual element
     pub(crate) mount: MountId,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ElementPath {
-    pub(crate) path: &'static [u8],
+pub enum ElementLocation {
+    Static(TemplateCursor),
+    Slot { id: usize, cursor: TemplateCursor },
 }
 
 impl VirtualDom {
@@ -198,11 +202,45 @@ impl VirtualDom {
         MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)))
     }
 
+    pub(crate) fn cached_template_root(
+        &self,
+        target_id: RenderTargetId,
+        template: Template,
+        root_idx: usize,
+    ) -> Option<MountedElementId> {
+        self.runtime
+            .render_targets
+            .borrow()
+            .get(target_id.index())
+            .and_then(|target| target.template_roots.get(&(template, root_idx)).copied())
+    }
+
+    pub(crate) fn allocate_template_root(
+        &mut self,
+        target_id: RenderTargetId,
+        template: Template,
+        root_idx: usize,
+    ) -> MountedElementId {
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets
+            .get_mut(target_id.index())
+            .expect("render target should exist while allocating a template root");
+        let id = MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)));
+        target.template_roots.insert((template, root_idx), id);
+        id
+    }
+
+    pub(crate) fn clear_template_roots(&mut self) {
+        for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
+            target.template_roots.clear();
+        }
+    }
+
     pub(crate) fn set_element_ref_for_mount(
         &self,
         mount: MountId,
         el: MountedElementId,
-        path: &'static [u8],
+        location: ElementLocation,
     ) {
         let target_id = self.mount_target_id(mount);
         let mut targets = self.runtime.render_targets.borrow_mut();
@@ -213,10 +251,7 @@ impl VirtualDom {
             .elements
             .get_mut(el.index())
             .expect("element should exist while assigning an element ref");
-        *element = Some(ElementRef {
-            path: ElementPath { path },
-            mount,
-        });
+        *element = Some(ElementRef { location, mount });
     }
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {
@@ -310,30 +345,47 @@ impl VirtualDom {
     }
 }
 
-impl ElementPath {
-    pub(crate) fn is_descendant(&self, small: &[u8]) -> bool {
-        small.len() <= self.path.len() && small == &self.path[..small.len()]
+impl ElementLocation {
+    pub(crate) fn is_under_attr(self, attr: TemplateCursor) -> bool {
+        match self {
+            ElementLocation::Static(cursor) => cursor.is_descendant_of_static(attr),
+            ElementLocation::Slot { cursor, .. } => cursor.slot_is_inside_static(attr),
+        }
+    }
+
+    pub(crate) fn is_exact_static(self, attr: TemplateCursor) -> bool {
+        matches!(self, ElementLocation::Static(cursor) if cursor == attr)
+    }
+
+    pub(crate) fn slot(self) -> Option<(usize, TemplateCursor)> {
+        match self {
+            ElementLocation::Slot { id, cursor } => Some((id, cursor)),
+            ElementLocation::Static(_) => None,
+        }
     }
 }
 
 #[test]
-fn is_descendant() {
-    let event_path = ElementPath {
-        path: &[1, 2, 3, 4, 5],
-    };
+fn static_location_is_under_attr() {
+    let event_location = ElementLocation::Static(TemplateCursor::new(&[1, 2, 3, 4, 5]));
 
-    assert!(event_path.is_descendant(&[1, 2, 3, 4, 5]));
-    assert!(event_path.is_descendant(&[1, 2, 3, 4]));
-    assert!(event_path.is_descendant(&[1, 2, 3]));
-    assert!(event_path.is_descendant(&[1, 2]));
-    assert!(event_path.is_descendant(&[1]));
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4, 5])));
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4])));
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3])));
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2])));
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[1])));
 
-    assert!(!event_path.is_descendant(&[1, 2, 3, 4, 5, 6]));
-    assert!(!event_path.is_descendant(&[2, 3, 4]));
+    assert!(!event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4, 5, 6])));
+    assert!(!event_location.is_under_attr(TemplateCursor::new(&[2, 3, 4])));
 }
 
-impl PartialEq<&[u8]> for ElementPath {
-    fn eq(&self, other: &&[u8]) -> bool {
-        self.path.eq(*other)
-    }
+#[test]
+fn slot_location_uses_parent_for_attr_matching() {
+    let event_location = ElementLocation::Slot {
+        id: 0,
+        cursor: TemplateCursor::new(&[0, 0]),
+    };
+
+    assert!(event_location.is_under_attr(TemplateCursor::new(&[0])));
+    assert!(!event_location.is_under_attr(TemplateCursor::new(&[0, 0])));
 }

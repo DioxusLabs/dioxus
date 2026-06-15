@@ -1,6 +1,6 @@
 use crate::{
     Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template, TemplateAttribute,
-    TemplateNode, VNode,
+    TemplateCursor, TemplateNode, VNode,
     innerlude::{CapturedError, provide_context},
     try_consume_context, use_hook,
 };
@@ -163,9 +163,9 @@ fn default_handler(errors: ErrorContext) -> Element {
                 namespace: Some("style"),
                 value: "red",
             }],
-            children: &[TemplateNode::Dynamic { id: 0usize }],
+            children: &[],
         }],
-        &[&[0u8, 0u8]],
+        &[TemplateCursor::new(&[0u8, 0u8])],
         &[],
     );
     std::result::Result::Ok(VNode::new(
@@ -180,9 +180,9 @@ fn default_handler(errors: ErrorContext) -> Element {
                         tag: "pre",
                         namespace: None,
                         attrs: &[],
-                        children: &[TemplateNode::Dynamic { id: 0usize }],
+                        children: &[],
                     }],
-                    &[&[0u8, 0u8]],
+                    &[TemplateCursor::new(&[0u8, 0u8])],
                     &[],
                 );
                 VNode::new(
@@ -321,8 +321,7 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template =
-                Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
+            static TEMPLATE: Template = Template::new(&[], &[TemplateCursor::new(&[0u8])], &[]);
             VNode::new(
                 None,
                 TEMPLATE,
