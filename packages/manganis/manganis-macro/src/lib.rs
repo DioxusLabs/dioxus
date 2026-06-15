@@ -341,13 +341,14 @@ impl PathResolver {
         // Eg. `/path/to/build/dir` is treated as an absolute path if it is within
         // the output directory, but `/src/assets/foo.css` is treated as a relative path
         // because it does not canonicalize to a location within the manifest or output directory.
-        if self.src.is_absolute()
-            && let Some(path) = dunce::canonicalize(&self.src)
+        if self.src.is_absolute() {
+            if let Some(path) = dunce::canonicalize(&self.src)
                 .ok()
                 .and_then(|path| self.canonicalize_path_within_crate(path).ok())
             {
                 return Ok(path);
             }
+        }
 
         // Otherwise, resolve the path relative to the current file or the manifest directory
         let path = if self
