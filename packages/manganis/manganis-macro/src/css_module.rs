@@ -1,4 +1,4 @@
-use crate::{asset::AssetParser, resolve_path};
+use crate::{PathResolver, asset::AssetParser};
 use macro_string::MacroString;
 use manganis_core::{create_module_hash, get_class_mappings};
 use proc_macro2::{Span, TokenStream};
@@ -18,7 +18,7 @@ impl Parse for CssModuleAttribute {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // Asset path "/path.css"
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src, path_expr.span());
+        let asset = PathResolver::new(&src, &path_expr.span()).resolve();
 
         let _comma = input.parse::<Comma>();
 
