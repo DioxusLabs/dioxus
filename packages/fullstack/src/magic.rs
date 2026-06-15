@@ -41,6 +41,7 @@ use crate::{
 };
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
+use anyhow::anyhow;
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
 use http::StatusCode;
@@ -539,7 +540,12 @@ pub mod req_from {
                     .map_err(|e| e.into_response())?;
 
                 let request = Request::from_parts(parts, body);
-                let bytes = Bytes::from_request(request, &()).await.unwrap();
+                let bytes = Bytes::from_request(request, &())
+                    .await
+                    .map_err(|e| {
+                        let err = ServerFnError::from(anyhow!(e));
+                        err.into_response()
+                    })?;
                 let as_str = String::from_utf8_lossy(&bytes);
 
                 let bytes = if as_str.is_empty() {
