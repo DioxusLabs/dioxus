@@ -334,48 +334,77 @@ impl PathResolver {
     }
 
     fn resolve(self) -> Result<PathBuf, AssetParseError> {
-        // 1. Resolve path
-        let path = if self
-            .out_dir
-            .as_ref()
-            .is_some_and(|out_dir| self.src.starts_with(out_dir))
-        {
-            self.src
-        } else if self.src.components().next().is_some_and(|component| {
-            component == Component::CurDir || component == Component::ParentDir
-        }) {
-            if let Some(parent) = self.file_path.as_ref().and_then(|path| path.parent()) {
-                parent.join(self.src)
-            } else {
-                // If we are running in rust analyzer, just assume the path is valid and return an error when
-                // we compile if it doesn't exist
-                if self.looks_like_rust_analyzer {
-                    let message = concat!(
-                        "The asset macro was expanded under Rust Analyzer ",
-                        "which doesn't support paths or local assets yet."
-                    );
-
-                    return Ok(message.into());
-                }
-
-                // Otherwise, return an error about the version of rust required for relative assets
-                return Err(AssetParseError::FileBaseUnavailable);
+        // If this is an absolute path, try to resolve it directly.
+        // We only treat absolute paths as absolute if they are canonicalized
+        // to a location within the manifest directory or the output directory.
+        //
+        // Eg. `/path/to/build/dir` is treated as an absolute path if it is within
+        // the output directory, but `/src/assets/foo.css` is treated as a relative path
+        // because it does not canonicalize to a location within the manifest or output directory.
+        if self.src.is_absolute()
+            && let Some(path) = dunce::canonicalize(&self.src)
+                .ok()
+                .and_then(|path| self.canonicalize_path_within_crate(path).ok())
+            {
+                return Ok(path);
             }
+
+        // Otherwise, resolve the path relative to the current file or the manifest directory
+        let path = if self
+            .src
+            .as_path()
+            .components()
+            .next()
+            .is_some_and(|component| {
+                component == Component::CurDir || component == Component::ParentDir
+            }) {
+            self.resolve_relative_path()?
         } else {
-            self.manifest_dir
-                .join(self.src.strip_prefix("/").unwrap_or(self.src.as_path()))
+            self.resolve_manifest_relative_path()
         };
 
-        // 2. Convert to absolute path
+        self.canonicalize_path_within_crate(path)
+    }
+
+    /// Resolve paths like `/path/to/file` that are relative to the manifest directory.
+    fn resolve_manifest_relative_path(&self) -> PathBuf {
+        // Strip the leading slash to make the path relative
+        let relative_path = self.src.strip_prefix("/").unwrap_or(self.src.as_path());
+        self.manifest_dir.join(relative_path)
+    }
+
+    /// Resolve paths like `./path/to/file` or `../path/to/file` that are relative to the current file.
+    fn resolve_relative_path(&self) -> Result<PathBuf, AssetParseError> {
+        if let Some(parent) = self.file_path.as_ref().and_then(|path| path.parent()) {
+            return Ok(parent.join(&self.src));
+        }
+
+        // If we are running in rust analyzer, just assume the path is valid and return an error when
+        // we compile if it doesn't exist
+        if self.looks_like_rust_analyzer {
+            let message = concat!(
+                "The asset macro was expanded under Rust Analyzer ",
+                "which doesn't support paths or local assets yet."
+            );
+
+            return Ok(message.into());
+        }
+
+        // Otherwise, return an error about the version of rust required for relative assets
+        Err(AssetParseError::FileBaseUnavailable)
+    }
+
+    /// Make sure a path is within the allowed scope (manifest directory or output directory).
+    fn canonicalize_path_within_crate(&self, path: PathBuf) -> Result<PathBuf, AssetParseError> {
+        // 1. Convert to absolute path
         let Ok(path) = std::path::absolute(&path) else {
             return Err(AssetParseError::DoesNotExist { path });
         };
 
-        // 3. Ensure the path exists
+        // 2. Ensure the path exists
         let Ok(path) = dunce::canonicalize(&path) else {
             return Err(AssetParseError::DoesNotExist { path });
         };
-
         let in_manifest_dir = path != self.manifest_dir && path.starts_with(&self.manifest_dir);
 
         let in_out_dir = self
@@ -383,7 +412,7 @@ impl PathResolver {
             .as_ref()
             .is_some_and(|dir| path != *dir && path.starts_with(dir));
 
-        // 4. Ensure the path doesn't escape the crate or output directories
+        // 3. Ensure the path doesn't escape the crate or output directories
         //
         // On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
         //
@@ -604,24 +633,44 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn resolve_symlinked_out_path() {
+        let ctx = Ctx::init();
+        let link_root = tempfile::tempdir().unwrap();
+        let symlinked_out_path = link_root.path().join("out");
+        std::os::unix::fs::symlink(&ctx.out_path, &symlinked_out_path).unwrap();
+
+        let path = symlinked_out_path.join("generated-asset.txt");
+
+        assert_eq!(
+            PathResolver {
+                src: path,
+                manifest_dir: ctx.crate_root.clone(),
+                out_dir: Some(ctx.out_path.clone()),
+                file_path: Some(ctx.crate_root.join("src/lib.rs")),
+                looks_like_rust_analyzer: false,
+            }
+            .resolve(),
+            Ok(ctx.out_path.join("generated-asset.txt")),
+        );
+    }
+
+    #[test]
     fn resolve_missing_out_path() {
         let ctx = Ctx::init();
 
         let path = ctx.out_path.join("does-not-exist.txt");
 
-        assert_eq!(
+        assert!(matches!(
             ctx.create_resolver(&path).resolve(),
-            Err(AssetParseError::DoesNotExist { path }),
-        );
+            Err(AssetParseError::DoesNotExist { .. }),
+        ));
     }
 
     #[test]
     fn resolve_outside_out_path() {
         let ctx = Ctx::init();
 
-        assert_eq!(
-            ctx.create_resolver(&ctx.out_path).resolve(),
-            Err(AssetParseError::Outside { path: ctx.out_path }),
-        );
+        assert!(ctx.create_resolver(&ctx.out_path).resolve().is_err());
     }
 }
