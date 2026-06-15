@@ -11,8 +11,8 @@ use dioxus_core::{
     consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
-use dioxus_fullstack_core::{HYDRATION_INJECT_MARKER, HydrationContext, SerializedHydrationData};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
+use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
@@ -698,13 +698,7 @@ impl SsrRendererPool {
         // // #[cfg(feature = "document")]
         // {
         use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-        // Marker lets the client's hydration walker skip this script (and any
-        // other dx-injected ones) without filtering user-authored `<script>`
-        // elements that happen to be top-level roots.
-        write!(
-            to,
-            "<script {HYDRATION_INJECT_MARKER}>{INITIALIZE_STREAMING_JS}</script>"
-        )?;
+        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
         // }
 
         Ok(())
@@ -723,7 +717,7 @@ impl SsrRendererPool {
         let raw_data = resolved_data.data;
         write!(
             to,
-            r#"<script {HYDRATION_INJECT_MARKER}>window.initial_dioxus_hydration_data="{raw_data}";"#,
+            r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
         )?;
         #[cfg(debug_assertions)]
         {

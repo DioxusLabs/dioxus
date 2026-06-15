@@ -9,36 +9,14 @@ test("ssr emits no hydration markers", async ({ page }) => {
   const res = await page.request.get(URL);
   const html = await res.text();
 
-  // Strip the dx-injected hydration-data scripts before scanning for
-  // comments — those scripts are marked with `data-dioxus-hydration` and
-  // legitimately contain hydration metadata.
-  const stripped = html.replace(
-    /<script data-dioxus-hydration>[\s\S]*?<\/script>/g,
-    ""
-  );
+  // Strip scripts before scanning for comments; injected hydration scripts
+  // legitimately contain serialized hydration metadata.
+  const stripped = html.replace(/<script\b[\s\S]*?<\/script>/gi, "");
 
   expect(stripped).not.toContain("data-node-hydration");
   expect(stripped).not.toContain("<!--node-id");
   expect(stripped).not.toContain("<!--placeholder");
   expect(stripped).not.toContain("<!--#-->");
-});
-
-test("user-authored top-level script survives hydration", async ({ page }) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  // The user script is preserved verbatim.
-  const scriptText = await page
-    .locator("#user-script")
-    .evaluate((el) => el.textContent);
-  expect(scriptText).toBe(`{"hello":"world"}`);
-
-  // The sibling button's click handler was attached — root indices weren't
-  // shifted by the script being filtered or mis-counted.
-  const button = page.locator("#user-script-button");
-  await expect(button).toContainText("user-script siblings: 0");
-  await button.click();
-  await expect(button).toContainText("user-script siblings: 1");
 });
 
 test("textarea with dynamic text hydrates cleanly", async ({ page }) => {

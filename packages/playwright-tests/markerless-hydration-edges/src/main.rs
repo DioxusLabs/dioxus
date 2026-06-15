@@ -9,7 +9,6 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        UserScript {}
         TextareaWithDynamic {}
         DangerousInnerHtml {}
         AdjacentDynamicTexts {}
@@ -24,29 +23,6 @@ fn app() -> Element {
         ParserInsertedWrapper {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
-    }
-}
-
-// A user-authored top-level `<script>` must hydrate as a normal root. The
-// script filter on the client now matches only the dx-injected scripts
-// (those marked with `data-dioxus-hydration`), so this one's text content
-// must survive and the sibling root indices must stay aligned with the
-// rendered VDOM.
-#[component]
-fn UserScript() -> Element {
-    let mut clicks = use_signal(|| 0);
-    let payload = r#"{"hello":"world"}"#;
-    rsx! {
-        script {
-            id: "user-script",
-            r#type: "application/json",
-            "{payload}"
-        }
-        button {
-            id: "user-script-button",
-            onclick: move |_| clicks += 1,
-            "user-script siblings: {clicks}"
-        }
     }
 }
 

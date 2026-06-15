@@ -8,10 +8,7 @@ test("scope with no SSR roots hydrates virtual root anchors", async ({
 }) => {
   const res = await page.request.get(URL);
   const html = await res.text();
-  const stripped = html.replace(
-    /<script data-dioxus-hydration>[\s\S]*?<\/script>/g,
-    ""
-  );
+  const stripped = html.replace(/<script\b[\s\S]*?<\/script>/gi, "");
 
   expect(stripped).not.toContain("late-empty-root");
   expect(stripped).not.toContain("root text ready");

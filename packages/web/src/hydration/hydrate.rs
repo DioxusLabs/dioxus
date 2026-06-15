@@ -5,10 +5,10 @@
 
 use crate::dom::WebsysDom;
 use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
-use dioxus_fullstack_core::{HYDRATION_INJECT_MARKER, HydrationContext};
+use dioxus_fullstack_core::HydrationContext;
 use dioxus_interpreter_js::hydration_bindings::{
-    HydrationChannel, claim_hydration_virtual_root, install_hydration_state,
-    push_hydration_virtual_root,
+    HydrationChannel, claim_hydration_anchor_root, install_hydration_state,
+    push_hydration_anchor_root,
 };
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
@@ -71,13 +71,13 @@ impl WebsysDom {
             self.interpreter.base().push_root(node);
         }
 
-        // Empty errored chunks use a virtual sentinel as the
+        // Empty errored chunks use an anchor ref as the
         // `replace_with(loading_id, 1)` item. `applyChunk` fills in
         // `parent`/`before` from the loading slot; hydration later binds the
-        // new scope's placeholder ElementId to that same sentinel.
+        // new scope's placeholder ElementId to that same anchor.
         let empty_bootstrap = children.is_empty();
         let empty_bootstrap_anchor =
-            empty_bootstrap.then(|| push_hydration_virtual_root(self.interpreter.base()));
+            empty_bootstrap.then(|| push_hydration_anchor_root(self.interpreter.base()));
         let replace_count = if empty_bootstrap { 1 } else { children.len() };
 
         #[cfg(not(debug_assertions))]
@@ -122,20 +122,16 @@ impl WebsysDom {
             .clone_from(&suspense_path);
 
         if empty_bootstrap {
-            // Empty-chunk path: the sentinel pushed earlier already has
+            // Empty-chunk path: the anchor pushed earlier already has
             // `parent`/`before` set from `replace_with`. Bind it to the
-            // resolved scope's first virtual dynamic-root ElementId so
+            // resolved scope's first empty dynamic-root ElementId so
             // subsequent anchor ops resolve through it, then walk the scope
             // to record nested suspense ids.
             if let (Some(claim_id), Some(anchor)) = (
                 first_dynamic_root_element_id(root_scope, dom),
                 empty_bootstrap_anchor.as_ref(),
             ) {
-                claim_hydration_virtual_root(
-                    self.interpreter.base(),
-                    claim_id.raw() as u32,
-                    anchor,
-                );
+                claim_hydration_anchor_root(self.interpreter.base(), claim_id.raw() as u32, anchor);
             }
             self.collect_suspense_only(root_scope, dom);
         } else {
@@ -162,8 +158,8 @@ impl WebsysDom {
 
         if under_is_empty {
             // No real root nodes were emitted by SSR. Hydrate under the mount
-            // element so zero-DOM root ids still become virtual anchors with a
-            // concrete parent.
+            // element so zero-DOM root ids still get anchors with a concrete
+            // parent.
             channel.hy_enter_root(0);
             channel.hy_begin_children();
             self.emit_scope(scope, dom, &mut channel, &mut to_mount)?;
@@ -215,17 +211,16 @@ impl WebsysDom {
         closure.forget();
 
         // EnterRoot(i) parks the cursor on under[i], so pass the rendered template
-        // roots. Filter out dx-injected hydration-data scripts (marked with
-        // `data-dioxus-hydration`) so user-authored top-level `<script>` tags still
-        // receive a stable root index.
+        // roots. The dx build injects `<script>` tags before/after the app for
+        // hydration-data plumbing; those are not part of the rendered app.
         let mut roots: Vec<web_sys::Node> = Vec::new();
         let mut current = self.root.first_child();
         while let Some(node) = current {
             current = node.next_sibling();
-            let is_injected = node
+            let is_injected_script = node
                 .dyn_ref::<web_sys::Element>()
-                .is_some_and(|el| el.has_attribute(HYDRATION_INJECT_MARKER));
-            if !is_injected {
+                .is_some_and(|el| el.tag_name().eq_ignore_ascii_case("script"));
+            if !is_injected_script {
                 roots.push(node);
             }
         }
