@@ -3,68 +3,6 @@
 use std::any::Any;
 use std::sync::RwLock;
 
-macro_rules! impl_event {
-    (
-        $data:ty;
-        $(
-            $( #[$attr:meta] )*
-            $name:ident $( : $js_name:expr )?;
-        )*
-    ) => {
-        $(
-            $( #[$attr] )*
-            /// <details open>
-            /// <summary>General Event Handler Information</summary>
-            ///
-            #[doc = include_str!("../../docs/event_handlers.md")]
-            ///
-            /// </details>
-            ///
-            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
-            #[inline]
-            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
-                let event_handler = _f.super_into();
-                ::dioxus_core::Attribute::new(
-                    impl_event!(@name $name $($js_name)?),
-                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        let event: ::dioxus_core::Event<$data> = e.map(|data| {
-                            data.into()
-                        });
-                        event_handler.call(event.into_any());
-                    }),
-                    None,
-                    false,
-                ).into()
-            }
-
-            #[doc(hidden)]
-            $( #[$attr] )*
-            pub mod $name {
-                use super::*;
-
-                // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference
-                $( #[$attr] )*
-                pub fn call_with_explicit_closure<
-                    __Marker,
-                    Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
-                >(
-                    event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
-                ) -> ::dioxus_core::Attribute {
-                    #[allow(deprecated)]
-                    super::$name(event_handler)
-                }
-            }
-        )*
-    };
-
-    (@name $name:ident $js_name:expr) => {
-        $js_name
-    };
-    (@name $name:ident) => {
-        stringify!($name)
-    };
-}
-
 static EVENT_CONVERTER: RwLock<Option<Box<dyn HtmlEventConverter>>> = RwLock::new(None);
 
 #[inline]
@@ -106,6 +44,27 @@ impl PlatformEventData {
     pub fn into_inner<T: 'static>(self) -> Option<T> {
         self.event.downcast::<T>().ok().map(|e| *e)
     }
+}
+
+pub(crate) fn event_attribute<Data, Marker>(
+    name: &'static str,
+    event_handler: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<Data>, Marker>,
+) -> ::dioxus_core::Attribute
+where
+    Data: for<'a> From<&'a PlatformEventData> + 'static,
+{
+    let event_handler = event_handler.super_into();
+    ::dioxus_core::Attribute::new(
+        name,
+        ::dioxus_core::AttributeValue::listener(
+            move |event: ::dioxus_core::Event<PlatformEventData>| {
+                let event = event.map(|data| Data::from(data));
+                event_handler.call(event.into_any());
+            },
+        ),
+        None,
+        false,
+    )
 }
 
 mod generated;

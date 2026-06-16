@@ -419,10 +419,58 @@ macro_rules! expand_html_event_deserialize {
             )*
         }
     ) => {
+        #[allow(non_snake_case)]
+        mod raw_event_deserializers {
+            pub(super) struct RawEventDeserializer {
+                pub(super) name: &'static str,
+                pub(super) deserialize: fn(
+                    &serde_json::Value,
+                ) -> Result<crate::transit::EventData, serde_json::Error>,
+            }
+
+            $(
+                fn $group(
+                    data: &serde_json::Value,
+                ) -> Result<crate::transit::EventData, serde_json::Error> {
+                    let _ = data;
+                    Ok(expand_html_event_deserialize!(@deserialize $group, data))
+                }
+            )*
+
+            pub(super) static RAW_EVENT_DESERIALIZERS: &[RawEventDeserializer] = &[
+                $(
+                    $(
+                        RawEventDeserializer {
+                            name: stringify!($raw),
+                            deserialize: $group,
+                        },
+                    )*
+                    $($(
+                        RawEventDeserializer {
+                            name: stringify!($raw_only),
+                            deserialize: $group,
+                        },
+                    )*)?
+                )*
+            ];
+        }
+
         pub(crate) fn deserialize_raw_event(
             name: &str,
             data: &serde_json::Value,
         ) -> Result<Option<crate::transit::EventData>, serde_json::Error> {
+            raw_event_deserializers::RAW_EVENT_DESERIALIZERS
+                .iter()
+                .find(|deserializer| deserializer.name == name)
+                .map(|deserializer| (deserializer.deserialize)(data))
+                .transpose()
+        }
+    };
+    (@deserialize Mounted, $data:ident) => {
+        crate::transit::EventData::Mounted
+    };
+    (@deserialize $group:ident, $data:ident) => {
+        crate::transit::EventData::$group({
             #[inline]
             fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
             where
@@ -431,21 +479,8 @@ macro_rules! expand_html_event_deserialize {
                 F::deserialize(f)
             }
 
-            Ok(match name {
-                $(
-                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)? => {
-                        Some(expand_html_event_deserialize!(@deserialize $group, data))
-                    }
-                )*
-                _ => None,
-            })
-        }
-    };
-    (@deserialize Mounted, $data:ident) => {
-        crate::transit::EventData::Mounted
-    };
-    (@deserialize $group:ident, $data:ident) => {
-        crate::transit::EventData::$group(de($data)?)
+            de($data)?
+        })
     };
 }
 
@@ -465,16 +500,88 @@ macro_rules! expand_html_event_listeners {
             )*
         }
     ) => {
-        $(
-            impl_event! {
-                $data;
+        /// Event handler extension methods for typed HTML builders.
+        pub trait EventsExtension: ::dioxus_core::view::AttributeTarget + Sized {
+            $(
                 $(
                     #[doc = concat!(stringify!($name))]
                     $( #[$attr] )*
-                    $name: concat!("on", stringify!($raw));
+                    /// <details open>
+                    /// <summary>General Event Handler Information</summary>
+                    ///
+                    #[doc = include_str!("../../docs/event_handlers.md")]
+                    ///
+                    /// </details>
+                    ///
+                    #[doc = include_str!("../../docs/common_event_handler_errors.md")]
+                    #[inline]
+                    fn $name<__Marker, __Return>(
+                        self,
+                        event_handler: impl FnMut(::dioxus_core::Event<$data>) -> __Return + 'static,
+                    ) -> <Self as ::dioxus_core::view::AttributeTarget>::Output
+                    where
+                        __Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
+                    {
+                        ::dioxus_core::view::AttributeTarget::append_attribute(
+                            self,
+                            super::event_attribute::<$data, ::dioxus_core::MarkerWrapper<__Marker>>(
+                                concat!("on", stringify!($raw)),
+                                event_handler,
+                            ),
+                        )
+                    }
                 )*
-            }
-        )*
+            )*
+        }
+
+        impl<Target> EventsExtension for Target
+        where
+            Target: ::dioxus_core::view::AttributeTarget,
+        {
+        }
+
+        #[doc(hidden)]
+        pub mod __rsx {
+            use super::*;
+
+            $(
+                $(
+                    $( #[$attr] )*
+                    #[inline]
+                    pub fn $name<__Marker>(
+                        event_handler: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>,
+                    ) -> ::dioxus_core::Attribute {
+                        super::super::event_attribute::<$data, __Marker>(
+                            concat!("on", stringify!($raw)),
+                            event_handler,
+                        )
+                    }
+
+                    #[doc(hidden)]
+                    $( #[$attr] )*
+                    pub mod $name {
+                        use super::*;
+
+                        // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference.
+                        $( #[$attr] )*
+                        pub fn call_with_explicit_closure<
+                            __Marker,
+                            Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
+                        >(
+                            event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
+                        ) -> ::dioxus_core::Attribute {
+                            super::super::super::event_attribute::<
+                                $data,
+                                ::dioxus_core::MarkerWrapper<__Marker>,
+                            >(
+                                concat!("on", stringify!($raw)),
+                                event_handler,
+                            )
+                        }
+                    }
+                )*
+            )*
+        }
     };
 }
 

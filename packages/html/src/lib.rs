@@ -55,4 +55,5 @@ pub mod traits {
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
+    pub use crate::events::EventsExtension;
 }

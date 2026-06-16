@@ -1,5 +1,5 @@
 use dioxus_core::internal::HotReloadDynamicSlot;
-use dioxus_core::{Template, TemplateRawAttrNamespace, TemplateRawOp};
+use dioxus_core::{Template, TemplateRawOp};
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use internment::Intern;
@@ -118,11 +118,6 @@ impl<'a> NativeTemplateBuilder<'a> {
         };
 
         let (name, namespace) = html_tag_and_namespace::<Ctx>(attr);
-        let namespace = match namespace {
-            Some("style") => TemplateRawAttrNamespace::Style,
-            Some(namespace) => TemplateRawAttrNamespace::Custom(namespace),
-            None => TemplateRawAttrNamespace::None,
-        };
         self.raw_ops.push(TemplateRawOp::StaticAttr {
             name,
             value: intern(value.to_static().unwrap().as_str()),

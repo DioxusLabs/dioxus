@@ -158,7 +158,7 @@ fn default_handler(errors: ErrorContext) -> Element {
         &[
             TemplateOp::enter(8, false),
             TemplateOp::static_text(0),
-            TemplateOp::attr(true),
+            TemplateOp::attr_custom_namespace(),
             TemplateOp::static_text(1),
             TemplateOp::static_text(2),
             TemplateOp::static_text(3),

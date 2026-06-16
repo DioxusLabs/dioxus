@@ -248,7 +248,7 @@ impl Attribute {
                         AttributeName::BuiltIn(name) => {
                             let event_tokens_is_closure = check_tokens_is_closure(&tokens);
                             let function_name =
-                                quote_spanned! { span => dioxus_elements::events::#name };
+                                quote_spanned! { span => dioxus_elements::events::__rsx::#name };
                             let function = if event_tokens_is_closure {
                                 // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
                                 quote_spanned! { span => #function_name::call_with_explicit_closure }
@@ -264,7 +264,7 @@ impl Attribute {
                     }
                 }
                 _ => {
-                    quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
+                    quote_spanned! { value.span() => dioxus_elements::events::__rsx::#name(#value) }
                 }
             }
         };

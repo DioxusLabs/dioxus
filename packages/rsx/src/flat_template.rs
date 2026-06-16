@@ -208,10 +208,7 @@ impl FlatTemplateBuilder {
         let marker = self.next_ident("__DioxusText");
         let value = text.input.to_static().unwrap();
         self.definitions.push(quote_spanned! { text.input.span() =>
-            struct #marker;
-            impl dioxus_core::view::StaticText for #marker {
-                const TEXT: &'static str = #value;
-            }
+            dioxus_core::static_text!(struct #marker, #value);
         });
         TypedView {
             expr: quote! { dioxus_core::view::text::<#marker>() },
@@ -321,13 +318,7 @@ impl FlatTemplateBuilder {
     ) -> TypedView {
         let marker = self.next_ident("__DioxusAttr");
         self.definitions.push(quote_spanned! { span =>
-            struct #marker;
-            impl dioxus_core::view::StaticAttribute for #marker {
-                const NAME: &'static str = #name;
-                const VALUE: &'static str = #value;
-                const NAMESPACE: dioxus_core::TemplateRawAttrNamespace =
-                    dioxus_core::TemplateRawAttrNamespace::new(#namespace);
-            }
+            dioxus_core::static_attribute!(struct #marker, #name, #value, #namespace);
         });
         TypedView {
             expr: quote! { dioxus_core::view::attr::<#marker>() },

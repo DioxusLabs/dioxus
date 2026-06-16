@@ -9,8 +9,8 @@ use crate::{
 use dioxus::prelude::*;
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime,
-    TEMPLATE_STORAGE_MAX_CAP, Task, Template, TemplateRawAttrNamespace, TemplateRawOp,
-    TemplateStorage, VComponent, VNode, VText,
+    TEMPLATE_STORAGE_MAX_CAP, Task, Template, TemplateRawOp, TemplateStorage, VComponent, VNode,
+    VText,
 };
 #[cfg(test)]
 use dioxus_core::{TemplateOp, TemplatePath};
@@ -676,11 +676,6 @@ impl FuzzRawTemplateBuilder {
         static_attrs.sort_by_key(|(name, _, _)| *name);
 
         for (name, value, namespace) in static_attrs {
-            let namespace = match namespace {
-                Some("style") => TemplateRawAttrNamespace::Style,
-                Some(namespace) => TemplateRawAttrNamespace::Custom(namespace),
-                None => TemplateRawAttrNamespace::None,
-            };
             self.raw_ops.push(TemplateRawOp::StaticAttr {
                 name,
                 value,

@@ -5,7 +5,7 @@ use std::{
 
 use crate::nodes::DynamicValue;
 #[cfg(feature = "serialize")]
-use crate::nodes::deserialize_string_leaky;
+use crate::template::deserialize_string_leaky;
 use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -414,13 +414,13 @@ pub struct NamedAttribute {
     /// The name of this attribute.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
+        serde(deserialize_with = "crate::template::deserialize_string_leaky")
     )]
     name: StaticStr,
     /// The namespace of this attribute. Does not exist in the HTML spec
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
+        serde(deserialize_with = "crate::template::deserialize_option_leaky")
     )]
     namespace: Option<StaticStr>,
 

@@ -64,6 +64,7 @@ mod scope_context;
 mod scopes;
 mod suspense;
 mod tasks;
+mod template;
 pub mod view;
 mod virtual_dom;
 
@@ -128,6 +129,7 @@ pub(crate) mod innerlude {
     pub use crate::scopes::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
+    pub use crate::template::*;
     pub use crate::virtual_dom::*;
 
     pub use anyhow::Context as AnyhowContext;
@@ -167,9 +169,11 @@ pub use crate::innerlude::{
 };
 
 pub use crate::view::{
-    Attr, Built, ConstStatic, DynAttrs, DynText, DynamicValues, El, IntoChild, IntoKey, Keyed,
-    RAW_TAPE_CAP, Raw, RawTape, StaticAttribute, StaticText, TagName, Text, View, ViewChild, attr,
-    attr_dyn, el, keyed, text, text_dyn,
+    Attr, AttributeDescriptor, AttributeTarget, Built, ConstStatic, DynAttrs, DynText,
+    DynamicValues, El, IntoAttributeBuilderValue, IntoChild, IntoKey, Keyed, RAW_TAPE_CAP, Raw,
+    RawTape, StaticAttr, StaticAttribute, StaticAttributeBuilderMarker, StaticAttributeValue,
+    StaticText, StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, keyed,
+    static_value, text, text_dyn,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

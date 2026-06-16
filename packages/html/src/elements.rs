@@ -1,7 +1,5 @@
 #![allow(non_upper_case_globals)]
 
-use dioxus_core::HasAttributes;
-use dioxus_core::IntoAttributeValue;
 #[cfg(feature = "hot-reload-context")]
 use dioxus_core_types::HotReloadingContext;
 use dioxus_html_internal_macro::impl_extension_attributes;
@@ -248,7 +246,8 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub(super) mod $name {
+        #[doc(hidden)]
+        pub mod $name {
             #[allow(unused)]
             use super::*;
             #[allow(unused_imports)]
@@ -257,14 +256,15 @@ macro_rules! impl_element {
             pub(super) const TAG_NAME: &'static str = stringify!($name);
             pub(super) const NAME_SPACE: Option<&'static str> = None;
 
-            pub(in crate::elements) struct Tag;
+            #[doc(hidden)]
+            pub struct Tag;
 
             impl dioxus_core::view::TagName for Tag {
                 const NAME: &'static str = TAG_NAME;
                 const NAMESPACE: Option<&'static str> = NAME_SPACE;
             }
 
-            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+            pub const fn new() -> dioxus_core::view::El<Tag, (), ()> {
                 dioxus_core::view::el::<Tag>()
             }
 
@@ -313,7 +313,8 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub(super) mod $name {
+        #[doc(hidden)]
+        pub mod $name {
             #[allow(unused)]
             use super::*;
             #[allow(unused_imports)]
@@ -322,14 +323,15 @@ macro_rules! impl_element {
             pub(super) const TAG_NAME: &'static str = stringify!($name);
             pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
 
-            pub(in crate::elements) struct Tag;
+            #[doc(hidden)]
+            pub struct Tag;
 
             impl dioxus_core::view::TagName for Tag {
                 const NAME: &'static str = TAG_NAME;
                 const NAMESPACE: Option<&'static str> = NAME_SPACE;
             }
 
-            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+            pub const fn new() -> dioxus_core::view::El<Tag, (), ()> {
                 dioxus_core::view::el::<Tag>()
             }
 
@@ -379,7 +381,8 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub(super) mod $element {
+        #[doc(hidden)]
+        pub mod $element {
             #[allow(unused)]
             use super::*;
             #[allow(unused_imports)]
@@ -388,14 +391,15 @@ macro_rules! impl_element {
             pub(super) const TAG_NAME: &'static str = $name;
             pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
 
-            pub(in crate::elements) struct Tag;
+            #[doc(hidden)]
+            pub struct Tag;
 
             impl dioxus_core::view::TagName for Tag {
                 const NAME: &'static str = TAG_NAME;
                 const NAMESPACE: Option<&'static str> = NAME_SPACE;
             }
 
-            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+            pub const fn new() -> dioxus_core::view::El<Tag, (), ()> {
                 dioxus_core::view::el::<Tag>()
             }
 
@@ -422,8 +426,23 @@ macro_rules! impl_element_constructor {
         }
     ) => {
         $(#[$attr])*
-        pub const fn $name() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
-            element_tags::$name::new()
+        pub const fn $name() -> dioxus_core::view::El<$name::Tag, (), ()> {
+            $name::new()
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $name:ident "http://www.w3.org/2000/svg" {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        $(#[$attr])*
+        pub const fn $name() -> dioxus_core::view::El<$name::Tag, (), ()> {
+            $name::new()
         }
     };
 
@@ -437,8 +456,23 @@ macro_rules! impl_element_constructor {
         }
     ) => {
         $(#[$attr])*
-        pub const fn $name() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
-            element_tags::$name::new()
+        pub const fn $name() -> dioxus_core::view::El<$name::Tag, (), ()> {
+            $name::new()
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $element:ident [$name:literal, "http://www.w3.org/2000/svg"] {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        $(#[$attr])*
+        pub const fn $element() -> dioxus_core::view::El<$element::Tag, (), ()> {
+            $element::new()
         }
     };
 
@@ -452,8 +486,8 @@ macro_rules! impl_element_constructor {
         }
     ) => {
         $(#[$attr])*
-        pub const fn $element() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
-            element_tags::$element::new()
+        pub const fn $element() -> dioxus_core::view::El<$element::Tag, (), ()> {
+            $element::new()
         }
     };
 }
@@ -565,6 +599,29 @@ macro_rules! impl_map_global_attributes {
     };
 }
 
+macro_rules! impl_attribute_group_extension {
+    ($name:ident "http://www.w3.org/2000/svg") => {
+        impl<Attrs, Children> crate::attribute_groups::SvgAttributesExtension
+            for dioxus_core::view::El<$name::Tag, Attrs, Children>
+        {
+        }
+    };
+
+    ($name:ident [$_tag:literal, "http://www.w3.org/2000/svg"]) => {
+        impl<Attrs, Children> crate::attribute_groups::SvgAttributesExtension
+            for dioxus_core::view::El<$name::Tag, Attrs, Children>
+        {
+        }
+    };
+
+    ($name:ident $namespace:tt) => {
+        impl<Attrs, Children> crate::attribute_groups::GlobalAttributesExtension
+            for dioxus_core::view::El<$name::Tag, Attrs, Children>
+        {
+        }
+    };
+}
+
 macro_rules! builder_constructors {
     (
         $(
@@ -641,21 +698,17 @@ macro_rules! builder_constructors {
             None
         }
 
-        mod element_tags {
-            use super::*;
-
-            $(
-                impl_element!(
-                    $(#[$attr])*
-                    $name $namespace {
-                        $(
-                            $(#[$attr_method])*
-                            $fil: $vil $extra,
-                        )*
-                    }
-                );
-            )*
-        }
+        $(
+            impl_element!(
+                $(#[$attr])*
+                $name $namespace {
+                    $(
+                        $(#[$attr_method])*
+                        $fil: $vil $extra,
+                    )*
+                }
+            );
+        )*
 
         $(
             impl_element_constructor!(
@@ -667,13 +720,13 @@ macro_rules! builder_constructors {
                     )*
                 }
             );
+            impl_attribute_group_extension!($name $namespace);
         )*
 
         pub(crate) mod extensions {
             use super::*;
-            use super::element_tags::*;
             $(
-                impl_extension_attributes![$name { $($fil,)* }];
+                impl_extension_attributes![$name { $($fil,)* } for_el];
             )*
         }
     };

@@ -1103,6 +1103,11 @@ path = "examples/09-reference/optional_props.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "html_builder"
+path = "examples/09-reference/html_builder.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "rsx_usage"
 path = "examples/09-reference/rsx_usage.rs"
 doc-scrape-examples = true
