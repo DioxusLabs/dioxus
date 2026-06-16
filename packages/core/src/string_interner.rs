@@ -14,9 +14,9 @@ pub struct TemplateStringSpan {
 /// Const string interner used while building a template.
 #[doc(hidden)]
 #[derive(Clone, Copy)]
-pub struct StringInterner<const CAP: usize> {
-    blob: ConstVec<u8, CAP>,
-    spans: ConstVec<TemplateStringSpan, CAP>,
+pub struct StringInterner<const BLOB_CAP: usize, const SPAN_CAP: usize> {
+    blob: ConstVec<u8, BLOB_CAP>,
+    spans: ConstVec<TemplateStringSpan, SPAN_CAP>,
 }
 
 /// Static string interner stored on a lowered template.
@@ -32,7 +32,7 @@ pub(crate) struct RuntimeStringInterner {
     spans: Vec<TemplateStringSpan>,
 }
 
-impl<const CAP: usize> Debug for StringInterner<CAP> {
+impl<const BLOB_CAP: usize, const SPAN_CAP: usize> Debug for StringInterner<BLOB_CAP, SPAN_CAP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StringInterner")
             .field("values", &self.values())
@@ -48,12 +48,32 @@ impl Debug for StaticStringInterner {
     }
 }
 
-impl<const CAP: usize> StringInterner<CAP> {
+impl<const BLOB_CAP: usize, const SPAN_CAP: usize> StringInterner<BLOB_CAP, SPAN_CAP> {
     /// Create an empty string interner.
     pub const fn new() -> Self {
         Self {
             blob: ConstVec::new_with_max_size(),
             spans: ConstVec::new_with_max_size(),
+        }
+    }
+
+    /// Get the used length of the blob.
+    pub const fn used_len(&self) -> usize {
+        self.blob.len()
+    }
+
+    /// Get the used length of the spans.
+    pub const fn used_spans(&self) -> usize {
+        self.spans.len()
+    }
+
+    /// Reallocate the interner with a new capacity.
+    pub const fn reallocate<const NEW_BLOB_CAP: usize, const NEW_SPAN_CAP: usize>(
+        self,
+    ) -> StringInterner<NEW_BLOB_CAP, NEW_SPAN_CAP> {
+        StringInterner {
+            blob: self.blob.reallocate(),
+            spans: self.spans.reallocate(),
         }
     }
 
@@ -282,7 +302,7 @@ mod tests {
 
     #[test]
     fn deduplicates_strings() {
-        const INTERNED: (StringInterner<16>, u16, u16) = {
+        const INTERNED: (StringInterner<16, 16>, u16, u16) = {
             let (interner, first) = StringInterner::new().intern("div");
             let (interner, second) = interner.intern("div");
             (interner, first, second)
@@ -294,7 +314,7 @@ mod tests {
 
     #[test]
     fn stores_distinct_strings() {
-        const INTERNED: (StringInterner<16>, u16, u16) = {
+        const INTERNED: (StringInterner<16, 16>, u16, u16) = {
             let (interner, first) = StringInterner::new().intern("div");
             let (interner, second) = interner.intern("span");
             (interner, first, second)
@@ -307,7 +327,7 @@ mod tests {
 
     #[test]
     fn hashes_interned_string_spans() {
-        static INTERNED: StringInterner<96> = {
+        static INTERNED: StringInterner<96, 3> = {
             let (interner, _) = StringInterner::new().intern("");
             let (interner, _) = interner.intern("div");
             let (interner, _) = interner.intern("abcdefghijklmnopqrstuvwxyz0123456789");

@@ -69,31 +69,18 @@ impl Default for RawTape {
 pub trait Raw {
     /// The raw template-v2-style tape for this view type.
     const RAW: RawTape;
+
+    /// The static template for this view type.
+    const TEMPLATE: &'static Template =
+        &TemplateStorage::<RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP>::build(
+            Self::RAW.as_slice(),
+        )
+        .as_template();
 }
 
 impl Raw for () {
     const RAW: RawTape = RawTape::new();
 }
-
-/// Type-indexed compile-time static promotion.
-pub trait ConstStatic<T: ?Sized + 'static> {
-    /// The promoted static value.
-    const STATIC: &'static T;
-}
-
-impl<V: Raw> ConstStatic<Template> for V {
-    const STATIC: &'static Template =
-        &TemplateStorage::<RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP>::build(V::RAW.as_slice())
-            .as_template();
-}
-
-/// A type with a promoted static template.
-pub trait Built: Raw + ConstStatic<Template> {
-    /// The promoted static template for this view type.
-    const TEMPLATE: &'static Template = <Self as ConstStatic<Template>>::STATIC;
-}
-
-impl<V: Raw> Built for V {}
 
 /// Runtime dynamic values collected while consuming a typed view.
 #[derive(Debug, Default)]
@@ -136,7 +123,7 @@ impl DynamicValues {
 }
 
 /// A typed view that can collect runtime dynamic values.
-pub trait View: Raw + Built + Sized {
+pub trait View: Raw + Sized {
     /// Push runtime dynamic values in template order.
     fn push(self, _dynamic: &mut DynamicValues) {}
 

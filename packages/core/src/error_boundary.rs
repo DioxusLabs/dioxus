@@ -155,7 +155,7 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 }
 
 fn default_handler(errors: ErrorContext) -> Element {
-    const STRINGS: StringInterner<{ crate::template::TEMPLATE_STORAGE_MAX_CAP }> =
+    const STRINGS: StringInterner<16, 4> =
         StringInterner::from_unique_static_strings(&["div", "color", "red", "style"]);
     static TEMPLATE: Template = Template::new(
         &[
@@ -179,9 +179,8 @@ fn default_handler(errors: ErrorContext) -> Element {
                 .error()
                 .iter()
                 .map(|e| {
-                    const INNER_STRINGS: StringInterner<
-                        { crate::template::TEMPLATE_STORAGE_MAX_CAP },
-                    > = StringInterner::from_unique_static_strings(&["pre"]);
+                    const INNER_STRINGS: StringInterner<3, 1> =
+                        StringInterner::from_unique_static_strings(&["pre"]);
                     static INNER_TEMPLATE: Template = Template::new(
                         &[
                             TemplateOp::enter(4, false),

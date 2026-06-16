@@ -127,7 +127,7 @@ pub(super) fn dynamic_node_slots(
         .iter()
         .copied()
         .enumerate()
-        .filter(|(index, _)| vnode.template.dynamic_is_node(*index))
+        .filter(|(index, _)| vnode.dynamic_values[*index].as_node().is_some())
         .map(|(index, path)| DynamicNodeSlot::new(&vnode.template, index, path))
 }
 
@@ -164,7 +164,7 @@ impl<'a> TemplateRoots<'a> {
             let idx = self.dynamic_idx;
             self.dynamic_idx += 1;
 
-            if !template.dynamic_is_node(idx) {
+            if self.vnode.dynamic_values[idx].as_node().is_none() {
                 continue;
             }
 
@@ -210,7 +210,11 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
 ) {
     let mut current = None;
 
-    for (idx, path) in vnode.template.attr_paths() {
+    for (idx, path) in vnode.template.dynamics().iter().copied().enumerate() {
+        if vnode.dynamic_values[idx].as_attrs().is_none() {
+            continue;
+        }
+
         match current {
             Some((current_path, start, _)) if current_path == path => {
                 current = Some((current_path, start, idx + 1));

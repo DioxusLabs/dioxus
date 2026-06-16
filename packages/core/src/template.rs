@@ -503,16 +503,18 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 
 /// Const storage for a lowered raw template.
 ///
-/// The RSX macro emits a `static TemplateStorage<OPS, STRINGS, DYNAMICS>` from a raw operation
-/// tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by the runtime.
+/// The RSX macro emits a `static TemplateStorage<OPS, STRING_BLOB, STRING_SPANS, DYNAMICS>` from a
+/// raw operation tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by
+/// the runtime.
 #[derive(Clone, Copy)]
 pub(crate) struct TemplateStorage<
-    const OPS_CAP: usize,
-    const STRING_CAP: usize,
-    const DYNAMIC_CAP: usize,
+    const OPS_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
+    const STRING_BLOB_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
+    const STRING_SPAN_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
+    const DYNAMIC_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
 > {
     ops: ConstVec<TemplateOp, OPS_CAP>,
-    strings: StringInterner<STRING_CAP>,
+    strings: StringInterner<STRING_BLOB_CAP, STRING_SPAN_CAP>,
     dynamics: ConstVec<TemplatePath, DYNAMIC_CAP>,
 }
 
@@ -675,8 +677,12 @@ macro_rules! lower_raw_template {
     }};
 }
 
-impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
-    TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
+impl<
+    const OPS_CAP: usize,
+    const STRING_BLOB_CAP: usize,
+    const STRING_SPAN_CAP: usize,
+    const DYNAMIC_CAP: usize,
+> TemplateStorage<OPS_CAP, STRING_BLOB_CAP, STRING_SPAN_CAP, DYNAMIC_CAP>
 {
     /// Lower a raw template tape into packed storage in const context.
     pub(crate) const fn build(raw: &'static [TemplateRawOp]) -> Self {
@@ -688,6 +694,23 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
 
         lower_raw_template!(raw, storage);
         storage
+    }
+
+    /// Reallocate the storage with a new capacity.
+    pub(crate) const fn reallocate<
+        const NEW_OPS_CAP: usize,
+        const NEW_STRING_BLOB_CAP: usize,
+        const NEW_STRING_SPAN_CAP: usize,
+        const NEW_DYNAMIC_CAP: usize,
+    >(
+        self,
+    ) -> TemplateStorage<NEW_OPS_CAP, NEW_STRING_BLOB_CAP, NEW_STRING_SPAN_CAP, NEW_DYNAMIC_CAP>
+    {
+        TemplateStorage {
+            ops: self.ops.reallocate(),
+            strings: self.strings.reallocate(),
+            dynamics: self.dynamics.reallocate(),
+        }
     }
 
     /// Return this storage as a compact template.
