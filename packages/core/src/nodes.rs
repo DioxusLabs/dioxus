@@ -1,14 +1,15 @@
+use std::rc::Rc;
+
 use crate::{
     Element, Event, Properties, ScopeId, VirtualDom,
-    any_props::BoxedAnyProps,
     arena::ElementId,
     events::ListenerCallback,
-    innerlude::{ElementRef, MountId, ScopeState, VProps},
+    innerlude::{ElementRef, MountId, ScopeState},
     properties::ComponentFunction,
+    render_driver::{BodyDriver, RenderDriver},
 };
 use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;
-use std::rc::Rc;
 use std::vec;
 use std::{
     any::{Any, TypeId},
@@ -631,19 +632,15 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The raw pointer to the render function
-    pub(crate) render_fn: usize,
-
-    /// The props for this component
-    pub(crate) props: BoxedAnyProps,
+    /// The driver owning this component's rendering lifecycle and props.
+    pub(crate) driver: Rc<dyn RenderDriver>,
 }
 
 impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            props: self.props.duplicate(),
-            render_fn: self.render_fn,
+            driver: self.driver.duplicate(),
         }
     }
 }
@@ -658,8 +655,7 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let render_fn = component.fn_ptr();
-        let props = Box::new(VProps::new(
+        let driver = Rc::new(BodyDriver::new(
             component,
             <P as Properties>::memoize,
             props,
@@ -667,10 +663,17 @@ impl VComponent {
         ));
 
         VComponent {
-            render_fn,
             name: fn_name,
-            props,
+            driver,
         }
+    }
+
+    /// Create a [`VComponent`] with a custom [`RenderDriver`].
+    pub(crate) fn new_with_driver(
+        name: &'static str,
+        driver: Rc<dyn RenderDriver>,
+    ) -> Self {
+        VComponent { name, driver }
     }
 
     /// Get the [`ScopeId`] this node is mounted to if it's mounted

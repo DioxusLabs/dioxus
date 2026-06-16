@@ -3,7 +3,6 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![warn(missing_docs)]
 
-mod any_props;
 mod arena;
 mod diff;
 mod effect;
@@ -18,6 +17,7 @@ mod nodes;
 mod properties;
 mod reactive_context;
 mod render_error;
+pub(crate) mod render_driver;
 mod root_wrapper;
 mod runtime;
 mod scheduler;
@@ -54,7 +54,6 @@ pub mod internal {
 }
 
 pub(crate) mod innerlude {
-    pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
     pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;

@@ -1,6 +1,7 @@
 use crate::{
     Runtime, ScopeId, Task,
     innerlude::{SchedulerMsg, SuspenseContext},
+    render_driver::RenderDriver,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -8,6 +9,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -23,7 +25,6 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
-    SuspenseBoundary(SuspenseContext),
     UnderSuspense(SuspenseContext),
     InSuspensePlaceholder(SuspenseContext),
 }
@@ -33,7 +34,6 @@ impl SuspenseLocation {
         match self {
             SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
             SuspenseLocation::UnderSuspense(context) => Some(context),
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
             _ => None,
         }
     }
@@ -57,8 +57,14 @@ pub(crate) struct Scope {
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
-    /// The suspense boundary that this scope is currently in (if any)
-    suspense_boundary: SuspenseLocation,
+    /// The suspense boundary location this scope is rendered under, if any.
+    suspense_location: SuspenseLocation,
+
+    /// The suspense context owned by this scope when this scope is a boundary.
+    suspense_boundary: RefCell<Option<SuspenseContext>>,
+
+    /// The driver owning this scope's rendered output.
+    render_driver: Rc<dyn RenderDriver>,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -69,7 +75,8 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
-        suspense_boundary: SuspenseLocation,
+        suspense_location: SuspenseLocation,
+        render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
             name,
@@ -86,12 +93,23 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_boundary,
+            suspense_location,
+            suspense_boundary: RefCell::new(None),
+            render_driver,
         }
     }
 
     pub fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
+    }
+
+    /// The driver owning this scope's rendered output.
+    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
+        self.render_driver.clone()
+    }
+
+    pub(crate) fn set_suspense_boundary(&self, context: SuspenseContext) {
+        self.suspense_boundary.replace(Some(context));
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
@@ -111,20 +129,17 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_boundary.clone()
+        self.suspense_location.clone()
     }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        match self.suspense_location() {
-            SuspenseLocation::SuspenseBoundary(context) => Some(context),
-            _ => None,
-        }
+        self.suspense_boundary.borrow().clone()
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_boundary.suspense_context() else {
+        let Some(context) = self.suspense_location.suspense_context() else {
             return false;
         };
 
