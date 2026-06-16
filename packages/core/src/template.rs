@@ -359,7 +359,7 @@ impl TemplateOp {
     const MAX_CAP: usize = 16_383;
 
     /// Create a packed enter op.
-    pub const fn enter(skip: u16, namespace: bool) -> Self {
+    pub(crate) const fn enter(skip: u16, namespace: bool) -> Self {
         if skip as usize > Self::MAX_CAP {
             panic!("op skip exceeds packed op capacity");
         }
@@ -367,7 +367,7 @@ impl TemplateOp {
     }
 
     /// Create a packed static attribute op.
-    pub const fn attr(namespace: bool) -> Self {
+    pub(crate) const fn attr(namespace: bool) -> Self {
         if namespace {
             Self(Self::ATTR_CUSTOM_NS_CODE)
         } else {
@@ -376,17 +376,17 @@ impl TemplateOp {
     }
 
     /// Create a packed static attribute op with a following custom namespace string.
-    pub const fn attr_custom_namespace() -> Self {
+    pub(crate) const fn attr_custom_namespace() -> Self {
         Self(Self::ATTR_CUSTOM_NS_CODE)
     }
 
     /// Create a packed text marker op.
-    pub const fn text() -> Self {
+    pub(crate) const fn text() -> Self {
         Self(Self::TEXT_CODE)
     }
 
     /// Create a packed static string reference op.
-    pub const fn static_text(id: u16) -> Self {
+    pub(crate) const fn static_text(id: u16) -> Self {
         if id as usize >= Self::MAX_CAP {
             panic!("static op id exceeds packed op capacity");
         }
@@ -394,7 +394,7 @@ impl TemplateOp {
     }
 
     /// Create a packed dynamic op.
-    pub const fn dynamic() -> Self {
+    pub(crate) const fn dynamic() -> Self {
         Self(Self::DYN_CODE)
     }
 
@@ -509,7 +509,6 @@ impl RawTemplateLoweringCursor {
         if self.stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
             panic!("template path stack capacity exceeded");
         }
-
         let path = self.next_paths[self.stack_pointer];
         self.next_paths[self.stack_pointer] = path.next_sibling();
         self.element_paths[self.stack_pointer] = path;
@@ -522,7 +521,6 @@ impl RawTemplateLoweringCursor {
         if self.stack_pointer == 0 {
             panic!("template close op without matching open op");
         }
-
         self.stack_pointer -= 1;
         self.enter_stack[self.stack_pointer]
     }
@@ -531,7 +529,6 @@ impl RawTemplateLoweringCursor {
         if self.stack_pointer == 0 {
             panic!("dynamic attr raw op without an open element");
         }
-
         self.element_paths[self.stack_pointer - 1]
     }
 
@@ -601,7 +598,6 @@ macro_rules! lower_raw_template {
             }
             index += 1;
         }
-
         cursor.finish();
     }};
 }
@@ -706,9 +702,6 @@ impl RuntimeTemplateBuilder {
 
 impl Template {
     /// Lower a raw template tape into a leaked runtime template.
-    ///
-    /// This mirrors [`TemplateStorage::build`] without allocating the max-capacity
-    /// const storage on the runtime stack.
     pub(crate) fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
         let mut builder = RuntimeTemplateBuilder::new();
         lower_raw_template!(raw, builder);
@@ -879,9 +872,9 @@ impl Template {
         Some(op + skip)
     }
 
-    /// Return the first static or dynamic child marker inside an element.
-    pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
-        let mut cursor = self.element_children_start(element_op)?;
+    fn element_attr_child_ops(&self, element_op: usize) -> Option<(usize, usize, usize)> {
+        let attr_start = self.element_children_start(element_op)?;
+        let mut cursor = attr_start;
         let end = self.element_end(element_op)?;
         while cursor < end {
             if let Some(len) = self.attr_op_len(cursor) {
@@ -892,7 +885,12 @@ impl Template {
                 break;
             }
         }
-        Some(cursor)
+        Some((attr_start, cursor, end))
+    }
+
+    /// Return the first static or dynamic child marker inside an element.
+    pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
+        Some(self.element_attr_child_ops(element_op)?.1)
     }
 
     /// Find a static attr fallback value for a key in an element.
@@ -901,8 +899,7 @@ impl Template {
         element_op: usize,
         key: (&'static str, Option<&'static str>),
     ) -> Option<&'static str> {
-        let mut cursor = self.element_children_start(element_op)?;
-        let end = self.first_child_node_op(element_op)?;
+        let (mut cursor, end, _) = self.element_attr_child_ops(element_op)?;
         let mut found = None;
         while cursor < end {
             if let Some((name, value, namespace)) = self.static_attr_at_op(cursor) {
@@ -1010,9 +1007,7 @@ impl Template {
         element_op: usize,
         child_idx: usize,
     ) -> Option<usize> {
-        let (skip, _) = self.enter_meta(element_op)?;
-        let mut cursor = self.first_child_node_op(element_op)?;
-        let end = element_op + skip;
+        let (_, mut cursor, end) = self.element_attr_child_ops(element_op)?;
         let mut child = 0;
         let mut static_child = 0;
 
@@ -1039,20 +1034,9 @@ impl Template {
         element_op: usize,
         child_idx: usize,
     ) -> Option<(usize, usize)> {
-        let (skip, _) = self.enter_meta(element_op)?;
-        let mut cursor = self.element_children_start(element_op)?;
-        let end = element_op + skip;
-
-        while cursor < end {
-            if let Some(len) = self.attr_op_len(cursor) {
-                cursor += len;
-            } else if self.dynamic_op_is_attr(cursor) {
-                cursor += 1;
-            } else if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
-                break;
-            } else {
-                return None;
-            }
+        let (_, mut cursor, end) = self.element_attr_child_ops(element_op)?;
+        if cursor < end && !self.is_static_node_op(cursor) && !self.is_dynamic_node_marker(cursor) {
+            return None;
         }
 
         let mut child = 0;

@@ -122,6 +122,26 @@ impl Mount {
     }
 }
 
+macro_rules! mounted_element_accessors {
+    ($mounted:ident, $unchecked:ident, $set:ident, $clear:ident, $idx:ident, $field:ident, $expect:literal) => {
+        pub(crate) fn $mounted(&self, mount: MountId, $idx: usize) -> Option<MountedElementId> {
+            self.with_mount(mount, |mount| mount.$field[$idx])
+        }
+
+        pub(crate) fn $unchecked(&self, mount: MountId, $idx: usize) -> MountedElementId {
+            self.$mounted(mount, $idx).expect($expect)
+        }
+
+        pub(crate) fn $set(&self, mount: MountId, $idx: usize, value: MountedElementId) {
+            self.with_mount_mut(mount, |mount| mount.$field[$idx] = Some(value));
+        }
+
+        pub(crate) fn $clear(&self, mount: MountId, $idx: usize) {
+            self.with_mount_mut(mount, |mount| mount.$field[$idx] = None);
+        }
+    };
+}
+
 impl VirtualDom {
     pub(crate) fn create_mount(
         &mut self,
@@ -201,7 +221,7 @@ impl VirtualDom {
         mount: MountId,
         dyn_node_idx: usize,
     ) -> MountedDynamicNodeSlot {
-        self.with_mounted_dynamic_node_slot(mount, dyn_node_idx, |slot| *slot)
+        self.with_mount(mount, |mount| mount.mounted_dynamic_nodes[dyn_node_idx])
     }
 
     pub(crate) fn set_mounted_dynamic_node_slot(
@@ -210,7 +230,9 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: MountedDynamicNodeSlot,
     ) {
-        self.with_mounted_dynamic_node_slot_mut(mount, dyn_node_idx, |slot| *slot = value);
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_dynamic_nodes[dyn_node_idx] = value;
+        });
     }
 
     pub(crate) fn clear_mounted_dynamic_node_slot(&self, mount: MountId, dyn_node_idx: usize) {
@@ -285,8 +307,8 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: ScopeId,
     ) {
-        self.with_mounted_dynamic_node_slot_mut(mount, dyn_node_idx, |slot| {
-            slot.set_component_scope(value);
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_dynamic_nodes[dyn_node_idx].set_component_scope(value);
         });
     }
 
@@ -296,8 +318,8 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: Option<MountId>,
     ) {
-        self.with_mounted_dynamic_node_slot_mut(mount, dyn_node_idx, |slot| {
-            slot.set_component_root_mount(value);
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_dynamic_nodes[dyn_node_idx].set_component_root_mount(value);
         });
     }
 
@@ -309,73 +331,25 @@ impl VirtualDom {
         self.clear_mounted_dynamic_node_slot(mount, dyn_node_idx);
     }
 
-    pub(crate) fn mounted_dyn_attr(
-        &self,
-        mount: MountId,
-        dyn_attr_idx: usize,
-    ) -> Option<MountedElementId> {
-        self.mounted_element_slot(mount, dyn_attr_idx, |mount| {
-            mount.mounted_attributes.as_ref()
-        })
-    }
+    mounted_element_accessors!(
+        mounted_dyn_attr,
+        unchecked_mounted_dyn_attr,
+        set_mounted_dyn_attr,
+        clear_mounted_dyn_attr,
+        dyn_attr_idx,
+        mounted_attributes,
+        "dynamic attribute slot should be mounted"
+    );
 
-    pub(crate) fn unchecked_mounted_dyn_attr(
-        &self,
-        mount: MountId,
-        dyn_attr_idx: usize,
-    ) -> MountedElementId {
-        self.mounted_dyn_attr(mount, dyn_attr_idx)
-            .expect("dynamic attribute slot should be mounted")
-    }
-
-    pub(crate) fn set_mounted_dyn_attr(
-        &self,
-        mount: MountId,
-        dyn_attr_idx: usize,
-        value: MountedElementId,
-    ) {
-        self.set_mounted_element_slot(mount, dyn_attr_idx, Some(value), |mount| {
-            mount.mounted_attributes.as_mut()
-        });
-    }
-
-    pub(crate) fn clear_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) {
-        self.set_mounted_element_slot(mount, dyn_attr_idx, None, |mount| {
-            mount.mounted_attributes.as_mut()
-        });
-    }
-
-    pub(crate) fn mounted_root_node(
-        &self,
-        mount: MountId,
-        root_idx: usize,
-    ) -> Option<MountedElementId> {
-        self.mounted_element_slot(mount, root_idx, |mount| mount.root_ids.as_ref())
-    }
-
-    pub(crate) fn unchecked_mounted_root_node(
-        &self,
-        mount: MountId,
-        root_idx: usize,
-    ) -> MountedElementId {
-        self.mounted_root_node(mount, root_idx)
-            .expect("root node slot should be mounted")
-    }
-
-    pub(crate) fn set_mounted_root_node(
-        &self,
-        mount: MountId,
-        root_idx: usize,
-        value: MountedElementId,
-    ) {
-        self.set_mounted_element_slot(mount, root_idx, Some(value), |mount| {
-            mount.root_ids.as_mut()
-        });
-    }
-
-    pub(crate) fn clear_mounted_root_node(&self, mount: MountId, root_idx: usize) {
-        self.set_mounted_element_slot(mount, root_idx, None, |mount| mount.root_ids.as_mut());
-    }
+    mounted_element_accessors!(
+        mounted_root_node,
+        unchecked_mounted_root_node,
+        set_mounted_root_node,
+        clear_mounted_root_node,
+        root_idx,
+        root_ids,
+        "root node slot should be mounted"
+    );
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
         // Hand out a deep clone so placement lookups that descend into the
@@ -456,49 +430,6 @@ impl VirtualDom {
             .get_mut(mount.0)
             .map(with_mount)
             .expect("mounted mount record should exist")
-    }
-
-    fn with_mounted_dynamic_node_slot<R>(
-        &self,
-        mount: MountId,
-        dyn_node_idx: usize,
-        with_slot: impl FnOnce(&MountedDynamicNodeSlot) -> R,
-    ) -> R {
-        self.with_mount(mount, |mount| {
-            with_slot(&mount.mounted_dynamic_nodes[dyn_node_idx])
-        })
-    }
-
-    fn with_mounted_dynamic_node_slot_mut<R>(
-        &self,
-        mount: MountId,
-        dyn_node_idx: usize,
-        with_slot: impl FnOnce(&mut MountedDynamicNodeSlot) -> R,
-    ) -> R {
-        self.with_mount_mut(mount, |mount| {
-            with_slot(&mut mount.mounted_dynamic_nodes[dyn_node_idx])
-        })
-    }
-
-    fn mounted_element_slot(
-        &self,
-        mount: MountId,
-        idx: usize,
-        slots: impl FnOnce(&Mount) -> &[Option<MountedElementId>],
-    ) -> Option<MountedElementId> {
-        self.with_mount(mount, |mount| slots(mount)[idx])
-    }
-
-    fn set_mounted_element_slot(
-        &self,
-        mount: MountId,
-        idx: usize,
-        value: Option<MountedElementId>,
-        slots: impl FnOnce(&mut Mount) -> &mut [Option<MountedElementId>],
-    ) {
-        self.with_mount_mut(mount, |mount| {
-            slots(mount)[idx] = value;
-        });
     }
 }
 

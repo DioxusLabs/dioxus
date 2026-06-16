@@ -13,7 +13,7 @@ use dioxus_core::{
     VComponent, VNode, VText,
 };
 #[cfg(test)]
-use dioxus_core::{TemplateOp, TemplatePath};
+use dioxus_core::{DecodedTemplateOp, TemplatePath};
 use std::future::pending;
 
 pub(crate) fn App(context: HarnessContext) -> Element {
@@ -786,13 +786,21 @@ mod tests {
             roots: vec![spec],
         });
 
+        let decoded_ops = template
+            .ops()
+            .iter()
+            .map(|op| op.decode())
+            .collect::<Vec<_>>();
         assert_eq!(
-            template.ops(),
-            &[
-                TemplateOp::enter(4, false),
-                TemplateOp::static_text(0),
-                TemplateOp::text(),
-                TemplateOp::dynamic(),
+            decoded_ops,
+            vec![
+                DecodedTemplateOp::Enter {
+                    skip: 4,
+                    namespace: false
+                },
+                DecodedTemplateOp::Static(0),
+                DecodedTemplateOp::Text,
+                DecodedTemplateOp::Dynamic,
             ]
         );
         assert_eq!(template.strings().len(), 1);

@@ -2,8 +2,9 @@ use crate::{
     Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
 };
 use dioxus_core::{
-    Element, EventHandler, Portal, Properties, RenderTargetId, Runtime, SuperInto, VComponent,
-    VNode, fc_to_builder, provide_context, schedule_update, spawn, use_hook, use_hook_with_cleanup,
+    ComponentFunctionExt, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime,
+    SuperInto, VNode, View, provide_context, schedule_update, spawn, use_hook,
+    use_hook_with_cleanup,
 };
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -303,25 +304,23 @@ fn WindowContextProvider(props: WindowContextProviderProps) -> Element {
 }
 
 fn context_provider_element(providers: WindowProviders, children: Element) -> Element {
-    component_element(
-        fc_to_builder(WindowContextProvider)
-            .providers(providers)
-            .children(children)
-            .build()
-            .into_vcomponent(WindowContextProvider),
+    Element::Ok(
+        WindowContextProvider
+            .with_props(
+                WindowContextProvider
+                    .builder()
+                    .providers(providers)
+                    .children(children)
+                    .build(),
+            )
+            .into_vnode(),
     )
 }
 
 fn portal_element(target: RenderTargetId, children: Element) -> Element {
-    component_element(
-        fc_to_builder(Portal)
-            .target(target)
-            .children(children)
-            .build()
-            .into_vcomponent(Portal),
+    Element::Ok(
+        Portal
+            .with_props(Portal.builder().target(target).children(children).build())
+            .into_vnode(),
     )
-}
-
-fn component_element(component: VComponent) -> Element {
-    dioxus_core::internal::component_element(component)
 }

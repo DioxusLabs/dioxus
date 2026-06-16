@@ -1,6 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![allow(deprecated)]
-
 use dioxus_html_internal_macro::impl_extension_attributes;
 
 #[cfg(feature = "hot-reload-context")]
@@ -2429,4 +2426,20 @@ attribute_group! {
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
     zoom_and_pan: "zoomAndPan";
 
+}
+
+/// Marker for tag types that support global HTML attributes.
+pub trait GlobalAttributesElement {}
+
+/// Marker for tag types that support SVG attributes.
+pub trait SvgAttributesElement {}
+
+impl<Tag, Attrs, Children> GlobalAttributesExtension for dioxus_core::view::El<Tag, Attrs, Children> where
+    Tag: GlobalAttributesElement
+{
+}
+
+impl<Tag, Attrs, Children> SvgAttributesExtension for dioxus_core::view::El<Tag, Attrs, Children> where
+    Tag: SvgAttributesElement
+{
 }

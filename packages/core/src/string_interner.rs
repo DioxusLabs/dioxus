@@ -320,7 +320,10 @@ mod tests {
         assert_eq!(strings.hash_at(1, 0), xxh64(b"div", 0));
         assert_eq!(
             strings.hash_at(2, 0x1234_5678_9abc_def0),
-            xxh64(b"abcdefghijklmnopqrstuvwxyz0123456789", 0x1234_5678_9abc_def0)
+            xxh64(
+                b"abcdefghijklmnopqrstuvwxyz0123456789",
+                0x1234_5678_9abc_def0
+            )
         );
     }
 }

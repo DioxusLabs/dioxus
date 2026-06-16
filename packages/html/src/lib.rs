@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![allow(non_snake_case)]
 
 //! # Dioxus Namespace for HTML
 //!
@@ -33,6 +32,22 @@ pub use data_transfer::*;
 
 pub use bytes;
 
+#[doc(hidden)]
+pub use dioxus_core;
+#[doc(hidden)]
+pub use dioxus_html_internal_macro::define_elements as __define_elements;
+
+#[macro_export]
+macro_rules! define_elements {
+    ($($tokens:tt)*) => {
+        $crate::__define_elements! {
+            core = $crate::dioxus_core,
+            html = $crate;
+            $($tokens)*
+        }
+    };
+}
+
 #[cfg(feature = "serialize")]
 mod transit;
 
@@ -40,7 +55,6 @@ mod transit;
 pub use transit::*;
 
 pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
-pub use crate::elements::extensions::*;
 pub use crate::point_interaction::*;
 pub use attribute_groups::*;
 pub use elements::*;

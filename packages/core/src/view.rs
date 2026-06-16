@@ -10,7 +10,8 @@ use const_vec::ConstVec;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode, Template,
-    VNode, VText,
+    VComponent, VNode, VText,
+    nodes::IntoVNode,
     template::{TEMPLATE_STORAGE_MAX_CAP, TemplateRawOp, TemplateStorage},
 };
 
@@ -135,6 +136,22 @@ pub trait View: Raw + Built + Sized {
 }
 
 impl View for () {}
+
+impl Raw for VComponent {
+    const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicNode);
+}
+
+impl View for VComponent {
+    fn push(self, dynamic: &mut DynamicValues) {
+        dynamic.push_node(DynamicNode::Component(self));
+    }
+}
+
+impl IntoVNode for VComponent {
+    fn into_vnode(self) -> VNode {
+        View::into_vnode(self)
+    }
+}
 
 macro_rules! impl_tuple_views {
     (($($name:ident $value:ident,)*) ;) => {};

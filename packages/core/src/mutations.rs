@@ -73,72 +73,44 @@ pub trait WriteMutations {
     fn remove(&mut self);
 }
 
+macro_rules! write_mutation_methods {
+    ($macro:ident, $($prefix:tt)*) => {
+        $macro! {
+            $($prefix)*
+            push_id(id: ElementId);
+            pop_id(id: ElementId);
+            child(index: usize);
+            pop();
+            create_element(tag: &str, ns: Option<&str>);
+            create_text(value: &str);
+            clone();
+            append_children(m: usize);
+            replace_with(m: usize);
+            insert_after(m: usize);
+            insert_before(m: usize);
+            set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+            set_text(value: &str);
+            add_event_listener(name: &str);
+            remove_event_listener(name: &str);
+            remove();
+        }
+    };
+}
+
+macro_rules! forward_mut_write_mutations {
+    ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
+        $(
+            fn $method(&mut self, $($arg: $arg_ty),*) {
+                WriteMutations::$method(&mut **self, $($arg),*);
+            }
+        )*
+    };
+}
+
 /// Forward through a mutable reference so writer-generic code can be
 /// instantiated at `&mut dyn WriteMutations`.
 impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
-    fn push_id(&mut self, id: ElementId) {
-        (**self).push_id(id)
-    }
-
-    fn pop_id(&mut self, id: ElementId) {
-        (**self).pop_id(id)
-    }
-
-    fn child(&mut self, index: usize) {
-        (**self).child(index)
-    }
-
-    fn pop(&mut self) {
-        (**self).pop()
-    }
-
-    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
-        (**self).create_element(tag, ns)
-    }
-
-    fn create_text(&mut self, value: &str) {
-        (**self).create_text(value)
-    }
-
-    fn clone(&mut self) {
-        WriteMutations::clone(&mut **self)
-    }
-
-    fn append_children(&mut self, m: usize) {
-        (**self).append_children(m)
-    }
-
-    fn replace_with(&mut self, m: usize) {
-        (**self).replace_with(m)
-    }
-
-    fn insert_after(&mut self, m: usize) {
-        (**self).insert_after(m)
-    }
-
-    fn insert_before(&mut self, m: usize) {
-        (**self).insert_before(m)
-    }
-
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
-        (**self).set_attribute(name, ns, value)
-    }
-
-    fn set_text(&mut self, value: &str) {
-        (**self).set_text(value)
-    }
-
-    fn add_event_listener(&mut self, name: &str) {
-        (**self).add_event_listener(name)
-    }
-
-    fn remove_event_listener(&mut self, name: &str) {
-        (**self).remove_event_listener(name)
-    }
-
-    fn remove(&mut self) {
-        (**self).remove()
-    }
+    write_mutation_methods!(forward_mut_write_mutations,);
 }
 
 /// Push `id`, run `with_node`, then pop the node.
@@ -228,7 +200,7 @@ impl<P: FnMut(&mut dyn WriteMutations)> Drop for LazyScope<'_, P> {
     }
 }
 
-macro_rules! forward_lazy_scope {
+macro_rules! forward_lazy_scope_write_mutations {
     ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
         $(
             fn $method(&mut self, $($arg: $arg_ty),*) {
@@ -240,24 +212,22 @@ macro_rules! forward_lazy_scope {
 }
 
 impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for LazyScope<'_, P> {
-    forward_lazy_scope! {
-        push_id(id: ElementId);
-        pop_id(id: ElementId);
-        child(index: usize);
-        pop();
-        create_element(tag: &str, ns: Option<&str>);
-        create_text(value: &str);
-        clone();
-        append_children(m: usize);
-        replace_with(m: usize);
-        insert_after(m: usize);
-        insert_before(m: usize);
-        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
-        set_text(value: &str);
-        add_event_listener(name: &str);
-        remove_event_listener(name: &str);
-        remove();
+    write_mutation_methods!(forward_lazy_scope_write_mutations,);
+}
+
+fn create_and_place_at_id(
+    to: &mut dyn WriteMutations,
+    id: ElementId,
+    runtime: Rc<Runtime>,
+    create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
+    place_nodes: impl FnOnce(&mut dyn WriteMutations, usize),
+) -> usize {
+    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
+    let count = create_nodes(&mut to);
+    if count > 0 {
+        place_nodes(&mut to, count);
     }
+    count
 }
 
 pub(crate) fn append_children_to(
@@ -266,12 +236,9 @@ pub(crate) fn append_children_to(
     runtime: Rc<Runtime>,
     create_children: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
-    let count = create_children(&mut to);
-    if count > 0 {
+    create_and_place_at_id(to, id, runtime, create_children, |to, count| {
         to.append_children(count);
-    }
-    count
+    })
 }
 
 pub(crate) fn insert_before_id(
@@ -280,12 +247,9 @@ pub(crate) fn insert_before_id(
     runtime: Rc<Runtime>,
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
-    let count = create_nodes(&mut to);
-    if count > 0 {
+    create_and_place_at_id(to, id, runtime, create_nodes, |to, count| {
         to.insert_before(count);
-    }
-    count
+    })
 }
 
 pub(crate) fn insert_after_id(
@@ -294,12 +258,9 @@ pub(crate) fn insert_after_id(
     runtime: Rc<Runtime>,
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
-    let count = create_nodes(&mut to);
-    if count > 0 {
+    create_and_place_at_id(to, id, runtime, create_nodes, |to, count| {
         to.insert_after(count);
-    }
-    count
+    })
 }
 
 pub(crate) fn replace_id_with<M: WriteMutations + ?Sized>(
@@ -441,7 +402,7 @@ impl<'a, M: MultiWriter> TargetRouter<'a, M> {
     }
 }
 
-macro_rules! forward_target_router {
+macro_rules! route_write_mutations {
     ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
         $(
             fn $method(&mut self, $($arg: $arg_ty),*) {
@@ -452,24 +413,7 @@ macro_rules! forward_target_router {
 }
 
 impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
-    forward_target_router! {
-        push_id(id: ElementId);
-        pop_id(id: ElementId);
-        child(index: usize);
-        pop();
-        create_element(tag: &str, ns: Option<&str>);
-        create_text(value: &str);
-        clone();
-        append_children(m: usize);
-        replace_with(m: usize);
-        insert_after(m: usize);
-        insert_before(m: usize);
-        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
-        set_text(value: &str);
-        add_event_listener(name: &str);
-        remove_event_listener(name: &str);
-        remove();
-    }
+    write_mutation_methods!(route_write_mutations,);
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -571,21 +515,58 @@ pub struct Mutations {
     pub edits: Vec<Mutation>,
 }
 
+fn serializable_attribute_value(value: &AttributeValue) -> AttributeValue {
+    match value {
+        AttributeValue::Text(_)
+        | AttributeValue::Bool(_)
+        | AttributeValue::Float(_)
+        | AttributeValue::Int(_)
+        | AttributeValue::None => value.clone(),
+        _ => panic!("Cannot serialize attribute value"),
+    }
+}
+
+macro_rules! collect_field_mutations {
+    ($($method:ident($field:ident: $field_ty:ty) => $variant:ident;)*) => {
+        $(
+            fn $method(&mut self, $field: $field_ty) {
+                self.edits.push(Mutation::$variant { $field })
+            }
+        )*
+    };
+}
+
+macro_rules! collect_string_mutations {
+    ($($method:ident($field:ident) => $variant:ident;)*) => {
+        $(
+            fn $method(&mut self, $field: &str) {
+                self.edits.push(Mutation::$variant {
+                    $field: $field.into(),
+                })
+            }
+        )*
+    };
+}
+
+macro_rules! collect_unit_mutations {
+    ($($method:ident => $variant:ident;)*) => {
+        $(
+            fn $method(&mut self) {
+                self.edits.push(Mutation::$variant)
+            }
+        )*
+    };
+}
+
 impl WriteMutations for Mutations {
-    fn push_id(&mut self, id: ElementId) {
-        self.edits.push(Mutation::PushId { id })
-    }
-
-    fn pop_id(&mut self, id: ElementId) {
-        self.edits.push(Mutation::PopId { id })
-    }
-
-    fn child(&mut self, index: usize) {
-        self.edits.push(Mutation::Child { index })
-    }
-
-    fn pop(&mut self) {
-        self.edits.push(Mutation::Pop)
+    collect_field_mutations! {
+        push_id(id: ElementId) => PushId;
+        pop_id(id: ElementId) => PopId;
+        child(index: usize) => Child;
+        append_children(m: usize) => AppendChildren;
+        replace_with(m: usize) => ReplaceWith;
+        insert_after(m: usize) => InsertAfter;
+        insert_before(m: usize) => InsertBefore;
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&str>) {
@@ -595,101 +576,41 @@ impl WriteMutations for Mutations {
         })
     }
 
-    fn create_text(&mut self, value: &str) {
-        self.edits.push(Mutation::CreateText {
-            value: value.into(),
-        })
+    collect_string_mutations! {
+        create_text(value) => CreateText;
+        set_text(value) => SetText;
+        add_event_listener(name) => NewEventListener;
+        remove_event_listener(name) => RemoveEventListener;
     }
 
-    fn clone(&mut self) {
-        self.edits.push(Mutation::Clone)
-    }
-
-    fn append_children(&mut self, m: usize) {
-        self.edits.push(Mutation::AppendChildren { m })
-    }
-
-    fn replace_with(&mut self, m: usize) {
-        self.edits.push(Mutation::ReplaceWith { m })
-    }
-
-    fn insert_after(&mut self, m: usize) {
-        self.edits.push(Mutation::InsertAfter { m })
-    }
-
-    fn insert_before(&mut self, m: usize) {
-        self.edits.push(Mutation::InsertBefore { m })
+    collect_unit_mutations! {
+        pop => Pop;
+        clone => Clone;
+        remove => Remove;
     }
 
     fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
         self.edits.push(Mutation::SetAttribute {
             name: name.to_string(),
             ns: ns.map(str::to_string),
-            value: match value {
-                AttributeValue::Text(s) => AttributeValue::Text(s.clone()),
-                AttributeValue::Bool(b) => AttributeValue::Bool(*b),
-                AttributeValue::Float(n) => AttributeValue::Float(*n),
-                AttributeValue::Int(n) => AttributeValue::Int(*n),
-                AttributeValue::None => AttributeValue::None,
-                _ => panic!("Cannot serialize attribute value"),
-            },
+            value: serializable_attribute_value(value),
         })
-    }
-
-    fn set_text(&mut self, value: &str) {
-        self.edits.push(Mutation::SetText {
-            value: value.into(),
-        })
-    }
-
-    fn add_event_listener(&mut self, name: &str) {
-        self.edits
-            .push(Mutation::NewEventListener { name: name.into() })
-    }
-
-    fn remove_event_listener(&mut self, name: &str) {
-        self.edits
-            .push(Mutation::RemoveEventListener { name: name.into() })
-    }
-
-    fn remove(&mut self) {
-        self.edits.push(Mutation::Remove)
     }
 }
 
 /// A struct that ignores all mutations
 pub struct NoOpMutations;
 
+macro_rules! noop_write_mutations {
+    ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
+        $(
+            fn $method(&mut self, $($arg: $arg_ty),*) {
+                $(let _ = $arg;)*
+            }
+        )*
+    };
+}
+
 impl WriteMutations for NoOpMutations {
-    fn push_id(&mut self, _: ElementId) {}
-
-    fn pop_id(&mut self, _: ElementId) {}
-
-    fn child(&mut self, _: usize) {}
-
-    fn pop(&mut self) {}
-
-    fn create_element(&mut self, _: &str, _: Option<&str>) {}
-
-    fn create_text(&mut self, _: &str) {}
-
-    fn clone(&mut self) {}
-
-    fn append_children(&mut self, _: usize) {}
-
-    fn replace_with(&mut self, _: usize) {}
-
-    fn insert_after(&mut self, _: usize) {}
-
-    fn insert_before(&mut self, _: usize) {}
-
-    fn set_attribute(&mut self, _: &str, _: Option<&str>, _: &AttributeValue) {}
-
-    fn set_text(&mut self, _: &str) {}
-
-    fn add_event_listener(&mut self, _: &str) {}
-
-    fn remove_event_listener(&mut self, _: &str) {}
-
-    fn remove(&mut self) {}
+    write_mutation_methods!(noop_write_mutations,);
 }

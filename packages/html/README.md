@@ -79,29 +79,26 @@ Because attributes are defined as methods on the unit struct, they guard the att
 Whenever the rsx! macro is called, it relies on the HTML element constructors and extension traits that are in scope. When you enable the `html` feature in dioxus, the prelude imports the built-in HTML namespace for you. You can extend this with your own custom elements by adding a constructor for the tag and extension traits for any typed attributes you want to support.
 
 ```rust, ignore
-use dioxus::{
-    core::view::{El, TagName, el},
-    prelude::*,
-};
-
-pub struct AnalyticsPanel;
-
-impl TagName for AnalyticsPanel {
-    const NAME: &'static str = "analytics-panel";
-}
-
-pub const fn analytics_panel() -> El<AnalyticsPanel, (), ()> {
-    el::<AnalyticsPanel>()
+dioxus::html::define_elements! {
+    #[element(name = "analytics-panel")]
+    analyticsPanel {
+        metric,
+        #[attr(name = "data-region")]
+        region,
+    }
 }
 
 rsx! {
-    analytics_panel {
+    analyticsPanel {
+        class: "metric-card",
+        metric: "conversion-rate",
+        region: "north-america",
         "Rendered as <analytics-panel>"
     }
 }
 ```
 
-See [`examples/09-reference/custom_element.rs`](../../examples/09-reference/custom_element.rs) for a complete example with a typed custom attribute.
+See [`examples/09-reference/custom_element.rs`](../../examples/09-reference/custom_element.rs) for a complete example.
 
 ## Contributing
 

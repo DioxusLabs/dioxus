@@ -82,8 +82,6 @@ pub mod internal {
         TemplateGlobalKey,
     };
     #[doc(hidden)]
-    pub use crate::root_wrapper::component_element;
-    #[doc(hidden)]
     pub use crate::template::{TemplateRawAttrNamespace, TemplateRawOp};
 
     #[cfg(fuzzing)]
@@ -165,7 +163,7 @@ pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentFunction, ComponentFunctionExt, DecodedTemplateOp, DynamicNode, DynamicValue, Element,
     ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
-    IntoAttributeValue, IntoDynNode, IntoVComponent, LaunchConfig, ListenerCallback, MarkerWrapper,
+    IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper,
     MultiTargetWriter, MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
     Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId, Result, Runtime,
     RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, StaticStringInterner, StringInterner,
@@ -179,9 +177,6 @@ pub use crate::innerlude::{
     throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
     use_hook_with_cleanup, with_owner,
 };
-
-#[doc(hidden)]
-pub use crate::properties::fc_to_builder;
 
 pub use crate::view::{
     Attr, AttributeDescriptor, AttributeTarget, Built, ConstStatic, DynAttrs, DynText,

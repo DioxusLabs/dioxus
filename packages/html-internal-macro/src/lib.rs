@@ -7,7 +7,8 @@ use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{
-    Attribute, Expr, ExprLit, Ident, Lit, LitStr, Meta, Path, Token, braced, parse_macro_input,
+    Attribute, Expr, ExprLit, Ident, Lit, LitBool, LitStr, Meta, Path, Token, braced,
+    parse_macro_input,
 };
 
 #[proc_macro]
@@ -55,6 +56,7 @@ struct AttributeMetadata {
 struct DefineElements {
     core_path: Path,
     html_path: Path,
+    context: bool,
     elements: Vec<ElementDef>,
 }
 
@@ -166,6 +168,27 @@ impl Parse for DefineElements {
         }
         input.parse::<Token![=]>()?;
         let html_path = input.parse()?;
+
+        let mut context = false;
+        while input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+            if input.peek(Token![;]) {
+                break;
+            }
+
+            let option: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            let enabled: LitBool = input.parse()?;
+            if option == "context" {
+                context = enabled.value;
+            } else {
+                return Err(syn::Error::new(
+                    option.span(),
+                    "expected `context = true` or `context = false`",
+                ));
+            }
+        }
+
         input.parse::<Token![;]>()?;
 
         let mut elements = Vec::new();
@@ -176,6 +199,7 @@ impl Parse for DefineElements {
         Ok(Self {
             core_path,
             html_path,
+            context,
             elements,
         })
     }
@@ -350,6 +374,401 @@ fn lit_str_from_expr(expr: &Expr) -> syn::Result<LitStr> {
     }
 }
 
+impl ToTokens for DefineElements {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let core = &self.core_path;
+        let html = &self.html_path;
+        let elements = self
+            .elements
+            .iter()
+            .map(|element| element.to_tokens_with_paths(core, html));
+        let context = self.context.then(|| self.context_tokens(html));
+
+        tokens.append_all(quote! {
+            #(#elements)*
+            #context
+        });
+    }
+}
+
+impl DefineElements {
+    fn context_tokens(&self, html: &Path) -> TokenStream2 {
+        let map_attribute = self
+            .elements
+            .iter()
+            .map(|element| element.map_attribute_tokens(html));
+        let map_element = self.elements.iter().map(ElementDef::map_element_tokens);
+        let map_html_attribute = self
+            .elements
+            .iter()
+            .flat_map(|element| element.attributes.iter())
+            .map(ExtensionAttribute::map_html_attribute_tokens);
+        let map_html_element = self
+            .elements
+            .iter()
+            .map(ElementDef::map_html_element_tokens);
+        let extension_exports = self
+            .elements
+            .iter()
+            .map(ElementDef::extension_export_tokens);
+
+        quote! {
+            #[cfg(feature = "hot-reload-context")]
+            pub struct HtmlCtx;
+
+            #[cfg(feature = "hot-reload-context")]
+            impl ::dioxus_core_types::HotReloadingContext for HtmlCtx {
+                fn map_attribute(
+                    element: &str,
+                    attribute: &str,
+                ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
+                    #(#map_attribute)*
+                    ::std::option::Option::None
+                }
+
+                fn map_element(
+                    element: &str,
+                ) -> ::std::option::Option<(&'static str, ::std::option::Option<&'static str>)> {
+                    #(#map_element)*
+                    ::std::option::Option::None
+                }
+            }
+
+            #[cfg(feature = "html-to-rsx")]
+            pub fn map_html_attribute_to_rsx(html: &str) -> ::std::option::Option<&'static str> {
+                #(#map_html_attribute)*
+
+                if let ::std::option::Option::Some(name) = #html::map_html_global_attributes_to_rsx(html) {
+                    return ::std::option::Option::Some(name);
+                }
+
+                if let ::std::option::Option::Some(name) = #html::map_html_svg_attributes_to_rsx(html) {
+                    return ::std::option::Option::Some(name);
+                }
+
+                ::std::option::Option::None
+            }
+
+            #[cfg(feature = "html-to-rsx")]
+            pub fn map_html_element_to_rsx(html: &str) -> ::std::option::Option<&'static str> {
+                #(#map_html_element)*
+                ::std::option::Option::None
+            }
+
+            #[allow(unused_imports)]
+            pub(crate) mod extensions {
+                #(#extension_exports)*
+            }
+        }
+    }
+}
+
+impl ElementDef {
+    fn to_tokens_with_paths(&self, core: &Path, html: &Path) -> TokenStream2 {
+        let name = &self.name;
+        let name_string = self.rust_name();
+        let camel_name = self.camel_name();
+        let tag = Ident::new(format!("{camel_name}Element").as_str(), name.span());
+        let extension_name = self.extension_ident();
+        let tag_name = self
+            .metadata
+            .name
+            .as_ref()
+            .map(|name| quote! { #name })
+            .unwrap_or_else(|| {
+                let ident = name_string.strip_prefix("r#").unwrap_or(&name_string);
+                quote! { #ident }
+            });
+        let namespace = self
+            .metadata
+            .namespace
+            .as_ref()
+            .map(|namespace| quote! { ::std::option::Option::Some(#namespace) })
+            .unwrap_or_else(|| quote! { ::std::option::Option::None });
+        let attribute_group_marker = match self.namespace_value().as_deref() {
+            Some("http://www.w3.org/2000/svg") => quote! { #html::SvgAttributesElement },
+            _ => quote! { #html::GlobalAttributesElement },
+        };
+        let attrs = self
+            .attrs
+            .iter()
+            .filter(|attr| !attr.path().is_ident("element"));
+        let descriptors = self.attributes.iter().map(|attr| {
+            let ident = &attr.name;
+            let ident_string = ident.to_string();
+            let attr_camel_name = ident_string
+                .strip_prefix("r#")
+                .unwrap_or(&ident_string)
+                .to_case(Case::UpperCamel);
+            let descriptor = Ident::new(
+                format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
+                ident.span(),
+            );
+            let attr_name = attr
+                .metadata
+                .name
+                .as_ref()
+                .map(|name| quote! { #name })
+                .unwrap_or_else(|| {
+                    let ident = ident_string.strip_prefix("r#").unwrap_or(&ident_string);
+                    quote! { #ident }
+                });
+            let namespace = attr
+                .metadata
+                .namespace
+                .as_ref()
+                .map(|namespace| quote! { ::std::option::Option::Some(#namespace) })
+                .unwrap_or_else(|| quote! { ::std::option::Option::None });
+            let volatile = attr.metadata.volatile;
+
+            quote! {
+                #[doc(hidden)]
+                pub struct #descriptor;
+
+                impl #core::view::AttributeDescriptor for #descriptor {
+                    const NAME: &'static str = #attr_name;
+                    const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
+                    const VOLATILE: bool = #volatile;
+                }
+            }
+        });
+        let methods = self.attributes.iter().map(|attr| {
+            let ident = &attr.name;
+            let ident_string = ident.to_string();
+            let attr_camel_name = ident_string
+                .strip_prefix("r#")
+                .unwrap_or(&ident_string)
+                .to_case(Case::UpperCamel);
+            let descriptor = Ident::new(
+                format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
+                ident.span(),
+            );
+
+            quote! {
+                #[allow(non_snake_case)]
+                fn #ident<__DioxusAttrMarker, __DioxusAttrValue>(
+                    self,
+                    value: __DioxusAttrValue,
+                ) -> <__DioxusAttrValue as #core::view::IntoAttributeBuilderValue<
+                    Self,
+                    #descriptor,
+                    __DioxusAttrMarker,
+                >>::Output
+                where
+                    __DioxusAttrValue: #core::view::IntoAttributeBuilderValue<
+                        Self,
+                        #descriptor,
+                        __DioxusAttrMarker,
+                    >,
+                {
+                    <__DioxusAttrValue as #core::view::IntoAttributeBuilderValue<
+                        Self,
+                        #descriptor,
+                        __DioxusAttrMarker,
+                    >>::append_to(value, self)
+                }
+            }
+        });
+
+        quote! {
+            #[allow(non_camel_case_types)]
+            #[doc(hidden)]
+            pub struct #tag;
+
+            impl #core::view::TagName for #tag {
+                const NAME: &'static str = #tag_name;
+                const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
+            }
+
+            #[allow(non_snake_case)]
+            #(#attrs)*
+            pub const fn #name() -> #core::view::El<#tag, (), ()> {
+                #core::view::el::<#tag>()
+            }
+
+            impl #attribute_group_marker for #tag {}
+
+            #(#descriptors)*
+
+            pub trait #extension_name: #core::view::AttributeTarget + Sized {
+                #(#methods)*
+            }
+
+            impl<__DioxusAttrs, __DioxusChildren> #extension_name
+                for #core::view::El<#tag, __DioxusAttrs, __DioxusChildren>
+            {
+            }
+        }
+    }
+}
+
+impl ElementDef {
+    fn rust_name(&self) -> String {
+        self.name.to_string()
+    }
+
+    fn rsx_name(&self) -> String {
+        self.rust_name()
+            .strip_prefix("r#")
+            .map(ToString::to_string)
+            .unwrap_or_else(|| self.rust_name())
+    }
+
+    fn tag_name_value(&self) -> String {
+        self.metadata
+            .name
+            .as_ref()
+            .map(LitStr::value)
+            .unwrap_or_else(|| self.rsx_name())
+    }
+
+    fn namespace_value(&self) -> Option<String> {
+        self.metadata.namespace.as_ref().map(LitStr::value)
+    }
+
+    fn camel_name(&self) -> String {
+        self.rsx_name().to_case(Case::UpperCamel)
+    }
+
+    fn extension_ident(&self) -> Ident {
+        Ident::new(
+            format!("{}Extension", self.camel_name()).as_str(),
+            self.name.span(),
+        )
+    }
+
+    fn element_matches(&self) -> TokenStream2 {
+        let rust_name = LitStr::new(&self.rust_name(), self.name.span());
+        let rsx_name = LitStr::new(&self.rsx_name(), self.name.span());
+
+        if rust_name.value() == rsx_name.value() {
+            quote! { element == #rust_name }
+        } else {
+            quote! { element == #rust_name || element == #rsx_name }
+        }
+    }
+
+    fn namespace_tokens(&self) -> TokenStream2 {
+        self.metadata
+            .namespace
+            .as_ref()
+            .map(|namespace| quote! { ::std::option::Option::Some(#namespace) })
+            .unwrap_or_else(|| quote! { ::std::option::Option::None })
+    }
+
+    fn map_attribute_tokens(&self, html: &Path) -> TokenStream2 {
+        let element_matches = self.element_matches();
+        let attributes = self
+            .attributes
+            .iter()
+            .map(ExtensionAttribute::map_attribute_tokens);
+        let fallback = match self.namespace_value().as_deref() {
+            Some("http://www.w3.org/2000/svg") => quote! { #html::map_svg_attributes(attribute) },
+            _ => quote! { #html::map_global_attributes(attribute) },
+        };
+
+        quote! {
+            if #element_matches {
+                #(#attributes)*
+                return #fallback;
+            }
+        }
+    }
+
+    fn map_element_tokens(&self) -> TokenStream2 {
+        let element_matches = self.element_matches();
+        let tag_name = LitStr::new(&self.tag_name_value(), self.name.span());
+        let namespace = self.namespace_tokens();
+
+        quote! {
+            if #element_matches {
+                return ::std::option::Option::Some((#tag_name, #namespace));
+            }
+        }
+    }
+
+    fn map_html_element_tokens(&self) -> TokenStream2 {
+        let html_name = LitStr::new(&self.tag_name_value(), self.name.span());
+        let rsx_name = LitStr::new(&self.rsx_name(), self.name.span());
+
+        quote! {
+            if html == #html_name {
+                return ::std::option::Option::Some(#rsx_name);
+            }
+        }
+    }
+
+    fn extension_export_tokens(&self) -> TokenStream2 {
+        let extension = self.extension_ident();
+        quote! {
+            pub use super::#extension;
+        }
+    }
+}
+
+impl ExtensionAttribute {
+    fn rust_name(&self) -> String {
+        self.name.to_string()
+    }
+
+    fn rsx_name(&self) -> String {
+        self.rust_name()
+            .strip_prefix("r#")
+            .map(ToString::to_string)
+            .unwrap_or_else(|| self.rust_name())
+    }
+
+    fn attribute_name_value(&self) -> String {
+        self.metadata
+            .name
+            .as_ref()
+            .map(LitStr::value)
+            .unwrap_or_else(|| self.rsx_name())
+    }
+
+    fn namespace_tokens(&self) -> TokenStream2 {
+        self.metadata
+            .namespace
+            .as_ref()
+            .map(|namespace| quote! { ::std::option::Option::Some(#namespace) })
+            .unwrap_or_else(|| quote! { ::std::option::Option::None })
+    }
+
+    fn attribute_matches(&self) -> TokenStream2 {
+        let rust_name = LitStr::new(&self.rust_name(), self.name.span());
+        let rsx_name = LitStr::new(&self.rsx_name(), self.name.span());
+
+        if rust_name.value() == rsx_name.value() {
+            quote! { attribute == #rust_name }
+        } else {
+            quote! { attribute == #rust_name || attribute == #rsx_name }
+        }
+    }
+
+    fn map_attribute_tokens(&self) -> TokenStream2 {
+        let attribute_matches = self.attribute_matches();
+        let attribute_name = LitStr::new(&self.attribute_name_value(), self.name.span());
+        let namespace = self.namespace_tokens();
+
+        quote! {
+            if #attribute_matches {
+                return ::std::option::Option::Some((#attribute_name, #namespace));
+            }
+        }
+    }
+
+    fn map_html_attribute_tokens(&self) -> TokenStream2 {
+        let html_name = LitStr::new(&self.attribute_name_value(), self.name.span());
+        let rsx_name = LitStr::new(&self.rust_name(), self.name.span());
+
+        quote! {
+            if html == #html_name {
+                return ::std::option::Option::Some(#rsx_name);
+            }
+        }
+    }
+}
+
 impl ToTokens for ImplExtensionAttributes {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
@@ -384,8 +803,8 @@ impl ToTokens for ImplExtensionAttributes {
                 .metadata
                 .namespace
                 .as_ref()
-                .map(|namespace| quote! { Some(#namespace) })
-                .unwrap_or_else(|| quote! { None });
+                .map(|namespace| quote! { ::std::option::Option::Some(#namespace) })
+                .unwrap_or_else(|| quote! { ::std::option::Option::None });
             let volatile = attr.metadata.volatile;
             quote! {
                 #[doc(hidden)]
@@ -393,7 +812,7 @@ impl ToTokens for ImplExtensionAttributes {
 
                 impl ::dioxus_core::view::AttributeDescriptor for #descriptor {
                     const NAME: &'static str = #attr_name;
-                    const NAMESPACE: Option<&'static str> = #namespace;
+                    const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
                     const VOLATILE: bool = #volatile;
                 }
             }
@@ -411,6 +830,7 @@ impl ToTokens for ImplExtensionAttributes {
                 ident.span(),
             );
             quote! {
+                #[allow(non_snake_case)]
                 fn #ident<__DioxusAttrMarker, __DioxusAttrValue>(
                     self,
                     value: __DioxusAttrValue,

@@ -21,7 +21,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
 use dioxus_core::{NoOpMutations, ScopeId};
 use rand::prelude::*;
-use std::{cell::RefCell, hint::black_box, rc::Rc};
+use std::{cell::RefCell, hint::black_box, option::Option, rc::Rc};
 
 criterion_group!(mbenches, create_rows, js_framework_benchmark_core);
 criterion_main!(mbenches);

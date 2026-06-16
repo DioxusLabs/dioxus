@@ -73,17 +73,6 @@ impl Properties for () {
     }
 }
 
-/// Create the generated props builder for a function component.
-#[doc(hidden)]
-pub fn fc_to_builder<Props, Marker>(
-    _component: impl ComponentFunction<Props, Marker>,
-) -> Props::Builder
-where
-    Props: Properties,
-{
-    Props::builder()
-}
-
 /// Root properties never need to be memoized, so we can use a dummy implementation.
 pub(crate) struct RootProps<P>(pub P);
 
@@ -147,26 +136,6 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     fn rebuild(&self, props: Props) -> Element;
 }
 
-/// A value that can create a [`VComponent`] for a component render function.
-///
-/// Most props use the blanket implementation for [`Properties`]. Generated props with child-owned
-/// fields can implement this trait to preserve their owner wrapper while still using
-/// [`ComponentFunctionExt::with_props`].
-pub trait IntoVComponent<RenderFn, Marker = ()> {
-    /// Convert these props into a [`VComponent`] rendered by `render_fn`.
-    fn into_vcomponent_for(self, render_fn: RenderFn) -> VComponent;
-}
-
-impl<Props, RenderFn, Marker: 'static> IntoVComponent<RenderFn, Marker> for Props
-where
-    Props: Properties,
-    RenderFn: ComponentFunction<Props, Marker>,
-{
-    fn into_vcomponent_for(self, render_fn: RenderFn) -> VComponent {
-        Properties::into_vcomponent(self, render_fn)
-    }
-}
-
 /// Extension methods for function components.
 ///
 /// This lets handwritten builder code start from the component function directly:
@@ -191,11 +160,11 @@ where
     }
 
     /// Create a [`VComponent`] from already-built props.
-    fn with_props<ComponentProps, ComponentPropsMarker>(self, props: ComponentProps) -> VComponent
+    fn with_props(self, props: Props) -> VComponent
     where
-        ComponentProps: IntoVComponent<Self, ComponentPropsMarker>,
+        Marker: 'static,
     {
-        props.into_vcomponent_for(self)
+        props.into_vcomponent(self)
     }
 }
 

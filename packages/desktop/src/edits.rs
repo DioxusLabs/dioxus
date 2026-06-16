@@ -67,69 +67,34 @@ impl WryQueue {
     }
 }
 
+macro_rules! forward_wry_queue_mutations {
+    ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
+        $(
+            fn $method(&mut self, $($arg: $arg_ty),*) {
+                self.with_mutation_state(|state| WriteMutations::$method(state, $($arg),*));
+            }
+        )*
+    };
+}
+
 impl WriteMutations for WryQueue {
-    fn push_id(&mut self, id: ElementId) {
-        self.with_mutation_state(|state| state.push_id(id));
-    }
-
-    fn pop_id(&mut self, id: ElementId) {
-        self.with_mutation_state(|state| state.pop_id(id));
-    }
-
-    fn child(&mut self, index: usize) {
-        self.with_mutation_state(|state| state.child(index));
-    }
-
-    fn pop(&mut self) {
-        self.with_mutation_state(WriteMutations::pop);
-    }
-
-    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
-        self.with_mutation_state(|state| state.create_element(tag, ns));
-    }
-
-    fn create_text(&mut self, value: &str) {
-        self.with_mutation_state(|state| state.create_text(value));
-    }
-
-    fn clone(&mut self) {
-        self.with_mutation_state(WriteMutations::clone);
-    }
-
-    fn append_children(&mut self, m: usize) {
-        self.with_mutation_state(|state| state.append_children(m));
-    }
-
-    fn replace_with(&mut self, m: usize) {
-        self.with_mutation_state(|state| state.replace_with(m));
-    }
-
-    fn insert_after(&mut self, m: usize) {
-        self.with_mutation_state(|state| state.insert_after(m));
-    }
-
-    fn insert_before(&mut self, m: usize) {
-        self.with_mutation_state(|state| state.insert_before(m));
-    }
-
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
-        self.with_mutation_state(|state| state.set_attribute(name, ns, value));
-    }
-
-    fn set_text(&mut self, value: &str) {
-        self.with_mutation_state(|state| state.set_text(value));
-    }
-
-    fn add_event_listener(&mut self, name: &str) {
-        self.with_mutation_state(|state| state.add_event_listener(name));
-    }
-
-    fn remove_event_listener(&mut self, name: &str) {
-        self.with_mutation_state(|state| state.remove_event_listener(name));
-    }
-
-    fn remove(&mut self) {
-        self.with_mutation_state(WriteMutations::remove);
+    forward_wry_queue_mutations! {
+        push_id(id: ElementId);
+        pop_id(id: ElementId);
+        child(index: usize);
+        pop();
+        create_element(tag: &str, ns: Option<&str>);
+        create_text(value: &str);
+        clone();
+        append_children(m: usize);
+        replace_with(m: usize);
+        insert_after(m: usize);
+        insert_before(m: usize);
+        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+        set_text(value: &str);
+        add_event_listener(name: &str);
+        remove_event_listener(name: &str);
+        remove();
     }
 }
 

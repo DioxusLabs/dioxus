@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    Template, TemplateOp, TemplatePath, VNode,
+    DecodedTemplateOp, Template, TemplatePath, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
@@ -89,6 +89,10 @@ fn base() -> CallBody {
     syn::parse2(base_stream()).unwrap()
 }
 
+fn decoded_ops(template: &HotReloadedTemplate) -> Vec<DecodedTemplateOp> {
+    template.ops().iter().map(|op| op.decode()).collect()
+}
+
 #[test]
 fn simple_for_loop() {
     let old = quote! {
@@ -155,14 +159,17 @@ fn valid_reorder() {
 
     // It's an inversion, so we should get them in reverse
     assert_eq!(
-        template.ops(),
-        &[
-            TemplateOp::enter(6, false),
-            TemplateOp::static_text(0),
-            TemplateOp::text(),
-            TemplateOp::dynamic(),
-            TemplateOp::text(),
-            TemplateOp::dynamic(),
+        decoded_ops(template),
+        vec![
+            DecodedTemplateOp::Enter {
+                skip: 6,
+                namespace: false
+            },
+            DecodedTemplateOp::Static(0),
+            DecodedTemplateOp::Text,
+            DecodedTemplateOp::Dynamic,
+            DecodedTemplateOp::Text,
+            DecodedTemplateOp::Dynamic,
         ]
     );
     assert_eq!(template.strings().len(), 1);
@@ -266,14 +273,20 @@ fn valid_new_dynamic_attribute() {
 
     // We should have a new dynamic attribute
     assert_eq!(
-        template.ops(),
-        &[
-            TemplateOp::enter(3, false),
-            TemplateOp::static_text(0),
-            TemplateOp::dynamic(),
-            TemplateOp::enter(3, false),
-            TemplateOp::static_text(0),
-            TemplateOp::dynamic(),
+        decoded_ops(template),
+        vec![
+            DecodedTemplateOp::Enter {
+                skip: 3,
+                namespace: false
+            },
+            DecodedTemplateOp::Static(0),
+            DecodedTemplateOp::Dynamic,
+            DecodedTemplateOp::Enter {
+                skip: 3,
+                namespace: false
+            },
+            DecodedTemplateOp::Static(0),
+            DecodedTemplateOp::Dynamic,
         ]
     );
     assert_eq!(template.strings().len(), 1);
@@ -347,13 +360,10 @@ fn valid_move_dynamic_segment_between_nodes() {
 
     // We should have a new dynamic node and no attributes
     assert_eq!(
-        template.ops(),
-        &[TemplateOp::text(), TemplateOp::dynamic()]
+        decoded_ops(template),
+        vec![DecodedTemplateOp::Text, DecodedTemplateOp::Dynamic]
     );
-    assert_eq!(
-        template.dynamics(),
-        &[TemplatePath::empty().next_child()]
-    );
+    assert_eq!(template.dynamics(), &[TemplatePath::empty().next_child()]);
     assert!(template.dynamic_is_node(0));
 
     // The new dynamic node should be created from the formatted segments pool
@@ -475,12 +485,15 @@ fn invalid_cases() {
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
     assert_eq!(
-        template.ops(),
-        &[
-            TemplateOp::enter(4, false),
-            TemplateOp::static_text(0),
-            TemplateOp::text(),
-            TemplateOp::dynamic(),
+        decoded_ops(template),
+        vec![
+            DecodedTemplateOp::Enter {
+                skip: 4,
+                namespace: false
+            },
+            DecodedTemplateOp::Static(0),
+            DecodedTemplateOp::Text,
+            DecodedTemplateOp::Dynamic,
         ]
     );
     assert_eq!(template.strings().len(), 1);

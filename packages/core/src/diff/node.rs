@@ -5,8 +5,8 @@ use crate::{
     diff::{
         context::{DiffFrame, DiffState},
         placement::{
-            DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
-            insertion_site_for_loaded_static_slot, insertion_site_for_slot,
+            DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, find_root_dynamic_slot,
+            insertion_site_at, insertion_site_for_loaded_static_slot, insertion_site_for_slot,
         },
         template::{
             DynamicAttrGroup, DynamicNodeSlot, TemplateRoot, dynamic_node_slots,
@@ -266,20 +266,16 @@ impl VNode {
         edge: ElementEdge,
     ) -> Option<ElementId> {
         let mount = self.mounted_id()?;
-        match edge {
-            ElementEdge::First => (0..self.template.root_count()).find_map(|cursor_idx| {
-                self.find_root_dynamic_at_cursor(cursor_idx, mount, target_id, dom, edge)
-                    .or_else(|| {
-                        self.find_element_at_root_in_target(cursor_idx, mount, target_id, dom)
-                    })
-            }),
-            ElementEdge::Last => (0..self.template.root_count()).rev().find_map(|root_idx| {
-                self.find_element_at_root_in_target(root_idx, mount, target_id, dom)
-                    .or_else(|| {
-                        self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge)
-                    })
-            }),
-        }
+        edge.find_map(self.template.root_count(), |root_idx| {
+            let dynamic =
+                || self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge);
+            let static_root =
+                || self.find_element_at_root_in_target(root_idx, mount, target_id, dom);
+            match edge {
+                ElementEdge::First => dynamic().or_else(static_root),
+                ElementEdge::Last => static_root().or_else(dynamic),
+            }
+        })
     }
 
     fn find_root_dynamic_at_cursor(
@@ -290,46 +286,17 @@ impl VNode {
         dom: &VirtualDom,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        let mut found = None;
-        match edge {
-            ElementEdge::First => {
-                for slot in dynamic_node_slots(self) {
-                    if !slot.is_root_level() || slot.root_index() != cursor_idx {
-                        continue;
-                    }
-
-                    let idx = slot.index();
-                    found = self.dynamic_node_edge_element(
-                        mount,
-                        idx,
-                        self.dynamic_values[idx].node(),
-                        dom,
-                        target_id,
-                        ElementEdge::First,
-                    );
-                    if found.is_some() {
-                        break;
-                    }
-                }
-                found
-            }
-            ElementEdge::Last => {
-                for slot in dynamic_node_slots(self) {
-                    if slot.is_root_level() && slot.root_index() == cursor_idx {
-                        let idx = slot.index();
-                        found = self.dynamic_node_edge_element(
-                            mount,
-                            idx,
-                            self.dynamic_values[idx].node(),
-                            dom,
-                            target_id,
-                            ElementEdge::Last,
-                        );
-                    }
-                }
-                found
-            }
-        }
+        find_root_dynamic_slot(self, cursor_idx, edge, |slot| {
+            let idx = slot.index();
+            self.dynamic_node_edge_element(
+                mount,
+                idx,
+                self.dynamic_values[idx].node(),
+                dom,
+                target_id,
+                edge,
+            )
+        })
     }
 
     pub(crate) fn replace(
@@ -756,13 +723,8 @@ impl VNode {
         path: TemplatePath,
         state: &mut DiffState<'_, '_, '_>,
     ) {
-        // Reverse order lets earlier adjacent dynamic slots insert before
-        // later siblings that have already materialized.
         let root_idx = path.segment(0) as usize;
-        for slot in dynamic_node_slots(self)
-            .filter(|slot| slot.is_inside_static(path))
-            .rev()
-        {
+        for slot in dynamic_node_slots(self).filter(|slot| slot.is_inside_static(path)) {
             let dynamic_node_id = slot.index();
             if state.to.is_none() {
                 self.create_dynamic_node(
@@ -775,9 +737,8 @@ impl VNode {
             }
 
             let context = state.context();
-            let site = insertion_site_for_loaded_static_slot(
-                mount, root_idx, self, slot, &[], state.dom, context,
-            );
+            let site =
+                insertion_site_for_loaded_static_slot(mount, root_idx, slot, state.dom, context);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             at_site(site, reborrow_writer(&mut state.to), runtime, |to| {
@@ -964,9 +925,7 @@ fn find_fragment_edge(
     target_id: crate::RenderTargetId,
     edge: ElementEdge,
 ) -> Option<ElementId> {
-    let find = |child: &VNode| child.find_element_in_roots(dom, target_id, edge);
-    match edge {
-        ElementEdge::First => children.iter().find_map(find),
-        ElementEdge::Last => children.iter().rev().find_map(find),
-    }
+    edge.find_map(children.len(), |idx| {
+        children[idx].find_element_in_roots(dom, target_id, edge)
+    })
 }

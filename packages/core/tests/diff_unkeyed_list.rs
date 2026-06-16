@@ -218,22 +218,22 @@ fn replace_and_add_items() {
         }
     }
 
-    let (mut dom, mut oracle, rebuild) = rebuild(app, vec![ul(Vec::new())]);
+    let (mut dom, mut oracle, rebuild) = rebuild(app, vec![snapshot_ul(Vec::new())]);
     assert_eq!(rebuild.loads, 1);
 
     // 0 (empty) -> 1 fizz: one load, no replace.
-    let summary = rerender(&mut dom, &mut oracle, vec![ul(fizz_items(1))]);
+    let summary = rerender(&mut dom, &mut oracle, vec![snapshot_ul(fizz_items(1))]);
     assert_eq!(summary.loads, 1);
     assert_eq!(summary.replaces, 0);
 
     // 1 fizz -> 0 empty: one remove, no replace. The slot stays addressable
     // via the parent's logical anchor.
-    let summary = rerender(&mut dom, &mut oracle, vec![ul(Vec::new())]);
+    let summary = rerender(&mut dom, &mut oracle, vec![snapshot_ul(Vec::new())]);
     assert_eq!(summary.removes, 1);
     assert_eq!(summary.replaces, 0);
 
     // 0 -> 3 fizzes: three loads inserted at the slot anchor.
-    let summary = rerender(&mut dom, &mut oracle, vec![ul(fizz_items(3))]);
+    let summary = rerender(&mut dom, &mut oracle, vec![snapshot_ul(fizz_items(3))]);
     assert_eq!(summary.loads, 3);
     assert_eq!(summary.replaces, 0);
 }
@@ -288,50 +288,57 @@ fn rerender(
 }
 
 fn numbered_outer_div(count: usize, copies: usize) -> Vec<SnapshotNode> {
-    vec![div(numbered_children(count, copies))]
+    vec![snapshot_div(numbered_children(count, copies))]
 }
 
 fn numbered_children(count: usize, copies: usize) -> Vec<SnapshotNode> {
     let mut children = Vec::new();
     for i in 0..count {
         for _ in 0..copies {
-            children.push(div(vec![text(i.to_string())]));
+            children.push(snapshot_div(vec![text(i.to_string())]));
         }
     }
     children
 }
 
 fn repeated_text_divs(value: &str, count: usize) -> Vec<SnapshotNode> {
-    (0..count).map(|_| div(vec![text(value)])).collect()
+    (0..count)
+        .map(|_| snapshot_div(vec![text(value)]))
+        .collect()
 }
 
 fn hello_divs(count: usize) -> Vec<SnapshotNode> {
     (0..count)
-        .map(|i| div(vec![text(format!("hello {i}"))]))
+        .map(|i| snapshot_div(vec![text(format!("hello {i}"))]))
         .collect()
 }
 
 fn fizz_items(count: usize) -> Vec<SnapshotNode> {
-    (0..count).map(|_| li(vec![text("Fizz")])).collect()
+    (0..count)
+        .map(|_| snapshot_li(vec![text("Fizz")]))
+        .collect()
 }
 
 fn paragraphs(lines: &[&str]) -> Vec<SnapshotNode> {
-    lines.iter().map(|line| p(vec![text(*line)])).collect()
+    lines
+        .iter()
+        .map(|line| snapshot_p(vec![text(*line)]))
+        .collect()
 }
 
-fn div(children: Vec<SnapshotNode>) -> SnapshotNode {
+fn snapshot_div(children: Vec<SnapshotNode>) -> SnapshotNode {
     element("div", children)
 }
 
-fn ul(children: Vec<SnapshotNode>) -> SnapshotNode {
+fn snapshot_ul(children: Vec<SnapshotNode>) -> SnapshotNode {
     element("ul", children)
 }
 
-fn li(children: Vec<SnapshotNode>) -> SnapshotNode {
+fn snapshot_li(children: Vec<SnapshotNode>) -> SnapshotNode {
     element("li", children)
 }
 
-fn p(children: Vec<SnapshotNode>) -> SnapshotNode {
+fn snapshot_p(children: Vec<SnapshotNode>) -> SnapshotNode {
     element("p", children)
 }
 
