@@ -155,7 +155,7 @@ fn valid_reorder() {
 
     // It's an inversion, so we should get them in reverse
     assert_eq!(
-        template.template.ops(),
+        template.ops(),
         &[
             TemplateOp::enter(6, false),
             TemplateOp::static_text(0),
@@ -165,10 +165,10 @@ fn valid_reorder() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings().len(), 1);
-    assert_eq!(template.template.strings().str_at(0), "div");
+    assert_eq!(template.strings().len(), 1);
+    assert_eq!(template.strings().str_at(0), "div");
     assert_eq!(
-        template.template.dynamics(),
+        template.dynamics(),
         &[
             TemplatePath::empty().next_child().next_child(),
             TemplatePath::empty()
@@ -266,7 +266,7 @@ fn valid_new_dynamic_attribute() {
 
     // We should have a new dynamic attribute
     assert_eq!(
-        template.template.ops(),
+        template.ops(),
         &[
             TemplateOp::enter(3, false),
             TemplateOp::static_text(0),
@@ -276,17 +276,17 @@ fn valid_new_dynamic_attribute() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings().len(), 1);
-    assert_eq!(template.template.strings().str_at(0), "div");
+    assert_eq!(template.strings().len(), 1);
+    assert_eq!(template.strings().str_at(0), "div");
     assert_eq!(
-        template.template.dynamics(),
+        template.dynamics(),
         &[
             TemplatePath::empty().next_child(),
             TemplatePath::empty().next_child().next_sibling(),
         ]
     );
-    assert!(template.template.dynamic_is_attr(0));
-    assert!(template.template.dynamic_is_attr(1));
+    assert!(template.dynamic_is_attr(0));
+    assert!(template.dynamic_is_attr(1));
 
     // The new dynamic attribute should be created from the formatted segments pool
     assert_eq!(
@@ -347,14 +347,14 @@ fn valid_move_dynamic_segment_between_nodes() {
 
     // We should have a new dynamic node and no attributes
     assert_eq!(
-        template.template.ops(),
+        template.ops(),
         &[TemplateOp::text(), TemplateOp::dynamic()]
     );
     assert_eq!(
-        template.template.dynamics(),
+        template.dynamics(),
         &[TemplatePath::empty().next_child()]
     );
-    assert!(template.template.dynamic_is_node(0));
+    assert!(template.dynamic_is_node(0));
 
     // The new dynamic node should be created from the formatted segments pool
     assert_eq!(
@@ -475,7 +475,7 @@ fn invalid_cases() {
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
     assert_eq!(
-        template.template.ops(),
+        template.ops(),
         &[
             TemplateOp::enter(4, false),
             TemplateOp::static_text(0),
@@ -483,10 +483,10 @@ fn invalid_cases() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings().len(), 1);
-    assert_eq!(template.template.strings().str_at(0), "div");
+    assert_eq!(template.strings().len(), 1);
+    assert_eq!(template.strings().str_at(0), "div");
     assert_eq!(
-        template.template.dynamics(),
+        template.dynamics(),
         &[TemplatePath::empty().next_child().next_child()]
     );
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);

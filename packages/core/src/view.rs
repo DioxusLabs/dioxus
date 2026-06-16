@@ -10,11 +10,12 @@ use const_vec::ConstVec;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode, Template,
-    TemplateRawAttrNamespace, TemplateRawOp, TemplateStorage, VNode, VText,
+    VNode, VText,
+    template::{TEMPLATE_STORAGE_MAX_CAP, TemplateRawOp, TemplateStorage},
 };
 
 /// Maximum number of raw template operations a typed view can contribute.
-pub const RAW_TAPE_CAP: usize = crate::TEMPLATE_STORAGE_MAX_CAP;
+pub const RAW_TAPE_CAP: usize = TEMPLATE_STORAGE_MAX_CAP;
 
 /// A const template-v2-style raw operation tape.
 #[derive(Clone, Copy)]
@@ -30,13 +31,20 @@ impl RawTape {
         }
     }
 
+    /// Create a raw tape with one raw template operation.
+    pub(crate) const fn single(op: TemplateRawOp) -> Self {
+        let mut raw = Self::new();
+        raw.push(op);
+        raw
+    }
+
     /// Push one raw template operation.
-    pub const fn push(&mut self, op: TemplateRawOp) {
+    pub(crate) const fn push(&mut self, op: TemplateRawOp) {
         self.ops = self.ops.push(op);
     }
 
     /// Append another raw tape.
-    pub const fn concat(&mut self, other: &RawTape) {
+    pub(crate) const fn concat(&mut self, other: &RawTape) {
         let mut index = 0;
         while index < other.ops.len() {
             self.ops = self.ops.push(other.ops.at(index));
@@ -45,7 +53,7 @@ impl RawTape {
     }
 
     /// Borrow the tape as a static slice during const promotion.
-    pub const fn as_slice(&self) -> &[TemplateRawOp] {
+    pub(crate) const fn as_slice(&self) -> &[TemplateRawOp] {
         self.ops.as_slice()
     }
 }
@@ -66,49 +74,15 @@ impl Raw for () {
     const RAW: RawTape = RawTape::new();
 }
 
-macro_rules! impl_raw_tuple {
-    ($($name:ident),+ $(,)?) => {
-        impl<$($name: Raw),+> Raw for ($($name,)+) {
-            const RAW: RawTape = {
-                let mut raw = RawTape::new();
-                $(raw.concat(&$name::RAW);)+
-                raw
-            };
-        }
-    };
-}
-
-impl_raw_tuple!(A);
-impl_raw_tuple!(A, B);
-impl_raw_tuple!(A, B, C);
-impl_raw_tuple!(A, B, C, D);
-impl_raw_tuple!(A, B, C, D, E);
-impl_raw_tuple!(A, B, C, D, E, F);
-impl_raw_tuple!(A, B, C, D, E, F, G);
-impl_raw_tuple!(A, B, C, D, E, F, G, H);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-impl_raw_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
-
 /// Type-indexed compile-time static promotion.
 pub trait ConstStatic<T: ?Sized + 'static> {
     /// The promoted static value.
     const STATIC: &'static T;
 }
 
-impl<V: Raw> ConstStatic<TemplateStorage<RAW_TAPE_CAP>> for V {
-    const STATIC: &'static TemplateStorage<RAW_TAPE_CAP> =
-        &TemplateStorage::<RAW_TAPE_CAP>::build(V::RAW.as_slice());
-}
-
 impl<V: Raw> ConstStatic<Template> for V {
     const STATIC: &'static Template =
-        &<Self as ConstStatic<TemplateStorage<RAW_TAPE_CAP>>>::STATIC.as_template();
+        &TemplateStorage::<RAW_TAPE_CAP>::build(V::RAW.as_slice()).as_template();
 }
 
 /// A type with a promoted static template.
@@ -162,8 +136,21 @@ pub trait View: Raw + Built + Sized {
 
 impl View for () {}
 
-macro_rules! impl_view_tuple {
-    ($(($name:ident, $value:ident)),+ $(,)?) => {
+macro_rules! impl_tuple_views {
+    (($($name:ident $value:ident,)*) ;) => {};
+    (($($name:ident $value:ident,)*) ; $next_name:ident $next_value:ident, $($rest:tt)*) => {
+        impl_tuple_views!(@impl $($name $value,)* $next_name $next_value,);
+        impl_tuple_views!(($($name $value,)* $next_name $next_value,) ; $($rest)*);
+    };
+    (@impl $($name:ident $value:ident,)+) => {
+        impl<$($name: Raw),+> Raw for ($($name,)+) {
+            const RAW: RawTape = {
+                let mut raw = RawTape::new();
+                $(raw.concat(&$name::RAW);)+
+                raw
+            };
+        }
+
         impl<$($name: View),+> View for ($($name,)+) {
             fn push(self, dynamic: &mut DynamicValues) {
                 let ($($value,)+) = self;
@@ -173,139 +160,25 @@ macro_rules! impl_view_tuple {
     };
 }
 
-impl_view_tuple!((A, a));
-impl_view_tuple!((A, a), (B, b));
-impl_view_tuple!((A, a), (B, b), (C, c));
-impl_view_tuple!((A, a), (B, b), (C, c), (D, d));
-impl_view_tuple!((A, a), (B, b), (C, c), (D, d), (E, e));
-impl_view_tuple!((A, a), (B, b), (C, c), (D, d), (E, e), (F, f));
-impl_view_tuple!((A, a), (B, b), (C, c), (D, d), (E, e), (F, f), (G, g));
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k),
-    (L, l)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k),
-    (L, l),
-    (M, m)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k),
-    (L, l),
-    (M, m),
-    (N, n)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k),
-    (L, l),
-    (M, m),
-    (N, n),
-    (O, o)
-);
-impl_view_tuple!(
-    (A, a),
-    (B, b),
-    (C, c),
-    (D, d),
-    (E, e),
-    (F, f),
-    (G, g),
-    (H, h),
-    (I, i),
-    (J, j),
-    (K, k),
-    (L, l),
-    (M, m),
-    (N, n),
-    (O, o),
-    (P, p)
-);
+impl_tuple_views! {
+    ();
+    A a,
+    B b,
+    C c,
+    D d,
+    E e,
+    F f,
+    G g,
+    H h,
+    I i,
+    J j,
+    K k,
+    L l,
+    M m,
+    N n,
+    O o,
+    P p,
+}
 
 /// A static element tag marker.
 pub trait TagName {
@@ -364,7 +237,7 @@ pub struct ViewChild;
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
-    use crate::{IntoDynNode, TemplateRawOp};
+    use crate::{IntoDynNode, template::TemplateRawOp};
 
     use super::{DynamicValues, Raw, RawTape, View};
 
@@ -389,11 +262,7 @@ pub(crate) mod dynamic_node {
     }
 
     impl<N, Marker> Raw for DynNode<N, Marker> {
-        const RAW: RawTape = {
-            let mut raw = RawTape::new();
-            raw.push(TemplateRawOp::DynamicNode);
-            raw
-        };
+        const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicNode);
     }
 
     impl<N, Marker> View for DynNode<N, Marker>
@@ -461,7 +330,7 @@ pub trait AttributeDescriptor {
     const NAME: &'static str;
 
     /// Attribute namespace.
-    const NAMESPACE: TemplateRawAttrNamespace = None;
+    const NAMESPACE: Option<&'static str> = None;
 
     /// Whether this dynamic attribute should always be written.
     const VOLATILE: bool = false;
@@ -476,15 +345,11 @@ pub const fn attr<A: AttributeDescriptor + StaticAttributeValue>() -> Attr<A> {
 }
 
 impl<A: AttributeDescriptor + StaticAttributeValue> Raw for Attr<A> {
-    const RAW: RawTape = {
-        let mut raw = RawTape::new();
-        raw.push(TemplateRawOp::StaticAttr {
-            name: A::NAME,
-            value: A::VALUE,
-            namespace: A::NAMESPACE,
-        });
-        raw
-    };
+    const RAW: RawTape = RawTape::single(TemplateRawOp::StaticAttr {
+        name: A::NAME,
+        value: A::VALUE,
+        namespace: A::NAMESPACE,
+    });
 }
 
 impl<A: AttributeDescriptor + StaticAttributeValue> View for Attr<A> {}
@@ -512,7 +377,7 @@ where
     Value: StaticAttributeValue,
 {
     const NAME: &'static str = Descriptor::NAME;
-    const NAMESPACE: TemplateRawAttrNamespace = Descriptor::NAMESPACE;
+    const NAMESPACE: Option<&'static str> = Descriptor::NAMESPACE;
     const VOLATILE: bool = Descriptor::VOLATILE;
 }
 
@@ -563,11 +428,7 @@ pub fn attr_dyn<T>(
 }
 
 impl Raw for DynAttrs {
-    const RAW: RawTape = {
-        let mut raw = RawTape::new();
-        raw.push(TemplateRawOp::DynamicAttr);
-        raw
-    };
+    const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicAttr);
 }
 
 impl View for DynAttrs {
@@ -664,11 +525,7 @@ pub const fn text<T: StaticText>() -> Text<T> {
 }
 
 impl<T: StaticText> Raw for Text<T> {
-    const RAW: RawTape = {
-        let mut raw = RawTape::new();
-        raw.push(TemplateRawOp::StaticText { value: T::TEXT });
-        raw
-    };
+    const RAW: RawTape = RawTape::single(TemplateRawOp::StaticText { value: T::TEXT });
 }
 
 impl<T: StaticText> View for Text<T> {}
@@ -686,30 +543,13 @@ pub fn text_dyn(value: impl ToString) -> DynText {
 }
 
 impl Raw for DynText {
-    const RAW: RawTape = {
-        let mut raw = RawTape::new();
-        raw.push(TemplateRawOp::DynamicNode);
-        raw
-    };
+    const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicNode);
 }
 
 impl View for DynText {
     fn push(self, dynamic: &mut DynamicValues) {
         dynamic.push_node(DynamicNode::Text(VText::new(self.value)));
     }
-}
-
-#[doc(hidden)]
-pub(crate) fn internal_node_dyn<N, Marker>(node: N) -> dynamic_node::DynNode<N, Marker>
-where
-    N: IntoDynNode<Marker>,
-{
-    dynamic_node::node_dyn(node)
-}
-
-#[doc(hidden)]
-pub(crate) fn internal_attrs_dyn(attrs: Box<[Attribute]>) -> DynAttrs {
-    attrs_dyn(attrs)
 }
 
 /// A typed view with a root key.
@@ -771,19 +611,12 @@ impl<V: View> View for Keyed<V> {
 #[macro_export]
 macro_rules! static_text {
     ($value:literal) => {{
-        #[doc(hidden)]
-        mod __dioxus_static_text {
-            pub(super) fn view() -> impl $crate::view::View {
-                struct Text;
-                impl $crate::view::StaticText for Text {
-                    const TEXT: &'static str = $value;
-                }
-
-                $crate::view::text::<Text>()
-            }
+        struct Text;
+        impl $crate::view::StaticText for Text {
+            const TEXT: &'static str = $value;
         }
 
-        __dioxus_static_text::view()
+        $crate::view::text::<Text>()
     }};
     ($name:ident, $value:literal) => {
         $crate::static_text!(pub struct $name, $value);

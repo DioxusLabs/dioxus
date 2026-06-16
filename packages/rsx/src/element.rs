@@ -106,12 +106,7 @@ impl Parse for Element {
 
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let body = TemplateBody {
-            roots: vec![BodyNode::Element(self.clone())],
-            template_idx: Default::default(),
-            diagnostics: Diagnostics::new(),
-        };
-        let builder = crate::view_builder::ViewBuilderPieces::from_body(&body);
+        let builder = self.view_builder_pieces();
         let definitions = builder.definitions();
         let view = builder.view_expr();
 

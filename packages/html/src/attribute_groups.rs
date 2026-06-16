@@ -117,7 +117,14 @@ macro_rules! attribute_group {
             None
         }
 
-        impl_extension_attributes![$mod { $($(#[$attr])* $name $(: $(no-$alias)? $js_name)? $(in $ns)? ,)* }];
+        impl_extension_attributes![$mod {
+            $(
+                $(#[$attr])*
+                $(#[attr(name = $js_name)])?
+                $(#[attr(namespace = $ns)])?
+                $name,
+            )*
+        }];
     };
 }
 

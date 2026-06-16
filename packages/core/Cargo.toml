@@ -3,7 +3,7 @@
 # (`#![feature(coverage_attribute)]` and `#[coverage(off)]`) on
 # unreachable-by-design code. Stable builds see no effect; coverage runs
 # enable the cfg via `RUSTFLAGS="--cfg coverage_nightly"`.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)', 'cfg(fuzzing)'] }
 
 [package]
 name = "dioxus-core"

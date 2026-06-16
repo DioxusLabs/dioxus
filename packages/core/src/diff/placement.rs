@@ -122,6 +122,32 @@ pub(super) fn insertion_site_for_slot(
     insertion_site_for_slot(parent_mount, slot.root_slot(), skip, dom, context)
 }
 
+pub(super) fn insertion_site_for_loaded_static_slot(
+    parent_mount: MountId,
+    root_idx: usize,
+    parent_vnode: &VNode,
+    slot: DynamicNodeSlot<'_>,
+    skip: &[MountId],
+    dom: &VirtualDom,
+    context: Option<DiffContext<'_>>,
+) -> InsertionSite {
+    if let Some(enclosing) = dom.mounted_root_node(parent_mount, root_idx)
+        && dom.element_exists_for_mount(parent_mount, enclosing)
+    {
+        if let Some(id) =
+            adjacent_dynamic_sibling_after_in_vnode(parent_vnode, parent_mount, slot, skip, dom)
+        {
+            return InsertionSite::AtAnchor(DomAnchor::Before(id));
+        }
+        return InsertionSite::Slot {
+            parent: enclosing.element_id(),
+            placement: slot.placement(),
+        };
+    }
+
+    insertion_site_for_slot(parent_mount, slot, skip, dom, context)
+}
+
 pub(super) fn create_at_site(
     content: &[VNode],
     parent: Option<MountRef>,
@@ -251,30 +277,40 @@ fn adjacent_dynamic_sibling_after(
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
     parent_views(dom, parent_mount, context).find_map(|parent_vnode| {
-        let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or_else(|| slot);
-        let mut site = None;
-        for sibling in dynamic_node_slots(parent_vnode) {
-            if sibling.index() <= active_slot.index() {
-                continue;
-            }
-            if sibling.parent_path() == active_slot.parent_path()
-                && !sibling.shares_insertion_position(active_slot)
-            {
-                break;
-            }
-            if !sibling.shares_insertion_position(active_slot) {
-                continue;
-            }
-            if let Some(id) =
-                first_live_dynamic_slot(parent_vnode, parent_mount, sibling.index(), skip, dom)
-            {
-                site = Some(id);
-                break;
-            }
-        }
-
-        site
+        adjacent_dynamic_sibling_after_in_vnode(parent_vnode, parent_mount, slot, skip, dom)
     })
+}
+
+fn adjacent_dynamic_sibling_after_in_vnode(
+    parent_vnode: &VNode,
+    parent_mount: MountId,
+    slot: DynamicNodeSlot<'_>,
+    skip: &[MountId],
+    dom: &VirtualDom,
+) -> Option<ElementId> {
+    let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or_else(|| slot);
+    let mut site = None;
+    for sibling in dynamic_node_slots(parent_vnode) {
+        if sibling.index() <= active_slot.index() {
+            continue;
+        }
+        if sibling.parent_path() == active_slot.parent_path()
+            && !sibling.shares_insertion_position(active_slot)
+        {
+            break;
+        }
+        if !sibling.shares_insertion_position(active_slot) {
+            continue;
+        }
+        if let Some(id) =
+            first_live_dynamic_slot(parent_vnode, parent_mount, sibling.index(), skip, dom)
+        {
+            site = Some(id);
+            break;
+        }
+    }
+
+    site
 }
 
 fn first_live_dynamic_slot(

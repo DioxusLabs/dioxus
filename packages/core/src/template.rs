@@ -471,8 +471,7 @@ impl TemplateOp {
 }
 
 /// Maximum packed template storage capacity.
-#[doc(hidden)]
-pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
+pub(crate) const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
 const TEMPLATE_PATH_STACK_CAP: usize = 129;
 
@@ -480,111 +479,148 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 ///
 /// The RSX macro emits a `static TemplateStorage<N>` from a raw operation tape, then calls
 /// [`Self::as_template`] to expose the compact [`Template`] used by the runtime.
-#[doc(hidden)]
 #[derive(Clone, Copy)]
-pub struct TemplateStorage<const CAP: usize> {
+pub(crate) struct TemplateStorage<const CAP: usize> {
     ops: ConstVec<TemplateOp, CAP>,
     strings: StringInterner<CAP>,
     dynamics: ConstVec<TemplatePath, CAP>,
 }
 
-impl<const CAP: usize> TemplateStorage<CAP> {
-    /// Lower a raw template tape into packed storage in const context.
-    pub const fn build(raw: &'static [TemplateRawOp]) -> Self {
-        let mut storage = Self {
-            ops: ConstVec::new_with_max_size(),
-            strings: StringInterner::new(),
-            dynamics: ConstVec::new_with_max_size(),
-        };
+struct RawTemplateLoweringCursor {
+    enter_stack: [usize; TEMPLATE_PATH_STACK_CAP],
+    element_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
+    next_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
+    stack_pointer: usize,
+}
 
-        let mut enter_stack = [0usize; TEMPLATE_PATH_STACK_CAP];
-        let mut element_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
+impl RawTemplateLoweringCursor {
+    const fn new() -> Self {
         let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
         next_paths[0] = TemplatePath::root(0);
-        let mut stack_pointer = 0usize;
+        Self {
+            enter_stack: [0; TEMPLATE_PATH_STACK_CAP],
+            element_paths: [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP],
+            next_paths,
+            stack_pointer: 0,
+        }
+    }
 
+    const fn open_element(&mut self, enter_index: usize) {
+        if self.stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
+            panic!("template path stack capacity exceeded");
+        }
+
+        let path = self.next_paths[self.stack_pointer];
+        self.next_paths[self.stack_pointer] = path.next_sibling();
+        self.element_paths[self.stack_pointer] = path;
+        self.enter_stack[self.stack_pointer] = enter_index;
+        self.next_paths[self.stack_pointer + 1] = path.next_child();
+        self.stack_pointer += 1;
+    }
+
+    const fn close_element(&mut self) -> usize {
+        if self.stack_pointer == 0 {
+            panic!("template close op without matching open op");
+        }
+
+        self.stack_pointer -= 1;
+        self.enter_stack[self.stack_pointer]
+    }
+
+    const fn current_element_path(&self) -> TemplatePath {
+        if self.stack_pointer == 0 {
+            panic!("dynamic attr raw op without an open element");
+        }
+
+        self.element_paths[self.stack_pointer - 1]
+    }
+
+    const fn next_node_path(&mut self) -> TemplatePath {
+        let path = self.next_paths[self.stack_pointer];
+        self.next_paths[self.stack_pointer] = path.next_sibling();
+        path
+    }
+
+    const fn finish(&self) {
+        if self.stack_pointer != 0 {
+            panic!("template raw ops ended with unclosed elements");
+        }
+    }
+}
+
+macro_rules! lower_raw_template {
+    ($raw:expr, $builder:ident) => {{
+        let mut cursor = RawTemplateLoweringCursor::new();
         let mut index = 0usize;
-        while index < raw.len() {
-            match raw[index] {
+        while index < $raw.len() {
+            match $raw[index] {
                 TemplateRawOp::OpenElement { tag, namespace } => {
-                    if stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
-                        panic!("template path stack capacity exceeded");
-                    }
-
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    element_paths[stack_pointer] = path;
-                    enter_stack[stack_pointer] = storage.ops.len();
-                    next_paths[stack_pointer + 1] = path.next_child();
-                    stack_pointer += 1;
-
-                    storage.ops = storage.ops.push(TemplateOp::enter(0, namespace.is_some()));
-                    storage.push_static(tag);
+                    cursor.open_element($builder.ops_len());
+                    $builder.push_op(TemplateOp::enter(0, namespace.is_some()));
+                    $builder.push_static(tag);
                     if let Some(namespace) = namespace {
-                        storage.push_static(namespace);
+                        $builder.push_static(namespace);
                     }
                 }
                 TemplateRawOp::CloseElement => {
-                    if stack_pointer == 0 {
-                        panic!("template close op without matching open op");
-                    }
-
-                    stack_pointer -= 1;
-                    let enter_index = enter_stack[stack_pointer];
-                    let namespace = storage.ops.at(enter_index).has_namespace();
-                    let skip = storage.ops.len() - enter_index;
+                    let enter_index = cursor.close_element();
+                    let namespace = $builder.op_at(enter_index).has_namespace();
+                    let skip = $builder.ops_len() - enter_index;
                     if skip > TemplateOp::MAX_CAP {
                         panic!("template op skip exceeds packed op capacity");
                     }
-                    storage.ops = storage
-                        .ops
-                        .set(enter_index, TemplateOp::enter(skip as u16, namespace));
+                    $builder.set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
                 }
                 TemplateRawOp::StaticAttr {
                     name,
                     value,
                     namespace,
                 } => {
-                    storage.ops = storage.ops.push(TemplateOp::attr(namespace.is_some()));
-                    storage.push_static(name);
-                    storage.push_static(value);
+                    $builder.push_op(TemplateOp::attr(namespace.is_some()));
+                    $builder.push_static(name);
+                    $builder.push_static(value);
                     if let Some(namespace) = namespace {
-                        storage.push_static(namespace);
+                        $builder.push_static(namespace);
                     }
                 }
                 TemplateRawOp::DynamicAttr => {
-                    if stack_pointer == 0 {
-                        panic!("dynamic attr raw op without an open element");
-                    }
-                    storage.ops = storage.ops.push(TemplateOp::dynamic());
-                    storage.dynamics = storage.dynamics.push(element_paths[stack_pointer - 1]);
+                    $builder.push_op(TemplateOp::dynamic());
+                    $builder.push_dynamic(cursor.current_element_path());
                 }
                 TemplateRawOp::StaticText { value } => {
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    storage.ops = storage.ops.push(TemplateOp::text());
-                    storage.push_static(value);
+                    let _ = cursor.next_node_path();
+                    $builder.push_op(TemplateOp::text());
+                    $builder.push_static(value);
                 }
                 TemplateRawOp::DynamicNode => {
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    storage.ops = storage.ops.push(TemplateOp::text());
-                    storage.ops = storage.ops.push(TemplateOp::dynamic());
-                    storage.dynamics = storage.dynamics.push(path);
+                    let path = cursor.next_node_path();
+                    $builder.push_op(TemplateOp::text());
+                    $builder.push_op(TemplateOp::dynamic());
+                    $builder.push_dynamic(path);
                 }
             }
             index += 1;
         }
 
-        if stack_pointer != 0 {
-            panic!("template raw ops ended with unclosed elements");
-        }
+        cursor.finish();
+    }};
+}
 
+impl<const CAP: usize> TemplateStorage<CAP> {
+    /// Lower a raw template tape into packed storage in const context.
+    pub(crate) const fn build(raw: &'static [TemplateRawOp]) -> Self {
+        let mut storage = Self {
+            ops: ConstVec::new_with_max_size(),
+            strings: StringInterner::new(),
+            dynamics: ConstVec::new_with_max_size(),
+        };
+
+        lower_raw_template!(raw, storage);
         storage
     }
 
     /// Return this storage as a compact template.
-    pub const fn as_template(&'static self) -> Template {
+    pub(crate) const fn as_template(&'static self) -> Template {
         Template::new(
             self.ops.as_slice(),
             self.strings.as_static(),
@@ -597,6 +633,75 @@ impl<const CAP: usize> TemplateStorage<CAP> {
         self.strings = strings;
         self.ops = self.ops.push(TemplateOp::static_text(id));
     }
+
+    const fn ops_len(&self) -> usize {
+        self.ops.len()
+    }
+
+    const fn op_at(&self, index: usize) -> TemplateOp {
+        self.ops.at(index)
+    }
+
+    const fn push_op(&mut self, op: TemplateOp) {
+        self.ops = self.ops.push(op);
+    }
+
+    const fn set_op(&mut self, index: usize, op: TemplateOp) {
+        self.ops = self.ops.set(index, op);
+    }
+
+    const fn push_dynamic(&mut self, path: TemplatePath) {
+        self.dynamics = self.dynamics.push(path);
+    }
+}
+
+struct RuntimeTemplateBuilder {
+    ops: Vec<TemplateOp>,
+    strings: RuntimeStringInterner,
+    dynamics: Vec<TemplatePath>,
+}
+
+impl RuntimeTemplateBuilder {
+    fn new() -> Self {
+        Self {
+            ops: Vec::new(),
+            strings: RuntimeStringInterner::new(),
+            dynamics: Vec::new(),
+        }
+    }
+
+    fn ops_len(&self) -> usize {
+        self.ops.len()
+    }
+
+    fn op_at(&self, index: usize) -> TemplateOp {
+        self.ops[index]
+    }
+
+    fn push_op(&mut self, op: TemplateOp) {
+        self.ops.push(op);
+    }
+
+    fn set_op(&mut self, index: usize, op: TemplateOp) {
+        self.ops[index] = op;
+    }
+
+    fn push_static(&mut self, value: &'static str) {
+        let id = self.strings.intern(value);
+        self.ops.push(TemplateOp::static_text(id));
+    }
+
+    fn push_dynamic(&mut self, path: TemplatePath) {
+        self.dynamics.push(path);
+    }
+
+    fn into_template(self) -> Template {
+        Template::new(
+            Box::leak(self.ops.into_boxed_slice()),
+            self.strings.leak(),
+            Box::leak(self.dynamics.into_boxed_slice()),
+        )
+    }
 }
 
 impl Template {
@@ -604,106 +709,11 @@ impl Template {
     ///
     /// This mirrors [`TemplateStorage::build`] without allocating the max-capacity
     /// const storage on the runtime stack.
-    #[doc(hidden)]
-    pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
-        let mut ops = Vec::new();
-        let mut strings = RuntimeStringInterner::new();
-        let mut dynamics = Vec::new();
-
-        let mut enter_stack = [0usize; TEMPLATE_PATH_STACK_CAP];
-        let mut element_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
-        let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
-        next_paths[0] = TemplatePath::root(0);
-        let mut stack_pointer = 0usize;
-
-        for raw_op in raw {
-            match *raw_op {
-                TemplateRawOp::OpenElement { tag, namespace } => {
-                    if stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
-                        panic!("template path stack capacity exceeded");
-                    }
-
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    element_paths[stack_pointer] = path;
-                    enter_stack[stack_pointer] = ops.len();
-                    next_paths[stack_pointer + 1] = path.next_child();
-                    stack_pointer += 1;
-
-                    ops.push(TemplateOp::enter(0, namespace.is_some()));
-                    push_runtime_static(&mut ops, &mut strings, tag);
-                    if let Some(namespace) = namespace {
-                        push_runtime_static(&mut ops, &mut strings, namespace);
-                    }
-                }
-                TemplateRawOp::CloseElement => {
-                    if stack_pointer == 0 {
-                        panic!("template close op without matching open op");
-                    }
-
-                    stack_pointer -= 1;
-                    let enter_index = enter_stack[stack_pointer];
-                    let namespace = ops[enter_index].has_namespace();
-                    let skip = ops.len() - enter_index;
-                    if skip > TemplateOp::MAX_CAP {
-                        panic!("template op skip exceeds packed op capacity");
-                    }
-                    ops[enter_index] = TemplateOp::enter(skip as u16, namespace);
-                }
-                TemplateRawOp::StaticAttr {
-                    name,
-                    value,
-                    namespace,
-                } => {
-                    ops.push(TemplateOp::attr(namespace.is_some()));
-                    push_runtime_static(&mut ops, &mut strings, name);
-                    push_runtime_static(&mut ops, &mut strings, value);
-                    if let Some(namespace) = namespace {
-                        push_runtime_static(&mut ops, &mut strings, namespace);
-                    }
-                }
-                TemplateRawOp::DynamicAttr => {
-                    if stack_pointer == 0 {
-                        panic!("dynamic attr raw op without an open element");
-                    }
-                    ops.push(TemplateOp::dynamic());
-                    dynamics.push(element_paths[stack_pointer - 1]);
-                }
-                TemplateRawOp::StaticText { value } => {
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    ops.push(TemplateOp::text());
-                    push_runtime_static(&mut ops, &mut strings, value);
-                }
-                TemplateRawOp::DynamicNode => {
-                    let path = next_paths[stack_pointer];
-                    next_paths[stack_pointer] = path.next_sibling();
-                    ops.push(TemplateOp::text());
-                    ops.push(TemplateOp::dynamic());
-                    dynamics.push(path);
-                }
-            }
-        }
-
-        if stack_pointer != 0 {
-            panic!("template raw ops ended with unclosed elements");
-        }
-
-        Self::new(
-            Box::leak(ops.into_boxed_slice()),
-            strings.leak(),
-            Box::leak(dynamics.into_boxed_slice()),
-        )
+    pub(crate) fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
+        let mut builder = RuntimeTemplateBuilder::new();
+        lower_raw_template!(raw, builder);
+        builder.into_template()
     }
-}
-
-fn push_runtime_static(
-    ops: &mut Vec<TemplateOp>,
-    strings: &mut RuntimeStringInterner,
-    value: &'static str,
-) {
-    let id = strings.intern(value);
-    ops.push(TemplateOp::static_text(id));
 }
 
 impl std::fmt::Debug for TemplateOp {
@@ -717,7 +727,7 @@ impl std::fmt::Debug for TemplateOp {
 /// This is the core innovation in Dioxus. Most UIs are made of static nodes, yet participate in diffing like any
 /// dynamic node. This struct can be created at compile time. It promises that its pointer is unique, allow Dioxus to use
 /// its static description of the UI to skip immediately to the dynamic nodes during diffing.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
     /// Flat static template operations.
@@ -749,7 +759,7 @@ pub struct Template {
 impl Template {
     /// Create a new flat template with the given ops, strings, and dynamic paths.
     /// The hash is computed automatically from the template content.
-    pub const fn new(
+    pub(crate) const fn new(
         ops: &'static [TemplateOp],
         strings: StaticStringInterner,
         dynamics: &'static [TemplatePath],

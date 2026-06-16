@@ -33,7 +33,6 @@ mod literal;
 mod location;
 mod partial_closure;
 mod util;
-mod view_builder;
 
 // Re-export the namespaces into each other
 pub use diagnostics::Diagnostics;

@@ -73,6 +73,17 @@ impl Properties for () {
     }
 }
 
+/// Create the generated props builder for a function component.
+#[doc(hidden)]
+pub fn fc_to_builder<Props, Marker>(
+    _component: impl ComponentFunction<Props, Marker>,
+) -> Props::Builder
+where
+    Props: Properties,
+{
+    Props::builder()
+}
+
 /// Root properties never need to be memoized, so we can use a dummy implementation.
 pub(crate) struct RootProps<P>(pub P);
 
@@ -105,15 +116,6 @@ impl EmptyBuilder {
     pub fn build(self) {}
 }
 
-/// This utility function launches the builder method so that the rsx! macro can use the typed-builder pattern
-/// to initialize a component's props.
-pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as Properties>::Builder
-where
-    P: Properties,
-{
-    P::builder()
-}
-
 /// Any component that implements the `ComponentFn` trait can be used as a component.
 ///
 /// This trait is automatically implemented for functions that are in one of the following forms:
@@ -143,6 +145,65 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
 
     /// Convert the component to a function that takes props and returns an element.
     fn rebuild(&self, props: Props) -> Element;
+}
+
+/// A value that can create a [`VComponent`] for a component render function.
+///
+/// Most props use the blanket implementation for [`Properties`]. Generated props with child-owned
+/// fields can implement this trait to preserve their owner wrapper while still using
+/// [`ComponentFunctionExt::with_props`].
+pub trait IntoVComponent<RenderFn, Marker = ()> {
+    /// Convert these props into a [`VComponent`] rendered by `render_fn`.
+    fn into_vcomponent_for(self, render_fn: RenderFn) -> VComponent;
+}
+
+impl<Props, RenderFn, Marker: 'static> IntoVComponent<RenderFn, Marker> for Props
+where
+    Props: Properties,
+    RenderFn: ComponentFunction<Props, Marker>,
+{
+    fn into_vcomponent_for(self, render_fn: RenderFn) -> VComponent {
+        Properties::into_vcomponent(self, render_fn)
+    }
+}
+
+/// Extension methods for function components.
+///
+/// This lets handwritten builder code start from the component function directly:
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn Greeting(#[props(into)] name: String) -> Element {
+///     rsx! { "Hello {name}" }
+/// }
+///
+/// let props = Greeting.builder().name("Ada").build();
+/// let component = Greeting.with_props(props);
+/// ```
+pub trait ComponentFunctionExt<Props, Marker>: ComponentFunction<Props, Marker> + Sized
+where
+    Props: Properties,
+{
+    /// Create the generated props builder for this component.
+    fn builder(self) -> Props::Builder {
+        Props::builder()
+    }
+
+    /// Create a [`VComponent`] from already-built props.
+    fn with_props<ComponentProps, ComponentPropsMarker>(self, props: ComponentProps) -> VComponent
+    where
+        ComponentProps: IntoVComponent<Self, ComponentPropsMarker>,
+    {
+        props.into_vcomponent_for(self)
+    }
+}
+
+impl<F, P, M> ComponentFunctionExt<P, M> for F
+where
+    F: ComponentFunction<P, M>,
+    P: Properties,
+{
 }
 
 /// Accept any callbacks that take props

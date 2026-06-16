@@ -1,5 +1,4 @@
-use dioxus_core::internal::HotReloadDynamicSlot;
-use dioxus_core::{Template, TemplateRawOp};
+use dioxus_core::internal::{HotReloadDynamicSlot, TemplateRawOp};
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use internment::Intern;
@@ -29,7 +28,7 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
 }
 
 pub(crate) struct HotReloadTemplateParts<'a> {
-    pub(crate) template: Template,
+    pub(crate) raw_ops: &'static [TemplateRawOp],
     pub(crate) dynamic_slots: Vec<HotReloadDynamicSlot>,
     pub(crate) dynamic_nodes: Vec<&'a BodyNode>,
     pub(crate) dynamic_attributes: Vec<&'a Attribute>,
@@ -44,7 +43,7 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
     let raw_ops = intern(&*builder.raw_ops);
 
     Some(HotReloadTemplateParts {
-        template: Template::from_raw_ops(raw_ops),
+        raw_ops,
         dynamic_slots: builder.dynamic_slots,
         dynamic_nodes: builder.dynamic_nodes,
         dynamic_attributes: builder.dynamic_attributes,

@@ -353,18 +353,18 @@ pub struct TemplateGlobalKey {
 
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct HotReloadedTemplate {
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
     pub component_values: Vec<HotReloadLiteral>,
     dynamic_slots: Vec<HotReloadDynamicSlot>,
-    pub template: Template,
+    template: Template,
 }
 
 impl HotReloadedTemplate {
-    pub fn new(
+    fn new(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -380,6 +380,24 @@ impl HotReloadedTemplate {
             dynamic_slots,
             template,
         }
+    }
+
+    pub fn from_raw_ops(
+        key: Option<FmtedSegments>,
+        dynamic_nodes: Vec<HotReloadDynamicNode>,
+        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+        component_values: Vec<HotReloadLiteral>,
+        raw_ops: &'static [crate::template::TemplateRawOp],
+        dynamic_slots: Vec<HotReloadDynamicSlot>,
+    ) -> Self {
+        Self::new(
+            key,
+            dynamic_nodes,
+            dynamic_attributes,
+            component_values,
+            Template::from_raw_ops(raw_ops),
+            dynamic_slots,
+        )
     }
 
     pub fn from_template(
@@ -413,6 +431,73 @@ impl HotReloadedTemplate {
             template,
             dynamic_slots,
         )
+    }
+
+    pub fn root_count(&self) -> usize {
+        self.template.root_count()
+    }
+
+    pub fn ops(&self) -> &'static [crate::TemplateOp] {
+        self.template.ops()
+    }
+
+    pub fn strings(&self) -> crate::StaticStringInterner {
+        self.template.strings()
+    }
+
+    pub fn dynamics(&self) -> &'static [crate::TemplatePath] {
+        self.template.dynamics()
+    }
+
+    pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
+        self.template.dynamic_is_node(dynamic_idx)
+    }
+
+    pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
+        self.template.dynamic_is_attr(dynamic_idx)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct SerializedTemplate {
+            #[serde(deserialize_with = "crate::template::deserialize_leaky")]
+            ops: &'static [crate::TemplateOp],
+            strings: crate::StaticStringInterner,
+            #[serde(deserialize_with = "crate::template::deserialize_leaky")]
+            dynamics: &'static [crate::TemplatePath],
+            hash: u64,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct SerializedHotReloadedTemplate {
+            key: Option<FmtedSegments>,
+            dynamic_nodes: Vec<HotReloadDynamicNode>,
+            dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+            component_values: Vec<HotReloadLiteral>,
+            dynamic_slots: Vec<HotReloadDynamicSlot>,
+            template: SerializedTemplate,
+        }
+
+        let serialized = SerializedHotReloadedTemplate::deserialize(deserializer)?;
+        let _serialized_hash = serialized.template.hash;
+        Ok(Self::new(
+            serialized.key,
+            serialized.dynamic_nodes,
+            serialized.dynamic_attributes,
+            serialized.component_values,
+            Template::new(
+                serialized.template.ops,
+                serialized.template.strings,
+                serialized.template.dynamics,
+            ),
+            serialized.dynamic_slots,
+        ))
     }
 }
 

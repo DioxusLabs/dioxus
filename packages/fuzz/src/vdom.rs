@@ -7,10 +7,10 @@ use crate::{
     model::*,
 };
 use dioxus::prelude::*;
+use dioxus_core::internal::{TemplateRawOp, build_template_from_raw_ops};
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime,
-    TEMPLATE_STORAGE_MAX_CAP, Task, Template, TemplateRawOp, TemplateStorage, VComponent, VNode,
-    VText,
+    Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
+    VComponent, VNode, VText,
 };
 #[cfg(test)]
 use dioxus_core::{TemplateOp, TemplatePath};
@@ -160,6 +160,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
         wake_mutation,
         wake_applied,
     );
+    let wake_not_applied = false;
     rsx! {
         SuspenseBoundary {
             fallback: |_| rsx! { GeneratedSuspenseFallback {} },
@@ -170,7 +171,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
                 required_ready_wake_count,
                 mode,
                 wake_mutation: WakeMutationSpec::None,
-                wake_applied: false,
+                wake_applied: wake_not_applied,
                 suspense_ancestors,
                 child: VNodeSpec::minimal(),
             }
@@ -612,10 +613,7 @@ fn compile_flat_template(roots: &[TemplateNodeShape]) -> Template {
     let mut builder = FuzzRawTemplateBuilder::default();
     builder.push_roots(roots);
     let raw_ops = Box::leak(builder.raw_ops.into_boxed_slice());
-    let storage = Box::leak(Box::new(
-        TemplateStorage::<TEMPLATE_STORAGE_MAX_CAP>::build(raw_ops),
-    ));
-    storage.as_template()
+    build_template_from_raw_ops(raw_ops)
 }
 
 #[derive(Default)]

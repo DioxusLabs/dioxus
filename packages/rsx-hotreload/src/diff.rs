@@ -232,12 +232,12 @@ impl HotReloadResult {
 
         let key = self.hot_reload_key(new)?;
 
-        let template = HotReloadedTemplate::new(
+        let template = HotReloadedTemplate::from_raw_ops(
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,
             literal_component_properties,
-            parts.template,
+            parts.raw_ops,
             parts.dynamic_slots,
         );
 

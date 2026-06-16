@@ -81,6 +81,16 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
+    #[doc(hidden)]
+    pub use crate::root_wrapper::component_element;
+    #[doc(hidden)]
+    pub use crate::template::{TemplateRawAttrNamespace, TemplateRawOp};
+
+    #[cfg(fuzzing)]
+    #[doc(hidden)]
+    pub fn build_template_from_raw_ops(raw: &'static [TemplateRawOp]) -> crate::Template {
+        crate::Template::from_raw_ops(raw)
+    }
 
     #[doc(hidden)]
     pub type DynamicNodeView<N, Marker = ()> = crate::view::dynamic_node::DynNode<N, Marker>;
@@ -90,12 +100,12 @@ pub mod internal {
     where
         N: crate::nodes::IntoDynNode<Marker>,
     {
-        crate::view::internal_node_dyn(node)
+        crate::view::dynamic_node::node_dyn(node)
     }
 
     #[doc(hidden)]
     pub fn attrs_dyn(attrs: Box<[crate::nodes::Attribute]>) -> crate::view::DynAttrs {
-        crate::view::internal_attrs_dyn(attrs)
+        crate::view::attrs_dyn(attrs)
     }
 
     #[allow(non_snake_case)]
@@ -153,17 +163,16 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, DecodedTemplateOp, DynamicNode, DynamicValue, Element, ElementId,
-    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MultiTargetWriter, MultiWriter,
-    Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
-    ReactiveContext, RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId,
-    ScopeState, SpawnIfAsync, StaticStringInterner, StringInterner, SubscriberList, Subscribers,
-    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-    SuspenseContext, TEMPLATE_STORAGE_MAX_CAP, Task, Template, TemplateOp, TemplatePath,
-    TemplateRawAttrNamespace, TemplateRawOp, TemplateStorage, TemplateStringSpan, VComponent,
-    VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
-    consume_context_from_scope, current_owner, current_scope_id, fc_to_builder, generation,
+    ComponentFunction, ComponentFunctionExt, DecodedTemplateOp, DynamicNode, DynamicValue, Element,
+    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
+    IntoAttributeValue, IntoDynNode, IntoVComponent, LaunchConfig, ListenerCallback, MarkerWrapper,
+    MultiTargetWriter, MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
+    Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId, Result, Runtime,
+    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, StaticStringInterner, StringInterner,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateOp, TemplatePath,
+    TemplateStringSpan, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow,
+    consume_context, consume_context_from_scope, current_owner, current_scope_id, generation,
     has_context, needs_update, needs_update_any, parent_scope, provide_context,
     provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
     schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
@@ -171,12 +180,15 @@ pub use crate::innerlude::{
     use_hook_with_cleanup, with_owner,
 };
 
+#[doc(hidden)]
+pub use crate::properties::fc_to_builder;
+
 pub use crate::view::{
     Attr, AttributeDescriptor, AttributeTarget, Built, ConstStatic, DynAttrs, DynText,
     DynamicValues, El, IntoAttributeBuilderValue, IntoChild, IntoKey, Keyed, RAW_TAPE_CAP, Raw,
-    RawTape, StaticAttr, StaticAttributeBuilderMarker, StaticAttributeValue,
-    StaticText, StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, keyed,
-    static_value, text, text_dyn,
+    RawTape, StaticAttr, StaticAttributeBuilderMarker, StaticAttributeValue, StaticText,
+    StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, keyed, static_value, text,
+    text_dyn,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

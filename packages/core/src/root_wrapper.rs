@@ -1,6 +1,7 @@
 use crate::{
     DynamicNode, DynamicValue, Element, ErrorBoundary, Properties, SuspenseBoundary, Template,
-    TemplateOp, TemplatePath, VComponent, VNode, fc_to_builder, properties::RootProps,
+    TemplateOp, TemplatePath, VComponent, VNode,
+    properties::{RootProps, fc_to_builder},
     string_interner::StaticStringInterner,
 };
 
@@ -36,5 +37,20 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                 .build()
                 .into_vcomponent(SuspenseBoundary),
         ))]),
+    ))
+}
+
+#[doc(hidden)]
+pub fn component_element(component: VComponent) -> Element {
+    static TEMPLATE: Template = Template::new(
+        &[TemplateOp::text(), TemplateOp::dynamic()],
+        StaticStringInterner::empty(),
+        &[TemplatePath::root(0)],
+    );
+
+    Element::Ok(VNode::new(
+        None,
+        TEMPLATE,
+        Box::new([DynamicValue::Node(DynamicNode::Component(component))]),
     ))
 }

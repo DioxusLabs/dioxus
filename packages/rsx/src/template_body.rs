@@ -1,10 +1,10 @@
 //! Lower parsed RSX bodies into typed view builders.
 
 use self::location::DynIdx;
-use crate::view_builder::ViewBuilderPieces;
 use crate::*;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
+use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
 use syn::parse_quote;
 
 /// A set of nodes in a template position
@@ -52,7 +52,7 @@ impl ToTokens for TemplateBody {
 
         let key_warnings = self.check_for_duplicate_keys();
 
-        let view = ViewBuilderPieces::from_body(&node);
+        let view = node.view_builder_pieces();
         let view_definitions = view.definitions();
         let view_expr = view.view_expr();
         let dynamic_text = view.dynamic_text_tokens().iter();
@@ -131,7 +131,382 @@ impl ToTokens for TemplateBody {
     }
 }
 
+pub(crate) struct ViewBuilderPieces {
+    definitions: Vec<TokenStream2>,
+    view: TokenStream2,
+    dynamic_text_tokens: Vec<TokenStream2>,
+    component_value_tokens: Vec<TokenStream2>,
+    hot_reload_dynamic_nodes: Vec<TokenStream2>,
+    hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    hot_reload_key: Option<TokenStream2>,
+}
+
+impl ViewBuilderPieces {
+    fn from_body(body: &TemplateBody) -> Self {
+        let mut builder = ViewBuilder::new();
+        let view = builder.visit_roots(&body.roots);
+        builder.finish(view)
+    }
+
+    fn from_element(element: &Element) -> Self {
+        let mut builder = ViewBuilder::new();
+        let view = builder.visit_element(element, true).expr;
+        builder.finish(view)
+    }
+
+    pub(crate) fn definitions(&self) -> impl Iterator<Item = &TokenStream2> {
+        self.definitions.iter()
+    }
+
+    pub(crate) fn view_expr(&self) -> &TokenStream2 {
+        &self.view
+    }
+
+    fn dynamic_text_tokens(&self) -> &[TokenStream2] {
+        &self.dynamic_text_tokens
+    }
+
+    fn hot_reload_template_tokens(&self, template: TokenStream2) -> TokenStream2 {
+        let key = self
+            .hot_reload_key
+            .as_ref()
+            .map(|key| quote! { Some(#key) })
+            .unwrap_or_else(|| quote! { None });
+        let dynamic_nodes = self.hot_reload_dynamic_nodes.iter();
+        let dyn_attrs = self.hot_reload_dynamic_attrs.iter();
+        let component_values = self.component_value_tokens.iter();
+
+        quote! {
+            dioxus_core::internal::HotReloadedTemplate::from_template(
+                #key,
+                vec![ #( #dynamic_nodes ),* ],
+                vec![ #( #dyn_attrs ),* ],
+                vec![ #( #component_values ),* ],
+                #template,
+            )
+        }
+    }
+}
+
+struct ViewExpr {
+    expr: TokenStream2,
+    child_arg: Option<TokenStream2>,
+}
+
+impl ViewExpr {
+    fn into_child_arg(self) -> TokenStream2 {
+        self.child_arg.unwrap_or(self.expr)
+    }
+}
+
+struct ViewBuilder {
+    definitions: Vec<TokenStream2>,
+    dynamic_node_count: usize,
+    dynamic_attr_count: usize,
+    dynamic_text_tokens: Vec<TokenStream2>,
+    component_value_tokens: Vec<TokenStream2>,
+    hot_reload_dynamic_nodes: Vec<TokenStream2>,
+    hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    hot_reload_key: Option<TokenStream2>,
+    next_marker: usize,
+}
+
+impl ViewBuilder {
+    fn new() -> Self {
+        Self {
+            definitions: Vec::new(),
+            dynamic_node_count: 0,
+            dynamic_attr_count: 0,
+            dynamic_text_tokens: Vec::new(),
+            component_value_tokens: Vec::new(),
+            hot_reload_dynamic_nodes: Vec::new(),
+            hot_reload_dynamic_attrs: Vec::new(),
+            hot_reload_key: None,
+            next_marker: 0,
+        }
+    }
+
+    fn finish(self, view: TokenStream2) -> ViewBuilderPieces {
+        ViewBuilderPieces {
+            definitions: self.definitions,
+            view,
+            dynamic_text_tokens: self.dynamic_text_tokens,
+            component_value_tokens: self.component_value_tokens,
+            hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
+            hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
+            hot_reload_key: self.hot_reload_key,
+        }
+    }
+
+    fn visit_roots(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
+        let roots = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| self.visit_node(node, index == 0).expr);
+
+        quote! { (#(#roots),*) }
+    }
+
+    fn visit_node(&mut self, node: &BodyNode, implicit_key: bool) -> ViewExpr {
+        match node {
+            BodyNode::Element(element) => self.visit_element(element, implicit_key),
+            BodyNode::Text(text) if text.is_static() => self.static_text(text),
+            BodyNode::Text(text) => {
+                self.allocate_formatted(&text.input);
+                self.dynamic_node(quote! { #text })
+            }
+            BodyNode::Component(component) => {
+                let literal_ids = self.component_literal_ids(component, implicit_key);
+                self.dynamic_node(component.to_tokens_with_literal_ids(&literal_ids))
+            }
+            BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
+                self.dynamic_node(quote! { #node })
+            }
+        }
+    }
+
+    fn visit_element(&mut self, element: &Element, implicit_key: bool) -> ViewExpr {
+        let tag = self.element_tag(element);
+        let mut attrs = TokenStream2::new();
+        for attr in &element.merged_attributes {
+            attrs.extend(element.typed_builder_attribute(attr, self));
+        }
+
+        if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element.key() {
+            let key = self.allocate_formatted(key);
+            if implicit_key {
+                self.hot_reload_key = Some(key);
+            }
+        }
+
+        let mut children = TokenStream2::new();
+        for child in &element.children {
+            let child = self.visit_node(child, false).into_child_arg();
+            children.extend(quote! { .child(#child) });
+        }
+
+        ViewExpr {
+            expr: quote! { #tag #attrs #children },
+            child_arg: None,
+        }
+    }
+
+    fn static_text(&mut self, text: &TextNode) -> ViewExpr {
+        let value = text.input.to_static().unwrap();
+        let expr = quote_spanned! { text.input.span() => dioxus_core::static_text!(#value) };
+        ViewExpr {
+            expr,
+            child_arg: None,
+        }
+    }
+
+    fn dynamic_node(&mut self, tokens: TokenStream2) -> ViewExpr {
+        let id = self.dynamic_node_count;
+        self.dynamic_node_count += 1;
+        self.hot_reload_dynamic_nodes
+            .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
+        ViewExpr {
+            expr: quote! { dioxus_core::internal::node_dyn::<_, ()>(#tokens) },
+            child_arg: Some(tokens),
+        }
+    }
+
+    fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
+        self.track_dynamic_attr(attr);
+        let attrs = attr.rendered_as_dynamic_attr();
+        quote! { .attr(dioxus_core::internal::attrs_dyn(#attrs)) }
+    }
+
+    fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
+        self.track_dynamic_attr(attr);
+        let attr_value = &attr.value;
+        let value = quote! { #attr_value };
+        let method = if attr.name.is_likely_event() {
+            event_handler_method(&method, &value)
+        } else {
+            method
+        };
+        quote! { .#method(#value) }
+    }
+
+    fn track_dynamic_attr(&mut self, attr: &Attribute) {
+        let id = self.dynamic_attr_count;
+        self.dynamic_attr_count += 1;
+        self.hot_reload_dynamic_attrs
+            .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
+
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
+            self.allocate_formatted(lit);
+        }
+    }
+
+    fn component_literal_ids(&mut self, component: &Component, implicit_key: bool) -> Vec<usize> {
+        let mut literal_ids = Vec::with_capacity(component.literal_component_property_count());
+
+        for property in &component.fields {
+            let AttributeValue::AttrLiteral(literal) = &property.value else {
+                continue;
+            };
+
+            if property.name.is_likely_key() {
+                if let HotLiteral::Fmted(fmted) = literal {
+                    let fmted = self.allocate_formatted(fmted);
+                    if implicit_key {
+                        self.hot_reload_key = Some(fmted);
+                    }
+                }
+                continue;
+            }
+
+            let hot_literal = match literal {
+                HotLiteral::Fmted(fmted) => {
+                    let fmted = self.allocate_formatted(fmted);
+                    quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#fmted) }
+                }
+                HotLiteral::Float(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Float(#value as _) }
+                }
+                HotLiteral::Int(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Int(#value as _) }
+                }
+                HotLiteral::Bool(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Bool(#value) }
+                }
+            };
+
+            let id = self.component_value_tokens.len();
+            self.component_value_tokens.push(hot_literal);
+            literal_ids.push(id);
+        }
+
+        literal_ids
+    }
+
+    fn allocate_formatted(&mut self, formatted: &HotReloadFormattedSegment) -> TokenStream2 {
+        let mut dynamic_ids = Vec::with_capacity(formatted.formatted_segment_count());
+        for segment in &formatted.segments {
+            if let Segment::Formatted(segment) = segment {
+                let id = self.dynamic_text_tokens.len();
+                dynamic_ids.push(id);
+                self.dynamic_text_tokens
+                    .push(quote! { #segment.to_string() });
+            }
+        }
+        formatted.quote_with_dynamic_ids(&dynamic_ids)
+    }
+
+    fn static_attr(
+        &mut self,
+        span: proc_macro2::Span,
+        name: TokenStream2,
+        value: TokenStream2,
+        namespace: TokenStream2,
+    ) -> TokenStream2 {
+        let marker = self.next_ident("__DioxusAttr");
+        self.definitions.push(quote_spanned! { span =>
+            struct #marker;
+            impl dioxus_core::view::AttributeDescriptor for #marker {
+                const NAME: &'static str = #name;
+                const NAMESPACE: Option<&'static str> = #namespace;
+            }
+            impl dioxus_core::view::StaticAttributeValue for #marker {
+                const VALUE: &'static str = #value;
+            }
+        });
+        let attr = quote_spanned! { span => dioxus_core::view::attr::<#marker>() };
+        quote! { .attr(#attr) }
+    }
+
+    fn static_builder_attr(
+        &mut self,
+        span: proc_macro2::Span,
+        value: TokenStream2,
+        method: Ident,
+    ) -> TokenStream2 {
+        let value = quote_spanned! { span => dioxus_core::static_value!(#value) };
+        quote! { .#method(#value) }
+    }
+
+    fn element_tag(&mut self, element: &Element) -> TokenStream2 {
+        match &element.name {
+            ElementName::Ident(tag) => quote_spanned! { element.name.span() => #tag() },
+            ElementName::Custom(_) => {
+                let tag = self.define_tag(element);
+                quote! { dioxus_core::view::el::<#tag>() }
+            }
+        }
+    }
+
+    fn define_tag(&mut self, element: &Element) -> Ident {
+        let marker = self.next_ident("__DioxusTag");
+        let tag = element.name.tag_name();
+        self.definitions
+            .push(quote_spanned! { element.name.span() =>
+                struct #marker;
+                impl dioxus_core::view::TagName for #marker {
+                    const NAME: &'static str = #tag;
+                }
+            });
+        marker
+    }
+
+    fn next_ident(&mut self, prefix: &str) -> Ident {
+        let index = self.next_marker;
+        self.next_marker += 1;
+        format_ident!("{prefix}{index}")
+    }
+}
+
+impl Element {
+    pub(crate) fn view_builder_pieces(&self) -> ViewBuilderPieces {
+        ViewBuilderPieces::from_element(self)
+    }
+
+    fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
+        if matches!(self.name, ElementName::Ident(_))
+            && let AttributeName::BuiltIn(method) = &attr.name
+            && !attr.name.is_likely_key()
+        {
+            if attr.name.is_likely_event() {
+                return builder.dynamic_builder_attr(attr, method.clone());
+            }
+
+            if let Some((_, value)) = attr.as_static_str_literal() {
+                let value = value.to_static().unwrap();
+                return builder.static_builder_attr(attr.span(), quote! { #value }, method.clone());
+            }
+
+            return builder.dynamic_builder_attr(attr, method.clone());
+        }
+
+        let Some((name, value)) = attr.as_static_str_literal() else {
+            return builder.dynamic_attr(attr);
+        };
+
+        let namespace = self.builder_attribute_namespace_tokens(name);
+        let name = self.builder_attribute_name_tokens(name);
+        let value = value.to_static().unwrap();
+        builder.static_attr(attr.span(), name, quote! { #value }, namespace)
+    }
+
+    fn builder_attribute_namespace_tokens(&self, name: &AttributeName) -> TokenStream2 {
+        match name.resolved(&self.name).namespace {
+            Some(namespace) => quote! { Some(#namespace) },
+            None => quote!(None::<&'static str>),
+        }
+    }
+
+    fn builder_attribute_name_tokens(&self, name: &AttributeName) -> TokenStream2 {
+        let name = name.resolved(&self.name).name;
+        quote! { #name }
+    }
+}
+
 impl TemplateBody {
+    pub(crate) fn view_builder_pieces(&self) -> ViewBuilderPieces {
+        ViewBuilderPieces::from_body(self)
+    }
+
     /// Create a new TemplateBody from a set of nodes
     ///
     /// This will fill in all the necessary path information for the nodes in the template and will

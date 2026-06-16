@@ -6,7 +6,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{
             DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
-            insertion_site_for_slot,
+            insertion_site_for_loaded_static_slot, insertion_site_for_slot,
         },
         template::{
             DynamicAttrGroup, DynamicNodeSlot, TemplateRoot, dynamic_node_slots,
@@ -758,13 +758,26 @@ impl VNode {
     ) {
         // Reverse order lets earlier adjacent dynamic slots insert before
         // later siblings that have already materialized.
+        let root_idx = path.segment(0) as usize;
         for slot in dynamic_node_slots(self)
             .filter(|slot| slot.is_inside_static(path))
             .rev()
         {
             let dynamic_node_id = slot.index();
+            if state.to.is_none() {
+                self.create_dynamic_node(
+                    self.dynamic_values[dynamic_node_id].node(),
+                    mount,
+                    dynamic_node_id,
+                    state,
+                );
+                continue;
+            }
+
             let context = state.context();
-            let site = insertion_site_for_slot(mount, slot, &[], state.dom, context);
+            let site = insertion_site_for_loaded_static_slot(
+                mount, root_idx, self, slot, &[], state.dom, context,
+            );
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             at_site(site, reborrow_writer(&mut state.to), runtime, |to| {

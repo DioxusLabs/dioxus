@@ -13,6 +13,7 @@
 //! - [`harness`]: incremental-vs-fresh renderer oracle and lifecycle checks
 //! - [`vdom`]: compiles model specs into real `VNode`s/`Template`s
 //! - [`warmup`]: one-shot scenarios for paths replay cannot reach
+#![cfg(fuzzing)]
 #![deny(unsafe_code)]
 
 mod cache;

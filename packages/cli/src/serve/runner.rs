@@ -531,7 +531,7 @@ impl AppServer {
                     // Only send down templates that have roots, and ideally ones that have changed
                     // todo(jon): maybe cache these and don't send them down if they're the same
                     for (index, template) in results.templates {
-                        if template.template.root_count() == 0 {
+                        if template.root_count() == 0 {
                             continue;
                         }
 

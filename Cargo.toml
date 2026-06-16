@@ -1083,6 +1083,11 @@ path = "examples/09-reference/web_component.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "custom_element"
+path = "examples/09-reference/custom_element.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "generic_component"
 path = "examples/09-reference/generic_component.rs"
 doc-scrape-examples = true
