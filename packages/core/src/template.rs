@@ -12,6 +12,7 @@ type StaticTemplateOpArray = &'static [TemplateOp];
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TemplatePath {
     path: u128,
+    appends: bool,
 }
 
 /// A single step in a compact template path.
@@ -26,12 +27,18 @@ pub enum TemplatePathStep {
 impl TemplatePath {
     /// Create an empty path.
     pub const fn empty() -> Self {
-        Self { path: 0 }
+        Self {
+            path: 0,
+            appends: false,
+        }
     }
 
     /// Create a path from raw template-v2 bits.
     pub const fn from_bits(path: u128) -> Self {
-        Self { path }
+        Self {
+            path,
+            appends: false,
+        }
     }
 
     /// Return the path for a root position.
@@ -50,10 +57,24 @@ impl TemplatePath {
         self.path
     }
 
+    /// Return true if this dynamic slot appends to its static parent.
+    pub const fn appends(self) -> bool {
+        self.appends
+    }
+
+    /// Mark this path as a dynamic slot that appends to its static parent.
+    pub const fn with_appends(self, appends: bool) -> Self {
+        Self {
+            path: self.path,
+            appends,
+        }
+    }
+
     /// Return the path for the first child of this path.
     pub const fn next_child(self) -> Self {
         Self {
             path: (self.path << 1) | 1,
+            appends: false,
         }
     }
 
@@ -61,6 +82,7 @@ impl TemplatePath {
     pub const fn next_sibling(self) -> Self {
         Self {
             path: self.path << 1,
+            appends: false,
         }
     }
 
@@ -68,6 +90,7 @@ impl TemplatePath {
     pub const fn parent(self) -> Self {
         Self {
             path: self.path >> 1,
+            appends: false,
         }
     }
 
@@ -146,7 +169,7 @@ impl TemplatePath {
         if parent != 0 {
             parent >>= 1;
         }
-        (TemplatePath { path: parent }, insertion_index)
+        (TemplatePath::from_bits(parent), insertion_index)
     }
 
     /// Return the parent path of this dynamic slot.
@@ -216,7 +239,7 @@ impl serde::Serialize for TemplatePath {
     where
         S: serde::Serializer,
     {
-        serde::Serialize::serialize(&self.path, serializer)
+        serde::Serialize::serialize(&(self.path, self.appends), serializer)
     }
 }
 
@@ -226,8 +249,11 @@ impl<'de> serde::Deserialize<'de> for TemplatePath {
     where
         D: serde::Deserializer<'de>,
     {
-        let deserialized = <u128 as serde::Deserialize>::deserialize(deserializer)?;
-        Ok(Self::from_bits(deserialized))
+        let deserialized = <(u128, bool) as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self {
+            path: deserialized.0,
+            appends: deserialized.1,
+        })
     }
 }
 
@@ -538,10 +564,52 @@ impl RawTemplateLoweringCursor {
         path
     }
 
+    const fn next_slot_path(&mut self, appends: bool) -> TemplatePath {
+        if self.stack_pointer == 0 {
+            return self.next_node_path().with_appends(appends);
+        }
+
+        self.next_paths[self.stack_pointer].with_appends(appends)
+    }
+
     const fn finish(&self) {
         if self.stack_pointer != 0 {
             panic!("template raw ops ended with unclosed elements");
         }
+    }
+
+    const fn dynamic_node_appends(&self, raw: &'static [TemplateRawOp], index: usize) -> bool {
+        let parent_depth = self.stack_pointer;
+        let mut depth = parent_depth;
+        let mut cursor = index + 1;
+
+        while cursor < raw.len() {
+            match raw[cursor] {
+                TemplateRawOp::OpenElement { .. } => {
+                    if depth == parent_depth {
+                        return false;
+                    }
+                    depth += 1;
+                }
+                TemplateRawOp::StaticText { .. } => {
+                    if depth == parent_depth {
+                        return false;
+                    }
+                }
+                TemplateRawOp::CloseElement => {
+                    if depth == parent_depth {
+                        return true;
+                    }
+                    depth -= 1;
+                }
+                TemplateRawOp::StaticAttr { .. }
+                | TemplateRawOp::DynamicAttr
+                | TemplateRawOp::DynamicNode => {}
+            }
+            cursor += 1;
+        }
+
+        true
     }
 }
 
@@ -590,7 +658,8 @@ macro_rules! lower_raw_template {
                     $builder.push_static(value);
                 }
                 TemplateRawOp::DynamicNode => {
-                    let path = cursor.next_node_path();
+                    let appends = cursor.dynamic_node_appends($raw, index);
+                    let path = cursor.next_slot_path(appends);
                     $builder.push_op(TemplateOp::text());
                     $builder.push_op(TemplateOp::dynamic());
                     $builder.push_dynamic(path);
@@ -985,6 +1054,46 @@ impl Template {
         Some(indexes)
     }
 
+    /// Return child indexes and the parent op for navigating from a known static root through
+    /// a static prototype.
+    pub(crate) fn static_prototype_child_indexes_from_root_op(
+        &self,
+        root_op: usize,
+        path: TemplatePath,
+    ) -> Option<(Vec<usize>, usize)> {
+        if path.is_empty() {
+            return None;
+        }
+        let mut op = root_op;
+        let mut indexes = Vec::with_capacity(path.len().saturating_sub(1));
+        for depth in 1..path.len() {
+            let (child_op, prototype_index) =
+                self.static_child_op_and_prototype_index(op, path.segment(depth) as usize)?;
+            indexes.push(prototype_index);
+            op = child_op;
+        }
+        Some((indexes, op))
+    }
+
+    /// Return the number of static child nodes under an element op.
+    pub(crate) fn static_child_count(&self, element_op: usize) -> usize {
+        let Some(mut cursor) = self.first_child_node_op(element_op) else {
+            return 0;
+        };
+        let Some(end) = self.element_end(element_op) else {
+            return 0;
+        };
+
+        let mut count = 0;
+        while cursor < end {
+            if self.is_static_node_op(cursor) {
+                count += 1;
+            }
+            cursor = self.next_sibling_op(cursor);
+        }
+        count
+    }
+
     /// Return the static-prototype insertion index for a dynamic child slot.
     pub(crate) fn static_prototype_insertion_index(
         &self,
@@ -1204,6 +1313,7 @@ impl Template {
         let mut i = 0;
         while i < dynamics.len() {
             hash = xxh64(&dynamics[i].path.to_le_bytes(), hash);
+            hash = xxh64(&[dynamics[i].appends as u8], hash);
             i += 1;
         }
 

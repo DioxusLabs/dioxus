@@ -189,14 +189,8 @@ fn insert_at_slot(
 ) -> usize {
     let mut to = LazyScope::new_for_current_target(to, runtime, move |to| {
         to.push_id(root_id);
-        if let Some(indexes) = &placement.static_child_indexes {
-            for index in indexes.iter().copied() {
-                to.child(index);
-            }
-        } else {
-            for depth in 1..placement.parent_path.len() {
-                to.child(placement.parent_path.segment(depth) as usize);
-            }
+        for depth in 1..placement.parent_path.len() {
+            to.child(placement.parent_path.segment(depth) as usize);
         }
         if !placement.appends {
             to.child(placement.static_insertion_index);
@@ -295,7 +289,7 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or_else(|| slot);
+    let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or(slot);
     first_live_slot_after(
         parent_vnode,
         parent_mount,

@@ -44,47 +44,29 @@ impl<'a> DynamicNodeSlot<'a> {
         Self {
             template: self.template,
             index: self.index,
-            path: TemplatePath::root(self.root_index()),
+            path: TemplatePath::root(self.root_index()).with_appends(self.path.appends()),
         }
     }
 
     pub(super) fn placement(self) -> SlotPlacement {
         let parent_path = self.parent_path();
         let child_index = self.child_index();
-        let static_child_indexes = (!parent_path.is_empty())
-            .then(|| self.template.static_prototype_child_indexes(parent_path))
-            .flatten();
-        let static_insertion_index = if parent_path.is_empty() {
-            root_static_insertion_index(self.template, child_index)
-        } else {
-            self.template
-                .static_prototype_insertion_index(parent_path, child_index)
-                .unwrap_or(child_index)
-        };
-        let appends = if parent_path.is_empty() {
-            static_insertion_index >= static_root_count(self.template)
-        } else {
-            slot_appends(self.template, parent_path, child_index)
-        };
 
         SlotPlacement {
             parent_path,
-            static_child_indexes,
-            static_insertion_index,
-            appends,
+            static_insertion_index: child_index,
+            appends: self.path.appends(),
         }
     }
 
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.parent_path() == other.parent_path()
-            && self.placement().static_insertion_index == other.placement().static_insertion_index
+        self.parent_path() == other.parent_path() && self.child_index() == other.child_index()
     }
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct SlotPlacement {
     pub(super) parent_path: TemplatePath,
-    pub(super) static_child_indexes: Option<Vec<usize>>,
     pub(super) static_insertion_index: usize,
     pub(super) appends: bool,
 }
@@ -123,12 +105,6 @@ impl<'a> DynamicAttrGroup<'a> {
 
     pub(super) fn is_descendant_of_static(&self, path: TemplatePath) -> bool {
         path_starts_with(self.path, path)
-    }
-
-    pub(super) fn static_child_indexes(&self) -> Option<Vec<usize>> {
-        (!self.path.is_root_level_slot())
-            .then(|| self.template.static_prototype_child_indexes(self.path))
-            .flatten()
     }
 
     pub(super) fn first_id(&self) -> Option<usize> {
@@ -257,47 +233,6 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
     if let Some((path, start, end)) = current {
         visit(DynamicAttrGroup::new(&vnode.template, path, start, end));
     }
-}
-
-fn root_static_insertion_index(template: &Template, child_index: usize) -> usize {
-    (0..child_index)
-        .filter(|root| template.root_op_index(*root).is_some())
-        .count()
-}
-
-fn static_root_count(template: &Template) -> usize {
-    (0..template.root_count())
-        .filter(|root| template.root_op_index(*root).is_some())
-        .count()
-}
-
-fn slot_appends(template: &Template, parent_path: TemplatePath, child_index: usize) -> bool {
-    let Some(parent_op) = template.static_node_op_at_path(parent_path) else {
-        return true;
-    };
-    let Some(static_slot_index) = template.static_child_insertion_index(parent_op, child_index)
-    else {
-        return true;
-    };
-    static_slot_index >= static_child_count(template, parent_op)
-}
-
-fn static_child_count(template: &Template, element_op: usize) -> usize {
-    let Some(mut cursor) = template.first_child_node_op(element_op) else {
-        return 0;
-    };
-    let Some(end) = template.element_end(element_op) else {
-        return 0;
-    };
-
-    let mut count = 0;
-    while cursor < end {
-        if template.is_static_node_op(cursor) {
-            count += 1;
-        }
-        cursor = template.next_sibling_op(cursor);
-    }
-    count
 }
 
 fn path_starts_with(path: TemplatePath, ancestor: TemplatePath) -> bool {

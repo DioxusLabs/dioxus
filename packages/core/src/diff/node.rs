@@ -737,8 +737,7 @@ impl VNode {
             }
 
             let context = state.context();
-            let site =
-                insertion_site_for_loaded_static_slot(mount, root_idx, slot, state.dom, context);
+            let site = insertion_site_for_loaded_static_slot(mount, root_idx, slot, state.dom, context);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             at_site(site, reborrow_writer(&mut state.to), runtime, |to| {
@@ -811,10 +810,8 @@ impl VNode {
         let root_idx = cursor.segment(0) as usize;
         let root_id = dom.unchecked_mounted_root_node(mount, root_idx);
         with_consumed_id(to, root_id.element_id(), |to| {
-            if let Some(indexes) = group.static_child_indexes() {
-                for index in indexes {
-                    to.child(index);
-                }
+            for depth in 1..cursor.len() {
+                to.child(cursor.segment(depth) as usize);
             }
             to.pop_id(id.element_id());
         });

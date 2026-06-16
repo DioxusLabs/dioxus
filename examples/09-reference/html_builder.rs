@@ -5,14 +5,10 @@
 //! static text views, generated component props builders, and dynamic slots only
 //! for runtime values.
 
-use dioxus::core as dioxus_core;
 use dioxus::{
-    core::{
-        ComponentFunctionExt, Element,
-        view::{View, attr_dyn},
-    },
-    html::{self, EventsExtension, GlobalAttributesExtension},
-    prelude::Props,
+    dioxus_core::view::{attr_dyn, View},
+    html,
+    prelude::*,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -56,38 +52,32 @@ fn app() -> Element {
         .into_vnode())
 }
 
-#[dioxus::prelude::component]
+#[component]
 fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Element {
     Ok(html::main()
         .onclick(|event| println!("{event:?}"))
-        .class(dioxus::core::static_value!("dashboard"))
+        .class("dashboard")
         .child(Header.with_props(Header.builder().title(title).total(metrics.len()).build()))
         .child(
-            html::section()
-                .class(dioxus::core::static_value!("metric-grid"))
-                .child(metrics.iter().copied().map(|metric| {
+            html::section().class("metric-grid").child(
+                metrics.iter().copied().map(|metric| {
                     MetricCard.with_props(MetricCard.builder().metric(metric).build())
-                })),
+                }),
+            ),
         )
         .child(
             html::footer()
-                .class(dioxus::core::static_value!("note"))
-                .child(dioxus::core::static_text!(
-                    "Created with html element builders and component props builders."
-                )),
+                .class("note")
+                .child("Created with html element builders and component props builders."),
         )
         .into_vnode())
 }
 
-#[dioxus::prelude::component]
+#[component]
 fn Header(#[props(into)] title: String, total: usize) -> Element {
     Ok(html::header()
-        .class(dioxus::core::static_value!("intro"))
-        .child(
-            html::p()
-                .class(dioxus::core::static_value!("eyebrow"))
-                .child(dioxus::core::static_text!("typed views")),
-        )
+        .class("intro")
+        .child(html::p().class("eyebrow").child("typed views"))
         .child(html::h1().child(title))
         .child(html::p().child(format!(
             "{total} cards are rendered from a runtime iterator."
@@ -95,20 +85,16 @@ fn Header(#[props(into)] title: String, total: usize) -> Element {
         .into_vnode())
 }
 
-#[dioxus::prelude::component]
+#[component]
 fn MetricCard(metric: Metric) -> Element {
     Ok(html::article()
-        .class(dioxus::core::static_value!("metric-card"))
+        .class("metric-card")
         .attr(attr_dyn("data-status", metric.status, None, false))
-        .child(
-            html::span()
-                .class(dioxus::core::static_value!("metric-label"))
-                .child(metric.label),
-        )
+        .child(html::span().class("metric-label").child(metric.label))
         .child(html::strong().child(metric.value))
         .child(
             html::small()
-                .class(dioxus::core::static_value!("metric-status"))
+                .class("metric-status")
                 .child(format!("status: {}", metric.status)),
         )
         .into_vnode())
