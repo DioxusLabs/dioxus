@@ -103,7 +103,12 @@ pub(crate) fn remove_rendered_output(
         .last_rendered_node
         .clone()
         .expect("scope being removed should have last_rendered_node set");
-    node.remove_node_inner(dom, reborrow_writer(&mut to), destroy_component_state);
+    node.as_vnode().remove_node_inner(
+        node.root_mount(),
+        dom,
+        reborrow_writer(&mut to),
+        destroy_component_state,
+    );
 
     if destroy_component_state {
         // Now drop all the resources
@@ -204,20 +209,21 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
         // A new scope runs once to get the initial state
-        if new {
-            let body = dom.run_scope_with(scope_id, || self.render());
-            dom.scopes[scope_id.index()].last_rendered_node = Some(LastRenderedNode::new(body));
-        }
+        let new_node = if new {
+            LastRenderedNode::new(dom.run_scope_with(scope_id, || self.render()))
+        } else {
+            dom.scopes[scope_id.index()]
+                .last_rendered_node
+                .as_ref()
+                .expect("Component to be mounted")
+                .node()
+                .clone()
+        };
 
         // If our scope landed in `dirty_scopes` during its initial render
         // (e.g. a hook synchronously queued an update for itself), drain the
         // entry now so we don't re-process the same scope after creation.
         dom.mark_clean(scope_id);
-
-        let new_node = dom.scopes[scope_id.index()]
-            .last_rendered_node
-            .clone()
-            .expect("Component to be mounted");
 
         dom.create_scope(reborrow_writer(&mut to), scope_id, new_node, parent)
     }

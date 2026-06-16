@@ -255,16 +255,21 @@ Effects run AFTER mutations are applied to DOM:
 ```rust
 pub struct VNode {
     vnode: Rc<VNodeInner>,
-    mount: Cell<MountId>,
 }
 
 pub struct VNodeInner {
-    pub key: Option<String>,
     pub template: Template,
-    pub dynamic_nodes: Box<[DynamicNode]>,
-    pub dynamic_attrs: Box<[Box<[Attribute]>]>,
+    pub view: RenderedView,
+}
+
+pub struct RenderedView {
+    pub key: Option<String>,
+    pub dynamic_values: Box<[DynamicValue]>,
 }
 ```
+
+Mounted state lives in the VirtualDOM mount arena and is accessed through
+`MountedVNode`, not stored on `VNode`.
 
 ### Template (Static)
 ```rust

@@ -2,7 +2,7 @@ use super::cache::Segment;
 use crate::cache::StringCache;
 
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, ScopeId, Template, VNode, VirtualDom,
+    Attribute, AttributeValue, DynamicNode, Element, MountedVNode, ScopeId, Template, VirtualDom,
 };
 use rustc_hash::FxHashMap;
 use std::fmt::Write;
@@ -90,7 +90,11 @@ impl Renderer {
         dom: &VirtualDom,
         scope: ScopeId,
     ) -> std::fmt::Result {
-        let node = dom.get_scope(scope).unwrap().root_node();
+        let node = dom
+            .get_scope(scope)
+            .unwrap()
+            .try_mounted_root_node()
+            .unwrap();
         self.render_template(buf, dom, node, true)?;
 
         Ok(())
@@ -100,13 +104,13 @@ impl Renderer {
         &mut self,
         mut buf: &mut W,
         dom: &VirtualDom,
-        template: &VNode,
+        template: MountedVNode<'_>,
         parent_escaped: bool,
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template)
-            .or_insert_with(move || Arc::new(StringCache::from_template(template).unwrap()))
+            .entry(template.vnode().template)
+            .or_insert_with(move || Arc::new(StringCache::from_template(template.vnode()).unwrap()))
             .clone();
 
         let mut inner_html = None;
@@ -148,7 +152,7 @@ impl Renderer {
                                 render_components(self, &mut buf, dom, scope_id)?;
                             } else {
                                 let scope = node.mounted_scope(*index, template, dom).unwrap();
-                                let node = scope.root_node();
+                                let node = scope.try_mounted_root_node().unwrap();
                                 self.render_template(buf, dom, node, escaped)?
                             }
                         }
@@ -166,7 +170,14 @@ impl Renderer {
                         DynamicNode::Fragment(nodes) => {
                             // An empty fragment contributes no HTML — the web hydrator handles
                             // the position via the markerless walk script.
-                            for child in nodes {
+                            let mounted_children = template.mounted_fragment_children(*index, dom);
+                            assert_eq!(
+                                mounted_children.len(),
+                                nodes.len(),
+                                "fragment dynamic node {index} is not mounted"
+                            );
+
+                            for child in mounted_children {
                                 self.render_template(buf, dom, child, escaped)?;
                             }
                         }

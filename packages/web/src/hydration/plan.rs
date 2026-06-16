@@ -1,6 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, ScopeState, VNode, VirtualDom,
+    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, VirtualDom,
     internal::{
         StaticAttribute, StaticChildren, StaticNode, StaticNodeKind, TemplateChild, TemplatePath,
     },
@@ -24,24 +24,25 @@ impl WebsysDom {
         self.collect_suspense_only(scope, dom);
 
         let mut leaves: Vec<Leaf<'_>> = Vec::new();
-        self.collect_vnode_root_leaves(scope.root_node(), dom, &mut leaves)?;
+        let root = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
+        self.collect_vnode_root_leaves(root, dom, &mut leaves)?;
         self.emit_leaves(&leaves, channel, dom, to_mount)
     }
 
     /// Flatten a VNode's roots into leaves at the current DOM level.
     fn collect_vnode_root_leaves<'a>(
         &mut self,
-        vnode: &'a VNode,
+        vnode: MountedVNode<'a>,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        self.collect_template_child_leaves(vnode, StaticChildren::roots(vnode), dom, out)?;
+        self.collect_template_child_leaves(vnode, StaticChildren::roots(vnode.vnode()), dom, out)?;
         Ok(())
     }
 
     fn collect_template_child_leaves<'a>(
         &mut self,
-        vnode: &'a VNode,
+        vnode: MountedVNode<'a>,
         children: StaticChildren<'a>,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
@@ -67,7 +68,7 @@ impl WebsysDom {
 
     fn collect_template_node_leaves<'a>(
         &mut self,
-        vnode: &'a VNode,
+        vnode: MountedVNode<'a>,
         node: StaticNode<'a>,
         root_id: Option<ElementId>,
         out: &mut Vec<Leaf<'a>>,
@@ -91,7 +92,7 @@ impl WebsysDom {
 
     fn collect_dynamic_node_leaves<'a>(
         &mut self,
-        vnode: &'a VNode,
+        vnode: MountedVNode<'a>,
         dyn_idx: usize,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
@@ -113,10 +114,16 @@ impl WebsysDom {
                 let scope = comp
                     .mounted_scope(dyn_idx, vnode, dom)
                     .ok_or(VNodeNotInitialized)?;
-                self.collect_vnode_root_leaves(scope.root_node(), dom, out)?;
+                let child = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
+                self.collect_vnode_root_leaves(child, dom, out)?;
             }
             DynamicNode::Fragment(fragment) => {
-                for sub_vnode in fragment {
+                let mounted_children = vnode.mounted_fragment_children(dyn_idx, dom);
+                if mounted_children.len() != fragment.len() {
+                    return Err(VNodeNotInitialized);
+                }
+
+                for sub_vnode in mounted_children {
                     self.collect_vnode_root_leaves(sub_vnode, dom, out)?;
                 }
             }
@@ -220,7 +227,7 @@ impl WebsysDom {
         let children = element.children();
         if children.has_dynamic_content() {
             let mut child_leaves: Vec<Leaf<'_>> = Vec::new();
-            self.collect_template_child_leaves(vnode, children, dom, &mut child_leaves)?;
+            self.collect_template_child_leaves(*vnode, children, dom, &mut child_leaves)?;
             channel.hy_begin_children();
             self.emit_leaves(&child_leaves, channel, dom, to_mount)?;
             channel.hy_end_children();
@@ -245,7 +252,7 @@ pub(super) enum Leaf<'a> {
     /// A static template element plus the owning VNode (for resolving
     /// dynamic attribute slots).
     Element {
-        vnode: &'a VNode,
+        vnode: MountedVNode<'a>,
         node: StaticNode<'a>,
         path: TemplatePath,
         root_id: Option<ElementId>,

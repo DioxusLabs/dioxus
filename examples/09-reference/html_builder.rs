@@ -6,7 +6,7 @@
 //! for runtime values.
 
 use dioxus::{
-    dioxus_core::view::{attr_dyn, View},
+    dioxus_core::view::{View, attr_dyn},
     html,
     prelude::*,
 };

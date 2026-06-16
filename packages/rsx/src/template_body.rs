@@ -74,6 +74,28 @@ impl ToTokens for TemplateBody {
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
+                #[cfg(debug_assertions)]
+                let __hot_reload_template_read = {
+                    use dioxus_signals::ReadableExt;
+
+                    static __NORMALIZED_FILE: &'static str = {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                    };
+
+                    // The key is important here - we're creating a new GlobalSignal each call to this
+                    // But the key is what's keeping it stable
+                    static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
+                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                        __NORMALIZED_FILE,
+                        line!(),
+                        column!(),
+                        #index
+                    );
+
+                    dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
+                };
+
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 let __key = #key_tokens;
 
@@ -88,30 +110,10 @@ impl ToTokens for TemplateBody {
                 {
                     let __template = __vnodes.template;
                     let __original_template = #hot_reload_mapping;
-                    let __template_read = {
-                        use dioxus_signals::ReadableExt;
-
-                        static __NORMALIZED_FILE: &'static str = {
-                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                            dioxus_core::const_format::str_replace!(PATH, '\\', "/")
-                        };
-
-                        // The key is important here - we're creating a new GlobalSignal each call to this
-                        // But the key is what's keeping it stable
-                        static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                            || None::<dioxus_core::internal::HotReloadedTemplate>,
-                            __NORMALIZED_FILE,
-                            line!(),
-                            column!(),
-                            #index
-                        );
-
-                        dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
-                    };
                     // If the template has not been hot reloaded, we always use the original template
                     // Templates nested within macros may be merged because they have the same file-line-column-index
                     // They cannot be hot reloaded, so this prevents incorrect rendering
-                    let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                    let __template_read = match __hot_reload_template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
                         Some(Some(__template_read)) => &__template_read,
                         _ => &__original_template,
                     };
@@ -138,6 +140,7 @@ pub(crate) struct ViewBuilderPieces {
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
 }
 
@@ -175,6 +178,7 @@ impl ViewBuilderPieces {
         let dynamic_nodes = self.hot_reload_dynamic_nodes.iter();
         let dyn_attrs = self.hot_reload_dynamic_attrs.iter();
         let component_values = self.component_value_tokens.iter();
+        let dynamic_slots = self.hot_reload_dynamic_slots.iter();
 
         quote! {
             dioxus_core::internal::HotReloadedTemplate::from_template(
@@ -183,6 +187,7 @@ impl ViewBuilderPieces {
                 vec![ #( #dyn_attrs ),* ],
                 vec![ #( #component_values ),* ],
                 #template,
+                vec![ #( #dynamic_slots ),* ],
             )
         }
     }
@@ -207,6 +212,7 @@ struct ViewBuilder {
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
     next_marker: usize,
 }
@@ -221,6 +227,7 @@ impl ViewBuilder {
             component_value_tokens: Vec::new(),
             hot_reload_dynamic_nodes: Vec::new(),
             hot_reload_dynamic_attrs: Vec::new(),
+            hot_reload_dynamic_slots: Vec::new(),
             hot_reload_key: None,
             next_marker: 0,
         }
@@ -234,6 +241,7 @@ impl ViewBuilder {
             component_value_tokens: self.component_value_tokens,
             hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
             hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
+            hot_reload_dynamic_slots: self.hot_reload_dynamic_slots,
             hot_reload_key: self.hot_reload_key,
         }
     }
@@ -305,6 +313,8 @@ impl ViewBuilder {
         self.dynamic_node_count += 1;
         self.hot_reload_dynamic_nodes
             .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
+        self.hot_reload_dynamic_slots
+            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
         ViewExpr {
             expr: quote! { dioxus_core::internal::node_dyn::<_, ()>(#tokens) },
             child_arg: Some(tokens),
@@ -334,6 +344,8 @@ impl ViewBuilder {
         self.dynamic_attr_count += 1;
         self.hot_reload_dynamic_attrs
             .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
+        self.hot_reload_dynamic_slots
+            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Attribute(#id) });
 
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
             self.allocate_formatted(lit);

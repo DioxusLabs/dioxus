@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    Runtime, VNode, VirtualDom, WriteMutations,
+    MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{MountId, MountRef},
     mutations::{LazyScope, append_children_to, insert_after_id, insert_before_id},
@@ -9,8 +9,11 @@ use crate::{
 };
 
 use super::{
+    CreatedNodes,
     context::DiffContext,
-    template::{DynamicNodeSlot, SlotPlacement, dynamic_node_slot, dynamic_node_slots},
+    template::{
+        DynamicNodeSlot, SlotPlacement, dynamic_node_slot, dynamic_node_slots_in_document_order,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -85,16 +88,14 @@ impl InsertionSite {
 /// when the vnode has no live DOM.
 pub(super) fn insertion_site_at(
     edge: ElementEdge,
-    vnode: &VNode,
+    vnode: MountedVNode<'_>,
     skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     let at_edge =
         vnode_edge_element(vnode, dom, edge).map(|id| InsertionSite::AtAnchor(edge.anchor(id)));
-    at_edge.unwrap_or_else(|| {
-        insertion_site_for_mounted_child(vnode.unchecked_mounted_id(), skip, dom, context)
-    })
+    at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), skip, dom, context))
 }
 
 pub(super) fn insertion_site_for_slot(
@@ -136,35 +137,20 @@ pub(super) fn insertion_site_for_slot(
     insertion_site_for_slot(parent_mount, slot.root_slot(), skip, dom, context)
 }
 
-pub(super) fn insertion_site_for_loaded_static_slot(
-    parent_mount: MountId,
-    root_idx: usize,
-    slot: DynamicNodeSlot<'_>,
-    dom: &VirtualDom,
-    context: Option<DiffContext<'_>>,
-) -> InsertionSite {
-    if let Some(enclosing) = dom.mounted_root_node(parent_mount, root_idx)
-        && dom.element_exists_for_mount(parent_mount, enclosing)
-    {
-        return InsertionSite::Slot {
-            parent: enclosing.element_id(),
-            placement: slot.placement(),
-        };
-    }
-
-    insertion_site_for_slot(parent_mount, slot, &[], dom, context)
-}
-
 pub(super) fn create_at_site(
     content: &[VNode],
     parent: Option<MountRef>,
     site: InsertionSite,
     dom: &mut VirtualDom,
     to: Option<&mut dyn WriteMutations>,
-) -> usize {
-    at_site(site, to, dom.runtime.clone(), |to| {
-        dom.create_children(to, content, parent)
-    })
+) -> CreatedNodes {
+    let mut mounts = Vec::new();
+    let nodes = at_site(site, to, dom.runtime.clone(), |to| {
+        let created = dom.create_children_with_parents(to, content, parent, parent);
+        mounts = created.mounts;
+        created.nodes
+    });
+    CreatedNodes { nodes, mounts }
 }
 
 pub(super) fn at_site(
@@ -213,7 +199,7 @@ fn insertion_site_for_mounted_child(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let Some(parent_ref) = dom.get_mounted_parent(mount) else {
+    let Some(parent_ref) = dom.mounted_render_parent(mount) else {
         return InsertionSite::AppendTo(ElementId::ROOT);
     };
     let parent_mount = parent_ref.mount;
@@ -235,13 +221,21 @@ fn insertion_site_for_child_in_parent(
 ) -> Option<InsertionSite> {
     let parent_views = parent_views(dom, parent_mount, context);
     parent_views.find_map(|parent_vnode| {
-        for (idx, _) in parent_vnode.template.node_paths() {
-            let slot = dynamic_slot_for(parent_vnode, idx)?;
+        for slot in dynamic_node_slots_in_document_order(parent_vnode.vnode()) {
+            let idx = slot.index();
             match parent_vnode.dynamic_values[idx].node() {
                 DynamicNode::Fragment(children) => {
-                    let position = locate_in_fragment(children, mount)?;
-                    if let Some(id) = first_live_sibling_after(children, position, mount, skip, dom)
-                    {
+                    let child_mounts =
+                        dom.mounted_fragment_children(parent_mount, idx, children.len());
+                    let position = locate_in_fragment(&child_mounts, mount)?;
+                    if let Some(id) = first_live_sibling_after(
+                        children,
+                        &child_mounts,
+                        position,
+                        mount,
+                        skip,
+                        dom,
+                    ) {
                         return Some(InsertionSite::AtAnchor(DomAnchor::Before(id)));
                     }
                     return Some(insertion_site_for_slot(
@@ -278,7 +272,7 @@ fn adjacent_dynamic_sibling_after(
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
     parent_views(dom, parent_mount, context).find_map(|parent_vnode| {
-        adjacent_dynamic_sibling_after_in_vnode(parent_vnode, parent_mount, slot, skip, dom)
+        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, skip, dom)
     })
 }
 
@@ -289,7 +283,7 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or(slot);
+    let active_slot = dynamic_node_slot(parent_vnode, slot.index()).unwrap_or(slot);
     first_live_slot_after(
         parent_vnode,
         parent_mount,
@@ -315,8 +309,12 @@ fn first_live_slot_after(
     dom: &VirtualDom,
     mut scan: impl FnMut(DynamicNodeSlot<'_>) -> Option<bool>,
 ) -> Option<ElementId> {
-    for slot in dynamic_node_slots(vnode) {
-        if slot.index() <= after_idx {
+    let mut after_active_slot = false;
+    for slot in dynamic_node_slots_in_document_order(vnode) {
+        if !after_active_slot {
+            if slot.index() == after_idx {
+                after_active_slot = true;
+            }
             continue;
         }
         match scan(slot) {
@@ -353,21 +351,24 @@ fn live_dynamic_slot_edge(
             .mounted_dynamic_text_node(mount, idx)
             .filter(|id| dom.element_exists_in_target(target_id, *id))
             .map(|id| id.element_id()),
-        DynamicNode::Fragment(children) => edge.find_map(children.len(), |idx| {
-            let child = &children[idx];
-            let child_mount = child.mounted_id()?;
-            if skip.contains(&child_mount) {
-                return None;
-            }
-            vnode_edge_element(child, dom, edge)
-        }),
+        DynamicNode::Fragment(children) => {
+            let child_mounts = dom.mounted_fragment_children(mount, idx, children.len());
+            edge.find_map(children.len(), |child_idx| {
+                let child = &children[child_idx];
+                let child_mount = child_mounts.get(child_idx).copied()?;
+                if skip.contains(&child_mount) {
+                    return None;
+                }
+                vnode_edge_element(MountedVNode::new(child, child_mount), dom, edge)
+            })
+        }
         DynamicNode::Component(_) => {
             let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
             if skip.contains(&component_root_mount) {
                 return None;
             }
             let vnode = dom.current_mounted_view(component_root_mount)?;
-            vnode_edge_element(&vnode, dom, edge)
+            vnode_edge_element(MountedVNode::new(&vnode, component_root_mount), dom, edge)
         }
     }
 }
@@ -379,47 +380,65 @@ fn parent_views<'a>(
 ) -> ParentViews<'a> {
     if let Some(context) = context.and_then(|context| context.for_mount(parent_mount)) {
         return ParentViews::Context {
+            mount: parent_mount,
             new: context.new,
             old: context.old,
         };
     }
-    ParentViews::Mounted(dom.current_mounted_view(parent_mount))
+    ParentViews::Mounted {
+        mount: parent_mount,
+        view: dom.current_mounted_view(parent_mount),
+    }
 }
 
 enum ParentViews<'a> {
-    Context { new: &'a VNode, old: &'a VNode },
-    Mounted(Option<VNode>),
+    Context {
+        mount: MountId,
+        new: &'a VNode,
+        old: &'a VNode,
+    },
+    Mounted {
+        mount: MountId,
+        view: Option<VNode>,
+    },
 }
 
 impl<'a> ParentViews<'a> {
-    fn find_map<T>(&self, mut f: impl FnMut(&VNode) -> Option<T>) -> Option<T> {
+    fn find_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
         match self {
-            Self::Context { new, old } => f(new).or_else(|| f(old)),
-            Self::Mounted(view) => view.as_ref().and_then(f),
+            Self::Context { mount, new, old } => {
+                f(MountedVNode::new(new, *mount)).or_else(|| f(MountedVNode::new(old, *mount)))
+            }
+            Self::Mounted { mount, view } => view
+                .as_ref()
+                .and_then(|vnode| f(MountedVNode::new(vnode, *mount))),
         }
     }
 }
 
-fn locate_in_fragment(children: &[VNode], mount: MountId) -> Option<usize> {
-    children
-        .iter()
-        .position(|child| child.mounted_id() == Some(mount))
+fn locate_in_fragment(child_mounts: &[MountId], mount: MountId) -> Option<usize> {
+    child_mounts.iter().position(|child| *child == mount)
 }
 
 fn first_live_sibling_after(
     children: &[VNode],
+    child_mounts: &[MountId],
     position: usize,
     mount: MountId,
     skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    children.iter().skip(position + 1).find_map(|child| {
-        let m = child.mounted_id()?;
-        if skip.contains(&m) || m == mount {
-            return None;
-        }
-        child.find_first_element(dom)
-    })
+    children
+        .iter()
+        .zip(child_mounts)
+        .skip(position + 1)
+        .find_map(|(child, m)| {
+            let m = *m;
+            if skip.contains(&m) || m == mount {
+                return None;
+            }
+            child.find_first_element(m, dom)
+        })
 }
 
 fn root_content_after_slot(
@@ -483,7 +502,7 @@ pub(super) fn find_root_dynamic_slot<T>(
     edge: ElementEdge,
     mut find: impl FnMut(DynamicNodeSlot<'_>) -> Option<T>,
 ) -> Option<T> {
-    let mut slots = dynamic_node_slots(vnode)
+    let mut slots = dynamic_node_slots_in_document_order(vnode)
         .filter(|slot| slot.is_root_level() && slot.root_index() == cursor_idx);
     match edge {
         ElementEdge::First => slots.find_map(&mut find),
@@ -511,11 +530,11 @@ pub(super) fn static_root_element(
         .map(|id| id.element_id())
 }
 
-fn dynamic_slot_for(vnode: &VNode, slot_id: usize) -> Option<DynamicNodeSlot<'_>> {
-    dynamic_node_slot(vnode, slot_id)
-}
-
-fn vnode_edge_element(vnode: &VNode, dom: &VirtualDom, edge: ElementEdge) -> Option<ElementId> {
+fn vnode_edge_element(
+    vnode: MountedVNode<'_>,
+    dom: &VirtualDom,
+    edge: ElementEdge,
+) -> Option<ElementId> {
     match edge {
         ElementEdge::First => vnode.find_first_element(dom),
         ElementEdge::Last => vnode.find_last_element(dom),

@@ -104,7 +104,7 @@ use tracing::instrument;
 /// # let mut vdom = VirtualDom::new(app);
 /// # let runtime = vdom.runtime();
 /// let event = Event::new(std::rc::Rc::new(0) as std::rc::Rc<dyn std::any::Any>, true);
-/// runtime.handle_event("onclick", event, ElementId::from_raw(0));
+/// runtime.handle_event_for_target(RenderTargetId::ROOT, "onclick", event, ElementId::from_raw(0));
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
@@ -175,7 +175,7 @@ use tracing::instrument;
 ///         _ = dom.wait_for_work() => {}
 ///         evt = real_dom.wait_for_event() => {
 ///             let evt = dioxus_core::Event::new(evt, true);
-///             dom.runtime().handle_event("onclick", evt, ElementId::from_raw(0))
+///             dom.runtime().handle_event_for_target(RenderTargetId::ROOT, "onclick", evt, ElementId::from_raw(0))
 ///         },
 ///     }
 ///
@@ -564,9 +564,13 @@ impl VirtualDom {
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl crate::MultiWriter) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        self.clear_template_roots();
-        let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
-        self.rebuild_with_writer(&mut router);
+        self.clear_full_rebuild_state();
+        if crate::MultiWriter::writes_are_noops(to) {
+            self.rebuild_with_writer(&mut NoOpMutations);
+        } else {
+            let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+            self.rebuild_with_writer(&mut router);
+        }
         self.drain_remaining_effects();
     }
 
@@ -579,12 +583,45 @@ impl VirtualDom {
         {
             let _runtime = RuntimeGuard::new(self.runtime.clone());
             {
-                let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
-                self.render_immediate_with_writer(&mut router);
+                if crate::MultiWriter::writes_are_noops(to) {
+                    self.render_immediate_with_writer(&mut NoOpMutations);
+                } else {
+                    let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+                    self.render_immediate_with_writer(&mut router);
+                }
             }
             self.drain_remaining_effects();
         }
         self.runtime.finish_render();
+    }
+
+    fn clear_full_rebuild_state(&mut self) {
+        let mut root_scope = None;
+        let mut scopes = Vec::new();
+        for scope in self.scopes.drain() {
+            if scope.context_id == ScopeId::ROOT {
+                root_scope = Some(scope);
+            } else {
+                scopes.push(scope);
+            }
+        }
+
+        drop_scopes_child_first(scopes);
+
+        self.dirty_scopes.clear();
+        self.resolved_scopes.clear();
+        self.runtime.dirty_tasks.borrow_mut().clear();
+        self.runtime.pending_effects.borrow_mut().clear();
+
+        if let Some(mut root) = root_scope {
+            root.last_rendered_node = None;
+            let root_id = self.scopes.insert(root);
+            debug_assert_eq!(root_id, ScopeId::ROOT.index());
+        }
+        self.runtime.get_state(ScopeId::ROOT).set_root_mount(None);
+
+        self.runtime.mounts.borrow_mut().clear();
+        self.reset_render_targets_for_rebuild();
     }
 
     fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
@@ -631,7 +668,11 @@ impl VirtualDom {
                 Work::PollTask(task) => deferred_tasks.push(task),
                 Work::RerunScope(scope) => {
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(to as &mut dyn WriteMutations), scope.id);
+                        self.run_and_diff_scope_with_context(
+                            Some(to as &mut dyn WriteMutations),
+                            scope.id,
+                            None,
+                        );
                     });
                 }
             }
@@ -761,7 +802,7 @@ impl VirtualDom {
                     if run_scope {
                         // Run the scope and diff it without writing mutations.
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None, scope_id);
+                            self.run_and_diff_scope_with_context(None, scope_id, None);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
@@ -815,16 +856,34 @@ impl VirtualDom {
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Drop all scopes in order of height
-        let mut scopes = self.scopes.drain().collect::<Vec<_>>();
-        scopes.sort_by_key(|scope| scope.state().height);
-        for scope in scopes.into_iter().rev() {
-            drop(scope);
-        }
+        drop_scopes_child_first(self.scopes.drain().collect());
 
         // Drop the mounts, tasks, and effects, releasing any `Rc<Runtime>` references
         self.runtime.pending_effects.borrow_mut().clear();
         self.runtime.tasks.borrow_mut().clear();
         self.runtime.mounts.borrow_mut().clear();
+    }
+}
+
+fn drop_scopes_child_first(mut scopes: Vec<ScopeState>) {
+    let mut previous_height = None;
+    let mut sorted_by_height = true;
+    for scope in &scopes {
+        if let Some(previous_height) = previous_height
+            && scope.height < previous_height
+        {
+            sorted_by_height = false;
+            break;
+        }
+        previous_height = Some(scope.height);
+    }
+
+    if !sorted_by_height {
+        scopes.sort_unstable_by_key(|scope| scope.height);
+    }
+
+    for scope in scopes.into_iter().rev() {
+        drop(scope);
     }
 }
 

@@ -79,16 +79,16 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
 
     // rsx! { "static text" }
     if template.root_count() == 1
-        && template.dynamics().is_empty()
-        && let Some(root) = template.root_op_index(0)
+        && template.dynamic_value_count() == 0
+        && let Some((_, Some(root), None)) = template.root_slots().next()
         && let Some(text) = template.static_text_at_op(root)
     {
         return Ok(text.to_string());
     }
     // rsx! { "title: {dynamic_text}" }
     if template.root_count() == 0
-        && template.dynamics().len() == 1
-        && template.dynamic_is_node(0)
+        && template.dynamic_value_count() == 1
+        && vnode.dynamic_values[0].as_node().is_some()
         && template.dynamic_path(0).is_root_slot(0)
     {
         let node = vnode.dynamic_values[0]

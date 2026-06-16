@@ -1,6 +1,7 @@
 use crate::{ScopeId, Template, virtual_dom::VirtualDom};
 use slab::Slab;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 
 /// An Element's unique identifier.
 ///
@@ -45,20 +46,25 @@ impl ElementId {
 /// This type is used inside mounted-state tables so absence is represented by
 /// `Option<MountedElementId>` instead of sentinel `ElementId` values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct MountedElementId(ElementId);
+pub(crate) struct MountedElementId(NonZeroUsize);
 
 impl MountedElementId {
     pub(crate) fn new_unchecked(id: ElementId) -> Self {
         debug_assert!(id != ElementId::ROOT);
-        Self(id)
+        Self::from_index_unchecked(id.index())
+    }
+
+    pub(crate) fn from_index_unchecked(index: usize) -> Self {
+        debug_assert_ne!(index, ElementId::ROOT.index());
+        Self(NonZeroUsize::new(index).expect("mounted element id cannot be the root element"))
     }
 
     pub(crate) fn element_id(self) -> ElementId {
-        self.0
+        ElementId::new(self.index())
     }
 
     pub(crate) fn index(self) -> usize {
-        self.0.index()
+        self.0.get()
     }
 }
 
@@ -89,14 +95,12 @@ impl RenderTargetId {
 /// root nodes; for other dynamic nodes it records the renderer element the
 /// node is mounted to. Both live on the VirtualDom-side [`Mount`], indexed by
 /// dynamic-node index.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum MountedDynamicNodeSlot {
     Empty,
     Text(MountedElementId),
-    Component {
-        scope: ScopeId,
-        root_mount: Option<MountId>,
-    },
+    Component(ScopeId),
+    Fragment(usize),
 }
 
 /// Renderer-local state for a render target.
@@ -117,6 +121,13 @@ impl RenderTargetState {
             template_roots: HashMap::new(),
         }
     }
+
+    pub(crate) fn reset_for_rebuild(&mut self) {
+        self.elements.clear();
+        // The root element is always renderer-local element ID 0.
+        self.elements.insert(None);
+        self.template_roots.clear();
+    }
 }
 
 /// A live mount's unique identifier.
@@ -136,11 +147,6 @@ pub struct MountRef {
 impl VirtualDom {
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
         self.runtime.current_render_target_id()
-    }
-
-    pub(crate) fn next_element_for_mount(&mut self, mount: MountId) -> MountedElementId {
-        let target_id = self.mount_target_id(mount);
-        self.next_element_in_target(target_id)
     }
 
     pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> MountedElementId {
@@ -179,9 +185,9 @@ impl VirtualDom {
         id
     }
 
-    pub(crate) fn clear_template_roots(&mut self) {
+    pub(crate) fn reset_render_targets_for_rebuild(&mut self) {
         for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
-            target.template_roots.clear();
+            target.reset_for_rebuild();
         }
     }
 

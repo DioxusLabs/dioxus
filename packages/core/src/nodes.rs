@@ -1,10 +1,11 @@
 use crate::{
-    Element, Event, Properties, ScopeId, Template, TemplateOp, TemplatePath, VirtualDom,
+    Element, Event, Properties, ScopeId, Template, VirtualDom,
     arena::ElementId,
     events::ListenerCallback,
     innerlude::{MountId, ScopeState},
     properties::ComponentFunction,
     string_interner::StaticStringInterner,
+    template::TemplateAnchor,
 };
 use dioxus_core_types::DioxusFormattable;
 
@@ -12,30 +13,46 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::{
     any::{Any, TypeId},
-    cell::Cell,
     fmt::{Arguments, Debug},
 };
 
-/// A reference to a template along with any context needed to hydrate it
-///
-/// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
-/// static parts of the template.
 #[derive(Debug)]
-pub struct VNodeInner {
-    /// The key given to the root of this template.
-    ///
-    /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
+/// Runtime values that hydrate a static [`Template`].
+pub struct RenderedView {
+    /// Root key for this render.
     pub key: Option<String>,
 
-    /// The static nodes and static descriptor of the template
+    /// Dynamic values in template order.
+    pub dynamic_values: Box<[DynamicValue]>,
+}
+
+impl RenderedView {
+    /// Create a rendered view payload.
+    #[inline]
+    pub fn new(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
+        Self {
+            key,
+            dynamic_values,
+        }
+    }
+}
+
+#[derive(Debug)]
+/// A static template with the values rendered for it.
+pub struct VNodeInner {
+    /// The static template.
     pub template: Template,
 
-    /// The dynamic values in template order.
-    ///
-    /// Each entry corresponds to one path in [`Template::dynamics`]. Node and attribute slots share
-    /// the same index space so the flat template stream can be diffed in a single document-order
-    /// pass.
-    pub dynamic_values: Box<[DynamicValue]>,
+    /// The rendered dynamic values.
+    pub view: RenderedView,
+}
+
+impl Deref for VNodeInner {
+    type Target = RenderedView;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view
+    }
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -45,12 +62,6 @@ pub struct VNodeInner {
 #[derive(Debug, Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
-
-    /// The raw mount slot for this template.
-    ///
-    /// `usize::MAX` means this vnode is not mounted. Convert this raw slot to
-    /// `MountId` through `mounted_id` or `unchecked_mounted_id`.
-    mount: Cell<usize>,
 }
 
 impl Default for VNode {
@@ -74,8 +85,6 @@ impl Deref for VNode {
 }
 
 impl VNode {
-    const UNMOUNTED_MOUNT: usize = usize::MAX;
-
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
@@ -89,26 +98,23 @@ impl VNode {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
         static EMPTY_TEMPLATE: Template = Template::new(
-            &[TemplateOp::text(), TemplateOp::dynamic()],
+            &[],
             StaticStringInterner::empty(),
-            &[TemplatePath::root(0).with_appends(true)],
+            &[TemplateAnchor::root_node(0, 0, true)],
         );
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_values: Box::new([DynamicValue::Node(DynamicNode::Fragment(
-                        Vec::new(),
-                    ))]),
                     template: EMPTY_TEMPLATE,
+                    view: RenderedView::new(
+                        None,
+                        Box::new([DynamicValue::Node(DynamicNode::Fragment(Vec::new()))]),
+                    ),
                 })
             })
             .clone()
         });
-        Self {
-            vnode,
-            mount: Cell::new(Self::UNMOUNTED_MOUNT),
-        }
+        Self { vnode }
     }
 
     /// Create a VNode that represents a failed component render (suspense / error boundary).
@@ -120,26 +126,25 @@ impl VNode {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
         static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
-            &[TemplateOp::text(), TemplateOp::dynamic()],
+            &[],
             StaticStringInterner::empty(),
-            &[TemplatePath::root(0).with_appends(true)],
+            &[TemplateAnchor::root_node(0, 0, true)],
         );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_values: Box::new([DynamicValue::Node(DynamicNode::Text(VText {
-                        value: String::new(),
-                    }))]),
                     template: ERROR_ANCHOR_TEMPLATE,
+                    view: RenderedView::new(
+                        None,
+                        Box::new([DynamicValue::Node(DynamicNode::Text(VText {
+                            value: String::new(),
+                        }))]),
+                    ),
                 })
             })
             .clone()
         });
-        Self {
-            vnode,
-            mount: Cell::new(Self::UNMOUNTED_MOUNT),
-        }
+        Self { vnode }
     }
 
     /// Create a new VNode
@@ -149,11 +154,23 @@ impl VNode {
         template: Template,
         dynamic_values: Box<[DynamicValue]>,
     ) -> Self {
+        Self::new_with_rendered_view(template, RenderedView::new(key, dynamic_values))
+    }
+
+    /// Create a new VNode from a static template and rendered view payload.
+    #[inline]
+    pub fn new_with_rendered_view(template: Template, view: RenderedView) -> Self {
+        assert_eq!(
+            view.dynamic_values.len(),
+            template.dynamic_value_count(),
+            "dynamic value count must match template"
+        );
+
         // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
         // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
         // and the only realistic source of violations.
         #[cfg(debug_assertions)]
-        for value in &dynamic_values {
+        for value in &view.dynamic_values {
             if let DynamicValue::Attrs(slot) = value {
                 for pair in slot.windows(2) {
                     let left = (pair[0].name, pair[0].namespace);
@@ -173,12 +190,7 @@ impl VNode {
         }
 
         Self {
-            vnode: Rc::new(VNodeInner {
-                key,
-                template,
-                dynamic_values,
-            }),
-            mount: Cell::new(Self::UNMOUNTED_MOUNT),
+            vnode: Rc::new(VNodeInner { template, view }),
         }
     }
 
@@ -187,153 +199,144 @@ impl VNode {
     /// Returns [`None`] if the dynamic node is mounted under a static template node.
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
         self.template
-            .node_paths()
-            .any(|(dynamic_idx, path)| dynamic_idx == idx && path.is_root_level_slot())
-            .then(|| self.dynamic_values[idx].as_node())
-            .flatten()
+            .anchor_for_value(idx)
+            .filter(|anchor| anchor.is_root_level())
+            .and_then(|_| self.dynamic_values[idx].as_node())
     }
 
-    /// Get the mount id for this node if it has been mounted.
-    pub(crate) fn mounted_id(&self) -> Option<MountId> {
-        let mount = self.mount.get();
-        (mount != Self::UNMOUNTED_MOUNT).then_some(MountId(mount))
+    fn anchor_is_node(&self, anchor: &TemplateAnchor) -> bool {
+        self.dynamic_values[anchor.value_start()]
+            .as_node()
+            .is_some()
     }
 
-    /// Get the mount id for this node.
-    ///
-    /// Callers must already know this vnode is mounted.
-    pub(crate) fn unchecked_mounted_id(&self) -> MountId {
-        MountId(self.mount.get())
-    }
-
-    /// Set this node's mount id.
-    pub(crate) fn set_mounted_id(&self, mount: MountId) {
-        self.mount.set(mount.0);
-    }
-
-    /// Take this node's mount id, leaving it unmounted.
-    pub(crate) fn take_mounted_id(&self) -> MountId {
-        MountId(self.mount.replace(Self::UNMOUNTED_MOUNT))
-    }
-
-    /// Clear this node's mount id.
-    pub(crate) fn clear_mounted_id(&self) {
-        self.mount.set(Self::UNMOUNTED_MOUNT);
-    }
-
-    /// Get the mounted id for a dynamic node index
-    pub fn mounted_dynamic_node(
+    pub(crate) fn dynamic_attr_anchors(
         &self,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.template
+            .anchors()
+            .iter()
+            .filter(move |anchor| !self.anchor_is_node(anchor))
+    }
+
+    fn dynamic_anchors_in_document_order(
+        &self,
+        nodes: bool,
+    ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
+        self.template
+            .anchors_in_document_order()
+            .filter(move |anchor| self.anchor_is_node(anchor) == nodes)
+    }
+
+    #[doc(hidden)]
+    pub fn dynamic_node_anchors_for_element(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_anchors_in_document_order(true)
+            .filter(move |anchor| anchor.element_op() == Some(element_op))
+    }
+
+    #[doc(hidden)]
+    pub fn dynamic_node_anchors_for_slot(
+        &self,
+        element_op: usize,
+        slot: usize,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_node_anchors_for_element(element_op)
+            .filter(move |anchor| anchor.path().split_slot().1 == slot)
+    }
+
+    #[doc(hidden)]
+    pub fn dynamic_attr_anchors_for_element(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_anchors_in_document_order(false)
+            .filter(move |anchor| anchor.element_op() == Some(element_op))
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+/// A [`VNode`] paired with the live mount that renders it.
+pub struct MountedVNode<'a> {
+    vnode: &'a VNode,
+    mount: MountId,
+}
+
+impl<'a> MountedVNode<'a> {
+    pub(crate) const fn new(vnode: &'a VNode, mount: MountId) -> Self {
+        Self { vnode, mount }
+    }
+
+    pub(crate) const fn mount(self) -> MountId {
+        self.mount
+    }
+
+    /// Return the underlying vnode.
+    pub const fn vnode(self) -> &'a VNode {
+        self.vnode
+    }
+
+    /// Get the mounted id for a dynamic node.
+    pub fn mounted_dynamic_node(
+        self,
         dynamic_node_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mounted_id()?;
-
-        match self.dynamic_values[dynamic_node_idx].node() {
+        match self.vnode.dynamic_values[dynamic_node_idx].node() {
             DynamicNode::Text(_) => dom
-                .mounted_dynamic_text_node(mount, dynamic_node_idx)
+                .mounted_dynamic_text_node(self.mount, dynamic_node_idx)
                 .map(|id| id.element_id()),
             _ => None,
         }
     }
 
-    /// Get the mounted id for a root node index
-    pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        let mount = self.mounted_id()?;
-        if root_idx >= dom.mounted_root_count(mount) {
+    /// Get the mounted id for a root node.
+    pub fn mounted_root(self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+        if root_idx >= dom.mounted_root_count(self.mount) {
             return None;
         }
 
-        dom.mounted_root_node(mount, root_idx)
+        dom.mounted_root_node(self.mount, root_idx)
             .map(|id| id.element_id())
     }
 
-    /// Get the mounted id for a dynamic attribute index
+    /// Get the mounted id for a dynamic attribute.
     pub fn mounted_dynamic_attribute(
-        &self,
+        self,
         dynamic_attribute_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mounted_id()?;
-
-        dom.mounted_dyn_attr(mount, dynamic_attribute_idx)
+        dom.mounted_dyn_attr(self.mount, dynamic_attribute_idx)
             .map(|id| id.element_id())
     }
 
-    /// Create a deep clone of this VNode
-    pub(crate) fn deep_clone(&self) -> Self {
-        self.deep_clone_inner(false)
-    }
+    /// Get mounted children for a dynamic fragment.
+    pub fn mounted_fragment_children(
+        self,
+        dynamic_node_idx: usize,
+        dom: &VirtualDom,
+    ) -> Vec<MountedVNode<'a>> {
+        let Some(DynamicNode::Fragment(children)) =
+            self.vnode.dynamic_values[dynamic_node_idx].as_node()
+        else {
+            return Vec::new();
+        };
 
-    /// Deep-clone the tree while preserving every per-node raw mount slot. Each
-    /// `VNodeInner` is freshly allocated so the resulting tree's per-node
-    /// `Cell<usize>` slots are independent from this one — diffing against
-    /// the clone won't mutate this tree's mount state via the shared `Rc`.
-    ///
-    /// Used by `SuspenseBranch::root` to hand out a fresh tree per diff pass
-    /// without losing the mount info the diff needs to talk to the renderer.
-    pub(crate) fn deep_clone_preserving_mounts(&self) -> Self {
-        self.deep_clone_inner(true)
+        children
+            .iter()
+            .zip(dom.mounted_fragment_children(self.mount, dynamic_node_idx, children.len()))
+            .map(|(vnode, mount)| MountedVNode::new(vnode, mount))
+            .collect()
     }
+}
 
-    /// Clone this vnode for retained mount lookups.
-    ///
-    /// Only dynamic fragments contain descendant `VNode` mount cells that can be
-    /// invalidated by a later `claim_mount`. Text, attributes, and component
-    /// dynamic slots keep their mount state in the mount registry, so a shallow
-    /// clone is enough for those templates.
-    pub(crate) fn clone_for_mount_snapshot(&self) -> Self {
-        if self.needs_deep_mount_snapshot() {
-            self.deep_clone_preserving_mounts()
-        } else {
-            self.clone()
-        }
-    }
+impl Deref for MountedVNode<'_> {
+    type Target = VNode;
 
-    fn needs_deep_mount_snapshot(&self) -> bool {
-        self.vnode.dynamic_values.iter().any(|value| {
-            matches!(
-                value,
-                DynamicValue::Node(DynamicNode::Fragment(nodes)) if !nodes.is_empty()
-            )
-        })
-    }
-
-    fn deep_clone_inner(&self, preserve_mounts: bool) -> Self {
-        Self {
-            vnode: Rc::new(VNodeInner {
-                key: self.vnode.key.clone(),
-                template: self.vnode.template,
-                dynamic_values: self
-                    .vnode
-                    .dynamic_values
-                    .iter()
-                    .map(|value| match value {
-                        DynamicValue::Node(DynamicNode::Fragment(nodes)) => {
-                            DynamicValue::Node(DynamicNode::Fragment(
-                                nodes
-                                    .iter()
-                                    .map(|node| {
-                                        if preserve_mounts {
-                                            node.clone_for_mount_snapshot()
-                                        } else {
-                                            node.deep_clone_inner(false)
-                                        }
-                                    })
-                                    .collect(),
-                            ))
-                        }
-                        DynamicValue::Node(other) => DynamicValue::Node(other.clone()),
-                        DynamicValue::Attrs(attrs) => DynamicValue::Attrs(attrs.clone()),
-                    })
-                    .collect(),
-            }),
-            mount: Cell::new(if preserve_mounts {
-                self.mount.get()
-            } else {
-                Self::UNMOUNTED_MOUNT
-            }),
-        }
+    fn deref(&self) -> &Self::Target {
+        self.vnode
     }
 }
 
@@ -473,12 +476,10 @@ impl VComponent {
     pub fn mounted_scope_id(
         &self,
         dynamic_node_index: usize,
-        vnode: &VNode,
+        vnode: MountedVNode<'_>,
         dom: &VirtualDom,
     ) -> Option<ScopeId> {
-        let mount = vnode.mounted_id()?;
-
-        dom.mounted_dynamic_component_scope(mount, dynamic_node_index)
+        dom.mounted_dynamic_component_scope(vnode.mount(), dynamic_node_index)
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -489,12 +490,10 @@ impl VComponent {
     pub fn mounted_scope<'a>(
         &self,
         dynamic_node_index: usize,
-        vnode: &VNode,
+        vnode: MountedVNode<'_>,
         dom: &'a VirtualDom,
     ) -> Option<&'a ScopeState> {
-        let mount = vnode.mounted_id()?;
-
-        let scope_id = dom.mounted_dynamic_component_scope(mount, dynamic_node_index)?;
+        let scope_id = dom.mounted_dynamic_component_scope(vnode.mount(), dynamic_node_index)?;
 
         dom.scopes.get(scope_id.index())
     }

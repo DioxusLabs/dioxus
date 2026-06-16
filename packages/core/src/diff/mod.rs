@@ -10,7 +10,8 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    innerlude::{MountRef, WriteMutations},
+    DynamicNode,
+    innerlude::{MountId, MountRef, WriteMutations},
     mutations::reborrow_writer,
     nodes::VNode,
     virtual_dom::VirtualDom,
@@ -24,41 +25,92 @@ pub(crate) mod node;
 pub(crate) mod placement;
 mod template;
 
-impl VirtualDom {
-    pub(crate) fn create_children(
-        &mut self,
-        to: Option<&mut dyn WriteMutations>,
-        nodes: &[VNode],
-        parent: Option<MountRef>,
-    ) -> usize {
-        self.create_children_with_parents(to, nodes, parent, parent)
-    }
+#[derive(Debug)]
+pub(crate) struct CreatedVNode {
+    pub(crate) nodes: usize,
+    pub(crate) mount: MountId,
+}
 
+#[derive(Debug)]
+pub(crate) struct CreatedNodes {
+    pub(crate) nodes: usize,
+    pub(crate) mounts: Vec<MountId>,
+}
+
+impl VirtualDom {
     pub(crate) fn create_children_with_parents(
         &mut self,
         mut to: Option<&mut dyn WriteMutations>,
         nodes: &[VNode],
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
-    ) -> usize {
-        nodes
-            .iter()
-            .map(|child| {
-                child.create_with_parents(
-                    self,
-                    render_parent,
-                    logical_parent,
-                    reborrow_writer(&mut to),
-                )
-            })
-            .sum()
+    ) -> CreatedNodes {
+        self.reserve_fragment_children(nodes);
+
+        let mut created = CreatedNodes {
+            nodes: 0,
+            mounts: Vec::with_capacity(nodes.len()),
+        };
+        for child in nodes {
+            let child = child.create_with_parents(
+                self,
+                render_parent,
+                logical_parent,
+                reborrow_writer(&mut to),
+            );
+            created.nodes += child.nodes;
+            created.mounts.push(child.mount);
+        }
+        created
+    }
+
+    fn reserve_fragment_children(&mut self, nodes: &[VNode]) {
+        if nodes.is_empty() {
+            return;
+        }
+
+        self.runtime.mounts.borrow_mut().reserve(nodes.len());
+
+        let root_components = nodes.iter().map(root_component_count).sum::<usize>();
+        if root_components == 0 {
+            return;
+        }
+
+        self.scopes.reserve(root_components);
+        self.runtime
+            .scope_states
+            .borrow_mut()
+            .reserve(root_components);
     }
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, mut to: Option<&mut dyn WriteMutations>, nodes: &[VNode]) {
-        for node in nodes.iter().rev() {
-            node.remove_node(self, reborrow_writer(&mut to));
+    fn remove_nodes(
+        &mut self,
+        mut to: Option<&mut dyn WriteMutations>,
+        nodes: &[VNode],
+        mounts: &[MountId],
+    ) {
+        for (node, mount) in nodes.iter().zip(mounts).rev() {
+            node.remove_node(*mount, self, reborrow_writer(&mut to));
         }
     }
+}
+
+fn root_component_count(node: &VNode) -> usize {
+    node.template
+        .root_slots()
+        .filter_map(|(_, _, anchor)| anchor)
+        .map(|anchor| {
+            anchor
+                .values()
+                .filter(|idx| {
+                    matches!(
+                        node.dynamic_values[*idx].as_node(),
+                        Some(DynamicNode::Component(_))
+                    )
+                })
+                .count()
+        })
+        .sum()
 }

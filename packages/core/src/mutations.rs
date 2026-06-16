@@ -10,6 +10,15 @@ use std::{collections::BTreeMap, rc::Rc};
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub trait WriteMutations {
+    /// Return true if this writer ignores every mutation.
+    ///
+    /// Diff code can use this to skip placement-only writer work while still
+    /// doing the logical create/diff bookkeeping.
+    #[doc(hidden)]
+    fn writes_are_noops(&self) -> bool {
+        false
+    }
+
     /// Push the node registered to `id` onto the stack.
     fn push_id(&mut self, id: ElementId);
 
@@ -111,6 +120,10 @@ macro_rules! forward_mut_write_mutations {
 /// instantiated at `&mut dyn WriteMutations`.
 impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
     write_mutation_methods!(forward_mut_write_mutations,);
+
+    fn writes_are_noops(&self) -> bool {
+        WriteMutations::writes_are_noops(&**self)
+    }
 }
 
 /// Push `id`, run `with_node`, then pop the node.
@@ -119,6 +132,10 @@ pub(crate) fn with_id<M: WriteMutations + ?Sized, R>(
     id: ElementId,
     with_node: impl FnOnce(&mut M) -> R,
 ) -> R {
+    if WriteMutations::writes_are_noops(to) {
+        return with_node(to);
+    }
+
     to.push_id(id);
     let result = with_node(to);
     to.pop();
@@ -131,6 +148,10 @@ pub(crate) fn with_consumed_id<M: WriteMutations + ?Sized, R>(
     id: ElementId,
     consume_node: impl FnOnce(&mut M) -> R,
 ) -> R {
+    if WriteMutations::writes_are_noops(to) {
+        return consume_node(to);
+    }
+
     to.push_id(id);
     consume_node(to)
 }
@@ -222,6 +243,10 @@ fn create_and_place_at_id(
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
     place_nodes: impl FnOnce(&mut dyn WriteMutations, usize),
 ) -> usize {
+    if WriteMutations::writes_are_noops(to) {
+        return create_nodes(to);
+    }
+
     let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
     let count = create_nodes(&mut to);
     if count > 0 {
@@ -292,11 +317,13 @@ pub trait MultiWriter {
     type Writer: WriteMutations;
 
     /// The writer for `id`, or `None` for a target with no attached host.
-    ///
-    /// When this returns `None`, [`TargetRouter`] drops renderer mutations for
-    /// that target. Hosts should serve writers for every target they want to
-    /// materialize.
     fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Self::Writer>;
+
+    /// Return true if every target write is ignored.
+    #[doc(hidden)]
+    fn writes_are_noops(&self) -> bool {
+        false
+    }
 }
 
 impl<W: WriteMutations> MultiWriter for W {
@@ -308,6 +335,10 @@ impl<W: WriteMutations> MultiWriter for W {
         } else {
             None
         }
+    }
+
+    fn writes_are_noops(&self) -> bool {
+        WriteMutations::writes_are_noops(self)
     }
 }
 
@@ -414,6 +445,10 @@ macro_rules! route_write_mutations {
 
 impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
     write_mutation_methods!(route_write_mutations,);
+
+    fn writes_are_noops(&self) -> bool {
+        self.to.writes_are_noops()
+    }
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -613,4 +648,8 @@ macro_rules! noop_write_mutations {
 
 impl WriteMutations for NoOpMutations {
     write_mutation_methods!(noop_write_mutations,);
+
+    fn writes_are_noops(&self) -> bool {
+        true
+    }
 }

@@ -433,16 +433,20 @@ fn build_vnode_with_suspense(
         .collect::<Vec<_>>();
     let dynamic_slots = dynamic_slots_for_template(&spec.template, &template);
 
+    let dynamic_values = dynamic_slots
+        .into_iter()
+        .map(|slot| match slot {
+            FuzzDynamicSlot::Node(id) => DynamicValue::Node(dynamic_nodes[id].clone()),
+            FuzzDynamicSlot::Attrs(id) => DynamicValue::Attrs(dynamic_attrs[id].clone()),
+        })
+        .collect();
+
     VNode::new(
         spec.key.map(|key| format!("k{key}")),
         template,
-        dynamic_slots
-            .into_iter()
-            .map(|slot| match slot {
-                FuzzDynamicSlot::Node(id) => DynamicValue::Node(dynamic_nodes[id].clone()),
-                FuzzDynamicSlot::Attrs(id) => DynamicValue::Attrs(dynamic_attrs[id].clone()),
-            })
-            .collect(),
+        template
+            .reorder_dynamic_values_from_document_order(dynamic_values)
+            .into_boxed_slice(),
     )
 }
 
@@ -452,25 +456,50 @@ enum FuzzDynamicSlot {
     Attrs(usize),
 }
 
-fn dynamic_slots_for_template(_spec: &TemplateSpec, template: &Template) -> Vec<FuzzDynamicSlot> {
+/// Compute the node/attribute classification of each dynamic value in document order, mirroring the
+/// raw-op emission in [`FuzzRawTemplateBuilder`] (dynamic attributes before children). This is the
+/// fuzz-side source of truth for slot kinds; the lowered template no longer records it.
+fn dynamic_slots_for_template(spec: &TemplateSpec, _template: &Template) -> Vec<FuzzDynamicSlot> {
+    let shapes = spec
+        .roots
+        .iter()
+        .map(TemplateNodeSpec::shape)
+        .collect::<Vec<_>>();
+    let mut slots = Vec::new();
     let mut next_node = 0;
     let mut next_attr = 0;
-    template
-        .dynamics()
-        .iter()
-        .enumerate()
-        .map(|(idx, _)| {
-            if template.dynamic_is_node(idx) {
-                let slot = FuzzDynamicSlot::Node(next_node);
-                next_node += 1;
-                slot
-            } else {
-                let slot = FuzzDynamicSlot::Attrs(next_attr);
-                next_attr += 1;
-                slot
+    for shape in &shapes {
+        collect_fuzz_slots(shape, &mut slots, &mut next_node, &mut next_attr);
+    }
+    slots
+}
+
+fn collect_fuzz_slots(
+    node: &TemplateNodeShape,
+    slots: &mut Vec<FuzzDynamicSlot>,
+    next_node: &mut usize,
+    next_attr: &mut usize,
+) {
+    match node {
+        TemplateNodeShape::Element {
+            attrs, children, ..
+        } => {
+            for attr in attrs {
+                if matches!(attr, TemplateAttrShape::Dynamic) {
+                    slots.push(FuzzDynamicSlot::Attrs(*next_attr));
+                    *next_attr += 1;
+                }
             }
-        })
-        .collect()
+            for child in children {
+                collect_fuzz_slots(child, slots, next_node, next_attr);
+            }
+        }
+        TemplateNodeShape::Dynamic => {
+            slots.push(FuzzDynamicSlot::Node(*next_node));
+            *next_node += 1;
+        }
+        TemplateNodeShape::Text(_) => {}
+    }
 }
 
 fn build_dynamic(
@@ -767,14 +796,15 @@ mod tests {
         let first = compile_template(&spec);
         let second = compile_template(&spec);
 
+        // A shared `ops` pointer proves the interning cache returned the identical leaked template
+        // (a fresh compile would leak new slices).
         assert!(ptr::eq(first.ops(), second.ops()));
         assert!(ptr::eq(first.strings().blob(), second.strings().blob()));
         assert!(ptr::eq(first.strings().spans(), second.strings().spans()));
-        assert!(ptr::eq(first.dynamics(), second.dynamics()));
     }
 
     #[test]
-    fn dynamic_children_are_represented_by_packed_paths() {
+    fn dynamic_children_leave_only_static_structure_in_the_op_tape() {
         let spec = element(
             1,
             Vec::new(),
@@ -786,6 +816,7 @@ mod tests {
             roots: vec![spec],
         });
 
+        // The dynamic child no longer appears in the op tape; only the static element remains.
         let decoded_ops = template
             .ops()
             .iter()
@@ -795,21 +826,15 @@ mod tests {
             decoded_ops,
             vec![
                 DecodedTemplateOp::Enter {
-                    skip: 4,
+                    skip: 2,
                     namespace: false
                 },
                 DecodedTemplateOp::Static(0),
-                DecodedTemplateOp::Text,
-                DecodedTemplateOp::Dynamic,
             ]
         );
-        assert_eq!(template.strings().len(), 1);
         assert_eq!(template.strings().str_at(0), "tag1");
-        assert_eq!(
-            template.dynamics(),
-            &[TemplatePath::empty().next_child().next_child()]
-        );
-        assert!(template.dynamic_is_node(0));
+        assert_eq!(template.root_count(), 1);
+        assert_eq!(template.dynamic_value_count(), 1);
     }
 
     #[test]
@@ -836,6 +861,8 @@ mod tests {
             )],
         });
 
+        // Static attributes are emitted into the op tape sorted by name; dynamic attributes leave
+        // the tape entirely and live in the anchor table (2 dynamic attribute values here).
         assert_eq!(
             template.static_attr_at_op(2),
             Some(("attr1", "static4", None))
@@ -844,14 +871,6 @@ mod tests {
             template.static_attr_at_op(5),
             Some(("attr2", "static3", None))
         );
-        assert_eq!(
-            template.attr_paths().collect::<Vec<_>>(),
-            vec![
-                (0, TemplatePath::empty().next_child()),
-                (1, TemplatePath::empty().next_child())
-            ]
-        );
-        assert!(!template.dynamic_is_node(0));
-        assert!(!template.dynamic_is_node(1));
+        assert_eq!(template.dynamic_value_count(), 2);
     }
 }

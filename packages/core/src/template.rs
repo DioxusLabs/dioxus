@@ -95,7 +95,7 @@ impl TemplatePath {
     }
 
     /// Return the number of path segments.
-    pub fn len(self) -> usize {
+    pub const fn len(self) -> usize {
         let mut count = 0;
         let mut path = self.path;
         while path != 0 {
@@ -175,11 +175,6 @@ impl TemplatePath {
     /// Return the parent path of this dynamic slot.
     pub(crate) fn slot_parent(self) -> TemplatePath {
         self.split_slot().0
-    }
-
-    /// Return true if this static path is equal to or beneath `ancestor`.
-    pub(crate) fn is_descendant_of_static(self, ancestor: TemplatePath) -> bool {
-        self.starts_with(ancestor)
     }
 
     /// Return true if this dynamic slot is mounted inside `ancestor`.
@@ -367,12 +362,10 @@ pub enum DecodedTemplateOp {
         /// Namespace storage for this attr.
         namespace: DecodedTemplateAttrNamespace,
     },
-    /// A text node marker. The next op is either [`Self::Static`] or [`Self::Dynamic`].
+    /// A text node marker. The next op is a [`Self::Static`] string reference.
     Text,
     /// A static string pool reference.
     Static(u16),
-    /// A dynamic slot.
-    Dynamic,
 }
 
 impl TemplateOp {
@@ -380,8 +373,7 @@ impl TemplateOp {
     const ATTR_CODE: u16 = 0x8000;
     const ATTR_CUSTOM_NS_CODE: u16 = 0x8001;
     const TEXT_CODE: u16 = 0x8002;
-    const DYN_CODE: u16 = 0x8003;
-    const STATIC_BASE: u16 = 0x8004;
+    const STATIC_BASE: u16 = 0x8003;
     const MAX_CAP: usize = 16_383;
 
     /// Create a packed enter op.
@@ -419,11 +411,6 @@ impl TemplateOp {
         Self(Self::STATIC_BASE + id)
     }
 
-    /// Create a packed dynamic op.
-    pub(crate) const fn dynamic() -> Self {
-        Self(Self::DYN_CODE)
-    }
-
     /// Decode this packed op.
     pub const fn decode(self) -> DecodedTemplateOp {
         if self.0 <= Self::ENTER_MAX_CODE {
@@ -441,8 +428,6 @@ impl TemplateOp {
             }
         } else if self.0 == Self::TEXT_CODE {
             DecodedTemplateOp::Text
-        } else if self.0 == Self::DYN_CODE {
-            DecodedTemplateOp::Dynamic
         } else {
             DecodedTemplateOp::Static(self.0 - Self::STATIC_BASE)
         }
@@ -461,11 +446,6 @@ impl TemplateOp {
     /// Return true if this op starts a text slot.
     pub const fn is_text(self) -> bool {
         matches!(self.decode(), DecodedTemplateOp::Text)
-    }
-
-    /// Return true if this op is a dynamic slot.
-    pub const fn is_dynamic(self) -> bool {
-        matches!(self.decode(), DecodedTemplateOp::Dynamic)
     }
 
     /// Return the namespace bit for element and attr ops.
@@ -496,6 +476,85 @@ impl TemplateOp {
     }
 }
 
+/// Sentinel `op` value marking a [`TemplateAnchor`] for a root-level dynamic node slot, which has no
+/// enclosing static element.
+pub(crate) const ROOT_ANCHOR_OP: u16 = u16::MAX;
+
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct TemplateAnchor {
+    op: u16,
+    path: TemplatePath,
+    value_start: u16,
+    value_count: u16,
+}
+
+impl TemplateAnchor {
+    pub const fn new(op: u16, path: TemplatePath, value_start: u16, value_count: u16) -> Self {
+        if value_count == 0 {
+            panic!("template anchors must cover at least one dynamic value");
+        }
+        Self {
+            op,
+            path,
+            value_start,
+            value_count,
+        }
+    }
+
+    const fn single(op: u16, path: TemplatePath, value_start: u16) -> Self {
+        Self::new(op, path, value_start, 1)
+    }
+
+    pub const fn root_node(value_index: u16, root_idx: usize, appends: bool) -> Self {
+        Self {
+            op: ROOT_ANCHOR_OP,
+            path: TemplatePath::root(root_idx).with_appends(appends),
+            value_start: value_index,
+            value_count: 1,
+        }
+    }
+
+    pub fn element_op(self) -> Option<usize> {
+        (self.op != ROOT_ANCHOR_OP).then_some(self.op as usize)
+    }
+
+    pub fn is_root_level(self) -> bool {
+        self.op == ROOT_ANCHOR_OP
+    }
+
+    pub fn path(self) -> TemplatePath {
+        self.path
+    }
+
+    pub fn value_start(self) -> usize {
+        self.value_start as usize
+    }
+
+    pub fn value_count(self) -> usize {
+        self.value_count as usize
+    }
+
+    pub fn values(self) -> std::ops::Range<usize> {
+        self.value_start as usize..(self.value_start as usize + self.value_count as usize)
+    }
+
+    const fn same_slot(self, op: u16, path: TemplatePath) -> bool {
+        self.op == op && self.path.bits() == path.bits() && self.path.appends() == path.appends()
+    }
+
+    const fn should_fill_before(self, other: Self) -> bool {
+        let self_depth = self.path.len();
+        let other_depth = other.path.len();
+        if self_depth != other_depth {
+            return self_depth > other_depth;
+        }
+
+        self.value_start > other.value_start
+    }
+}
+
 /// Maximum packed template storage capacity.
 pub(crate) const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
@@ -515,7 +574,7 @@ pub(crate) struct TemplateStorage<
 > {
     ops: ConstVec<TemplateOp, OPS_CAP>,
     strings: StringInterner<STRING_BLOB_CAP, STRING_SPAN_CAP>,
-    dynamics: ConstVec<TemplatePath, DYNAMIC_CAP>,
+    anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
 }
 
 struct RawTemplateLoweringCursor {
@@ -562,6 +621,21 @@ impl RawTemplateLoweringCursor {
             panic!("dynamic attr raw op without an open element");
         }
         self.element_paths[self.stack_pointer - 1]
+    }
+
+    const fn current_element_op(&self) -> u16 {
+        if self.stack_pointer == 0 {
+            panic!("dynamic attr raw op without an open element");
+        }
+        self.enter_stack[self.stack_pointer - 1] as u16
+    }
+
+    const fn node_anchor_op(&self) -> u16 {
+        if self.stack_pointer == 0 {
+            ROOT_ANCHOR_OP
+        } else {
+            self.enter_stack[self.stack_pointer - 1] as u16
+        }
     }
 
     const fn next_node_path(&mut self) -> TemplatePath {
@@ -655,8 +729,8 @@ macro_rules! lower_raw_template {
                     }
                 }
                 TemplateRawOp::DynamicAttr => {
-                    $builder.push_op(TemplateOp::dynamic());
-                    $builder.push_dynamic(cursor.current_element_path());
+                    $builder
+                        .push_anchor(cursor.current_element_op(), cursor.current_element_path());
                 }
                 TemplateRawOp::StaticText { value } => {
                     let _ = cursor.next_node_path();
@@ -666,9 +740,7 @@ macro_rules! lower_raw_template {
                 TemplateRawOp::DynamicNode => {
                     let appends = cursor.dynamic_node_appends($raw, index);
                     let path = cursor.next_slot_path(appends);
-                    $builder.push_op(TemplateOp::text());
-                    $builder.push_op(TemplateOp::dynamic());
-                    $builder.push_dynamic(path);
+                    $builder.push_anchor(cursor.node_anchor_op(), path);
                 }
             }
             index += 1;
@@ -689,28 +761,12 @@ impl<
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
             strings: StringInterner::new(),
-            dynamics: ConstVec::new_with_max_size(),
+            anchors: ConstVec::new_with_max_size(),
         };
 
         lower_raw_template!(raw, storage);
+        storage.sort_anchors_in_fill_order();
         storage
-    }
-
-    /// Reallocate the storage with a new capacity.
-    pub(crate) const fn reallocate<
-        const NEW_OPS_CAP: usize,
-        const NEW_STRING_BLOB_CAP: usize,
-        const NEW_STRING_SPAN_CAP: usize,
-        const NEW_DYNAMIC_CAP: usize,
-    >(
-        self,
-    ) -> TemplateStorage<NEW_OPS_CAP, NEW_STRING_BLOB_CAP, NEW_STRING_SPAN_CAP, NEW_DYNAMIC_CAP>
-    {
-        TemplateStorage {
-            ops: self.ops.reallocate(),
-            strings: self.strings.reallocate(),
-            dynamics: self.dynamics.reallocate(),
-        }
     }
 
     /// Return this storage as a compact template.
@@ -718,7 +774,7 @@ impl<
         Template::new(
             self.ops.as_slice(),
             self.strings.as_static(),
-            self.dynamics.as_slice(),
+            self.anchors.as_slice(),
         )
     }
 
@@ -744,15 +800,68 @@ impl<
         self.ops.set(index, op);
     }
 
-    const fn push_dynamic(&mut self, path: TemplatePath) {
-        self.dynamics.push(path);
+    const fn push_anchor(&mut self, op: u16, path: TemplatePath) {
+        let len = self.anchors.len();
+        if len > 0 {
+            let last = self.anchors.at(len - 1);
+            if last.same_slot(op, path) {
+                self.anchors.set(
+                    len - 1,
+                    TemplateAnchor {
+                        value_count: last.value_count + 1,
+                        ..last
+                    },
+                );
+                return;
+            }
+        }
+        let mut i = 0;
+        while i < len {
+            if self.anchors.at(i).same_slot(op, path) {
+                panic!(
+                    "dynamic values for a template anchor must be contiguous (attributes must precede children)"
+                );
+            }
+            i += 1;
+        }
+        let value_start = if len == 0 {
+            0
+        } else {
+            let last = self.anchors.at(len - 1);
+            last.value_start + last.value_count
+        };
+        self.anchors
+            .push(TemplateAnchor::single(op, path, value_start));
+    }
+
+    const fn sort_anchors_in_fill_order(&mut self) {
+        let len = self.anchors.len();
+        let mut index = 0;
+        while index < len {
+            let mut best = index;
+            let mut candidate = index + 1;
+            while candidate < len {
+                if self
+                    .anchors
+                    .at(candidate)
+                    .should_fill_before(self.anchors.at(best))
+                {
+                    best = candidate;
+                }
+                candidate += 1;
+            }
+            if best != index {
+                self.anchors.swap(index, best);
+            }
+            index += 1;
+        }
     }
 }
 
 struct RuntimeTemplateBuilder {
     ops: Vec<TemplateOp>,
     strings: RuntimeStringInterner,
-    dynamics: Vec<TemplatePath>,
+    anchors: Vec<TemplateAnchor>,
 }
 
 impl RuntimeTemplateBuilder {
@@ -760,7 +869,7 @@ impl RuntimeTemplateBuilder {
         Self {
             ops: Vec::new(),
             strings: RuntimeStringInterner::new(),
-            dynamics: Vec::new(),
+            anchors: Vec::new(),
         }
     }
 
@@ -785,15 +894,38 @@ impl RuntimeTemplateBuilder {
         self.ops.push(TemplateOp::static_text(id));
     }
 
-    fn push_dynamic(&mut self, path: TemplatePath) {
-        self.dynamics.push(path);
+    fn push_anchor(&mut self, op: u16, path: TemplatePath) {
+        if let Some(last) = self.anchors.last_mut() {
+            if last.same_slot(op, path) {
+                last.value_count += 1;
+                return;
+            }
+        }
+        assert!(
+            !self.anchors.iter().any(|a| a.same_slot(op, path)),
+            "dynamic values for a template anchor must be contiguous (attributes must precede children)"
+        );
+        let value_start = self
+            .anchors
+            .last()
+            .map_or(0, |a| a.value_start + a.value_count);
+        self.anchors
+            .push(TemplateAnchor::single(op, path, value_start));
     }
 
     fn into_template(self) -> Template {
+        let mut anchors = self.anchors;
+        anchors.sort_by(|left, right| {
+            right
+                .path
+                .len()
+                .cmp(&left.path.len())
+                .then_with(|| right.value_start.cmp(&left.value_start))
+        });
         Template::new(
             Box::leak(self.ops.into_boxed_slice()),
             self.strings.leak(),
-            Box::leak(self.dynamics.into_boxed_slice()),
+            Box::leak(anchors.into_boxed_slice()),
         )
     }
 }
@@ -828,9 +960,13 @@ pub struct Template {
     /// Static strings referenced by [`TemplateOp::Static`].
     strings: StaticStringInterner,
 
-    /// Dynamic paths in document order.
+    /// Dynamic value groups in reverse breadth-first fill order, each anchored to a static element.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    dynamics: &'static [TemplatePath],
+    anchors: &'static [TemplateAnchor],
+
+    /// Total number of runtime dynamic values this template expects.
+    #[cfg_attr(feature = "serialize", serde(skip))]
+    dynamic_value_count: u16,
 
     /// Compile-time hash of template content for reliable cross-crate comparison.
     /// This ensures identical templates compare equal regardless of optimization levels.
@@ -848,18 +984,20 @@ pub struct Template {
 }
 
 impl Template {
-    /// Create a new flat template with the given ops, strings, and dynamic paths.
+    /// Create a new flat template with the given ops, strings, and dynamic anchors.
     /// The hash is computed automatically from the template content.
     pub(crate) const fn new(
         ops: &'static [TemplateOp],
         strings: StaticStringInterner,
-        dynamics: &'static [TemplatePath],
+        anchors: &'static [TemplateAnchor],
     ) -> Self {
+        Self::validate_anchors(anchors);
         Self {
             ops,
             strings,
-            dynamics,
-            hash: Self::compute_hash(ops, strings, dynamics),
+            anchors,
+            dynamic_value_count: Self::compute_dynamic_value_count(anchors),
+            hash: Self::compute_hash(ops, strings, anchors),
         }
     }
 
@@ -873,9 +1011,86 @@ impl Template {
         self.strings
     }
 
-    /// Get dynamic paths in document order.
-    pub const fn dynamics(&self) -> &'static [TemplatePath] {
-        self.dynamics
+    const fn validate_anchors(anchors: &[TemplateAnchor]) {
+        let mut index = 0;
+        let mut has_start = anchors.is_empty();
+        while index < anchors.len() {
+            let anchor = anchors[index];
+            if anchor.value_count == 0 {
+                panic!("template anchors must cover at least one dynamic value");
+            }
+
+            let start = anchor.value_start;
+            let end = Self::anchor_value_end(anchor);
+            if start == 0 {
+                has_start = true;
+            }
+
+            let mut other_index = 0;
+            while other_index < anchors.len() {
+                if index != other_index {
+                    let other = anchors[other_index];
+                    let other_end = Self::anchor_value_end(other);
+                    if start < other_end && other.value_start < end {
+                        panic!("template anchor dynamic value ranges must not overlap");
+                    }
+                }
+                other_index += 1;
+            }
+
+            if start != 0 {
+                let mut has_predecessor = false;
+                let mut predecessor_index = 0;
+                while predecessor_index < anchors.len() && !has_predecessor {
+                    has_predecessor = Self::anchor_value_end(anchors[predecessor_index]) == start;
+                    predecessor_index += 1;
+                }
+                if !has_predecessor {
+                    panic!("template anchor dynamic value ranges must be contiguous");
+                }
+            }
+
+            index += 1;
+        }
+
+        if !has_start {
+            panic!("template anchor dynamic value ranges must start at zero");
+        }
+    }
+
+    /// Get dynamic value anchors in native fill order.
+    pub const fn anchors(&self) -> &'static [TemplateAnchor] {
+        self.anchors
+    }
+
+    pub(crate) fn anchors_in_document_order(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
+        (0..self.dynamic_value_count()).filter_map(move |idx| {
+            self.anchors
+                .iter()
+                .find(|anchor| anchor.value_start() == idx)
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn reorder_dynamic_values_from_document_order<T>(&self, values: Vec<T>) -> Vec<T> {
+        let expected = self.dynamic_value_count();
+        assert_eq!(
+            values.len(),
+            expected,
+            "dynamic value count must match template"
+        );
+        values
+    }
+
+    /// Return the total number of dynamic values.
+    pub fn dynamic_value_count(&self) -> usize {
+        self.dynamic_value_count as usize
+    }
+
+    pub(crate) fn anchor_for_value(&self, idx: usize) -> Option<&'static TemplateAnchor> {
+        self.anchors.iter().find(|a| a.values().contains(&idx))
     }
 
     /// Get the number of root positions in this template.
@@ -883,12 +1098,16 @@ impl Template {
         let mut count = 0;
         let mut op = 0;
         while op < self.ops.len() {
-            if self.is_static_node_op(op) || self.is_dynamic_node_marker(op) {
+            if self.is_static_node_op(op) {
                 count += 1;
             }
             op = self.next_sibling_op(op);
         }
-        count
+        count + self.root_level_anchor_count()
+    }
+
+    fn root_level_anchor_count(&self) -> usize {
+        self.anchors.iter().filter(|a| a.is_root_level()).count()
     }
 
     /// Get a static string from this template's string pool.
@@ -965,7 +1184,7 @@ impl Template {
     }
 
     /// Return the op immediately after an element subtree.
-    pub fn element_end(&self, op: usize) -> Option<usize> {
+    pub(crate) fn element_end(&self, op: usize) -> Option<usize> {
         let (skip, _) = self.enter_meta(op)?;
         Some(op + skip)
     }
@@ -977,8 +1196,6 @@ impl Template {
         while cursor < end {
             if let Some(len) = self.attr_op_len(cursor) {
                 cursor += len;
-            } else if self.dynamic_op_is_attr(cursor) {
-                cursor += 1;
             } else {
                 break;
             }
@@ -986,8 +1203,7 @@ impl Template {
         Some((attr_start, cursor, end))
     }
 
-    /// Return the first static or dynamic child marker inside an element.
-    pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
+    pub(crate) fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
         Some(self.element_attr_child_ops(element_op)?.1)
     }
 
@@ -1005,8 +1221,6 @@ impl Template {
                     found = Some(value);
                 }
                 cursor += self.attr_op_len(cursor)?;
-            } else if self.dynamic_op_is_attr(cursor) {
-                cursor += 1;
             } else {
                 break;
             }
@@ -1014,83 +1228,60 @@ impl Template {
         found
     }
 
-    /// Iterate over dynamic node slots as `(dynamic_value_index, path)` pairs.
-    pub fn node_paths(&self) -> impl Iterator<Item = (usize, TemplatePath)> + '_ {
-        self.dynamics
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(move |(idx, _)| self.dynamic_is_node(*idx))
-    }
-
-    /// Iterate over dynamic attribute slots as `(dynamic_value_index, path)` pairs.
-    pub fn attr_paths(&self) -> impl Iterator<Item = (usize, TemplatePath)> + '_ {
-        self.dynamics
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(move |(idx, _)| self.dynamic_is_attr(*idx))
-    }
-
-    /// Get the template path for a dynamic slot by dynamic value index.
+    /// Get the navigation path for a dynamic value by index.
     pub fn dynamic_path(&self, idx: usize) -> TemplatePath {
-        self.dynamics[idx]
+        self.anchor_for_value(idx)
+            .expect("dynamic value index out of range")
+            .path()
     }
 
-    /// Return the flat op index for a static root at a root position.
-    pub fn root_op_index(&self, root_idx: usize) -> Option<usize> {
-        let mut current_root = 0;
-        let mut idx = 0;
-        while idx < self.ops.len() {
-            if self.is_static_node_op(idx) || self.is_dynamic_node_marker(idx) {
-                if current_root == root_idx {
-                    return self.is_static_node_op(idx).then_some(idx);
-                }
-                current_root += 1;
-                idx = self.next_sibling_op(idx);
-            } else {
-                idx = self.next_sibling_op(idx);
+    fn root_dynamic_anchor(&self, root_idx: usize) -> Option<&'static TemplateAnchor> {
+        self.anchors
+            .iter()
+            .find(|anchor| anchor.is_root_level() && anchor.path().split_slot().1 == root_idx)
+    }
+
+    /// Iterate template root positions in materialization order.
+    pub fn root_slots(
+        &self,
+    ) -> impl Iterator<Item = (usize, Option<usize>, Option<&'static TemplateAnchor>)> + '_ {
+        let root_count = self.root_count();
+        let mut root_idx = 0usize;
+        let mut op = 0usize;
+        std::iter::from_fn(move || {
+            if root_idx >= root_count {
+                return None;
             }
-        }
-        None
-    }
 
-    /// Return the flat op index for a static node path.
-    pub(crate) fn static_node_op_at_path(&self, path: TemplatePath) -> Option<usize> {
-        if path.is_empty() {
-            return None;
-        }
-        let mut op = self.root_op_index(path.segment(0) as usize)?;
-        for depth in 1..path.len() {
-            op = self.static_child_op(op, path.segment(depth) as usize)?;
-        }
-        Some(op)
-    }
+            let current_root = root_idx;
+            root_idx += 1;
 
-    /// Return the flat op index for the static-prototype child at `child_idx` under an element op.
-    pub fn static_child_op(&self, element_op: usize, child_idx: usize) -> Option<usize> {
-        let (_, mut cursor, end) = self.element_attr_child_ops(element_op)?;
-        let mut static_child = 0;
-
-        while cursor < end {
-            if self.is_static_node_op(cursor) {
-                if static_child == child_idx {
-                    return Some(cursor);
-                }
-                static_child += 1;
-                cursor = self.next_sibling_op(cursor);
-            } else if self.is_dynamic_node_marker(cursor) {
-                cursor = self.next_sibling_op(cursor);
-            } else {
-                cursor += 1;
+            if let Some(anchor) = self.root_dynamic_anchor(current_root) {
+                return Some((current_root, None, Some(anchor)));
             }
-        }
 
-        None
+            while op < self.ops.len() && !self.is_static_node_op(op) {
+                op = self.next_sibling_op(op);
+            }
+
+            if op >= self.ops.len() {
+                return None;
+            }
+
+            let current_op = op;
+            op = self.next_sibling_op(op);
+            Some((current_root, Some(current_op), None))
+        })
+    }
+
+    /// Iterate static root positions and their op indices.
+    pub fn static_root_ops(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.root_slots()
+            .filter_map(|(root_idx, op, _)| op.map(|op| (root_idx, op)))
     }
 
     /// Return the flat op index immediately after the static node or op at `op`.
-    pub fn next_sibling_op(&self, op: usize) -> usize {
+    pub(crate) fn next_sibling_op(&self, op: usize) -> usize {
         match self.ops[op].decode() {
             DecodedTemplateOp::Enter { skip, .. } => op + skip as usize,
             DecodedTemplateOp::Text => op + 2,
@@ -1103,7 +1294,7 @@ impl Template {
     }
 
     /// Return true if an op starts an element or static text node.
-    pub fn is_static_node_op(&self, op: usize) -> bool {
+    pub(crate) fn is_static_node_op(&self, op: usize) -> bool {
         match self.ops[op].decode() {
             DecodedTemplateOp::Enter { .. } => true,
             DecodedTemplateOp::Text => matches!(
@@ -1114,84 +1305,75 @@ impl Template {
         }
     }
 
-    /// Is this template worth caching at all, since it's completely runtime?
-    ///
-    /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
-    pub fn is_completely_dynamic(&self) -> bool {
-        !self
-            .ops
+    /// Iterate static child node ops of an element.
+    pub fn static_children(&self, element_op: usize) -> impl Iterator<Item = usize> + '_ {
+        let (mut cursor, end) = match self.element_attr_child_ops(element_op) {
+            Some((_, child_start, element_end)) => (child_start, element_end),
+            None => (0, 0),
+        };
+        std::iter::from_fn(move || {
+            while cursor < end {
+                let op = cursor;
+                cursor = self.next_sibling_op(cursor);
+                if self.is_static_node_op(op) {
+                    return Some(op);
+                }
+            }
+            None
+        })
+    }
+
+    /// Iterate dynamic anchors attached directly to an element.
+    pub fn element_dynamic_anchors(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.anchors
             .iter()
-            .enumerate()
-            .any(|(idx, _)| self.is_static_node_op(idx))
+            .filter(move |anchor| anchor.element_op() == Some(element_op))
     }
 
-    /// Return true if an op starts a dynamic node marker.
-    pub fn is_dynamic_node_marker(&self, op: usize) -> bool {
-        self.ops[op].decode() == DecodedTemplateOp::Text
-            && matches!(
-                self.ops.get(op + 1).map(|op| op.decode()),
-                Some(DecodedTemplateOp::Dynamic)
-            )
-    }
-
-    /// Return the packed op index for a dynamic slot.
-    pub(crate) fn dynamic_op_index(&self, dynamic_idx: usize) -> Option<usize> {
-        let mut seen = 0;
-        for (idx, op) in self.ops.iter().enumerate() {
-            if op.decode() == DecodedTemplateOp::Dynamic {
-                if seen == dynamic_idx {
-                    return Some(idx);
+    /// Iterate static attributes of an element.
+    pub fn static_attrs(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = (&'static str, &'static str, Option<&'static str>)> + '_ {
+        let (mut cursor, child_start) = match self.element_attr_child_ops(element_op) {
+            Some((attr_start, child_start, _)) => (attr_start, child_start),
+            None => (0, 0),
+        };
+        std::iter::from_fn(move || {
+            while cursor < child_start {
+                let op = cursor;
+                cursor += self.attr_op_len(cursor).unwrap_or(1);
+                if let Some(attr) = self.static_attr_at_op(op) {
+                    return Some(attr);
                 }
-                seen += 1;
             }
-        }
-        None
-    }
-
-    /// Return the dynamic value index for a packed dynamic op.
-    pub fn dynamic_index_at_op(&self, op_index: usize) -> Option<usize> {
-        if self.ops.get(op_index).map(|op| op.decode()) != Some(DecodedTemplateOp::Dynamic) {
-            return None;
-        }
-        let mut seen = 0;
-        for (idx, op) in self.ops.iter().enumerate() {
-            if op.decode() == DecodedTemplateOp::Dynamic {
-                if idx == op_index {
-                    return Some(seen);
-                }
-                seen += 1;
-            }
-        }
-        None
-    }
-
-    /// Return true if the dynamic op at `op_index` is a dynamic node slot.
-    pub(crate) fn dynamic_op_is_node(&self, op_index: usize) -> bool {
-        self.ops.get(op_index).is_some_and(|op| {
-            op.decode() == DecodedTemplateOp::Dynamic
-                && op_index > 0
-                && self.ops[op_index - 1].decode() == DecodedTemplateOp::Text
+            None
         })
     }
 
-    /// Return true if the dynamic op at `op_index` is a dynamic attribute slot.
-    pub fn dynamic_op_is_attr(&self, op_index: usize) -> bool {
-        self.ops.get(op_index).is_some_and(|op| {
-            op.decode() == DecodedTemplateOp::Dynamic
-                && (op_index == 0 || self.ops[op_index - 1].decode() != DecodedTemplateOp::Text)
-        })
+    const fn compute_dynamic_value_count(anchors: &[TemplateAnchor]) -> u16 {
+        let mut max = 0u16;
+        let mut i = 0;
+        while i < anchors.len() {
+            let anchor = anchors[i];
+            let end = Self::anchor_value_end(anchor);
+            if end > max {
+                max = end;
+            }
+            i += 1;
+        }
+        max
     }
 
-    /// Return true if a dynamic slot is a node slot.
-    pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
-        self.dynamic_op_index(dynamic_idx)
-            .is_some_and(|op| self.dynamic_op_is_node(op))
-    }
-
-    /// Return true if a dynamic slot is an attribute slot.
-    pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
-        self.dynamic_op_index(dynamic_idx)
-            .is_some_and(|op| self.dynamic_op_is_attr(op))
+    const fn anchor_value_end(anchor: TemplateAnchor) -> u16 {
+        let end = anchor.value_start as u32 + anchor.value_count as u32;
+        if end > u16::MAX as u32 {
+            panic!("template dynamic value count exceeds packed anchor capacity");
+        }
+        end as u16
     }
 
     /// Compute a content-based hash of template structure.
@@ -1199,7 +1381,7 @@ impl Template {
     const fn compute_hash(
         ops: &[TemplateOp],
         strings: StaticStringInterner,
-        dynamics: &[TemplatePath],
+        anchors: &[TemplateAnchor],
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
@@ -1222,17 +1404,19 @@ impl Template {
                     let h = xxh64(&[0x04], hash);
                     strings.hash_at(id, h)
                 }
-                DecodedTemplateOp::Dynamic => xxh64(&[0x05], hash),
             };
             i += 1;
         }
 
-        // Hash dynamic metadata.
+        // Hash anchor metadata.
         hash = xxh64(&[0xA1], hash);
         let mut i = 0;
-        while i < dynamics.len() {
-            hash = xxh64(&dynamics[i].path.to_le_bytes(), hash);
-            hash = xxh64(&[dynamics[i].appends as u8], hash);
+        while i < anchors.len() {
+            let anchor = anchors[i];
+            hash = xxh64(&anchor.op.to_le_bytes(), hash);
+            hash = xxh64(&anchor.path.path.to_le_bytes(), hash);
+            hash = xxh64(&[anchor.path.appends as u8], hash);
+            hash = xxh64(&anchor.value_count.to_le_bytes(), hash);
             i += 1;
         }
 

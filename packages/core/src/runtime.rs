@@ -2,12 +2,10 @@ use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
-    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, innerlude::MountId,
+    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, VNode,
+    innerlude::MountId,
 };
-use crate::{
-    CapturedError,
-    arena::{MountedDynamicNodeSlot, RenderTargetState},
-};
+use crate::{CapturedError, arena::RenderTargetState};
 use crate::{
     SuspenseContext,
     innerlude::{DirtyTasks, Effect},
@@ -18,7 +16,7 @@ use crate::{
     scope_context::Scope,
     scopes::ScopeId,
 };
-use generational_box::{AnyStorage, Owner};
+use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
@@ -44,7 +42,7 @@ enum EventTargetPath {
 impl EventTargetPath {
     fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
-            Self::Static(path) => path.is_descendant_of_static(attr),
+            Self::Static(path) => path.starts_with(attr),
             Self::Slot(path) => path.slot_is_inside_static(attr),
         }
     }
@@ -58,11 +56,19 @@ thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
 }
 
+#[derive(Clone, Copy)]
+struct ScopeStackFrame {
+    scope: ScopeId,
+    target_id: RenderTargetId,
+}
+
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     // We use this to track the current scope
     // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
-    scope_stack: RefCell<Vec<ScopeId>>,
+    scope_stack: RefCell<Vec<ScopeStackFrame>>,
+
+    current_render_target: Cell<RenderTargetId>,
 
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
@@ -130,6 +136,7 @@ impl Runtime {
             rendering: Cell::new(false),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            current_render_target: Cell::new(RenderTargetId::ROOT),
             suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
@@ -220,9 +227,7 @@ fn MyComponent() -> Element {{
     /// no scope is active. Every scope carries a flat target assignment;
     /// portal scopes carry the portal's target and their subtree inherits it.
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
-        self.try_current_scope_id()
-            .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
-            .unwrap_or(RenderTargetId::ROOT)
+        self.current_render_target.get()
     }
 
     /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
@@ -243,39 +248,72 @@ fn MyComponent() -> Element {{
 
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
-        let id = context.id;
+        let id = context.id.index();
         let mut scopes = self.scope_states.borrow_mut();
-        if scopes.len() <= id.index() {
-            scopes.resize_with(id.index() + 1, Default::default);
+        if id == scopes.len() {
+            scopes.push(Some(context));
+            return;
         }
-        scopes[id.index()] = Some(context);
+
+        if scopes.len() <= id {
+            scopes.resize_with(id + 1, Default::default);
+        }
+        scopes[id] = Some(context);
+    }
+
+    pub(crate) fn set_scope_target_id(&self, scope: ScopeId, target_id: RenderTargetId) {
+        {
+            let scope_state = self.get_state(scope);
+            scope_state.set_target_id(target_id);
+        }
+
+        {
+            let mut scope_stack = self.scope_stack.borrow_mut();
+            if let Some(current) = scope_stack.last_mut()
+                && current.scope == scope
+            {
+                current.target_id = target_id;
+                self.current_render_target.set(target_id);
+            }
+        }
     }
 
     pub(crate) fn remove_scope(self: &Rc<Self>, id: ScopeId) {
         {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.index()] {
-                // Manually drop tasks, hooks, and contexts inside of the runtime
-                self.in_scope(id, || {
-                    // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
-                    // In theory nested tasks might not like this
-                    for id in scope.spawned_tasks.take() {
-                        self.remove_task(id);
-                    }
+                let has_scoped_state = !scope.spawned_tasks.borrow().is_empty()
+                    || !scope.hooks.borrow().is_empty()
+                    || has_user_shared_contexts(scope);
 
-                    // Drop all queued effects
+                if has_scoped_state {
+                    // Manually drop tasks, hooks, and contexts inside of the runtime
+                    self.in_scope(id, || {
+                        // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
+                        // In theory nested tasks might not like this
+                        for id in scope.spawned_tasks.take() {
+                            self.remove_task(id);
+                        }
+
+                        // Drop all queued effects
+                        self.pending_effects
+                            .borrow_mut()
+                            .remove(&ScopeOrder::new(scope.height, scope.id));
+
+                        // Drop all hooks in reverse order in case a hook depends on another hook.
+                        for hook in scope.hooks.take().drain(..).rev() {
+                            drop(hook);
+                        }
+
+                        // Drop all contexts
+                        scope.shared_contexts.take();
+                    });
+                } else {
+                    // Empty scopes do not need the runtime/scope stack just to clear bookkeeping.
                     self.pending_effects
                         .borrow_mut()
                         .remove(&ScopeOrder::new(scope.height, scope.id));
-
-                    // Drop all hooks in reverse order in case a hook depends on another hook.
-                    for hook in scope.hooks.take().drain(..).rev() {
-                        drop(hook);
-                    }
-
-                    // Drop all contexts
-                    scope.shared_contexts.take();
-                });
+                }
             }
         }
         self.scope_states.borrow_mut()[id.index()].take();
@@ -295,19 +333,16 @@ fn MyComponent() -> Element {{
 
     /// Get the current scope id
     pub fn current_scope_id(&self) -> ScopeId {
-        self.scope_stack.borrow().last().copied().unwrap()
+        self.scope_stack
+            .borrow()
+            .last()
+            .map(|frame| frame.scope)
+            .unwrap()
     }
 
     /// Try to get the current scope id, returning None if it we aren't actively inside a scope
     pub fn try_current_scope_id(&self) -> Option<ScopeId> {
-        self.scope_stack.borrow().last().copied()
-    }
-
-    /// The depth of the scope stack, used to check that render drivers leave
-    /// the stack balanced.
-    #[cfg(debug_assertions)]
-    pub(crate) fn scope_stack_depth(&self) -> usize {
-        self.scope_stack.borrow().len()
+        self.scope_stack.borrow().last().map(|frame| frame.scope)
     }
 
     /// Call this function with the current scope set to the given scope
@@ -342,21 +377,31 @@ fn MyComponent() -> Element {{
 
     /// Push a scope onto the stack
     fn push_scope(&self, scope: ScopeId) {
-        let suspense_location = self
+        let (suspense_location, target_id) = self
             .scope_states
             .borrow()
             .get(scope.index())
             .and_then(|s| s.as_ref())
-            .map(|s| s.suspense_location())
-            .unwrap_or_default();
+            .map(|s| (s.suspense_location(), s.target_id()))
+            .unwrap_or((SuspenseLocation::default(), RenderTargetId::ROOT));
         self.suspense_stack.borrow_mut().push(suspense_location);
-        self.scope_stack.borrow_mut().push(scope);
+        self.scope_stack
+            .borrow_mut()
+            .push(ScopeStackFrame { scope, target_id });
+        self.current_render_target.set(target_id);
     }
 
     /// Pop a scope off the stack
     fn pop_scope(&self) {
-        self.scope_stack.borrow_mut().pop();
         self.suspense_stack.borrow_mut().pop();
+        let target_id = {
+            let mut scope_stack = self.scope_stack.borrow_mut();
+            scope_stack.pop();
+            scope_stack
+                .last()
+                .map_or(RenderTargetId::ROOT, |frame| frame.target_id)
+        };
+        self.current_render_target.set(target_id);
     }
 
     /// Get the state for any scope given its ID
@@ -489,12 +534,21 @@ fn MyComponent() -> Element {{
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
 
-        for (idx, path) in node.template.attr_paths() {
-            let Some(id) = mount.mounted_attribute(idx) else {
+        for anchor in node.template.anchors() {
+            if node.dynamic_values[anchor.value_start()]
+                .as_attrs()
+                .is_none()
+            {
                 continue;
-            };
-            if id.element_id() == element {
-                return Some(EventTargetPath::Static(path));
+            }
+            let path = anchor.path();
+            for idx in anchor.values() {
+                let Some(id) = mount.mounted_attribute(idx) else {
+                    continue;
+                };
+                if id.element_id() == element {
+                    return Some(EventTargetPath::Static(path));
+                }
             }
         }
 
@@ -510,31 +564,69 @@ fn MyComponent() -> Element {{
         let parent = mounts.get(parent_mount.0)?;
         let parent_node = parent.node();
 
-        for (idx, path) in parent_node.template.node_paths() {
-            match parent_node.dynamic_values[idx].node() {
-                DynamicNode::Fragment(children) => {
-                    if children
-                        .iter()
-                        .any(|child| child.mounted_id() == Some(child_mount))
-                    {
-                        return Some(EventTargetPath::Slot(path));
+        for anchor in parent_node.template.anchors() {
+            if parent_node.dynamic_values[anchor.value_start()]
+                .as_node()
+                .is_none()
+            {
+                continue;
+            }
+            let path = anchor.path();
+            for idx in anchor.values() {
+                match parent_node.dynamic_values[idx].node() {
+                    DynamicNode::Fragment(children) => {
+                        if parent
+                            .fragment_children(idx, children.len())
+                            .is_some_and(|mounts| mounts.contains(&child_mount))
+                        {
+                            return Some(EventTargetPath::Slot(path));
+                        }
                     }
-                }
-                DynamicNode::Component(_) => {
-                    let Some(MountedDynamicNodeSlot::Component { root_mount, .. }) =
-                        parent.dynamic_node_slot(idx)
-                    else {
-                        continue;
-                    };
-                    if root_mount == Some(child_mount) {
-                        return Some(EventTargetPath::Slot(path));
+                    DynamicNode::Component(_) => {
+                        let Some(scope) = parent.component_scope(idx) else {
+                            continue;
+                        };
+                        let root_mount = self
+                            .scope_states
+                            .borrow()
+                            .get(scope.index())
+                            .and_then(|scope| scope.as_ref())
+                            .and_then(|scope| scope.root_mount());
+                        if root_mount == Some(child_mount) {
+                            return Some(EventTargetPath::Slot(path));
+                        }
                     }
+                    DynamicNode::Text(_) => {}
                 }
-                DynamicNode::Text(_) => {}
             }
         }
 
         None
+    }
+
+    fn visit_event_attributes(
+        node: &VNode,
+        target_path: EventTargetPath,
+        name: &str,
+        path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
+        mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
+    ) {
+        for anchor in node.dynamic_attr_anchors() {
+            let attr_path = anchor.path();
+            if !path_matches(target_path, attr_path) {
+                continue;
+            }
+
+            for idx in anchor.values() {
+                let attrs = node.dynamic_values[idx].attrs();
+                for attr in attrs.iter() {
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /*
@@ -580,32 +672,26 @@ fn MyComponent() -> Element {{
                 };
 
                 let el_ref = mount.node();
-                let node_template = el_ref.template;
                 let target_path = target.path;
                 logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_cursor) in node_template.attr_paths() {
-                    let attrs = el_ref.dynamic_values[idx].attrs();
-
-                    for attr in attrs.iter() {
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.get(2..) == Some(name)
-                            && target_path.is_under_attr(this_cursor)
-                        {
-                            if let AttributeValue::Listener(listener) = &attr.value {
-                                listeners.push(listener.clone());
-                            }
-
-                            // Break if this is the exact target element.
-                            // This means we won't call two listeners with the same name on the same element. This should be
-                            // documented, or be rejected from the rsx! macro outright
-                            if target_path.is_exact_static(this_cursor) {
-                                break;
-                            }
+                Self::visit_event_attributes(
+                    el_ref,
+                    target_path,
+                    name,
+                    EventTargetPath::is_under_attr,
+                    |value, attr_path| {
+                        if let AttributeValue::Listener(listener) = value {
+                            listeners.push(listener.clone());
                         }
-                    }
-                }
+
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        target_path.is_exact_static(attr_path)
+                    },
+                );
             }
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
@@ -641,28 +727,35 @@ fn MyComponent() -> Element {{
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&self, node: EventTarget, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
-        let Some(mount) = mounts.get(node.mount.0) else {
-            // If the node is suspended and not mounted, we can just ignore the event
-            return;
-        };
-        let el_ref = mount.node();
-        let node_template = el_ref.template;
-        let target_path = node.path;
+        let listeners = {
+            let mounts = self.mounts.borrow();
+            let Some(mount) = mounts.get(node.mount.0) else {
+                // If the node is suspended and not mounted, we can just ignore the event
+                return;
+            };
+            let mut listeners = Vec::new();
+            let target_path = node.path;
 
-        for (idx, this_cursor) in node_template.attr_paths() {
-            let attrs = el_ref.dynamic_values[idx].attrs();
-
-            for attr in attrs.iter() {
-                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                // Only call the listener if this is the exact target element.
-                if attr.name.get(2..) == Some(name) && target_path.is_exact_static(this_cursor) {
-                    if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.call(uievent.clone());
-                        break;
+            Self::visit_event_attributes(
+                mount.node(),
+                target_path,
+                name,
+                EventTargetPath::is_exact_static,
+                |value, _| {
+                    if let AttributeValue::Listener(listener) = value {
+                        listeners.push(listener.clone());
+                        true
+                    } else {
+                        false
                     }
-                }
-            }
+                },
+            );
+
+            listeners
+        };
+
+        for listener in listeners {
+            listener.call(uievent.clone());
         }
     }
 
@@ -705,7 +798,7 @@ fn MyComponent() -> Element {{
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(&self, scope: ScopeId) {
-        self.get_state(scope).needs_update();
+        self.get_state(scope).needs_update_any(scope);
     }
 
     /// Get the height of the current scope
@@ -757,7 +850,7 @@ fn MyComponent() -> Element {{
     pub fn force_all_dirty(&self) {
         self.scope_states.borrow_mut().iter().for_each(|state| {
             if let Some(scope) = state.as_ref() {
-                scope.needs_update();
+                scope.needs_update_any(scope.id);
             }
         });
     }
@@ -766,6 +859,13 @@ fn MyComponent() -> Element {{
     pub fn vdom_is_rendering(&self) -> bool {
         self.rendering.get()
     }
+}
+
+fn has_user_shared_contexts(scope: &Scope) -> bool {
+    scope.shared_contexts.borrow().iter().any(|context| {
+        let context = context.as_ref();
+        !context.is::<Owner<SyncStorage>>() && !context.is::<Owner<UnsyncStorage>>()
+    })
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.

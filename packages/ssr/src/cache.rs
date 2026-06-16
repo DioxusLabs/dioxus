@@ -30,7 +30,7 @@
 //!```
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
-use dioxus_core::{Template, VNode};
+use dioxus_core::VNode;
 use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]
@@ -134,10 +134,25 @@ impl std::fmt::Write for StringChain {
 
 impl StringCache {
     /// Create a new string cache from a template.
-    pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
+    ///
+    /// The cache is keyed by template and reused across renders. Whether each dynamic slot is a node
+    /// or an attribute is structural (identical for every `VNode` of this template), so it is read
+    /// from this `VNode`'s dynamic values.
+    pub fn from_template(vnode: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
-        from_template_roots(&template.template, EscapeText::ParentEscape, &mut chain)?;
+        for (_, static_op, dynamic_anchor) in vnode.template.root_slots() {
+            if let Some(anchor) = dynamic_anchor {
+                chain.push(Segment::Node {
+                    index: anchor.value_start(),
+                    escape_text: EscapeText::ParentEscape,
+                });
+                continue;
+            }
+
+            let op = static_op.expect("root slot must be static or dynamic");
+            from_template_recursive(vnode, op, EscapeText::ParentEscape, &mut chain)?;
+        }
 
         Ok(Self {
             segments: chain.segments,
@@ -145,39 +160,36 @@ impl StringCache {
     }
 }
 
-fn from_template_roots(
-    template: &Template,
-    escape_text: EscapeText,
-    chain: &mut StringChain,
-) -> Result<(), std::fmt::Error> {
-    from_template_children(template, 0, template.ops().len(), escape_text, chain)
-}
-
 fn from_template_children(
-    template: &Template,
-    mut cursor: usize,
-    end: usize,
+    vnode: &VNode,
+    element_op: usize,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
-    while cursor < end {
-        if let Some(index) = dynamic_node_at_op(template, cursor) {
-            *chain += Segment::Node { index, escape_text };
-        } else if template.is_static_node_op(cursor) {
-            from_template_recursive(template, cursor, escape_text, chain)?;
+    let static_children = vnode
+        .template
+        .static_children(element_op)
+        .collect::<Vec<_>>();
+    for slot in 0..=static_children.len() {
+        for anchor in vnode.dynamic_node_anchors_for_slot(element_op, slot) {
+            for index in anchor.values() {
+                chain.push(Segment::Node { index, escape_text });
+            }
         }
-        cursor = template.next_sibling_op(cursor);
+        if let Some(&op) = static_children.get(slot) {
+            from_template_recursive(vnode, op, escape_text, chain)?;
+        }
     }
-
     Ok(())
 }
 
 fn from_template_recursive(
-    template: &Template,
+    vnode: &VNode,
     op: usize,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
+    let template = &vnode.template;
     if let Some((tag, _namespace)) = template.element_meta_at_op(op) {
         write!(chain, "<{tag}")?;
         // we need to collect the styles and write them at the end
@@ -186,42 +198,32 @@ fn from_template_recursive(
         let mut inner_html = None;
         // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
         let mut has_dyn_attrs = false;
-        let mut attr = template
-            .element_children_start(op)
-            .expect("element op must have a children start");
-        let first_child = template
-            .first_child_node_op(op)
-            .expect("element op must have a first child op");
-        while attr < first_child {
-            if let Some((name, value, namespace)) = template.static_attr_at_op(attr) {
-                if name == "dangerous_inner_html" {
-                    inner_html = Some(value);
-                } else if let Some("style") = namespace {
-                    styles.push((name, value));
-                } else if BOOL_ATTRS.contains(&name) {
-                    if str_truthy(value) {
-                        write!(
-                            chain,
-                            " {name}=\"{}\"",
-                            askama_escape::escape(value, askama_escape::Html)
-                        )?;
-                    }
-                } else {
+        for (name, value, namespace) in template.static_attrs(op) {
+            if name == "dangerous_inner_html" {
+                inner_html = Some(value);
+            } else if let Some("style") = namespace {
+                styles.push((name, value));
+            } else if BOOL_ATTRS.contains(&name) {
+                if str_truthy(value) {
                     write!(
                         chain,
                         " {name}=\"{}\"",
                         askama_escape::escape(value, askama_escape::Html)
                     )?;
                 }
-                attr += template
-                    .attr_op_len(attr)
-                    .expect("static attr op must have a length");
-            } else if let Some(index) = dynamic_attribute_at_op(template, attr) {
+            } else {
+                write!(
+                    chain,
+                    " {name}=\"{}\"",
+                    askama_escape::escape(value, askama_escape::Html)
+                )?;
+            }
+        }
+
+        for anchor in vnode.dynamic_attr_anchors_for_element(op) {
+            for index in anchor.values() {
                 *chain += Segment::Attr(index);
                 has_dyn_attrs = true;
-                attr += 1;
-            } else {
-                attr += 1;
             }
         }
 
@@ -245,10 +247,7 @@ fn from_template_recursive(
             };
         }
 
-        let end = template
-            .element_end(op)
-            .expect("element op must have an end op");
-        if template_children_is_empty(template, first_child, end) && tag_is_self_closing(tag) {
+        if template_children_is_empty(vnode, op) && tag_is_self_closing(tag) {
             write!(chain, "/>")?;
         } else {
             write!(chain, ">")?;
@@ -266,7 +265,7 @@ fn from_template_recursive(
                 _ => EscapeText::Escape,
             };
 
-            from_template_children(template, first_child, end, escape_text, chain)?;
+            from_template_children(vnode, op, escape_text, chain)?;
             write!(chain, "</{tag}>")?;
         }
     } else if let Some(text) = template.static_text_at_op(op) {
@@ -301,28 +300,12 @@ fn from_template_recursive(
     Ok(())
 }
 
-fn dynamic_node_at_op(template: &Template, op: usize) -> Option<usize> {
-    if !template.is_dynamic_node_marker(op) {
-        return None;
-    }
-    template.dynamic_index_at_op(op + 1)
-}
-
-fn dynamic_attribute_at_op(template: &Template, op: usize) -> Option<usize> {
-    if !template.dynamic_op_is_attr(op) {
-        return None;
-    }
-    template.dynamic_index_at_op(op)
-}
-
-fn template_children_is_empty(template: &Template, mut cursor: usize, end: usize) -> bool {
-    while cursor < end {
-        if template.is_static_node_op(cursor) || dynamic_node_at_op(template, cursor).is_some() {
-            return false;
-        }
-        cursor = template.next_sibling_op(cursor);
-    }
-    true
+fn template_children_is_empty(vnode: &VNode, element_op: usize) -> bool {
+    vnode.template.static_children(element_op).next().is_none()
+        && vnode
+            .dynamic_node_anchors_for_element(element_op)
+            .next()
+            .is_none()
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {

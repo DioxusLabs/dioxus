@@ -121,6 +121,7 @@ name = "const-serialize"
 version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize-macro",
+ "const-vec",
  "serde",
 ]
 
@@ -132,6 +133,10 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "const-vec"
+version = "0.8.0-alpha.0"
 
 [[package]]
 name = "const_format"
@@ -297,6 +302,7 @@ name = "dioxus-core"
 version = "0.8.0-alpha.0"
 dependencies = [
  "anyhow",
+ "const-vec",
  "const_format",
  "dioxus-core-types",
  "futures-channel",

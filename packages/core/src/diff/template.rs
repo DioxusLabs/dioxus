@@ -1,19 +1,31 @@
-use crate::{Template, TemplatePath, VNode};
+use crate::{Template, TemplatePath, VNode, template::TemplateAnchor};
 
+/// One dynamic node value (`index`) viewed over its owning [`TemplateAnchor`].
+///
+/// An anchor can cover several adjacent node values at the same insertion position (e.g. `{a}{b}`);
+/// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
+///
+/// `path_override` is normally `None`, in which case the slot's navigation path is `anchor.path()`.
+/// `root_slot` produces a slot promoted to a synthetic root-level path for which no real anchor
+/// exists (the enclosing element was reclaimed); that promoted path is carried here as `Some`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct DynamicNodeSlot<'a> {
-    template: &'a Template,
+    anchor: &'a TemplateAnchor,
     index: usize,
-    path: TemplatePath,
+    path_override: Option<TemplatePath>,
 }
 
 impl<'a> DynamicNodeSlot<'a> {
-    pub(super) fn new(template: &'a Template, index: usize, path: TemplatePath) -> Self {
+    pub(super) fn new(_template: &'a Template, anchor: &'a TemplateAnchor, index: usize) -> Self {
         Self {
-            template,
+            anchor,
             index,
-            path,
+            path_override: None,
         }
+    }
+
+    fn path(self) -> TemplatePath {
+        self.path_override.unwrap_or_else(|| self.anchor.path())
     }
 
     pub(super) fn index(self) -> usize {
@@ -21,41 +33,38 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn root_index(self) -> usize {
-        self.path.segment(0) as usize
+        self.path().segment(0) as usize
     }
 
     pub(super) fn is_root_level(self) -> bool {
-        self.path.is_root_level_slot()
+        self.path().is_root_level_slot()
     }
 
     pub(super) fn parent_path(self) -> TemplatePath {
-        self.path.split_slot().0
+        self.path().split_slot().0
     }
 
     pub(super) fn child_index(self) -> usize {
-        self.path.split_slot().1
-    }
-
-    pub(super) fn is_inside_static(self, path: TemplatePath) -> bool {
-        self.path.slot_is_inside_static(path)
+        self.path().split_slot().1
     }
 
     pub(super) fn root_slot(self) -> Self {
         Self {
-            template: self.template,
-            index: self.index,
-            path: TemplatePath::root(self.root_index()).with_appends(self.path.appends()),
+            path_override: Some(
+                TemplatePath::root(self.root_index()).with_appends(self.path().appends()),
+            ),
+            ..self
         }
     }
 
     pub(super) fn placement(self) -> SlotPlacement {
-        let parent_path = self.parent_path();
-        let child_index = self.child_index();
+        let path = self.path();
+        let (parent_path, child_index) = path.split_slot();
 
         SlotPlacement {
             parent_path,
             static_insertion_index: child_index,
-            appends: self.path.appends(),
+            appends: path.appends(),
         }
     }
 
@@ -71,49 +80,43 @@ pub(super) struct SlotPlacement {
     pub(super) appends: bool,
 }
 
-#[derive(Clone, Debug)]
+/// A group of dynamic attribute values that all attach to one static element, viewed directly over
+/// its [`TemplateAnchor`].
+#[derive(Clone, Copy, Debug)]
 pub(super) struct DynamicAttrGroup<'a> {
     template: &'a Template,
-    path: TemplatePath,
-    start: usize,
-    end: usize,
+    anchor: &'a TemplateAnchor,
 }
 
 impl<'a> DynamicAttrGroup<'a> {
-    fn new(template: &'a Template, path: TemplatePath, start: usize, end: usize) -> Self {
-        Self {
-            template,
-            path,
-            start,
-            end,
-        }
+    pub(super) fn new(template: &'a Template, anchor: &'a TemplateAnchor) -> Self {
+        Self { template, anchor }
     }
 
     pub(super) fn ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.start..self.end
+        self.anchor.values()
     }
 
     pub(super) fn path(&self) -> TemplatePath {
-        self.path
+        self.anchor.path()
     }
 
     pub(super) fn is_root_level(&self) -> bool {
-        self.path.is_root_level_slot()
+        self.anchor.path().is_root_level_slot()
     }
 
-    pub(super) fn is_descendant_of_static(&self, path: TemplatePath) -> bool {
-        self.path.is_descendant_of_static(path)
-    }
-
-    pub(super) fn first_id(&self) -> Option<usize> {
-        self.ids().next()
+    pub(super) fn first_id(&self) -> usize {
+        self.anchor.value_start()
     }
 
     pub(super) fn static_attr_value_for_key(
         &self,
         key: (&'static str, Option<&'static str>),
     ) -> Option<&'static str> {
-        let element_op = self.template.static_node_op_at_path(self.path)?;
+        let element_op = self
+            .anchor
+            .element_op()
+            .expect("a dynamic attribute anchor always has an enclosing element");
         self.template.static_attr_value_for_key(element_op, key)
     }
 }
@@ -121,118 +124,50 @@ impl<'a> DynamicAttrGroup<'a> {
 pub(super) fn dynamic_node_slots(
     vnode: &VNode,
 ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
-    vnode
-        .template
-        .dynamics()
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(index, _)| vnode.dynamic_values[*index].as_node().is_some())
-        .map(|(index, path)| DynamicNodeSlot::new(&vnode.template, index, path))
+    dynamic_node_slots_for_anchors(vnode, vnode.template.anchors().iter())
+}
+
+pub(super) fn dynamic_node_slots_in_document_order(
+    vnode: &VNode,
+) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
+    dynamic_node_slots_for_anchors(vnode, vnode.template.anchors_in_document_order())
+}
+
+fn dynamic_node_slots_for_anchors<'a, I>(
+    vnode: &'a VNode,
+    anchors: I,
+) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'a>> + 'a
+where
+    I: DoubleEndedIterator<Item = &'static TemplateAnchor> + 'a,
+{
+    let template = &vnode.template;
+    anchors.flat_map(move |anchor| {
+        let is_node = vnode.dynamic_values[anchor.value_start()]
+            .as_node()
+            .is_some();
+        let values = if is_node {
+            anchor.values()
+        } else {
+            anchor.value_start()..anchor.value_start()
+        };
+        values.map(move |index| DynamicNodeSlot::new(template, anchor, index))
+    })
 }
 
 pub(super) fn dynamic_node_slot(vnode: &VNode, index: usize) -> Option<DynamicNodeSlot<'_>> {
     dynamic_node_slots(vnode).find(|slot| slot.index() == index)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum TemplateRoot<'a> {
-    Static { root_idx: usize, op: usize },
-    Dynamic { slot: DynamicNodeSlot<'a> },
-}
-
-pub(super) fn template_roots(vnode: &VNode) -> TemplateRoots<'_> {
-    TemplateRoots {
-        vnode,
-        op: 0,
-        root_idx: 0,
-        dynamic_idx: 0,
-    }
-}
-
-pub(super) struct TemplateRoots<'a> {
-    vnode: &'a VNode,
-    op: usize,
-    root_idx: usize,
-    dynamic_idx: usize,
-}
-
-impl<'a> TemplateRoots<'a> {
-    fn next_dynamic_root(&mut self, root_idx: usize) -> Option<DynamicNodeSlot<'a>> {
-        let template = &self.vnode.template;
-        while self.dynamic_idx < template.dynamics().len() {
-            let idx = self.dynamic_idx;
-            self.dynamic_idx += 1;
-
-            if self.vnode.dynamic_values[idx].as_node().is_none() {
-                continue;
-            }
-
-            let path = template.dynamic_path(idx);
-            if path.is_root_slot(root_idx) {
-                return Some(DynamicNodeSlot::new(template, idx, path));
-            }
-        }
-        None
-    }
-}
-
-impl<'a> Iterator for TemplateRoots<'a> {
-    type Item = TemplateRoot<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let template = &self.vnode.template;
-        while self.op < template.ops().len() {
-            let op = self.op;
-            self.op = template.next_sibling_op(op);
-
-            if template.is_static_node_op(op) {
-                let root_idx = self.root_idx;
-                self.root_idx += 1;
-                return Some(TemplateRoot::Static { root_idx, op });
-            }
-
-            if template.is_dynamic_node_marker(op) {
-                let root_idx = self.root_idx;
-                self.root_idx += 1;
-                if let Some(slot) = self.next_dynamic_root(root_idx) {
-                    return Some(TemplateRoot::Dynamic { slot });
-                }
-            }
-        }
-        None
-    }
-}
-
 pub(super) fn for_each_dynamic_attr_group<'a>(
     vnode: &'a VNode,
     mut visit: impl FnMut(DynamicAttrGroup<'a>),
 ) {
-    let mut current = None;
-
-    for (idx, path) in vnode.template.dynamics().iter().copied().enumerate() {
-        if vnode.dynamic_values[idx].as_attrs().is_none() {
-            continue;
+    for anchor in vnode.template.anchors() {
+        if vnode.dynamic_values[anchor.value_start()]
+            .as_attrs()
+            .is_some()
+        {
+            visit(DynamicAttrGroup::new(&vnode.template, anchor));
         }
-
-        match current {
-            Some((current_path, start, _)) if current_path == path => {
-                current = Some((current_path, start, idx + 1));
-            }
-            Some((current_path, start, end)) => {
-                visit(DynamicAttrGroup::new(
-                    &vnode.template,
-                    current_path,
-                    start,
-                    end,
-                ));
-                current = Some((path, idx, idx + 1));
-            }
-            None => current = Some((path, idx, idx + 1)),
-        }
-    }
-
-    if let Some((path, start, end)) = current {
-        visit(DynamicAttrGroup::new(&vnode.template, path, start, end));
     }
 }

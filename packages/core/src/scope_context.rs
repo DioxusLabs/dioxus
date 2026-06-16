@@ -1,6 +1,6 @@
 use crate::{
     RenderTargetId, Runtime, ScopeId, Task,
-    innerlude::{SchedulerMsg, SuspenseContext},
+    innerlude::{MountId, SchedulerMsg, SuspenseContext},
     render_driver::RenderDriver,
 };
 use generational_box::{AnyStorage, Owner};
@@ -98,6 +98,8 @@ pub(crate) struct Scope {
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
 
+    pub(crate) root_mount: Cell<Option<MountId>>,
+
     // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
@@ -138,6 +140,7 @@ impl Scope {
             target_id: Cell::new(target_id),
             height,
             render_count: Cell::new(0),
+            root_mount: Cell::new(None),
             shared_contexts: RefCell::new(vec![]),
             spawned_tasks: RefCell::new(FxHashSet::default()),
             hooks: RefCell::new(vec![]),
@@ -163,6 +166,14 @@ impl Scope {
 
     pub(crate) fn set_target_id(&self, target_id: RenderTargetId) {
         self.target_id.set(target_id);
+    }
+
+    pub(crate) fn root_mount(&self) -> Option<MountId> {
+        self.root_mount.get()
+    }
+
+    pub(crate) fn set_root_mount(&self, root_mount: Option<MountId>) {
+        self.root_mount.set(root_mount);
     }
 
     /// The driver owning this scope's rendered output.
@@ -206,11 +217,6 @@ impl Scope {
         };
 
         !context.frozen()
-    }
-
-    /// Mark this scope as dirty, and schedule a render for it.
-    pub(crate) fn needs_update(&self) {
-        self.needs_update_any(self.id)
     }
 
     /// Mark this scope as dirty, and schedule a render for it.

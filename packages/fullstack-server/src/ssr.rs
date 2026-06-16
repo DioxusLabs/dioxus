@@ -7,8 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, VNode, VirtualDom,
-    consume_context, has_context, try_consume_context,
+    DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, TemplateAnchor,
+    TemplatePath, VNode, VirtualDom, consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
@@ -554,62 +554,69 @@ impl SsrRendererPool {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
             if let Some(suspense_boundary) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
-                && let Some(node) = suspense_boundary.suspended_nodes()
             {
-                Self::take_from_vnode(context, vdom, &node);
+                let _ = suspense_boundary.with_suspended_mounted_root(|node| {
+                    Self::take_from_vnode(context, vdom, node);
+                });
             }
-            if let Some(node) = scope.try_root_node() {
+            if let Some(node) = scope.try_mounted_root_node() {
                 Self::take_from_vnode(context, vdom, node);
             }
         }
     }
 
-    fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
+    fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
         let template = vnode.template;
-        for root_idx in 0..=template.root_count() {
-            for (dynamic_node_id, _) in template
-                .node_paths()
-                .filter(|(_, cursor)| cursor.is_root_slot(root_idx))
-            {
-                let dynamic_node = vnode.dynamic_values[dynamic_node_id]
+
+        for (root_idx, static_op, dynamic_anchor) in template.root_slots() {
+            if let Some(anchor) = dynamic_anchor {
+                let node_index = anchor.value_start();
+                let dynamic_node = vnode.dynamic_values[node_index]
                     .as_node()
                     .expect("hydration data node slot must point at a dynamic node");
-                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dynamic_node_id);
+                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
+                continue;
             }
 
-            if let Some(root_op) = template.root_op_index(root_idx)
-                && template.ops()[root_op].is_enter()
-            {
-                // dioxus core runs nested nodes in reverse order while anchoring them into a
-                // cloned static root. We need to match that order here.
-                let nested_nodes = template
-                    .node_paths()
-                    .filter(|(_, cursor)| {
-                        cursor.starts_with_root(root_idx as u8) && !cursor.is_root_level_slot()
-                    })
-                    .map(|(idx, _)| idx)
-                    .collect::<Vec<_>>();
-
-                for dynamic_node_id in nested_nodes.into_iter().rev() {
-                    let dynamic_node = vnode.dynamic_values[dynamic_node_id]
-                        .as_node()
-                        .expect("hydration data node slot must point at a dynamic node");
-                    Self::take_from_dynamic_node(
-                        context,
-                        vdom,
-                        vnode,
-                        dynamic_node,
-                        dynamic_node_id,
-                    );
+            let op = static_op.expect("root slot must be static or dynamic");
+            if template.element_meta_at_op(op).is_some() {
+                let root_path = TemplatePath::root(root_idx);
+                for anchor in template.anchors().iter().filter(|anchor| {
+                    Self::node_anchor_inside_static_root(vnode.vnode(), **anchor, root_path)
+                }) {
+                    for dynamic_node_id in anchor.values() {
+                        let dynamic_node = vnode.dynamic_values[dynamic_node_id]
+                            .as_node()
+                            .expect("hydration data node slot must point at a dynamic node");
+                        Self::take_from_dynamic_node(
+                            context,
+                            vdom,
+                            vnode,
+                            dynamic_node,
+                            dynamic_node_id,
+                        );
+                    }
                 }
             }
         }
     }
 
+    fn node_anchor_inside_static_root(
+        vnode: &VNode,
+        anchor: TemplateAnchor,
+        root_path: TemplatePath,
+    ) -> bool {
+        vnode.dynamic_values[anchor.value_start()]
+            .as_node()
+            .is_some()
+            && !anchor.is_root_level()
+            && anchor.path().split_slot().0.starts_with(root_path)
+    }
+
     fn take_from_dynamic_node(
         context: &HydrationContext,
         vdom: &VirtualDom,
-        vnode: &VNode,
+        vnode: MountedVNode<'_>,
         dyn_node: &DynamicNode,
         dynamic_node_index: usize,
     ) {
@@ -620,7 +627,12 @@ impl SsrRendererPool {
                 }
             }
             DynamicNode::Fragment(nodes) => {
-                for node in nodes {
+                let mounted_children = vnode.mounted_fragment_children(dynamic_node_index, vdom);
+                if mounted_children.len() != nodes.len() {
+                    return;
+                }
+
+                for node in mounted_children {
                     Self::take_from_vnode(context, vdom, node);
                 }
             }

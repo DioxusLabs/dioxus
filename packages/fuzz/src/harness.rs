@@ -728,6 +728,12 @@ fn render_suspense_dirty_and_assert(state: &mut Harness) -> Result<(), String> {
         .lifecycle
         .with_run(LifecycleRun::Incremental, || {
             let mut dom = state.vdom.borrow_mut();
+            // Mirror SSR's `rebuild` -> `render_suspense_immediate` ordering:
+            // flush any deferred foreground render before resolving suspense.
+            // `render_suspense_immediate` only reruns scopes under a suspense
+            // boundary, so a foreground scope left dirty here would be skipped
+            // and its update lost, diverging from the fresh render.
+            dom.render_immediate(&mut *state.incremental.borrow_mut());
             poll_render_suspense_immediate(&mut dom)
         });
     let compare_lifecycle = state.strict_lifecycle_errors;

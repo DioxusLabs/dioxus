@@ -1,6 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
-    DynamicNode, ElementId, ScopeId, ScopeState, SuspenseContext, VNode, VirtualDom,
+    DynamicNode, ElementId, MountedVNode, ScopeId, ScopeState, SuspenseContext, VirtualDom,
     internal::{StaticChildren, TemplateChild},
 };
 use std::fmt::Write;
@@ -86,9 +86,9 @@ pub(super) fn first_dynamic_root_element_id(
     scope: &ScopeState,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    fn from_vnode(vnode: &VNode, dom: &VirtualDom) -> Option<ElementId> {
+    fn from_vnode(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Option<ElementId> {
         let mut found = None;
-        StaticChildren::roots(vnode)
+        StaticChildren::roots(vnode.vnode())
             .try_for_each(|child| {
                 if found.is_some() {
                     return Ok::<(), ()>(());
@@ -112,7 +112,11 @@ pub(super) fn first_dynamic_root_element_id(
         found
     }
 
-    fn from_dynamic(vnode: &VNode, dyn_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+    fn from_dynamic(
+        vnode: MountedVNode<'_>,
+        dyn_idx: usize,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
         match vnode.dynamic_values[dyn_idx]
             .as_node()
             .expect("hydration suspense node slot must point at a dynamic node")
@@ -120,10 +124,15 @@ pub(super) fn first_dynamic_root_element_id(
             DynamicNode::Text(_) => vnode.mounted_dynamic_node(dyn_idx, dom),
             DynamicNode::Component(comp) => {
                 let child = comp.mounted_scope(dyn_idx, vnode, dom)?;
-                from_vnode(child.root_node(), dom)
+                from_vnode(child.try_mounted_root_node()?, dom)
             }
             DynamicNode::Fragment(fragment) => {
-                for sub in fragment {
+                let mounted_children = vnode.mounted_fragment_children(dyn_idx, dom);
+                if mounted_children.len() != fragment.len() {
+                    return None;
+                }
+
+                for sub in mounted_children {
                     if let Some(id) = from_vnode(sub, dom) {
                         return Some(id);
                     }
@@ -133,7 +142,7 @@ pub(super) fn first_dynamic_root_element_id(
         }
     }
 
-    from_vnode(scope.root_node(), dom)
+    from_vnode(scope.try_mounted_root_node()?, dom)
 }
 
 impl WebsysDom {
@@ -144,10 +153,12 @@ impl WebsysDom {
     /// registered so subsequent chunks can resolve them.
     pub(super) fn collect_suspense_only(&mut self, scope: &ScopeState, dom: &VirtualDom) {
         self.track_suspense_for_scope(scope, dom);
-        self.collect_suspense_in_vnode(scope.root_node(), dom);
+        if let Some(root) = scope.try_mounted_root_node() {
+            self.collect_suspense_in_vnode(root, dom);
+        }
     }
 
-    fn collect_suspense_in_vnode(&mut self, vnode: &VNode, dom: &VirtualDom) {
+    fn collect_suspense_in_vnode(&mut self, vnode: MountedVNode<'_>, dom: &VirtualDom) {
         for (idx, value) in vnode.dynamic_values.iter().enumerate() {
             let Some(node) = value.as_node() else {
                 continue;
@@ -160,7 +171,12 @@ impl WebsysDom {
                     }
                 }
                 DynamicNode::Fragment(fragment) => {
-                    for sub in fragment {
+                    let mounted_children = vnode.mounted_fragment_children(idx, dom);
+                    if mounted_children.len() != fragment.len() {
+                        continue;
+                    }
+
+                    for sub in mounted_children {
                         self.collect_suspense_in_vnode(sub, dom);
                     }
                 }

@@ -17,33 +17,26 @@ fn attributes_pass_properly() {
 
     let template = &o.template;
 
-    assert_eq!(template.attr_paths().count(), 3);
+    // The three numeric attributes (cx, cy, r) are dynamic; there are no dynamic nodes.
+    assert_eq!(template.dynamic_value_count(), 3);
 
     let circle = template
-        .root_op_index(0)
+        .static_root_ops()
+        .next()
+        .map(|(_, op)| op)
         .expect("expected one static root element");
-    let (skip, namespace) = template.enter_meta(circle).expect("Expected an element op");
+    let (tag, namespace) = template
+        .element_meta_at_op(circle)
+        .expect("expected an element op");
+    assert_eq!(tag, "circle");
+    assert_eq!(namespace, Some("http://www.w3.org/2000/svg"));
 
-    assert_eq!(template.static_string_at_op(circle + 1), Some("circle"));
-    assert!(namespace);
-    assert_eq!(
-        template.static_string_at_op(circle + 2),
-        Some("http://www.w3.org/2000/svg")
-    );
-
-    let mut cursor = template
-        .element_children_start(circle)
-        .expect("element op should have metadata");
-    let mut attr_count = 0;
-    while cursor < circle + skip {
-        if let Some(len) = template.attr_op_len(cursor) {
-            attr_count += 1;
-            cursor += len;
-        } else if template.dynamic_op_is_attr(cursor) {
-            cursor += 1;
-        } else {
-            break;
-        }
-    }
-    assert_eq!(attr_count + template.attr_paths().count(), 5);
+    // Five attributes total: cx, cy, r (dynamic) and stroke, fill (static).
+    let static_attr_count = template.static_attrs(circle).count();
+    let dynamic_attr_count = template
+        .element_dynamic_anchors(circle)
+        .filter(|anchor| o.dynamic_values[anchor.value_start()].as_attrs().is_some())
+        .map(|anchor| anchor.value_count())
+        .sum::<usize>();
+    assert_eq!(static_attr_count + dynamic_attr_count, 5);
 }

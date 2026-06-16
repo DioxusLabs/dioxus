@@ -258,10 +258,12 @@ impl DynamicValuePool {
         let mut dynamic_nodes = Vec::new();
         let mut dynamic_attributes = Vec::new();
 
-        for value in vnode.dynamic_values.iter() {
-            match value {
-                DynamicValue::Node(node) => dynamic_nodes.push(node.clone()),
-                DynamicValue::Attrs(attrs) => dynamic_attributes.push(attrs.clone()),
+        for anchor in vnode.template.anchors_in_document_order() {
+            for idx in anchor.values() {
+                match &vnode.dynamic_values[idx] {
+                    DynamicValue::Node(node) => dynamic_nodes.push(node.clone()),
+                    DynamicValue::Attrs(attrs) => dynamic_attributes.push(attrs.clone()),
+                }
             }
         }
 
@@ -382,6 +384,25 @@ impl HotReloadedTemplate {
         }
     }
 
+    fn new_from_document_order(
+        key: Option<FmtedSegments>,
+        dynamic_nodes: Vec<HotReloadDynamicNode>,
+        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+        component_values: Vec<HotReloadLiteral>,
+        template: Template,
+        dynamic_slots: Vec<HotReloadDynamicSlot>,
+    ) -> Self {
+        let dynamic_slots = template.reorder_dynamic_values_from_document_order(dynamic_slots);
+        Self::new(
+            key,
+            dynamic_nodes,
+            dynamic_attributes,
+            component_values,
+            template,
+            dynamic_slots,
+        )
+    }
+
     pub fn from_raw_ops(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
@@ -390,7 +411,7 @@ impl HotReloadedTemplate {
         raw_ops: &'static [crate::template::TemplateRawOp],
         dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
-        Self::new(
+        Self::new_from_document_order(
             key,
             dynamic_nodes,
             dynamic_attributes,
@@ -406,24 +427,9 @@ impl HotReloadedTemplate {
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         template: Template,
+        dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
-        let mut next_node = 0;
-        let mut next_attribute = 0;
-        let dynamic_slots = (0..template.dynamics().len())
-            .map(|idx| {
-                if template.dynamic_is_node(idx) {
-                    let id = next_node;
-                    next_node += 1;
-                    HotReloadDynamicSlot::Node(id)
-                } else {
-                    let id = next_attribute;
-                    next_attribute += 1;
-                    HotReloadDynamicSlot::Attribute(id)
-                }
-            })
-            .collect();
-
-        Self::new(
+        Self::new_from_document_order(
             key,
             dynamic_nodes,
             dynamic_attributes,
@@ -445,16 +451,20 @@ impl HotReloadedTemplate {
         self.template.strings()
     }
 
-    pub fn dynamics(&self) -> &'static [crate::TemplatePath] {
-        self.template.dynamics()
-    }
-
+    /// Classify a dynamic value index using the transmitted slot table.
     pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
-        self.template.dynamic_is_node(dynamic_idx)
+        matches!(
+            self.dynamic_slots.get(dynamic_idx),
+            Some(HotReloadDynamicSlot::Node(_))
+        )
     }
 
+    /// Classify a dynamic value index using the transmitted slot table.
     pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
-        self.template.dynamic_is_attr(dynamic_idx)
+        matches!(
+            self.dynamic_slots.get(dynamic_idx),
+            Some(HotReloadDynamicSlot::Attribute(_))
+        )
     }
 }
 
@@ -470,7 +480,7 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
             ops: &'static [crate::TemplateOp],
             strings: crate::StaticStringInterner,
             #[serde(deserialize_with = "crate::template::deserialize_leaky")]
-            dynamics: &'static [crate::TemplatePath],
+            anchors: &'static [crate::template::TemplateAnchor],
             hash: u64,
         }
 
@@ -494,7 +504,7 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
             Template::new(
                 serialized.template.ops,
                 serialized.template.strings,
-                serialized.template.dynamics,
+                serialized.template.anchors,
             ),
             serialized.dynamic_slots,
         ))

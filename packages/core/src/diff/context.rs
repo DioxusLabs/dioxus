@@ -51,21 +51,25 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
         create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_>) -> R,
         remove_old: impl FnOnce(&mut DiffState<'_, 'ctx, '_>),
     ) -> R {
-        let old_slot = self.dom.get_mounted_dynamic_node_slot(mount, dyn_node_idx);
+        let old_slot = self
+            .dom
+            .mounted_dynamic_node_slot_snapshot(mount, dyn_node_idx);
         self.dom
             .clear_mounted_dynamic_node_slot(mount, dyn_node_idx);
 
         let result = create_new(self);
-        let new_slot = self.dom.get_mounted_dynamic_node_slot(mount, dyn_node_idx);
+        let new_slot = self
+            .dom
+            .mounted_dynamic_node_slot_snapshot(mount, dyn_node_idx);
 
         if restore_old_slot_for_removal {
             self.dom
-                .set_mounted_dynamic_node_slot(mount, dyn_node_idx, old_slot);
+                .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, old_slot);
             remove_old(self);
         }
 
         self.dom
-            .set_mounted_dynamic_node_slot(mount, dyn_node_idx, new_slot);
+            .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, new_slot);
         result
     }
 

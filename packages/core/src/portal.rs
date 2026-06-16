@@ -178,24 +178,31 @@ fn mount_children(
     );
     let mut render_to = to;
     let should_mount = render_to.is_some();
+    let mut root_mount = None;
     if let Some(to) = reborrow_writer(&mut render_to) {
         append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
-            dom.create_children_with_parents(
+            let created = dom.create_children_with_parents(
                 Some(to),
                 std::slice::from_ref(children.as_vnode()),
                 None,
                 parent,
-            )
+            );
+            root_mount = created.mounts.first().copied();
+            created.nodes
         });
     } else {
-        dom.create_children_with_parents(
+        let created = dom.create_children_with_parents(
             None,
             std::slice::from_ref(children.as_vnode()),
             None,
             parent,
         );
+        root_mount = created.mounts.first().copied();
     }
-    dom.scopes[scope_id.index()].last_rendered_node = Some(children);
+    dom.scopes[scope_id.index()].last_rendered_node = Some(MountedOutput::new(
+        children,
+        root_mount.expect("portal children should create a root mount"),
+    ));
     if should_mount {
         dom.runtime.get_state(scope_id).mount(&dom.runtime);
     }
@@ -231,7 +238,7 @@ impl RenderDriver for PortalDriver {
             // a retargeting point before anything mounts under it. Later
             // target changes are applied by the retarget arm of `diff`, which
             // must observe the old target first.
-            dom.runtime.get_state(scope_id).set_target_id(target_id);
+            dom.runtime.set_scope_target_id(scope_id, target_id);
             (target_id, children)
         } else {
             // Re-creating a live scope: the props' children handle is not
@@ -240,7 +247,9 @@ impl RenderDriver for PortalDriver {
             // current target. Pending prop changes apply on the next `diff`.
             let children = dom.scopes[scope_id.index()]
                 .last_rendered_node
-                .clone()
+                .as_ref()
+                .map(MountedOutput::node)
+                .cloned()
                 .expect("portal scope must have rendered before re-create");
             (dom.runtime.get_state(scope_id).target_id(), children)
         };
@@ -275,16 +284,21 @@ impl RenderDriver for PortalDriver {
             let old_target_id = dom.runtime.get_state(scope_id).target_id();
 
             if old_target_id != target_id {
-                let old_mount = old_children.as_vnode().unchecked_mounted_id();
-                let logical_parent = dom.get_mounted_logical_parent(old_mount);
+                let old_mount = old_children.root_mount();
+                let logical_parent = dom.mounted_logical_parent(old_mount);
 
-                old_children.remove_node_inner(dom, reborrow_writer(&mut to), true);
+                old_children.as_vnode().remove_node_inner(
+                    old_mount,
+                    dom,
+                    reborrow_writer(&mut to),
+                    true,
+                );
 
                 // Ordering is correctness-critical: writes route through the
                 // portal scope's `target_id`, so the removal above resolves
                 // against the old target and `mount_children` below resolves
                 // against the new one.
-                dom.runtime.get_state(scope_id).set_target_id(target_id);
+                dom.runtime.set_scope_target_id(scope_id, target_id);
 
                 mount_children(
                     scope_id,
@@ -298,8 +312,13 @@ impl RenderDriver for PortalDriver {
             }
 
             let mut render_to = to.filter(|_| dom.runtime.scope_should_render(scope_id));
-            old_children.diff_node(&new_children, dom, reborrow_writer(&mut render_to));
-            dom.scopes[scope_id.index()].last_rendered_node = Some(new_children);
+            let new_mount = old_children.mounted_vnode().diff_node(
+                new_children.as_vnode(),
+                dom,
+                reborrow_writer(&mut render_to),
+            );
+            dom.scopes[scope_id.index()].last_rendered_node =
+                Some(MountedOutput::new(new_children, new_mount));
             if render_to.is_some() {
                 dom.runtime.get_state(scope_id).mount(&dom.runtime);
             }
@@ -320,9 +339,11 @@ impl RenderDriver for PortalDriver {
             // through `create`, so the clone is always `Some`.
             let node = dom.scopes[scope_id.index()]
                 .last_rendered_node
-                .clone()
+                .as_ref()
+                .cloned()
                 .expect("portal scope must have rendered before remove");
-            node.remove_node_inner(
+            node.as_vnode().remove_node_inner(
+                node.root_mount(),
                 dom,
                 reborrow_writer(&mut render_to),
                 destroy_component_state,

@@ -3,6 +3,7 @@ use crate::{
     TemplateOp, TemplatePath, VNode,
     innerlude::{CapturedError, provide_context},
     string_interner::{StaticStringInterner, StringInterner},
+    template::TemplateAnchor,
     try_consume_context, use_hook,
 };
 use std::{
@@ -11,6 +12,13 @@ use std::{
     fmt::{Debug, Display},
     rc::Rc,
 };
+
+const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::new(
+    0,
+    TemplatePath::root(0).next_child().with_appends(true),
+    0,
+    1,
+)];
 
 /// Return early with an error.
 #[macro_export]
@@ -159,17 +167,15 @@ fn default_handler(errors: ErrorContext) -> Element {
         StringInterner::from_unique_static_strings(&["div", "color", "red", "style"]);
     static TEMPLATE: Template = Template::new(
         &[
-            TemplateOp::enter(8, false),
+            TemplateOp::enter(6, false),
             TemplateOp::static_text(0),
             TemplateOp::attr_custom_namespace(),
             TemplateOp::static_text(1),
             TemplateOp::static_text(2),
             TemplateOp::static_text(3),
-            TemplateOp::text(),
-            TemplateOp::dynamic(),
         ],
         STRINGS.as_static(),
-        &[TemplatePath::root(0).next_child().with_appends(true)],
+        DYNAMIC_CHILD_ANCHOR,
     );
     std::result::Result::Ok(VNode::new(
         None,
@@ -182,14 +188,9 @@ fn default_handler(errors: ErrorContext) -> Element {
                     const INNER_STRINGS: StringInterner<3, 1> =
                         StringInterner::from_unique_static_strings(&["pre"]);
                     static INNER_TEMPLATE: Template = Template::new(
-                        &[
-                            TemplateOp::enter(4, false),
-                            TemplateOp::static_text(0),
-                            TemplateOp::text(),
-                            TemplateOp::dynamic(),
-                        ],
+                        &[TemplateOp::enter(2, false), TemplateOp::static_text(0)],
                         INNER_STRINGS.as_static(),
-                        &[TemplatePath::root(0).next_child().with_appends(true)],
+                        DYNAMIC_CHILD_ANCHOR,
                     );
                     VNode::new(
                         None,
@@ -327,9 +328,9 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     } else {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template::new(
-                &[TemplateOp::text(), TemplateOp::dynamic()],
+                &[],
                 StaticStringInterner::empty(),
-                &[TemplatePath::root(0).with_appends(true)],
+                &[TemplateAnchor::root_node(0, 0, true)],
             );
             VNode::new(
                 None,

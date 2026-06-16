@@ -1,5 +1,6 @@
 use crate::{
-    Element, RenderError, Runtime, VNode, reactive_context::ReactiveContext, scope_context::Scope,
+    Element, MountedVNode, RenderError, Runtime, VNode, innerlude::MountId,
+    reactive_context::ReactiveContext, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -74,9 +75,9 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-    /// The last node that has been rendered for this component. This node may not ben mounted
-    /// During suspense, this component can be rendered in the background multiple times
-    pub(crate) last_rendered_node: Option<LastRenderedNode>,
+    pub(crate) height: u32,
+    /// The last mounted output for this component.
+    pub(crate) last_rendered_node: Option<MountedOutput>,
     pub(crate) reactive_context: ReactiveContext,
 }
 
@@ -98,10 +99,18 @@ impl ScopeState {
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&VNode> {
         match &self.last_rendered_node {
-            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
-            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
+            Some(output) => Some(output.as_vnode()),
             None => None,
         }
+    }
+
+    /// Try to get the currently active root node with its mounted identity.
+    ///
+    /// Returns [`None`] if the tree has not been built or mounted yet.
+    pub fn try_mounted_root_node(&self) -> Option<MountedVNode<'_>> {
+        self.last_rendered_node
+            .as_ref()
+            .map(MountedOutput::mounted_vnode)
     }
 
     /// Returns the scope id of this [`ScopeState`].
@@ -115,7 +124,43 @@ impl ScopeState {
 
     /// Returns the height of this scope in the tree.
     pub fn height(&self) -> u32 {
-        self.state().height()
+        self.height
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) struct MountedOutput {
+    node: LastRenderedNode,
+    root_mount: MountId,
+}
+
+impl MountedOutput {
+    pub(crate) fn new(node: LastRenderedNode, root_mount: MountId) -> Self {
+        Self { node, root_mount }
+    }
+
+    pub(crate) fn node(&self) -> &LastRenderedNode {
+        &self.node
+    }
+
+    pub(crate) fn root_mount(&self) -> MountId {
+        self.root_mount
+    }
+
+    pub(crate) fn as_vnode(&self) -> &VNode {
+        self.node.as_vnode()
+    }
+
+    pub(crate) fn mounted_vnode(&self) -> MountedVNode<'_> {
+        MountedVNode::new(self.as_vnode(), self.root_mount)
+    }
+}
+
+impl std::ops::Deref for MountedOutput {
+    type Target = LastRenderedNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
     }
 }
 

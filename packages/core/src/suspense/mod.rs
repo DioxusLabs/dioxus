@@ -54,14 +54,6 @@ impl SuspendedFuture {
     pub fn task(&self) -> Task {
         Task::from_id(self.task)
     }
-
-    /// Create a deep clone of this suspended future
-    pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            task: self.task,
-            origin: self.origin,
-        }
-    }
 }
 
 impl std::fmt::Display for SuspendedFuture {
@@ -105,6 +97,17 @@ impl SuspenseContext {
     /// Get the suspense boundary's suspended nodes
     pub fn suspended_nodes(&self) -> Option<VNode> {
         self.suspended_branch().map(|branch| branch.root())
+    }
+
+    /// Run a callback with the suspense boundary's retained primary branch and
+    /// its mounted identity.
+    pub fn with_suspended_mounted_root<R>(
+        &self,
+        with_root: impl FnOnce(MountedVNode<'_>) -> R,
+    ) -> Option<R> {
+        let branch = self.inner.suspended_branch.borrow();
+        let branch = branch.as_ref()?;
+        Some(with_root(branch.mounted_root()))
     }
 
     /// Get the retained primary branch for this boundary.
@@ -155,7 +158,7 @@ impl SuspenseContext {
             .borrow_mut()
             .retain(|t| t.task != task.id);
         if let Some(scope) = self.inner.rt.try_get_state(self.inner.id.get()) {
-            scope.needs_update();
+            scope.needs_update_any(scope.id);
         }
     }
 

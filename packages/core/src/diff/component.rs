@@ -8,7 +8,7 @@ use crate::{
     innerlude::{MountId, MountRef, VComponent, WriteMutations},
     mutations::reborrow_writer,
     nodes::VNode,
-    scopes::{LastRenderedNode, ScopeId},
+    scopes::{LastRenderedNode, MountedOutput, ScopeId},
     virtual_dom::VirtualDom,
 };
 
@@ -21,27 +21,11 @@ fn drive<R>(
 ) -> R {
     let dom = &mut *state.dom;
     let to = reborrow_writer(&mut state.to);
-    #[cfg(debug_assertions)]
-    let depth = dom.runtime.scope_stack_depth();
     let result = f(&mut *dom, to);
-    #[cfg(debug_assertions)]
-    dioxus_debug_assert_eq!(
-        depth,
-        dom.runtime.scope_stack_depth(),
-        "render driver left the runtime scope stack unbalanced"
-    );
     result
 }
 
 impl VirtualDom {
-    pub(crate) fn run_and_diff_scope(
-        &mut self,
-        to: Option<&mut dyn WriteMutations>,
-        scope_id: ScopeId,
-    ) {
-        self.run_and_diff_scope_with_context(to, scope_id, None);
-    }
-
     pub(crate) fn run_and_diff_scope_with_context(
         &mut self,
         to: Option<&mut dyn WriteMutations>,
@@ -70,12 +54,12 @@ impl VirtualDom {
                 return;
             };
             // Load the old and new rendered nodes
-            let old = self.scopes[scope.index()]
+            let old_output = self.scopes[scope.index()]
                 .last_rendered_node
                 .take()
                 .unwrap();
-
-            let old_mount = old.unchecked_mounted_id();
+            let old_mount = old_output.root_mount();
+            let old = old_output.node();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
@@ -83,12 +67,17 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
             let mut state =
                 DiffState::new_with_context(self, reborrow_writer(&mut render_to), parent_context);
-            DiffFrame::new(old_mount, &old, new_real_nodes).diff_into(&mut state);
-            if let Some(new_mount) = new_real_nodes.mounted_id() {
-                self.replace_mounted_component_root_mount(old_mount, new_mount);
-            }
+            let new_mount =
+                DiffFrame::new(old_mount, old.as_vnode(), new_real_nodes).diff_into(&mut state);
+            self.replace_mounted_component_root_mount(old_mount, new_mount);
+            self.runtime
+                .get_state(scope)
+                .set_root_mount(Some(new_mount));
 
-            self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+            self.scopes[scope.index()].last_rendered_node = Some(MountedOutput::new(
+                LastRenderedNode::new(new_nodes),
+                new_mount,
+            ));
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
@@ -114,16 +103,34 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
             // Create the node
-            let nodes = new_nodes.create(self, parent, reborrow_writer(&mut render_to));
+            let existing_mount = self.scopes[scope.index()]
+                .last_rendered_node
+                .as_ref()
+                .map(MountedOutput::root_mount);
+            let created = if let Some(mount) = existing_mount {
+                new_nodes.as_vnode().recreate_with_mount(
+                    self,
+                    mount,
+                    parent,
+                    parent,
+                    reborrow_writer(&mut render_to),
+                )
+            } else {
+                new_nodes.create_with_parents(self, parent, parent, reborrow_writer(&mut render_to))
+            };
 
             // Then set the new node as the last rendered node
-            self.scopes[scope.index()].last_rendered_node = Some(new_nodes);
+            self.scopes[scope.index()].last_rendered_node =
+                Some(MountedOutput::new(new_nodes, created.mount));
+            self.runtime
+                .get_state(scope)
+                .set_root_mount(Some(created.mount));
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
             }
 
-            nodes
+            created.nodes
         })
     }
 
@@ -197,16 +204,19 @@ impl VNode {
         let site = state.dom.scopes[scope.index()]
             .last_rendered_node
             .as_ref()
-            .and_then(|n| n.find_first_element(state.dom))
+            .and_then(|n| n.mounted_vnode().find_first_element(state.dom))
             .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
             .unwrap_or_else(|| {
-                let slot =
-                    DynamicNodeSlot::new(&self.template, idx, self.template.dynamic_path(idx));
+                let anchor = self
+                    .template
+                    .anchor_for_value(idx)
+                    .expect("a dynamic component value always has an owning anchor");
+                let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
                 insertion_site_for_slot(mount, slot, &[], state.dom, state.context())
             });
 
         // Free the scope slot so `create_component_node` allocates a new scope.
-        state.dom.clear_mounted_dynamic_component_scope(mount, idx);
+        state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
         {
             let runtime = state.dom.runtime.clone();
@@ -263,11 +273,13 @@ impl VNode {
         let root_mount = state
             .dom
             .get_scope(scope_id)
-            .and_then(|scope| scope.try_root_node())
-            .and_then(VNode::mounted_id);
+            .and_then(|scope| scope.last_rendered_node.as_ref())
+            .map(MountedOutput::root_mount);
         state
             .dom
-            .set_mounted_dynamic_component_root_mount(mount, idx, root_mount);
+            .runtime
+            .get_state(scope_id)
+            .set_root_mount(root_mount);
         nodes
     }
 }

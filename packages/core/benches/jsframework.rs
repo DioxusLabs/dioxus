@@ -28,12 +28,14 @@ criterion_main!(mbenches);
 
 fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
-        let mut dom = VirtualDom::new(synthetic_app);
-        dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-        b.iter(|| {
-            dom.rebuild(&mut NoOpMutations);
-        })
+        b.iter_batched(
+            || VirtualDom::new(synthetic_app),
+            |mut dom| {
+                dom.rebuild(&mut NoOpMutations);
+                dom
+            },
+            BatchSize::PerIteration,
+        )
     });
 }
 

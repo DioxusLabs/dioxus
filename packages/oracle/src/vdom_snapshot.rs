@@ -1,8 +1,6 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
-use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, Template, TemplatePath, VNode, VirtualDom,
-};
+use dioxus_core::{Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VirtualDom};
 use std::any::Any;
 
 /// Render `app` from scratch into a stable snapshot.
@@ -16,7 +14,7 @@ pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
 
 /// Snapshot the raw rendered VDOM tree without using renderer mutations.
 pub fn vdom_snapshot(vdom: &VirtualDom) -> Vec<SnapshotNode> {
-    vnode_snapshot(vdom, vdom.base_scope().root_node())
+    vnode_snapshot(vdom, vdom.base_scope().try_mounted_root_node().unwrap())
 }
 
 /// Render pending work from `vdom` into `renderer` and return the resulting snapshot.
@@ -65,94 +63,70 @@ pub fn assert_no_mutations(vdom: &mut VirtualDom) {
     );
 }
 
-fn vnode_snapshot(vdom: &VirtualDom, vnode: &VNode) -> Vec<SnapshotNode> {
-    template_children_snapshot(
-        vdom,
-        vnode,
-        TemplatePath::empty(),
-        None,
-        vnode.template.root_count(),
-    )
-}
-
-fn template_children_snapshot(
-    vdom: &VirtualDom,
-    vnode: &VNode,
-    parent_cursor: TemplatePath,
-    parent_op: Option<usize>,
-    static_count: usize,
-) -> Vec<SnapshotNode> {
+fn vnode_snapshot(vdom: &VirtualDom, vnode: MountedVNode<'_>) -> Vec<SnapshotNode> {
     let mut out = Vec::new();
-    for child_idx in 0..=static_count {
-        for (dynamic_idx, _) in vnode.template.node_paths().filter(|(_, cursor)| {
-            let (slot_parent, insertion_index) = cursor.split_slot();
-            slot_parent == parent_cursor && insertion_index == child_idx
-        }) {
-            out.extend(dynamic_node_snapshot(vdom, vnode, dynamic_idx));
+    for (_, static_op, dynamic_anchor) in vnode.template.root_slots() {
+        if let Some(anchor) = dynamic_anchor {
+            out.extend(dynamic_node_snapshot(vdom, vnode, anchor.value_start()));
+            continue;
         }
 
-        let child_op = match parent_op {
-            Some(parent_op) => vnode.template.static_child_op(parent_op, child_idx),
-            None => vnode.template.root_op_index(child_idx),
-        };
-        if let Some(child_op) = child_op {
-            let child_cursor = child_path(parent_cursor, child_idx);
-            out.extend(template_node_snapshot(vdom, vnode, child_op, &child_cursor));
+        let op = static_op.expect("root slot must be static or dynamic");
+        out.extend(template_node_snapshot(vdom, vnode, op));
+    }
+    out
+}
+
+fn element_children_snapshot(
+    vdom: &VirtualDom,
+    vnode: MountedVNode<'_>,
+    op: usize,
+) -> Vec<SnapshotNode> {
+    let mut out = Vec::new();
+    let static_children = vnode.template.static_children(op).collect::<Vec<_>>();
+    for slot in 0..=static_children.len() {
+        for anchor in vnode.dynamic_node_anchors_for_slot(op, slot) {
+            for idx in anchor.values() {
+                out.extend(dynamic_node_snapshot(vdom, vnode, idx));
+            }
+        }
+        if let Some(&child_op) = static_children.get(slot) {
+            out.extend(template_node_snapshot(vdom, vnode, child_op));
         }
     }
     out
 }
 
-fn child_path(parent: TemplatePath, child_idx: usize) -> TemplatePath {
-    let mut path = parent.next_child();
-    for _ in 0..child_idx {
-        path = path.next_sibling();
-    }
-    path
-}
-
 fn template_node_snapshot(
     vdom: &VirtualDom,
-    vnode: &VNode,
+    vnode: MountedVNode<'_>,
     op: usize,
-    cursor: &TemplatePath,
 ) -> Vec<SnapshotNode> {
     if let Some((tag, namespace)) = vnode.template.element_meta_at_op(op) {
         let mut element_attrs = Vec::new();
         let mut listeners = Vec::new();
 
-        for attr in template_attributes(vnode.template, op) {
-            match attr {
-                TemplateAttrView::Static {
-                    name,
-                    value,
-                    namespace,
-                } => {
-                    set_snapshot_attr(
-                        &mut element_attrs,
-                        name.to_string(),
-                        namespace.map(ToString::to_string),
-                        value.to_string(),
-                    );
-                }
-                TemplateAttrView::Dynamic { id } => {
-                    let attrs = vnode.dynamic_values[id]
-                        .as_attrs()
-                        .expect("snapshot attr slot must point at attributes");
-                    for attr in attrs {
-                        apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
-                    }
+        for (name, value, namespace) in vnode.template.static_attrs(op) {
+            set_snapshot_attr(
+                &mut element_attrs,
+                name.to_string(),
+                namespace.map(ToString::to_string),
+                value.to_string(),
+            );
+        }
+
+        for anchor in vnode.dynamic_attr_anchors_for_element(op) {
+            for id in anchor.values() {
+                let attrs = vnode.dynamic_values[id]
+                    .as_attrs()
+                    .expect("snapshot attr slot must point at attributes");
+                for attr in attrs {
+                    apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
                 }
             }
         }
 
-        let rendered_children = template_children_snapshot(
-            vdom,
-            vnode,
-            *cursor,
-            Some(op),
-            static_child_count(vnode.template, op),
-        );
+        let rendered_children = element_children_snapshot(vdom, vnode, op);
 
         vec![SnapshotNode::Element {
             tag: tag.to_string(),
@@ -168,16 +142,28 @@ fn template_node_snapshot(
     }
 }
 
-fn dynamic_node_snapshot(vdom: &VirtualDom, owner: &VNode, id: usize) -> Vec<SnapshotNode> {
+fn dynamic_node_snapshot(
+    vdom: &VirtualDom,
+    owner: MountedVNode<'_>,
+    id: usize,
+) -> Vec<SnapshotNode> {
     match owner.dynamic_values[id]
         .as_node()
         .expect("snapshot node slot must point at a dynamic node")
     {
         DynamicNode::Text(text) => vec![SnapshotNode::Text(text.value.clone())],
-        DynamicNode::Fragment(nodes) => nodes
-            .iter()
-            .flat_map(|node| vnode_snapshot(vdom, node))
-            .collect(),
+        DynamicNode::Fragment(nodes) => {
+            let mounted_children = owner.mounted_fragment_children(id, vdom);
+            assert_eq!(
+                mounted_children.len(),
+                nodes.len(),
+                "fragment dynamic node {id} is not mounted"
+            );
+            mounted_children
+                .into_iter()
+                .flat_map(|node| vnode_snapshot(vdom, node))
+                .collect()
+        }
         DynamicNode::Component(component) => {
             let scope = component.mounted_scope(id, owner, vdom).unwrap_or_else(|| {
                 panic!(
@@ -185,78 +171,9 @@ fn dynamic_node_snapshot(vdom: &VirtualDom, owner: &VNode, id: usize) -> Vec<Sna
                     component.name
                 )
             });
-            vnode_snapshot(vdom, scope.root_node())
+            vnode_snapshot(vdom, scope.try_mounted_root_node().unwrap())
         }
     }
-}
-
-enum TemplateAttrView<'a> {
-    Static {
-        name: &'a str,
-        value: &'a str,
-        namespace: Option<&'a str>,
-    },
-    Dynamic {
-        id: usize,
-    },
-}
-
-fn template_attributes(
-    template: Template,
-    element_op: usize,
-) -> impl Iterator<Item = TemplateAttrView<'static>> {
-    let mut cursor = template
-        .element_children_start(element_op)
-        .expect("template attr scan must start at an element");
-    let end = template
-        .first_child_node_op(element_op)
-        .expect("template attr scan must start at an element");
-    std::iter::from_fn(move || {
-        while cursor < end {
-            if let Some((name, value, namespace)) = template.static_attr_at_op(cursor) {
-                let attr = TemplateAttrView::Static {
-                    name,
-                    value,
-                    namespace,
-                };
-                cursor += template
-                    .attr_op_len(cursor)
-                    .expect("static attr op must include metadata");
-                return Some(attr);
-            }
-            if template.dynamic_op_is_attr(cursor) {
-                let id = template
-                    .dynamic_index_at_op(cursor)
-                    .expect("dynamic attr op must have metadata");
-                cursor += 1;
-                return Some(TemplateAttrView::Dynamic { id });
-            }
-            return None;
-        }
-        None
-    })
-}
-
-fn static_child_count(template: Template, element_op: usize) -> usize {
-    let Some(mut cursor) = template.first_child_node_op(element_op) else {
-        return 0;
-    };
-    let Some(end) = template.element_end(element_op) else {
-        return 0;
-    };
-
-    let mut count = 0;
-    while cursor < end {
-        if template.is_static_node_op(cursor) {
-            count += 1;
-            cursor = template.next_sibling_op(cursor);
-        } else if template.is_dynamic_node_marker(cursor) {
-            cursor = template.next_sibling_op(cursor);
-        } else {
-            cursor += 1;
-        }
-    }
-    count
 }
 
 fn apply_dynamic_attr(

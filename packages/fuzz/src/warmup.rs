@@ -179,8 +179,8 @@ fn warmup_suspense_hidden_paths() {
 
     // Scenario B: render normally, then suspend, then re-render with a
     // reversed key order. The keyed-reorder path observes children in the
-    // suspended branch with unmounted state, exercising checked `mounted_id()`
-    // paths that skip children whose DOM never materialized.
+    // suspended branch with retained mount state, exercising paths that skip
+    // children whose DOM never materialized.
     {
         SUSPEND_GEN.with(|c| c.set(1));
         SHUFFLE_GEN.with(|c| c.set(2));
