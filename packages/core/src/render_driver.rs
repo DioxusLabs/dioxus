@@ -3,7 +3,7 @@ use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 use crate::{
     ComponentFunction, Element, WriteMutations,
     diff::context::DiffContext,
-    innerlude::{CapturedPanic, ElementRef},
+    innerlude::{CapturedPanic, MountRef},
     mutations::reborrow_writer,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
@@ -61,7 +61,7 @@ pub(crate) trait RenderDriver: 'static {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         to: Option<&mut dyn WriteMutations>,
     ) -> usize;
 
@@ -200,7 +200,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
         // A new scope runs once to get the initial state

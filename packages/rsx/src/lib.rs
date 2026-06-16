@@ -28,12 +28,12 @@ mod text_node;
 
 mod diagnostics;
 mod expr_node;
-mod flat_template;
 mod ifmt;
 mod literal;
 mod location;
 mod partial_closure;
 mod util;
+mod view_builder;
 
 // Re-export the namespaces into each other
 pub use diagnostics::Diagnostics;

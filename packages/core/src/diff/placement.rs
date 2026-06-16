@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
-    innerlude::{ElementRef, MountId},
+    innerlude::{MountId, MountRef},
     mutations::{LazyScope, append_children_to, insert_after_id, insert_before_id},
     nodes::DynamicNode,
 };
@@ -124,7 +124,7 @@ pub(super) fn insertion_site_for_slot(
 
 pub(super) fn create_at_site(
     content: &[VNode],
-    parent: Option<ElementRef>,
+    parent: Option<MountRef>,
     site: InsertionSite,
     dom: &mut VirtualDom,
     to: Option<&mut dyn WriteMutations>,
@@ -226,7 +226,7 @@ fn insertion_site_for_child_in_parent(
                     ));
                 }
                 DynamicNode::Component(_) => {
-                    if dom.mounted_dynamic_component_root(parent_mount, idx) == Some(mount) {
+                    if dom.mounted_dynamic_component_root_mount(parent_mount, idx) == Some(mount) {
                         return Some(insertion_site_for_slot(
                             parent_mount,
                             slot,
@@ -298,11 +298,11 @@ fn first_live_dynamic_slot(
             child.find_first_element(dom)
         }),
         DynamicNode::Component(_) => {
-            let component_root = dom.mounted_dynamic_component_root(mount, idx)?;
-            if skip.contains(&component_root) {
+            let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
+            if skip.contains(&component_root_mount) {
                 return None;
             }
-            dom.current_mounted_view(component_root)?
+            dom.current_mounted_view(component_root_mount)?
                 .find_first_element(dom)
         }
     }
@@ -498,11 +498,11 @@ fn last_live_dynamic_slot(
             child.find_last_element(dom)
         }),
         DynamicNode::Component(_) => {
-            let component_root = dom.mounted_dynamic_component_root(mount, idx)?;
-            if skip.contains(&component_root) {
+            let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
+            if skip.contains(&component_root_mount) {
                 return None;
             }
-            dom.current_mounted_view(component_root)?
+            dom.current_mounted_view(component_root_mount)?
                 .find_last_element(dom)
         }
     }

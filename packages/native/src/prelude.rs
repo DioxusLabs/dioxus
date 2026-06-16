@@ -9,11 +9,9 @@ pub use dioxus_core::{
 #[allow(deprecated)]
 pub use dioxus_core_macro::{Props, component, rsx};
 pub use dioxus_html as dioxus_elements;
+pub use dioxus_html::extensions::*;
 pub use dioxus_html::{Code, Key, Location, Modifiers};
-pub use dioxus_html::{
-    GlobalAttributesExtension, SvgAttributesExtension, events::*, extensions::*, global_attributes,
-    keyboard_types, svg_attributes, traits::*,
-};
+pub use dioxus_html::{events::*, keyboard_types, traits::*};
 
 // Assets
 pub use manganis::{self, *};

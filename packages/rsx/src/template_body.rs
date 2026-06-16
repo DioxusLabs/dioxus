@@ -1,12 +1,7 @@
-//! Lower parsed RSX bodies into the typed view builder.
-//!
-//! `TemplateBody` owns the parsed nodes and validates root-key rules. The actual
-//! template lowering happens in `FlatTemplatePieces`, which walks the body once
-//! to produce the const builder expression, dynamic value expressions, and
-//! hot-reload metadata for the same slots.
+//! Lower parsed RSX bodies into typed view builders.
 
 use self::location::DynIdx;
-use crate::flat_template::FlatTemplatePieces;
+use crate::view_builder::ViewBuilderPieces;
 use crate::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
@@ -57,14 +52,14 @@ impl ToTokens for TemplateBody {
 
         let key_warnings = self.check_for_duplicate_keys();
 
-        let template = FlatTemplatePieces::from_body(&node);
-        let template_definitions = template.definitions();
-        let template_expr = template.view_expr();
-        let dynamic_text = template.dynamic_text_tokens().iter();
+        let view = ViewBuilderPieces::from_body(&node);
+        let view_definitions = view.definitions();
+        let view_expr = view.view_expr();
+        let dynamic_text = view.dynamic_text_tokens().iter();
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
-        let hot_reload_mapping = template.hot_reload_template_tokens(quote! { __template });
+        let hot_reload_mapping = view.hot_reload_template_tokens(quote! { __template });
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -72,7 +67,7 @@ impl ToTokens for TemplateBody {
 
                 #key_warnings
 
-                #(#template_definitions)*
+                #(#view_definitions)*
 
                 #[cfg(debug_assertions)]
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
@@ -86,7 +81,7 @@ impl ToTokens for TemplateBody {
                 #[allow(clippy::let_and_return)]
                 let __vnodes = {
                     use dioxus_core::view::View as _;
-                    dioxus_core::view::keyed(#template_expr, __key).into_vnode()
+                    dioxus_core::view::keyed(#view_expr, __key).into_vnode()
                 };
 
                 #[cfg(debug_assertions)]

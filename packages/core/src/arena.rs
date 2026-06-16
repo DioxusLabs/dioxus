@@ -83,46 +83,26 @@ impl RenderTargetId {
     }
 }
 
-/// Renderer-local mounted state for one logical mount.
-#[derive(Debug)]
-pub(crate) struct MountedNodeState {
-    /// The IDs for the roots of this template, used when moving or removing
-    /// roots from the renderer.
-    pub(crate) root_ids: Box<[Option<MountedElementId>]>,
-
-    /// The element in the renderer that each dynamic attribute is mounted to.
-    pub(crate) mounted_attributes: Box<[Option<MountedElementId>]>,
-
-    /// The mounted target for each dynamic node slot.
-    pub(crate) mounted_dynamic_nodes: Box<[MountedDynamicNodeSlot]>,
-}
-
-impl MountedNodeState {
-    pub(crate) fn new(root_count: usize, attr_count: usize, dynamic_count: usize) -> Self {
-        Self {
-            root_ids: vec![None; root_count].into(),
-            mounted_attributes: vec![None; attr_count].into(),
-            mounted_dynamic_nodes: vec![MountedDynamicNodeSlot::Empty; dynamic_count].into(),
-        }
-    }
-}
-
 /// The mounted target for one dynamic node slot.
+///
+/// For components this records the child scope and the mount that owns its
+/// root nodes; for other dynamic nodes it records the renderer element the
+/// node is mounted to. Both live on the VirtualDom-side [`Mount`], indexed by
+/// dynamic-node index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MountedDynamicNodeSlot {
     Empty,
     Text(MountedElementId),
     Component {
         scope: ScopeId,
-        root: Option<MountId>,
+        root_mount: Option<MountId>,
     },
 }
 
 /// Renderer-local state for a render target.
 #[derive(Debug)]
 pub(crate) struct RenderTargetState {
-    pub(crate) elements: Slab<Option<ElementRef>>,
-    pub(crate) mounts: Vec<Option<MountedNodeState>>,
+    pub(crate) elements: Slab<Option<MountRef>>,
     pub(crate) template_roots: HashMap<(Template, usize), MountedElementId>,
 }
 
@@ -134,33 +114,8 @@ impl RenderTargetState {
 
         Self {
             elements,
-            mounts: Vec::new(),
             template_roots: HashMap::new(),
         }
-    }
-
-    pub(crate) fn create_mounted_node(
-        &mut self,
-        mount: MountId,
-        root_count: usize,
-        attr_count: usize,
-        dynamic_count: usize,
-    ) {
-        if self.mounts.len() <= mount.0 {
-            self.mounts.resize_with(mount.0 + 1, || None);
-        }
-        self.mounts[mount.0] = Some(MountedNodeState::new(root_count, attr_count, dynamic_count));
-    }
-
-    pub(crate) fn remove_mounted_node(&mut self, mount: MountId) {
-        // Removal only happens for `mount` values just produced by the
-        // mount-create path that allocated the slot, so the index is in
-        // bounds by construction.
-        debug_assert!(
-            self.mounts.get(mount.0).is_some(),
-            "remove_mounted_node called with unallocated mount",
-        );
-        self.mounts[mount.0].take();
     }
 }
 
@@ -173,8 +128,8 @@ impl RenderTargetState {
 pub(crate) struct MountId(pub(crate) usize);
 
 #[derive(Debug, Clone, Copy)]
-pub struct ElementRef {
-    // The mount that owns the real element.
+pub struct MountRef {
+    // The mount that owns the renderer element.
     pub(crate) mount: MountId,
 }
 
@@ -240,7 +195,7 @@ impl VirtualDom {
             .elements
             .get_mut(el.index())
             .expect("element should exist while assigning an element ref");
-        *element = Some(ElementRef { mount });
+        *element = Some(MountRef { mount });
     }
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {

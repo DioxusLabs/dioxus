@@ -1,6 +1,7 @@
 use crate::{
     DynamicNode, DynamicValue, Element, ErrorBoundary, Properties, SuspenseBoundary, Template,
     TemplateOp, TemplatePath, VComponent, VNode, fc_to_builder, properties::RootProps,
+    string_interner::StaticStringInterner,
 };
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary
@@ -9,7 +10,7 @@ use crate::{
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
     static TEMPLATE: Template = Template::new(
         &[TemplateOp::text(), TemplateOp::dynamic()],
-        &[],
+        StaticStringInterner::empty(),
         &[TemplatePath::root(0)],
     );
     Element::Ok(VNode::new(

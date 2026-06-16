@@ -4,6 +4,7 @@ use crate::{
     events::ListenerCallback,
     innerlude::{MountId, ScopeState},
     properties::ComponentFunction,
+    string_interner::StaticStringInterner,
 };
 use dioxus_core_types::DioxusFormattable;
 
@@ -89,7 +90,7 @@ impl VNode {
         }
         static EMPTY_TEMPLATE: Template = Template::new(
             &[TemplateOp::text(), TemplateOp::dynamic()],
-            &[],
+            StaticStringInterner::empty(),
             &[TemplatePath::root(0)],
         );
         let vnode = EMPTY_VNODE.with(|cell| {
@@ -120,7 +121,7 @@ impl VNode {
         }
         static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
             &[TemplateOp::text(), TemplateOp::dynamic()],
-            &[],
+            StaticStringInterner::empty(),
             &[TemplatePath::root(0)],
         );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
@@ -235,18 +236,6 @@ impl VNode {
         }
     }
 
-    /// Get the mounted id for a dynamic text node index.
-    ///
-    /// Panics if this vnode or dynamic text slot is not mounted.
-    pub fn unchecked_mounted_dynamic_node(
-        &self,
-        dynamic_node_idx: usize,
-        dom: &VirtualDom,
-    ) -> ElementId {
-        self.mounted_dynamic_node(dynamic_node_idx, dom)
-            .expect("dynamic text node slot should be mounted")
-    }
-
     /// Get the mounted id for a root node index
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mounted_id()?;
@@ -256,14 +245,6 @@ impl VNode {
 
         dom.mounted_root_node(mount, root_idx)
             .map(|id| id.element_id())
-    }
-
-    /// Get the mounted id for a root node index.
-    ///
-    /// Panics if this vnode or root slot is not mounted.
-    pub fn unchecked_mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> ElementId {
-        self.mounted_root(root_idx, dom)
-            .expect("root node slot should be mounted")
     }
 
     /// Get the mounted id for a dynamic attribute index
@@ -276,18 +257,6 @@ impl VNode {
 
         dom.mounted_dyn_attr(mount, dynamic_attribute_idx)
             .map(|id| id.element_id())
-    }
-
-    /// Get the mounted id for a dynamic attribute index.
-    ///
-    /// Panics if this vnode or dynamic attribute slot is not mounted.
-    pub fn unchecked_mounted_dynamic_attribute(
-        &self,
-        dynamic_attribute_idx: usize,
-        dom: &VirtualDom,
-    ) -> ElementId {
-        self.mounted_dynamic_attribute(dynamic_attribute_idx, dom)
-            .expect("dynamic attribute slot should be mounted")
     }
 
     /// Create a deep clone of this VNode
@@ -482,20 +451,6 @@ impl VComponent {
         dom.mounted_dynamic_component_scope(mount, dynamic_node_index)
     }
 
-    /// Get the [`ScopeId`] this node is mounted to.
-    ///
-    /// Panics if the vnode or component slot is not mounted.
-    pub fn unchecked_mounted_scope_id(
-        &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
-        dom: &VirtualDom,
-    ) -> ScopeId {
-        let mount = vnode.unchecked_mounted_id();
-
-        dom.unchecked_mounted_dynamic_component_scope(mount, dynamic_node_index)
-    }
-
     /// Get the scope this node is mounted to if it's mounted
     ///
     /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
@@ -512,22 +467,6 @@ impl VComponent {
         let scope_id = dom.mounted_dynamic_component_scope(mount, dynamic_node_index)?;
 
         dom.scopes.get(scope_id.index())
-    }
-
-    /// Get the scope this node is mounted to.
-    ///
-    /// Panics if the vnode or component slot is not mounted.
-    pub fn unchecked_mounted_scope<'a>(
-        &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
-        dom: &'a VirtualDom,
-    ) -> &'a ScopeState {
-        let scope_id = self.unchecked_mounted_scope_id(dynamic_node_index, vnode, dom);
-
-        dom.scopes
-            .get(scope_id.index())
-            .expect("component scope should be live")
     }
 }
 

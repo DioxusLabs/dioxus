@@ -165,7 +165,8 @@ fn valid_reorder() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings(), &["div"]);
+    assert_eq!(template.template.strings().len(), 1);
+    assert_eq!(template.template.strings().str_at(0), "div");
     assert_eq!(
         template.template.dynamics(),
         &[
@@ -275,7 +276,8 @@ fn valid_new_dynamic_attribute() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings(), &["div"]);
+    assert_eq!(template.template.strings().len(), 1);
+    assert_eq!(template.template.strings().str_at(0), "div");
     assert_eq!(
         template.template.dynamics(),
         &[
@@ -481,7 +483,8 @@ fn invalid_cases() {
             TemplateOp::dynamic(),
         ]
     );
-    assert_eq!(template.template.strings(), &["div"]);
+    assert_eq!(template.template.strings().len(), 1);
+    assert_eq!(template.template.strings().str_at(0), "div");
     assert_eq!(
         template.template.dynamics(),
         &[TemplatePath::empty().next_child().next_child()]

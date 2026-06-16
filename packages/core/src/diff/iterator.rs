@@ -4,7 +4,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{ElementEdge, at_site, create_at_site, insertion_site_at},
     },
-    innerlude::{ElementRef, MountId, WriteMutations},
+    innerlude::{MountId, MountRef, WriteMutations},
     mutations::reborrow_writer,
     nodes::VNode,
 };
@@ -18,7 +18,7 @@ impl DiffState<'_, '_, '_> {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
@@ -46,12 +46,7 @@ impl DiffState<'_, '_, '_> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(
-        &mut self,
-        old: &[VNode],
-        new: &[VNode],
-        parent: Option<ElementRef>,
-    ) {
+    fn diff_non_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: Option<MountRef>) {
         use std::cmp::Ordering;
 
         // Handled these cases in `diff_children` before calling this function.
@@ -90,7 +85,7 @@ impl DiffState<'_, '_, '_> {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: Option<ElementRef>) {
+    fn diff_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: Option<MountRef>) {
         #[cfg(debug_assertions)]
         {
             let mut keys = rustc_hash::FxHashSet::default();
@@ -167,7 +162,7 @@ impl DiffState<'_, '_, '_> {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
     ) -> Option<(usize, usize)> {
         let left_offset = old
             .iter()
@@ -247,7 +242,7 @@ impl DiffState<'_, '_, '_> {
     // this subsequence will remain in place, minimizing the number of DOM moves we
     // will have to do.
     #[allow(clippy::too_many_lines)]
-    fn diff_keyed_middle(&mut self, old: &[VNode], new: &[VNode], parent: Option<ElementRef>) {
+    fn diff_keyed_middle(&mut self, old: &[VNode], new: &[VNode], parent: Option<MountRef>) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -392,7 +387,7 @@ impl DiffState<'_, '_, '_> {
         new: &[VNode],
         old: &[VNode],
         sibling: &VNode,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         new_index_to_old_index: &[usize],
         range: std::ops::Range<usize>,
     ) {
@@ -412,7 +407,7 @@ impl DiffState<'_, '_, '_> {
         &mut self,
         new: &[VNode],
         old: &[VNode],
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         new_index_to_old_index: &[usize],
         range: std::ops::Range<usize>,
     ) -> usize {
@@ -436,7 +431,7 @@ impl DiffState<'_, '_, '_> {
         edge: ElementEdge,
         new: &[VNode],
         sibling: &VNode,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
     ) {
         let site = insertion_site_at(
             edge,

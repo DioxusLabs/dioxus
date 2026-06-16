@@ -1,6 +1,6 @@
 use crate::{
     RenderTargetId, ScopeId, VNode,
-    arena::{ElementRef, MountId, MountedDynamicNodeSlot, MountedElementId, MountedNodeState},
+    arena::{MountId, MountRef, MountedDynamicNodeSlot, MountedElementId},
     virtual_dom::VirtualDom,
 };
 
@@ -15,14 +15,16 @@ pub(crate) enum RenderMode {
 ///
 /// A mount owns the renderer ids and dynamic child bindings for an rsx block.
 /// `node` is the committed view used after diffing for event dispatch, tree
-/// inspection, and the next render pass.
+/// inspection, and the next render pass. A mount belongs to exactly one render
+/// target, so its per-mount bindings live here rather than in a parallel
+/// per-target table.
 #[derive(Debug)]
 pub(crate) struct Mount {
-    /// The physical parent used for renderer placement and anchors.
-    render_parent: Option<ElementRef>,
+    /// The physical parent used for renderer placement.
+    render_parent: Option<MountRef>,
 
     /// The logical parent used for context tree event bubbling.
-    logical_parent: Option<ElementRef>,
+    logical_parent: Option<MountRef>,
 
     /// The render target this mount is materialized into.
     target_id: RenderTargetId,
@@ -34,14 +36,27 @@ pub(crate) struct Mount {
     /// Background mounts may update their virtual tree, but they must not write
     /// renderer mutations until they are promoted back to the foreground.
     mode: RenderMode,
+
+    /// The renderer ids for the roots of this template, used when moving or
+    /// removing roots from the renderer.
+    root_ids: Box<[Option<MountedElementId>]>,
+
+    /// The renderer element each dynamic attribute is mounted to.
+    mounted_attributes: Box<[Option<MountedElementId>]>,
+
+    /// The mounted target for each dynamic node slot.
+    mounted_dynamic_nodes: Box<[MountedDynamicNodeSlot]>,
 }
 
 impl Mount {
     pub(crate) fn new(
         node: VNode,
-        render_parent: Option<ElementRef>,
-        logical_parent: Option<ElementRef>,
+        render_parent: Option<MountRef>,
+        logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
+        root_count: usize,
+        attr_count: usize,
+        dynamic_count: usize,
     ) -> Self {
         Self {
             render_parent,
@@ -49,15 +64,22 @@ impl Mount {
             target_id,
             node,
             mode: RenderMode::Foreground,
+            root_ids: vec![None; root_count].into(),
+            mounted_attributes: vec![None; attr_count].into(),
+            mounted_dynamic_nodes: vec![MountedDynamicNodeSlot::Empty; dynamic_count].into(),
         }
     }
 
-    pub(crate) fn logical_parent(&self) -> Option<ElementRef> {
-        self.logical_parent
+    pub(crate) fn dynamic_node_slot(&self, idx: usize) -> Option<MountedDynamicNodeSlot> {
+        self.mounted_dynamic_nodes.get(idx).copied()
     }
 
-    pub(crate) fn target_id(&self) -> RenderTargetId {
-        self.target_id
+    pub(crate) fn mounted_attribute(&self, idx: usize) -> Option<MountedElementId> {
+        self.mounted_attributes.get(idx).copied().flatten()
+    }
+
+    pub(crate) fn logical_parent(&self) -> Option<MountRef> {
+        self.logical_parent
     }
 
     pub(crate) fn node(&self) -> &VNode {
@@ -69,8 +91,8 @@ impl VirtualDom {
     pub(crate) fn create_mount(
         &mut self,
         node: &VNode,
-        render_parent: Option<ElementRef>,
-        logical_parent: Option<ElementRef>,
+        render_parent: Option<MountRef>,
+        logical_parent: Option<MountRef>,
         root_count: usize,
         attr_count: usize,
         dynamic_count: usize,
@@ -88,22 +110,15 @@ impl VirtualDom {
             render_parent,
             logical_parent,
             target_id,
-        ));
-        drop(mounts);
-
-        self.runtime.render_targets.borrow_mut()[target_id.index()].create_mounted_node(
-            mount,
             root_count,
             attr_count,
             dynamic_count,
-        );
+        ));
 
         mount
     }
 
     pub(crate) fn remove_mount(&mut self, mount: MountId) {
-        let target_id = self.mount_target_id(mount);
-        self.runtime.render_targets.borrow_mut()[target_id.index()].remove_mounted_node(mount);
         self.runtime.mounts.borrow_mut().remove(mount.0);
     }
 
@@ -119,11 +134,11 @@ impl VirtualDom {
             .expect("mounted mount record should exist")
     }
 
-    pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
+    pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<MountRef> {
         self.mounted_render_parent(mount)
     }
 
-    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<ElementRef> {
+    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<MountRef> {
         self.runtime
             .mounts
             .borrow()
@@ -132,7 +147,7 @@ impl VirtualDom {
             .expect("mounted mount record should exist")
     }
 
-    pub(crate) fn get_mounted_logical_parent(&self, mount: MountId) -> Option<ElementRef> {
+    pub(crate) fn get_mounted_logical_parent(&self, mount: MountId) -> Option<MountRef> {
         self.runtime
             .mounts
             .borrow()
@@ -144,19 +159,17 @@ impl VirtualDom {
     /// Number of template roots this `mount`'s mount was created with.
     /// Anchor lookups that walk a view's `template.roots()` may iterate
     /// beyond what the mount actually has — e.g. when the view was a clone
-    /// whose template grew between renders — and the underlying
-    /// `MountedNodeState::root_ids` would panic on out-of-range indexing.
+    /// whose template grew between renders — and the underlying `root_ids`
+    /// would panic on out-of-range indexing.
     pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        self.mounted_node_state(mount, |state| state.root_ids.len())
-            .expect("mounted mount state should exist")
+        self.with_mount(mount, |mount| mount.root_ids.len())
     }
 
     /// Number of dynamic-node slots this `mount`'s mount was created with.
     /// Same guard rail as [`Self::mounted_root_count`], but for
-    /// `MountedNodeState::mounted_dynamic_nodes`.
+    /// `mounted_dynamic_nodes`.
     pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
-        self.mounted_node_state(mount, |state| state.mounted_dynamic_nodes.len())
-            .expect("mounted mount state should exist")
+        self.with_mount(mount, |mount| mount.mounted_dynamic_nodes.len())
     }
 
     pub(crate) fn get_mounted_dynamic_node_slot(
@@ -164,7 +177,7 @@ impl VirtualDom {
         mount: MountId,
         dyn_node_idx: usize,
     ) -> MountedDynamicNodeSlot {
-        self.with_mounted_node_state(mount, |state| state.mounted_dynamic_nodes[dyn_node_idx])
+        self.with_mount(mount, |mount| mount.mounted_dynamic_nodes[dyn_node_idx])
     }
 
     pub(crate) fn set_mounted_dynamic_node_slot(
@@ -173,8 +186,8 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: MountedDynamicNodeSlot,
     ) {
-        self.with_mounted_node_state_mut(mount, |state| {
-            state.mounted_dynamic_nodes[dyn_node_idx] = value;
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_dynamic_nodes[dyn_node_idx] = value;
         });
     }
 
@@ -230,13 +243,13 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn mounted_dynamic_component_root(
+    pub(crate) fn mounted_dynamic_component_root_mount(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
     ) -> Option<MountId> {
         match self.get_mounted_dynamic_node_slot(mount, dyn_node_idx) {
-            MountedDynamicNodeSlot::Component { root, .. } => root,
+            MountedDynamicNodeSlot::Component { root_mount, .. } => root_mount,
             _ => None,
         }
     }
@@ -256,15 +269,18 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: ScopeId,
     ) {
-        let root = self.mounted_dynamic_component_root(mount, dyn_node_idx);
+        let root_mount = self.mounted_dynamic_component_root_mount(mount, dyn_node_idx);
         self.set_mounted_dynamic_node_slot(
             mount,
             dyn_node_idx,
-            MountedDynamicNodeSlot::Component { scope: value, root },
+            MountedDynamicNodeSlot::Component {
+                scope: value,
+                root_mount,
+            },
         );
     }
 
-    pub(crate) fn set_mounted_dynamic_component_root(
+    pub(crate) fn set_mounted_dynamic_component_root_mount(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
@@ -274,7 +290,10 @@ impl VirtualDom {
         self.set_mounted_dynamic_node_slot(
             mount,
             dyn_node_idx,
-            MountedDynamicNodeSlot::Component { scope, root: value },
+            MountedDynamicNodeSlot::Component {
+                scope,
+                root_mount: value,
+            },
         );
     }
 
@@ -291,7 +310,7 @@ impl VirtualDom {
         mount: MountId,
         dyn_attr_idx: usize,
     ) -> Option<MountedElementId> {
-        self.with_mounted_node_state(mount, |state| state.mounted_attributes[dyn_attr_idx])
+        self.with_mount(mount, |mount| mount.mounted_attributes[dyn_attr_idx])
     }
 
     pub(crate) fn unchecked_mounted_dyn_attr(
@@ -309,14 +328,14 @@ impl VirtualDom {
         dyn_attr_idx: usize,
         value: MountedElementId,
     ) {
-        self.with_mounted_node_state_mut(mount, |state| {
-            state.mounted_attributes[dyn_attr_idx] = Some(value);
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_attributes[dyn_attr_idx] = Some(value);
         });
     }
 
     pub(crate) fn clear_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) {
-        self.with_mounted_node_state_mut(mount, |state| {
-            state.mounted_attributes[dyn_attr_idx] = None;
+        self.with_mount_mut(mount, |mount| {
+            mount.mounted_attributes[dyn_attr_idx] = None;
         });
     }
 
@@ -325,7 +344,7 @@ impl VirtualDom {
         mount: MountId,
         root_idx: usize,
     ) -> Option<MountedElementId> {
-        self.with_mounted_node_state(mount, |state| state.root_ids[root_idx])
+        self.with_mount(mount, |mount| mount.root_ids[root_idx])
     }
 
     pub(crate) fn unchecked_mounted_root_node(
@@ -343,19 +362,19 @@ impl VirtualDom {
         root_idx: usize,
         value: MountedElementId,
     ) {
-        self.with_mounted_node_state_mut(mount, |state| {
-            state.root_ids[root_idx] = Some(value);
+        self.with_mount_mut(mount, |mount| {
+            mount.root_ids[root_idx] = Some(value);
         });
     }
 
     pub(crate) fn clear_mounted_root_node(&self, mount: MountId, root_idx: usize) {
-        self.with_mounted_node_state_mut(mount, |state| {
-            state.root_ids[root_idx] = None;
+        self.with_mount_mut(mount, |mount| {
+            mount.root_ids[root_idx] = None;
         });
     }
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
-        // Hand out a deep clone so anchor lookups that descend into the
+        // Hand out a deep clone so placement lookups that descend into the
         // returned tree can't observe descendant mount cells being mutated
         // by a sibling diff's `claim_mount`.
         self.runtime
@@ -390,67 +409,49 @@ impl VirtualDom {
         // Deep-clone so the committed snapshot owns its own per-vnode
         // raw mount slots. A subsequent diff that calls
         // `claim_mount` on descendant `old` vnodes would otherwise
-        // mutate the shared `Rc<VNodeInner>` here too, and anchor lookups
+        // mutate the shared `Rc<VNodeInner>` here too, and placement lookups
         // that walk `mount.node` would see those descendants as unmounted.
         self.runtime.mounts.borrow_mut()[mount.0].node = node.deep_clone_preserving_mounts();
     }
 
-    pub(crate) fn replace_mounted_component_root(&self, old_root: MountId, new_root: MountId) {
-        if old_root == new_root {
+    pub(crate) fn replace_mounted_component_root_mount(
+        &self,
+        old_root_mount: MountId,
+        new_root_mount: MountId,
+    ) {
+        if old_root_mount == new_root_mount {
             return;
         }
 
-        let mut targets = self.runtime.render_targets.borrow_mut();
-        for (_, target) in targets.iter_mut() {
-            for mounted in target.mounts.iter_mut().flatten() {
-                for slot in mounted.mounted_dynamic_nodes.iter_mut() {
-                    let MountedDynamicNodeSlot::Component { root, .. } = slot else {
-                        continue;
-                    };
-                    if *root == Some(old_root) {
-                        *root = Some(new_root);
-                    }
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        for (_, mount) in mounts.iter_mut() {
+            for slot in mount.mounted_dynamic_nodes.iter_mut() {
+                let MountedDynamicNodeSlot::Component { root_mount, .. } = slot else {
+                    continue;
+                };
+                if *root_mount == Some(old_root_mount) {
+                    *root_mount = Some(new_root_mount);
                 }
             }
         }
     }
 
-    fn mounted_node_state<R>(
-        &self,
-        mount: MountId,
-        with_state: impl FnOnce(&MountedNodeState) -> R,
-    ) -> Option<R> {
-        let target_id = self.mount_target_id(mount);
-        let targets = self.runtime.render_targets.borrow();
-        targets
-            .get(target_id.index())
-            .and_then(|target| target.mounts.get(mount.0))
-            .and_then(|mount| mount.as_ref())
-            .map(with_state)
+    fn with_mount<R>(&self, mount: MountId, with_mount: impl FnOnce(&Mount) -> R) -> R {
+        self.runtime
+            .mounts
+            .borrow()
+            .get(mount.0)
+            .map(with_mount)
+            .expect("mounted mount record should exist")
     }
 
-    fn with_mounted_node_state<R>(
-        &self,
-        mount: MountId,
-        with_state: impl FnOnce(&MountedNodeState) -> R,
-    ) -> R {
-        self.mounted_node_state(mount, with_state)
-            .expect("mounted mount state should exist")
-    }
-
-    fn with_mounted_node_state_mut<R>(
-        &self,
-        mount: MountId,
-        with_state: impl FnOnce(&mut MountedNodeState) -> R,
-    ) -> R {
-        let target_id = self.mount_target_id(mount);
-        let mut targets = self.runtime.render_targets.borrow_mut();
-        let state = targets
-            .get_mut(target_id.index())
-            .and_then(|target| target.mounts.get_mut(mount.0))
-            .and_then(|mount| mount.as_mut())
-            .expect("mounted mount state should exist");
-        with_state(state)
+    fn with_mount_mut<R>(&self, mount: MountId, with_mount: impl FnOnce(&mut Mount) -> R) -> R {
+        self.runtime
+            .mounts
+            .borrow_mut()
+            .get_mut(mount.0)
+            .map(with_mount)
+            .expect("mounted mount record should exist")
     }
 }
 

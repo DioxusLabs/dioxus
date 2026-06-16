@@ -500,45 +500,13 @@ macro_rules! expand_html_event_listeners {
             )*
         }
     ) => {
-        /// Event handler extension methods for typed HTML builders.
-        pub trait EventsExtension: ::dioxus_core::view::AttributeTarget + Sized {
+        dioxus_html_internal_macro::impl_event_extensions! {
             $(
                 $(
-                    #[doc = concat!(stringify!($name))]
                     $( #[$attr] )*
-                    /// <details open>
-                    /// <summary>General Event Handler Information</summary>
-                    ///
-                    #[doc = include_str!("../../docs/event_handlers.md")]
-                    ///
-                    /// </details>
-                    ///
-                    #[doc = include_str!("../../docs/common_event_handler_errors.md")]
-                    #[inline]
-                    fn $name<__Marker>(
-                        self,
-                        event_handler: impl ::dioxus_core::SuperInto<
-                            ::dioxus_core::ListenerCallback<$data>,
-                            __Marker,
-                        >,
-                    ) -> <Self as ::dioxus_core::view::AttributeTarget>::Output
-                    {
-                        ::dioxus_core::view::AttributeTarget::append_attribute(
-                            self,
-                            super::event_attribute::<$data, __Marker>(
-                                concat!("on", stringify!($raw)),
-                                event_handler,
-                            ),
-                        )
-                    }
+                    $name => $raw => $data,
                 )*
             )*
-        }
-
-        impl<Target> EventsExtension for Target
-        where
-            Target: ::dioxus_core::view::AttributeTarget,
-        {
         }
     };
 }

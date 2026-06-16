@@ -46,14 +46,55 @@ impl PlatformEventData {
     }
 }
 
+#[doc(hidden)]
+pub struct EventClosureMarker<Marker>(std::marker::PhantomData<Marker>);
+
+#[doc(hidden)]
+pub struct EventListenerMarker;
+
+#[doc(hidden)]
+pub struct EventCallbackMarker;
+
+#[doc(hidden)]
+pub trait EventHandlerValue<Data, Marker> {
+    fn into_listener(self) -> ::dioxus_core::ListenerCallback<Data>;
+}
+
+impl<Data, Function, Spawn, Marker> EventHandlerValue<Data, EventClosureMarker<Marker>> for Function
+where
+    Data: 'static,
+    Function: FnMut(::dioxus_core::Event<Data>) -> Spawn + 'static,
+    Spawn: ::dioxus_core::SpawnIfAsync<Marker> + 'static,
+{
+    fn into_listener(self) -> ::dioxus_core::ListenerCallback<Data> {
+        ::dioxus_core::ListenerCallback::new(self)
+    }
+}
+
+impl<Data> EventHandlerValue<Data, EventListenerMarker> for ::dioxus_core::ListenerCallback<Data> {
+    fn into_listener(self) -> ::dioxus_core::ListenerCallback<Data> {
+        self
+    }
+}
+
+impl<Data> EventHandlerValue<Data, EventCallbackMarker>
+    for ::dioxus_core::Callback<::dioxus_core::Event<Data>>
+where
+    Data: 'static,
+{
+    fn into_listener(self) -> ::dioxus_core::ListenerCallback<Data> {
+        ::dioxus_core::ListenerCallback::new(move |event| self.call(event))
+    }
+}
+
 pub(crate) fn event_attribute<Data, Marker>(
     name: &'static str,
-    event_handler: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<Data>, Marker>,
+    event_handler: impl EventHandlerValue<Data, Marker>,
 ) -> ::dioxus_core::Attribute
 where
     Data: for<'a> From<&'a PlatformEventData> + 'static,
 {
-    let event_handler = event_handler.super_into();
+    let event_handler = event_handler.into_listener();
     ::dioxus_core::Attribute::new(
         name,
         ::dioxus_core::AttributeValue::listener(

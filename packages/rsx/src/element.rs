@@ -111,9 +111,9 @@ impl ToTokens for Element {
             template_idx: Default::default(),
             diagnostics: Diagnostics::new(),
         };
-        let template = crate::flat_template::FlatTemplatePieces::from_body(&body);
-        let definitions = template.definitions();
-        let view = template.view_expr();
+        let builder = crate::view_builder::ViewBuilderPieces::from_body(&body);
+        let definitions = builder.definitions();
+        let view = builder.view_expr();
 
         tokens.append_all(quote! {
             {
@@ -258,13 +258,13 @@ impl Parse for ElementName {
 impl ElementName {
     pub(crate) fn tag_name_string(&self) -> String {
         match self {
-            ElementName::Ident(i) => normalize_element_ident(i),
+            ElementName::Ident(i) => i
+                .to_string()
+                .strip_prefix("r#")
+                .map(ToString::to_string)
+                .unwrap_or_else(|| i.to_string()),
             ElementName::Custom(s) => s.value(),
         }
-    }
-
-    pub(crate) fn namespace(&self) -> Option<&'static str> {
-        namespace_for_tag(self.tag_name_string().as_str())
     }
 
     pub(crate) fn tag_name(&self) -> TokenStream2 {
@@ -282,90 +282,6 @@ impl ElementName {
             ElementName::Ident(i) => i.span(),
             ElementName::Custom(s) => s.span(),
         }
-    }
-}
-
-fn normalize_element_ident(ident: &Ident) -> String {
-    match ident.to_string().strip_prefix("r#") {
-        Some(raw) => raw.to_string(),
-        None => match ident.to_string().as_str() {
-            "annotationXml" => "annotation-xml".to_string(),
-            name => name.to_string(),
-        },
-    }
-}
-
-fn namespace_for_tag(tag: &str) -> Option<&'static str> {
-    match tag {
-        "svg"
-        | "animate"
-        | "animateMotion"
-        | "animateTransform"
-        | "circle"
-        | "clipPath"
-        | "defs"
-        | "desc"
-        | "discard"
-        | "ellipse"
-        | "feBlend"
-        | "feColorMatrix"
-        | "feComponentTransfer"
-        | "feComposite"
-        | "feConvolveMatrix"
-        | "feDiffuseLighting"
-        | "feDisplacementMap"
-        | "feDistantLight"
-        | "feDropShadow"
-        | "feFlood"
-        | "feFuncA"
-        | "feFuncB"
-        | "feFuncG"
-        | "feFuncR"
-        | "feGaussianBlur"
-        | "feImage"
-        | "feMerge"
-        | "feMergeNode"
-        | "feMorphology"
-        | "feOffset"
-        | "fePointLight"
-        | "feSpecularLighting"
-        | "feSpotLight"
-        | "feTile"
-        | "feTurbulence"
-        | "filter"
-        | "foreignObject"
-        | "g"
-        | "hatch"
-        | "hatchpath"
-        | "image"
-        | "line"
-        | "linearGradient"
-        | "marker"
-        | "mask"
-        | "metadata"
-        | "mpath"
-        | "path"
-        | "pattern"
-        | "polygon"
-        | "polyline"
-        | "radialGradient"
-        | "rect"
-        | "set"
-        | "stop"
-        | "switch"
-        | "symbol"
-        | "text"
-        | "textPath"
-        | "tspan"
-        | "use"
-        | "view" => Some("http://www.w3.org/2000/svg"),
-        "annotation" | "annotation-xml" | "merror" | "math" | "mfrac" | "mi" | "mmultiscripts"
-        | "mn" | "mo" | "mover" | "mpadded" | "mprescripts" | "mroot" | "mrow" | "ms"
-        | "mspace" | "msqrt" | "mstyle" | "msub" | "msubsup" | "msup" | "mtable" | "mtd"
-        | "mtext" | "mtr" | "munder" | "munderover" | "semantics" => {
-            Some("http://www.w3.org/1998/Math/MathML")
-        }
-        _ => None,
     }
 }
 

@@ -137,7 +137,7 @@ impl DynamicValues {
     }
 
     /// Push a dynamic attribute slot.
-    pub fn push_attrs(&mut self, value: Box<[Attribute]>) {
+    pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
         self.values.push(DynamicValue::Attrs(value));
     }
 
@@ -455,18 +455,6 @@ impl<Tag: TagName, Attrs: View, Children: View> View for El<Tag, Attrs, Children
     }
 }
 
-/// A marker for one static attribute.
-pub trait StaticAttribute {
-    /// Attribute name.
-    const NAME: &'static str;
-
-    /// Attribute value.
-    const VALUE: &'static str;
-
-    /// Attribute namespace.
-    const NAMESPACE: TemplateRawAttrNamespace = None;
-}
-
 /// Static metadata for a generated attribute builder method.
 pub trait AttributeDescriptor {
     /// Attribute name.
@@ -483,11 +471,11 @@ pub trait AttributeDescriptor {
 pub struct Attr<A>(PhantomData<A>);
 
 /// Create a static attribute view for an attribute marker.
-pub const fn attr<A: StaticAttribute>() -> Attr<A> {
+pub const fn attr<A: AttributeDescriptor + StaticAttributeValue>() -> Attr<A> {
     Attr(PhantomData)
 }
 
-impl<A: StaticAttribute> Raw for Attr<A> {
+impl<A: AttributeDescriptor + StaticAttributeValue> Raw for Attr<A> {
     const RAW: RawTape = {
         let mut raw = RawTape::new();
         raw.push(TemplateRawOp::StaticAttr {
@@ -499,7 +487,7 @@ impl<A: StaticAttribute> Raw for Attr<A> {
     };
 }
 
-impl<A: StaticAttribute> View for Attr<A> {}
+impl<A: AttributeDescriptor + StaticAttributeValue> View for Attr<A> {}
 
 /// A marker for one static attribute value.
 pub trait StaticAttributeValue {
@@ -518,14 +506,22 @@ pub const fn static_value<V: StaticAttributeValue>() -> StaticValue<V> {
 /// A static attribute assembled from a generated descriptor and a static value.
 pub struct StaticAttr<Descriptor, Value>(PhantomData<(Descriptor, Value)>);
 
-impl<Descriptor, Value> StaticAttribute for StaticAttr<Descriptor, Value>
+impl<Descriptor, Value> AttributeDescriptor for StaticAttr<Descriptor, Value>
 where
     Descriptor: AttributeDescriptor,
     Value: StaticAttributeValue,
 {
     const NAME: &'static str = Descriptor::NAME;
-    const VALUE: &'static str = Value::VALUE;
     const NAMESPACE: TemplateRawAttrNamespace = Descriptor::NAMESPACE;
+    const VOLATILE: bool = Descriptor::VOLATILE;
+}
+
+impl<Descriptor, Value> StaticAttributeValue for StaticAttr<Descriptor, Value>
+where
+    Descriptor: AttributeDescriptor,
+    Value: StaticAttributeValue,
+{
+    const VALUE: &'static str = Value::VALUE;
 }
 
 #[doc(hidden)]
@@ -580,24 +576,13 @@ impl View for DynAttrs {
     }
 }
 
-/// A builder target that can accept one dynamic attribute.
+/// A builder target that can accept one attribute.
 pub trait AttributeTarget: Sized {
     /// The target returned after adding the attribute.
     type Output;
 
-    /// Append one fully constructed dynamic attribute.
+    /// Append one fully constructed attribute.
     fn append_attribute(self, attr: Attribute) -> Self::Output;
-
-    /// Build and append one dynamic attribute from its parts.
-    fn push_dynamic_attribute<T>(
-        self,
-        name: &'static str,
-        namespace: Option<&'static str>,
-        value: impl IntoAttributeValue<T>,
-        volatile: bool,
-    ) -> Self::Output {
-        self.append_attribute(Attribute::new(name, value, namespace, volatile))
-    }
 }
 
 impl<Target> AttributeTarget for Target
@@ -638,12 +623,14 @@ where
     type Output = <Target as AttributeTarget>::Output;
 
     fn append_to(self, target: Target) -> Self::Output {
-        AttributeTarget::push_dynamic_attribute(
+        AttributeTarget::append_attribute(
             target,
-            Descriptor::NAME,
-            Descriptor::NAMESPACE,
-            self,
-            Descriptor::VOLATILE,
+            Attribute::new(
+                Descriptor::NAME,
+                self,
+                Descriptor::NAMESPACE,
+                Descriptor::VOLATILE,
+            ),
         )
     }
 }
@@ -809,99 +796,16 @@ macro_rules! static_text {
     };
 }
 
-/// Declare a static attribute marker type.
-#[macro_export]
-macro_rules! static_attribute {
-    ($attr:literal, $value:literal) => {{
-        #[doc(hidden)]
-        mod __dioxus_static_attribute {
-            pub(super) fn view() -> impl $crate::view::View {
-                struct Attribute;
-                impl $crate::view::StaticAttribute for Attribute {
-                    const NAME: &'static str = $attr;
-                    const VALUE: &'static str = $value;
-                }
-
-                $crate::view::attr::<Attribute>()
-            }
-        }
-
-        __dioxus_static_attribute::view()
-    }};
-    ($attr:literal, $value:literal, $namespace:expr) => {{
-        #[doc(hidden)]
-        mod __dioxus_static_attribute {
-            pub(super) fn view() -> impl $crate::view::View {
-                struct Attribute;
-                impl $crate::view::StaticAttribute for Attribute {
-                    const NAME: &'static str = $attr;
-                    const VALUE: &'static str = $value;
-                    const NAMESPACE: $crate::TemplateRawAttrNamespace = $namespace;
-                }
-
-                $crate::view::attr::<Attribute>()
-            }
-        }
-
-        __dioxus_static_attribute::view()
-    }};
-    ($name:ident, $attr:literal, $value:literal) => {
-        $crate::static_attribute!(pub struct $name, $attr, $value);
-    };
-    ($name:ident, $attr:literal, $value:literal, $namespace:expr) => {
-        $crate::static_attribute!(pub struct $name, $attr, $value, $namespace);
-    };
-    ($vis:vis struct $name:ident, $attr:expr, $value:expr) => {
-        $vis struct $name;
-        impl $crate::view::StaticAttribute for $name {
-            const NAME: &'static str = $attr;
-            const VALUE: &'static str = $value;
-        }
-    };
-    ($vis:vis struct $name:ident, $attr:expr, $value:expr, $namespace:expr) => {
-        $vis struct $name;
-        impl $crate::view::StaticAttribute for $name {
-            const NAME: &'static str = $attr;
-            const VALUE: &'static str = $value;
-            const NAMESPACE: $crate::TemplateRawAttrNamespace = $namespace;
-        }
-    };
-}
-
 /// Declare a static attribute value for generated attribute builder methods.
 #[macro_export]
 macro_rules! static_value {
     ($value:literal) => {{
-        #[doc(hidden)]
-        mod __dioxus_static_value {
-            pub(super) struct Value;
+        struct Value;
 
-            impl $crate::view::StaticAttributeValue for Value {
-                const VALUE: &'static str = $value;
-            }
-
-            pub(super) fn value() -> $crate::view::StaticValue<Value> {
-                $crate::view::static_value::<Value>()
-            }
-        }
-
-        __dioxus_static_value::value()
-    }};
-    ($name:ident, $value:literal) => {
-        $crate::static_value!(pub struct $name, $value);
-    };
-    ($vis:vis struct $name:ident, $value:expr) => {
-        $vis struct $name;
-        impl $crate::view::StaticAttributeValue for $name {
+        impl $crate::view::StaticAttributeValue for Value {
             const VALUE: &'static str = $value;
         }
-    };
-}
 
-/// Compatibility alias for [`static_attribute!`].
-#[macro_export]
-macro_rules! static_attr {
-    ($($tokens:tt)*) => {
-        $crate::static_attribute!($($tokens)*);
-    };
+        $crate::view::static_value::<Value>()
+    }};
 }

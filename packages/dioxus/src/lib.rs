@@ -192,10 +192,20 @@ pub mod prelude {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(no_inline)]
+    #[allow(ambiguous_glob_reexports)]
+    pub use dioxus_elements::elements::*;
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(no_inline)]
     pub use dioxus_elements::{
-        GlobalAttributesExtension, SvgAttributesExtension, events::*, extensions::*,
-        global_attributes, keyboard_types, svg_attributes, traits::*,
+        GlobalAttributesExtension, SvgAttributesExtension, events::*, keyboard_types, traits::*,
     };
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(no_inline)]
+    pub use dioxus_elements::extensions::*;
 
     #[cfg(feature = "desktop")]
     #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]

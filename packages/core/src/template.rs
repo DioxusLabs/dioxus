@@ -1,8 +1,8 @@
 use const_vec::ConstVec;
 
+use crate::string_interner::{RuntimeStringInterner, StaticStringInterner, StringInterner};
+
 type StaticTemplateOpArray = &'static [TemplateOp];
-type StaticTemplateStringArray = &'static [&'static str];
-type StaticTemplatePathArray = &'static [TemplatePath];
 
 /// A compact path from a template root to a dynamic node or dynamic attribute.
 ///
@@ -90,7 +90,7 @@ impl TemplatePath {
     }
 
     /// Return the path segment at `index`.
-    pub fn segment(self, index: usize) -> u8 {
+    pub(crate) fn segment(self, index: usize) -> u8 {
         let mut current_segment = 0usize;
         let mut current_index = 0u8;
         let mut started = false;
@@ -150,17 +150,17 @@ impl TemplatePath {
     }
 
     /// Return the parent path of this dynamic slot.
-    pub fn slot_parent(self) -> TemplatePath {
+    pub(crate) fn slot_parent(self) -> TemplatePath {
         self.split_slot().0
     }
 
     /// Return true if this static path is equal to or beneath `ancestor`.
-    pub fn is_descendant_of_static(self, ancestor: TemplatePath) -> bool {
+    pub(crate) fn is_descendant_of_static(self, ancestor: TemplatePath) -> bool {
         self.starts_with(ancestor)
     }
 
     /// Return true if this dynamic slot is mounted inside `ancestor`.
-    pub fn slot_is_inside_static(self, ancestor: TemplatePath) -> bool {
+    pub(crate) fn slot_is_inside_static(self, ancestor: TemplatePath) -> bool {
         self.slot_parent().starts_with(ancestor)
     }
 
@@ -174,7 +174,7 @@ impl TemplatePath {
     }
 
     /// Return the number of raw child/sibling bits in this path.
-    pub fn bit_len(self) -> u32 {
+    pub(crate) fn bit_len(self) -> u32 {
         u128::BITS - self.path.leading_zeros()
     }
 
@@ -229,23 +229,6 @@ impl<'de> serde::Deserialize<'de> for TemplatePath {
         let deserialized = <u128 as serde::Deserialize>::deserialize(deserializer)?;
         Ok(Self::from_bits(deserialized))
     }
-}
-
-const fn static_str_eq(left: &str, right: &str) -> bool {
-    let left = left.as_bytes();
-    let right = right.as_bytes();
-    if left.len() != right.len() {
-        return false;
-    }
-
-    let mut index = 0;
-    while index < left.len() {
-        if left[index] != right[index] {
-            return false;
-        }
-        index += 1;
-    }
-    true
 }
 
 /// Static attribute namespace information in a raw template tape.
@@ -501,7 +484,7 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 #[derive(Clone, Copy)]
 pub struct TemplateStorage<const CAP: usize> {
     ops: ConstVec<TemplateOp, CAP>,
-    strings: ConstVec<&'static str, CAP>,
+    strings: StringInterner<CAP>,
     dynamics: ConstVec<TemplatePath, CAP>,
 }
 
@@ -510,7 +493,7 @@ impl<const CAP: usize> TemplateStorage<CAP> {
     pub const fn build(raw: &'static [TemplateRawOp]) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
-            strings: ConstVec::new_with_max_size(),
+            strings: StringInterner::new(),
             dynamics: ConstVec::new_with_max_size(),
         };
 
@@ -604,27 +587,15 @@ impl<const CAP: usize> TemplateStorage<CAP> {
     pub const fn as_template(&'static self) -> Template {
         Template::new(
             self.ops.as_slice(),
-            self.strings.as_slice(),
+            self.strings.as_static(),
             self.dynamics.as_slice(),
         )
     }
 
     const fn push_static(&mut self, value: &'static str) {
-        let mut id = 0usize;
-        while id < self.strings.len() {
-            if static_str_eq(self.strings.at(id), value) {
-                self.ops = self.ops.push(TemplateOp::static_text(id as u16));
-                return;
-            }
-            id += 1;
-        }
-
-        if self.strings.len() > u16::MAX as usize {
-            panic!("template string capacity exceeded");
-        }
-        let id = self.strings.len();
-        self.strings = self.strings.push(value);
-        self.ops = self.ops.push(TemplateOp::static_text(id as u16));
+        let (strings, id) = self.strings.intern(value);
+        self.strings = strings;
+        self.ops = self.ops.push(TemplateOp::static_text(id));
     }
 }
 
@@ -636,7 +607,7 @@ impl Template {
     #[doc(hidden)]
     pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
         let mut ops = Vec::new();
-        let mut strings = Vec::new();
+        let mut strings = RuntimeStringInterner::new();
         let mut dynamics = Vec::new();
 
         let mut enter_stack = [0usize; TEMPLATE_PATH_STACK_CAP];
@@ -720,7 +691,7 @@ impl Template {
 
         Self::new(
             Box::leak(ops.into_boxed_slice()),
-            Box::leak(strings.into_boxed_slice()),
+            strings.leak(),
             Box::leak(dynamics.into_boxed_slice()),
         )
     }
@@ -728,22 +699,11 @@ impl Template {
 
 fn push_runtime_static(
     ops: &mut Vec<TemplateOp>,
-    strings: &mut Vec<&'static str>,
+    strings: &mut RuntimeStringInterner,
     value: &'static str,
 ) {
-    for (id, current) in strings.iter().enumerate() {
-        if *current == value {
-            ops.push(TemplateOp::static_text(id as u16));
-            return;
-        }
-    }
-
-    if strings.len() > u16::MAX as usize {
-        panic!("template string capacity exceeded");
-    }
-    let id = strings.len();
-    strings.push(value);
-    ops.push(TemplateOp::static_text(id as u16));
+    let id = strings.intern(value);
+    ops.push(TemplateOp::static_text(id));
 }
 
 impl std::fmt::Debug for TemplateOp {
@@ -765,15 +725,11 @@ pub struct Template {
     ops: StaticTemplateOpArray,
 
     /// Static strings referenced by [`TemplateOp::Static`].
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_string_array_leaky")
-    )]
-    strings: StaticTemplateStringArray,
+    strings: StaticStringInterner,
 
     /// Dynamic paths in document order.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    dynamics: StaticTemplatePathArray,
+    dynamics: &'static [TemplatePath],
 
     /// Compile-time hash of template content for reliable cross-crate comparison.
     /// This ensures identical templates compare equal regardless of optimization levels.
@@ -795,7 +751,7 @@ impl Template {
     /// The hash is computed automatically from the template content.
     pub const fn new(
         ops: &'static [TemplateOp],
-        strings: &'static [&'static str],
+        strings: StaticStringInterner,
         dynamics: &'static [TemplatePath],
     ) -> Self {
         Self {
@@ -812,7 +768,7 @@ impl Template {
     }
 
     /// Get the template static string pool.
-    pub const fn strings(&self) -> &'static [&'static str] {
+    pub const fn strings(&self) -> StaticStringInterner {
         self.strings
     }
 
@@ -835,12 +791,12 @@ impl Template {
     }
 
     /// Get a static string from this template's string pool.
-    pub const fn string(&self, id: u16) -> &'static str {
-        self.strings[id as usize]
+    pub fn string(&self, id: u16) -> &'static str {
+        self.strings.str_at(id)
     }
 
     /// Decode an element op into its subtree length and namespace presence.
-    pub fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
+    pub(crate) fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Enter { skip, namespace }) => Some((skip as usize, namespace)),
             _ => None,
@@ -848,7 +804,7 @@ impl Template {
     }
 
     /// Return the static string referenced by an op.
-    pub fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
+    pub(crate) fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Static(id)) => Some(self.string(id)),
             _ => None,
@@ -930,7 +886,7 @@ impl Template {
     }
 
     /// Find a static attr fallback value for a key in an element.
-    pub fn static_attr_value_for_key(
+    pub(crate) fn static_attr_value_for_key(
         &self,
         element_op: usize,
         key: (&'static str, Option<&'static str>),
@@ -995,7 +951,7 @@ impl Template {
     }
 
     /// Return the flat op index for a static node path.
-    pub fn static_node_op_at_path(&self, path: TemplatePath) -> Option<usize> {
+    pub(crate) fn static_node_op_at_path(&self, path: TemplatePath) -> Option<usize> {
         if path.is_empty() {
             return None;
         }
@@ -1007,7 +963,7 @@ impl Template {
     }
 
     /// Return child indexes for navigating from a static root through a static prototype.
-    pub fn static_prototype_child_indexes(&self, path: TemplatePath) -> Option<Vec<usize>> {
+    pub(crate) fn static_prototype_child_indexes(&self, path: TemplatePath) -> Option<Vec<usize>> {
         if path.is_empty() {
             return None;
         }
@@ -1023,7 +979,7 @@ impl Template {
     }
 
     /// Return the static-prototype insertion index for a dynamic child slot.
-    pub fn static_prototype_insertion_index(
+    pub(crate) fn static_prototype_insertion_index(
         &self,
         parent_path: TemplatePath,
         child_idx: usize,
@@ -1039,7 +995,7 @@ impl Template {
     }
 
     /// Return the static-prototype child index where authored child `child_idx` should be inserted.
-    pub fn static_child_insertion_index(
+    pub(crate) fn static_child_insertion_index(
         &self,
         element_op: usize,
         child_idx: usize,
@@ -1136,6 +1092,17 @@ impl Template {
         }
     }
 
+    /// Is this template worth caching at all, since it's completely runtime?
+    ///
+    /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
+    pub fn is_completely_dynamic(&self) -> bool {
+        !self
+            .ops
+            .iter()
+            .enumerate()
+            .any(|(idx, _)| self.is_static_node_op(idx))
+    }
+
     /// Return true if an op starts a dynamic node marker.
     pub fn is_dynamic_node_marker(&self, op: usize) -> bool {
         self.ops[op].decode() == DecodedTemplateOp::Text
@@ -1146,7 +1113,7 @@ impl Template {
     }
 
     /// Return the packed op index for a dynamic slot.
-    pub fn dynamic_op_index(&self, dynamic_idx: usize) -> Option<usize> {
+    pub(crate) fn dynamic_op_index(&self, dynamic_idx: usize) -> Option<usize> {
         let mut seen = 0;
         for (idx, op) in self.ops.iter().enumerate() {
             if op.decode() == DecodedTemplateOp::Dynamic {
@@ -1177,7 +1144,7 @@ impl Template {
     }
 
     /// Return true if the dynamic op at `op_index` is a dynamic node slot.
-    pub fn dynamic_op_is_node(&self, op_index: usize) -> bool {
+    pub(crate) fn dynamic_op_is_node(&self, op_index: usize) -> bool {
         self.ops.get(op_index).is_some_and(|op| {
             op.decode() == DecodedTemplateOp::Dynamic
                 && op_index > 0
@@ -1209,7 +1176,7 @@ impl Template {
     /// This is const so it can be used both at compile time and runtime.
     const fn compute_hash(
         ops: &[TemplateOp],
-        strings: &[&'static str],
+        strings: StaticStringInterner,
         dynamics: &[TemplatePath],
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
@@ -1231,7 +1198,7 @@ impl Template {
                 DecodedTemplateOp::Text => xxh64(&[0x03], hash),
                 DecodedTemplateOp::Static(id) => {
                     let h = xxh64(&[0x04], hash);
-                    xxh64(strings[id as usize].as_bytes(), h)
+                    strings.hash_at(id, h)
                 }
                 DecodedTemplateOp::Dynamic => xxh64(&[0x05], hash),
             };
@@ -1276,23 +1243,6 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_string_array_leaky<'de, D>(
-    deserializer: D,
-) -> Result<&'static [&'static str], D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Vec::<String>::deserialize(deserializer)?;
-    let deserialized = deserialized
-        .into_iter()
-        .map(|value| &*Box::leak(value.into_boxed_str()) as &'static str)
-        .collect::<Vec<_>>();
-    Ok(&*Box::leak(deserialized.into_boxed_slice()))
-}
-
-#[cfg(feature = "serialize")]
 pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
 where
     T: serde::Deserialize<'de>,
@@ -1315,17 +1265,4 @@ where
 
     let deserialized = Option::<String>::deserialize(deserializer)?;
     Ok(deserialized.map(|deserialized| &*Box::leak(deserialized.into_boxed_str())))
-}
-
-impl Template {
-    /// Is this template worth caching at all, since it's completely runtime?
-    ///
-    /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
-    pub fn is_completely_dynamic(&self) -> bool {
-        !self
-            .ops
-            .iter()
-            .enumerate()
-            .any(|(idx, _)| self.is_static_node_op(idx))
-    }
 }

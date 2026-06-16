@@ -62,6 +62,7 @@ mod scheduler;
 mod scope_arena;
 mod scope_context;
 mod scopes;
+mod string_interner;
 mod suspense;
 mod tasks;
 mod template;
@@ -127,6 +128,7 @@ pub(crate) mod innerlude {
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
     pub use crate::scopes::*;
+    pub use crate::string_interner::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::template::*;
@@ -156,10 +158,11 @@ pub use crate::innerlude::{
     IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MultiTargetWriter, MultiWriter,
     Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
     ReactiveContext, RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId,
-    ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,
-    SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, TEMPLATE_STORAGE_MAX_CAP, Task,
-    Template, TemplateOp, TemplatePath, TemplateRawAttrNamespace, TemplateRawOp, TemplateStorage,
-    VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
+    ScopeState, SpawnIfAsync, StaticStringInterner, StringInterner, SubscriberList, Subscribers,
+    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+    SuspenseContext, TEMPLATE_STORAGE_MAX_CAP, Task, Template, TemplateOp, TemplatePath,
+    TemplateRawAttrNamespace, TemplateRawOp, TemplateStorage, TemplateStringSpan, VComponent,
+    VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
     consume_context_from_scope, current_owner, current_scope_id, fc_to_builder, generation,
     has_context, needs_update, needs_update_any, parent_scope, provide_context,
     provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
@@ -171,7 +174,7 @@ pub use crate::innerlude::{
 pub use crate::view::{
     Attr, AttributeDescriptor, AttributeTarget, Built, ConstStatic, DynAttrs, DynText,
     DynamicValues, El, IntoAttributeBuilderValue, IntoChild, IntoKey, Keyed, RAW_TAPE_CAP, Raw,
-    RawTape, StaticAttr, StaticAttribute, StaticAttributeBuilderMarker, StaticAttributeValue,
+    RawTape, StaticAttr, StaticAttributeBuilderMarker, StaticAttributeValue,
     StaticText, StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, keyed,
     static_value, text, text_dyn,
 };

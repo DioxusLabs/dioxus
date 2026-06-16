@@ -770,7 +770,8 @@ mod tests {
         let second = compile_template(&spec);
 
         assert!(ptr::eq(first.ops(), second.ops()));
-        assert!(ptr::eq(first.strings(), second.strings()));
+        assert!(ptr::eq(first.strings().blob(), second.strings().blob()));
+        assert!(ptr::eq(first.strings().spans(), second.strings().spans()));
         assert!(ptr::eq(first.dynamics(), second.dynamics()));
     }
 
@@ -796,7 +797,8 @@ mod tests {
                 TemplateOp::dynamic(),
             ]
         );
-        assert_eq!(template.strings(), &["tag1"]);
+        assert_eq!(template.strings().len(), 1);
+        assert_eq!(template.strings().str_at(0), "tag1");
         assert_eq!(
             template.dynamics(),
             &[TemplatePath::empty().next_child().next_child()]

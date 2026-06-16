@@ -10,31 +10,7 @@ use crate::{map_global_attributes, map_svg_attributes};
 #[cfg(feature = "hot-reload-context")]
 macro_rules! impl_attribute_match {
     (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident,
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), None));
-        }
-    };
-
-    (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident DEFAULT,
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), None));
-        }
-    };
-
-    (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident volatile,
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), None));
-        }
-    };
-
-    (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident $name:literal,
+        $attr:ident $(#[$leading:meta])* #[attr(name = $name:literal)] $(#[$attr_method:meta])* $fil:ident,
     ) => {
         if $attr == stringify!($fil) {
             return Some(($name, None));
@@ -42,10 +18,18 @@ macro_rules! impl_attribute_match {
     };
 
     (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident in $ns:literal,
+        $attr:ident $(#[$leading:meta])* #[attr(namespace = $ns:literal)] $(#[$attr_method:meta])* $fil:ident,
     ) => {
         if $attr == stringify!($fil) {
             return Some((stringify!($fil), Some($ns)));
+        }
+    };
+
+    (
+        $attr:ident $(#[$attr_method:meta])* $fil:ident,
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some((stringify!($fil), None));
         }
     };
 }
@@ -53,7 +37,7 @@ macro_rules! impl_attribute_match {
 #[cfg(feature = "html-to-rsx")]
 macro_rules! impl_html_to_rsx_attribute_match {
     (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident $name:literal
+        $attr:ident $(#[$leading:meta])* #[attr(name = $name:literal)] $(#[$attr_method:meta])* $fil:ident
     ) => {
         if $attr == $name {
             return Some(stringify!($fil));
@@ -61,7 +45,7 @@ macro_rules! impl_html_to_rsx_attribute_match {
     };
 
     (
-        $attr:ident $(#[$attr_method:meta])* $fil:ident $($_:tt)?
+        $attr:ident $(#[$attr_method:meta])* $fil:ident $($_:tt)*
     ) => {
         if $attr == stringify!($fil) {
             return Some(stringify!($fil));
@@ -75,7 +59,7 @@ macro_rules! impl_element {
         $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -133,7 +117,7 @@ macro_rules! impl_element {
         $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -190,7 +174,7 @@ macro_rules! impl_element {
         $element:ident [$name:literal, $namespace:tt] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -250,7 +234,7 @@ macro_rules! impl_element_constructor {
         $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -265,7 +249,7 @@ macro_rules! impl_element_constructor {
         $name:ident "http://www.w3.org/2000/svg" {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -280,7 +264,7 @@ macro_rules! impl_element_constructor {
         $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -295,7 +279,7 @@ macro_rules! impl_element_constructor {
         $element:ident [$name:literal, "http://www.w3.org/2000/svg"] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -310,7 +294,7 @@ macro_rules! impl_element_constructor {
         $element:ident [$name:literal, $namespace:tt] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -327,7 +311,7 @@ macro_rules! impl_element_match {
         $el:ident $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -340,7 +324,7 @@ macro_rules! impl_element_match {
         $el:ident $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -353,7 +337,7 @@ macro_rules! impl_element_match {
         $el:ident $name:ident [$_:literal, $namespace:tt] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
@@ -369,14 +353,14 @@ macro_rules! impl_element_match_attributes {
         $el:ident $attr:ident $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
         if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $attr $(#[$attr_method])* $fil $($extra)*,
+                    $attr $(#[$attr_method])* $fil,
                 );
             )*
 
@@ -388,14 +372,14 @@ macro_rules! impl_element_match_attributes {
         $el:ident $attr:ident $name:ident $namespace:tt {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident $($extra:tt)*,
+                $fil:ident,
             )*
         }
     ) => {
         if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $attr $(#[$attr_method])* $fil $($extra)*,
+                    $attr $(#[$attr_method])* $fil,
                 );
             )*
 
@@ -463,7 +447,7 @@ macro_rules! builder_constructors {
             $name:ident $namespace:tt {
                 $(
                     $(#[$attr_method:meta])*
-                    $fil:ident $($extra:tt)*,
+                    $fil:ident,
                 )*
             };
          )*
@@ -479,7 +463,7 @@ macro_rules! builder_constructors {
                         element attribute $name $namespace {
                             $(
                                 $(#[$attr_method])*
-                                $fil $($extra)*,
+                                $fil,
                             )*
                         }
                     );
@@ -493,7 +477,7 @@ macro_rules! builder_constructors {
                         element $name $namespace {
                             $(
                                 $(#[$attr_method])*
-                                $fil $($extra)*,
+                                $fil,
                             )*
                         }
                     );
@@ -507,7 +491,7 @@ macro_rules! builder_constructors {
             $(
                 $(
                     impl_html_to_rsx_attribute_match!(
-                        html $(#[$attr_method])* $fil $($extra)*
+                        html $(#[$attr_method])* $fil
                     );
                 )*
             )*
@@ -540,7 +524,7 @@ macro_rules! builder_constructors {
                 $name $namespace {
                     $(
                         $(#[$attr_method])*
-                        $fil $($extra)*,
+                        $fil,
                     )*
                 }
             );
@@ -552,7 +536,7 @@ macro_rules! builder_constructors {
                 $name $namespace {
                     $(
                         $(#[$attr_method])*
-                        $fil $($extra)*,
+                        $fil,
                     )*
                 }
             );
@@ -562,7 +546,7 @@ macro_rules! builder_constructors {
         pub(crate) mod extensions {
             use super::*;
             $(
-                impl_extension_attributes![$name { $($(#[$attr_method])* $fil $($extra)* ,)* } for_el];
+                impl_extension_attributes![$name { $($(#[$attr_method])* $fil ,)* } for_el];
             )*
         }
     };
@@ -584,8 +568,8 @@ builder_constructors! {
     /// element.
     ///
     base None {
-        href: Uri DEFAULT,
-        target: Target DEFAULT,
+        href,
+        target,
     };
 
     /// Build a
@@ -598,41 +582,45 @@ builder_constructors! {
     /// element.
     link None {
         // as: Mime,
-        crossorigin: CrossOrigin DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        media: String DEFAULT, // FIXME media query
-        rel: LinkType DEFAULT,
-        sizes: String DEFAULT, // FIXME
-        title: String DEFAULT, // FIXME
-        r#type: Mime "type",
-        integrity: String DEFAULT,
-        disabled: Bool DEFAULT,
-        referrerpolicy: ReferrerPolicy DEFAULT,
-        fetchpriority: FetchPriority DEFAULT,
-        blocking: Blocking DEFAULT,
-        r#as: As "as",
+        crossorigin,
+        href,
+        hreflang,
+        media, // FIXME media query
+        rel,
+        sizes, // FIXME
+        title, // FIXME
+        #[attr(name = "type")]
+        r#type,
+        integrity,
+        disabled,
+        referrerpolicy,
+        fetchpriority,
+        blocking,
+        #[attr(name = "as")]
+        r#as,
     };
 
     /// Build a
     /// [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta)
     /// element.
     meta None {
-        charset: String DEFAULT, // FIXME IANA standard names
-        content: String DEFAULT,
-        http_equiv: String "http-equiv",
-        name: Metadata DEFAULT,
-        property: Metadata DEFAULT,
+        charset, // FIXME IANA standard names
+        content,
+        #[attr(name = "http-equiv")]
+        http_equiv,
+        name,
+        property,
     };
 
     /// Build a
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element.
     style None {
-        r#type: Mime "type",
-        media: String DEFAULT, // FIXME media query
-        nonce: Nonce DEFAULT,
-        title: String DEFAULT, // FIXME
+        #[attr(name = "type")]
+        r#type,
+        media, // FIXME media query
+        nonce,
+        title, // FIXME
     };
 
     /// Build a
@@ -753,7 +741,7 @@ builder_constructors! {
     /// [`<blockquote>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote)
     /// element.
     blockquote None {
-        cite: Uri DEFAULT,
+        cite,
     };
     /// Build a
     /// [`<dd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dd)
@@ -808,16 +796,17 @@ builder_constructors! {
     /// [`<li>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/li)
     /// element.
     li None {
-        value: isize DEFAULT,
+        value,
     };
 
     /// Build a
     /// [`<ol>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol)
     /// element.
     ol None {
-        reversed: Bool DEFAULT,
-        start: isize DEFAULT,
-        r#type: OrderedListType "type",
+        reversed,
+        start,
+        #[attr(name = "type")]
+        r#type,
     };
 
     /// Build a
@@ -842,15 +831,16 @@ builder_constructors! {
     /// [`<a>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a)
     /// element.
     a None {
-        download: String DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        target: Target DEFAULT,
-        r#type: Mime "type",
+        download,
+        href,
+        hreflang,
+        target,
+        #[attr(name = "type")]
+        r#type,
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
-        ping: SpacedList DEFAULT,
-        rel: SpacedList DEFAULT,
+        ping,
+        rel,
     };
 
     /// Build a
@@ -887,14 +877,14 @@ builder_constructors! {
     /// [`<code>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code)
     /// element.
     code None {
-        language: String DEFAULT,
+        language,
     };
 
     /// Build a
     /// [`<data>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data)
     /// element.
     data None {
-        value: String DEFAULT,
+        value,
     };
 
     /// Build a
@@ -931,7 +921,7 @@ builder_constructors! {
     /// [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
     /// element.
     q None {
-        cite: Uri DEFAULT,
+        cite,
     };
 
 
@@ -991,7 +981,7 @@ builder_constructors! {
     /// [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
     /// element.
     time None {
-        datetime: Datetime DEFAULT,
+        datetime,
     };
 
     /// Build a
@@ -1016,13 +1006,13 @@ builder_constructors! {
     /// [`<area>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/area)
     /// element.
     area None {
-        alt: String DEFAULT,
-        coords: String DEFAULT, // TODO could perhaps be validated
-        download: Bool DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        shape: AreaShape DEFAULT,
-        target: Target DEFAULT,
+        alt,
+        coords, // TODO could perhaps be validated
+        download,
+        href,
+        hreflang,
+        shape,
+        target,
         // ping: SpacedList<Uri>,
         // rel: SpacedSet<LinkType>,
     };
@@ -1031,69 +1021,71 @@ builder_constructors! {
     /// [`<audio>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/audio)
     /// element.
     audio None {
-        autoplay: Bool DEFAULT,
-        controls: Bool DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        muted: Bool DEFAULT,
-        preload: Preload DEFAULT,
-        src: Uri DEFAULT,
-        r#loop: Bool "loop",
+        autoplay,
+        controls,
+        crossorigin,
+        muted,
+        preload,
+        src,
+        #[attr(name = "loop")]
+        r#loop,
     };
 
     /// Build a
     /// [`<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img)
     /// element.
     img None {
-        alt: String DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        decoding: ImageDecoding DEFAULT,
-        height: usize DEFAULT,
-        ismap: Bool DEFAULT,
-        loading: String DEFAULT,
-        src: Uri DEFAULT,
-        srcset: String DEFAULT, // FIXME this is much more complicated
-        usemap: String DEFAULT, // FIXME should be a fragment starting with '#'
-        width: usize DEFAULT,
-        referrerpolicy: String DEFAULT,
-        sizes: String DEFAULT, // FIXME
-        elementtiming: String DEFAULT,
-        fetchpriority: String DEFAULT,
-        attributionsrc: String DEFAULT,
+        alt,
+        crossorigin,
+        decoding,
+        height,
+        ismap,
+        loading,
+        src,
+        srcset, // FIXME this is much more complicated
+        usemap, // FIXME should be a fragment starting with '#'
+        width,
+        referrerpolicy,
+        sizes, // FIXME
+        elementtiming,
+        fetchpriority,
+        attributionsrc,
     };
 
     /// Build a
     /// [`<map>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/map)
     /// element.
     map None {
-        name: Id DEFAULT,
+        name,
     };
 
     /// Build a
     /// [`<track>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/track)
     /// element.
     track None {
-        default: Bool DEFAULT,
-        kind: VideoKind DEFAULT,
-        label: String DEFAULT,
-        src: Uri DEFAULT,
-        srclang: LanguageTag DEFAULT,
+        default,
+        kind,
+        label,
+        src,
+        srclang,
     };
 
     /// Build a
     /// [`<video>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video)
     /// element.
     video None {
-        autoplay: Bool DEFAULT,
-        controls: Bool DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        height: usize DEFAULT,
-        r#loop: Bool "loop",
-        muted: Bool DEFAULT,
-        preload: Preload DEFAULT,
-        playsinline: Bool DEFAULT,
-        poster: Uri DEFAULT,
-        src: Uri DEFAULT,
-        width: usize DEFAULT,
+        autoplay,
+        controls,
+        crossorigin,
+        height,
+        #[attr(name = "loop")]
+        r#loop,
+        muted,
+        preload,
+        playsinline,
+        poster,
+        src,
+        width,
     };
 
 
@@ -1103,33 +1095,38 @@ builder_constructors! {
     /// [`<embed>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/embed)
     /// element.
     embed None {
-        height: usize DEFAULT,
-        src: Uri DEFAULT,
-        r#type: Mime "type",
-        width: usize DEFAULT,
+        height,
+        src,
+        #[attr(name = "type")]
+        r#type,
+        width,
     };
 
     /// Build a
     /// [`<iframe>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)
     /// element.
     iframe None {
-        allow: FeaturePolicy DEFAULT,
-        allowfullscreen: Bool DEFAULT,
-        allowpaymentrequest: Bool DEFAULT,
-        height: usize DEFAULT,
-        name: Id DEFAULT,
-        referrerpolicy: ReferrerPolicy DEFAULT,
-        src: Uri DEFAULT,
-        srcdoc: Uri DEFAULT,
-        width: usize DEFAULT,
+        allow,
+        allowfullscreen,
+        allowpaymentrequest,
+        height,
+        name,
+        referrerpolicy,
+        src,
+        srcdoc,
+        width,
 
-        margin_width: String "marginWidth",
-        align: String DEFAULT,
-        longdesc: String DEFAULT,
+        #[attr(name = "marginWidth")]
 
-        scrolling: String DEFAULT,
-        margin_height: String "marginHeight",
-        frame_border: String "frameBorder",
+        margin_width,
+        align,
+        longdesc,
+
+        scrolling,
+        #[attr(name = "marginHeight")]
+        margin_height,
+        #[attr(name = "frameBorder")]
+        frame_border,
         // sandbox: SpacedSet<Sandbox>,
     };
 
@@ -1137,22 +1134,23 @@ builder_constructors! {
     /// [`<object>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/object)
     /// element.
     object None {
-        data: Uri DEFAULT,
-        form: Id DEFAULT,
-        height: usize DEFAULT,
-        name: Id DEFAULT,
-        r#type: Mime "type",
-        typemustmatch: Bool DEFAULT,
-        usemap: String DEFAULT, // TODO should be a fragment starting with '#'
-        width: usize DEFAULT,
+        data,
+        form,
+        height,
+        name,
+        #[attr(name = "type")]
+        r#type,
+        typemustmatch,
+        usemap, // TODO should be a fragment starting with '#'
+        width,
     };
 
     /// Build a
     /// [`<param>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/param)
     /// element.
     param None {
-        name: String DEFAULT,
-        value: String DEFAULT,
+        name,
+        value,
     };
 
     /// Build a
@@ -1164,13 +1162,14 @@ builder_constructors! {
     /// [`<source>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/source)
     /// element.
     source None {
-        src: Uri DEFAULT,
-        r#type: Mime "type",
-        srcset: String DEFAULT,
-        media: String DEFAULT,
-        sizes: String DEFAULT,
-        width: usize DEFAULT,
-        height: usize DEFAULT,
+        src,
+        #[attr(name = "type")]
+        r#type,
+        srcset,
+        media,
+        sizes,
+        width,
+        height,
     };
 
 
@@ -1180,8 +1179,8 @@ builder_constructors! {
     /// [`<canvas>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas)
     /// element.
     canvas None {
-        height: usize DEFAULT,
-        width: usize DEFAULT,
+        height,
+        width,
     };
 
     /// Build a
@@ -1200,7 +1199,7 @@ builder_constructors! {
         /// Normal script elements pass minimal information to the window.onerror for scripts which do not pass the
         /// standard CORS checks. To allow error logging for sites which use a separate domain for static media, use
         /// this attribute. See CORS settings attributes for a more descriptive explanation of its valid arguments.
-        crossorigin: CrossOrigin DEFAULT,
+        crossorigin,
 
         /// This Boolean attribute is set to indicate to a browser that the script is meant to be executed after the
         /// document has been parsed, but before firing DOMContentLoaded.
@@ -1221,18 +1220,22 @@ builder_constructors! {
         ///
         /// This attribute allows the elimination of parser-blocking JavaScript where the browser would have to load and
         /// evaluate scripts before continuing to parse. async has a similar effect in this case.
-        defer: Bool DEFAULT,
-        integrity: Integrity DEFAULT,
-        nomodule: Bool DEFAULT,
-        nonce: Nonce DEFAULT,
-        src: Uri DEFAULT,
-        text: String DEFAULT,
-        fetchpriority: String DEFAULT,
-        referrerpolicy: String DEFAULT,
+        defer,
+        integrity,
+        nomodule,
+        nonce,
+        src,
+        text,
+        fetchpriority,
+        referrerpolicy,
 
-        r#async: Bool "async",
-        r#type: String "type", // TODO could be an enum
-        r#script: String "script",
+        #[attr(name = "async")]
+
+        r#async,
+        #[attr(name = "type")]
+        r#type, // TODO could be an enum
+        #[attr(name = "script")]
+        r#script,
     };
 
 
@@ -1242,16 +1245,16 @@ builder_constructors! {
     /// [`<del>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/del)
     /// element.
     del None {
-        cite: Uri DEFAULT,
-        datetime: Datetime DEFAULT,
+        cite,
+        datetime,
     };
 
     /// Build a
     /// [`<ins>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ins)
     /// element.
     ins None {
-        cite: Uri DEFAULT,
-        datetime: Datetime DEFAULT,
+        cite,
+        datetime,
     };
 
 
@@ -1266,14 +1269,14 @@ builder_constructors! {
     /// [`<col>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/col)
     /// element.
     col None {
-        span: usize DEFAULT,
+        span,
     };
 
     /// Build a
     /// [`<colgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/colgroup)
     /// element.
     colgroup None {
-        span: usize DEFAULT,
+        span,
     };
 
     /// Build a
@@ -1290,8 +1293,8 @@ builder_constructors! {
     /// [`<td>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/td)
     /// element.
     td None {
-        colspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
+        colspan,
+        rowspan,
         // headers: SpacedSet<Id>,
     };
 
@@ -1304,10 +1307,10 @@ builder_constructors! {
     /// [`<th>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/th)
     /// element.
     th None {
-        abbr: String DEFAULT,
-        colspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
-        scope: TableHeaderScope DEFAULT,
+        abbr,
+        colspan,
+        rowspan,
+        scope,
         // headers: SpacedSet<Id>,
     };
 
@@ -1328,19 +1331,20 @@ builder_constructors! {
     /// [`<button>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button)
     /// element.
     button None {
-        autofocus: Bool DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        formaction: Uri DEFAULT,
-        formenctype: FormEncodingType DEFAULT,
-        formmethod: FormMethod DEFAULT,
-        formnovalidate: Bool DEFAULT,
-        formtarget: Target DEFAULT,
-        name: Id DEFAULT,
-        popovertarget: String DEFAULT,
-        popovertargetaction: String DEFAULT,
-        value: String DEFAULT,
-        r#type: String "type",
+        autofocus,
+        disabled,
+        form,
+        formaction,
+        formenctype,
+        formmethod,
+        formnovalidate,
+        formtarget,
+        name,
+        popovertarget,
+        popovertargetaction,
+        value,
+        #[attr(name = "type")]
+        r#type,
     };
 
     /// Build a
@@ -1352,9 +1356,9 @@ builder_constructors! {
     /// [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
     /// element.
     fieldset None {
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        name: Id DEFAULT,
+        disabled,
+        form,
+        name,
     };
 
     /// Build a
@@ -1362,56 +1366,57 @@ builder_constructors! {
     /// element.
     form None {
         // accept-charset: SpacedList<CharacterEncoding>,
-        action: Uri DEFAULT,
-        autocomplete: OnOff DEFAULT,
-        enctype: FormEncodingType DEFAULT,
-        method: FormMethod DEFAULT,
-        name: Id DEFAULT,
-        novalidate: Bool DEFAULT,
-        target: Target DEFAULT,
+        action,
+        autocomplete,
+        enctype,
+        method,
+        name,
+        novalidate,
+        target,
     };
 
     /// Build a
     /// [`<input>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input)
     /// element.
     input None {
-        accept: String DEFAULT,
-        alt: String DEFAULT,
-        autocomplete: String DEFAULT,
+        accept,
+        alt,
+        autocomplete,
         /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
-        autocorrect: OnOff DEFAULT,
-        autofocus: Bool DEFAULT,
-        capture: String DEFAULT,
-        checked: Bool DEFAULT,
-        directory: Bool "webkitdirectory",
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        formaction: Uri DEFAULT,
-        formenctype: FormEncodingType DEFAULT,
-        formmethod: FormDialogMethod DEFAULT,
-        formnovalidate: Bool DEFAULT,
-        formtarget: Target DEFAULT,
-        height: isize DEFAULT,
-        initial_checked: Bool DEFAULT,
-        list: Id DEFAULT,
-        max: String DEFAULT,
-        maxlength: usize DEFAULT,
-        min: String DEFAULT,
-        minlength: usize DEFAULT,
-        multiple: Bool DEFAULT,
-        name: Id DEFAULT,
-        pattern: String DEFAULT,
-        popovertarget: String DEFAULT,
-        popovertargetaction: String DEFAULT,
-        placeholder: String DEFAULT,
-        readonly: Bool DEFAULT,
-        required: Bool DEFAULT,
-        size: usize DEFAULT,
-        spellcheck: Bool DEFAULT,
-        src: Uri DEFAULT,
-        step: String DEFAULT,
-        tabindex: usize DEFAULT,
-        width: isize DEFAULT,
+        autocorrect,
+        autofocus,
+        capture,
+        checked,
+        #[attr(name = "webkitdirectory")]
+        directory,
+        disabled,
+        form,
+        formaction,
+        formenctype,
+        formmethod,
+        formnovalidate,
+        formtarget,
+        height,
+        initial_checked,
+        list,
+        max,
+        maxlength,
+        min,
+        minlength,
+        multiple,
+        name,
+        pattern,
+        popovertarget,
+        popovertargetaction,
+        placeholder,
+        readonly,
+        required,
+        size,
+        spellcheck,
+        src,
+        step,
+        tabindex,
+        width,
 
         /// The type of input
         ///
@@ -1440,19 +1445,22 @@ builder_constructors! {
         /// - `url`
         /// - `week`
 
-        r#type: InputType "type",
+        #[attr(name = "type")]
+
+        r#type,
         // value: String,
         #[attr(volatile)]
-        value: String,
-        initial_value: String DEFAULT,
+        value,
+        initial_value,
     };
 
     /// Build a
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element.
     label None {
-        form: Id DEFAULT,
-        r#for: Id "for",
+        form,
+        #[attr(name = "for")]
+        r#for,
     };
 
     /// Build a
@@ -1464,44 +1472,44 @@ builder_constructors! {
     /// [`<meter>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meter)
     /// element.
     meter None {
-        value: isize DEFAULT,
-        min: isize DEFAULT,
-        max: isize DEFAULT,
-        low: isize DEFAULT,
-        high: isize DEFAULT,
-        optimum: isize DEFAULT,
-        form: Id DEFAULT,
+        value,
+        min,
+        max,
+        low,
+        high,
+        optimum,
+        form,
     };
 
     /// Build a
     /// [`<optgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/optgroup)
     /// element.
     optgroup None {
-        disabled: Bool DEFAULT,
-        label: String DEFAULT,
+        disabled,
+        label,
     };
 
     /// Build a
     /// [`<option>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/option)
     /// element.
     option None {
-        disabled: Bool DEFAULT,
-        label: String DEFAULT,
+        disabled,
+        label,
 
 
-        value: String DEFAULT,
+        value,
 
         #[attr(volatile)]
-        selected: Bool,
-        initial_selected: Bool DEFAULT,
+        selected,
+        initial_selected,
     };
 
     /// Build a
     /// [`<output>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/output)
     /// element.
     output None {
-        form: Id DEFAULT,
-        name: Id DEFAULT,
+        form,
+        name,
         // r#for: SpacedSet<Id>,
     };
 
@@ -1509,8 +1517,8 @@ builder_constructors! {
     /// [`<progress>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress)
     /// element.
     progress None {
-        max: f64 DEFAULT,
-        value: f64 DEFAULT,
+        max,
+        value,
     };
 
     /// Build a
@@ -1519,42 +1527,42 @@ builder_constructors! {
     select None {
         // defined below
         // value: String,
-        autocomplete: String DEFAULT,
-        autofocus: Bool DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        multiple: Bool DEFAULT,
-        name: Id DEFAULT,
-        required: Bool DEFAULT,
-        size: usize DEFAULT,
+        autocomplete,
+        autofocus,
+        disabled,
+        form,
+        multiple,
+        name,
+        required,
+        size,
         #[attr(volatile)]
-        value: String,
+        value,
     };
 
     /// Build a
     /// [`<textarea>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea)
     /// element.
     textarea None {
-        autocomplete: OnOff DEFAULT,
+        autocomplete,
         /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
-        autocorrect: OnOff DEFAULT,
-        autofocus: Bool DEFAULT,
-        cols: usize DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        maxlength: usize DEFAULT,
-        minlength: usize DEFAULT,
-        name: Id DEFAULT,
-        placeholder: String DEFAULT,
-        readonly: Bool DEFAULT,
-        required: Bool DEFAULT,
-        rows: usize DEFAULT,
-        spellcheck: BoolOrDefault DEFAULT,
-        wrap: Wrap DEFAULT,
+        autocorrect,
+        autofocus,
+        cols,
+        disabled,
+        form,
+        maxlength,
+        minlength,
+        name,
+        placeholder,
+        readonly,
+        required,
+        rows,
+        spellcheck,
+        wrap,
         #[attr(volatile)]
-        value: String,
+        value,
 
-        initial_value: String DEFAULT,
+        initial_value,
     };
 
 
@@ -1564,14 +1572,14 @@ builder_constructors! {
     /// [`<details>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details)
     /// element.
     details None {
-        open: Bool DEFAULT,
+        open,
     };
 
     /// Build dialog
     /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
     /// element.
     dialog None {
-        open: Bool DEFAULT,
+        open,
     };
 
     /// Build a
@@ -1585,7 +1593,7 @@ builder_constructors! {
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element.
     slot None {
-        name: String DEFAULT,
+        name,
     };
 
     /// Build a
@@ -1929,7 +1937,7 @@ builder_constructors! {
     // /// [`<use>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use)
     // /// element.
     r#use ["use", "http://www.w3.org/2000/svg"] {
-        href: String DEFAULT,
+        href,
     };
 
     // MathML elements
@@ -1938,14 +1946,14 @@ builder_constructors! {
     /// [`<annotation>`](https://w3c.github.io/mathml-core/#dfn-annotation)
     /// element.
     annotation "http://www.w3.org/1998/Math/MathML" {
-            encoding: String DEFAULT,
+            encoding,
     };
 
     /// Build a
     /// [`<annotation-xml>`](https://w3c.github.io/mathml-core/#dfn-annotation-xml)
     /// element.
     annotationXml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {
-            encoding: String DEFAULT,
+            encoding,
     };
 
     /// Build a
@@ -1957,21 +1965,21 @@ builder_constructors! {
     /// [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/math)
     /// element.
     math "http://www.w3.org/1998/Math/MathML" {
-        display: String DEFAULT,
+        display,
     };
 
     /// Build a
     /// [`<mfrac>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mfrac)
     /// element.
     mfrac "http://www.w3.org/1998/Math/MathML" {
-        linethickness: usize DEFAULT,
+        linethickness,
     };
 
     /// Build a
     /// [`<mi>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mi)
     /// element.
     mi "http://www.w3.org/1998/Math/MathML" {
-        mathvariant: String DEFAULT,
+        mathvariant,
     };
 
     /// Build a
@@ -1988,34 +1996,34 @@ builder_constructors! {
     /// [`<mo>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mo)
     /// element.
     mo "http://www.w3.org/1998/Math/MathML" {
-        fence: Bool DEFAULT,
-        largeop: Bool DEFAULT,
-        lspace: usize DEFAULT,
-        maxsize: usize DEFAULT,
-        minsize: usize DEFAULT,
-        movablelimits: Bool DEFAULT,
-        rspace: usize DEFAULT,
-        separator: Bool DEFAULT,
-        stretchy: Bool DEFAULT,
-        symmetric: Bool DEFAULT,
+        fence,
+        largeop,
+        lspace,
+        maxsize,
+        minsize,
+        movablelimits,
+        rspace,
+        separator,
+        stretchy,
+        symmetric,
     };
 
     /// Build a
     /// [`<mover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mover)
     /// element.
     mover "http://www.w3.org/1998/Math/MathML" {
-        accent: Bool DEFAULT,
+        accent,
     };
 
     /// Build a
     /// [`<mpadded>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mpadded)
     /// element.
     mpadded "http://www.w3.org/1998/Math/MathML" {
-        depth: usize DEFAULT,
-        height: usize DEFAULT,
-        lspace: usize DEFAULT,
-        voffset: usize DEFAULT,
-        width: usize DEFAULT,
+        depth,
+        height,
+        lspace,
+        voffset,
+        width,
     };
 
     /// Build a
@@ -2044,17 +2052,17 @@ builder_constructors! {
     /// [`<ms>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/ms)
     /// element.
     ms "http://www.w3.org/1998/Math/MathML" {
-        lquote: String DEFAULT,
-        rquote: String DEFAULT,
+        lquote,
+        rquote,
     };
 
     /// Build a
     /// [`<mspace>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mspace)
     /// element.
     mspace "http://www.w3.org/1998/Math/MathML" {
-        depth: usize DEFAULT,
-        height: usize DEFAULT,
-        width: usize DEFAULT,
+        depth,
+        height,
+        width,
     };
 
     /// Build a
@@ -2091,8 +2099,8 @@ builder_constructors! {
     /// [`<mtd>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtd)
     /// element.
     mtd "http://www.w3.org/1998/Math/MathML" {
-        columnspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
+        columnspan,
+        rowspan,
     };
 
     /// Build a
@@ -2109,21 +2117,21 @@ builder_constructors! {
     /// [`<munder>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munder)
     /// element.
     munder "http://www.w3.org/1998/Math/MathML" {
-        accentunder: Bool DEFAULT,
+        accentunder,
     };
 
     /// Build a
     /// [`<munderover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munderover)
     /// element.
     munderover "http://www.w3.org/1998/Math/MathML" {
-        accent: Bool DEFAULT,
-        accentunder: Bool DEFAULT,
+        accent,
+        accentunder,
     };
 
     /// Build a
     /// [`<semantics>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/semantics)
     /// element.
     semantics "http://www.w3.org/1998/Math/MathML" {
-        encoding: String DEFAULT,
+        encoding,
     };
 }

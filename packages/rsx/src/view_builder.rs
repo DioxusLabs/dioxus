@@ -2,12 +2,6 @@ use crate::innerlude::*;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote, quote_spanned};
 
-#[derive(Clone, Copy, Debug)]
-enum FlatDynamicSlot {
-    Node(usize),
-    Attrs(usize),
-}
-
 #[derive(Clone, Debug)]
 struct TypedView {
     expr: TokenStream2,
@@ -42,12 +36,11 @@ impl AttrAppend {
     }
 }
 
-/// Template-v2-style typed pieces collected from an RSX template.
+/// Typed view-builder pieces collected from an RSX template.
 #[derive(Clone, Debug)]
-pub(crate) struct FlatTemplatePieces {
+pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TypedView,
-    dynamic_slots: Vec<FlatDynamicSlot>,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
@@ -55,14 +48,13 @@ pub(crate) struct FlatTemplatePieces {
     hot_reload_key: Option<TokenStream2>,
 }
 
-impl FlatTemplatePieces {
+impl ViewBuilderPieces {
     pub(crate) fn from_body(body: &TemplateBody) -> Self {
-        let mut builder = FlatTemplateBuilder::new();
+        let mut builder = ViewBuilder::new();
         let view = builder.visit_roots(&body.roots);
         Self {
             definitions: builder.definitions,
             view,
-            dynamic_slots: builder.dynamic_slots,
             dynamic_text_tokens: builder.dynamic_text_tokens,
             component_value_tokens: builder.component_value_tokens,
             hot_reload_dynamic_nodes: builder.hot_reload_dynamic_nodes,
@@ -79,10 +71,6 @@ impl FlatTemplatePieces {
         &self.view.expr
     }
 
-    pub(crate) fn view_ty(&self) -> &TokenStream2 {
-        &self.view.ty
-    }
-
     pub(crate) fn dynamic_text_tokens(&self) -> &[TokenStream2] {
         &self.dynamic_text_tokens
     }
@@ -96,31 +84,21 @@ impl FlatTemplatePieces {
         let dynamic_nodes = self.hot_reload_dynamic_nodes.iter();
         let dyn_attrs = self.hot_reload_dynamic_attrs.iter();
         let component_values = self.component_value_tokens.iter();
-        let dynamic_slots = self.dynamic_slots.iter().map(|slot| match slot {
-            FlatDynamicSlot::Node(id) => {
-                quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) }
-            }
-            FlatDynamicSlot::Attrs(id) => {
-                quote! { dioxus_core::internal::HotReloadDynamicSlot::Attribute(#id) }
-            }
-        });
 
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::new(
+            dioxus_core::internal::HotReloadedTemplate::from_template(
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attrs ),* ],
                 vec![ #( #component_values ),* ],
                 #template,
-                vec![ #( #dynamic_slots ),* ],
             )
         }
     }
 }
 
-struct FlatTemplateBuilder {
+struct ViewBuilder {
     definitions: Vec<TokenStream2>,
-    dynamic_slots: Vec<FlatDynamicSlot>,
     dynamic_node_count: usize,
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
@@ -131,11 +109,10 @@ struct FlatTemplateBuilder {
     next_marker: usize,
 }
 
-impl FlatTemplateBuilder {
+impl ViewBuilder {
     fn new() -> Self {
         Self {
             definitions: Vec::new(),
-            dynamic_slots: Vec::new(),
             dynamic_node_count: 0,
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
@@ -178,7 +155,7 @@ impl FlatTemplateBuilder {
         let tag = self.element_tag(element);
         let mut attrs = Vec::new();
         for attr in &element.merged_attributes {
-            attrs.push(element.typed_template_attribute(attr, self));
+            attrs.push(element.typed_builder_attribute(attr, self));
         }
 
         if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element.key() {
@@ -219,8 +196,6 @@ impl FlatTemplateBuilder {
             expr = quote! { #expr.child(#child) };
         }
         let expr = quote! {{
-            use dioxus_elements::extensions::*;
-
             #(#child_definitions)*
             #expr
         }};
@@ -245,7 +220,6 @@ impl FlatTemplateBuilder {
     fn dynamic_node(&mut self, tokens: TokenStream2) -> TypedView {
         let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
-        self.dynamic_slots.push(FlatDynamicSlot::Node(id));
         self.hot_reload_dynamic_nodes
             .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
         TypedView {
@@ -258,7 +232,6 @@ impl FlatTemplateBuilder {
     fn dynamic_attr(&mut self, attr: &Attribute) -> TypedAttr {
         let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
-        self.dynamic_slots.push(FlatDynamicSlot::Attrs(id));
         self.hot_reload_dynamic_attrs
             .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
 
@@ -276,7 +249,6 @@ impl FlatTemplateBuilder {
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TypedAttr {
         let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
-        self.dynamic_slots.push(FlatDynamicSlot::Attrs(id));
         self.hot_reload_dynamic_attrs
             .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
 
@@ -284,12 +256,17 @@ impl FlatTemplateBuilder {
             self.allocate_formatted(lit);
         }
 
-        let value = &attr.value;
+        let attr_value = &attr.value;
+        let value = quote! { #attr_value };
+        // Inline event closures need the explicit-closure builder method so the closure
+        // parameter type can be inferred without an annotation.
+        let method = if attr.name.is_likely_event() {
+            event_handler_method(&method, &value)
+        } else {
+            method
+        };
         TypedAttr {
-            append: AttrAppend::Method {
-                method,
-                value: quote! { #value },
-            },
+            append: AttrAppend::Method { method, value },
             ty: quote! { dioxus_core::view::DynAttrs },
         }
     }
@@ -361,9 +338,20 @@ impl FlatTemplateBuilder {
         value: TokenStream2,
         namespace: TokenStream2,
     ) -> TypedAttr {
+        let marker = self.next_ident("__DioxusAttr");
+        self.definitions.push(quote_spanned! { span =>
+            struct #marker;
+            impl dioxus_core::view::AttributeDescriptor for #marker {
+                const NAME: &'static str = #name;
+                const NAMESPACE: dioxus_core::TemplateRawAttrNamespace = #namespace;
+            }
+            impl dioxus_core::view::StaticAttributeValue for #marker {
+                const VALUE: &'static str = #value;
+            }
+        });
         TypedAttr {
             append: AttrAppend::Direct(
-                quote_spanned! { span => dioxus_core::static_attribute!(#name, #value, #namespace) },
+                quote_spanned! { span => dioxus_core::view::attr::<#marker>() },
             ),
             ty: quote! { () },
         }
@@ -387,7 +375,7 @@ impl FlatTemplateBuilder {
     fn element_tag(&mut self, element: &Element) -> TypedTag {
         match &element.name {
             ElementName::Ident(tag) => TypedTag {
-                expr: quote_spanned! { element.name.span() => dioxus_elements::#tag() },
+                expr: quote_spanned! { element.name.span() => #tag() },
                 ty: quote! { () },
             },
             ElementName::Custom(_) => {
@@ -403,15 +391,11 @@ impl FlatTemplateBuilder {
     fn define_tag(&mut self, element: &Element) -> Ident {
         let marker = self.next_ident("__DioxusTag");
         let tag = element.name.tag_name();
-        let namespace = element
-            .flat_template_namespace_tokens()
-            .unwrap_or_else(|| quote!(None::<&'static str>));
         self.definitions
             .push(quote_spanned! { element.name.span() =>
                 struct #marker;
                 impl dioxus_core::view::TagName for #marker {
                     const NAME: &'static str = #tag;
-                    const NAMESPACE: Option<&'static str> = #namespace;
                 }
             });
         marker
@@ -456,23 +440,15 @@ impl FlatTemplateBuilder {
 }
 
 impl Element {
-    fn flat_template_namespace_tokens(&self) -> Option<TokenStream2> {
-        match self.name.namespace() {
-            Some(namespace) => Some(quote! { Some(#namespace) }),
-            None => None,
-        }
-    }
-
-    fn typed_template_attribute(
-        &self,
-        attr: &Attribute,
-        builder: &mut FlatTemplateBuilder,
-    ) -> TypedAttr {
+    fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TypedAttr {
         if matches!(self.name, ElementName::Ident(_))
             && let AttributeName::BuiltIn(method) = &attr.name
-            && !attr.name.is_likely_event()
             && !attr.name.is_likely_key()
         {
+            if attr.name.is_likely_event() {
+                return builder.dynamic_builder_attr(attr, method.clone());
+            }
+
             if let Some((_, value)) = attr.as_static_str_literal() {
                 let value = value.to_static().unwrap();
                 return builder.static_builder_attr(attr.span(), quote! { #value }, method.clone());
@@ -485,20 +461,20 @@ impl Element {
             return builder.dynamic_attr(attr);
         };
 
-        let namespace = self.template_attribute_namespace_tokens(name);
-        let name = self.template_attribute_name_tokens(name);
+        let namespace = self.builder_attribute_namespace_tokens(name);
+        let name = self.builder_attribute_name_tokens(name);
         let value = value.to_static().unwrap();
         builder.static_attr(attr.span(), name, quote! { #value }, namespace)
     }
 
-    fn template_attribute_namespace_tokens(&self, name: &AttributeName) -> TokenStream2 {
+    fn builder_attribute_namespace_tokens(&self, name: &AttributeName) -> TokenStream2 {
         match name.resolved(&self.name).namespace {
             Some(namespace) => quote! { Some(#namespace) },
             None => quote!(None::<&'static str>),
         }
     }
 
-    fn template_attribute_name_tokens(&self, name: &AttributeName) -> TokenStream2 {
+    fn builder_attribute_name_tokens(&self, name: &AttributeName) -> TokenStream2 {
         let name = name.resolved(&self.name).name;
         quote! { #name }
     }

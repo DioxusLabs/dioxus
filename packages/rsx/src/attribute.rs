@@ -18,10 +18,11 @@ use super::literal::HotLiteral;
 use crate::{innerlude::*, partial_closure::PartialClosure};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
 use std::fmt::Display;
 use syn::{
-    Block, Expr, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
+    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
+    Stmt, Token,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     parse_quote,
@@ -227,11 +228,11 @@ impl Attribute {
                     };
                     match &self.name {
                         AttributeName::BuiltIn(name) => {
+                            let method = event_handler_method(name, &tokens);
                             quote_spanned! { span =>
-                                dioxus_elements::events::EventsExtension::#name(
-                                    ::std::vec::Vec::<dioxus_core::Attribute>::new(),
-                                    #tokens,
-                                ).into_boxed_slice()
+                                ::std::vec::Vec::<dioxus_core::Attribute>::new()
+                                    .#method(#tokens)
+                                    .into_boxed_slice()
                             }
                         }
                         AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
@@ -242,11 +243,12 @@ impl Attribute {
                     let AttributeName::BuiltIn(name) = name else {
                         unreachable!("Handled elsewhere in the macro")
                     };
+                    let value_tokens = quote! { #value };
+                    let method = event_handler_method(name, &value_tokens);
                     quote_spanned! { value.span() =>
-                        dioxus_elements::events::EventsExtension::#name(
-                            ::std::vec::Vec::<dioxus_core::Attribute>::new(),
-                            #value,
-                        ).into_boxed_slice()
+                        ::std::vec::Vec::<dioxus_core::Attribute>::new()
+                            .#method(#value_tokens)
+                            .into_boxed_slice()
                     }
                 }
             }
@@ -274,6 +276,41 @@ impl Attribute {
     }
 }
 
+/// Pick the builder method used to attach an event handler.
+///
+/// Inline closures use the hidden `_with_explicit_closure` variant whose explicit
+/// `FnMut(Event<Data>) -> _` signature gives the closure parameter a known type, so the user
+/// does not need to annotate it. Any other value uses the plain event method, which accepts
+/// listeners, callbacks, and closures alike.
+pub(crate) fn event_handler_method(method: &Ident, value: &TokenStream2) -> Ident {
+    if event_tokens_are_inline_closure(value) {
+        format_ident!("{}_with_explicit_closure", method, span = method.span())
+    } else {
+        method.clone()
+    }
+}
+
+fn event_tokens_are_inline_closure(tokens: &TokenStream2) -> bool {
+    if syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok() {
+        return true;
+    }
+
+    let Ok(block) = syn::parse2::<ExprBlock>(tokens.to_token_stream()) else {
+        return false;
+    };
+
+    let mut block = &block;
+    loop {
+        match block.block.stmts.last() {
+            Some(Stmt::Expr(Expr::Closure(_), _)) => return true,
+            Some(Stmt::Expr(Expr::Block(b), _)) => {
+                block = b;
+            }
+            _ => return false,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeName {
     Spread(Token![..]),
@@ -289,9 +326,17 @@ pub enum AttributeName {
 }
 
 impl AttributeName {
-    pub(crate) fn resolved(&self, element: &ElementName) -> ResolvedAttribute {
+    pub(crate) fn resolved(&self, _element: &ElementName) -> ResolvedAttribute {
         match self {
-            Self::BuiltIn(ident) => resolve_builtin_attribute(element, ident),
+            Self::BuiltIn(ident) => {
+                let raw_name = ident.to_string();
+                let name = raw_name.strip_prefix("r#").unwrap_or(&raw_name).to_string();
+                ResolvedAttribute {
+                    name,
+                    namespace: None,
+                    volatile: false,
+                }
+            }
             Self::Custom(lit) => ResolvedAttribute {
                 name: lit.value(),
                 namespace: None,
@@ -322,266 +367,6 @@ pub(crate) struct ResolvedAttribute {
     pub(crate) name: String,
     pub(crate) namespace: Option<&'static str>,
     pub(crate) volatile: bool,
-}
-
-fn resolve_builtin_attribute(element: &ElementName, ident: &Ident) -> ResolvedAttribute {
-    let element_name = element.tag_name_string();
-    let raw_name = ident.to_string();
-    let ident_name = raw_name.strip_prefix("r#").unwrap_or(&raw_name);
-    let name = resolve_attribute_name(&element_name, ident_name);
-    let namespace = resolve_attribute_namespace(element, ident_name, &name);
-    let volatile = matches!(
-        (element_name.as_str(), ident_name),
-        ("input", "value") | ("option", "selected") | ("select", "value") | ("textarea", "value")
-    );
-
-    ResolvedAttribute {
-        name,
-        namespace,
-        volatile,
-    }
-}
-
-fn resolve_attribute_name(element: &str, ident: &str) -> String {
-    match (element, ident) {
-        (_, "as") => "as".to_string(),
-        (_, "async") => "async".to_string(),
-        (_, "for") => "for".to_string(),
-        (_, "loop") => "loop".to_string(),
-        (_, "type") => "type".to_string(),
-        ("meta", "http_equiv") => "http-equiv".to_string(),
-        ("iframe", "margin_width") => "marginWidth".to_string(),
-        ("iframe", "margin_height") => "marginHeight".to_string(),
-        ("iframe", "frame_border") => "frameBorder".to_string(),
-        ("input", "directory") => "webkitdirectory".to_string(),
-        ("annotation-xml", "encoding") => "encoding".to_string(),
-        (_, "webkit_user_select") => "-webkit-user-select".to_string(),
-        _ if ident.starts_with("aria_") => ident.replace('_', "-"),
-        _ if is_style_attribute(ident) => ident.replace('_', "-"),
-        _ => ident.to_string(),
-    }
-}
-
-fn resolve_attribute_namespace(
-    element: &ElementName,
-    ident: &str,
-    resolved_name: &str,
-) -> Option<&'static str> {
-    if element.namespace().is_some() {
-        return None;
-    }
-
-    if is_style_attribute(ident) && !matches!(resolved_name, "style" | "class" | "id") {
-        Some("style")
-    } else {
-        None
-    }
-}
-
-fn is_style_attribute(ident: &str) -> bool {
-    matches!(
-        ident,
-        "align_content"
-            | "align_items"
-            | "align_self"
-            | "alignment_adjust"
-            | "alignment_baseline"
-            | "all"
-            | "alt"
-            | "animation"
-            | "animation_delay"
-            | "animation_direction"
-            | "animation_duration"
-            | "animation_fill_mode"
-            | "animation_iteration_count"
-            | "animation_name"
-            | "animation_play_state"
-            | "animation_timing_function"
-            | "aspect_ratio"
-            | "azimuth"
-            | "backdrop_filter"
-            | "backface_visibility"
-            | "background"
-            | "background_attachment"
-            | "background_blend_mode"
-            | "background_clip"
-            | "background_color"
-            | "background_image"
-            | "background_origin"
-            | "background_position"
-            | "background_repeat"
-            | "background_size"
-            | "baseline_shift"
-            | "border"
-            | "border_bottom"
-            | "border_bottom_color"
-            | "border_bottom_left_radius"
-            | "border_bottom_right_radius"
-            | "border_bottom_style"
-            | "border_bottom_width"
-            | "border_collapse"
-            | "border_color"
-            | "border_left"
-            | "border_left_color"
-            | "border_left_style"
-            | "border_left_width"
-            | "border_radius"
-            | "border_right"
-            | "border_right_color"
-            | "border_right_style"
-            | "border_right_width"
-            | "border_spacing"
-            | "border_style"
-            | "border_top"
-            | "border_top_color"
-            | "border_top_left_radius"
-            | "border_top_right_radius"
-            | "border_top_style"
-            | "border_top_width"
-            | "border_width"
-            | "bottom"
-            | "box_shadow"
-            | "box_sizing"
-            | "caption_side"
-            | "clear"
-            | "clip"
-            | "clip_path"
-            | "clip_rule"
-            | "color"
-            | "column_count"
-            | "column_gap"
-            | "columns"
-            | "content"
-            | "cursor"
-            | "direction"
-            | "display"
-            | "dominant_baseline"
-            | "fill"
-            | "fill_opacity"
-            | "fill_rule"
-            | "filter"
-            | "flex"
-            | "flex_basis"
-            | "flex_direction"
-            | "flex_flow"
-            | "flex_grow"
-            | "flex_shrink"
-            | "flex_wrap"
-            | "float"
-            | "font"
-            | "font_family"
-            | "font_size"
-            | "font_style"
-            | "font_weight"
-            | "gap"
-            | "grid"
-            | "grid_area"
-            | "grid_auto_columns"
-            | "grid_auto_flow"
-            | "grid_auto_rows"
-            | "grid_column"
-            | "grid_column_end"
-            | "grid_column_start"
-            | "grid_row"
-            | "grid_row_end"
-            | "grid_row_start"
-            | "grid_template"
-            | "grid_template_areas"
-            | "grid_template_columns"
-            | "grid_template_rows"
-            | "height"
-            | "hyphens"
-            | "image_rendering"
-            | "isolation"
-            | "justify_content"
-            | "justify_items"
-            | "justify_self"
-            | "left"
-            | "letter_spacing"
-            | "line_height"
-            | "list_style"
-            | "list_style_image"
-            | "list_style_position"
-            | "list_style_type"
-            | "margin"
-            | "margin_bottom"
-            | "margin_left"
-            | "margin_right"
-            | "margin_top"
-            | "marker"
-            | "marker_end"
-            | "marker_mid"
-            | "marker_start"
-            | "mask"
-            | "mask_image"
-            | "max_height"
-            | "max_width"
-            | "min_height"
-            | "min_width"
-            | "object_fit"
-            | "object_position"
-            | "opacity"
-            | "order"
-            | "outline"
-            | "outline_color"
-            | "outline_offset"
-            | "outline_style"
-            | "outline_width"
-            | "overflow"
-            | "overflow_x"
-            | "overflow_y"
-            | "padding"
-            | "padding_bottom"
-            | "padding_left"
-            | "padding_right"
-            | "padding_top"
-            | "perspective"
-            | "pointer_events"
-            | "position"
-            | "resize"
-            | "right"
-            | "row_gap"
-            | "scroll_behavior"
-            | "shape_rendering"
-            | "size"
-            | "stop_color"
-            | "stop_opacity"
-            | "stroke"
-            | "stroke_dasharray"
-            | "stroke_dashoffset"
-            | "stroke_linecap"
-            | "stroke_linejoin"
-            | "stroke_miterlimit"
-            | "stroke_opacity"
-            | "stroke_width"
-            | "text_align"
-            | "text_anchor"
-            | "text_decoration"
-            | "text_overflow"
-            | "text_rendering"
-            | "text_shadow"
-            | "top"
-            | "touch_action"
-            | "transform"
-            | "transform_origin"
-            | "transition"
-            | "transition_delay"
-            | "transition_duration"
-            | "transition_property"
-            | "transition_timing_function"
-            | "user_select"
-            | "webkit_user_select"
-            | "vertical_align"
-            | "visibility"
-            | "white_space"
-            | "width"
-            | "will_change"
-            | "word_break"
-            | "word_spacing"
-            | "word_wrap"
-            | "writing_mode"
-            | "z_index"
-    )
 }
 
 impl Display for AttributeName {

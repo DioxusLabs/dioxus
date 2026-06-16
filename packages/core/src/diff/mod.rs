@@ -10,7 +10,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    innerlude::{ElementRef, WriteMutations},
+    innerlude::{MountRef, WriteMutations},
     mutations::reborrow_writer,
     nodes::VNode,
     virtual_dom::VirtualDom,
@@ -29,7 +29,7 @@ impl VirtualDom {
         &mut self,
         to: Option<&mut dyn WriteMutations>,
         nodes: &[VNode],
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
     ) -> usize {
         self.create_children_with_parents(to, nodes, parent, parent)
     }
@@ -38,8 +38,8 @@ impl VirtualDom {
         &mut self,
         mut to: Option<&mut dyn WriteMutations>,
         nodes: &[VNode],
-        render_parent: Option<ElementRef>,
-        logical_parent: Option<ElementRef>,
+        render_parent: Option<MountRef>,
+        logical_parent: Option<MountRef>,
     ) -> usize {
         nodes
             .iter()

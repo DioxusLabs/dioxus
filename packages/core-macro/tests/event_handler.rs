@@ -63,3 +63,18 @@ fn event_handlers_compile() {
         }
     }
 }
+
+#[test]
+#[allow(unused)]
+fn builder_extensions_compile_from_prelude() {
+    fn app() -> Element {
+        rsx! {
+            button {
+                class: "primary",
+                r#type: "button",
+                onclick: |_| {},
+                "Click!"
+            }
+        }
+    }
+}

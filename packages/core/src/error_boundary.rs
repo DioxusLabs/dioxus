@@ -2,6 +2,7 @@ use crate::{
     DynamicValue, Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template,
     TemplateOp, TemplatePath, VNode,
     innerlude::{CapturedError, provide_context},
+    string_interner::{StaticStringInterner, StringInterner},
     try_consume_context, use_hook,
 };
 use std::{
@@ -74,7 +75,7 @@ fn create_error_boundary() -> ErrorContext {
 
 /// Provide an error boundary to catch errors from child components. This needs to called in a hydration comptable
 /// order if fullstack is enabled
-pub fn use_error_boundary_provider() -> ErrorContext {
+pub(crate) fn use_error_boundary_provider() -> ErrorContext {
     use_hook(|| provide_context(create_error_boundary()))
 }
 
@@ -154,6 +155,8 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 }
 
 fn default_handler(errors: ErrorContext) -> Element {
+    const STRINGS: StringInterner<{ crate::TEMPLATE_STORAGE_MAX_CAP }> =
+        StringInterner::from_unique_static_strings(&["div", "color", "red", "style"]);
     static TEMPLATE: Template = Template::new(
         &[
             TemplateOp::enter(8, false),
@@ -165,7 +168,7 @@ fn default_handler(errors: ErrorContext) -> Element {
             TemplateOp::text(),
             TemplateOp::dynamic(),
         ],
-        &["div", "color", "red", "style"],
+        STRINGS.as_static(),
         &[TemplatePath::root(0).next_child()],
     );
     std::result::Result::Ok(VNode::new(
@@ -176,6 +179,8 @@ fn default_handler(errors: ErrorContext) -> Element {
                 .error()
                 .iter()
                 .map(|e| {
+                    const INNER_STRINGS: StringInterner<{ crate::TEMPLATE_STORAGE_MAX_CAP }> =
+                        StringInterner::from_unique_static_strings(&["pre"]);
                     static INNER_TEMPLATE: Template = Template::new(
                         &[
                             TemplateOp::enter(4, false),
@@ -183,7 +188,7 @@ fn default_handler(errors: ErrorContext) -> Element {
                             TemplateOp::text(),
                             TemplateOp::dynamic(),
                         ],
-                        &["pre"],
+                        INNER_STRINGS.as_static(),
                         &[TemplatePath::root(0).next_child()],
                     );
                     VNode::new(
@@ -323,7 +328,7 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template::new(
                 &[TemplateOp::text(), TemplateOp::dynamic()],
-                &[],
+                StaticStringInterner::empty(),
                 &[TemplatePath::root(0)],
             );
             VNode::new(

@@ -236,7 +236,7 @@ impl VNode {
 
     /// Write one dynamic attribute to an already mounted element.
     ///
-    /// Listener attributes also need an `ElementRef` in the runtime so event dispatch can find
+    /// Listener attributes also need a `MountRef` in the runtime so event dispatch can find
     /// the VNode that owns the handler.
     pub(crate) fn write_attribute(
         attribute: &Attribute,

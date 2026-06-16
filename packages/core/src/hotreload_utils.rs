@@ -381,6 +381,39 @@ impl HotReloadedTemplate {
             template,
         }
     }
+
+    pub fn from_template(
+        key: Option<FmtedSegments>,
+        dynamic_nodes: Vec<HotReloadDynamicNode>,
+        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+        component_values: Vec<HotReloadLiteral>,
+        template: Template,
+    ) -> Self {
+        let mut next_node = 0;
+        let mut next_attribute = 0;
+        let dynamic_slots = (0..template.dynamics().len())
+            .map(|idx| {
+                if template.dynamic_is_node(idx) {
+                    let id = next_node;
+                    next_node += 1;
+                    HotReloadDynamicSlot::Node(id)
+                } else {
+                    let id = next_attribute;
+                    next_attribute += 1;
+                    HotReloadDynamicSlot::Attribute(id)
+                }
+            })
+            .collect();
+
+        Self::new(
+            key,
+            dynamic_nodes,
+            dynamic_attributes,
+            component_values,
+            template,
+            dynamic_slots,
+        )
+    }
 }
 
 #[doc(hidden)]

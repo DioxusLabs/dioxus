@@ -4,7 +4,10 @@ use crate::scope_context::SuspenseLocation;
 use crate::{
     AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, innerlude::MountId,
 };
-use crate::{CapturedError, arena::RenderTargetState};
+use crate::{
+    CapturedError,
+    arena::{MountedDynamicNodeSlot, RenderTargetState},
+};
 use crate::{
     SuspenseContext,
     innerlude::{DirtyTasks, Effect},
@@ -29,16 +32,16 @@ use tracing::instrument;
 #[derive(Clone, Copy, Debug)]
 struct EventTarget {
     mount: MountId,
-    location: EventTargetLocation,
+    path: EventTargetPath,
 }
 
 #[derive(Clone, Copy, Debug)]
-enum EventTargetLocation {
+enum EventTargetPath {
     Static(TemplatePath),
     Slot(TemplatePath),
 }
 
-impl EventTargetLocation {
+impl EventTargetPath {
     fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
             Self::Static(path) => path.is_descendant_of_static(attr),
@@ -216,7 +219,7 @@ fn MyComponent() -> Element {{
     /// target of the scope currently being rendered, or the root target when
     /// no scope is active. Every scope carries a flat target assignment;
     /// portal scopes carry the portal's target and their subtree inherits it.
-    pub fn current_render_target_id(&self) -> RenderTargetId {
+    pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
         self.try_current_scope_id()
             .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
             .unwrap_or(RenderTargetId::ROOT)
@@ -467,11 +470,11 @@ fn MyComponent() -> Element {{
         drop(targets);
 
         if let Some(parent_ref) = parent_ref
-            && let Some(location) = self.event_target_location(target_id, parent_ref.mount, element)
+            && let Some(path) = self.event_target_path(parent_ref.mount, element)
         {
             let target = EventTarget {
                 mount: parent_ref.mount,
-                location,
+                path,
             };
             if event.propagates() {
                 self.handle_bubbling_event(target, name, event);
@@ -481,49 +484,31 @@ fn MyComponent() -> Element {{
         }
     }
 
-    fn event_target_location(
-        &self,
-        target_id: RenderTargetId,
-        mount_id: MountId,
-        element: ElementId,
-    ) -> Option<EventTargetLocation> {
+    fn event_target_path(&self, mount_id: MountId, element: ElementId) -> Option<EventTargetPath> {
         let mounts = self.mounts.borrow();
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
-        let targets = self.render_targets.borrow();
-        let mounted = targets
-            .get(target_id.index())?
-            .mounts
-            .get(mount_id.0)?
-            .as_ref()?;
 
         for (idx, path) in node.template.attr_paths() {
-            let Some(id) = mounted.mounted_attributes.get(idx).and_then(|id| *id) else {
+            let Some(id) = mount.mounted_attribute(idx) else {
                 continue;
             };
             if id.element_id() == element {
-                return Some(EventTargetLocation::Static(path));
+                return Some(EventTargetPath::Static(path));
             }
         }
 
         None
     }
 
-    fn child_slot_location(
+    fn child_slot_path(
         &self,
         parent_mount: MountId,
         child_mount: MountId,
-    ) -> Option<EventTargetLocation> {
+    ) -> Option<EventTargetPath> {
         let mounts = self.mounts.borrow();
         let parent = mounts.get(parent_mount.0)?;
-        let parent_target = parent.target_id();
         let parent_node = parent.node();
-        let targets = self.render_targets.borrow();
-        let mounted = targets
-            .get(parent_target.index())?
-            .mounts
-            .get(parent_mount.0)?
-            .as_ref()?;
 
         for (idx, path) in parent_node.template.node_paths() {
             match parent_node.dynamic_values[idx].node() {
@@ -532,17 +517,17 @@ fn MyComponent() -> Element {{
                         .iter()
                         .any(|child| child.mounted_id() == Some(child_mount))
                     {
-                        return Some(EventTargetLocation::Slot(path));
+                        return Some(EventTargetPath::Slot(path));
                     }
                 }
                 DynamicNode::Component(_) => {
-                    let Some(crate::arena::MountedDynamicNodeSlot::Component { root, .. }) =
-                        mounted.mounted_dynamic_nodes.get(idx).copied()
+                    let Some(MountedDynamicNodeSlot::Component { root_mount, .. }) =
+                        parent.dynamic_node_slot(idx)
                     else {
                         continue;
                     };
-                    if root == Some(child_mount) {
-                        return Some(EventTargetLocation::Slot(path));
+                    if root_mount == Some(child_mount) {
+                        return Some(EventTargetPath::Slot(path));
                     }
                 }
                 DynamicNode::Text(_) => {}
@@ -596,7 +581,7 @@ fn MyComponent() -> Element {{
 
                 let el_ref = mount.node();
                 let node_template = el_ref.template;
-                let target_location = target.location;
+                let target_path = target.path;
                 logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
@@ -606,7 +591,7 @@ fn MyComponent() -> Element {{
                     for attr in attrs.iter() {
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                         if attr.name.get(2..) == Some(name)
-                            && target_location.is_under_attr(this_cursor)
+                            && target_path.is_under_attr(this_cursor)
                         {
                             if let AttributeValue::Listener(listener) = &attr.value {
                                 listeners.push(listener.clone());
@@ -615,7 +600,7 @@ fn MyComponent() -> Element {{
                             // Break if this is the exact target element.
                             // This means we won't call two listeners with the same name on the same element. This should be
                             // documented, or be rejected from the rsx! macro outright
-                            if target_location.is_exact_static(this_cursor) {
+                            if target_path.is_exact_static(this_cursor) {
                                 break;
                             }
                         }
@@ -640,10 +625,10 @@ fn MyComponent() -> Element {{
             }
 
             parent = logical_parent.and_then(|parent_ref| {
-                self.child_slot_location(parent_ref.mount, target.mount)
-                    .map(|location| EventTarget {
+                self.child_slot_path(parent_ref.mount, target.mount)
+                    .map(|path| EventTarget {
                         mount: parent_ref.mount,
-                        location,
+                        path,
                     })
             });
         }
@@ -663,7 +648,7 @@ fn MyComponent() -> Element {{
         };
         let el_ref = mount.node();
         let node_template = el_ref.template;
-        let target_location = node.location;
+        let target_path = node.path;
 
         for (idx, this_cursor) in node_template.attr_paths() {
             let attrs = el_ref.dynamic_values[idx].attrs();
@@ -671,8 +656,7 @@ fn MyComponent() -> Element {{
             for attr in attrs.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 // Only call the listener if this is the exact target element.
-                if attr.name.get(2..) == Some(name) && target_location.is_exact_static(this_cursor)
-                {
+                if attr.name.get(2..) == Some(name) && target_path.is_exact_static(this_cursor) {
                     if let AttributeValue::Listener(listener) = &attr.value {
                         listener.call(uievent.clone());
                         break;

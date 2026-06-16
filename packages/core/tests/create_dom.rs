@@ -148,14 +148,15 @@ fn empty_fragment_root_via_direct_vnode_api_is_diffable() {
     // bypass the rsx macro's `IntoDynNode` collapse and trip
     // `index out of bounds: the len is 0 but the index is 0` on the second rerender.
     use dioxus_core::{
-        DynamicNode, DynamicValue, ScopeId, Template, TemplateOp, TemplatePath, VNode, VirtualDom,
+        DynamicNode, DynamicValue, ScopeId, StaticStringInterner, Template, TemplateOp,
+        TemplatePath, VNode, VirtualDom,
     };
     use dioxus_renderer_oracle::RendererOracle;
 
     fn app() -> Element {
         static TEMPLATE: Template = Template::new(
             &[TemplateOp::text(), TemplateOp::dynamic()],
-            &[],
+            StaticStringInterner::empty(),
             &[TemplatePath::root(0)],
         );
         Ok(VNode::new(

@@ -9,7 +9,7 @@ use dioxus::{
         Element,
         view::{View, attr_dyn, keyed},
     },
-    html::{self, GlobalAttributesExtension},
+    html::{self, EventsExtension, GlobalAttributesExtension},
 };
 
 #[derive(Clone, Copy)]

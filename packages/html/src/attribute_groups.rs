@@ -83,7 +83,7 @@ macro_rules! html_to_rsx_attribute_mapping {
     };
 }
 
-macro_rules! mod_methods {
+macro_rules! attribute_group {
     (
         $(#[$mod_attr:meta])*
         $mod:ident;
@@ -121,7 +121,7 @@ macro_rules! mod_methods {
     };
 }
 
-mod_methods! {
+attribute_group! {
     global_attributes;
     map_global_attributes;
     map_html_global_attributes_to_rsx;
@@ -1653,7 +1653,7 @@ mod_methods! {
     aria_setsize: "aria-setsize";
 }
 
-mod_methods! {
+attribute_group! {
     svg_attributes;
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;

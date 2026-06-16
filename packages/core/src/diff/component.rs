@@ -5,7 +5,7 @@ use crate::{
         placement::{DomAnchor, InsertionSite, at_site, insertion_site_for_slot},
         template::DynamicNodeSlot,
     },
-    innerlude::{ElementRef, MountId, VComponent, WriteMutations},
+    innerlude::{MountId, MountRef, VComponent, WriteMutations},
     mutations::reborrow_writer,
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
@@ -85,7 +85,7 @@ impl VirtualDom {
                 DiffState::new_with_context(self, reborrow_writer(&mut render_to), parent_context);
             DiffFrame::new(old_mount, &old, new_real_nodes).diff_into(&mut state);
             if let Some(new_mount) = new_real_nodes.mounted_id() {
-                self.replace_mounted_component_root(old_mount, new_mount);
+                self.replace_mounted_component_root_mount(old_mount, new_mount);
             }
 
             self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
@@ -105,7 +105,7 @@ impl VirtualDom {
         to: Option<&mut dyn WriteMutations>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
@@ -157,7 +157,7 @@ impl VNode {
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_>,
     ) {
         // Replace components whose drivers identify different components
@@ -184,7 +184,7 @@ impl VNode {
         mount: MountId,
         idx: usize,
         new: &VComponent,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_>,
     ) {
         let scope = state
@@ -230,7 +230,7 @@ impl VNode {
         mount: MountId,
         idx: usize,
         component: &VComponent,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
@@ -260,14 +260,14 @@ impl VNode {
         let nodes = drive(state, |dom, to| {
             driver.create(dom, scope_id, new, parent, to)
         });
-        let root = state
+        let root_mount = state
             .dom
             .get_scope(scope_id)
             .and_then(|scope| scope.try_root_node())
             .and_then(VNode::mounted_id);
         state
             .dom
-            .set_mounted_dynamic_component_root(mount, idx, root);
+            .set_mounted_dynamic_component_root_mount(mount, idx, root_mount);
         nodes
     }
 }

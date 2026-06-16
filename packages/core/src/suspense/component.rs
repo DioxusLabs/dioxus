@@ -312,7 +312,7 @@ impl RenderDriver for SuspenseDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
         if new {
@@ -377,7 +377,7 @@ use generational_box::Owner;
 fn suspense_create(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
-    parent: Option<ElementRef>,
+    parent: Option<MountRef>,
     dom: &mut VirtualDom,
     to: Option<&mut dyn WriteMutations>,
 ) -> usize {

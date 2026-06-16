@@ -167,7 +167,7 @@ fn mount_children(
     scope_id: ScopeId,
     target_id: RenderTargetId,
     children: LastRenderedNode,
-    parent: Option<ElementRef>,
+    parent: Option<MountRef>,
     dom: &mut VirtualDom,
     to: Option<&mut dyn WriteMutations>,
 ) {
@@ -222,7 +222,7 @@ impl RenderDriver for PortalDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<ElementRef>,
+        parent: Option<MountRef>,
         mut to: Option<&mut dyn WriteMutations>,
     ) -> usize {
         let (target_id, children) = if new {
