@@ -37,7 +37,7 @@ members = [
     "packages/signals",
     "packages/stores",
     "packages/stores-macro",
-    "packages/const-vec",
+    "packages/dioxus-const-vec",
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
@@ -182,7 +182,7 @@ manganis-core = { path = "packages/manganis/manganis-core", version = "0.8.0-alp
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.8.0-alpha.0" }
 
 # const-serialize
-const-vec = { path = "packages/const-vec", version = "0.8.0-alpha.0" }
+dioxus-const-vec = { path = "packages/dioxus-const-vec", version = "0.8.0-alpha.0" }
 const-serialize = { path = "packages/const-serialize", version = "0.8.0-alpha.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0-alpha.0" }
 

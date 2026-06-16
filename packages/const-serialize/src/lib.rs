@@ -18,7 +18,7 @@ mod str;
 pub use str::*;
 
 pub use const_serialize_macro::SerializeConst;
-pub use const_vec::{ConstReadBuffer, ConstVec};
+pub use dioxus_const_vec::{ConstReadBuffer, ConstVec};
 
 use crate::cbor::{
     str_eq, take_array, take_bytes, take_map, take_number, take_str, write_array, write_bytes,

@@ -2290,7 +2290,7 @@ name = "const-serialize"
 version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize-macro",
- "const-vec",
+ "dioxus-const-vec",
  "rand 0.9.4",
  "serde",
 ]
@@ -2329,10 +2329,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "const-vec"
-version = "0.8.0-alpha.0"
 
 [[package]]
 name = "const_format"
@@ -3395,11 +3391,14 @@ name = "dioxus-config-macros"
 version = "0.8.0-alpha.0"
 
 [[package]]
+name = "dioxus-const-vec"
+version = "0.8.0-alpha.0"
+
+[[package]]
 name = "dioxus-core"
 version = "0.8.0-alpha.0"
 dependencies = [
  "anyhow",
- "const-vec",
  "const_format",
  "dioxus",
  "dioxus-core-types",

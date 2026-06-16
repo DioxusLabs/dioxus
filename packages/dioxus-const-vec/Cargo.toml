@@ -1,5 +1,5 @@
 [package]
-name = "const-vec"
+name = "dioxus-const-vec"
 version = "0.8.0-alpha.0"
 authors = ["Evan Almloff"]
 edition = "2024"
