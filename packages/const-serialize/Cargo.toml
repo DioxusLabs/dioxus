@@ -11,6 +11,7 @@ keywords = ["const", "serialize"]
 rust-version = "1.85.0"
 
 [dependencies]
+const-vec = { workspace = true }
 const-serialize-macro = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 

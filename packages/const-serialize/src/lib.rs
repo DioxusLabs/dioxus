@@ -3,10 +3,7 @@
 
 use std::mem::MaybeUninit;
 
-mod const_buffers;
-pub use const_buffers::ConstReadBuffer;
 mod cbor;
-mod const_vec;
 mod r#enum;
 pub use r#enum::*;
 mod r#struct;
@@ -21,7 +18,7 @@ mod str;
 pub use str::*;
 
 pub use const_serialize_macro::SerializeConst;
-pub use const_vec::ConstVec;
+pub use const_vec::{ConstReadBuffer, ConstVec};
 
 use crate::cbor::{
     str_eq, take_array, take_bytes, take_map, take_number, take_str, write_array, write_bytes,
