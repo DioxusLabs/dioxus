@@ -3,9 +3,13 @@ use proc_macro::TokenStream;
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt, quote};
+use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{Ident, Token, braced, parse_macro_input};
+use syn::{
+    Attribute, Expr, ExprLit, Ident, Lit, LitStr, Meta, Token, braced, parenthesized,
+    parse_macro_input,
+};
 
 #[proc_macro]
 pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {
@@ -15,8 +19,20 @@ pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {
 
 struct ImplExtensionAttributes {
     name: Ident,
-    attrs: Punctuated<Ident, Token![,]>,
+    attrs: Punctuated<ExtensionAttribute, Token![,]>,
     for_el: bool,
+}
+
+struct ExtensionAttribute {
+    name: Ident,
+    metadata: AttributeMetadata,
+}
+
+#[derive(Default)]
+struct AttributeMetadata {
+    name: Option<LitStr>,
+    namespace: Option<LitStr>,
+    volatile: bool,
 }
 
 impl Parse for ImplExtensionAttributes {
@@ -25,7 +41,7 @@ impl Parse for ImplExtensionAttributes {
 
         let name = input.parse()?;
         braced!(content in input);
-        let attrs = content.parse_terminated(Ident::parse, Token![,])?;
+        let attrs = content.parse_terminated(ExtensionAttribute::parse, Token![,])?;
         let for_el = if input.is_empty() {
             false
         } else {
@@ -47,6 +63,156 @@ impl Parse for ImplExtensionAttributes {
     }
 }
 
+impl Parse for ExtensionAttribute {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
+        let name = input.parse()?;
+        let mut metadata = AttributeMetadata::from_attrs(&attrs)?;
+        metadata.merge(AttributeMetadata::parse_legacy(input)?);
+
+        Ok(Self { name, metadata })
+    }
+}
+
+impl AttributeMetadata {
+    fn from_attrs(attrs: &[Attribute]) -> syn::Result<Self> {
+        let mut metadata = AttributeMetadata::default();
+
+        for attr in attrs {
+            if !attr.path().is_ident("attr") {
+                continue;
+            }
+
+            let args = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+            for meta in args {
+                match meta {
+                    Meta::Path(path) if path.is_ident("volatile") => {
+                        metadata.volatile = true;
+                    }
+                    Meta::Path(path) if path.is_ident("no_alias") => {}
+                    Meta::NameValue(name_value)
+                        if name_value.path.is_ident("name")
+                            || name_value.path.is_ident("rename") =>
+                    {
+                        metadata.name = Some(lit_str_from_expr(&name_value.value)?);
+                    }
+                    Meta::NameValue(name_value)
+                        if name_value.path.is_ident("namespace")
+                            || name_value.path.is_ident("ns") =>
+                    {
+                        metadata.namespace = Some(lit_str_from_expr(&name_value.value)?);
+                    }
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            other,
+                            "expected `volatile`, `no_alias`, `name = \"...\"`, or `namespace = \"...\"`",
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(metadata)
+    }
+
+    fn merge(&mut self, other: AttributeMetadata) {
+        if other.name.is_some() {
+            self.name = other.name;
+        }
+        if other.namespace.is_some() {
+            self.namespace = other.namespace;
+        }
+        self.volatile |= other.volatile;
+    }
+
+    fn parse_legacy(input: ParseStream) -> syn::Result<Self> {
+        let mut metadata = AttributeMetadata::default();
+
+        if input.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+            if input.peek(Ident::peek_any) {
+                let maybe_no_alias: Ident = input.call(Ident::parse_any)?;
+                if maybe_no_alias != "no" {
+                    return Err(syn::Error::new(
+                        maybe_no_alias.span(),
+                        "expected attribute alias string",
+                    ));
+                }
+                input.parse::<Token![-]>()?;
+                let alias: Ident = input.call(Ident::parse_any)?;
+                if alias != "alias" {
+                    return Err(syn::Error::new(alias.span(), "expected `alias`"));
+                }
+            }
+            metadata.name = Some(input.parse()?);
+        }
+
+        if input.peek(Ident::peek_any) {
+            let marker: Ident = input.call(Ident::parse_any)?;
+            match marker.to_string().as_str() {
+                "DEFAULT" => {}
+                "volatile" => metadata.volatile = true,
+                "in" => metadata.namespace = Some(input.parse()?),
+                _ => {
+                    return Err(syn::Error::new(
+                        marker.span(),
+                        "expected `DEFAULT`, `volatile`, or `in`",
+                    ));
+                }
+            }
+        } else if input.peek(LitStr) {
+            metadata.name = Some(input.parse()?);
+        } else if input.peek(syn::token::Paren) {
+            let content;
+            parenthesized!(content in input);
+            if content.peek(Ident::peek_any) {
+                let marker: Ident = content.call(Ident::parse_any)?;
+                match marker.to_string().as_str() {
+                    "DEFAULT" => {}
+                    "volatile" => metadata.volatile = true,
+                    "in" => {
+                        metadata.namespace = Some(content.parse()?);
+                        if content.peek(Token![:]) {
+                            content.parse::<Token![:]>()?;
+                            let volatile: Ident = content.call(Ident::parse_any)?;
+                            if volatile != "volatile" {
+                                return Err(syn::Error::new(
+                                    volatile.span(),
+                                    "expected `volatile`",
+                                ));
+                            }
+                            metadata.volatile = true;
+                        }
+                    }
+                    _ => {
+                        return Err(syn::Error::new(
+                            marker.span(),
+                            "expected `DEFAULT`, `volatile`, or `in`",
+                        ));
+                    }
+                }
+            } else if content.peek(LitStr) {
+                metadata.name = Some(content.parse()?);
+            }
+
+            if !content.is_empty() {
+                return Err(content.error("unexpected attribute metadata"));
+            }
+        }
+
+        Ok(metadata)
+    }
+}
+
+fn lit_str_from_expr(expr: &Expr) -> syn::Result<LitStr> {
+    match expr {
+        Expr::Lit(ExprLit {
+            lit: Lit::Str(lit), ..
+        }) => Ok(lit.clone()),
+        _ => Err(syn::Error::new_spanned(expr, "expected string literal")),
+    }
+}
+
 impl ToTokens for ImplExtensionAttributes {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
@@ -57,7 +223,8 @@ impl ToTokens for ImplExtensionAttributes {
             .to_case(Case::UpperCamel);
         let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
 
-        let descriptors = self.attrs.iter().map(|ident| {
+        let descriptors = self.attrs.iter().map(|attr| {
+            let ident = &attr.name;
             let ident_string = ident.to_string();
             let attr_camel_name = ident_string
                 .strip_prefix("r#")
@@ -67,20 +234,36 @@ impl ToTokens for ImplExtensionAttributes {
                 format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                 ident.span(),
             );
-            let d = quote! { #name::#ident };
+            let attr_name = attr
+                .metadata
+                .name
+                .as_ref()
+                .map(|name| quote! { #name })
+                .unwrap_or_else(|| {
+                    let ident = ident_string.strip_prefix("r#").unwrap_or(&ident_string);
+                    quote! { #ident }
+                });
+            let namespace = attr
+                .metadata
+                .namespace
+                .as_ref()
+                .map(|namespace| quote! { Some(#namespace) })
+                .unwrap_or_else(|| quote! { None });
+            let volatile = attr.metadata.volatile;
             quote! {
                 #[doc(hidden)]
                 pub struct #descriptor;
 
                 impl ::dioxus_core::view::AttributeDescriptor for #descriptor {
-                    const NAME: &'static str = #d.0;
-                    const NAMESPACE: ::dioxus_core::TemplateRawAttrNamespace = #d.1;
-                    const VOLATILE: bool = #d.2;
+                    const NAME: &'static str = #attr_name;
+                    const NAMESPACE: ::dioxus_core::TemplateRawAttrNamespace = #namespace;
+                    const VOLATILE: bool = #volatile;
                 }
             }
         });
 
-        let impls = self.attrs.iter().map(|ident| {
+        let impls = self.attrs.iter().map(|attr| {
+            let ident = &attr.name;
             let ident_string = ident.to_string();
             let attr_camel_name = ident_string
                 .strip_prefix("r#")

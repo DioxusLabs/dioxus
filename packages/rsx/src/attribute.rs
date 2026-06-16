@@ -21,8 +21,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::fmt::Display;
 use syn::{
-    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
-    Stmt, Token,
+    Block, Expr, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     parse_quote,
@@ -187,7 +186,7 @@ impl Attribute {
             quote! { #volatile }
         };
 
-        let attribute = {
+        let attributes = {
             let value = &self.value;
             let name = &self.name;
             let is_not_event = !self.name.is_likely_event();
@@ -206,12 +205,14 @@ impl Attribute {
                     let value = quote! { #value };
 
                     quote! {
-                        dioxus_core::Attribute::new(
-                            #attribute,
-                            #value,
-                            #ns,
-                            #volatile
-                        )
+                        Box::new([
+                            dioxus_core::Attribute::new(
+                                #attribute,
+                                #value,
+                                #ns,
+                                #volatile
+                            )
+                        ])
                     }
                 }
                 AttributeValue::EventTokens(_) | AttributeValue::AttrExpr(_) => {
@@ -224,39 +225,13 @@ impl Attribute {
                         }
                         _ => unreachable!(),
                     };
-
-                    fn check_tokens_is_closure(tokens: &TokenStream2) -> bool {
-                        if syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok() {
-                            return true;
-                        }
-                        let Ok(block) = syn::parse2::<ExprBlock>(tokens.to_token_stream()) else {
-                            return false;
-                        };
-                        let mut block = &block;
-                        loop {
-                            match block.block.stmts.last() {
-                                Some(Stmt::Expr(Expr::Closure(_), _)) => return true,
-                                Some(Stmt::Expr(Expr::Block(b), _)) => {
-                                    block = b;
-                                    continue;
-                                }
-                                _ => return false,
-                            }
-                        }
-                    }
                     match &self.name {
                         AttributeName::BuiltIn(name) => {
-                            let event_tokens_is_closure = check_tokens_is_closure(&tokens);
-                            let function_name =
-                                quote_spanned! { span => dioxus_elements::events::__rsx::#name };
-                            let function = if event_tokens_is_closure {
-                                // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
-                                quote_spanned! { span => #function_name::call_with_explicit_closure }
-                            } else {
-                                function_name
-                            };
                             quote_spanned! { span =>
-                                #function(#tokens)
+                                dioxus_elements::events::EventsExtension::#name(
+                                    ::std::vec::Vec::<dioxus_core::Attribute>::new(),
+                                    #tokens,
+                                ).into_boxed_slice()
                             }
                         }
                         AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
@@ -264,20 +239,20 @@ impl Attribute {
                     }
                 }
                 _ => {
-                    quote_spanned! { value.span() => dioxus_elements::events::__rsx::#name(#value) }
+                    let AttributeName::BuiltIn(name) = name else {
+                        unreachable!("Handled elsewhere in the macro")
+                    };
+                    quote_spanned! { value.span() =>
+                        dioxus_elements::events::EventsExtension::#name(
+                            ::std::vec::Vec::<dioxus_core::Attribute>::new(),
+                            #value,
+                        ).into_boxed_slice()
+                    }
                 }
             }
         };
 
-        let attr_span = attribute.span();
-        quote_spanned! { attr_span =>
-            Box::new([
-                {
-                    #attribute
-                }
-            ])
-        }
-        .to_token_stream()
+        attributes.to_token_stream()
     }
 
     pub fn can_be_shorthand(&self) -> bool {
@@ -1077,41 +1052,6 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_ne!(a, d);
-    }
-
-    #[test]
-    fn call_with_explicit_closure() {
-        let mut a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let a = 1; |e| {} } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let b = 2; { |e| { b } } } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let r = |e| { b }; r } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            !a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
     }
 
     /// Make sure reserved keywords are parsed as attributes

@@ -59,7 +59,6 @@ impl ToTokens for TemplateBody {
 
         let template = FlatTemplatePieces::from_body(&node);
         let template_definitions = template.definitions();
-        let template_ty = template.view_ty();
         let template_expr = template.view_expr();
         let dynamic_text = template.dynamic_text_tokens().iter();
 
@@ -74,42 +73,6 @@ impl ToTokens for TemplateBody {
                 #key_warnings
 
                 #(#template_definitions)*
-
-                #[cfg(debug_assertions)]
-                let __template = *<#template_ty as dioxus_core::view::Built>::TEMPLATE;
-
-                #[cfg(debug_assertions)]
-                let __original_template = #hot_reload_mapping;
-
-                #[cfg(debug_assertions)]
-                let __template_read = {
-                    use dioxus_signals::ReadableExt;
-
-                    static __NORMALIZED_FILE: &'static str = {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
-                    };
-
-                    // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable
-                    static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        __NORMALIZED_FILE,
-                        line!(),
-                        column!(),
-                        #index
-                    );
-
-                    dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
-                };
-                // If the template has not been hot reloaded, we always use the original template
-                // Templates nested within macros may be merged because they have the same file-line-column-index
-                // They cannot be hot reloaded, so this prevents incorrect rendering
-                #[cfg(debug_assertions)]
-                let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
-                    Some(Some(__template_read)) => &__template_read,
-                    _ => &__original_template,
-                };
 
                 #[cfg(debug_assertions)]
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
@@ -128,6 +91,36 @@ impl ToTokens for TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
+                    let __template = __vnodes.template;
+                    let __original_template = #hot_reload_mapping;
+                    let __template_read = {
+                        use dioxus_signals::ReadableExt;
+
+                        static __NORMALIZED_FILE: &'static str = {
+                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                            dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                        };
+
+                        // The key is important here - we're creating a new GlobalSignal each call to this
+                        // But the key is what's keeping it stable
+                        static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
+                            || None::<dioxus_core::internal::HotReloadedTemplate>,
+                            __NORMALIZED_FILE,
+                            line!(),
+                            column!(),
+                            #index
+                        );
+
+                        dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
+                    };
+                    // If the template has not been hot reloaded, we always use the original template
+                    // Templates nested within macros may be merged because they have the same file-line-column-index
+                    // They cannot be hot reloaded, so this prevents incorrect rendering
+                    let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                        Some(Some(__template_read)) => &__template_read,
+                        _ => &__original_template,
+                    };
+
                     let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
                         &__vnodes,
                         __dynamic_literal_pool

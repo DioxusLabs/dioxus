@@ -515,16 +515,17 @@ macro_rules! expand_html_event_listeners {
                     ///
                     #[doc = include_str!("../../docs/common_event_handler_errors.md")]
                     #[inline]
-                    fn $name<__Marker, __Return>(
+                    fn $name<__Marker>(
                         self,
-                        event_handler: impl FnMut(::dioxus_core::Event<$data>) -> __Return + 'static,
+                        event_handler: impl ::dioxus_core::SuperInto<
+                            ::dioxus_core::ListenerCallback<$data>,
+                            __Marker,
+                        >,
                     ) -> <Self as ::dioxus_core::view::AttributeTarget>::Output
-                    where
-                        __Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
                     {
                         ::dioxus_core::view::AttributeTarget::append_attribute(
                             self,
-                            super::event_attribute::<$data, ::dioxus_core::MarkerWrapper<__Marker>>(
+                            super::event_attribute::<$data, __Marker>(
                                 concat!("on", stringify!($raw)),
                                 event_handler,
                             ),
@@ -538,49 +539,6 @@ macro_rules! expand_html_event_listeners {
         where
             Target: ::dioxus_core::view::AttributeTarget,
         {
-        }
-
-        #[doc(hidden)]
-        pub mod __rsx {
-            use super::*;
-
-            $(
-                $(
-                    $( #[$attr] )*
-                    #[inline]
-                    pub fn $name<__Marker>(
-                        event_handler: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>,
-                    ) -> ::dioxus_core::Attribute {
-                        super::super::event_attribute::<$data, __Marker>(
-                            concat!("on", stringify!($raw)),
-                            event_handler,
-                        )
-                    }
-
-                    #[doc(hidden)]
-                    $( #[$attr] )*
-                    pub mod $name {
-                        use super::*;
-
-                        // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference.
-                        $( #[$attr] )*
-                        pub fn call_with_explicit_closure<
-                            __Marker,
-                            Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
-                        >(
-                            event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
-                        ) -> ::dioxus_core::Attribute {
-                            super::super::super::event_attribute::<
-                                $data,
-                                ::dioxus_core::MarkerWrapper<__Marker>,
-                            >(
-                                concat!("on", stringify!($raw)),
-                                event_handler,
-                            )
-                        }
-                    }
-                )*
-            )*
         }
     };
 }

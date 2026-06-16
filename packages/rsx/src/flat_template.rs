@@ -15,6 +15,33 @@ struct TypedView {
     ty: TokenStream2,
 }
 
+#[derive(Clone, Debug)]
+struct TypedTag {
+    expr: TokenStream2,
+    ty: TokenStream2,
+}
+
+#[derive(Clone, Debug)]
+struct TypedAttr {
+    append: AttrAppend,
+    ty: TokenStream2,
+}
+
+#[derive(Clone, Debug)]
+enum AttrAppend {
+    Direct(TokenStream2),
+    Method { method: Ident, value: TokenStream2 },
+}
+
+impl AttrAppend {
+    fn apply_to(self, target: TokenStream2) -> TokenStream2 {
+        match self {
+            Self::Direct(attr) => quote! { #target.attr(#attr) },
+            Self::Method { method, value } => quote! { #target.#method(#value) },
+        }
+    }
+}
+
 /// Template-v2-style typed pieces collected from an RSX template.
 #[derive(Clone, Debug)]
 pub(crate) struct FlatTemplatePieces {
@@ -148,7 +175,7 @@ impl FlatTemplateBuilder {
     }
 
     fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TypedView {
-        let tag = self.define_tag(element);
+        let tag = self.element_tag(element);
         let mut attrs = Vec::new();
         for attr in &element.merged_attributes {
             attrs.push(element.typed_template_attribute(attr, self));
@@ -170,7 +197,7 @@ impl FlatTemplateBuilder {
         let attrs_ty = Self::fold_builder_tuple_type(attrs.iter().map(|attr| attr.ty.clone()));
         let children_ty =
             Self::fold_builder_tuple_type(children.iter().map(|child| child.ty.clone()));
-        let tag_ty = quote! { #tag };
+        let tag_ty = tag.ty;
         let ty = quote! { dioxus_core::view::El<#tag_ty, #attrs_ty, #children_ty> };
 
         let mut child_definitions = Vec::new();
@@ -184,15 +211,16 @@ impl FlatTemplateBuilder {
             child_idents.push(child_ident);
         }
 
-        let mut expr = quote! { dioxus_core::view::el::<#tag>() };
+        let mut expr = tag.expr;
         for attr in attrs {
-            let attr = attr.expr;
-            expr = quote! { #expr.attr(#attr) };
+            expr = attr.append.apply_to(expr);
         }
         for child in child_idents {
             expr = quote! { #expr.child(#child) };
         }
         let expr = quote! {{
+            use dioxus_elements::extensions::*;
+
             #(#child_definitions)*
             #expr
         }};
@@ -205,15 +233,12 @@ impl FlatTemplateBuilder {
     }
 
     fn static_text(&mut self, text: &TextNode) -> TypedView {
-        let marker = self.next_ident("__DioxusText");
         let value = text.input.to_static().unwrap();
-        self.definitions.push(quote_spanned! { text.input.span() =>
-            dioxus_core::static_text!(struct #marker, #value);
-        });
+        let expr = quote_spanned! { text.input.span() => dioxus_core::static_text!(#value) };
         TypedView {
-            expr: quote! { dioxus_core::view::text::<#marker>() },
-            child_expr: quote! { dioxus_core::view::text::<#marker>() },
-            ty: quote! { dioxus_core::view::Text<#marker> },
+            expr: expr.clone(),
+            child_expr: expr,
+            ty: quote! { () },
         }
     }
 
@@ -230,7 +255,7 @@ impl FlatTemplateBuilder {
         }
     }
 
-    fn dynamic_attr(&mut self, attr: &Attribute) -> TypedView {
+    fn dynamic_attr(&mut self, attr: &Attribute) -> TypedAttr {
         let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
         self.dynamic_slots.push(FlatDynamicSlot::Attrs(id));
@@ -242,9 +267,29 @@ impl FlatTemplateBuilder {
         }
 
         let attrs = attr.rendered_as_dynamic_attr();
-        TypedView {
-            expr: quote! { dioxus_core::internal::attrs_dyn(#attrs) },
-            child_expr: quote! { dioxus_core::internal::attrs_dyn(#attrs) },
+        TypedAttr {
+            append: AttrAppend::Direct(quote! { dioxus_core::internal::attrs_dyn(#attrs) }),
+            ty: quote! { dioxus_core::view::DynAttrs },
+        }
+    }
+
+    fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TypedAttr {
+        let id = self.dynamic_attr_count;
+        self.dynamic_attr_count += 1;
+        self.dynamic_slots.push(FlatDynamicSlot::Attrs(id));
+        self.hot_reload_dynamic_attrs
+            .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
+
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
+            self.allocate_formatted(lit);
+        }
+
+        let value = &attr.value;
+        TypedAttr {
+            append: AttrAppend::Method {
+                method,
+                value: quote! { #value },
+            },
             ty: quote! { dioxus_core::view::DynAttrs },
         }
     }
@@ -315,15 +360,43 @@ impl FlatTemplateBuilder {
         name: TokenStream2,
         value: TokenStream2,
         namespace: TokenStream2,
-    ) -> TypedView {
-        let marker = self.next_ident("__DioxusAttr");
-        self.definitions.push(quote_spanned! { span =>
-            dioxus_core::static_attribute!(struct #marker, #name, #value, #namespace);
-        });
-        TypedView {
-            expr: quote! { dioxus_core::view::attr::<#marker>() },
-            child_expr: quote! { dioxus_core::view::attr::<#marker>() },
-            ty: quote! { dioxus_core::view::Attr<#marker> },
+    ) -> TypedAttr {
+        TypedAttr {
+            append: AttrAppend::Direct(
+                quote_spanned! { span => dioxus_core::static_attribute!(#name, #value, #namespace) },
+            ),
+            ty: quote! { () },
+        }
+    }
+
+    fn static_builder_attr(
+        &mut self,
+        span: proc_macro2::Span,
+        value: TokenStream2,
+        method: Ident,
+    ) -> TypedAttr {
+        TypedAttr {
+            append: AttrAppend::Method {
+                method,
+                value: quote_spanned! { span => dioxus_core::static_value!(#value) },
+            },
+            ty: quote! { () },
+        }
+    }
+
+    fn element_tag(&mut self, element: &Element) -> TypedTag {
+        match &element.name {
+            ElementName::Ident(tag) => TypedTag {
+                expr: quote_spanned! { element.name.span() => dioxus_elements::#tag() },
+                ty: quote! { () },
+            },
+            ElementName::Custom(_) => {
+                let tag = self.define_tag(element);
+                TypedTag {
+                    expr: quote! { dioxus_core::view::el::<#tag>() },
+                    ty: quote! { #tag },
+                }
+            }
         }
     }
 
@@ -394,7 +467,20 @@ impl Element {
         &self,
         attr: &Attribute,
         builder: &mut FlatTemplateBuilder,
-    ) -> TypedView {
+    ) -> TypedAttr {
+        if matches!(self.name, ElementName::Ident(_))
+            && let AttributeName::BuiltIn(method) = &attr.name
+            && !attr.name.is_likely_event()
+            && !attr.name.is_likely_key()
+        {
+            if let Some((_, value)) = attr.as_static_str_literal() {
+                let value = value.to_static().unwrap();
+                return builder.static_builder_attr(attr.span(), quote! { #value }, method.clone());
+            }
+
+            return builder.dynamic_builder_attr(attr, method.clone());
+        }
+
         let Some((name, value)) = attr.as_static_str_literal() else {
             return builder.dynamic_attr(attr);
         };

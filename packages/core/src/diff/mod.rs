@@ -16,12 +16,12 @@ use crate::{
     virtual_dom::VirtualDom,
 };
 
-pub(crate) mod anchor;
 mod attributes;
 mod component;
 pub(crate) mod context;
 mod iterator;
 pub(crate) mod node;
+pub(crate) mod placement;
 mod template;
 
 impl VirtualDom {

@@ -1,11 +1,10 @@
 use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{AttributeValue, ElementId, Event, RenderTargetId};
 use crate::{
-    CapturedError,
-    arena::{ElementRef, RenderTargetState},
+    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, innerlude::MountId,
 };
+use crate::{CapturedError, arena::RenderTargetState};
 use crate::{
     SuspenseContext,
     innerlude::{DirtyTasks, Effect},
@@ -26,6 +25,31 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
+
+#[derive(Clone, Copy, Debug)]
+struct EventTarget {
+    mount: MountId,
+    location: EventTargetLocation,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum EventTargetLocation {
+    Static(TemplatePath),
+    Slot(TemplatePath),
+}
+
+impl EventTargetLocation {
+    fn is_under_attr(self, attr: TemplatePath) -> bool {
+        match self {
+            Self::Static(path) => path.is_descendant_of_static(attr),
+            Self::Slot(path) => path.slot_is_inside_static(attr),
+        }
+    }
+
+    fn is_exact_static(self, attr: TemplatePath) -> bool {
+        matches!(self, Self::Static(path) if path == attr)
+    }
+}
 
 thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
@@ -439,16 +463,93 @@ fn MyComponent() -> Element {{
             return;
         };
 
-        let parent_path = target.elements.get(element.index()).copied().flatten();
+        let parent_ref = target.elements.get(element.index()).copied().flatten();
         drop(targets);
 
-        if let Some(parent_path) = parent_path {
+        if let Some(parent_ref) = parent_ref
+            && let Some(location) = self.event_target_location(target_id, parent_ref.mount, element)
+        {
+            let target = EventTarget {
+                mount: parent_ref.mount,
+                location,
+            };
             if event.propagates() {
-                self.handle_bubbling_event(parent_path, name, event);
+                self.handle_bubbling_event(target, name, event);
             } else {
-                self.handle_non_bubbling_event(parent_path, name, event);
+                self.handle_non_bubbling_event(target, name, event);
             }
         }
+    }
+
+    fn event_target_location(
+        &self,
+        target_id: RenderTargetId,
+        mount_id: MountId,
+        element: ElementId,
+    ) -> Option<EventTargetLocation> {
+        let mounts = self.mounts.borrow();
+        let mount = mounts.get(mount_id.0)?;
+        let node = mount.node();
+        let targets = self.render_targets.borrow();
+        let mounted = targets
+            .get(target_id.index())?
+            .mounts
+            .get(mount_id.0)?
+            .as_ref()?;
+
+        for (idx, path) in node.template.attr_paths() {
+            let Some(id) = mounted.mounted_attributes.get(idx).and_then(|id| *id) else {
+                continue;
+            };
+            if id.element_id() == element {
+                return Some(EventTargetLocation::Static(path));
+            }
+        }
+
+        None
+    }
+
+    fn child_slot_location(
+        &self,
+        parent_mount: MountId,
+        child_mount: MountId,
+    ) -> Option<EventTargetLocation> {
+        let mounts = self.mounts.borrow();
+        let parent = mounts.get(parent_mount.0)?;
+        let parent_target = parent.target_id();
+        let parent_node = parent.node();
+        let targets = self.render_targets.borrow();
+        let mounted = targets
+            .get(parent_target.index())?
+            .mounts
+            .get(parent_mount.0)?
+            .as_ref()?;
+
+        for (idx, path) in parent_node.template.node_paths() {
+            match parent_node.dynamic_values[idx].node() {
+                DynamicNode::Fragment(children) => {
+                    if children
+                        .iter()
+                        .any(|child| child.mounted_id() == Some(child_mount))
+                    {
+                        return Some(EventTargetLocation::Slot(path));
+                    }
+                }
+                DynamicNode::Component(_) => {
+                    let Some(crate::arena::MountedDynamicNodeSlot::Component { root, .. }) =
+                        mounted.mounted_dynamic_nodes.get(idx).copied()
+                    else {
+                        continue;
+                    };
+                    if root == Some(child_mount) {
+                        return Some(EventTargetLocation::Slot(path));
+                    }
+                }
+                DynamicNode::Text(_) => {}
+            }
+        }
+
+        None
     }
 
     /*
@@ -477,26 +578,26 @@ fn MyComponent() -> Element {{
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_bubbling_event(&self, parent: EventTarget, name: &str, uievent: Event<dyn Any>) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
         let mut parent = Some(parent);
-        while let Some(parent_ref) = parent {
+        while let Some(target) = parent {
             let mut listeners = vec![];
-            let mount_id;
+            let logical_parent;
 
             // We do this in its own block to prevent mount borrows from staying open while we call user code
             {
                 let mounts = self.mounts.borrow();
-                let Some(mount) = mounts.get(parent_ref.mount.0) else {
+                let Some(mount) = mounts.get(target.mount.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
                 };
 
                 let el_ref = mount.node();
                 let node_template = el_ref.template;
-                let target_location = parent_ref.location;
-                mount_id = el_ref.unchecked_mounted_id().0;
+                let target_location = target.location;
+                logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
                 for (idx, this_cursor) in node_template.attr_paths() {
@@ -538,11 +639,13 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            parent = self
-                .mounts
-                .borrow()
-                .get(mount_id)
-                .and_then(|el| el.logical_parent());
+            parent = logical_parent.and_then(|parent_ref| {
+                self.child_slot_location(parent_ref.mount, target.mount)
+                    .map(|location| EventTarget {
+                        mount: parent_ref.mount,
+                        location,
+                    })
+            });
         }
     }
 
@@ -552,7 +655,7 @@ fn MyComponent() -> Element {{
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
-    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_non_bubbling_event(&self, node: EventTarget, name: &str, uievent: Event<dyn Any>) {
         let mounts = self.mounts.borrow();
         let Some(mount) = mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event

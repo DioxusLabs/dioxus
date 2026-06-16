@@ -1,8 +1,8 @@
 use crate::{
     DynamicNode, ElementId, VirtualDom,
     diff::{
-        anchor::{ElementEdge, anchor_at, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
+        placement::{ElementEdge, at_site, create_at_site, insertion_site_at},
     },
     innerlude::{ElementRef, MountId, WriteMutations},
     mutations::reborrow_writer,
@@ -139,9 +139,9 @@ impl DiffState<'_, '_, '_> {
                 // The left-edge pairs are diffed *after* this splice by
                 // `diff_shared_prefix`, so the matching new vnode's mount
                 // cell is still unset. Use the OLD sibling instead — its
-                // mount still references the element we want to anchor next
-                // to. (Anchoring against the unmounted new sibling falls
-                // through to `Anchor::AppendTo(ROOT)` and lands the new
+                // mount still references the element we want to insert next
+                // to. (Resolving against the unmounted new sibling falls
+                // through to appending at ROOT and lands the new
                 // content past unrelated root siblings.)
                 self.create_and_insert(
                     ElementEdge::Last,
@@ -303,8 +303,9 @@ impl DiffState<'_, '_, '_> {
         // create the new children afresh.
         if shared_keys.is_empty() {
             let first_old = old.first().unwrap();
-            let anchor = anchor_at(ElementEdge::First, first_old, &[], self.dom, self.context());
-            create_at_anchor(new, parent, anchor, self.dom, reborrow_writer(&mut self.to));
+            let site =
+                insertion_site_at(ElementEdge::First, first_old, &[], self.dom, self.context());
+            create_at_site(new, parent, site, self.dom, reborrow_writer(&mut self.to));
             self.dom.remove_nodes(reborrow_writer(&mut self.to), old);
             return;
         }
@@ -397,11 +398,11 @@ impl DiffState<'_, '_, '_> {
     ) {
         let skip = collect_splice_mounts(old, new_index_to_old_index, range.clone());
         let context = self.context();
-        let anchor = anchor_at(edge, sibling, &skip, self.dom, context);
+        let site = insertion_site_at(edge, sibling, &skip, self.dom, context);
         let runtime = self.dom.runtime.clone();
         let dom = &mut *self.dom;
         let to = reborrow_writer(&mut self.to);
-        at_anchor(anchor, to, runtime, |to| {
+        at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, to, context);
             state.create_or_diff_range(new, old, parent, new_index_to_old_index, range)
         });
@@ -437,14 +438,14 @@ impl DiffState<'_, '_, '_> {
         sibling: &VNode,
         parent: Option<ElementRef>,
     ) {
-        let anchor = anchor_at(
+        let site = insertion_site_at(
             edge,
             sibling,
             &collect_mounts(new),
             self.dom,
             self.context(),
         );
-        create_at_anchor(new, parent, anchor, self.dom, reborrow_writer(&mut self.to));
+        create_at_site(new, parent, site, self.dom, reborrow_writer(&mut self.to));
     }
 }
 
@@ -469,7 +470,7 @@ fn collect_splice_mounts(
 ) -> Vec<MountId> {
     // Each splice range is the *non-LIS* portion of the keyed middle, so the
     // new sibling at `range` is not yet claimed; only the matching old vnode's
-    // live mount needs to be added to the skip list so anchor lookups don't
+    // live mount needs to be added to the skip list so placement lookups don't
     // try to use a sibling that's about to be moved. The non-LIS old entries
     // come straight from the previous render with their mounts intact — no
     // earlier diff step has called `claim_mount` on them yet — so the

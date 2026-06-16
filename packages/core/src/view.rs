@@ -619,6 +619,15 @@ impl<Tag, Attrs, Children> AttributeTarget for El<Tag, Attrs, Children> {
     }
 }
 
+impl AttributeTarget for Vec<Attribute> {
+    type Output = Self;
+
+    fn append_attribute(mut self, attr: Attribute) -> Self::Output {
+        self.push(attr);
+        self
+    }
+}
+
 impl<Target, Descriptor, Marker, Value> IntoAttributeBuilderValue<Target, Descriptor, Marker>
     for Value
 where

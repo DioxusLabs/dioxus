@@ -89,7 +89,7 @@ pub(crate) struct DiffFrame<'a> {
 /// reconciled.
 ///
 /// The committed mount still points at the old vnode until a vnode finishes
-/// diffing, so anchor resolution needs these temporary old/new pairs to reason
+/// diffing, so placement resolution needs these temporary old/new pairs to reason
 /// about slots inside the active vnode and sibling order in the active parent.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiffContext<'a> {

@@ -1,4 +1,4 @@
-use crate::{ScopeId, Template, TemplatePath, virtual_dom::VirtualDom};
+use crate::{ScopeId, Template, virtual_dom::VirtualDom};
 use slab::Slab;
 use std::collections::HashMap;
 
@@ -112,7 +112,10 @@ impl MountedNodeState {
 pub(crate) enum MountedDynamicNodeSlot {
     Empty,
     Text(MountedElementId),
-    Component(ScopeId),
+    Component {
+        scope: ScopeId,
+        root: Option<MountId>,
+    },
 }
 
 /// Renderer-local state for a render target.
@@ -171,17 +174,8 @@ pub(crate) struct MountId(pub(crate) usize);
 
 #[derive(Debug, Clone, Copy)]
 pub struct ElementRef {
-    // the template location of the real element
-    pub(crate) location: ElementLocation,
-
-    // The actual element
+    // The mount that owns the real element.
     pub(crate) mount: MountId,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum ElementLocation {
-    Static(TemplatePath),
-    Slot { id: usize, cursor: TemplatePath },
 }
 
 impl VirtualDom {
@@ -236,12 +230,7 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn set_element_ref_for_mount(
-        &self,
-        mount: MountId,
-        el: MountedElementId,
-        location: ElementLocation,
-    ) {
+    pub(crate) fn set_element_ref_for_mount(&self, mount: MountId, el: MountedElementId) {
         let target_id = self.mount_target_id(mount);
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
@@ -251,7 +240,7 @@ impl VirtualDom {
             .elements
             .get_mut(el.index())
             .expect("element should exist while assigning an element ref");
-        *element = Some(ElementRef { location, mount });
+        *element = Some(ElementRef { mount });
     }
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {
@@ -343,63 +332,4 @@ impl VirtualDom {
         // If this scope was a suspense boundary, remove it from the resolved scopes
         self.resolved_scopes.retain(|s| s != &id);
     }
-}
-
-impl ElementLocation {
-    pub(crate) fn is_under_attr(self, attr: TemplatePath) -> bool {
-        match self {
-            ElementLocation::Static(cursor) => cursor.is_descendant_of_static(attr),
-            ElementLocation::Slot { cursor, .. } => cursor.slot_is_inside_static(attr),
-        }
-    }
-
-    pub(crate) fn is_exact_static(self, attr: TemplatePath) -> bool {
-        matches!(self, ElementLocation::Static(cursor) if cursor == attr)
-    }
-
-    pub(crate) fn slot(self) -> Option<(usize, TemplatePath)> {
-        match self {
-            ElementLocation::Slot { id, cursor } => Some((id, cursor)),
-            ElementLocation::Static(_) => None,
-        }
-    }
-}
-
-#[test]
-fn static_location_is_under_attr() {
-    let root = TemplatePath::root(1);
-    let child_2 = nth_child(root, 2);
-    let child_3 = nth_child(child_2, 3);
-    let child_4 = nth_child(child_3, 4);
-    let child_5 = nth_child(child_4, 5);
-    let event_location = ElementLocation::Static(child_5);
-
-    assert!(event_location.is_under_attr(child_5));
-    assert!(event_location.is_under_attr(child_4));
-    assert!(event_location.is_under_attr(child_3));
-    assert!(event_location.is_under_attr(child_2));
-    assert!(event_location.is_under_attr(root));
-
-    assert!(!event_location.is_under_attr(nth_child(child_5, 6)));
-    assert!(!event_location.is_under_attr(nth_child(nth_child(TemplatePath::root(2), 3), 4)));
-}
-
-#[test]
-fn slot_location_uses_parent_for_attr_matching() {
-    let event_location = ElementLocation::Slot {
-        id: 0,
-        cursor: TemplatePath::root(0).next_child(),
-    };
-
-    assert!(event_location.is_under_attr(TemplatePath::root(0)));
-    assert!(!event_location.is_under_attr(TemplatePath::root(0).next_child()));
-}
-
-#[cfg(test)]
-fn nth_child(parent: TemplatePath, index: usize) -> TemplatePath {
-    let mut path = parent.next_child();
-    for _ in 0..index {
-        path = path.next_sibling();
-    }
-    path
 }

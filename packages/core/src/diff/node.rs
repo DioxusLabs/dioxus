@@ -3,14 +3,17 @@ use crate::{
     Template, TemplatePath, VNode, VirtualDom, WriteMutations,
     arena::{ElementId, MountedElementId},
     diff::{
-        anchor::{Anchor, ElementEdge, anchor_at, anchor_for_slot, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
+        placement::{
+            DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
+            insertion_site_for_slot,
+        },
         template::{
-            DynamicAttrGroup, DynamicNodeSlot, TemplateRoot, dynamic_node_slot, dynamic_node_slots,
+            DynamicAttrGroup, DynamicNodeSlot, TemplateRoot, dynamic_node_slots,
             for_each_dynamic_attr_group, template_roots,
         },
     },
-    innerlude::{ElementLocation, ElementRef, MountId},
+    innerlude::{ElementRef, MountId},
     mutations::{reborrow_writer, remove_id, with_consumed_id, with_id},
     nodes::DynamicNode,
     scopes::ScopeId,
@@ -108,7 +111,7 @@ impl VNode {
                     new,
                     old,
                     scope_id,
-                    Some(self.reference_to_dynamic_node(mount, idx)),
+                    Some(ElementRef { mount }),
                     state,
                 )
             }
@@ -142,9 +145,9 @@ impl VNode {
         } else {
             None
         };
-        let anchor = match live_first {
-            Some(first) => Anchor::Before(first),
-            None => anchor_for_slot(mount, slot, &[], state.dom, state.context()),
+        let site = match live_first {
+            Some(first) => InsertionSite::AtAnchor(DomAnchor::Before(first)),
+            None => insertion_site_for_slot(mount, slot, &[], state.dom, state.context()),
         };
 
         state.with_mounted_dynamic_node_slot_replaced(
@@ -155,7 +158,7 @@ impl VNode {
                 let runtime = state.dom.runtime.clone();
                 let dom = &mut *state.dom;
                 let to = reborrow_writer(&mut state.to);
-                at_anchor(anchor, to, runtime, |to| {
+                at_site(site, to, runtime, |to| {
                     let mut state = DiffState::new(dom, to);
                     self.create_dynamic_node(new, mount, idx, &mut state)
                 });
@@ -174,7 +177,7 @@ impl VNode {
     }
 
     /// Diff two fragments at a dynamic slot. Handles empty <-> non-empty transitions
-    /// without using placeholders to anchor the slot position.
+    /// without using placeholders to preserve the slot position.
     fn diff_fragment(
         &self,
         mount: MountId,
@@ -183,21 +186,15 @@ impl VNode {
         new: &[VNode],
         state: &mut DiffState<'_, '_, '_>,
     ) {
-        let idx = slot.index();
-        let parent = Some(self.reference_to_dynamic_node(mount, idx));
+        let parent = Some(ElementRef { mount });
         match (old.is_empty(), new.is_empty()) {
             (true, true) => {}
             (true, false) => {
-                // Empty → non-empty: stage new content at the slot's anchor.
+                // Empty → non-empty: stage new content at the slot insertion site.
                 let own_mounts: Vec<MountId> = new.iter().filter_map(VNode::mounted_id).collect();
-                let anchor = anchor_for_slot(mount, slot, &own_mounts, state.dom, state.context());
-                create_at_anchor(
-                    new,
-                    parent,
-                    anchor,
-                    state.dom,
-                    reborrow_writer(&mut state.to),
-                );
+                let site =
+                    insertion_site_for_slot(mount, slot, &own_mounts, state.dom, state.context());
+                create_at_site(new, parent, site, state.dom, reborrow_writer(&mut state.to));
             }
             (false, true) => {
                 state.dom.remove_nodes(reborrow_writer(&mut state.to), old);
@@ -218,9 +215,7 @@ impl VNode {
         mount: MountId,
         target_id: crate::RenderTargetId,
         dom: &VirtualDom,
-        edge: ElementEdge,
     ) -> Option<ElementId> {
-        let _ = edge;
         if dom.mount_target_id(mount) != target_id {
             return None;
         }
@@ -275,11 +270,11 @@ impl VNode {
             ElementEdge::First => (0..self.template.root_count()).find_map(|cursor_idx| {
                 self.find_root_dynamic_at_cursor(cursor_idx, mount, target_id, dom, edge)
                     .or_else(|| {
-                        self.find_element_at_root_in_target(cursor_idx, mount, target_id, dom, edge)
+                        self.find_element_at_root_in_target(cursor_idx, mount, target_id, dom)
                     })
             }),
             ElementEdge::Last => (0..self.template.root_count()).rev().find_map(|root_idx| {
-                self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge)
+                self.find_element_at_root_in_target(root_idx, mount, target_id, dom)
                     .or_else(|| {
                         self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge)
                     })
@@ -372,11 +367,11 @@ impl VNode {
         let own_mounts: Vec<MountId> = right.iter().filter_map(VNode::mounted_id).collect();
         // When the old subtree has no live DOM and the boundary is hidden, we
         // skip emitting renderer mutations for both the create and remove
-        // sides. We still call `create_at_anchor` so the new subtree gets its
+        // sides. We still call `create_at_site` so the new subtree gets its
         // mount slots populated — otherwise the caller (e.g. suspense's
         // background diff) may later read a mount that was never set.
         let suppress_mutations = self.should_suppress_mutations(state.dom, destroy_component_state);
-        let anchor = anchor_at(
+        let site = insertion_site_at(
             ElementEdge::First,
             self,
             &own_mounts,
@@ -387,7 +382,7 @@ impl VNode {
         if suppress_mutations {
             to_for_create = None;
         }
-        create_at_anchor(right, parent, anchor, state.dom, to_for_create);
+        create_at_site(right, parent, site, state.dom, to_for_create);
         let to_for_remove = if suppress_mutations {
             None
         } else {
@@ -716,23 +711,13 @@ impl VNode {
         // slots populated, snapshot ourselves into the mount. Using a
         // deep-clone here gives the snapshot its own per-vnode cells, so a
         // later `claim_mount` against a sibling subtree can't mutate
-        // them out from under anchor lookups that read this mount.
+        // them out from under placement lookups that read this mount.
         state.dom.commit_mount(mount, self);
         nodes_created
     }
 }
 
 impl VNode {
-    pub(super) fn reference_to_dynamic_node(&self, mount: MountId, idx: usize) -> ElementRef {
-        let cursor = dynamic_node_slot(self, idx)
-            .expect("dynamic node reference must point at a node slot")
-            .path();
-        ElementRef {
-            location: ElementLocation::Slot { id: idx, cursor },
-            mount,
-        }
-    }
-
     pub(crate) fn create_dynamic_node(
         &self,
         node: &DynamicNode,
@@ -741,7 +726,7 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_>,
     ) -> usize {
         use DynamicNode::*;
-        let parent = Some(self.reference_to_dynamic_node(mount, idx));
+        let parent = Some(ElementRef { mount });
         match node {
             Component(c) => self.create_component_node(mount, idx, c, parent, state),
             Fragment(frag) => {
@@ -771,7 +756,7 @@ impl VNode {
         path: TemplatePath,
         state: &mut DiffState<'_, '_, '_>,
     ) {
-        // Reverse order lets earlier adjacent dynamic slots anchor before
+        // Reverse order lets earlier adjacent dynamic slots insert before
         // later siblings that have already materialized.
         for slot in dynamic_node_slots(self)
             .filter(|slot| slot.is_inside_static(path))
@@ -779,10 +764,10 @@ impl VNode {
         {
             let dynamic_node_id = slot.index();
             let context = state.context();
-            let anchor = anchor_for_slot(mount, slot, &[], state.dom, context);
+            let site = insertion_site_for_slot(mount, slot, &[], state.dom, context);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            at_anchor(anchor, reborrow_writer(&mut state.to), runtime, |to| {
+            at_site(site, reborrow_writer(&mut state.to), runtime, |to| {
                 let mut state = DiffState::new_with_context(dom, to, context);
                 self.create_dynamic_node(
                     self.dynamic_values[dynamic_node_id].node(),
@@ -818,7 +803,7 @@ impl VNode {
         let id = self.assign_static_node_as_dynamic(mount, group, dom, to);
         for attribute_idx in group.ids() {
             for attr in self.dynamic_values[attribute_idx].attrs() {
-                self.write_attribute(group.path(), attr, id, mount, dom, to);
+                Self::write_attribute(attr, id, mount, dom, to);
             }
             // Store this even for empty dynamic attribute groups so fullstack
             // can later find where attributes may be inserted.
@@ -947,10 +932,10 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 }
 
 /// Look up the rendered root VNode for a component scope, for walking with
-/// `find_element_in_roots` during anchor placement.
+/// `find_element_in_roots` during placement.
 ///
 /// The diff only resolves a component's rendered root once it has established
-/// the component is live and rendered — anchor resolution walks mounted
+/// the component is live and rendered — placement resolution walks mounted
 /// siblings, and `dynamic_node_first_element` runs under a `has_live_dom`
 /// check — so a missing scope or unbuilt root is a bug, asserted here rather
 /// than papered over with a silent `None`.

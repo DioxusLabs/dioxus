@@ -21,8 +21,8 @@ use core::{cmp::Ordering, iter::Peekable};
 
 use crate::innerlude::MountId;
 use crate::{
-    Attribute, AttributeValue, TemplatePath, VNode, VirtualDom, WriteMutations,
-    arena::{ElementLocation, MountedElementId},
+    Attribute, AttributeValue, VNode, VirtualDom, WriteMutations,
+    arena::MountedElementId,
     diff::template::{DynamicAttrGroup, for_each_dynamic_attr_group},
     mutations::{LazyScope, with_id},
 };
@@ -195,7 +195,7 @@ impl VNode {
         // Write the new value, or restore the static template attribute, or clear the DOM
         // attribute. A removed listener has nothing attribute-shaped left to clear.
         if let Some(new) = new {
-            self.write_attribute_to_current(attr_group.path(), new, id, mount, dom, to);
+            Self::write_attribute_to_current(new, id, mount, dom, to);
         } else if !old_listener {
             self.remove_attribute_or_write_fallback(attr_group, key, to)
         }
@@ -239,8 +239,6 @@ impl VNode {
     /// Listener attributes also need an `ElementRef` in the runtime so event dispatch can find
     /// the VNode that owns the handler.
     pub(crate) fn write_attribute(
-        &self,
-        cursor: TemplatePath,
         attribute: &Attribute,
         id: MountedElementId,
         mount: MountId,
@@ -248,13 +246,11 @@ impl VNode {
         to: &mut dyn WriteMutations,
     ) {
         with_id(to, id.element_id(), |to| {
-            self.write_attribute_to_current(cursor, attribute, id, mount, dom, to);
+            Self::write_attribute_to_current(attribute, id, mount, dom, to);
         });
     }
 
     fn write_attribute_to_current(
-        &self,
-        cursor: TemplatePath,
         attribute: &Attribute,
         id: MountedElementId,
         mount: MountId,
@@ -263,7 +259,7 @@ impl VNode {
     ) {
         match &attribute.value {
             AttributeValue::Listener(_) => {
-                dom.set_element_ref_for_mount(mount, id, ElementLocation::Static(cursor));
+                dom.set_element_ref_for_mount(mount, id);
                 to.add_event_listener(&attribute.name[2..]);
             }
             _ => {

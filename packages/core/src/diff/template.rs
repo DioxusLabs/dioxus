@@ -20,10 +20,6 @@ impl<'a> DynamicNodeSlot<'a> {
         self.index
     }
 
-    pub(super) fn path(self) -> TemplatePath {
-        self.path
-    }
-
     pub(super) fn root_index(self) -> usize {
         self.path.segment(0) as usize
     }

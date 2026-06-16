@@ -1,8 +1,8 @@
 use crate::{
     Element,
     diff::{
-        anchor::{Anchor, anchor_for_slot, at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
+        placement::{DomAnchor, InsertionSite, at_site, insertion_site_for_slot},
         template::DynamicNodeSlot,
     },
     innerlude::{ElementRef, MountId, VComponent, WriteMutations},
@@ -84,6 +84,9 @@ impl VirtualDom {
             let mut state =
                 DiffState::new_with_context(self, reborrow_writer(&mut render_to), parent_context);
             DiffFrame::new(old_mount, &old, new_real_nodes).diff_into(&mut state);
+            if let Some(new_mount) = new_real_nodes.mounted_id() {
+                self.replace_mounted_component_root(old_mount, new_mount);
+            }
 
             self.scopes[scope.index()].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
@@ -188,22 +191,18 @@ impl VNode {
             .dom
             .unchecked_mounted_dynamic_component_scope(mount, idx);
 
-        // Compute the anchor BEFORE freeing the scope slot — we need the OLD
-        // scope's rendered vnode to anchor against. If the OLD scope rendered
-        // DOM, that DOM is our insertion neighbor; otherwise we splice into
-        // the dynamic slot itself.
-        let anchor = state.dom.scopes[scope.index()]
+        // Compute the insertion site BEFORE freeing the scope slot — we need
+        // the OLD scope's rendered vnode if it has live DOM. Otherwise we
+        // splice into the dynamic slot itself.
+        let site = state.dom.scopes[scope.index()]
             .last_rendered_node
             .as_ref()
             .and_then(|n| n.find_first_element(state.dom))
-            .map(Anchor::Before)
+            .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
             .unwrap_or_else(|| {
-                let (slot_id, cursor) = parent
-                    .as_ref()
-                    .and_then(|p| p.location.slot())
-                    .expect("component parent must be a dynamic slot");
-                let slot = DynamicNodeSlot::new(&self.template, slot_id, cursor);
-                anchor_for_slot(mount, slot, &[], state.dom, state.context())
+                let slot =
+                    DynamicNodeSlot::new(&self.template, idx, self.template.dynamic_path(idx));
+                insertion_site_for_slot(mount, slot, &[], state.dom, state.context())
             });
 
         // Free the scope slot so `create_component_node` allocates a new scope.
@@ -213,7 +212,7 @@ impl VNode {
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = reborrow_writer(&mut state.to);
-            at_anchor(anchor, to, runtime, |to| {
+            at_site(site, to, runtime, |to| {
                 let mut state = DiffState::new(dom, to);
                 self.create_component_node(mount, idx, new, parent, &mut state)
             });
@@ -258,8 +257,17 @@ impl VNode {
 
         let scope_id = scope_id.expect("component scope should be mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(state, |dom, to| {
+        let nodes = drive(state, |dom, to| {
             driver.create(dom, scope_id, new, parent, to)
-        })
+        });
+        let root = state
+            .dom
+            .get_scope(scope_id)
+            .and_then(|scope| scope.try_root_node())
+            .and_then(VNode::mounted_id);
+        state
+            .dom
+            .set_mounted_dynamic_component_root(mount, idx, root);
+        nodes
     }
 }

@@ -7,159 +7,10 @@ use dioxus_html_internal_macro::impl_extension_attributes;
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 
-pub type AttributeDescription = (&'static str, Option<&'static str>, bool);
-
-macro_rules! impl_attribute {
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (DEFAULT),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), None, false);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident ($name:literal),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = ($name, None, false);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (volatile),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), None, true);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (in $ns:literal),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), false)
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (in $ns:literal : volatile),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), true)
-    };
-}
-
 #[cfg(feature = "hot-reload-context")]
 macro_rules! impl_attribute_match {
     (
-        $attr:ident $fil:ident: $vil:ident (DEFAULT),
+        $attr:ident $(#[$attr_method:meta])* $fil:ident,
     ) => {
         if $attr == stringify!($fil) {
             return Some((stringify!($fil), None));
@@ -167,7 +18,7 @@ macro_rules! impl_attribute_match {
     };
 
     (
-        $attr:ident $fil:ident: $vil:ident (volatile),
+        $attr:ident $(#[$attr_method:meta])* $fil:ident DEFAULT,
     ) => {
         if $attr == stringify!($fil) {
             return Some((stringify!($fil), None));
@@ -175,7 +26,15 @@ macro_rules! impl_attribute_match {
     };
 
     (
-        $attr:ident $fil:ident: $vil:ident ($name:literal),
+        $attr:ident $(#[$attr_method:meta])* $fil:ident volatile,
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some((stringify!($fil), None));
+        }
+    };
+
+    (
+        $attr:ident $(#[$attr_method:meta])* $fil:ident $name:literal,
     ) => {
         if $attr == stringify!($fil) {
             return Some(($name, None));
@@ -183,7 +42,7 @@ macro_rules! impl_attribute_match {
     };
 
     (
-        $attr:ident $fil:ident: $vil:ident (in $ns:literal),
+        $attr:ident $(#[$attr_method:meta])* $fil:ident in $ns:literal,
     ) => {
         if $attr == stringify!($fil) {
             return Some((stringify!($fil), Some($ns)));
@@ -194,7 +53,7 @@ macro_rules! impl_attribute_match {
 #[cfg(feature = "html-to-rsx")]
 macro_rules! impl_html_to_rsx_attribute_match {
     (
-        $attr:ident $fil:ident $name:literal
+        $attr:ident $(#[$attr_method:meta])* $fil:ident $name:literal
     ) => {
         if $attr == $name {
             return Some(stringify!($fil));
@@ -202,7 +61,7 @@ macro_rules! impl_html_to_rsx_attribute_match {
     };
 
     (
-        $attr:ident $fil:ident $_:tt
+        $attr:ident $(#[$attr_method:meta])* $fil:ident $($_:tt)?
     ) => {
         if $attr == stringify!($fil) {
             return Some(stringify!($fil));
@@ -216,7 +75,7 @@ macro_rules! impl_element {
         $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -250,8 +109,6 @@ macro_rules! impl_element {
         pub mod $name {
             #[allow(unused)]
             use super::*;
-            #[allow(unused_imports)]
-            pub use crate::attribute_groups::global_attributes::*;
 
             pub(super) const TAG_NAME: &'static str = stringify!($name);
             pub(super) const NAME_SPACE: Option<&'static str> = None;
@@ -268,14 +125,6 @@ macro_rules! impl_element {
                 dioxus_core::view::el::<Tag>()
             }
 
-            $(
-                impl_attribute!(
-                    $name {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
         }
     };
 
@@ -284,7 +133,7 @@ macro_rules! impl_element {
         $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -317,8 +166,6 @@ macro_rules! impl_element {
         pub mod $name {
             #[allow(unused)]
             use super::*;
-            #[allow(unused_imports)]
-            pub use crate::attribute_groups::svg_attributes::*;
 
             pub(super) const TAG_NAME: &'static str = stringify!($name);
             pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
@@ -335,14 +182,6 @@ macro_rules! impl_element {
                 dioxus_core::view::el::<Tag>()
             }
 
-            $(
-                impl_attribute!(
-                    $name {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
         }
     };
 
@@ -351,7 +190,7 @@ macro_rules! impl_element {
         $element:ident [$name:literal, $namespace:tt] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -385,8 +224,6 @@ macro_rules! impl_element {
         pub mod $element {
             #[allow(unused)]
             use super::*;
-            #[allow(unused_imports)]
-            pub use crate::attribute_groups::svg_attributes::*;
 
             pub(super) const TAG_NAME: &'static str = $name;
             pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
@@ -403,14 +240,6 @@ macro_rules! impl_element {
                 dioxus_core::view::el::<Tag>()
             }
 
-            $(
-                impl_attribute!(
-                    $element {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
         }
     }
 }
@@ -421,7 +250,7 @@ macro_rules! impl_element_constructor {
         $name:ident None {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -436,7 +265,7 @@ macro_rules! impl_element_constructor {
         $name:ident "http://www.w3.org/2000/svg" {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -451,7 +280,7 @@ macro_rules! impl_element_constructor {
         $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -466,7 +295,7 @@ macro_rules! impl_element_constructor {
         $element:ident [$name:literal, "http://www.w3.org/2000/svg"] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -481,7 +310,7 @@ macro_rules! impl_element_constructor {
         $element:ident [$name:literal, $namespace:tt] {
             $(
                 $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -497,7 +326,8 @@ macro_rules! impl_element_match {
     (
         $el:ident $name:ident None {
             $(
-                $fil:ident: $vil:ident $extra:tt,
+                $(#[$attr_method:meta])*
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -509,7 +339,8 @@ macro_rules! impl_element_match {
     (
         $el:ident $name:ident $namespace:literal {
             $(
-                $fil:ident: $vil:ident $extra:tt,
+                $(#[$attr_method:meta])*
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -521,7 +352,8 @@ macro_rules! impl_element_match {
     (
         $el:ident $name:ident [$_:literal, $namespace:tt] {
             $(
-                $fil:ident: $vil:ident $extra:tt,
+                $(#[$attr_method:meta])*
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
@@ -536,14 +368,15 @@ macro_rules! impl_element_match_attributes {
     (
         $el:ident $attr:ident $name:ident None {
             $(
-                $fil:ident: $vil:ident $extra:tt,
+                $(#[$attr_method:meta])*
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
         if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $attr $fil: $vil ($extra),
+                    $attr $(#[$attr_method])* $fil $($extra)*,
                 );
             )*
 
@@ -554,14 +387,15 @@ macro_rules! impl_element_match_attributes {
     (
         $el:ident $attr:ident $name:ident $namespace:tt {
             $(
-                $fil:ident: $vil:ident $extra:tt,
+                $(#[$attr_method:meta])*
+                $fil:ident $($extra:tt)*,
             )*
         }
     ) => {
         if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $attr $fil: $vil ($extra),
+                    $attr $(#[$attr_method])* $fil $($extra)*,
                 );
             )*
 
@@ -629,7 +463,7 @@ macro_rules! builder_constructors {
             $name:ident $namespace:tt {
                 $(
                     $(#[$attr_method:meta])*
-                    $fil:ident: $vil:ident $extra:tt,
+                    $fil:ident $($extra:tt)*,
                 )*
             };
          )*
@@ -644,7 +478,8 @@ macro_rules! builder_constructors {
                     impl_element_match_attributes!(
                         element attribute $name $namespace {
                             $(
-                                $fil: $vil $extra,
+                                $(#[$attr_method])*
+                                $fil $($extra)*,
                             )*
                         }
                     );
@@ -657,7 +492,8 @@ macro_rules! builder_constructors {
                     impl_element_match!(
                         element $name $namespace {
                             $(
-                                $fil: $vil $extra,
+                                $(#[$attr_method])*
+                                $fil $($extra)*,
                             )*
                         }
                     );
@@ -671,7 +507,7 @@ macro_rules! builder_constructors {
             $(
                 $(
                     impl_html_to_rsx_attribute_match!(
-                        html $fil $extra
+                        html $(#[$attr_method])* $fil $($extra)*
                     );
                 )*
             )*
@@ -704,7 +540,7 @@ macro_rules! builder_constructors {
                 $name $namespace {
                     $(
                         $(#[$attr_method])*
-                        $fil: $vil $extra,
+                        $fil $($extra)*,
                     )*
                 }
             );
@@ -716,7 +552,7 @@ macro_rules! builder_constructors {
                 $name $namespace {
                     $(
                         $(#[$attr_method])*
-                        $fil: $vil $extra,
+                        $fil $($extra)*,
                     )*
                 }
             );
@@ -726,7 +562,7 @@ macro_rules! builder_constructors {
         pub(crate) mod extensions {
             use super::*;
             $(
-                impl_extension_attributes![$name { $($fil,)* } for_el];
+                impl_extension_attributes![$name { $($(#[$attr_method])* $fil $($extra)* ,)* } for_el];
             )*
         }
     };
@@ -1606,7 +1442,8 @@ builder_constructors! {
 
         r#type: InputType "type",
         // value: String,
-        value: String volatile,
+        #[attr(volatile)]
+        value: String,
         initial_value: String DEFAULT,
     };
 
@@ -1654,7 +1491,8 @@ builder_constructors! {
 
         value: String DEFAULT,
 
-        selected: Bool volatile,
+        #[attr(volatile)]
+        selected: Bool,
         initial_selected: Bool DEFAULT,
     };
 
@@ -1689,7 +1527,8 @@ builder_constructors! {
         name: Id DEFAULT,
         required: Bool DEFAULT,
         size: usize DEFAULT,
-        value: String volatile,
+        #[attr(volatile)]
+        value: String,
     };
 
     /// Build a
@@ -1712,7 +1551,8 @@ builder_constructors! {
         rows: usize DEFAULT,
         spellcheck: BoolOrDefault DEFAULT,
         wrap: Wrap DEFAULT,
-        value: String volatile,
+        #[attr(volatile)]
+        value: String,
 
         initial_value: String DEFAULT,
     };

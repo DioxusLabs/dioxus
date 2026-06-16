@@ -47,6 +47,7 @@ fn app() -> Element {
 
 fn dashboard<'a>(title: &'a str, metrics: &'a [Metric]) -> impl View {
     html::main()
+        .onclick(|event| println!("{event:?}"))
         .class(dioxus::core::static_value!("dashboard"))
         .child(header(title, metrics.len()))
         .child(

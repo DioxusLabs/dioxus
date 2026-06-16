@@ -34,7 +34,7 @@ fn events_propagate() {
 
     fn problematic_child() -> Element {
         rsx! {
-            button { onclick: move |evt| {
+            button { onclick: move |evt: MouseEvent| {
                     println!("bottom clicked");
                     let mut clicks = CLICKS.lock().unwrap();
                     if *clicks == 3 {

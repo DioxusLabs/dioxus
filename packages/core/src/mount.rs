@@ -56,6 +56,10 @@ impl Mount {
         self.logical_parent
     }
 
+    pub(crate) fn target_id(&self) -> RenderTargetId {
+        self.target_id
+    }
+
     pub(crate) fn node(&self) -> &VNode {
         &self.node
     }
@@ -221,7 +225,18 @@ impl VirtualDom {
         dyn_node_idx: usize,
     ) -> Option<ScopeId> {
         match self.get_mounted_dynamic_node_slot(mount, dyn_node_idx) {
-            MountedDynamicNodeSlot::Component(scope) => Some(scope),
+            MountedDynamicNodeSlot::Component { scope, .. } => Some(scope),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn mounted_dynamic_component_root(
+        &self,
+        mount: MountId,
+        dyn_node_idx: usize,
+    ) -> Option<MountId> {
+        match self.get_mounted_dynamic_node_slot(mount, dyn_node_idx) {
+            MountedDynamicNodeSlot::Component { root, .. } => root,
             _ => None,
         }
     }
@@ -241,10 +256,25 @@ impl VirtualDom {
         dyn_node_idx: usize,
         value: ScopeId,
     ) {
+        let root = self.mounted_dynamic_component_root(mount, dyn_node_idx);
         self.set_mounted_dynamic_node_slot(
             mount,
             dyn_node_idx,
-            MountedDynamicNodeSlot::Component(value),
+            MountedDynamicNodeSlot::Component { scope: value, root },
+        );
+    }
+
+    pub(crate) fn set_mounted_dynamic_component_root(
+        &self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        value: Option<MountId>,
+    ) {
+        let scope = self.unchecked_mounted_dynamic_component_scope(mount, dyn_node_idx);
+        self.set_mounted_dynamic_node_slot(
+            mount,
+            dyn_node_idx,
+            MountedDynamicNodeSlot::Component { scope, root: value },
         );
     }
 
@@ -363,6 +393,26 @@ impl VirtualDom {
         // mutate the shared `Rc<VNodeInner>` here too, and anchor lookups
         // that walk `mount.node` would see those descendants as unmounted.
         self.runtime.mounts.borrow_mut()[mount.0].node = node.deep_clone_preserving_mounts();
+    }
+
+    pub(crate) fn replace_mounted_component_root(&self, old_root: MountId, new_root: MountId) {
+        if old_root == new_root {
+            return;
+        }
+
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        for (_, target) in targets.iter_mut() {
+            for mounted in target.mounts.iter_mut().flatten() {
+                for slot in mounted.mounted_dynamic_nodes.iter_mut() {
+                    let MountedDynamicNodeSlot::Component { root, .. } = slot else {
+                        continue;
+                    };
+                    if *root == Some(old_root) {
+                        *root = Some(new_root);
+                    }
+                }
+            }
+        }
     }
 
     fn mounted_node_state<R>(

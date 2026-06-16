@@ -3,8 +3,6 @@
 
 use dioxus_html_internal_macro::impl_extension_attributes;
 
-use crate::AttributeDescription;
-
 #[cfg(feature = "hot-reload-context")]
 macro_rules! mod_method_mapping {
     (
@@ -87,7 +85,6 @@ macro_rules! html_to_rsx_attribute_mapping {
 
 macro_rules! mod_methods {
     (
-        @base
         $(#[$mod_attr:meta])*
         $mod:ident;
         $fn:ident;
@@ -97,18 +94,6 @@ macro_rules! mod_methods {
             $name:ident $(: $(no-$alias:ident)? $js_name:literal)? $(in $ns:literal)?;
         )+
     ) => {
-        $(#[$mod_attr])*
-        pub mod $mod {
-            use super::*;
-            $(
-                mod_methods! {
-                    @attr
-                    $(#[$attr])*
-                    $name $(: $(no-$alias)? $js_name)? $(in $ns)?;
-                }
-            )+
-        }
-
         #[cfg(feature = "hot-reload-context")]
         pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
             $(
@@ -132,84 +117,11 @@ macro_rules! mod_methods {
             None
         }
 
-        impl_extension_attributes![$mod { $($name,)* }];
+        impl_extension_attributes![$mod { $($(#[$attr])* $name $(: $(no-$alias)? $js_name)? $(in $ns)? ,)* }];
     };
-
-    (
-        @attr
-        $(#[$attr:meta])*
-        $name:ident $(: no-alias $js_name:literal)? $(in $ns:literal)?;
-    ) => {
-        $(#[$attr])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, ignore
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($name), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        ///     div {
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($name), ": \"value\"")]
-        ///     }
-        ///     div {
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($name), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $name: AttributeDescription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
-    };
-
-    (
-        @attr
-        $(#[$attr:meta])*
-        $name:ident $(: $js_name:literal)? $(in $ns:literal)?;
-    ) => {
-        $(#[$attr])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, ignore
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($name), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        ///     div {
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($name), ": \"value\"")]
-        ///     }
-        ///     div {
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($name), ",")]
-        ///     }
-        /// };
-        /// ```
-        $(
-            #[doc(alias = $js_name)]
-        )?
-        pub const $name: AttributeDescription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
-    };
-
-    // Rename the incoming ident and apply a custom namespace
-    ( $name:ident: $lit:literal in $ns:literal; ) => { ($lit, Some($ns), false) };
-
-    // Custom namespace
-    ( $name:ident in $ns:literal; ) => { (stringify!($name), Some($ns), false) };
-
-    // Rename the incoming ident
-    ( $name:ident: $lit:literal; ) => { ($lit, None, false ) };
-
-    // Don't rename the incoming ident
-    ( $name:ident; ) => { (stringify!($name), None, false) };
 }
 
 mod_methods! {
-    @base
-
     global_attributes;
     map_global_attributes;
     map_html_global_attributes_to_rsx;
@@ -1742,7 +1654,6 @@ mod_methods! {
 }
 
 mod_methods! {
-    @base
     svg_attributes;
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
