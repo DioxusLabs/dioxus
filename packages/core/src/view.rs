@@ -41,14 +41,14 @@ impl RawTape {
 
     /// Push one raw template operation.
     pub(crate) const fn push(&mut self, op: TemplateRawOp) {
-        self.ops = self.ops.push(op);
+        self.ops.push(op);
     }
 
     /// Append another raw tape.
     pub(crate) const fn concat(&mut self, other: &RawTape) {
         let mut index = 0;
         while index < other.ops.len() {
-            self.ops = self.ops.push(other.ops.at(index));
+            self.ops.push(other.ops.at(index));
             index += 1;
         }
     }

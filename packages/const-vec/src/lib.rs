@@ -54,15 +54,17 @@ impl<'a> ConstReadBuffer<'a> {
 ///
 /// ```rust
 /// # use const_vec::ConstVec;
-/// const EMPTY: ConstVec<u8> = ConstVec::new();
-/// const ONE: ConstVec<u8> = EMPTY.push(1);
-/// const TWO: ConstVec<u8> = ONE.push(2);
-/// const THREE: ConstVec<u8> = TWO.push(3);
-/// const FOUR: ConstVec<u8> = THREE.push(4);
-/// const POPPED: (ConstVec<u8>, Option<u8>) = FOUR.pop();
+/// const VEC: ConstVec<u8> = {
+///     let mut vec = ConstVec::new();
+///     vec.push(1);
+///     vec.push(2);
+///     vec.push(3);
+///     vec.push(4);
+///     assert!(vec.pop().unwrap() == 4);
+///     vec
+/// };
 ///
-/// assert_eq!(POPPED.0, THREE);
-/// assert_eq!(POPPED.1.unwrap(), 4);
+/// assert_eq!(VEC.as_ref(), &[1, 2, 3]);
 /// ```
 pub struct ConstVec<T, const MAX_SIZE: usize = DEFAULT_MAX_SIZE> {
     memory: [MaybeUninit<T>; MAX_SIZE],
@@ -73,7 +75,7 @@ impl<T: Clone, const MAX_SIZE: usize> Clone for ConstVec<T, MAX_SIZE> {
     fn clone(&self) -> Self {
         let mut cloned = Self::new_with_max_size();
         for i in 0..self.len as usize {
-            cloned = cloned.push(self.get(i).unwrap().clone());
+            cloned.push(self.get(i).unwrap().clone());
         }
         cloned
     }
@@ -141,7 +143,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         let mut index = 0;
         while index < self.len as usize {
             let value = unsafe { self.memory[index].assume_init() };
-            result = result.push(value);
+            result.push(value);
             index += 1;
         }
         result
@@ -153,17 +155,19 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec
+    /// };
     /// assert_eq!(ONE.as_ref(), &[1]);
     /// ```
-    pub const fn push(mut self, value: T) -> Self {
+    pub const fn push(&mut self, value: T) {
         if self.len as usize >= MAX_SIZE {
             panic!("const vec capacity exceeded");
         }
         self.memory[self.len as usize] = MaybeUninit::new(value);
         self.len += 1;
-        self
     }
 
     /// Extend the [`ConstVec`] with the contents of a slice.
@@ -172,20 +176,22 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.extend(&[1, 2, 3]);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.extend(&[1, 2, 3]);
+    ///     vec
+    /// };
     /// assert_eq!(ONE.as_ref(), &[1, 2, 3]);
     /// ```
-    pub const fn extend(mut self, other: &[T]) -> Self
+    pub const fn extend(&mut self, other: &[T])
     where
         T: Copy,
     {
         let mut i = 0;
         while i < other.len() {
-            self = self.push(other[i]);
+            self.push(other[i]);
             i += 1;
         }
-        self
     }
 
     /// Get a reference to the value at the given index.
@@ -194,8 +200,11 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec
+    /// };
     /// assert_eq!(ONE.get(0), Some(&1));
     /// ```
     pub const fn get(&self, index: usize) -> Option<&T> {
@@ -225,8 +234,11 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec
+    /// };
     /// assert_eq!(ONE.len(), 1);
     /// ```
     pub const fn len(&self) -> usize {
@@ -241,7 +253,11 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// assert!(EMPTY.is_empty());
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec
+    /// };
     /// assert!(!ONE.is_empty());
     /// ```
     pub const fn is_empty(&self) -> bool {
@@ -254,8 +270,11 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const ONE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec
+    /// };
     /// assert_eq!(ONE.as_ref(), &[1]);
     /// ```
     pub const fn as_ref(&self) -> &[T] {
@@ -275,13 +294,16 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.push(2);
-    /// const THREE: ConstVec<u8> = TWO.swap(0, 1);
+    /// const THREE: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.push(2);
+    ///     vec.swap(0, 1);
+    ///     vec
+    /// };
     /// assert_eq!(THREE.as_ref(), &[2, 1]);
     /// ```
-    pub const fn swap(mut self, first: usize, second: usize) -> Self
+    pub const fn swap(&mut self, first: usize, second: usize)
     where
         T: Copy,
     {
@@ -290,7 +312,6 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         let temp = self.memory[first];
         self.memory[first] = self.memory[second];
         self.memory[second] = temp;
-        self
     }
 
     /// Pop a value off the end of the [`ConstVec`].
@@ -299,27 +320,29 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.push(2);
-    /// const THREE: ConstVec<u8> = TWO.push(3);
-    /// const POPPED: (ConstVec<u8>, Option<u8>) = THREE.pop();
-    /// assert_eq!(POPPED.0, TWO);
+    /// const POPPED: (ConstVec<u8>, Option<u8>) = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.push(2);
+    ///     vec.push(3);
+    ///     let popped = vec.pop();
+    ///     (vec, popped)
+    /// };
+    /// assert_eq!(POPPED.0.as_ref(), &[1, 2]);
     /// assert_eq!(POPPED.1.unwrap(), 3);
     /// ```
-    pub const fn pop(mut self) -> (Self, Option<T>)
+    pub const fn pop(&mut self) -> Option<T>
     where
         T: Copy,
     {
-        let value = if self.len > 0 {
+        if self.len > 0 {
             self.len -= 1;
             let last = self.len as usize;
             let last_value = unsafe { self.memory[last].assume_init() };
             Some(last_value)
         } else {
             None
-        };
-        (self, value)
+        }
     }
 
     /// Remove the value at the given index.
@@ -328,19 +351,22 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.push(2);
-    /// const THREE: ConstVec<u8> = TWO.push(3);
-    /// const REMOVED: (ConstVec<u8>, Option<u8>) = THREE.remove(1);
+    /// const REMOVED: (ConstVec<u8>, Option<u8>) = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.push(2);
+    ///     vec.push(3);
+    ///     let removed = vec.remove(1);
+    ///     (vec, removed)
+    /// };
     /// assert_eq!(REMOVED.0.as_ref(), &[1, 3]);
     /// assert_eq!(REMOVED.1.unwrap(), 2);
     /// ```
-    pub const fn remove(mut self, index: usize) -> (Self, Option<T>)
+    pub const fn remove(&mut self, index: usize) -> Option<T>
     where
         T: Copy,
     {
-        let value = if index < self.len as usize {
+        if index < self.len as usize {
             let value = unsafe { self.memory[index].assume_init() };
             let mut swap_index = index;
             while swap_index + 1 < self.len as usize {
@@ -351,9 +377,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
             Some(value)
         } else {
             None
-        };
-
-        (self, value)
+        }
     }
 
     /// Set the value at the given index.
@@ -362,17 +386,19 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.set(0, 2);
+    /// const TWO: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.set(0, 2);
+    ///     vec
+    /// };
     /// assert_eq!(TWO.as_ref(), &[2]);
     /// ```
-    pub const fn set(mut self, index: usize, value: T) -> Self {
+    pub const fn set(&mut self, index: usize, value: T) {
         if index >= self.len as usize {
             panic!("const vec index out of bounds")
         }
         self.memory[index] = MaybeUninit::new(value);
-        self
     }
 
     /// Split the [`ConstVec`] into two at the given index.
@@ -381,11 +407,13 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::ConstVec;
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.push(2);
-    /// const THREE: ConstVec<u8> = TWO.push(3);
-    /// const SPLIT: (ConstVec<u8>, ConstVec<u8>) = THREE.split_at(1);
+    /// const SPLIT: (ConstVec<u8>, ConstVec<u8>) = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.push(2);
+    ///     vec.push(3);
+    ///     vec.split_at(1)
+    /// };
     /// assert_eq!(SPLIT.0.as_ref(), &[1]);
     /// assert_eq!(SPLIT.1.as_ref(), &[2, 3]);
     /// ```
@@ -399,13 +427,13 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         let mut left_vec = Self::new_with_max_size();
         let mut i = 0;
         while i < left.len() {
-            left_vec = left_vec.push(left[i]);
+            left_vec.push(left[i]);
             i += 1;
         }
         let mut right_vec = Self::new_with_max_size();
         i = 0;
         while i < right.len() {
-            right_vec = right_vec.push(right[i]);
+            right_vec.push(right[i]);
             i += 1;
         }
         (left_vec, right_vec)
@@ -419,9 +447,12 @@ impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
     ///
     /// ```rust
     /// # use const_vec::{ConstReadBuffer, ConstVec};
-    /// const EMPTY: ConstVec<u8> = ConstVec::new();
-    /// const ONE: ConstVec<u8> = EMPTY.push(1);
-    /// const TWO: ConstVec<u8> = ONE.push(2);
+    /// const TWO: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.push(1);
+    ///     vec.push(2);
+    ///     vec
+    /// };
     /// const READ: ConstReadBuffer = TWO.read();
     /// assert_eq!(READ.as_ref(), &[1, 2]);
     /// ```
@@ -434,17 +465,17 @@ impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
 fn test_const_vec() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
     assert_eq!(VEC.as_ref(), &[1234, 5678]);
-    let vec = VEC;
-    let (vec, value) = vec.pop();
+    let mut vec = VEC;
+    let value = vec.pop();
     assert_eq!(value, Some(5678));
-    let (vec, value) = vec.pop();
+    let value = vec.pop();
     assert_eq!(value, Some(1234));
-    let (vec, value) = vec.pop();
+    let value = vec.pop();
     assert_eq!(value, None);
     assert_eq!(vec.as_ref(), &[]);
 }
@@ -453,8 +484,8 @@ fn test_const_vec() {
 fn test_const_vec_len() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
     assert_eq!(VEC.len(), 2);
@@ -464,8 +495,8 @@ fn test_const_vec_len() {
 fn test_const_vec_get() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
     assert_eq!(VEC.get(0), Some(&1234));
@@ -477,8 +508,8 @@ fn test_const_vec_get() {
 fn test_const_vec_at() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
     assert_eq!(VEC.at(0), 1234);
@@ -489,15 +520,15 @@ fn test_const_vec_at() {
 fn test_const_vec_swap() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
     let mut vec = VEC;
     assert_eq!(vec.as_ref(), &[1234, 5678]);
-    vec = vec.swap(0, 1);
+    vec.swap(0, 1);
     assert_eq!(vec.as_ref(), &[5678, 1234]);
-    vec = vec.swap(0, 1);
+    vec.swap(0, 1);
     assert_eq!(vec.as_ref(), &[1234, 5678]);
 }
 
@@ -505,16 +536,16 @@ fn test_const_vec_swap() {
 fn test_const_vec_remove() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
+        vec.push(1234);
+        vec.push(5678);
         vec
     };
-    let vec = VEC;
+    let mut vec = VEC;
     assert_eq!(vec.as_ref(), &[1234, 5678]);
-    let (vec, value) = vec.remove(0);
+    let value = vec.remove(0);
     assert_eq!(value, Some(1234));
     assert_eq!(vec.as_ref(), &[5678]);
-    let (vec, value) = vec.remove(0);
+    let value = vec.remove(0);
     assert_eq!(value, Some(5678));
     assert_eq!(vec.as_ref(), &[]);
 }
@@ -523,9 +554,9 @@ fn test_const_vec_remove() {
 fn test_const_vec_extend() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
-        vec = vec.push(1234);
-        vec = vec.push(5678);
-        vec = vec.extend(&[91011, 1213]);
+        vec.push(1234);
+        vec.push(5678);
+        vec.extend(&[91011, 1213]);
         vec
     };
     let vec = VEC;

@@ -105,12 +105,12 @@ impl<const CAP: usize> StringInterner<CAP> {
 
         let mut byte_index = 0;
         while byte_index < bytes.len() {
-            self.blob = self.blob.push(bytes[byte_index]);
+            self.blob.push(bytes[byte_index]);
             byte_index += 1;
         }
 
         let id = self.spans.len();
-        self.spans = self.spans.push(TemplateStringSpan {
+        self.spans.push(TemplateStringSpan {
             off: off as u16,
             len: bytes.len() as u16,
         });

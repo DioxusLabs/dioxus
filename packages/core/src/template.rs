@@ -702,7 +702,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     const fn push_static(&mut self, value: &'static str) {
         let (strings, id) = self.strings.intern(value);
         self.strings = strings;
-        self.ops = self.ops.push(TemplateOp::static_text(id));
+        self.ops.push(TemplateOp::static_text(id));
     }
 
     const fn ops_len(&self) -> usize {
@@ -714,15 +714,15 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     }
 
     const fn push_op(&mut self, op: TemplateOp) {
-        self.ops = self.ops.push(op);
+        self.ops.push(op);
     }
 
     const fn set_op(&mut self, index: usize, op: TemplateOp) {
-        self.ops = self.ops.set(index, op);
+        self.ops.set(index, op);
     }
 
     const fn push_dynamic(&mut self, path: TemplatePath) {
-        self.dynamics = self.dynamics.push(path);
+        self.dynamics.push(path);
     }
 }
 
