@@ -152,12 +152,15 @@ impl BuildRequest {
         let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
         tracing::debug!("replaying crates: {replayed_crates:?}");
         for crate_name in &replayed_crates {
-            let rustc_args = self
-                .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
-                .with_context(|| format!("Missing rustc args for replay: '{crate_name}'"))?;
-            self.compile_dep_crate(ctx, crate_name, rustc_args)
-                .await
-                .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
+            if let Some(rustc_args) =
+                self.workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
+            {
+                self.compile_dep_crate(ctx, crate_name, rustc_args)
+                    .await
+                    .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
+            } else {
+                tracing::warn!("No captured rustc args for workspace crate '{crate_name}', skipping");
+            }
         }
 
         // Recompile just the tip crate now
