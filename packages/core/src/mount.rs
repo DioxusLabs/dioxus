@@ -352,14 +352,14 @@ impl VirtualDom {
     );
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
-        // Hand out a deep clone so placement lookups that descend into the
-        // returned tree can't observe descendant mount cells being mutated
+        // Hand out an owned snapshot so placement lookups that descend into
+        // dynamic fragments can't observe descendant mount cells being mutated
         // by a sibling diff's `claim_mount`.
         self.runtime
             .mounts
             .borrow()
             .get(mount.0)
-            .map(|mount| mount.node.deep_clone_preserving_mounts())
+            .map(|mount| mount.node.clone_for_mount_snapshot())
     }
 
     pub(crate) fn set_mount_mode(&self, mount: MountId, mode: RenderMode) {
@@ -384,12 +384,9 @@ impl VirtualDom {
         // Every caller commits work on a `mount` that's just been claimed via
         // `claim_mount` or freshly allocated in `create_with_parents` —
         // both produce live `MountId`s.
-        // Deep-clone so the committed snapshot owns its own per-vnode
-        // raw mount slots. A subsequent diff that calls
-        // `claim_mount` on descendant `old` vnodes would otherwise
-        // mutate the shared `Rc<VNodeInner>` here too, and placement lookups
-        // that walk `mount.node` would see those descendants as unmounted.
-        self.runtime.mounts.borrow_mut()[mount.0].node = node.deep_clone_preserving_mounts();
+        // Clone so the committed snapshot owns any descendant vnode mount
+        // slots that a subsequent diff may mutate through `claim_mount`.
+        self.runtime.mounts.borrow_mut()[mount.0].node = node.clone_for_mount_snapshot();
     }
 
     pub(crate) fn replace_mounted_component_root_mount(

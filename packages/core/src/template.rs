@@ -503,13 +503,17 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 
 /// Const storage for a lowered raw template.
 ///
-/// The RSX macro emits a `static TemplateStorage<N>` from a raw operation tape, then calls
-/// [`Self::as_template`] to expose the compact [`Template`] used by the runtime.
+/// The RSX macro emits a `static TemplateStorage<OPS, STRINGS, DYNAMICS>` from a raw operation
+/// tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by the runtime.
 #[derive(Clone, Copy)]
-pub(crate) struct TemplateStorage<const CAP: usize> {
-    ops: ConstVec<TemplateOp, CAP>,
-    strings: StringInterner<CAP>,
-    dynamics: ConstVec<TemplatePath, CAP>,
+pub(crate) struct TemplateStorage<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+> {
+    ops: ConstVec<TemplateOp, OPS_CAP>,
+    strings: StringInterner<STRING_CAP>,
+    dynamics: ConstVec<TemplatePath, DYNAMIC_CAP>,
 }
 
 struct RawTemplateLoweringCursor {
@@ -671,7 +675,9 @@ macro_rules! lower_raw_template {
     }};
 }
 
-impl<const CAP: usize> TemplateStorage<CAP> {
+impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
+    TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
+{
     /// Lower a raw template tape into packed storage in const context.
     pub(crate) const fn build(raw: &'static [TemplateRawOp]) -> Self {
         let mut storage = Self {
@@ -1038,132 +1044,22 @@ impl Template {
         Some(op)
     }
 
-    /// Return child indexes for navigating from a static root through a static prototype.
-    pub(crate) fn static_prototype_child_indexes(&self, path: TemplatePath) -> Option<Vec<usize>> {
-        if path.is_empty() {
-            return None;
-        }
-        let mut op = self.root_op_index(path.segment(0) as usize)?;
-        let mut indexes = Vec::new();
-        for depth in 1..path.len() {
-            let (child_op, prototype_index) =
-                self.static_child_op_and_prototype_index(op, path.segment(depth) as usize)?;
-            indexes.push(prototype_index);
-            op = child_op;
-        }
-        Some(indexes)
-    }
-
-    /// Return child indexes and the parent op for navigating from a known static root through
-    /// a static prototype.
-    pub(crate) fn static_prototype_child_indexes_from_root_op(
-        &self,
-        root_op: usize,
-        path: TemplatePath,
-    ) -> Option<(Vec<usize>, usize)> {
-        if path.is_empty() {
-            return None;
-        }
-        let mut op = root_op;
-        let mut indexes = Vec::with_capacity(path.len().saturating_sub(1));
-        for depth in 1..path.len() {
-            let (child_op, prototype_index) =
-                self.static_child_op_and_prototype_index(op, path.segment(depth) as usize)?;
-            indexes.push(prototype_index);
-            op = child_op;
-        }
-        Some((indexes, op))
-    }
-
-    /// Return the number of static child nodes under an element op.
-    pub(crate) fn static_child_count(&self, element_op: usize) -> usize {
-        let Some(mut cursor) = self.first_child_node_op(element_op) else {
-            return 0;
-        };
-        let Some(end) = self.element_end(element_op) else {
-            return 0;
-        };
-
-        let mut count = 0;
-        while cursor < end {
-            if self.is_static_node_op(cursor) {
-                count += 1;
-            }
-            cursor = self.next_sibling_op(cursor);
-        }
-        count
-    }
-
-    /// Return the static-prototype insertion index for a dynamic child slot.
-    pub(crate) fn static_prototype_insertion_index(
-        &self,
-        parent_path: TemplatePath,
-        child_idx: usize,
-    ) -> Option<usize> {
-        let parent_op = self.static_node_op_at_path(parent_path)?;
-        self.static_child_insertion_index(parent_op, child_idx)
-    }
-
-    /// Return the flat op index for the static child at `child_idx` under an element op.
+    /// Return the flat op index for the static-prototype child at `child_idx` under an element op.
     pub fn static_child_op(&self, element_op: usize, child_idx: usize) -> Option<usize> {
-        self.static_child_op_and_prototype_index(element_op, child_idx)
-            .map(|(op, _)| op)
-    }
-
-    /// Return the static-prototype child index where authored child `child_idx` should be inserted.
-    pub(crate) fn static_child_insertion_index(
-        &self,
-        element_op: usize,
-        child_idx: usize,
-    ) -> Option<usize> {
         let (_, mut cursor, end) = self.element_attr_child_ops(element_op)?;
-        let mut child = 0;
         let mut static_child = 0;
 
         while cursor < end {
-            if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
-                if child == child_idx {
-                    return Some(static_child);
+            if self.is_static_node_op(cursor) {
+                if static_child == child_idx {
+                    return Some(cursor);
                 }
-                if self.is_static_node_op(cursor) {
-                    static_child += 1;
-                }
-                child += 1;
+                static_child += 1;
+                cursor = self.next_sibling_op(cursor);
+            } else if self.is_dynamic_node_marker(cursor) {
                 cursor = self.next_sibling_op(cursor);
             } else {
                 cursor += 1;
-            }
-        }
-
-        (child_idx >= child).then_some(static_child)
-    }
-
-    fn static_child_op_and_prototype_index(
-        &self,
-        element_op: usize,
-        child_idx: usize,
-    ) -> Option<(usize, usize)> {
-        let (_, mut cursor, end) = self.element_attr_child_ops(element_op)?;
-        if cursor < end && !self.is_static_node_op(cursor) && !self.is_dynamic_node_marker(cursor) {
-            return None;
-        }
-
-        let mut child = 0;
-        let mut static_child = 0;
-        while cursor < end {
-            if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
-                if child == child_idx {
-                    return self
-                        .is_static_node_op(cursor)
-                        .then_some((cursor, static_child));
-                }
-                if self.is_static_node_op(cursor) {
-                    static_child += 1;
-                }
-                child += 1;
-                cursor = self.next_sibling_op(cursor);
-            } else {
-                cursor = self.next_sibling_op(cursor);
             }
         }
 

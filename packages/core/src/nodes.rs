@@ -91,7 +91,7 @@ impl VNode {
         static EMPTY_TEMPLATE: Template = Template::new(
             &[TemplateOp::text(), TemplateOp::dynamic()],
             StaticStringInterner::empty(),
-            &[TemplatePath::root(0)],
+            &[TemplatePath::root(0).with_appends(true)],
         );
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
@@ -122,7 +122,7 @@ impl VNode {
         static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
             &[TemplateOp::text(), TemplateOp::dynamic()],
             StaticStringInterner::empty(),
-            &[TemplatePath::root(0)],
+            &[TemplatePath::root(0).with_appends(true)],
         );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
@@ -143,6 +143,7 @@ impl VNode {
     }
 
     /// Create a new VNode
+    #[inline]
     pub fn new(
         key: Option<String>,
         template: Template,
@@ -275,6 +276,29 @@ impl VNode {
         self.deep_clone_inner(true)
     }
 
+    /// Clone this vnode for retained mount lookups.
+    ///
+    /// Only dynamic fragments contain descendant `VNode` mount cells that can be
+    /// invalidated by a later `claim_mount`. Text, attributes, and component
+    /// dynamic slots keep their mount state in the mount registry, so a shallow
+    /// clone is enough for those templates.
+    pub(crate) fn clone_for_mount_snapshot(&self) -> Self {
+        if self.needs_deep_mount_snapshot() {
+            self.deep_clone_preserving_mounts()
+        } else {
+            self.clone()
+        }
+    }
+
+    fn needs_deep_mount_snapshot(&self) -> bool {
+        self.vnode.dynamic_values.iter().any(|value| {
+            matches!(
+                value,
+                DynamicValue::Node(DynamicNode::Fragment(nodes)) if !nodes.is_empty()
+            )
+        })
+    }
+
     fn deep_clone_inner(&self, preserve_mounts: bool) -> Self {
         Self {
             vnode: Rc::new(VNodeInner {
@@ -289,7 +313,13 @@ impl VNode {
                             DynamicValue::Node(DynamicNode::Fragment(
                                 nodes
                                     .iter()
-                                    .map(|node| node.deep_clone_inner(preserve_mounts))
+                                    .map(|node| {
+                                        if preserve_mounts {
+                                            node.clone_for_mount_snapshot()
+                                        } else {
+                                            node.deep_clone_inner(false)
+                                        }
+                                    })
                                     .collect(),
                             ))
                         }
@@ -487,9 +517,10 @@ pub struct VText {
 
 impl VText {
     /// Create a new VText
-    pub fn new(value: impl ToString) -> Self {
+    #[inline]
+    pub fn new(value: impl Into<String>) -> Self {
         Self {
-            value: value.to_string(),
+            value: value.into(),
         }
     }
 }
@@ -639,21 +670,25 @@ pub trait IntoDynNode<A = ()> {
 }
 
 impl IntoDynNode for () {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::default()
     }
 }
 impl IntoDynNode for VNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self])
     }
 }
 impl IntoDynNode for DynamicNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         self
     }
 }
 impl<T: IntoDynNode> IntoDynNode for Option<T> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self {
             Some(val) => val.into_dyn_node(),
@@ -662,6 +697,7 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
     }
 }
 impl IntoDynNode for &Element {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
             Ok(val) => val.into_dyn_node(),
@@ -670,6 +706,7 @@ impl IntoDynNode for &Element {
     }
 }
 impl IntoDynNode for Element {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self {
             Ok(val) => val.into_dyn_node(),
@@ -678,6 +715,7 @@ impl IntoDynNode for Element {
     }
 }
 impl IntoDynNode for &Option<VNode> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
             Some(val) => val.clone().into_dyn_node(),
@@ -686,6 +724,7 @@ impl IntoDynNode for &Option<VNode> {
     }
 }
 impl IntoDynNode for &str {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
@@ -693,11 +732,13 @@ impl IntoDynNode for &str {
     }
 }
 impl IntoDynNode for String {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText { value: self })
     }
 }
 impl IntoDynNode for Arguments<'_> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
@@ -705,6 +746,7 @@ impl IntoDynNode for Arguments<'_> {
     }
 }
 impl IntoDynNode for &VNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
     }
@@ -714,16 +756,19 @@ pub trait IntoVNode {
     fn into_vnode(self) -> VNode;
 }
 impl IntoVNode for VNode {
+    #[inline]
     fn into_vnode(self) -> VNode {
         self
     }
 }
 impl IntoVNode for &VNode {
+    #[inline]
     fn into_vnode(self) -> VNode {
         self.clone()
     }
 }
 impl IntoVNode for Element {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
@@ -732,6 +777,7 @@ impl IntoVNode for Element {
     }
 }
 impl IntoVNode for &Element {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
@@ -740,6 +786,7 @@ impl IntoVNode for &Element {
     }
 }
 impl IntoVNode for Option<VNode> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
@@ -748,6 +795,7 @@ impl IntoVNode for Option<VNode> {
     }
 }
 impl IntoVNode for &Option<VNode> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
@@ -756,6 +804,7 @@ impl IntoVNode for &Option<VNode> {
     }
 }
 impl IntoVNode for Option<Element> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
@@ -764,6 +813,7 @@ impl IntoVNode for Option<Element> {
     }
 }
 impl IntoVNode for &Option<Element> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
@@ -779,6 +829,7 @@ where
     T: Iterator<Item = I>,
     I: IntoVNode,
 {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(self.into_iter().map(|node| node.into_vnode()).collect())
     }

@@ -37,7 +37,7 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn is_inside_static(self, path: TemplatePath) -> bool {
-        path_starts_with(self.parent_path(), path)
+        self.path.slot_is_inside_static(path)
     }
 
     pub(super) fn root_slot(self) -> Self {
@@ -90,9 +90,7 @@ impl<'a> DynamicAttrGroup<'a> {
     }
 
     pub(super) fn ids(&self) -> impl Iterator<Item = usize> + '_ {
-        (self.start..self.end).filter(|idx| {
-            self.template.dynamic_is_attr(*idx) && self.template.dynamic_path(*idx) == self.path
-        })
+        self.start..self.end
     }
 
     pub(super) fn path(&self) -> TemplatePath {
@@ -104,7 +102,7 @@ impl<'a> DynamicAttrGroup<'a> {
     }
 
     pub(super) fn is_descendant_of_static(&self, path: TemplatePath) -> bool {
-        path_starts_with(self.path, path)
+        self.path.is_descendant_of_static(path)
     }
 
     pub(super) fn first_id(&self) -> Option<usize> {
@@ -233,16 +231,4 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
     if let Some((path, start, end)) = current {
         visit(DynamicAttrGroup::new(&vnode.template, path, start, end));
     }
-}
-
-fn path_starts_with(path: TemplatePath, ancestor: TemplatePath) -> bool {
-    if ancestor.is_empty() {
-        return true;
-    }
-
-    if path.len() < ancestor.len() {
-        return false;
-    }
-
-    (0..ancestor.len()).all(|index| path.segment(index) == ancestor.segment(index))
 }

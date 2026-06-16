@@ -169,7 +169,7 @@ fn default_handler(errors: ErrorContext) -> Element {
             TemplateOp::dynamic(),
         ],
         STRINGS.as_static(),
-        &[TemplatePath::root(0).next_child()],
+        &[TemplatePath::root(0).next_child().with_appends(true)],
     );
     std::result::Result::Ok(VNode::new(
         None,
@@ -190,7 +190,7 @@ fn default_handler(errors: ErrorContext) -> Element {
                             TemplateOp::dynamic(),
                         ],
                         INNER_STRINGS.as_static(),
-                        &[TemplatePath::root(0).next_child()],
+                        &[TemplatePath::root(0).next_child().with_appends(true)],
                     );
                     VNode::new(
                         None,
@@ -330,7 +330,7 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
             static TEMPLATE: Template = Template::new(
                 &[TemplateOp::text(), TemplateOp::dynamic()],
                 StaticStringInterner::empty(),
-                &[TemplatePath::root(0)],
+                &[TemplatePath::root(0).with_appends(true)],
             );
             VNode::new(
                 None,

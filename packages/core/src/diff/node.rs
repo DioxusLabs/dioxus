@@ -737,7 +737,8 @@ impl VNode {
             }
 
             let context = state.context();
-            let site = insertion_site_for_loaded_static_slot(mount, root_idx, slot, state.dom, context);
+            let site =
+                insertion_site_for_loaded_static_slot(mount, root_idx, slot, state.dom, context);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             at_site(site, reborrow_writer(&mut state.to), runtime, |to| {

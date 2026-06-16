@@ -81,7 +81,7 @@ impl ToTokens for TemplateBody {
                 #[allow(clippy::let_and_return)]
                 let __vnodes = {
                     use dioxus_core::view::View as _;
-                    dioxus_core::view::keyed(#view_expr, __key).into_vnode()
+                    #view_expr.keyed(__key).into_vnode()
                 };
 
                 #[cfg(debug_assertions)]

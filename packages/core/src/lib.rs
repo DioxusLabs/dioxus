@@ -182,8 +182,7 @@ pub use crate::view::{
     Attr, AttributeDescriptor, AttributeTarget, Built, ConstStatic, DynAttrs, DynText,
     DynamicValues, El, IntoAttributeBuilderValue, IntoChild, IntoKey, Keyed, RAW_TAPE_CAP, Raw,
     RawTape, StaticAttr, StaticAttributeBuilderMarker, StaticAttributeValue, StaticText,
-    StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, keyed, static_value, text,
-    text_dyn,
+    StaticValue, TagName, Text, View, ViewChild, attr, attr_dyn, el, static_value, text, text_dyn,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
