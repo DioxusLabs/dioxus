@@ -142,22 +142,26 @@ fn anchors() {
 
 #[test]
 fn empty_fragment_root_via_direct_vnode_api_is_diffable() {
-    // `VNode::new` normalizes `DynamicNode::Fragment(Vec::new())` to
+    // `VNode::new` accepts `DynamicValue::Node(DynamicNode::Fragment(Vec::new()))` without
     // `DynamicNode::Placeholder(..)` so the diff path never sees an empty fragment.
     // Without that normalization, callers using the direct `VNode::new(..)` API would
     // bypass the rsx macro's `IntoDynNode` collapse and trip
     // `index out of bounds: the len is 0 but the index is 0` on the second rerender.
-    use dioxus_core::{DynamicNode, ScopeId, Template, TemplateCursor, VNode, VirtualDom};
+    use dioxus_core::{
+        DynamicNode, DynamicValue, ScopeId, Template, TemplateOp, TemplatePath, VNode, VirtualDom,
+    };
     use dioxus_renderer_oracle::RendererOracle;
 
     fn app() -> Element {
-        static NODE_CURSORS: &[TemplateCursor] = &[TemplateCursor::new(&[0u8])];
-        static TEMPLATE: Template = Template::new(&[], NODE_CURSORS, &[]);
+        static TEMPLATE: Template = Template::new(
+            &[TemplateOp::text(), TemplateOp::dynamic()],
+            &[],
+            &[TemplatePath::root(0)],
+        );
         Ok(VNode::new(
             None,
             TEMPLATE,
-            Box::new([DynamicNode::Fragment(Vec::new())]),
-            Vec::<Box<[dioxus_core::Attribute]>>::new().into_boxed_slice(),
+            Box::new([DynamicValue::Node(DynamicNode::Fragment(Vec::new()))]),
         ))
     }
 

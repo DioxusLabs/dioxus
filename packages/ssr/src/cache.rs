@@ -30,7 +30,7 @@
 //!```
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
-use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
+use dioxus_core::{Template, VNode};
 use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]
@@ -137,13 +137,7 @@ impl StringCache {
     pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
-        from_template_children(
-            template,
-            &[],
-            template.template.roots(),
-            EscapeText::ParentEscape,
-            &mut chain,
-        )?;
+        from_template_roots(&template.template, EscapeText::ParentEscape, &mut chain)?;
 
         Ok(Self {
             segments: chain.segments,
@@ -151,140 +145,132 @@ impl StringCache {
     }
 }
 
-fn from_template_children(
-    vnode: &VNode,
-    parent_cursor: &[u8],
-    children: &[TemplateNode],
+fn from_template_roots(
+    template: &Template,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
-    for child_idx in 0..=children.len() {
-        for (dynamic_idx, _) in vnode
-            .template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, cursor)| {
-                let (slot_parent, insertion_index) = cursor.split_slot();
-                slot_parent == parent_cursor && insertion_index == child_idx
-            })
-        {
-            *chain += Segment::Node {
-                index: dynamic_idx,
-                escape_text,
-            };
-        }
+    from_template_children(template, 0, template.ops().len(), escape_text, chain)
+}
 
-        if let Some(child) = children.get(child_idx) {
-            let mut child_cursor = parent_cursor.to_vec();
-            child_cursor.push(child_idx as u8);
-            from_template_recursive(vnode, child, &child_cursor, escape_text, chain)?;
+fn from_template_children(
+    template: &Template,
+    mut cursor: usize,
+    end: usize,
+    escape_text: EscapeText,
+    chain: &mut StringChain,
+) -> Result<(), std::fmt::Error> {
+    while cursor < end {
+        if let Some(index) = dynamic_node_at_op(template, cursor) {
+            *chain += Segment::Node { index, escape_text };
+        } else if template.is_static_node_op(cursor) {
+            from_template_recursive(template, cursor, escape_text, chain)?;
         }
+        cursor = template.next_sibling_op(cursor);
     }
 
     Ok(())
 }
 
 fn from_template_recursive(
-    vnode: &VNode,
-    root: &TemplateNode,
-    cursor: &[u8],
+    template: &Template,
+    op: usize,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
-    match root {
-        TemplateNode::Element {
-            tag,
-            attrs,
-            children,
-            ..
-        } => {
-            write!(chain, "<{tag}")?;
-            // we need to collect the styles and write them at the end
-            let mut styles = Vec::new();
-            // we need to collect the inner html and write it at the end
-            let mut inner_html = None;
-            // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
-            let mut has_dyn_attrs = false;
-            for attr in *attrs {
-                match attr {
-                    TemplateAttribute::Static {
-                        name,
-                        value,
-                        namespace,
-                    } => {
-                        if *name == "dangerous_inner_html" {
-                            inner_html = Some(value);
-                        } else if let Some("style") = namespace {
-                            styles.push((name, value));
-                        } else if BOOL_ATTRS.contains(name) {
-                            if str_truthy(value) {
-                                write!(
-                                    chain,
-                                    " {name}=\"{}\"",
-                                    askama_escape::escape(value, askama_escape::Html)
-                                )?;
-                            }
-                        } else {
-                            write!(
-                                chain,
-                                " {name}=\"{}\"",
-                                askama_escape::escape(value, askama_escape::Html)
-                            )?;
-                        }
+    if let Some((tag, _namespace)) = template.element_meta_at_op(op) {
+        write!(chain, "<{tag}")?;
+        // we need to collect the styles and write them at the end
+        let mut styles = Vec::new();
+        // we need to collect the inner html and write it at the end
+        let mut inner_html = None;
+        // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
+        let mut has_dyn_attrs = false;
+        let mut attr = template
+            .element_children_start(op)
+            .expect("element op must have a children start");
+        let first_child = template
+            .first_child_node_op(op)
+            .expect("element op must have a first child op");
+        while attr < first_child {
+            if let Some((name, value, namespace)) = template.static_attr_at_op(attr) {
+                if name == "dangerous_inner_html" {
+                    inner_html = Some(value);
+                } else if let Some("style") = namespace {
+                    styles.push((name, value));
+                } else if BOOL_ATTRS.contains(&name) {
+                    if str_truthy(value) {
+                        write!(
+                            chain,
+                            " {name}=\"{}\"",
+                            askama_escape::escape(value, askama_escape::Html)
+                        )?;
                     }
-                    TemplateAttribute::Dynamic { id: index } => {
-                        let index = *index;
-                        *chain += Segment::Attr(index);
-                        has_dyn_attrs = true
-                    }
-                }
-            }
-
-            // write the styles
-            if !styles.is_empty() {
-                write!(chain, " style=\"")?;
-                for (name, value) in styles {
+                } else {
                     write!(
                         chain,
-                        "{name}:{};",
+                        " {name}=\"{}\"",
                         askama_escape::escape(value, askama_escape::Html)
                     )?;
                 }
-                *chain += Segment::StyleMarker {
-                    inside_style_tag: true,
-                };
-                write!(chain, "\"")?;
-            } else if has_dyn_attrs {
-                *chain += Segment::StyleMarker {
-                    inside_style_tag: false,
-                };
-            }
-
-            if children.is_empty() && tag_is_self_closing(tag) {
-                write!(chain, "/>")?;
+                attr += template
+                    .attr_op_len(attr)
+                    .expect("static attr op must have a length");
+            } else if let Some(index) = dynamic_attribute_at_op(template, attr) {
+                *chain += Segment::Attr(index);
+                has_dyn_attrs = true;
+                attr += 1;
             } else {
-                write!(chain, ">")?;
-                // Write the static inner html, or insert a marker if dynamic inner html is possible
-                if let Some(inner_html) = inner_html {
-                    chain.write_str(inner_html)?;
-                } else if has_dyn_attrs {
-                    *chain += Segment::InnerHtmlMarker;
-                }
-
-                // Escape the text in children if this is not a style or script tag. If it is a style
-                // or script tag, we want to allow the user to write code inside the tag
-                let escape_text = match *tag {
-                    "style" | "script" => EscapeText::NoEscape,
-                    _ => EscapeText::Escape,
-                };
-
-                from_template_children(vnode, cursor, children, escape_text, chain)?;
-                write!(chain, "</{tag}>")?;
+                attr += 1;
             }
         }
-        TemplateNode::Text { text } => match escape_text {
+
+        // write the styles
+        if !styles.is_empty() {
+            write!(chain, " style=\"")?;
+            for (name, value) in styles {
+                write!(
+                    chain,
+                    "{name}:{};",
+                    askama_escape::escape(value, askama_escape::Html)
+                )?;
+            }
+            *chain += Segment::StyleMarker {
+                inside_style_tag: true,
+            };
+            write!(chain, "\"")?;
+        } else if has_dyn_attrs {
+            *chain += Segment::StyleMarker {
+                inside_style_tag: false,
+            };
+        }
+
+        let end = template
+            .element_end(op)
+            .expect("element op must have an end op");
+        if template_children_is_empty(template, first_child, end) && tag_is_self_closing(tag) {
+            write!(chain, "/>")?;
+        } else {
+            write!(chain, ">")?;
+            // Write the static inner html, or insert a marker if dynamic inner html is possible
+            if let Some(inner_html) = inner_html {
+                chain.write_str(inner_html)?;
+            } else if has_dyn_attrs {
+                *chain += Segment::InnerHtmlMarker;
+            }
+
+            // Escape the text in children if this is not a style or script tag. If it is a style
+            // or script tag, we want to allow the user to write code inside the tag
+            let escape_text = match tag {
+                "style" | "script" => EscapeText::NoEscape,
+                _ => EscapeText::Escape,
+            };
+
+            from_template_children(template, first_child, end, escape_text, chain)?;
+            write!(chain, "</{tag}>")?;
+        }
+    } else if let Some(text) = template.static_text_at_op(op) {
+        match escape_text {
             // If we know this is statically escaped we can just write it out
             EscapeText::Escape => {
                 write!(
@@ -309,10 +295,34 @@ fn from_template_recursive(
                     renderer_if_escaped: true,
                 };
             }
-        },
+        }
     }
 
     Ok(())
+}
+
+fn dynamic_node_at_op(template: &Template, op: usize) -> Option<usize> {
+    if !template.is_dynamic_node_marker(op) {
+        return None;
+    }
+    template.dynamic_index_at_op(op + 1)
+}
+
+fn dynamic_attribute_at_op(template: &Template, op: usize) -> Option<usize> {
+    if !template.dynamic_op_is_attr(op) {
+        return None;
+    }
+    template.dynamic_index_at_op(op)
+}
+
+fn template_children_is_empty(template: &Template, mut cursor: usize, end: usize) -> bool {
+    while cursor < end {
+        if template.is_static_node_op(cursor) || dynamic_node_at_op(template, cursor).is_some() {
+            return false;
+        }
+        cursor = template.next_sibling_op(cursor);
+    }
+    true
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {

@@ -1,67 +1,16 @@
-//! I'm so sorry this is so complicated. Here's my best to simplify and explain it:
+//! Lower parsed RSX bodies into the typed view builder.
 //!
-//! The `Callbody` is the contents of the rsx! macro - this contains all the information about every
-//! node that rsx! directly knows about. For loops, if statements, etc.
-//!
-//! However, there are multiple *templates* inside a callbody - due to how core clones templates and
-//! just generally rationalize the concept of a template, nested bodies like for loops and if statements
-//! and component children are all templates, contained within the same Callbody.
-//!
-//! This gets confusing fast since there's lots of IDs bouncing around.
-//!
-//! The IDs at play:
-//! - The id of the template itself so we can find it and apply it to the dom.
-//!   This is challenging since all calls to file/line/col/id are relative to the macro invocation,
-//!   so they will have to share the same base ID and we need to give each template a new ID.
-//!   The id of the template will be something like file!():line!():col!():ID where ID increases for
-//!   each nested template.
-//!
-//! - The IDs of dynamic nodes relative to the template they live in. This is somewhat easy to track
-//!   but needs to happen on a per-template basis.
-//!
-//! - The IDs of formatted strings in debug mode only. Any formatted segments like "{x:?}" get pulled out
-//!   into a pool so we can move them around during hot reloading on a per-template basis.
-//!
-//! - The IDs of component property literals in debug mode only. Any component property literals like
-//!   1234 get pulled into the pool so we can hot reload them with the context of the literal pool.
-//!
-//! We solve this by parsing the structure completely and then doing a second pass that fills in IDs
-//! by walking the structure.
-//!
-//! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
-//! least they're stable enough for the purposes of hotreloading
-//!
-//! ```text
-//! rsx! {
-//!     div {
-//!         class: "hello",
-//!         id: "node-{node_id}",         <--- {node_id} has the formatted segment id 0 in the literal pool
-//!         ..props,                      <--- spreads are not reloadable
-//!
-//!         "Hello, world!"               <--- not tracked but reloadable in the template since it's just a string
-//!
-//!         for item in 0..10 {           <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
-//!             div { "cool-{item}" }     <--- {item} has the formatted segment id 1 in the literal pool
-//!         }
-//!
-//!         Link {
-//!             to: "/home",              <--- hotreloadable since its a component prop literal (with component literal id 0)
-//!             class: "link {is_ready}", <--- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
-//!             "Home"                    <--- hotreloadable since its a component child (via template)
-//!         }
-//!     }
-//! }
-//! ```
+//! `TemplateBody` owns the parsed nodes and validates root-key rules. The actual
+//! template lowering happens in `FlatTemplatePieces`, which walks the body once
+//! to produce the const builder expression, dynamic value expressions, and
+//! hot-reload metadata for the same slots.
 
 use self::location::DynIdx;
-use crate::innerlude::Attribute;
+use crate::flat_template::FlatTemplatePieces;
 use crate::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::parse_quote;
-
-type NodeCursor = Vec<u8>;
-type AttributeCursor = Vec<u8>;
 
 /// A set of nodes in a template position
 ///
@@ -77,9 +26,6 @@ type AttributeCursor = Vec<u8>;
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: DynIdx,
-    pub node_cursors: Vec<NodeCursor>,
-    pub attr_cursors: Vec<(AttributeCursor, usize)>,
-    pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
 }
 
@@ -111,35 +57,15 @@ impl ToTokens for TemplateBody {
 
         let key_warnings = self.check_for_duplicate_keys();
 
-        let roots = node.quote_roots();
-
-        let node_cursors = node
-            .node_cursors
-            .iter()
-            .map(|it| quote!(dioxus_core::TemplateCursor::new(&[#(#it),*])));
-        let attr_cursors = node
-            .attr_cursors
-            .iter()
-            .map(|(it, _)| quote!(dioxus_core::TemplateCursor::new(&[#(#it),*])));
-
-        // For printing dynamic nodes, we rely on the ToTokens impl
-        // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes: Vec<_> = node.dynamic_nodes().collect();
-        let dynamic_nodes_len = dynamic_nodes.len();
-
-        // We could add a ToTokens for Attribute but since we use that for both components and elements
-        // They actually need to be different, so we just localize that here
-        let dyn_attr_printer: Vec<_> = node
-            .dynamic_attributes()
-            .map(|attr| attr.rendered_as_dynamic_attr())
-            .collect();
-        let dynamic_attr_len = dyn_attr_printer.len();
-
-        let dynamic_text = node.dynamic_text_segments.iter();
+        let template = FlatTemplatePieces::from_body(&node);
+        let template_definitions = template.definitions();
+        let template_ty = template.view_ty();
+        let template_expr = template.view_expr();
+        let dynamic_text = template.dynamic_text_tokens().iter();
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
-        let hot_reload_mapping = node.hot_reload_mapping();
+        let hot_reload_mapping = template.hot_reload_template_tokens(quote! { __template });
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -147,15 +73,14 @@ impl ToTokens for TemplateBody {
 
                 #key_warnings
 
-                // Components pull in the dynamic literal pool and template in debug mode, so they need to be defined before dynamic nodes
+                #(#template_definitions)*
+
                 #[cfg(debug_assertions)]
-                fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
-                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
-                    if __ORIGINAL_TEMPLATE.get().is_none() {
-                        _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
-                    }
-                    __ORIGINAL_TEMPLATE.get().unwrap()
-                }
+                let __template = *<#template_ty as dioxus_core::view::Built>::TEMPLATE;
+
+                #[cfg(debug_assertions)]
+                let __original_template = #hot_reload_mapping;
+
                 #[cfg(debug_assertions)]
                 let __template_read = {
                     use dioxus_signals::ReadableExt;
@@ -183,53 +108,34 @@ impl ToTokens for TemplateBody {
                 #[cfg(debug_assertions)]
                 let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
                     Some(Some(__template_read)) => &__template_read,
-                    _ => __original_template(),
+                    _ => &__original_template,
                 };
+
                 #[cfg(debug_assertions)]
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
-                #[cfg(not(debug_assertions))]
                 let __key = #key_tokens;
-                // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
-                // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
-                let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
-                let __dynamic_attributes: [Box<[dioxus_core::Attribute]>; #dynamic_attr_len] = [ #( #dyn_attr_printer ),* ];
-                #[doc(hidden)]
-                static __TEMPLATE_ROOTS: &[dioxus_core::TemplateNode] = &[ #( #roots ),* ];
-                #[doc(hidden)]
-                static __TEMPLATE_NODE_CURSORS: &[dioxus_core::TemplateCursor] = &[ #( #node_cursors ),* ];
-                #[doc(hidden)]
-                static __TEMPLATE_ATTR_CURSORS: &[dioxus_core::TemplateCursor] = &[ #( #attr_cursors ),* ];
+
+                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                #[allow(clippy::let_and_return)]
+                let __vnodes = {
+                    use dioxus_core::view::View as _;
+                    dioxus_core::view::keyed(#template_expr, __key).into_vnode()
+                };
 
                 #[cfg(debug_assertions)]
                 {
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                        Vec::from(__dynamic_nodes),
-                        Vec::from(__dynamic_attributes),
+                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
+                        &__vnodes,
                         __dynamic_literal_pool
                     );
                     __dynamic_value_pool.render_with(__template_read)
                 }
                 #[cfg(not(debug_assertions))]
                 {
-                    #[doc(hidden)] // vscode please stop showing these in symbol search
-                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template::new(
-                        __TEMPLATE_ROOTS,
-                        __TEMPLATE_NODE_CURSORS,
-                        __TEMPLATE_ATTR_CURSORS,
-                    );
-
-                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                    #[allow(clippy::let_and_return)]
-                    let __vnodes = dioxus_core::VNode::new(
-                        __key,
-                        ___TEMPLATE,
-                        Box::new(__dynamic_nodes),
-                        Box::new(__dynamic_attributes),
-                    );
                     __vnodes
                 }
             })
@@ -246,16 +152,11 @@ impl TemplateBody {
         let mut body = Self {
             roots: vec![],
             template_idx: DynIdx::default(),
-            node_cursors: Vec::new(),
-            attr_cursors: Vec::new(),
-            dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
         };
 
-        // Assign paths to all nodes in the template
-        body.assign_paths_inner(&nodes);
-
-        // And then save the roots
+        // Save the roots without mutating the parsed tree; template lowering derives dynamic
+        // positions from the raw op tape.
         body.roots = nodes;
 
         // Finally, validate the key
@@ -327,122 +228,6 @@ impl TemplateBody {
         }
 
         warnings
-    }
-
-    pub fn get_static_node(&self, cursor: &[u8]) -> &BodyNode {
-        let mut node = Self::nth_static_node(&self.roots, cursor[0] as usize).unwrap();
-        for idx in cursor.iter().skip(1) {
-            node = Self::nth_static_node(node.element_children(), *idx as usize).unwrap();
-        }
-        node
-    }
-
-    fn nth_static_node(nodes: &[BodyNode], idx: usize) -> Option<&BodyNode> {
-        nodes
-            .iter()
-            .filter(|node| Self::is_static_template_node(node))
-            .nth(idx)
-    }
-
-    fn is_static_template_node(node: &BodyNode) -> bool {
-        match node {
-            BodyNode::Element(_) => true,
-            BodyNode::Text(text) => text.is_static(),
-            _ => false,
-        }
-    }
-
-    pub fn get_dyn_attr(&self, cursor: &AttributeCursor, idx: usize) -> &Attribute {
-        match self.get_static_node(cursor) {
-            BodyNode::Element(el) => &el.merged_attributes[idx],
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = &Attribute> {
-        self.attr_cursors
-            .iter()
-            .map(|(cursor, idx)| self.get_dyn_attr(cursor, *idx))
-    }
-
-    pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = &BodyNode> {
-        let mut dynamic_nodes = Vec::new();
-        Self::collect_dynamic_nodes(&self.roots, &mut dynamic_nodes);
-        dynamic_nodes.into_iter()
-    }
-
-    fn collect_dynamic_nodes<'a>(nodes: &'a [BodyNode], dynamic_nodes: &mut Vec<&'a BodyNode>) {
-        for node in nodes {
-            match node {
-                BodyNode::Element(el) => Self::collect_dynamic_nodes(&el.children, dynamic_nodes),
-                BodyNode::Text(text) if text.is_static() => {}
-                _ => dynamic_nodes.push(node),
-            }
-        }
-    }
-
-    fn quote_roots(&self) -> impl Iterator<Item = TokenStream2> + '_ {
-        self.roots.iter().filter_map(|node| match node {
-            BodyNode::Element(el) => Some(quote! { #el }),
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.to_static().unwrap();
-                Some(quote! { dioxus_core::TemplateNode::Text { text: #text } })
-            }
-            _ => None,
-        })
-    }
-
-    /// Iterate through the literal component properties of this rsx call in depth-first order
-    pub fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
-        self.dynamic_nodes()
-            .filter_map(|node| {
-                if let BodyNode::Component(component) = node {
-                    Some(component)
-                } else {
-                    None
-                }
-            })
-            .flat_map(|component| {
-                component.component_props().filter_map(|field| {
-                    if let AttributeValue::AttrLiteral(literal) = &field.value {
-                        Some(literal)
-                    } else {
-                        None
-                    }
-                })
-            })
-    }
-
-    fn hot_reload_mapping(&self) -> TokenStream2 {
-        let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
-            self.implicit_key()
-        {
-            quote! { Some(#key) }
-        } else {
-            quote! { None }
-        };
-        let dynamic_nodes = self.dynamic_nodes().map(|node| {
-            let id = node.get_dyn_idx();
-            quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
-        });
-        let dyn_attr_printer = self.dynamic_attributes().map(|attr| {
-            let id = attr.get_dyn_idx();
-            quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) }
-        });
-        let component_values = self
-            .literal_component_properties()
-            .map(|literal| literal.quote_as_hot_reload_literal());
-        quote! {
-            dioxus_core::internal::HotReloadedTemplate::new(
-                #key,
-                vec![ #( #dynamic_nodes ),* ],
-                vec![ #( #dyn_attr_printer ),* ],
-                vec![ #( #component_values ),* ],
-                __TEMPLATE_ROOTS,
-                __TEMPLATE_NODE_CURSORS,
-                __TEMPLATE_ATTR_CURSORS,
-            )
-        }
     }
 
     /// Get the span of the first root of this template

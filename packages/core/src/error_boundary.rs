@@ -1,6 +1,6 @@
 use crate::{
-    Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template, TemplateAttribute,
-    TemplateCursor, TemplateNode, VNode,
+    DynamicValue, Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template,
+    TemplateOp, TemplatePath, VNode,
     innerlude::{CapturedError, provide_context},
     try_consume_context, use_hook,
 };
@@ -155,45 +155,45 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 
 fn default_handler(errors: ErrorContext) -> Element {
     static TEMPLATE: Template = Template::new(
-        &[TemplateNode::Element {
-            tag: "div",
-            namespace: None,
-            attrs: &[TemplateAttribute::Static {
-                name: "color",
-                namespace: Some("style"),
-                value: "red",
-            }],
-            children: &[],
-        }],
-        &[TemplateCursor::new(&[0u8, 0u8])],
-        &[],
+        &[
+            TemplateOp::enter(8, false),
+            TemplateOp::static_text(0),
+            TemplateOp::attr(true),
+            TemplateOp::static_text(1),
+            TemplateOp::static_text(2),
+            TemplateOp::static_text(3),
+            TemplateOp::text(),
+            TemplateOp::dynamic(),
+        ],
+        &["div", "color", "red", "style"],
+        &[TemplatePath::root(0).next_child()],
     );
     std::result::Result::Ok(VNode::new(
         None,
         TEMPLATE,
-        Box::new([errors
-            .error()
-            .iter()
-            .map(|e| {
-                static INNER_TEMPLATE: Template = Template::new(
-                    &[TemplateNode::Element {
-                        tag: "pre",
-                        namespace: None,
-                        attrs: &[],
-                        children: &[],
-                    }],
-                    &[TemplateCursor::new(&[0u8, 0u8])],
-                    &[],
-                );
-                VNode::new(
-                    None,
-                    INNER_TEMPLATE,
-                    Box::new([e.to_string().into_dyn_node()]),
-                    Default::default(),
-                )
-            })
-            .into_dyn_node()]),
-        Default::default(),
+        Box::new([DynamicValue::Node(
+            errors
+                .error()
+                .iter()
+                .map(|e| {
+                    static INNER_TEMPLATE: Template = Template::new(
+                        &[
+                            TemplateOp::enter(4, false),
+                            TemplateOp::static_text(0),
+                            TemplateOp::text(),
+                            TemplateOp::dynamic(),
+                        ],
+                        &["pre"],
+                        &[TemplatePath::root(0).next_child()],
+                    );
+                    VNode::new(
+                        None,
+                        INNER_TEMPLATE,
+                        Box::new([DynamicValue::Node(e.to_string().into_dyn_node())]),
+                    )
+                })
+                .into_dyn_node(),
+        )]),
     ))
 }
 
@@ -321,12 +321,15 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template = Template::new(&[], &[TemplateCursor::new(&[0u8])], &[]);
+            static TEMPLATE: Template = Template::new(
+                &[TemplateOp::text(), TemplateOp::dynamic()],
+                &[],
+                &[TemplatePath::root(0)],
+            );
             VNode::new(
                 None,
                 TEMPLATE,
-                Box::new([(props.children).into_dyn_node()]),
-                Default::default(),
+                Box::new([DynamicValue::Node((props.children).into_dyn_node())]),
             )
         })
     }

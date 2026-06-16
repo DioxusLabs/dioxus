@@ -22,7 +22,7 @@ mod component;
 pub(crate) mod context;
 mod iterator;
 pub(crate) mod node;
-mod template_path;
+mod template;
 
 impl VirtualDom {
     pub(crate) fn create_children(

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    Runtime, TemplateCursor, TemplateNode, VNode, VirtualDom, WriteMutations,
+    Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{ElementRef, MountId},
     mutations::{LazyScope, append_children_to, insert_after_id, insert_before_id},
@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     context::DiffContext,
-    template_path::{push_static_cursor, slot_appends, split_slot_cursor},
+    template::{DynamicNodeSlot, SlotPlacement, dynamic_node_slot, dynamic_node_slots},
 };
 
 #[derive(Clone, Copy)]
@@ -22,13 +22,12 @@ pub(super) enum ElementEdge {
 /// A renderer-level position where `m` DOM nodes, already on the renderer stack,
 /// should be spliced in.
 #[derive(Debug, Clone)]
-pub(crate) enum Anchor {
+pub(super) enum Anchor {
     Before(ElementId),
     After(ElementId),
     Slot {
         parent: ElementId,
-        root: &'static TemplateNode,
-        cursor_tail: &'static [u8],
+        placement: SlotPlacement,
     },
     AppendTo(ElementId),
 }
@@ -44,11 +43,9 @@ impl Anchor {
             Anchor::Before(id) => insert_before_id(to, *id, runtime, create),
             Anchor::After(id) => insert_after_id(to, *id, runtime, create),
             Anchor::AppendTo(id) => append_children_to(to, *id, runtime, create),
-            Anchor::Slot {
-                parent,
-                root,
-                cursor_tail,
-            } => insert_at_slot(to, *parent, root, cursor_tail, runtime, create),
+            Anchor::Slot { parent, placement } => {
+                insert_at_slot(to, *parent, placement.clone(), runtime, create)
+            }
         }
     }
 }
@@ -78,23 +75,20 @@ pub(super) fn anchor_at(
     })
 }
 
-pub(crate) fn anchor_for_slot(
+pub(super) fn anchor_for_slot(
     parent_mount: MountId,
-    slot_id: usize,
-    cursor: TemplateCursor,
+    slot: DynamicNodeSlot<'_>,
     skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Anchor {
-    let cursor_slice = cursor.as_slice();
+    let root_idx = slot.root_index();
     // Every node cursor entry the diff hands us starts with the root index
     // (see `compile_template` and rsx codegen), so the empty cursor is
     // unreachable in practice.
-    if cursor.is_root_level_slot() {
-        let our_root_idx = cursor_slice[0] as usize;
-        if let Some(id) =
-            root_content_after_slot(parent_mount, slot_id, our_root_idx, skip, dom, context)
-        {
+    if slot.is_root_level() {
+        let our_root_idx = root_idx;
+        if let Some(id) = root_content_after_slot(parent_mount, slot, our_root_idx, skip, dom) {
             return Anchor::Before(id);
         }
         let parent_key = parent_key(parent_mount, dom, context);
@@ -106,41 +100,22 @@ pub(crate) fn anchor_for_slot(
     // context. If the enclosing root has been reclaimed for any reason we
     // fall through to the slot-level anchor instead of trying to refer to a
     // stale element id.
-    if let Some(enclosing) = dom.mounted_root_node(parent_mount, cursor_slice[0] as usize)
+    if let Some(enclosing) = dom.mounted_root_node(parent_mount, root_idx)
         && dom.element_exists_for_mount(parent_mount, enclosing)
     {
-        if let Some(id) =
-            adjacent_dynamic_sibling_after(parent_mount, slot_id, cursor, skip, dom, context)
-        {
+        if let Some(id) = adjacent_dynamic_sibling_after(parent_mount, slot, skip, dom, context) {
             return Anchor::Before(id);
         }
-        let parent_view = context
-            .and_then(|context| context.for_mount(parent_mount))
-            .map_or_else(
-                || {
-                    dom.current_mounted_view(parent_mount)
-                        .expect("slot parent must have a mounted view")
-                },
-                |context| context.new.clone(),
-            );
         return Anchor::Slot {
             parent: enclosing.element_id(),
-            root: &parent_view.template.roots()[cursor_slice[0] as usize],
-            cursor_tail: &cursor_slice[1..],
+            placement: slot.placement(),
         };
     }
 
-    anchor_for_slot(
-        parent_mount,
-        slot_id,
-        TemplateCursor::new(&cursor_slice[..1]),
-        skip,
-        dom,
-        context,
-    )
+    anchor_for_slot(parent_mount, slot.root_slot(), skip, dom, context)
 }
 
-pub(crate) fn create_at_anchor(
+pub(super) fn create_at_anchor(
     content: &[VNode],
     parent: Option<ElementRef>,
     anchor: Anchor,
@@ -152,7 +127,7 @@ pub(crate) fn create_at_anchor(
     })
 }
 
-pub(crate) fn at_anchor(
+pub(super) fn at_anchor(
     anchor: Anchor,
     to: Option<&mut dyn WriteMutations>,
     runtime: Rc<Runtime>,
@@ -168,23 +143,28 @@ pub(crate) fn at_anchor(
 fn insert_at_slot(
     to: &mut dyn WriteMutations,
     root_id: ElementId,
-    root: &'static TemplateNode,
-    cursor_tail: &'static [u8],
+    placement: SlotPlacement,
     runtime: Rc<Runtime>,
     create: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    let (parent_cursor, slot_index) = split_slot_cursor(cursor_tail);
-    let appends = slot_appends(root, parent_cursor, slot_index);
     let mut to = LazyScope::new_for_current_target(to, runtime, move |to| {
         to.push_id(root_id);
-        push_static_cursor(to, root, parent_cursor);
-        if !appends {
-            to.child(slot_index as usize);
+        if let Some(indexes) = &placement.static_child_indexes {
+            for index in indexes.iter().copied() {
+                to.child(index);
+            }
+        } else {
+            for depth in 1..placement.parent_path.len() {
+                to.child(placement.parent_path.segment(depth) as usize);
+            }
+        }
+        if !placement.appends {
+            to.child(placement.static_insertion_index);
         }
     });
     let count = create(&mut to);
     if count > 0 {
-        if appends {
+        if placement.appends {
             to.append_children(count);
         } else {
             to.insert_before(count);
@@ -213,7 +193,13 @@ fn anchor_for_with_key(
         return Anchor::Before(id);
     }
 
-    anchor_for_slot(parent_mount, slot_id, cursor, skip, dom, context)
+    let parent_views = parent_views(dom, parent_mount, context);
+    let Some(parent_view) = parent_views.first() else {
+        return Anchor::AppendTo(ElementId::ROOT);
+    };
+    let slot = dynamic_slot_for(parent_view, slot_id)
+        .unwrap_or_else(|| DynamicNodeSlot::new(&parent_view.template, slot_id, cursor));
+    anchor_for_slot(parent_mount, slot, skip, dom, context)
 }
 
 fn fragment_sibling_after(
@@ -226,7 +212,7 @@ fn fragment_sibling_after(
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
     let parent_views = parent_views(dom, parent_mount, context);
-    let same_view_anchor = parent_views.iter().find_map(|parent_vnode| {
+    let same_view_anchor = parent_views.find_map(|parent_vnode| {
         let children = fragment_children_for_slot(parent_vnode, slot_id)?;
         let position = locate_in_fragment(children, mount, key)?;
         first_live_sibling_after(children, position, mount, skip, dom)
@@ -235,49 +221,51 @@ fn fragment_sibling_after(
         return same_view_anchor;
     }
 
-    let position = parent_views
-        .iter()
-        .filter_map(|parent_vnode| fragment_children_for_slot(parent_vnode, slot_id))
-        .find_map(|children| locate_in_fragment(children, mount, None))?;
+    let position = parent_views.find_map(|parent_vnode| {
+        fragment_children_for_slot(parent_vnode, slot_id)
+            .and_then(|children| locate_in_fragment(children, mount, None))
+    })?;
 
-    parent_views
-        .iter()
-        .filter_map(|parent_vnode| fragment_children_for_slot(parent_vnode, slot_id))
-        .filter(|children| key.is_none() || fragment_is_unkeyed(children))
-        .find_map(|children| first_live_sibling_after(children, position, mount, skip, dom))
+    parent_views.find_map(|parent_vnode| {
+        let children = fragment_children_for_slot(parent_vnode, slot_id)?;
+        (key.is_none() || fragment_is_unkeyed(children))
+            .then(|| first_live_sibling_after(children, position, mount, skip, dom))
+            .flatten()
+    })
 }
 
 fn adjacent_dynamic_sibling_after(
     parent_mount: MountId,
-    slot_id: usize,
-    cursor: TemplateCursor,
+    slot: DynamicNodeSlot<'_>,
     skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
-    parent_views(dom, parent_mount, context)
-        .iter()
-        .find_map(|parent_vnode| {
-            for (sibling_id, sibling_cursor) in parent_vnode
-                .template
-                .node_cursors()
-                .iter()
-                .copied()
-                .enumerate()
-                .skip(slot_id + 1)
-            {
-                if sibling_cursor != cursor {
-                    break;
-                }
-                if let Some(anchor) =
-                    first_live_dynamic_slot(parent_vnode, parent_mount, sibling_id, skip, dom)
-                {
-                    return Some(anchor);
-                }
+    parent_views(dom, parent_mount, context).find_map(|parent_vnode| {
+        let active_slot = dynamic_slot_for(parent_vnode, slot.index()).unwrap_or_else(|| slot);
+        let mut anchor = None;
+        for sibling in dynamic_node_slots(parent_vnode) {
+            if sibling.index() <= active_slot.index() {
+                continue;
             }
+            if sibling.parent_path() == active_slot.parent_path()
+                && !sibling.shares_insertion_position(active_slot)
+            {
+                break;
+            }
+            if !sibling.shares_insertion_position(active_slot) {
+                continue;
+            }
+            if let Some(id) =
+                first_live_dynamic_slot(parent_vnode, parent_mount, sibling.index(), skip, dom)
+            {
+                anchor = Some(id);
+                break;
+            }
+        }
 
-            None
-        })
+        anchor
+    })
 }
 
 fn first_live_dynamic_slot(
@@ -288,7 +276,7 @@ fn first_live_dynamic_slot(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     let target_id = dom.current_render_target_id();
-    match &vnode.dynamic_nodes[idx] {
+    match vnode.dynamic_values[idx].node() {
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
             .filter(|id| dom.element_exists_in_target(target_id, *id))
@@ -312,15 +300,39 @@ fn first_live_dynamic_slot(
     }
 }
 
-fn parent_views(
+fn parent_views<'a>(
     dom: &VirtualDom,
     parent_mount: MountId,
-    context: Option<DiffContext<'_>>,
-) -> Vec<VNode> {
+    context: Option<DiffContext<'a>>,
+) -> ParentViews<'a> {
     if let Some(context) = context.and_then(|context| context.for_mount(parent_mount)) {
-        return vec![context.new.clone(), context.old.clone()];
+        return ParentViews::Context {
+            new: context.new,
+            old: context.old,
+        };
     }
-    dom.current_mounted_view(parent_mount).into_iter().collect()
+    ParentViews::Mounted(dom.current_mounted_view(parent_mount))
+}
+
+enum ParentViews<'a> {
+    Context { new: &'a VNode, old: &'a VNode },
+    Mounted(Option<VNode>),
+}
+
+impl<'a> ParentViews<'a> {
+    fn first(&self) -> Option<&VNode> {
+        match self {
+            Self::Context { new, .. } => Some(new),
+            Self::Mounted(view) => view.as_ref(),
+        }
+    }
+
+    fn find_map<T>(&self, mut f: impl FnMut(&VNode) -> Option<T>) -> Option<T> {
+        match self {
+            Self::Context { new, old } => f(new).or_else(|| f(old)),
+            Self::Mounted(view) => view.as_ref().and_then(f),
+        }
+    }
 }
 
 fn parent_key(
@@ -344,8 +356,8 @@ fn fragment_is_unkeyed(children: &[VNode]) -> bool {
 }
 
 fn fragment_children_for_slot(vnode: &VNode, slot_id: usize) -> Option<&[VNode]> {
-    match &vnode.dynamic_nodes[slot_id] {
-        DynamicNode::Fragment(children) => Some(children),
+    match vnode.dynamic_values[slot_id].node() {
+        DynamicNode::Fragment(children) => Some(children.as_slice()),
         _ => None,
     }
 }
@@ -373,11 +385,10 @@ fn first_live_sibling_after(
 
 fn root_content_after_slot(
     parent_mount: MountId,
-    slot_id: usize,
+    slot: DynamicNodeSlot<'_>,
     our_root_idx: usize,
     skip: &[MountId],
     dom: &VirtualDom,
-    context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
     // Probe the committed mount view of `parent_mount`. The diff context's
     // `old` snapshot matches the committed view by construction (both are
@@ -385,13 +396,12 @@ fn root_content_after_slot(
     // registry covers both cases. Callers (`anchor_for_slot` after the
     // path-length check) only reach here with a `parent_mount` that's
     // currently being diffed, so its mount is registered.
-    let _ = context;
     let probe = dom
         .current_mounted_view(parent_mount)
         .expect("parent_root_after requires a live parent mount");
 
     if let Some(id) =
-        root_dynamic_content_after_slot(&probe, parent_mount, slot_id, our_root_idx, skip, dom)
+        root_dynamic_content_after_slot(&probe, parent_mount, slot, our_root_idx, skip, dom)
     {
         return Some(id);
     }
@@ -400,8 +410,8 @@ fn root_content_after_slot(
         return Some(id);
     }
 
-    let upper = probe.template.roots().len();
-    for next_cursor in (our_root_idx + 1)..=upper {
+    let upper = probe.template.root_count();
+    for next_cursor in (our_root_idx + 1)..upper {
         if let Some(id) = first_root_dynamic_at_cursor(
             &probe,
             parent_mount,
@@ -422,23 +432,19 @@ fn root_content_after_slot(
 fn root_dynamic_content_after_slot(
     vnode: &VNode,
     mount: MountId,
-    slot_id: usize,
+    slot: DynamicNodeSlot<'_>,
     cursor_idx: usize,
     skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    for (dynamic_id, cursor) in vnode
-        .template
-        .node_cursors()
-        .iter()
-        .copied()
-        .enumerate()
-        .skip(slot_id + 1)
-    {
-        if cursor.as_slice() != [cursor_idx as u8].as_slice() {
+    for candidate in dynamic_node_slots(vnode) {
+        if candidate.index() <= slot.index() {
+            continue;
+        }
+        if !candidate.is_root_level() || candidate.root_index() != cursor_idx {
             break;
         }
-        if let Some(id) = first_live_dynamic_slot(vnode, mount, dynamic_id, skip, dom) {
+        if let Some(id) = first_live_dynamic_slot(vnode, mount, candidate.index(), skip, dom) {
             return Some(id);
         }
     }
@@ -453,25 +459,28 @@ pub(super) fn first_root_dynamic_at_cursor(
     dom: &VirtualDom,
     edge: ElementEdge,
 ) -> Option<ElementId> {
-    let cursor = [cursor_idx as u8];
-    let iter = vnode
-        .template
-        .node_cursors()
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(_, candidate)| candidate.as_slice() == cursor.as_slice());
-
+    let mut found = None;
     match edge {
-        ElementEdge::First => iter
-            .filter_map(|(idx, _)| first_live_dynamic_slot(vnode, mount, idx, skip, dom))
-            .next(),
-        ElementEdge::Last => iter
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .filter_map(|(idx, _)| last_live_dynamic_slot(vnode, mount, idx, skip, dom))
-            .next(),
+        ElementEdge::First => {
+            for slot in dynamic_node_slots(vnode) {
+                if !slot.is_root_level() || slot.root_index() != cursor_idx {
+                    continue;
+                }
+                found = first_live_dynamic_slot(vnode, mount, slot.index(), skip, dom);
+                if found.is_some() {
+                    break;
+                }
+            }
+            found
+        }
+        ElementEdge::Last => {
+            for slot in dynamic_node_slots(vnode) {
+                if slot.is_root_level() && slot.root_index() == cursor_idx {
+                    found = last_live_dynamic_slot(vnode, mount, slot.index(), skip, dom);
+                }
+            }
+            found
+        }
     }
 }
 
@@ -481,12 +490,16 @@ pub(super) fn static_root_element(
     root_idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    if root_idx >= vnode.template.roots().len() {
+    if root_idx >= vnode.template.root_count() {
         return None;
     }
     dom.mounted_root_node(mount, root_idx)
         .filter(|id| dom.element_exists_for_mount(mount, *id))
         .map(|id| id.element_id())
+}
+
+fn dynamic_slot_for(vnode: &VNode, slot_id: usize) -> Option<DynamicNodeSlot<'_>> {
+    dynamic_node_slot(vnode, slot_id)
 }
 
 fn last_live_dynamic_slot(
@@ -497,7 +510,7 @@ fn last_live_dynamic_slot(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     let target_id = dom.current_render_target_id();
-    match &vnode.dynamic_nodes[idx] {
+    match vnode.dynamic_values[idx].node() {
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
             .filter(|id| dom.element_exists_in_target(target_id, *id))

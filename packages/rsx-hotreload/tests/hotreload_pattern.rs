@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    Template, TemplateAttribute, TemplateCursor, TemplateNode, VNode,
+    Template, TemplateOp, TemplatePath, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
@@ -155,17 +155,26 @@ fn valid_reorder() {
 
     // It's an inversion, so we should get them in reverse
     assert_eq!(
-        template.roots,
-        &[TemplateNode::Element {
-            tag: "div",
-            namespace: None,
-            attrs: &[],
-            children: &[]
-        }]
+        template.template.ops(),
+        &[
+            TemplateOp::enter(6, false),
+            TemplateOp::static_text(0),
+            TemplateOp::text(),
+            TemplateOp::dynamic(),
+            TemplateOp::text(),
+            TemplateOp::dynamic(),
+        ]
     );
+    assert_eq!(template.template.strings(), &["div"]);
     assert_eq!(
-        template.node_cursors,
-        &[TemplateCursor::new(&[0, 0]), TemplateCursor::new(&[0, 0])]
+        template.template.dynamics(),
+        &[
+            TemplatePath::empty().next_child().next_child(),
+            TemplatePath::empty()
+                .next_child()
+                .next_child()
+                .next_sibling(),
+        ]
     );
     assert_eq!(
         template.dynamic_nodes,
@@ -256,22 +265,26 @@ fn valid_new_dynamic_attribute() {
 
     // We should have a new dynamic attribute
     assert_eq!(
-        template.roots,
+        template.template.ops(),
         &[
-            TemplateNode::Element {
-                tag: "div",
-                namespace: None,
-                attrs: &[TemplateAttribute::Dynamic { id: 0 }],
-                children: &[]
-            },
-            TemplateNode::Element {
-                tag: "div",
-                namespace: None,
-                attrs: &[TemplateAttribute::Dynamic { id: 1 }],
-                children: &[]
-            }
+            TemplateOp::enter(3, false),
+            TemplateOp::static_text(0),
+            TemplateOp::dynamic(),
+            TemplateOp::enter(3, false),
+            TemplateOp::static_text(0),
+            TemplateOp::dynamic(),
         ]
     );
+    assert_eq!(template.template.strings(), &["div"]);
+    assert_eq!(
+        template.template.dynamics(),
+        &[
+            TemplatePath::empty().next_child(),
+            TemplatePath::empty().next_child().next_sibling(),
+        ]
+    );
+    assert!(template.template.dynamic_is_attr(0));
+    assert!(template.template.dynamic_is_attr(1));
 
     // The new dynamic attribute should be created from the formatted segments pool
     assert_eq!(
@@ -331,8 +344,15 @@ fn valid_move_dynamic_segment_between_nodes() {
     let template = &templates[&1];
 
     // We should have a new dynamic node and no attributes
-    assert_eq!(template.roots, &[]);
-    assert_eq!(template.node_cursors, &[TemplateCursor::new(&[0])]);
+    assert_eq!(
+        template.template.ops(),
+        &[TemplateOp::text(), TemplateOp::dynamic()]
+    );
+    assert_eq!(
+        template.template.dynamics(),
+        &[TemplatePath::empty().next_child()]
+    );
+    assert!(template.template.dynamic_is_node(0));
 
     // The new dynamic node should be created from the formatted segments pool
     assert_eq!(
@@ -453,15 +473,19 @@ fn invalid_cases() {
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
     assert_eq!(
-        template.roots,
-        &[TemplateNode::Element {
-            tag: "div",
-            namespace: None,
-            attrs: &[],
-            children: &[]
-        }]
+        template.template.ops(),
+        &[
+            TemplateOp::enter(4, false),
+            TemplateOp::static_text(0),
+            TemplateOp::text(),
+            TemplateOp::dynamic(),
+        ]
     );
-    assert_eq!(template.node_cursors, &[TemplateCursor::new(&[0, 0])]);
+    assert_eq!(template.template.strings(), &["div"]);
+    assert_eq!(
+        template.template.dynamics(),
+        &[TemplatePath::empty().next_child().next_child()]
+    );
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 
     // Adding a new dynamic node should not be hot reloadable
@@ -847,21 +871,30 @@ fn ide_testcase() {
 }
 
 #[test]
-fn assigns_ids() {
+fn dynamic_nodes_are_collected_in_template_order() {
     let toks = quote! {
         div {
+            "{text}"
             div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
             for x in 0..5 {
                 h3 { "For loop contents" }
             }
+            {other}
         }
     };
 
     let parsed = syn::parse2::<CallBody>(toks).unwrap();
 
-    assert_eq!(parsed.body.node_cursors, &[vec![0, 1]]);
-    let node = parsed.body.dynamic_nodes().next().unwrap();
-    dbg!(node);
+    let template = callbody_to_template::<Mock>(&parsed, "").unwrap();
+    assert_eq!(template.dynamic_nodes.len(), 3);
+    assert!(matches!(
+        template.dynamic_nodes.as_slice(),
+        [
+            HotReloadDynamicNode::Formatted(_),
+            HotReloadDynamicNode::Dynamic(1),
+            HotReloadDynamicNode::Dynamic(2),
+        ]
+    ));
 }
 
 #[test]

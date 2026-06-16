@@ -1,4 +1,5 @@
-use dioxus_core::TemplateNode;
+use dioxus_core::internal::HotReloadDynamicSlot;
+use dioxus_core::{Template, TemplateRawAttrNamespace, TemplateRawOp};
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use internment::Intern;
@@ -27,98 +28,115 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
         .unwrap_or((intern(attribute_name_rust.as_str()), None))
 }
 
-fn sorted_template_attributes<Ctx: HotReloadingContext>(
-    attributes: &[Attribute],
-) -> Vec<dioxus_core::TemplateAttribute> {
-    let mut static_attrs = Vec::new();
-    let mut dynamic_attrs = Vec::new();
+pub(crate) struct HotReloadTemplateParts<'a> {
+    pub(crate) template: Template,
+    pub(crate) dynamic_slots: Vec<HotReloadDynamicSlot>,
+    pub(crate) dynamic_nodes: Vec<&'a BodyNode>,
+    pub(crate) dynamic_attributes: Vec<&'a Attribute>,
+}
 
-    for attr in attributes {
-        let template_attr = to_template_attribute::<Ctx>(attr);
-        match &template_attr {
-            dioxus_core::TemplateAttribute::Static { name, .. } => {
-                static_attrs.push((*name, template_attr));
-            }
-            dioxus_core::TemplateAttribute::Dynamic { .. } => {
-                dynamic_attrs.push(template_attr);
-            }
+pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
+    body: &'a TemplateBody,
+) -> Option<HotReloadTemplateParts<'a>> {
+    let mut builder = NativeTemplateBuilder::default();
+    builder.visit_roots::<Ctx>(&body.roots)?;
+
+    let raw_ops = intern(&*builder.raw_ops);
+
+    Some(HotReloadTemplateParts {
+        template: Template::from_raw_ops(raw_ops),
+        dynamic_slots: builder.dynamic_slots,
+        dynamic_nodes: builder.dynamic_nodes,
+        dynamic_attributes: builder.dynamic_attributes,
+    })
+}
+
+#[derive(Default)]
+struct NativeTemplateBuilder<'a> {
+    raw_ops: Vec<TemplateRawOp>,
+    dynamic_slots: Vec<HotReloadDynamicSlot>,
+    dynamic_nodes: Vec<&'a BodyNode>,
+    dynamic_attributes: Vec<&'a Attribute>,
+    next_dynamic_node: usize,
+    next_dynamic_attr: usize,
+}
+
+impl<'a> NativeTemplateBuilder<'a> {
+    fn visit_roots<Ctx: HotReloadingContext>(&mut self, nodes: &'a [BodyNode]) -> Option<()> {
+        for node in nodes {
+            self.visit_node::<Ctx>(node)?;
+        }
+        Some(())
+    }
+
+    fn visit_node<Ctx: HotReloadingContext>(&mut self, node: &'a BodyNode) -> Option<()> {
+        match node {
+            BodyNode::Element(element) => self.visit_element::<Ctx>(element),
+            BodyNode::Text(text) => match text.input.to_static() {
+                Some(text) => {
+                    self.raw_ops
+                        .push(TemplateRawOp::static_text(intern(text.as_str())));
+                    Some(())
+                }
+                None => self.push_dynamic_node(node),
+            },
+            BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_) => self.push_dynamic_node(node),
         }
     }
 
-    static_attrs.sort_by_key(|(left, _)| *left);
-    static_attrs
-        .into_iter()
-        .map(|(_, attr)| attr)
-        .chain(dynamic_attrs)
-        .collect()
-}
+    fn visit_element<Ctx: HotReloadingContext>(&mut self, element: &'a Element) -> Option<()> {
+        let rust_name = element.name.to_string();
+        let (tag, namespace) =
+            Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
 
-pub fn to_template_attribute<Ctx: HotReloadingContext>(
-    attr: &Attribute,
-) -> dioxus_core::TemplateAttribute {
-    use dioxus_core::TemplateAttribute;
+        self.raw_ops
+            .push(TemplateRawOp::open_element(tag, namespace));
 
-    // If it's a dynamic node, just return it
-    // For dynamic attributes, we need to check the mapping to see if that mapping exists
-    // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
-    // or something sufficiently serializable
-    //  (ie `checked`` being a bool and bools being interpretable)
-    //
-    // For now, just give up if that attribute doesn't exist in the mapping
-    if !attr.is_static_str_literal() {
-        let id = attr.dyn_idx.get();
-        return TemplateAttribute::Dynamic { id };
-    }
-
-    // Otherwise it's a static node and we can build it
-    let (_, value) = attr.as_static_str_literal().unwrap();
-    let (name, namespace) = html_tag_and_namespace::<Ctx>(attr);
-
-    TemplateAttribute::Static {
-        name,
-        namespace,
-        value: intern(value.to_static().unwrap().as_str()),
-    }
-}
-
-/// Convert this static BodyNode into a TemplateNode.
-///
-/// dioxus-core uses this to understand templates at compiletime
-pub fn to_template_node<Ctx: HotReloadingContext>(
-    node: &BodyNode,
-) -> Option<dioxus_core::TemplateNode> {
-    use dioxus_core::TemplateNode;
-    match node {
-        BodyNode::Element(el) => {
-            let rust_name = el.name.to_string();
-
-            let (tag, namespace) =
-                Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
-
-            Some(TemplateNode::Element {
-                tag,
-                namespace,
-                children: intern(
-                    el.children
-                        .iter()
-                        .filter_map(|c| to_template_node::<Ctx>(c))
-                        .collect::<Vec<_>>(),
-                ),
-                attrs: intern(sorted_template_attributes::<Ctx>(&el.merged_attributes)),
-            })
+        for attr in &element.merged_attributes {
+            self.push_attribute::<Ctx>(attr)?;
         }
-        BodyNode::Text(text) => text_to_template_node(text),
-        BodyNode::RawExpr(_)
-        | BodyNode::Component(_)
-        | BodyNode::ForLoop(_)
-        | BodyNode::IfChain(_) => None,
+
+        for child in &element.children {
+            self.visit_node::<Ctx>(child)?;
+        }
+
+        self.raw_ops.push(TemplateRawOp::close_element());
+        Some(())
     }
-}
-pub fn text_to_template_node(node: &TextNode) -> Option<TemplateNode> {
-    match node.input.to_static() {
-        Some(text) => Some(TemplateNode::Text {
-            text: intern(text.as_str()),
-        }),
-        None => None,
+
+    fn push_attribute<Ctx: HotReloadingContext>(&mut self, attr: &'a Attribute) -> Option<()> {
+        let Some((_, value)) = attr.as_static_str_literal() else {
+            let id = self.next_dynamic_attr;
+            self.next_dynamic_attr += 1;
+            self.raw_ops.push(TemplateRawOp::dynamic_attr());
+            self.dynamic_slots.push(HotReloadDynamicSlot::Attribute(id));
+            self.dynamic_attributes.push(attr);
+            return Some(());
+        };
+
+        let (name, namespace) = html_tag_and_namespace::<Ctx>(attr);
+        let namespace = match namespace {
+            Some("style") => TemplateRawAttrNamespace::Style,
+            Some(namespace) => TemplateRawAttrNamespace::Custom(namespace),
+            None => TemplateRawAttrNamespace::None,
+        };
+        self.raw_ops.push(TemplateRawOp::StaticAttr {
+            name,
+            value: intern(value.to_static().unwrap().as_str()),
+            namespace,
+        });
+        Some(())
+    }
+
+    fn push_dynamic_node(&mut self, node: &'a BodyNode) -> Option<()> {
+        let id = self.next_dynamic_node;
+        self.next_dynamic_node += 1;
+        self.raw_ops.push(TemplateRawOp::dynamic_node());
+        self.dynamic_slots.push(HotReloadDynamicSlot::Node(id));
+        self.dynamic_nodes.push(node);
+        Some(())
     }
 }

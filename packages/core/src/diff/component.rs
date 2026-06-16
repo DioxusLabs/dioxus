@@ -3,6 +3,7 @@ use crate::{
     diff::{
         anchor::{Anchor, anchor_for_slot, at_anchor},
         context::{DiffContext, DiffFrame, DiffState},
+        template::DynamicNodeSlot,
     },
     innerlude::{ElementRef, MountId, VComponent, WriteMutations},
     mutations::reborrow_writer,
@@ -201,7 +202,8 @@ impl VNode {
                     .as_ref()
                     .and_then(|p| p.location.slot())
                     .expect("component parent must be a dynamic slot");
-                anchor_for_slot(mount, slot_id, cursor, &[], state.dom, state.context())
+                let slot = DynamicNodeSlot::new(&self.template, slot_id, cursor);
+                anchor_for_slot(mount, slot, &[], state.dom, state.context())
             });
 
         // Free the scope slot so `create_component_node` allocates a new scope.

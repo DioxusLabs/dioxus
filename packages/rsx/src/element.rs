@@ -48,8 +48,7 @@ impl Parse for Element {
         let name = stream.parse::<ElementName>()?;
 
         // We very liberally parse elements - they might not even have a brace!
-        // This is designed such that we can throw a compile error but still give autocomplete
-        // ... partial completions mean we do some weird parsing to get the right completions
+        // This is designed such that we can emit a diagnostic instead of failing to parse.
         let mut brace = None;
         let mut block = RsxBlock::default();
 
@@ -68,7 +67,7 @@ impl Parse for Element {
             ),
         }
 
-        // Make sure these attributes have an el_name set for completions and Template generation
+        // Make sure these attributes have element context for name and namespace resolution.
         for attr in block.attributes.iter_mut() {
             attr.el_name = Some(name.clone());
         }
@@ -97,7 +96,6 @@ impl Parse for Element {
                 colon: None,
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
                 comma: spread.comma,
-                dyn_idx: spread.dyn_idx.clone(),
                 el_name: Some(name.clone()),
             });
         }
@@ -108,91 +106,21 @@ impl Parse for Element {
 
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let el = self;
-        let el_name = &el.name;
-
-        let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
-            ElementName::Custom(_) => quote! { None },
+        let body = TemplateBody {
+            roots: vec![BodyNode::Element(self.clone())],
+            template_idx: Default::default(),
+            diagnostics: Diagnostics::new(),
         };
+        let template = crate::flat_template::FlatTemplatePieces::from_body(&body);
+        let definitions = template.definitions();
+        let view = template.view_expr();
 
-        let mut static_attrs = Vec::new();
-        let mut dynamic_attrs = Vec::new();
-        for attr in &el.merged_attributes {
-            // Rendering static attributes requires a bit more work than just a dynamic attrs
-            let Some((name, value)) = attr.as_static_str_literal() else {
-                let id = attr.dyn_idx.get();
-                dynamic_attrs.push(quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } });
-                continue;
-            };
-
-            let ns = match name {
-                AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
-                AttributeName::Custom(_) => quote!(None),
-                AttributeName::Spread(_) => {
-                    unreachable!("spread attributes should not be static")
-                }
-            };
-
-            let name = match (el_name, name) {
-                (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                    quote! { dioxus_elements::#el_name::#name.0 }
-                }
-                //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
-                _ => {
-                    let as_string = name.to_string();
-                    quote! { #as_string }
-                }
-            };
-
-            let value = value.to_static().unwrap();
-
-            static_attrs.push(quote! {
-                    dioxus_core::TemplateAttribute::Static {
-                        name: #name,
-                        namespace: #ns,
-                        value: #value,
-                    }
-            });
-        }
-        // Dynamic attrs must stay ordered by their dynamic id, but static attrs need to be
-        // searchable by the emitted DOM name. Let core sort the fully expanded names so raw
-        // identifiers and RSX aliases do not use their Rust spelling as the sort key.
-        let template_attrs = static_attrs
-            .into_iter()
-            .chain(dynamic_attrs)
-            .collect::<Vec<_>>();
-
-        // Render static children. Dynamic children are represented by template cursors.
-        let children = el.children.iter().filter_map(|c| match c {
-            BodyNode::Element(el) => Some(quote! { #el }),
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.to_static().unwrap();
-                Some(quote! { dioxus_core::TemplateNode::Text { text: #text } })
-            }
-            _ => None,
-        });
-
-        let ns = ns(quote!(NAME_SPACE));
-        let el_name = el_name.tag_name();
-        let diagnostics = &el.diagnostics;
-        let completion_hints = &el.completion_hints();
-
-        // todo: generate less code if there's no diagnostics by not including the curlies
         tokens.append_all(quote! {
             {
-                #completion_hints
-
-                #diagnostics
-
-                dioxus_core::TemplateNode::Element {
-                    tag: #el_name,
-                    namespace: #ns,
-                    attrs: &dioxus_core::internal::sort_template_attributes([ #(#template_attrs),* ]),
-                    children: &[ #(#children),* ],
-                }
+                #(#definitions)*
+                #view
             }
-        })
+        });
     }
 }
 
@@ -279,7 +207,6 @@ impl Element {
                 name: attr.name.clone(),
                 value: AttributeValue::AttrLiteral(out_lit),
                 colon: attr.colon,
-                dyn_idx: attr.dyn_idx.clone(),
                 comma: matching_attrs.last().unwrap().comma,
                 el_name: attr.el_name.clone(),
             });
@@ -291,29 +218,6 @@ impl Element {
             .iter()
             .find(|attr| attr.name.is_likely_key())
             .map(|attr| &attr.value)
-    }
-
-    fn completion_hints(&self) -> TokenStream2 {
-        // If there is already a brace, we don't need any completion hints
-        if self.brace.is_some() {
-            return quote! {};
-        }
-
-        let ElementName::Ident(name) = &self.name else {
-            return quote! {};
-        };
-
-        quote! {
-            {
-                #[allow(dead_code)]
-                #[doc(hidden)]
-                mod __completions {
-                    fn ignore() {
-                        super::dioxus_elements::elements::completions::CompleteWithBraces::#name
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -352,9 +256,23 @@ impl Parse for ElementName {
 }
 
 impl ElementName {
+    pub(crate) fn tag_name_string(&self) -> String {
+        match self {
+            ElementName::Ident(i) => normalize_element_ident(i),
+            ElementName::Custom(s) => s.value(),
+        }
+    }
+
+    pub(crate) fn namespace(&self) -> Option<&'static str> {
+        namespace_for_tag(self.tag_name_string().as_str())
+    }
+
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
-            ElementName::Ident(i) => quote! { dioxus_elements::elements::#i::TAG_NAME },
+            ElementName::Ident(_) => {
+                let name = self.tag_name_string();
+                quote! { #name }
+            }
             ElementName::Custom(s) => quote! { #s },
         }
     }
@@ -364,6 +282,90 @@ impl ElementName {
             ElementName::Ident(i) => i.span(),
             ElementName::Custom(s) => s.span(),
         }
+    }
+}
+
+fn normalize_element_ident(ident: &Ident) -> String {
+    match ident.to_string().strip_prefix("r#") {
+        Some(raw) => raw.to_string(),
+        None => match ident.to_string().as_str() {
+            "annotationXml" => "annotation-xml".to_string(),
+            name => name.to_string(),
+        },
+    }
+}
+
+fn namespace_for_tag(tag: &str) -> Option<&'static str> {
+    match tag {
+        "svg"
+        | "animate"
+        | "animateMotion"
+        | "animateTransform"
+        | "circle"
+        | "clipPath"
+        | "defs"
+        | "desc"
+        | "discard"
+        | "ellipse"
+        | "feBlend"
+        | "feColorMatrix"
+        | "feComponentTransfer"
+        | "feComposite"
+        | "feConvolveMatrix"
+        | "feDiffuseLighting"
+        | "feDisplacementMap"
+        | "feDistantLight"
+        | "feDropShadow"
+        | "feFlood"
+        | "feFuncA"
+        | "feFuncB"
+        | "feFuncG"
+        | "feFuncR"
+        | "feGaussianBlur"
+        | "feImage"
+        | "feMerge"
+        | "feMergeNode"
+        | "feMorphology"
+        | "feOffset"
+        | "fePointLight"
+        | "feSpecularLighting"
+        | "feSpotLight"
+        | "feTile"
+        | "feTurbulence"
+        | "filter"
+        | "foreignObject"
+        | "g"
+        | "hatch"
+        | "hatchpath"
+        | "image"
+        | "line"
+        | "linearGradient"
+        | "marker"
+        | "mask"
+        | "metadata"
+        | "mpath"
+        | "path"
+        | "pattern"
+        | "polygon"
+        | "polyline"
+        | "radialGradient"
+        | "rect"
+        | "set"
+        | "stop"
+        | "switch"
+        | "symbol"
+        | "text"
+        | "textPath"
+        | "tspan"
+        | "use"
+        | "view" => Some("http://www.w3.org/2000/svg"),
+        "annotation" | "annotation-xml" | "merror" | "math" | "mfrac" | "mi" | "mmultiscripts"
+        | "mn" | "mo" | "mover" | "mpadded" | "mprescripts" | "mroot" | "mrow" | "ms"
+        | "mspace" | "msqrt" | "mstyle" | "msub" | "msubsup" | "msup" | "mtable" | "mtd"
+        | "mtext" | "mtr" | "munder" | "munderover" | "semantics" => {
+            Some("http://www.w3.org/1998/Math/MathML")
+        }
+        _ => None,
     }
 }
 

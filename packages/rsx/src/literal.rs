@@ -8,7 +8,7 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use crate::{IfmtInput, Segment, location::DynIdx};
+use crate::{IfmtInput, Segment};
 use proc_macro2::TokenStream as TokenStream2;
 
 /// A literal value in the rsx! macro
@@ -42,19 +42,6 @@ pub enum HotLiteral {
     ///
     /// true
     Bool(LitBool),
-}
-
-impl HotLiteral {
-    pub fn quote_as_hot_reload_literal(&self) -> TokenStream2 {
-        match &self {
-            HotLiteral::Fmted(f) => quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#f) },
-            HotLiteral::Float(f) => {
-                quote! { dioxus_core::internal::HotReloadLiteral::Float(#f as _) }
-            }
-            HotLiteral::Int(f) => quote! { dioxus_core::internal::HotReloadLiteral::Int(#f as _) },
-            HotLiteral::Bool(f) => quote! { dioxus_core::internal::HotReloadLiteral::Bool(#f) },
-        }
-    }
 }
 
 impl Parse for HotLiteral {
@@ -148,7 +135,6 @@ impl Display for HotLiteral {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct HotReloadFormattedSegment {
     pub formatted_input: IfmtInput,
-    pub dynamic_node_indexes: Vec<DynIdx>,
 }
 
 impl HotReloadFormattedSegment {
@@ -169,15 +155,8 @@ impl Deref for HotReloadFormattedSegment {
 
 impl From<IfmtInput> for HotReloadFormattedSegment {
     fn from(input: IfmtInput) -> Self {
-        let mut dynamic_node_indexes = Vec::new();
-        for segment in &input.segments {
-            if let Segment::Formatted { .. } = segment {
-                dynamic_node_indexes.push(DynIdx::default());
-            }
-        }
         Self {
             formatted_input: input,
-            dynamic_node_indexes,
         }
     }
 }
@@ -191,25 +170,36 @@ impl Parse for HotReloadFormattedSegment {
 
 impl ToTokens for HotReloadFormattedSegment {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let mut idx = 0_usize;
-        let segments = self.segments.iter().map(|s| match s {
+        tokens.extend(self.quote_with_dynamic_ids(&[]));
+    }
+}
+
+impl HotReloadFormattedSegment {
+    pub(crate) fn formatted_segment_count(&self) -> usize {
+        self.segments
+            .iter()
+            .filter(|segment| segment.is_formatted())
+            .count()
+    }
+
+    pub(crate) fn quote_with_dynamic_ids(&self, dynamic_ids: &[usize]) -> TokenStream2 {
+        let mut next_dynamic = 0usize;
+        let segments = self.segments.iter().map(|segment| match segment {
             Segment::Literal(lit) => quote! {
                 dioxus_core::internal::FmtSegment::Literal { value: #lit }
             },
-            Segment::Formatted(_fmt) => {
-                // increment idx for the dynamic segment so we maintain the mapping
-                let _idx = self.dynamic_node_indexes[idx].get();
-                idx += 1;
+            Segment::Formatted(_) => {
+                let id = dynamic_ids.get(next_dynamic).copied().unwrap_or(usize::MAX);
+                next_dynamic += 1;
                 quote! {
-                   dioxus_core::internal::FmtSegment::Dynamic { id: #_idx }
+                    dioxus_core::internal::FmtSegment::Dynamic { id: #id }
                 }
             }
         });
 
-        // The static segments with idxs for locations
-        tokens.extend(quote! {
-            dioxus_core::internal::FmtedSegments::new( vec![ #(#segments),* ], )
-        });
+        quote! {
+            dioxus_core::internal::FmtedSegments::new(vec![ #(#segments),* ])
+        }
     }
 }
 

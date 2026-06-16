@@ -64,6 +64,7 @@ mod scope_context;
 mod scopes;
 mod suspense;
 mod tasks;
+pub mod view;
 mod virtual_dom;
 
 mod hotreload_utils;
@@ -74,12 +75,26 @@ pub mod internal {
     #[doc(hidden)]
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
-        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
+        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadDynamicSlot, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
+
     #[doc(hidden)]
-    pub use crate::nodes::sort_template_attributes;
+    pub type DynamicNodeView<N, Marker = ()> = crate::view::dynamic_node::DynNode<N, Marker>;
+
+    #[doc(hidden)]
+    pub fn node_dyn<N, Marker>(node: N) -> DynamicNodeView<N, Marker>
+    where
+        N: crate::nodes::IntoDynNode<Marker>,
+    {
+        crate::view::internal_node_dyn(node)
+    }
+
+    #[doc(hidden)]
+    pub fn attrs_dyn(attrs: Box<[crate::nodes::Attribute]>) -> crate::view::DynAttrs {
+        crate::view::internal_attrs_dyn(attrs)
+    }
 
     #[allow(non_snake_case)]
     #[doc(hidden)]
@@ -134,20 +149,27 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
-    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
-    ListenerCallback, MarkerWrapper, MultiTargetWriter, MultiWriter, Mutation, Mutations,
-    NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext,
-    RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
-    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAttribute, TemplateCursor,
-    TemplateNode, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow,
-    consume_context, consume_context_from_scope, current_owner, current_scope_id, fc_to_builder,
-    generation, has_context, needs_update, needs_update_any, parent_scope, provide_context,
+    ComponentFunction, DecodedTemplateOp, DynamicNode, DynamicValue, Element, ElementId,
+    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MultiTargetWriter, MultiWriter,
+    Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
+    ReactiveContext, RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId,
+    ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,
+    SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, TEMPLATE_STORAGE_MAX_CAP, Task,
+    Template, TemplateOp, TemplatePath, TemplateRawAttrNamespace, TemplateRawOp, TemplateStorage,
+    VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
+    consume_context_from_scope, current_owner, current_scope_id, fc_to_builder, generation,
+    has_context, needs_update, needs_update_any, parent_scope, provide_context,
     provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
     schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
     throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
     use_hook_with_cleanup, with_owner,
+};
+
+pub use crate::view::{
+    Attr, Built, ConstStatic, DynAttrs, DynText, DynamicValues, El, IntoChild, IntoKey, Keyed,
+    RAW_TAPE_CAP, Raw, RawTape, StaticAttribute, StaticText, TagName, Text, View, ViewChild, attr,
+    attr_dyn, el, keyed, text, text_dyn,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

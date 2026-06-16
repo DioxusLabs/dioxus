@@ -5,7 +5,6 @@
 mod cache;
 pub mod config;
 pub mod renderer;
-pub mod template;
 
 use dioxus_core::{Element, VirtualDom};
 

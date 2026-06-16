@@ -248,13 +248,25 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub mod $name {
+        pub(super) mod $name {
             #[allow(unused)]
             use super::*;
+            #[allow(unused_imports)]
             pub use crate::attribute_groups::global_attributes::*;
 
-            pub const TAG_NAME: &'static str = stringify!($name);
-            pub const NAME_SPACE: Option<&'static str> = None;
+            pub(super) const TAG_NAME: &'static str = stringify!($name);
+            pub(super) const NAME_SPACE: Option<&'static str> = None;
+
+            pub(in crate::elements) struct Tag;
+
+            impl dioxus_core::view::TagName for Tag {
+                const NAME: &'static str = TAG_NAME;
+                const NAMESPACE: Option<&'static str> = NAME_SPACE;
+            }
+
+            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+                dioxus_core::view::el::<Tag>()
+            }
 
             $(
                 impl_attribute!(
@@ -301,13 +313,25 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub mod $name {
+        pub(super) mod $name {
             #[allow(unused)]
             use super::*;
+            #[allow(unused_imports)]
             pub use crate::attribute_groups::svg_attributes::*;
 
-            pub const TAG_NAME: &'static str = stringify!($name);
-            pub const NAME_SPACE: Option<&'static str> = Some($namespace);
+            pub(super) const TAG_NAME: &'static str = stringify!($name);
+            pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
+
+            pub(in crate::elements) struct Tag;
+
+            impl dioxus_core::view::TagName for Tag {
+                const NAME: &'static str = TAG_NAME;
+                const NAMESPACE: Option<&'static str> = NAME_SPACE;
+            }
+
+            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+                dioxus_core::view::el::<Tag>()
+            }
 
             $(
                 impl_attribute!(
@@ -355,13 +379,25 @@ macro_rules! impl_element {
         ///     }
         /// };
         /// ```
-        pub mod $element {
+        pub(super) mod $element {
             #[allow(unused)]
             use super::*;
+            #[allow(unused_imports)]
             pub use crate::attribute_groups::svg_attributes::*;
 
-            pub const TAG_NAME: &'static str = $name;
-            pub const NAME_SPACE: Option<&'static str> = Some($namespace);
+            pub(super) const TAG_NAME: &'static str = $name;
+            pub(super) const NAME_SPACE: Option<&'static str> = Some($namespace);
+
+            pub(in crate::elements) struct Tag;
+
+            impl dioxus_core::view::TagName for Tag {
+                const NAME: &'static str = TAG_NAME;
+                const NAMESPACE: Option<&'static str> = NAME_SPACE;
+            }
+
+            pub(in crate::elements) const fn new() -> dioxus_core::view::El<Tag, (), ()> {
+                dioxus_core::view::el::<Tag>()
+            }
 
             $(
                 impl_attribute!(
@@ -373,6 +409,53 @@ macro_rules! impl_element {
             )*
         }
     }
+}
+
+macro_rules! impl_element_constructor {
+    (
+        $(#[$attr:meta])*
+        $name:ident None {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        $(#[$attr])*
+        pub const fn $name() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
+            element_tags::$name::new()
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $name:ident $namespace:literal {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        $(#[$attr])*
+        pub const fn $name() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
+            element_tags::$name::new()
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $element:ident [$name:literal, $namespace:tt] {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        $(#[$attr])*
+        pub const fn $element() -> dioxus_core::view::El<impl dioxus_core::view::TagName, (), ()> {
+            element_tags::$element::new()
+        }
+    };
 }
 
 #[cfg(feature = "hot-reload-context")]
@@ -558,8 +641,24 @@ macro_rules! builder_constructors {
             None
         }
 
+        mod element_tags {
+            use super::*;
+
+            $(
+                impl_element!(
+                    $(#[$attr])*
+                    $name $namespace {
+                        $(
+                            $(#[$attr_method])*
+                            $fil: $vil $extra,
+                        )*
+                    }
+                );
+            )*
+        }
+
         $(
-            impl_element!(
+            impl_element_constructor!(
                 $(#[$attr])*
                 $name $namespace {
                     $(
@@ -570,45 +669,9 @@ macro_rules! builder_constructors {
             );
         )*
 
-        /// This module contains helpers for rust analyzer autocompletion
-        #[doc(hidden)]
-        pub mod completions {
-            /// This helper tells rust analyzer that it should autocomplete the element name with braces.
-            #[allow(non_camel_case_types)]
-            pub enum CompleteWithBraces {
-                $(
-                    $(#[$attr])*
-                    ///
-                    /// ## Usage in rsx
-                    ///
-                    /// ```rust, no_run
-                    /// # use dioxus::prelude::*;
-                    /// # let attributes = vec![];
-                    /// # fn ChildComponent() -> Element { unimplemented!() }
-                    /// # let raw_expression: Element = rsx! {};
-                    /// rsx! {
-                    ///     // Elements are followed by braces that surround any attributes and children for that element
-                    #[doc = concat!("    ", stringify!($name), " {")]
-                    ///         // Add any attributes first
-                    ///         class: "my-class",
-                    ///         "custom-attribute-name": "value",
-                    ///         // Then add any attributes you are spreading into this element
-                    ///         ..attributes,
-                    ///         // Then add any children elements, components, text nodes, or raw expressions
-                    ///         div {}
-                    ///         ChildComponent {}
-                    ///         "child text"
-                    ///         {raw_expression}
-                    ///     }
-                    /// };
-                    /// ```
-                    $name {}
-                ),*
-            }
-        }
-
         pub(crate) mod extensions {
             use super::*;
+            use super::element_tags::*;
             $(
                 impl_extension_attributes![$name { $($fil,)* }];
             )*

@@ -714,36 +714,6 @@ pub(crate) enum TemplateNodeShape {
     Dynamic,
 }
 
-impl TemplateNodeShape {
-    pub(crate) fn dynamic_count(&self) -> usize {
-        match self {
-            Self::Element { children, .. } => {
-                children.iter().map(TemplateNodeShape::dynamic_count).sum()
-            }
-            Self::Text(_) => 0,
-            Self::Dynamic => 1,
-        }
-    }
-
-    pub(crate) fn attr_count(&self) -> usize {
-        match self {
-            Self::Element {
-                attrs, children, ..
-            } => {
-                attrs
-                    .iter()
-                    .filter(|attr| matches!(attr, TemplateAttrShape::Dynamic))
-                    .count()
-                    + children
-                        .iter()
-                        .map(TemplateNodeShape::attr_count)
-                        .sum::<usize>()
-            }
-            Self::Text(_) | Self::Dynamic => 0,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TemplateAttrShape {
     Static {

@@ -1,6 +1,7 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
     DynamicNode, ElementId, ScopeId, ScopeState, SuspenseContext, VNode, VirtualDom,
+    internal::{StaticChildren, TemplateChild},
 };
 use std::fmt::Write;
 
@@ -86,31 +87,36 @@ pub(super) fn first_dynamic_root_element_id(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     fn from_vnode(vnode: &VNode, dom: &VirtualDom) -> Option<ElementId> {
-        for cursor_idx in 0..=vnode.template.roots().len() {
-            for (dyn_idx, _) in vnode
-                .template
-                .node_cursors()
-                .iter()
-                .copied()
-                .enumerate()
-                .filter(|(_, cursor)| cursor.as_slice() == [cursor_idx as u8].as_slice())
-            {
-                if let Some(id) = from_dynamic(vnode, dyn_idx, dom) {
-                    return Some(id);
+        let mut found = None;
+        StaticChildren::roots(vnode)
+            .try_for_each(|child| {
+                if found.is_some() {
+                    return Ok::<(), ()>(());
                 }
-            }
 
-            if cursor_idx < vnode.template.roots().len()
-                && let Some(id) = vnode.mounted_root(cursor_idx, dom)
-            {
-                return Some(id);
-            }
-        }
-        None
+                match child {
+                    TemplateChild::DynamicSlot { slot } => {
+                        let index = slot.index();
+                        found = from_dynamic(vnode, index, dom);
+                    }
+                    TemplateChild::Static { node } => {
+                        found = node
+                            .root_index()
+                            .and_then(|root_idx| vnode.mounted_root(root_idx, dom));
+                    }
+                }
+                Ok(())
+            })
+            .ok()?;
+
+        found
     }
 
     fn from_dynamic(vnode: &VNode, dyn_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        match &vnode.dynamic_nodes[dyn_idx] {
+        match vnode.dynamic_values[dyn_idx]
+            .as_node()
+            .expect("hydration suspense node slot must point at a dynamic node")
+        {
             DynamicNode::Text(_) => vnode.mounted_dynamic_node(dyn_idx, dom),
             DynamicNode::Component(comp) => {
                 let child = comp.mounted_scope(dyn_idx, vnode, dom)?;
@@ -142,8 +148,12 @@ impl WebsysDom {
     }
 
     fn collect_suspense_in_vnode(&mut self, vnode: &VNode, dom: &VirtualDom) {
-        for (idx, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
-            match dyn_node {
+        for (idx, value) in vnode.dynamic_values.iter().enumerate() {
+            let Some(node) = value.as_node() else {
+                continue;
+            };
+
+            match node {
                 DynamicNode::Component(comp) => {
                     if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
                         self.collect_suspense_only(child_scope, dom);

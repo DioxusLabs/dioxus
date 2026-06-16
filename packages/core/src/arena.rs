@@ -1,4 +1,4 @@
-use crate::{ScopeId, Template, TemplateCursor, virtual_dom::VirtualDom};
+use crate::{ScopeId, Template, TemplatePath, virtual_dom::VirtualDom};
 use slab::Slab;
 use std::collections::HashMap;
 
@@ -180,8 +180,8 @@ pub struct ElementRef {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ElementLocation {
-    Static(TemplateCursor),
-    Slot { id: usize, cursor: TemplateCursor },
+    Static(TemplatePath),
+    Slot { id: usize, cursor: TemplatePath },
 }
 
 impl VirtualDom {
@@ -346,18 +346,18 @@ impl VirtualDom {
 }
 
 impl ElementLocation {
-    pub(crate) fn is_under_attr(self, attr: TemplateCursor) -> bool {
+    pub(crate) fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
             ElementLocation::Static(cursor) => cursor.is_descendant_of_static(attr),
             ElementLocation::Slot { cursor, .. } => cursor.slot_is_inside_static(attr),
         }
     }
 
-    pub(crate) fn is_exact_static(self, attr: TemplateCursor) -> bool {
+    pub(crate) fn is_exact_static(self, attr: TemplatePath) -> bool {
         matches!(self, ElementLocation::Static(cursor) if cursor == attr)
     }
 
-    pub(crate) fn slot(self) -> Option<(usize, TemplateCursor)> {
+    pub(crate) fn slot(self) -> Option<(usize, TemplatePath)> {
         match self {
             ElementLocation::Slot { id, cursor } => Some((id, cursor)),
             ElementLocation::Static(_) => None,
@@ -367,25 +367,39 @@ impl ElementLocation {
 
 #[test]
 fn static_location_is_under_attr() {
-    let event_location = ElementLocation::Static(TemplateCursor::new(&[1, 2, 3, 4, 5]));
+    let root = TemplatePath::root(1);
+    let child_2 = nth_child(root, 2);
+    let child_3 = nth_child(child_2, 3);
+    let child_4 = nth_child(child_3, 4);
+    let child_5 = nth_child(child_4, 5);
+    let event_location = ElementLocation::Static(child_5);
 
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4, 5])));
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4])));
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3])));
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[1, 2])));
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[1])));
+    assert!(event_location.is_under_attr(child_5));
+    assert!(event_location.is_under_attr(child_4));
+    assert!(event_location.is_under_attr(child_3));
+    assert!(event_location.is_under_attr(child_2));
+    assert!(event_location.is_under_attr(root));
 
-    assert!(!event_location.is_under_attr(TemplateCursor::new(&[1, 2, 3, 4, 5, 6])));
-    assert!(!event_location.is_under_attr(TemplateCursor::new(&[2, 3, 4])));
+    assert!(!event_location.is_under_attr(nth_child(child_5, 6)));
+    assert!(!event_location.is_under_attr(nth_child(nth_child(TemplatePath::root(2), 3), 4)));
 }
 
 #[test]
 fn slot_location_uses_parent_for_attr_matching() {
     let event_location = ElementLocation::Slot {
         id: 0,
-        cursor: TemplateCursor::new(&[0, 0]),
+        cursor: TemplatePath::root(0).next_child(),
     };
 
-    assert!(event_location.is_under_attr(TemplateCursor::new(&[0])));
-    assert!(!event_location.is_under_attr(TemplateCursor::new(&[0, 0])));
+    assert!(event_location.is_under_attr(TemplatePath::root(0)));
+    assert!(!event_location.is_under_attr(TemplatePath::root(0).next_child()));
+}
+
+#[cfg(test)]
+fn nth_child(parent: TemplatePath, index: usize) -> TemplatePath {
+    let mut path = parent.next_child();
+    for _ in 0..index {
+        path = path.next_sibling();
+    }
+    path
 }

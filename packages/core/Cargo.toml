@@ -21,6 +21,7 @@ rust-version = "1.85.0"
 bench = false
 
 [dependencies]
+const-vec = { workspace = true }
 dioxus-core-types = { workspace = true }
 const_format = { workspace = true }
 futures-channel = { workspace = true }

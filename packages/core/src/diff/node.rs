@@ -1,18 +1,20 @@
 use crate::{
     DynamicNode::*,
-    TemplateAttribute, TemplateCursor, TemplateNode, VNode, VirtualDom, WriteMutations,
+    Template, TemplatePath, VNode, VirtualDom, WriteMutations,
     arena::{ElementId, MountedElementId},
     diff::{
         anchor::{Anchor, ElementEdge, anchor_at, anchor_for_slot, at_anchor, create_at_anchor},
         context::{DiffFrame, DiffState},
-        template_path::{cursor_starts_with, push_static_cursor},
+        template::{
+            DynamicAttrGroup, DynamicNodeSlot, TemplateRoot, dynamic_node_slot, dynamic_node_slots,
+            for_each_dynamic_attr_group, template_roots,
+        },
     },
     innerlude::{ElementLocation, ElementRef, MountId},
     mutations::{reborrow_writer, remove_id, with_consumed_id, with_id},
     nodes::DynamicNode,
     scopes::ScopeId,
 };
-use core::iter::Peekable;
 
 impl VNode {
     pub(crate) fn diff_node(
@@ -58,13 +60,15 @@ impl<'a> DiffFrame<'a> {
         }
 
         let mount_id = new.unchecked_mounted_id();
-        for (dyn_node_idx, (old_dynamic, new_dynamic)) in old
-            .dynamic_nodes
-            .iter()
-            .zip(new.dynamic_nodes.iter())
-            .enumerate()
-        {
-            old.diff_dynamic_node(mount_id, dyn_node_idx, old_dynamic, new_dynamic, &mut state)
+        for slot in dynamic_node_slots(old) {
+            let dyn_node_idx = slot.index();
+            old.diff_dynamic_node(
+                mount_id,
+                slot,
+                old.dynamic_values[dyn_node_idx].node(),
+                new.dynamic_values[dyn_node_idx].node(),
+                &mut state,
+            );
         }
         state.dom.commit_mount(mount_id, new);
     }
@@ -74,11 +78,12 @@ impl VNode {
     fn diff_dynamic_node(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         old_node: &DynamicNode,
         new_node: &DynamicNode,
         state: &mut DiffState<'_, '_, '_>,
     ) {
+        let idx = slot.index();
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
@@ -92,7 +97,7 @@ impl VNode {
                     with_id(to, id, |to| to.set_text(&new.value));
                 }
             }
-            (Fragment(old), Fragment(new)) => self.diff_fragment(mount, idx, old, new, state),
+            (Fragment(old), Fragment(new)) => self.diff_fragment(mount, slot, old, new, state),
             (Component(old), Component(new)) => {
                 let scope_id = state
                     .dom
@@ -107,18 +112,19 @@ impl VNode {
                     state,
                 )
             }
-            (old, new) => self.replace_dynamic_node_at_slot(mount, idx, old, new, state),
+            (old, new) => self.replace_dynamic_node_at_slot(mount, slot, old, new, state),
         };
     }
 
     fn replace_dynamic_node_at_slot(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         old: &DynamicNode,
         new: &DynamicNode,
         state: &mut DiffState<'_, '_, '_>,
     ) {
+        let idx = slot.index();
         let old_has_live_dom = self.dynamic_node_has_live_dom(mount, idx, old, state.dom);
         if !old_has_live_dom {
             // Pass `None::<&mut M>` (the caller's writer type) instead of
@@ -138,14 +144,7 @@ impl VNode {
         };
         let anchor = match live_first {
             Some(first) => Anchor::Before(first),
-            None => anchor_for_slot(
-                mount,
-                idx,
-                self.template.node_cursors()[idx],
-                &[],
-                state.dom,
-                state.context(),
-            ),
+            None => anchor_for_slot(mount, slot, &[], state.dom, state.context()),
         };
 
         state.with_mounted_dynamic_node_slot_replaced(
@@ -179,25 +178,19 @@ impl VNode {
     fn diff_fragment(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         old: &[VNode],
         new: &[VNode],
         state: &mut DiffState<'_, '_, '_>,
     ) {
+        let idx = slot.index();
         let parent = Some(self.reference_to_dynamic_node(mount, idx));
         match (old.is_empty(), new.is_empty()) {
             (true, true) => {}
             (true, false) => {
                 // Empty → non-empty: stage new content at the slot's anchor.
                 let own_mounts: Vec<MountId> = new.iter().filter_map(VNode::mounted_id).collect();
-                let anchor = anchor_for_slot(
-                    mount,
-                    idx,
-                    self.template.node_cursors()[idx],
-                    &own_mounts,
-                    state.dom,
-                    state.context(),
-                );
+                let anchor = anchor_for_slot(mount, slot, &own_mounts, state.dom, state.context());
                 create_at_anchor(
                     new,
                     parent,
@@ -247,19 +240,21 @@ impl VNode {
         let Some(mount) = self.mounted_id() else {
             return false;
         };
-        (0..self.template.roots().len()).any(|root_idx| {
+        if (0..self.template.root_count()).any(|root_idx| {
             root_idx < dom.mounted_root_count(mount) && self.root_has_live_dom(root_idx, mount, dom)
-        }) || self
-            .template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, cursor)| cursor.is_root_level_slot())
-            .any(|(idx, _)| {
-                idx < dom.mounted_dyn_node_count(mount)
-                    && self.dynamic_node_has_live_dom(mount, idx, &self.dynamic_nodes[idx], dom)
-            })
+        }) {
+            return true;
+        }
+
+        dynamic_node_slots(self).any(|slot| {
+            if !slot.is_root_level() {
+                return false;
+            }
+
+            let idx = slot.index();
+            idx < dom.mounted_dyn_node_count(mount)
+                && self.dynamic_node_has_live_dom(mount, idx, self.dynamic_values[idx].node(), dom)
+        })
     }
 
     fn root_has_live_dom(&self, root_idx: usize, mount: MountId, dom: &VirtualDom) -> bool {
@@ -276,26 +271,19 @@ impl VNode {
         edge: ElementEdge,
     ) -> Option<ElementId> {
         let mount = self.mounted_id()?;
-        let len = self.template.roots().len();
         match edge {
-            ElementEdge::First => (0..=len).find_map(|cursor_idx| {
+            ElementEdge::First => (0..self.template.root_count()).find_map(|cursor_idx| {
                 self.find_root_dynamic_at_cursor(cursor_idx, mount, target_id, dom, edge)
                     .or_else(|| {
                         self.find_element_at_root_in_target(cursor_idx, mount, target_id, dom, edge)
                     })
             }),
-            ElementEdge::Last => {
-                if let Some(id) = self.find_root_dynamic_at_cursor(len, mount, target_id, dom, edge)
-                {
-                    return Some(id);
-                }
-                (0..len).rev().find_map(|root_idx| {
-                    self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge)
-                        .or_else(|| {
-                            self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge)
-                        })
-                })
-            }
+            ElementEdge::Last => (0..self.template.root_count()).rev().find_map(|root_idx| {
+                self.find_element_at_root_in_target(root_idx, mount, target_id, dom, edge)
+                    .or_else(|| {
+                        self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge)
+                    })
+            }),
         }
     }
 
@@ -307,40 +295,45 @@ impl VNode {
         dom: &VirtualDom,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        let cursor = [cursor_idx as u8];
-        let mut iter = self
-            .template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .filter(|(_, candidate)| candidate.as_slice() == cursor.as_slice());
-
+        let mut found = None;
         match edge {
-            ElementEdge::First => iter.find_map(|(idx, _)| {
-                self.dynamic_node_edge_element(
-                    mount,
-                    idx,
-                    &self.dynamic_nodes[idx],
-                    dom,
-                    target_id,
-                    edge,
-                )
-            }),
-            ElementEdge::Last => iter
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .find_map(|(idx, _)| {
-                    self.dynamic_node_edge_element(
+            ElementEdge::First => {
+                for slot in dynamic_node_slots(self) {
+                    if !slot.is_root_level() || slot.root_index() != cursor_idx {
+                        continue;
+                    }
+
+                    let idx = slot.index();
+                    found = self.dynamic_node_edge_element(
                         mount,
                         idx,
-                        &self.dynamic_nodes[idx],
+                        self.dynamic_values[idx].node(),
                         dom,
                         target_id,
-                        edge,
-                    )
-                }),
+                        ElementEdge::First,
+                    );
+                    if found.is_some() {
+                        break;
+                    }
+                }
+                found
+            }
+            ElementEdge::Last => {
+                for slot in dynamic_node_slots(self) {
+                    if slot.is_root_level() && slot.root_index() == cursor_idx {
+                        let idx = slot.index();
+                        found = self.dynamic_node_edge_element(
+                            mount,
+                            idx,
+                            self.dynamic_values[idx].node(),
+                            dom,
+                            target_id,
+                            ElementEdge::Last,
+                        );
+                    }
+                }
+                found
+            }
         }
     }
 
@@ -417,15 +410,11 @@ impl VNode {
     }
 
     fn has_reclaimable_root(&self) -> bool {
-        self.template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .any(|(id, cursor)| {
-                cursor.is_root_level_slot()
-                    && matches!(&self.dynamic_nodes[id], Text(text) if text.value.is_empty())
-            })
+        dynamic_node_slots(self).any(|slot| {
+            let id = slot.index();
+            slot.is_root_level()
+                && matches!(self.dynamic_values[id].node(), Text(text) if text.value.is_empty())
+        })
     }
 
     /// Remove a node from the dom.
@@ -473,9 +462,10 @@ impl VNode {
         mut to: Option<&mut dyn WriteMutations>,
         destroy_component_state: bool,
     ) {
-        for (id, cursor) in self.template.node_cursors().iter().copied().enumerate() {
-            if cursor.is_root_level_slot() {
-                let dynamic_node = &self.dynamic_nodes[id];
+        for slot in dynamic_node_slots(self) {
+            let id = slot.index();
+            if slot.is_root_level() {
+                let dynamic_node = self.dynamic_values[id].node();
                 // Empty Fragments contribute no DOM and have nothing to reclaim
                 // via the renderer — skip them entirely.
                 if matches!(dynamic_node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
@@ -492,7 +482,7 @@ impl VNode {
             }
         }
 
-        for idx in 0..self.template.roots().len() {
+        for idx in 0..self.template.root_count() {
             let Some(id) = dom.mounted_root_node(mount, idx) else {
                 // Already reclaimed during a previous `move_node_to_background`.
                 continue;
@@ -511,14 +501,11 @@ impl VNode {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
-        let template = self.template;
-        for (idx, dyn_node) in self.dynamic_nodes.iter().enumerate() {
+        for slot in dynamic_node_slots(self) {
+            let idx = slot.index();
+            let dyn_node = self.dynamic_values[idx].node();
             // Roots are cleaned up automatically above; non-root nested dynamic nodes get cleaned here.
-            if template
-                .node_cursors()
-                .get(idx)
-                .is_some_and(|cursor| !cursor.is_root_level_slot())
-            {
+            if !slot.is_root_level() {
                 self.remove_dynamic_node(mount, dom, None, destroy_component_state, idx, dyn_node)
             }
         }
@@ -633,22 +620,24 @@ impl VNode {
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         let mut next_id = None;
-        for (idx, cursor) in self.template.attr_cursors().iter().copied().enumerate() {
+        for_each_dynamic_attr_group(self, |group| {
             // We clean up the roots in the next step, so don't worry about them here
-            if cursor.as_slice().len() <= 1 {
-                continue;
+            if group.path().is_root_level_slot() {
+                return;
             }
 
             // only reclaim the new element if it's different from the previous one
-            let new_id = dom.mounted_dyn_attr(mount, idx);
-            if let Some(new_id) = new_id
-                && Some(new_id) != next_id
-            {
-                dom.reclaim_for_mount(mount, new_id);
-                next_id = Some(new_id);
+            for idx in group.ids() {
+                let new_id = dom.mounted_dyn_attr(mount, idx);
+                if let Some(new_id) = new_id
+                    && Some(new_id) != next_id
+                {
+                    dom.reclaim_for_mount(mount, new_id);
+                    next_id = Some(new_id);
+                }
+                dom.clear_mounted_dyn_attr(mount, idx);
             }
-            dom.clear_mounted_dyn_attr(mount, idx);
-        }
+        });
     }
 
     /// Create this rsx block. This will create scopes from components that this rsx block contains, but it will not write anything to the DOM.
@@ -679,26 +668,11 @@ impl VNode {
                 self,
                 render_parent,
                 logical_parent,
-                template.roots().len(),
-                template.attr_cursors().len(),
-                template.node_cursors().len(),
+                template.root_count(),
+                template.dynamics().len(),
+                template.dynamics().len(),
             );
         }
-
-        // Walk the roots, creating nodes and assigning IDs
-        // nodes in an iterator of (dynamic_node_index, cursor) and attrs in an iterator of (attr_index, cursor)
-        let mut nodes = template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .peekable();
-        let mut attrs = template
-            .attr_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .peekable();
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
@@ -707,38 +681,36 @@ impl VNode {
             state.to = None;
         }
 
-        // Go through each root node and create the node, adding it to the stack.
-        // Each node already exists in the template, so we can just clone it from the template
-
-        // And return the number of nodes we created on the stack
         let mut nodes_created = 0;
-        for root_idx in 0..=template.roots().len() {
-            nodes_created +=
-                self.load_root_dynamic_slots(mount, &mut nodes, root_idx as u8, &mut state);
-
-            let Some(root) = template.roots().get(root_idx) else {
-                break;
-            };
-
-            // For static text and element nodes, just load the template root. This may be a placeholder or just a static node. We now know that each root node has a unique id
-            let writes_enabled = state.to.is_some();
-            if let Some(to) = reborrow_writer(&mut state.to) {
-                self.load_template_root(mount, root_idx, state.dom, to);
-            }
-
-            // If this is an element, load in all of the placeholder or dynamic content under this root element too
-            if matches!(root, TemplateNode::Element { .. }) {
-                // !!VERY IMPORTANT!!
-                // Write out all attributes before we load the children. Loading the children will change cursors we rely on
-                // to assign ids to elements with dynamic attributes
+        for root in template_roots(self) {
+            if let TemplateRoot::Static {
+                root_idx,
+                op: root_op,
+            } = root
+            {
+                let writes_enabled = state.to.is_some();
                 if let Some(to) = reborrow_writer(&mut state.to) {
-                    self.write_attrs(mount, &mut attrs, root_idx as u8, state.dom, to);
+                    self.load_template_root(mount, root_idx, root_op, state.dom, to);
                 }
-                self.load_dynamic_slots(mount, &mut nodes, root_idx as u8, &mut state);
-            }
 
-            // This creates one node on the stack if writes are enabled.
-            nodes_created += usize::from(writes_enabled);
+                if template.enter_meta(root_op).is_some() {
+                    let root_path = TemplatePath::root(root_idx);
+                    if let Some(to) = reborrow_writer(&mut state.to) {
+                        self.write_attrs_for_static_node(mount, root_path, state.dom, to);
+                    }
+                    self.load_dynamic_slots_for_static_node(mount, root_path, &mut state);
+                }
+
+                nodes_created += usize::from(writes_enabled);
+            } else if let TemplateRoot::Dynamic { slot } = root {
+                let index = slot.index();
+                nodes_created += self.create_dynamic_node(
+                    self.dynamic_values[index].node(),
+                    mount,
+                    index,
+                    &mut state,
+                );
+            }
         }
         // Now that all descendants have been mounted and their raw mount slots
         // slots populated, snapshot ourselves into the mount. Using a
@@ -752,7 +724,9 @@ impl VNode {
 
 impl VNode {
     pub(super) fn reference_to_dynamic_node(&self, mount: MountId, idx: usize) -> ElementRef {
-        let cursor = self.template.node_cursors()[idx];
+        let cursor = dynamic_node_slot(self, idx)
+            .expect("dynamic node reference must point at a node slot")
+            .path();
         ElementRef {
             location: ElementLocation::Slot { id: idx, cursor },
             mount,
@@ -791,64 +765,27 @@ impl VNode {
         }
     }
 
-    /// Mount all dynamic nodes that are descendants of this root template element.
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # let some_text = "hello world";
-    /// # let some_value = "123";
-    /// rsx! {
-    ///     div { // We just wrote this node
-    ///         // This is a dynamic slot
-    ///         {some_value}
-    ///
-    ///         // Load this too
-    ///         "{some_text}"
-    ///     }
-    /// };
-    /// ```
-    pub(super) fn load_dynamic_slots(
+    fn load_dynamic_slots_for_static_node(
         &self,
         mount: MountId,
-        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = (usize, TemplateCursor)>>,
-        root_idx: u8,
+        path: TemplatePath,
         state: &mut DiffState<'_, '_, '_>,
     ) {
-        let Some((start, first_cursor)) = dynamic_nodes_iter.peek().copied() else {
-            return;
-        };
-        if !cursor_starts_with(first_cursor, root_idx) || first_cursor.is_root_level_slot() {
-            return;
-        }
-        let mut end = start;
-        // Every dynamic surfaced here lives under an Element/Text root (the
-        // Dynamic-at-root case is handled by the sibling arm in
-        // `create_with_parents`), so the path always has the root index plus
-        // at least one child segment — `idx` advances `end` unconditionally.
-        while let Some((idx, _)) = dynamic_nodes_iter.next_if(|(_, cursor)| {
-            cursor_starts_with(*cursor, root_idx) && !cursor.is_root_level_slot()
-        }) {
-            end = idx;
-        }
-
         // Reverse order lets earlier adjacent dynamic slots anchor before
         // later siblings that have already materialized.
-        for dynamic_node_id in (start..=end).rev() {
+        for slot in dynamic_node_slots(self)
+            .filter(|slot| slot.is_inside_static(path))
+            .rev()
+        {
+            let dynamic_node_id = slot.index();
             let context = state.context();
-            let anchor = anchor_for_slot(
-                mount,
-                dynamic_node_id,
-                self.template.node_cursors()[dynamic_node_id],
-                &[],
-                state.dom,
-                context,
-            );
+            let anchor = anchor_for_slot(mount, slot, &[], state.dom, context);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             at_anchor(anchor, reborrow_writer(&mut state.to), runtime, |to| {
                 let mut state = DiffState::new_with_context(dom, to, context);
                 self.create_dynamic_node(
-                    &self.dynamic_nodes[dynamic_node_id],
+                    self.dynamic_values[dynamic_node_id].node(),
                     mount,
                     dynamic_node_id,
                     &mut state,
@@ -857,67 +794,31 @@ impl VNode {
         }
     }
 
-    pub(super) fn load_root_dynamic_slots(
+    fn write_attrs_for_static_node(
         &self,
         mount: MountId,
-        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = (usize, TemplateCursor)>>,
-        root_idx: u8,
-        state: &mut DiffState<'_, '_, '_>,
-    ) -> usize {
-        let mut created = 0;
-        while let Some((dynamic_node_id, _)) =
-            dynamic_nodes_iter.next_if(|(_, cursor)| cursor.as_slice() == [root_idx].as_slice())
-        {
-            created += self.create_dynamic_node(
-                &self.dynamic_nodes[dynamic_node_id],
-                mount,
-                dynamic_node_id,
-                state,
-            );
-        }
-        created
-    }
-
-    /// After we have written a root element, we need to write all the attributes that are on the root node
-    ///
-    /// ```rust, ignore
-    /// rsx! {
-    ///     div { // We just wrote this node
-    ///         class: "{class}", // We need to set these attributes
-    ///         id: "{id}",
-    ///         style: "{style}",
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// IMPORTANT: This function assumes that root node is the top node on the stack
-    pub(super) fn write_attrs(
-        &self,
-        mount: MountId,
-        dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, TemplateCursor)>>,
-        root_idx: u8,
+        path: TemplatePath,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        let mut last_cursor = None;
-        let from_root_node =
-            |(_, cursor): &(usize, TemplateCursor)| cursor.as_slice().first() == Some(&root_idx);
-        while let Some((attribute_idx, attribute_cursor)) =
-            dynamic_attributes_iter.next_if(from_root_node)
-        {
-            let attribute = &self.dynamic_attrs[attribute_idx];
+        for_each_dynamic_attr_group(self, |group| {
+            if group.is_descendant_of_static(path) {
+                self.write_attr_group(mount, &group, dom, to);
+            }
+        });
+    }
 
-            let id = match last_cursor {
-                Some((cursor, id)) if cursor == attribute_cursor => id,
-                _ => {
-                    let id = self.assign_static_node_as_dynamic(mount, attribute_cursor, dom, to);
-                    last_cursor = Some((attribute_cursor, id));
-                    id
-                }
-            };
-
-            for attr in &**attribute {
-                self.write_attribute(attribute_cursor, attr, id, mount, dom, to);
+    fn write_attr_group(
+        &self,
+        mount: MountId,
+        group: &DynamicAttrGroup<'_>,
+        dom: &mut VirtualDom,
+        to: &mut dyn WriteMutations,
+    ) {
+        let id = self.assign_static_node_as_dynamic(mount, group, dom, to);
+        for attribute_idx in group.ids() {
+            for attr in self.dynamic_values[attribute_idx].attrs() {
+                self.write_attribute(group.path(), attr, id, mount, dom, to);
             }
             // Store this even for empty dynamic attribute groups so fullstack
             // can later find where attributes may be inserted.
@@ -935,23 +836,27 @@ impl VNode {
     fn assign_static_node_as_dynamic(
         &self,
         mount: MountId,
-        cursor: TemplateCursor,
+        group: &DynamicAttrGroup<'_>,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> MountedElementId {
-        let cursor = cursor.as_slice();
+        let cursor = group.path();
         // This is just the root node. We already know it's id
-        if let [root_idx] = cursor {
-            return dom.unchecked_mounted_root_node(mount, *root_idx as usize);
+        if group.is_root_level() {
+            return dom.unchecked_mounted_root_node(mount, cursor.segment(0) as usize);
         }
 
         // The node is deeper in the template and we should create a new id for it
         let id = dom.next_element_for_mount(mount);
 
-        let root_idx = cursor[0] as usize;
+        let root_idx = cursor.segment(0) as usize;
         let root_id = dom.unchecked_mounted_root_node(mount, root_idx);
         with_consumed_id(to, root_id.element_id(), |to| {
-            push_static_cursor(to, &self.template.roots()[root_idx], &cursor[1..]);
+            if let Some(indexes) = group.static_child_indexes() {
+                for index in indexes {
+                    to.child(index);
+                }
+            }
             to.pop_id(id.element_id());
         });
 
@@ -962,6 +867,7 @@ impl VNode {
         &self,
         mount: MountId,
         root_idx: usize,
+        root_op: usize,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> MountedElementId {
@@ -972,7 +878,7 @@ impl VNode {
             Some(id) => id,
             None => {
                 let id = dom.allocate_template_root(target_id, self.template, root_idx);
-                create_static_prototype(&self.template.roots()[root_idx], to);
+                create_static_prototype(&self.template, root_op, to);
                 to.pop_id(id.element_id());
                 id
             }
@@ -985,40 +891,52 @@ impl VNode {
     }
 }
 
-fn create_static_prototype(node: &'static TemplateNode, to: &mut dyn WriteMutations) -> usize {
-    match node {
-        TemplateNode::Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-        } => {
-            to.create_element(tag, *namespace);
-            for attr in *attrs {
-                if let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                {
-                    let value = crate::AttributeValue::Text((*value).to_string());
-                    to.set_attribute(name, *namespace, &value);
-                }
+fn create_static_prototype(template: &Template, op: usize, to: &mut dyn WriteMutations) -> usize {
+    if let Some((tag, namespace)) = template.element_meta_at_op(op) {
+        to.create_element(tag, namespace);
+
+        let mut attr = template
+            .element_children_start(op)
+            .expect("element op must have a children start");
+        let first_child = template
+            .first_child_node_op(op)
+            .expect("element op must have a first child op");
+        while attr < first_child {
+            if let Some((name, value, namespace)) = template.static_attr_at_op(attr) {
+                let value = crate::AttributeValue::Text(value.to_string());
+                to.set_attribute(name, namespace, &value);
+                attr += template
+                    .attr_op_len(attr)
+                    .expect("static attr op must have a length");
+            } else {
+                attr += 1;
             }
-            let children = children
-                .iter()
-                .map(|child| create_static_prototype(child, to))
-                .sum();
-            if children > 0 {
-                to.append_children(children);
+        }
+
+        let mut child = first_child;
+        let end = template
+            .element_end(op)
+            .expect("element op must have an end op");
+        let mut children = 0;
+        while child < end {
+            if template.is_static_node_op(child) {
+                children += create_static_prototype(template, child, to);
             }
-            1
+            child = template.next_sibling_op(child);
         }
-        TemplateNode::Text { text } => {
-            to.create_text(text);
-            1
+
+        if children > 0 {
+            to.append_children(children);
         }
+        return 1;
     }
+
+    if let Some(text) = template.static_text_at_op(op) {
+        to.create_text(text);
+        return 1;
+    }
+
+    unreachable!("static prototype root must start at a static node op")
 }
 
 fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {

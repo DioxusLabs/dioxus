@@ -7,7 +7,7 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
+    DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, VNode, VirtualDom,
     consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
@@ -21,7 +21,6 @@ use http::{HeaderMap, StatusCode, request::Parts};
 use std::{
     collections::HashMap,
     fmt::Write,
-    iter::Peekable,
     rc::Rc,
     sync::{Arc, RwLock},
 };
@@ -567,34 +566,34 @@ impl SsrRendererPool {
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
         let template = vnode.template;
-        let mut dynamic_nodes_iter = template
-            .node_cursors()
-            .iter()
-            .copied()
-            .enumerate()
-            .peekable();
-        for root_idx in 0..=template.roots().len() {
-            while let Some((dynamic_node_id, _)) = dynamic_nodes_iter
-                .next_if(|(_, cursor)| cursor.as_slice() == [root_idx as u8].as_slice())
+        for root_idx in 0..=template.root_count() {
+            for (dynamic_node_id, _) in template
+                .node_paths()
+                .filter(|(_, cursor)| cursor.is_root_slot(root_idx))
             {
-                let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
+                let dynamic_node = vnode.dynamic_values[dynamic_node_id]
+                    .as_node()
+                    .expect("hydration data node slot must point at a dynamic node");
                 Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dynamic_node_id);
             }
 
-            if matches!(
-                template.roots().get(root_idx),
-                Some(TemplateNode::Element { .. })
-            ) {
+            if let Some(root_op) = template.root_op_index(root_idx)
+                && template.ops()[root_op].is_enter()
+            {
                 // dioxus core runs nested nodes in reverse order while anchoring them into a
                 // cloned static root. We need to match that order here.
-                let (start, end) =
-                    match Self::collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8) {
-                        Some((a, b)) => (a, b),
-                        None => continue,
-                    };
+                let nested_nodes = template
+                    .node_paths()
+                    .filter(|(_, cursor)| {
+                        cursor.starts_with_root(root_idx as u8) && !cursor.is_root_level_slot()
+                    })
+                    .map(|(idx, _)| idx)
+                    .collect::<Vec<_>>();
 
-                for dynamic_node_id in (start..=end).rev() {
-                    let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
+                for dynamic_node_id in nested_nodes.into_iter().rev() {
+                    let dynamic_node = vnode.dynamic_values[dynamic_node_id]
+                        .as_node()
+                        .expect("hydration data node slot must point at a dynamic node");
                     Self::take_from_dynamic_node(
                         context,
                         vdom,
@@ -627,32 +626,6 @@ impl SsrRendererPool {
             }
             _ => {}
         }
-    }
-
-    // This should have the same behavior as the collect_dyn_node_range method in core
-    // Find the index of the first and last dynamic node under a root index
-    fn collect_dyn_node_range(
-        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, dioxus_core::TemplateCursor)>>,
-        root_idx: u8,
-    ) -> Option<(usize, usize)> {
-        let start = match dynamic_nodes.peek() {
-            Some((idx, cursor))
-                if cursor.as_slice().first() == Some(&root_idx) && !cursor.is_root_level_slot() =>
-            {
-                *idx
-            }
-            _ => return None,
-        };
-
-        let mut end = start;
-
-        while let Some((idx, _)) = dynamic_nodes.next_if(|(_, cursor)| {
-            cursor.as_slice().first() == Some(&root_idx) && !cursor.is_root_level_slot()
-        }) {
-            end = idx;
-        }
-
-        Some((start, end))
     }
 
     /// Render any content before the head of the page.

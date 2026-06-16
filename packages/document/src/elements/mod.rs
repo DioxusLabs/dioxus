@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, TemplateNode};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId};
 use dioxus_core_macro::*;
 
 mod link;
@@ -76,19 +76,24 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
     let template = vnode.template;
-    let roots = template.roots();
-    let node_cursors = template.node_cursors();
-    let attr_cursors = template.attr_cursors();
 
     // rsx! { "static text" }
-    if let ([TemplateNode::Text { text }], [], []) = (roots, node_cursors, attr_cursors) {
+    if template.root_count() == 1
+        && template.dynamics().is_empty()
+        && let Some(root) = template.root_op_index(0)
+        && let Some(text) = template.static_text_at_op(root)
+    {
         return Ok(text.to_string());
     }
     // rsx! { "title: {dynamic_text}" }
-    if let ([], [cursor], []) = (roots, node_cursors, attr_cursors)
-        && cursor.as_slice() == [0].as_slice()
+    if template.root_count() == 0
+        && template.dynamics().len() == 1
+        && template.dynamic_is_node(0)
+        && template.dynamic_path(0).is_root_slot(0)
     {
-        let node = &vnode.dynamic_nodes[0];
+        let node = vnode.dynamic_values[0]
+            .as_node()
+            .expect("title dynamic slot must be a node");
         return match node {
             DynamicNode::Text(text) => Ok(text.value.clone()),
             _ => Err(ExtractSingleTextNodeError::NonTextNode),

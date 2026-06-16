@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    Template, TemplateAttribute, TemplateNode, VNode,
+    Template, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,

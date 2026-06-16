@@ -71,7 +71,7 @@ use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use std::collections::HashMap;
 
-use crate::extensions::{html_tag_and_namespace, intern, to_template_node};
+use crate::extensions::{hot_reload_template_parts, html_tag_and_namespace};
 
 use super::last_build_state::LastBuildState;
 
@@ -191,14 +191,16 @@ impl HotReloadResult {
     /// This encourages the hot reloader to hot onto DynamicContexts directly instead of the CallBody since
     /// you can preserve more information about the nodes as they've changed over time.
     fn hotreload_body<Ctx: HotReloadingContext>(&mut self, new: &TemplateBody) -> Option<()> {
+        let parts = hot_reload_template_parts::<Ctx>(new)?;
+
         // Quickly run through dynamic attributes first attempting to invalidate them
         // Move over old IDs onto the new template
-        self.hotreload_attributes::<Ctx>(new)?;
+        self.hotreload_attributes::<Ctx>(&parts.dynamic_attributes)?;
         let new_dynamic_attributes = std::mem::take(&mut self.dynamic_attributes);
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         // Move over old IDs onto the new template
-        self.hotreload_dynamic_nodes::<Ctx>(new)?;
+        self.hotreload_dynamic_nodes::<Ctx>(&parts.dynamic_nodes)?;
         let new_dynamic_nodes = std::mem::take(&mut self.dynamic_nodes);
 
         // Collapse the OLD-pool-indexed literal vector into the dense runtime vec the core
@@ -230,39 +232,13 @@ impl HotReloadResult {
 
         let key = self.hot_reload_key(new)?;
 
-        let roots: Vec<_> = new
-            .roots
-            .iter()
-            .filter_map(|node| to_template_node::<Ctx>(node))
-            .collect();
-        let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
-        let node_cursors: Vec<_> = new
-            .node_cursors
-            .iter()
-            .map(|cursor| {
-                let cursor: &'static [u8] = Box::leak(cursor.clone().into_boxed_slice());
-                dioxus_core::TemplateCursor::new(cursor)
-            })
-            .collect();
-        let node_cursors: &[dioxus_core::TemplateCursor] = intern(&*node_cursors);
-        let attr_cursors: Vec<_> = new
-            .attr_cursors
-            .iter()
-            .map(|(cursor, _)| {
-                let cursor: &'static [u8] = Box::leak(cursor.clone().into_boxed_slice());
-                dioxus_core::TemplateCursor::new(cursor)
-            })
-            .collect();
-        let attr_cursors: &[dioxus_core::TemplateCursor] = intern(&*attr_cursors);
-
         let template = HotReloadedTemplate::new(
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,
             literal_component_properties,
-            roots,
-            node_cursors,
-            attr_cursors,
+            parts.template,
+            parts.dynamic_slots,
         );
 
         self.templates
@@ -284,9 +260,9 @@ impl HotReloadResult {
 
     fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
         &mut self,
-        new: &TemplateBody,
+        new: &[&BodyNode],
     ) -> Option<()> {
-        for new_node in new.dynamic_nodes() {
+        for &new_node in new {
             self.hot_reload_node::<Ctx>(new_node)?
         }
 
@@ -444,16 +420,15 @@ impl HotReloadResult {
             .used
             .set(true);
 
-        // Place each matched literal at its correct OLD global literal-pool index. The k-th
-        // literal returned by `hotreload_component_fields` corresponds to the k-th non-key
-        // AttrLiteral in the OLD component's declaration order, which is exactly what
-        // `old_component.component_literal_dyn_idx[k]` maps to a global pool index.
-        let old_component = match &self.full_rebuild_state.dynamic_nodes.inner[index].inner {
-            BodyNode::Component(c) => c,
-            _ => unreachable!("candidate was filtered to Component variants"),
-        };
+        // Place each matched literal at its correct OLD global literal-pool index. The indexes are
+        // collected from the old template body in dynamic-node order.
+        let literal_indexes = self
+            .full_rebuild_state
+            .component_literal_indexes_by_dynamic_node
+            .get(index)?
+            .as_ref()?;
         for (k, lit) in literal_component_properties.iter().enumerate() {
-            let global_idx = old_component.component_literal_dyn_idx[k].get();
+            let global_idx = literal_indexes[k];
             self.literal_component_properties[global_idx] = Some(lit.clone());
         }
 
@@ -644,9 +619,9 @@ impl HotReloadResult {
     ///     div { width, class: "{class}", id: "{id} and {class}", "Hi" }
     /// }
     /// ```
-    fn hotreload_attributes<Ctx: HotReloadingContext>(&mut self, new: &TemplateBody) -> Option<()> {
+    fn hotreload_attributes<Ctx: HotReloadingContext>(&mut self, new: &[&Attribute]) -> Option<()> {
         // Walk through each attribute and create a new HotReloadAttribute for each one
-        for new_attr in new.dynamic_attributes() {
+        for &new_attr in new {
             // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
             // hotreload the literal
             self.hotreload_attribute::<Ctx>(new_attr)?;

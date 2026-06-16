@@ -9,6 +9,8 @@ use crate::{
     nodes::VNode,
 };
 
+use super::template::{TemplateRoot, template_roots};
+
 use rustc_hash::{FxHashMap, FxHashSet};
 
 impl DiffState<'_, '_, '_> {
@@ -69,7 +71,7 @@ impl DiffState<'_, '_, '_> {
             Ordering::Equal => {}
         }
 
-        self.diff_child_pairs(old.iter(), new);
+        self.diff_child_pairs(old, new);
     }
 
     // Diffing "keyed" children.
@@ -225,12 +227,14 @@ impl DiffState<'_, '_, '_> {
     }
 
     fn diff_shared_prefix(&mut self, old: &[VNode], new: &[VNode], len: usize) {
-        self.diff_child_pairs(old.iter().take(len), &new[..len]);
+        self.diff_child_pairs(&old[..len], &new[..len]);
     }
 
-    fn diff_child_pairs<'a>(&mut self, old: impl Iterator<Item = &'a VNode>, new: &'a [VNode]) {
-        let pairs = old.zip(new.iter()).collect::<Vec<_>>();
-        for (old, new) in pairs.into_iter().rev() {
+    fn diff_child_pairs(&mut self, old: &[VNode], new: &[VNode]) {
+        let len = old.len().min(new.len());
+        for idx in (0..len).rev() {
+            let old = &old[idx];
+            let new = &new[idx];
             DiffFrame::new(old.unchecked_mounted_id(), old, new).diff_into(self);
         }
     }
@@ -487,23 +491,15 @@ impl VNode {
         let target_id = dom.current_render_target_id();
 
         let mut count = 0;
-        for cursor_idx in 0..=self.template.roots().len() {
-            for (dynamic_idx, _) in self
-                .template
-                .node_cursors()
-                .iter()
-                .copied()
-                .enumerate()
-                .filter(|(_, cursor)| cursor.as_slice() == [cursor_idx as u8].as_slice())
-            {
-                count += self.push_dynamic_root_node(dynamic_idx, mount, target_id, dom, to);
-            }
-
-            if cursor_idx < self.template.roots().len() && dom.mount_target_id(mount) == target_id {
-                let id = dom
-                    .unchecked_mounted_root_node(mount, cursor_idx)
-                    .element_id();
-                count += push_live_root(to, id);
+        for root in template_roots(self) {
+            if let TemplateRoot::Static { root_idx, .. } = root {
+                if dom.mount_target_id(mount) == target_id
+                    && let Some(id) = dom.mounted_root_node(mount, root_idx)
+                {
+                    count += push_live_root(to, id.element_id());
+                }
+            } else if let TemplateRoot::Dynamic { slot } = root {
+                count += self.push_dynamic_root_node(slot.index(), mount, target_id, dom, to);
             }
         }
 
@@ -518,7 +514,7 @@ impl VNode {
         dom: &VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> usize {
-        match &self.dynamic_nodes[idx] {
+        match self.dynamic_values[idx].node() {
             DynamicNode::Fragment(nodes) => nodes
                 .iter()
                 .map(|node| node.push_all_root_nodes(dom, to))

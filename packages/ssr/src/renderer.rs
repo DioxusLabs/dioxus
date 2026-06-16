@@ -117,7 +117,9 @@ impl Renderer {
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
-                    let attrs = &*template.dynamic_attrs[*idx];
+                    let attrs = template.dynamic_values[*idx]
+                        .as_attrs()
+                        .expect("SSR attr segment must point at dynamic attributes");
                     for attr in attrs {
                         if attr.name == "dangerous_inner_html" {
                             inner_html = Some(attr);
@@ -134,7 +136,10 @@ impl Renderer {
                 }
                 Segment::Node { index, escape_text } => {
                     let escaped = escape_text.should_escape(parent_escaped);
-                    match &template.dynamic_nodes[*index] {
+                    match template.dynamic_values[*index]
+                        .as_node()
+                        .expect("SSR node segment must point at a dynamic node")
+                    {
                         DynamicNode::Component(node) => {
                             if let Some(render_components) = self.render_components.clone() {
                                 let scope_id =

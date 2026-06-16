@@ -29,7 +29,6 @@ mod data_transfer;
 pub mod geometry;
 pub mod input_data;
 pub mod point_interaction;
-mod render_template;
 pub use data_transfer::*;
 
 pub use bytes;
@@ -40,14 +39,12 @@ mod transit;
 #[cfg(feature = "serialize")]
 pub use transit::*;
 
-pub use attribute_groups::*;
-pub use elements::*;
-pub use events::*;
-pub use render_template::*;
-
 pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
 pub use crate::elements::extensions::*;
 pub use crate::point_interaction::*;
+pub use attribute_groups::*;
+pub use elements::*;
+pub use events::*;
 pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 
 pub mod traits {

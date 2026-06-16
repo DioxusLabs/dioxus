@@ -2,9 +2,9 @@ use crate::{
     Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
 };
 use dioxus_core::{
-    DynamicNode, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime, SuperInto,
-    Template, TemplateCursor, VComponent, VNode, fc_to_builder, provide_context, schedule_update,
-    spawn, use_hook, use_hook_with_cleanup,
+    DynamicNode, DynamicValue, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime,
+    SuperInto, Template, TemplateOp, TemplatePath, VComponent, VNode, fc_to_builder,
+    provide_context, schedule_update, spawn, use_hook, use_hook_with_cleanup,
 };
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -324,12 +324,15 @@ fn portal_element(target: RenderTargetId, children: Element) -> Element {
 }
 
 fn component_element(component: VComponent) -> Element {
-    static TEMPLATE: Template = Template::new(&[], &[TemplateCursor::new(&[0])], &[]);
+    static TEMPLATE: Template = Template::new(
+        &[TemplateOp::text(), TemplateOp::dynamic()],
+        &[],
+        &[TemplatePath::root(0)],
+    );
 
     Ok(VNode::new(
         None,
         TEMPLATE,
-        Box::new([DynamicNode::Component(component)]),
-        Box::new([]),
+        Box::new([DynamicValue::Node(DynamicNode::Component(component))]),
     ))
 }

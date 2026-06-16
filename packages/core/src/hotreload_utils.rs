@@ -3,11 +3,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use crate::nodes::DynamicValue;
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
-use crate::{
-    Attribute, AttributeValue, DynamicNode, Template, TemplateCursor, TemplateNode, VNode, VText,
-};
+use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
@@ -120,14 +119,8 @@ pub enum FmtSegment {
 // );
 // VNode::new(
 //     None,
-//     Template {
-//         name: "...",
-//         roots: &[...],
-//         node_cursors: &[..],
-//         attr_cursors: &[...],
-//     },
-//     Box::new([...]),
-//     Box::new([...]),
+//     Template::new(ops, strings, dynamics),
+//     dynamic_values,
 // )
 
 // Open questions:
@@ -261,23 +254,39 @@ impl DynamicValuePool {
         }
     }
 
+    pub fn from_vnode(vnode: &VNode, literal_pool: DynamicLiteralPool) -> Self {
+        let mut dynamic_nodes = Vec::new();
+        let mut dynamic_attributes = Vec::new();
+
+        for value in vnode.dynamic_values.iter() {
+            match value {
+                DynamicValue::Node(node) => dynamic_nodes.push(node.clone()),
+                DynamicValue::Attrs(attrs) => dynamic_attributes.push(attrs.clone()),
+            }
+        }
+
+        Self::new(dynamic_nodes, dynamic_attributes, literal_pool)
+    }
+
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
         let key = hot_reload
             .key
             .as_ref()
             .map(|key| self.literal_pool.render_formatted(key));
-        let dynamic_nodes = hot_reload
-            .dynamic_nodes
+        let dynamic_values = hot_reload
+            .dynamic_slots
             .iter()
-            .map(|node| self.render_dynamic_node(node))
-            .collect();
-        let dynamic_attrs = hot_reload
-            .dynamic_attributes
-            .iter()
-            .map(|attr| self.render_attribute(attr))
+            .map(|slot| match slot {
+                HotReloadDynamicSlot::Node(id) => {
+                    DynamicValue::Node(self.render_dynamic_node(&hot_reload.dynamic_nodes[*id]))
+                }
+                HotReloadDynamicSlot::Attribute(id) => {
+                    DynamicValue::Attrs(self.render_attribute(&hot_reload.dynamic_attributes[*id]))
+                }
+            })
             .collect();
 
-        VNode::new(key, hot_reload.template, dynamic_nodes, dynamic_attrs)
+        VNode::new(key, hot_reload.template, dynamic_values)
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
@@ -342,8 +351,6 @@ pub struct TemplateGlobalKey {
     pub index: usize,
 }
 
-type StaticTemplateArray = &'static [TemplateNode];
-
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -352,23 +359,8 @@ pub struct HotReloadedTemplate {
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
     pub component_values: Vec<HotReloadLiteral>,
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_leaky")
-    )]
-    pub roots: StaticTemplateArray,
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_cursors_leaky")
-    )]
-    pub node_cursors: &'static [TemplateCursor],
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_cursors_leaky")
-    )]
-    pub attr_cursors: &'static [TemplateCursor],
-    /// The template that is computed from the hot reload roots
-    template: Template,
+    dynamic_slots: Vec<HotReloadDynamicSlot>,
+    pub template: Template,
 }
 
 impl HotReloadedTemplate {
@@ -377,22 +369,26 @@ impl HotReloadedTemplate {
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
-        roots: &'static [TemplateNode],
-        node_cursors: &'static [TemplateCursor],
-        attr_cursors: &'static [TemplateCursor],
+        template: Template,
+        dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
-        let template = Template::new(roots, node_cursors, attr_cursors);
         Self {
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
-            roots,
-            node_cursors,
-            attr_cursors,
+            dynamic_slots,
             template,
         }
     }
+}
+
+#[doc(hidden)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub enum HotReloadDynamicSlot {
+    Node(usize),
+    Attribute(usize),
 }
 
 #[doc(hidden)]

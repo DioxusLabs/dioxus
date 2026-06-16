@@ -499,8 +499,8 @@ fn MyComponent() -> Element {{
                 mount_id = el_ref.unchecked_mounted_id().0;
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_cursor) in node_template.attr_cursors().iter().copied().enumerate() {
-                    let attrs = &*el_ref.dynamic_attrs[idx];
+                for (idx, this_cursor) in node_template.attr_paths() {
+                    let attrs = el_ref.dynamic_values[idx].attrs();
 
                     for attr in attrs.iter() {
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
@@ -562,8 +562,8 @@ fn MyComponent() -> Element {{
         let node_template = el_ref.template;
         let target_location = node.location;
 
-        for (idx, this_cursor) in node_template.attr_cursors().iter().copied().enumerate() {
-            let attrs = &*el_ref.dynamic_attrs[idx];
+        for (idx, this_cursor) in node_template.attr_paths() {
+            let attrs = el_ref.dynamic_values[idx].attrs();
 
             for attr in attrs.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one

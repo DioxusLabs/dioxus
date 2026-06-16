@@ -694,7 +694,7 @@ fn replace_placeholder_with(
     if let Some(to_ref) = reborrow_writer(&mut to) {
         let placeholder_vnode = placeholder.as_vnode();
         if let Some(id) = placeholder_vnode.mounted_root(0, dom) {
-            let child_owns_placeholder_id = (0..children.template.roots().len()).any(|root_idx| {
+            let child_owns_placeholder_id = (0..children.template.root_count()).any(|root_idx| {
                 children
                     .mounted_root(root_idx, dom)
                     .is_some_and(|root_id| root_id == id)
@@ -728,8 +728,8 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode) {
     let mount = vnode.unchecked_mounted_id();
     dom.set_mount_mode(mount, RenderMode::Foreground);
 
-    for (idx, dynamic) in vnode.dynamic_nodes.iter().enumerate() {
-        match dynamic {
+    for (idx, _) in vnode.template.node_paths() {
+        match vnode.dynamic_values[idx].node() {
             DynamicNode::Component(_) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                 if dom.mark_clean(scope_id) {

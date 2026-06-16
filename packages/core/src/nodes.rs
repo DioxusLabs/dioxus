@@ -5,6 +5,7 @@ use crate::{
     innerlude::{MountId, ScopeState},
     properties::ComponentFunction,
 };
+use const_vec::ConstVec;
 use dioxus_core_types::DioxusFormattable;
 
 use std::ops::Deref;
@@ -29,45 +30,12 @@ pub struct VNodeInner {
     /// The static nodes and static descriptor of the template
     pub template: Template,
 
-    /// The dynamic nodes in the template
-    pub dynamic_nodes: Box<[DynamicNode]>,
-
-    /// The dynamic attribute slots in the template
+    /// The dynamic values in template order.
     ///
-    /// This is a list of positions in the template where dynamic attributes can be inserted.
-    ///
-    /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
-    /// More than one slot can point at the same template element when named dynamic attributes and
-    /// spread attributes are mixed. Creation writes those slots in order, and diffing groups slots
-    /// with the same attribute path so duplicate keys keep the same last-write-wins behavior and
-    /// removed dynamic overrides can reveal the static template attribute underneath.
-    ///
-    /// For example:
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// let class = "my-class";
-    /// let attrs = vec![];
-    /// let color = "red";
-    ///
-    /// rsx! {
-    ///     div {
-    ///         class: "{class}",
-    ///         ..attrs,
-    ///         p {
-    ///             color: "{color}",
-    ///         }
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// Would be represented as:
-    /// ```text
-    /// [
-    ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
-    ///     [color], // Slot 1 in the template
-    /// ]
-    /// ```
-    pub dynamic_attrs: Box<[Box<[Attribute]>]>,
+    /// Each entry corresponds to one path in [`Template::dynamics`]. Node and attribute slots share
+    /// the same index space so the flat template stream can be diffed in a single document-order
+    /// pass.
+    pub dynamic_values: Box<[DynamicValue]>,
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -120,14 +88,18 @@ impl VNode {
         thread_local! {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static EMPTY_NODE_CURSORS: &[TemplateCursor] = &[TemplateCursor::new(&[0])];
-        static EMPTY_TEMPLATE: Template = Template::new(&[], EMPTY_NODE_CURSORS, &[]);
+        static EMPTY_TEMPLATE: Template = Template::new(
+            &[TemplateOp::text(), TemplateOp::dynamic()],
+            &[],
+            &[TemplatePath::root(0)],
+        );
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     key: None,
-                    dynamic_nodes: Box::new([DynamicNode::Fragment(Vec::new())]),
-                    dynamic_attrs: Box::new([]),
+                    dynamic_values: Box::new([DynamicValue::Node(DynamicNode::Fragment(
+                        Vec::new(),
+                    ))]),
                     template: EMPTY_TEMPLATE,
                 })
             })
@@ -147,16 +119,18 @@ impl VNode {
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static ERROR_ANCHOR_NODE_CURSORS: &[TemplateCursor] = &[TemplateCursor::new(&[0])];
-        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(&[], ERROR_ANCHOR_NODE_CURSORS, &[]);
+        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
+            &[TemplateOp::text(), TemplateOp::dynamic()],
+            &[],
+            &[TemplatePath::root(0)],
+        );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     key: None,
-                    dynamic_nodes: Box::new([DynamicNode::Text(VText {
+                    dynamic_values: Box::new([DynamicValue::Node(DynamicNode::Text(VText {
                         value: String::new(),
-                    })]),
-                    dynamic_attrs: Box::new([]),
+                    }))]),
                     template: ERROR_ANCHOR_TEMPLATE,
                 })
             })
@@ -172,26 +146,27 @@ impl VNode {
     pub fn new(
         key: Option<String>,
         template: Template,
-        dynamic_nodes: Box<[DynamicNode]>,
-        dynamic_attrs: Box<[Box<[Attribute]>]>,
+        dynamic_values: Box<[DynamicValue]>,
     ) -> Self {
         // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
         // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
         // and the only realistic source of violations.
         #[cfg(debug_assertions)]
-        for slot in &dynamic_attrs {
-            for pair in slot.windows(2) {
-                let left = (pair[0].name, pair[0].namespace);
-                let right = (pair[1].name, pair[1].namespace);
-                if left > right {
-                    tracing::warn!(
-                        "spread attributes in `rsx!` must be sorted by (name, namespace); \
-                         found {:?} before {:?}. The diff assumes sorted input and may produce \
-                         incorrect updates otherwise.",
-                        left,
-                        right,
-                    );
-                    break;
+        for value in &dynamic_values {
+            if let DynamicValue::Attrs(slot) = value {
+                for pair in slot.windows(2) {
+                    let left = (pair[0].name, pair[0].namespace);
+                    let right = (pair[1].name, pair[1].namespace);
+                    if left > right {
+                        tracing::warn!(
+                            "spread attributes in `rsx!` must be sorted by (name, namespace); \
+                             found {:?} before {:?}. The diff assumes sorted input and may produce \
+                             incorrect updates otherwise.",
+                            left,
+                            right,
+                        );
+                        break;
+                    }
                 }
             }
         }
@@ -200,8 +175,7 @@ impl VNode {
             vnode: Rc::new(VNodeInner {
                 key,
                 template,
-                dynamic_nodes,
-                dynamic_attrs,
+                dynamic_values,
             }),
             mount: Cell::new(Self::UNMOUNTED_MOUNT),
         }
@@ -212,10 +186,10 @@ impl VNode {
     /// Returns [`None`] if the dynamic node is mounted under a static template node.
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
         self.template
-            .node_cursors()
-            .get(idx)
-            .filter(|cursor| cursor.is_root_level_slot())
-            .map(|_| &self.dynamic_nodes[idx])
+            .node_paths()
+            .any(|(dynamic_idx, path)| dynamic_idx == idx && path.is_root_level_slot())
+            .then(|| self.dynamic_values[idx].as_node())
+            .flatten()
     }
 
     /// Get the mount id for this node if it has been mounted.
@@ -254,7 +228,7 @@ impl VNode {
     ) -> Option<ElementId> {
         let mount = self.mounted_id()?;
 
-        match &self.dynamic_nodes[dynamic_node_idx] {
+        match self.dynamic_values[dynamic_node_idx].node() {
             DynamicNode::Text(_) => dom
                 .mounted_dynamic_text_node(mount, dynamic_node_idx)
                 .map(|id| id.element_id()),
@@ -319,34 +293,7 @@ impl VNode {
 
     /// Create a deep clone of this VNode
     pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            vnode: Rc::new(VNodeInner {
-                key: self.vnode.key.clone(),
-                template: self.vnode.template,
-                dynamic_nodes: self
-                    .vnode
-                    .dynamic_nodes
-                    .iter()
-                    .map(|node| match node {
-                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
-                            nodes.iter().map(|node| node.deep_clone()).collect(),
-                        ),
-                        other => other.clone(),
-                    })
-                    .collect(),
-                dynamic_attrs: self
-                    .vnode
-                    .dynamic_attrs
-                    .iter()
-                    .map(|attr| {
-                        attr.iter()
-                            .map(|attribute| attribute.deep_clone())
-                            .collect()
-                    })
-                    .collect(),
-            }),
-            mount: Cell::new(Self::UNMOUNTED_MOUNT),
-        }
+        self.deep_clone_inner(false)
     }
 
     /// Deep-clone the tree while preserving every per-node raw mount slot. Each
@@ -357,105 +304,841 @@ impl VNode {
     /// Used by `SuspenseBranch::root` to hand out a fresh tree per diff pass
     /// without losing the mount info the diff needs to talk to the renderer.
     pub(crate) fn deep_clone_preserving_mounts(&self) -> Self {
+        self.deep_clone_inner(true)
+    }
+
+    fn deep_clone_inner(&self, preserve_mounts: bool) -> Self {
         Self {
             vnode: Rc::new(VNodeInner {
                 key: self.vnode.key.clone(),
                 template: self.vnode.template,
-                dynamic_nodes: self
+                dynamic_values: self
                     .vnode
-                    .dynamic_nodes
+                    .dynamic_values
                     .iter()
-                    .map(|node| match node {
-                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
-                            nodes
-                                .iter()
-                                .map(|node| node.deep_clone_preserving_mounts())
-                                .collect(),
-                        ),
-                        other => other.clone(),
-                    })
-                    .collect(),
-                dynamic_attrs: self
-                    .vnode
-                    .dynamic_attrs
-                    .iter()
-                    .map(|attr| {
-                        attr.iter()
-                            .map(|attribute| attribute.deep_clone())
-                            .collect()
+                    .map(|value| match value {
+                        DynamicValue::Node(DynamicNode::Fragment(nodes)) => {
+                            DynamicValue::Node(DynamicNode::Fragment(
+                                nodes
+                                    .iter()
+                                    .map(|node| node.deep_clone_inner(preserve_mounts))
+                                    .collect(),
+                            ))
+                        }
+                        DynamicValue::Node(other) => DynamicValue::Node(other.clone()),
+                        DynamicValue::Attrs(attrs) => DynamicValue::Attrs(attrs.clone()),
                     })
                     .collect(),
             }),
-            mount: Cell::new(self.mount.get()),
+            mount: Cell::new(if preserve_mounts {
+                self.mount.get()
+            } else {
+                Self::UNMOUNTED_MOUNT
+            }),
         }
     }
 }
 
-type StaticStr = &'static str;
-type StaticCursorArray = &'static [TemplateCursor];
-type StaticTemplateArray = &'static [TemplateNode];
-type StaticTemplateAttributeArray = &'static [TemplateAttribute];
+type StaticTemplateOpArray = &'static [TemplateOp];
+type StaticTemplateStringArray = &'static [&'static str];
+type StaticTemplatePathArray = &'static [TemplatePath];
 
-/// A cursor into a template's static children, or into a dynamic insertion slot.
+/// A compact path from a template root to a dynamic node or dynamic attribute.
 ///
-/// For a static node, every segment indexes the nth static child at that depth.
-/// For a dynamic node slot, the final segment is the insertion index among the
-/// static children of the parent identified by the preceding segments.
+/// Paths use the template-v2 child/sibling bit encoding: `1` means descend to the first child and
+/// `0` means advance to the next sibling. Bits are appended by shifting left, so iteration decodes
+/// from the least-significant bit back toward the root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(transparent)
-)]
-pub struct TemplateCursor(
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_byte_slice_leaky")
-    )]
-    &'static [u8],
-);
+pub struct TemplatePath {
+    path: u128,
+}
 
-impl TemplateCursor {
-    /// Create a new template cursor from a static byte slice.
-    pub const fn new(cursor: &'static [u8]) -> Self {
-        Self(cursor)
+/// A single step in a compact template path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplatePathStep {
+    /// Descend to the first child.
+    Child,
+    /// Advance to the next sibling.
+    Sibling,
+}
+
+impl TemplatePath {
+    /// Create an empty path.
+    pub const fn empty() -> Self {
+        Self { path: 0 }
     }
 
-    /// Return the cursor as a slice.
-    pub const fn as_slice(self) -> &'static [u8] {
-        self.0
+    /// Create a path from raw template-v2 bits.
+    pub const fn from_bits(path: u128) -> Self {
+        Self { path }
     }
 
-    /// Return true if this cursor points at a root-level dynamic slot.
-    pub const fn is_root_level_slot(self) -> bool {
-        self.0.len() == 1
+    /// Return the path for a root position.
+    pub const fn root(index: usize) -> Self {
+        let mut path = Self::empty().next_child();
+        let mut sibling = 0;
+        while sibling < index {
+            path = path.next_sibling();
+            sibling += 1;
+        }
+        path
     }
 
-    /// Split this dynamic slot cursor into `(parent_cursor, insertion_index)`.
-    pub fn split_slot(self) -> (&'static [u8], usize) {
-        let (index, parent) = self
-            .0
-            .split_last()
-            .expect("dynamic slot cursors must include an insertion index");
-        (parent, *index as usize)
+    /// Return the raw template-v2 bits for this path.
+    pub const fn bits(self) -> u128 {
+        self.path
     }
 
-    /// Return the parent cursor of this dynamic slot.
-    pub fn slot_parent(self) -> &'static [u8] {
+    /// Return the path for the first child of this path.
+    pub const fn next_child(self) -> Self {
+        Self {
+            path: (self.path << 1) | 1,
+        }
+    }
+
+    /// Return the path for the next sibling of this path.
+    pub const fn next_sibling(self) -> Self {
+        Self {
+            path: self.path << 1,
+        }
+    }
+
+    /// Return the parent path.
+    pub const fn parent(self) -> Self {
+        Self {
+            path: self.path >> 1,
+        }
+    }
+
+    /// Return the number of path segments.
+    pub fn len(self) -> usize {
+        let mut count = 0;
+        let mut path = self.path;
+        while path != 0 {
+            if path & 1 == 1 {
+                count += 1;
+            }
+            path >>= 1;
+        }
+        count
+    }
+
+    /// Return true if this path has no segments.
+    pub const fn is_empty(self) -> bool {
+        self.path == 0
+    }
+
+    /// Return the path segment at `index`.
+    pub fn segment(self, index: usize) -> u8 {
+        let mut current_segment = 0usize;
+        let mut current_index = 0u8;
+        let mut started = false;
+        for step in self.iter() {
+            match step {
+                TemplatePathStep::Child => {
+                    if started {
+                        if current_segment == index {
+                            return current_index;
+                        }
+                        current_segment += 1;
+                        current_index = 0;
+                    } else {
+                        started = true;
+                    }
+                }
+                TemplatePathStep::Sibling => {
+                    current_index = current_index
+                        .checked_add(1)
+                        .expect("template path sibling index overflow");
+                }
+            }
+        }
+        if started && current_segment == index {
+            return current_index;
+        }
+        panic!("template path segment index out of bounds");
+    }
+
+    /// Return true if this path points at a root-level dynamic slot.
+    pub fn is_root_level_slot(self) -> bool {
+        self.len() == 1
+    }
+
+    /// Return true if this path starts with `root_idx`.
+    pub fn starts_with_root(self, root_idx: u8) -> bool {
+        !self.is_empty() && self.segment(0) == root_idx
+    }
+
+    /// Return true if this path is exactly a root-level slot.
+    pub fn is_root_slot(self, root_idx: usize) -> bool {
+        self.len() == 1 && self.segment(0) == root_idx as u8
+    }
+
+    /// Split this dynamic slot path into `(parent_path, insertion_index)`.
+    pub fn split_slot(self) -> (TemplatePath, usize) {
+        let mut parent = self.path;
+        let mut insertion_index = 0usize;
+        while parent != 0 && parent & 1 == 0 {
+            insertion_index += 1;
+            parent >>= 1;
+        }
+        if parent != 0 {
+            parent >>= 1;
+        }
+        (TemplatePath { path: parent }, insertion_index)
+    }
+
+    /// Return the parent path of this dynamic slot.
+    pub fn slot_parent(self) -> TemplatePath {
         self.split_slot().0
     }
 
-    /// Return true if this static cursor is equal to or beneath `ancestor`.
-    pub fn is_descendant_of_static(self, ancestor: TemplateCursor) -> bool {
-        let ancestor = ancestor.as_slice();
-        ancestor.len() <= self.0.len() && ancestor == &self.0[..ancestor.len()]
+    /// Return true if this static path is equal to or beneath `ancestor`.
+    pub fn is_descendant_of_static(self, ancestor: TemplatePath) -> bool {
+        self.starts_with(ancestor)
     }
 
     /// Return true if this dynamic slot is mounted inside `ancestor`.
-    pub fn slot_is_inside_static(self, ancestor: TemplateCursor) -> bool {
-        let ancestor = ancestor.as_slice();
-        let parent = self.slot_parent();
-        ancestor.len() <= parent.len() && ancestor == &parent[..ancestor.len()]
+    pub fn slot_is_inside_static(self, ancestor: TemplatePath) -> bool {
+        self.slot_parent().starts_with(ancestor)
+    }
+
+    /// Return true if this compact path starts with `ancestor`.
+    pub fn starts_with(self, ancestor: TemplatePath) -> bool {
+        let self_len = self.bit_len();
+        let ancestor_len = ancestor.bit_len();
+        ancestor.path == 0
+            || (ancestor_len <= self_len
+                && (self.path >> (self_len - ancestor_len)) == ancestor.path)
+    }
+
+    /// Return the number of raw child/sibling bits in this path.
+    pub fn bit_len(self) -> u32 {
+        u128::BITS - self.path.leading_zeros()
+    }
+
+    /// Iterate over child/sibling path steps from root to leaf.
+    pub fn iter(self) -> TemplatePathIter {
+        TemplatePathIter {
+            path: self.path,
+            next_bit: self.bit_len(),
+        }
+    }
+}
+
+/// Iterator over compact template path steps.
+pub struct TemplatePathIter {
+    path: u128,
+    next_bit: u32,
+}
+
+impl Iterator for TemplatePathIter {
+    type Item = TemplatePathStep;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_bit == 0 {
+            return None;
+        }
+        self.next_bit -= 1;
+        let bit = (self.path >> self.next_bit) & 1;
+        Some(if bit == 1 {
+            TemplatePathStep::Child
+        } else {
+            TemplatePathStep::Sibling
+        })
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for TemplatePath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde::Serialize::serialize(&self.path, serializer)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for TemplatePath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let deserialized = <u128 as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self::from_bits(deserialized))
+    }
+}
+
+const fn static_str_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    if left.len() != right.len() {
+        return false;
+    }
+
+    let mut index = 0;
+    while index < left.len() {
+        if left[index] != right[index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+/// Static attribute namespace information in a raw template tape.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TemplateRawAttrNamespace {
+    /// No namespace.
+    None,
+    /// The built-in Dioxus style namespace.
+    Style,
+    /// A custom namespace.
+    Custom(&'static str),
+}
+
+impl TemplateRawAttrNamespace {
+    /// Create a raw namespace from the optional namespace used by `dioxus_elements`.
+    pub const fn new(namespace: Option<&'static str>) -> Self {
+        match namespace {
+            Some(namespace) if static_str_eq(namespace, "style") => Self::Style,
+            Some(namespace) => Self::Custom(namespace),
+            None => Self::None,
+        }
+    }
+}
+
+/// One unlowered operation in a template tape.
+///
+/// The RSX macro emits this raw tape directly. [`TemplateStorage::build`] lowers it into packed
+/// [`TemplateOp`]s and dynamic [`TemplatePath`]s in const context.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TemplateRawOp {
+    /// Open an element.
+    OpenElement {
+        /// Static tag name.
+        tag: &'static str,
+        /// Optional element namespace.
+        namespace: Option<&'static str>,
+    },
+    /// Close the current element.
+    CloseElement,
+    /// Static attribute on the current element.
+    StaticAttr {
+        /// Static attribute name.
+        name: &'static str,
+        /// Static attribute value.
+        value: &'static str,
+        /// Attribute namespace.
+        namespace: TemplateRawAttrNamespace,
+    },
+    /// Dynamic attribute slot on the current element.
+    DynamicAttr,
+    /// Static text node.
+    StaticText {
+        /// Static text value.
+        value: &'static str,
+    },
+    /// Dynamic node slot.
+    DynamicNode,
+}
+
+impl TemplateRawOp {
+    /// Create an open-element raw op.
+    pub const fn open_element(tag: &'static str, namespace: Option<&'static str>) -> Self {
+        Self::OpenElement { tag, namespace }
+    }
+
+    /// Create a close-element raw op.
+    pub const fn close_element() -> Self {
+        Self::CloseElement
+    }
+
+    /// Create a static-attribute raw op.
+    pub const fn static_attr(
+        name: &'static str,
+        value: &'static str,
+        namespace: Option<&'static str>,
+    ) -> Self {
+        Self::StaticAttr {
+            name,
+            value,
+            namespace: TemplateRawAttrNamespace::new(namespace),
+        }
+    }
+
+    /// Create a style static-attribute raw op.
+    pub const fn style_attr(name: &'static str, value: &'static str) -> Self {
+        Self::StaticAttr {
+            name,
+            value,
+            namespace: TemplateRawAttrNamespace::Style,
+        }
+    }
+
+    /// Create a dynamic-attribute raw op.
+    pub const fn dynamic_attr() -> Self {
+        Self::DynamicAttr
+    }
+
+    /// Create a static-text raw op.
+    pub const fn static_text(value: &'static str) -> Self {
+        Self::StaticText { value }
+    }
+
+    /// Create a dynamic-node raw op.
+    pub const fn dynamic_node() -> Self {
+        Self::DynamicNode
+    }
+}
+
+/// One operation in a flat static template tape.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct TemplateOp(u16);
+
+/// Decoded static attribute namespace storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecodedTemplateAttrNamespace {
+    /// No namespace.
+    None,
+    /// The built-in Dioxus style namespace.
+    Style,
+    /// A custom namespace string follows the static attr name/value.
+    Custom,
+}
+
+/// Decoded representation of a packed [`TemplateOp`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecodedTemplateOp {
+    /// Enter an element. `skip` is the number of ops in this element subtree.
+    Enter {
+        /// Number of ops to skip to move past this element and its children.
+        skip: u16,
+        /// Whether the reserved namespace string slot contains a namespace.
+        namespace: bool,
+    },
+    /// A static attribute on the current element.
+    Attr {
+        /// Namespace storage for this attr.
+        namespace: DecodedTemplateAttrNamespace,
+    },
+    /// A text node marker. The next op is either [`Self::Static`] or [`Self::Dynamic`].
+    Text,
+    /// A static string pool reference.
+    Static(u16),
+    /// A dynamic slot.
+    Dynamic,
+}
+
+impl TemplateOp {
+    const ENTER_MAX_CODE: u16 = 0x7fff;
+    const ATTR_CODE: u16 = 0x8000;
+    const ATTR_STYLE_CODE: u16 = 0x8001;
+    const ATTR_CUSTOM_NS_CODE: u16 = 0x8002;
+    const TEXT_CODE: u16 = 0x8003;
+    const DYN_CODE: u16 = 0x8004;
+    const STATIC_BASE: u16 = 0x8005;
+    const MAX_CAP: usize = 16_383;
+
+    /// Create a packed enter op.
+    pub const fn enter(skip: u16, namespace: bool) -> Self {
+        if skip as usize > Self::MAX_CAP {
+            panic!("op skip exceeds packed op capacity");
+        }
+        Self((skip << 1) | namespace as u16)
+    }
+
+    /// Create a packed static attribute op.
+    pub const fn attr(namespace: bool) -> Self {
+        if namespace {
+            Self(Self::ATTR_STYLE_CODE)
+        } else {
+            Self(Self::ATTR_CODE)
+        }
+    }
+
+    /// Create a packed static attribute op with a following custom namespace string.
+    pub const fn attr_custom_namespace() -> Self {
+        Self(Self::ATTR_CUSTOM_NS_CODE)
+    }
+
+    /// Create a packed text marker op.
+    pub const fn text() -> Self {
+        Self(Self::TEXT_CODE)
+    }
+
+    /// Create a packed static string reference op.
+    pub const fn static_text(id: u16) -> Self {
+        if id as usize >= Self::MAX_CAP {
+            panic!("static op id exceeds packed op capacity");
+        }
+        Self(Self::STATIC_BASE + id)
+    }
+
+    /// Create a packed dynamic op.
+    pub const fn dynamic() -> Self {
+        Self(Self::DYN_CODE)
+    }
+
+    /// Decode this packed op.
+    pub const fn decode(self) -> DecodedTemplateOp {
+        if self.0 <= Self::ENTER_MAX_CODE {
+            DecodedTemplateOp::Enter {
+                skip: self.0 >> 1,
+                namespace: self.0 & 1 == 1,
+            }
+        } else if self.0 == Self::ATTR_CODE {
+            DecodedTemplateOp::Attr {
+                namespace: DecodedTemplateAttrNamespace::None,
+            }
+        } else if self.0 == Self::ATTR_STYLE_CODE {
+            DecodedTemplateOp::Attr {
+                namespace: DecodedTemplateAttrNamespace::Style,
+            }
+        } else if self.0 == Self::ATTR_CUSTOM_NS_CODE {
+            DecodedTemplateOp::Attr {
+                namespace: DecodedTemplateAttrNamespace::Custom,
+            }
+        } else if self.0 == Self::TEXT_CODE {
+            DecodedTemplateOp::Text
+        } else if self.0 == Self::DYN_CODE {
+            DecodedTemplateOp::Dynamic
+        } else {
+            DecodedTemplateOp::Static(self.0 - Self::STATIC_BASE)
+        }
+    }
+
+    /// Return true if this op enters an element.
+    pub const fn is_enter(self) -> bool {
+        matches!(self.decode(), DecodedTemplateOp::Enter { .. })
+    }
+
+    /// Return true if this op starts a static attr.
+    pub const fn is_attr(self) -> bool {
+        matches!(self.decode(), DecodedTemplateOp::Attr { .. })
+    }
+
+    /// Return true if this op starts a text slot.
+    pub const fn is_text(self) -> bool {
+        matches!(self.decode(), DecodedTemplateOp::Text)
+    }
+
+    /// Return true if this op is a dynamic slot.
+    pub const fn is_dynamic(self) -> bool {
+        matches!(self.decode(), DecodedTemplateOp::Dynamic)
+    }
+
+    /// Return the namespace bit for element and attr ops.
+    pub const fn has_namespace(self) -> bool {
+        match self.decode() {
+            DecodedTemplateOp::Enter { namespace, .. } => namespace,
+            DecodedTemplateOp::Attr { namespace } => {
+                !matches!(namespace, DecodedTemplateAttrNamespace::None)
+            }
+            _ => false,
+        }
+    }
+
+    /// Return the element skip encoded in an enter op.
+    pub const fn enter_skip(self) -> Option<u16> {
+        match self.decode() {
+            DecodedTemplateOp::Enter { skip, .. } => Some(skip),
+            _ => None,
+        }
+    }
+
+    /// Return the static string id encoded in a static op.
+    pub const fn static_id(self) -> Option<u16> {
+        match self.decode() {
+            DecodedTemplateOp::Static(id) => Some(id),
+            _ => None,
+        }
+    }
+}
+
+/// Maximum packed template storage capacity.
+#[doc(hidden)]
+pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
+
+const TEMPLATE_PATH_STACK_CAP: usize = 129;
+
+/// Const storage for a lowered raw template.
+///
+/// The RSX macro emits a `static TemplateStorage<N>` from a raw operation tape, then calls
+/// [`Self::as_template`] to expose the compact [`Template`] used by the runtime.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct TemplateStorage<const CAP: usize> {
+    ops: ConstVec<TemplateOp, CAP>,
+    strings: ConstVec<&'static str, CAP>,
+    dynamics: ConstVec<TemplatePath, CAP>,
+}
+
+impl<const CAP: usize> TemplateStorage<CAP> {
+    /// Lower a raw template tape into packed storage in const context.
+    pub const fn build(raw: &'static [TemplateRawOp]) -> Self {
+        let mut storage = Self {
+            ops: ConstVec::new_with_max_size(),
+            strings: ConstVec::new_with_max_size(),
+            dynamics: ConstVec::new_with_max_size(),
+        };
+
+        let mut enter_stack = [0usize; TEMPLATE_PATH_STACK_CAP];
+        let mut element_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
+        let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
+        next_paths[0] = TemplatePath::root(0);
+        let mut stack_pointer = 0usize;
+
+        let mut index = 0usize;
+        while index < raw.len() {
+            match raw[index] {
+                TemplateRawOp::OpenElement { tag, namespace } => {
+                    if stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
+                        panic!("template path stack capacity exceeded");
+                    }
+
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    element_paths[stack_pointer] = path;
+                    enter_stack[stack_pointer] = storage.ops.len();
+                    next_paths[stack_pointer + 1] = path.next_child();
+                    stack_pointer += 1;
+
+                    storage.ops = storage.ops.push(TemplateOp::enter(0, namespace.is_some()));
+                    storage.push_static(tag);
+                    if let Some(namespace) = namespace {
+                        storage.push_static(namespace);
+                    }
+                }
+                TemplateRawOp::CloseElement => {
+                    if stack_pointer == 0 {
+                        panic!("template close op without matching open op");
+                    }
+
+                    stack_pointer -= 1;
+                    let enter_index = enter_stack[stack_pointer];
+                    let namespace = storage.ops.at(enter_index).has_namespace();
+                    let skip = storage.ops.len() - enter_index;
+                    if skip > TemplateOp::MAX_CAP {
+                        panic!("template op skip exceeds packed op capacity");
+                    }
+                    storage.ops = storage
+                        .ops
+                        .set(enter_index, TemplateOp::enter(skip as u16, namespace));
+                }
+                TemplateRawOp::StaticAttr {
+                    name,
+                    value,
+                    namespace,
+                } => {
+                    match namespace {
+                        TemplateRawAttrNamespace::None => {
+                            storage.ops = storage.ops.push(TemplateOp::attr(false))
+                        }
+                        TemplateRawAttrNamespace::Style => {
+                            storage.ops = storage.ops.push(TemplateOp::attr(true))
+                        }
+                        TemplateRawAttrNamespace::Custom(_) => {
+                            storage.ops = storage.ops.push(TemplateOp::attr_custom_namespace())
+                        }
+                    }
+                    storage.push_static(name);
+                    storage.push_static(value);
+                    if let TemplateRawAttrNamespace::Custom(namespace) = namespace {
+                        storage.push_static(namespace);
+                    }
+                }
+                TemplateRawOp::DynamicAttr => {
+                    if stack_pointer == 0 {
+                        panic!("dynamic attr raw op without an open element");
+                    }
+                    storage.ops = storage.ops.push(TemplateOp::dynamic());
+                    storage.dynamics = storage.dynamics.push(element_paths[stack_pointer - 1]);
+                }
+                TemplateRawOp::StaticText { value } => {
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    storage.ops = storage.ops.push(TemplateOp::text());
+                    storage.push_static(value);
+                }
+                TemplateRawOp::DynamicNode => {
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    storage.ops = storage.ops.push(TemplateOp::text());
+                    storage.ops = storage.ops.push(TemplateOp::dynamic());
+                    storage.dynamics = storage.dynamics.push(path);
+                }
+            }
+            index += 1;
+        }
+
+        if stack_pointer != 0 {
+            panic!("template raw ops ended with unclosed elements");
+        }
+
+        storage
+    }
+
+    /// Return this storage as a compact template.
+    pub const fn as_template(&'static self) -> Template {
+        Template::new(
+            self.ops.as_slice(),
+            self.strings.as_slice(),
+            self.dynamics.as_slice(),
+        )
+    }
+
+    const fn push_static(&mut self, value: &'static str) {
+        let mut id = 0usize;
+        while id < self.strings.len() {
+            if static_str_eq(self.strings.at(id), value) {
+                self.ops = self.ops.push(TemplateOp::static_text(id as u16));
+                return;
+            }
+            id += 1;
+        }
+
+        if self.strings.len() > u16::MAX as usize {
+            panic!("template string capacity exceeded");
+        }
+        let id = self.strings.len();
+        self.strings = self.strings.push(value);
+        self.ops = self.ops.push(TemplateOp::static_text(id as u16));
+    }
+}
+
+impl Template {
+    /// Lower a raw template tape into a leaked runtime template.
+    ///
+    /// This mirrors [`TemplateStorage::build`] without allocating the max-capacity
+    /// const storage on the runtime stack.
+    #[doc(hidden)]
+    pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
+        let mut ops = Vec::new();
+        let mut strings = Vec::new();
+        let mut dynamics = Vec::new();
+
+        let mut enter_stack = [0usize; TEMPLATE_PATH_STACK_CAP];
+        let mut element_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
+        let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
+        next_paths[0] = TemplatePath::root(0);
+        let mut stack_pointer = 0usize;
+
+        for raw_op in raw {
+            match *raw_op {
+                TemplateRawOp::OpenElement { tag, namespace } => {
+                    if stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
+                        panic!("template path stack capacity exceeded");
+                    }
+
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    element_paths[stack_pointer] = path;
+                    enter_stack[stack_pointer] = ops.len();
+                    next_paths[stack_pointer + 1] = path.next_child();
+                    stack_pointer += 1;
+
+                    ops.push(TemplateOp::enter(0, namespace.is_some()));
+                    push_runtime_static(&mut ops, &mut strings, tag);
+                    if let Some(namespace) = namespace {
+                        push_runtime_static(&mut ops, &mut strings, namespace);
+                    }
+                }
+                TemplateRawOp::CloseElement => {
+                    if stack_pointer == 0 {
+                        panic!("template close op without matching open op");
+                    }
+
+                    stack_pointer -= 1;
+                    let enter_index = enter_stack[stack_pointer];
+                    let namespace = ops[enter_index].has_namespace();
+                    let skip = ops.len() - enter_index;
+                    if skip > TemplateOp::MAX_CAP {
+                        panic!("template op skip exceeds packed op capacity");
+                    }
+                    ops[enter_index] = TemplateOp::enter(skip as u16, namespace);
+                }
+                TemplateRawOp::StaticAttr {
+                    name,
+                    value,
+                    namespace,
+                } => {
+                    match namespace {
+                        TemplateRawAttrNamespace::None => ops.push(TemplateOp::attr(false)),
+                        TemplateRawAttrNamespace::Style => ops.push(TemplateOp::attr(true)),
+                        TemplateRawAttrNamespace::Custom(_) => {
+                            ops.push(TemplateOp::attr_custom_namespace())
+                        }
+                    }
+                    push_runtime_static(&mut ops, &mut strings, name);
+                    push_runtime_static(&mut ops, &mut strings, value);
+                    if let TemplateRawAttrNamespace::Custom(namespace) = namespace {
+                        push_runtime_static(&mut ops, &mut strings, namespace);
+                    }
+                }
+                TemplateRawOp::DynamicAttr => {
+                    if stack_pointer == 0 {
+                        panic!("dynamic attr raw op without an open element");
+                    }
+                    ops.push(TemplateOp::dynamic());
+                    dynamics.push(element_paths[stack_pointer - 1]);
+                }
+                TemplateRawOp::StaticText { value } => {
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    ops.push(TemplateOp::text());
+                    push_runtime_static(&mut ops, &mut strings, value);
+                }
+                TemplateRawOp::DynamicNode => {
+                    let path = next_paths[stack_pointer];
+                    next_paths[stack_pointer] = path.next_sibling();
+                    ops.push(TemplateOp::text());
+                    ops.push(TemplateOp::dynamic());
+                    dynamics.push(path);
+                }
+            }
+        }
+
+        if stack_pointer != 0 {
+            panic!("template raw ops ended with unclosed elements");
+        }
+
+        Self::new(
+            Box::leak(ops.into_boxed_slice()),
+            Box::leak(strings.into_boxed_slice()),
+            Box::leak(dynamics.into_boxed_slice()),
+        )
+    }
+}
+
+fn push_runtime_static(
+    ops: &mut Vec<TemplateOp>,
+    strings: &mut Vec<&'static str>,
+    value: &'static str,
+) {
+    for (id, current) in strings.iter().enumerate() {
+        if *current == value {
+            ops.push(TemplateOp::static_text(id as u16));
+            return;
+        }
+    }
+
+    if strings.len() > u16::MAX as usize {
+        panic!("template string capacity exceeded");
+    }
+    let id = strings.len();
+    strings.push(value);
+    ops.push(TemplateOp::static_text(id as u16));
+}
+
+impl std::fmt::Debug for TemplateOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.decode().fmt(f)
     }
 }
 
@@ -467,25 +1150,20 @@ impl TemplateCursor {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
-    /// The list of template nodes that make up the template
-    ///
-    /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
+    /// Flat static template operations.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    roots: StaticTemplateArray,
+    ops: StaticTemplateOpArray,
 
-    /// The insertion cursor for each dynamic node.
+    /// Static strings referenced by [`TemplateOp::Static`].
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "deserialize_cursors_leaky")
+        serde(deserialize_with = "deserialize_string_array_leaky")
     )]
-    node_cursors: StaticCursorArray,
+    strings: StaticTemplateStringArray,
 
-    /// The static-node cursor for each dynamic attribute.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_cursors_leaky", bound = "")
-    )]
-    attr_cursors: StaticCursorArray,
+    /// Dynamic paths in document order.
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
+    dynamics: StaticTemplatePathArray,
 
     /// Compile-time hash of template content for reliable cross-crate comparison.
     /// This ensures identical templates compare equal regardless of optimization levels.
@@ -503,123 +1181,459 @@ pub struct Template {
 }
 
 impl Template {
-    /// Create a new Template with the given roots, node cursors, and attribute cursors.
+    /// Create a new flat template with the given ops, strings, and dynamic paths.
     /// The hash is computed automatically from the template content.
     pub const fn new(
-        roots: &'static [TemplateNode],
-        node_cursors: &'static [TemplateCursor],
-        attr_cursors: &'static [TemplateCursor],
+        ops: &'static [TemplateOp],
+        strings: &'static [&'static str],
+        dynamics: &'static [TemplatePath],
     ) -> Self {
         Self {
-            roots,
-            node_cursors,
-            attr_cursors,
-            hash: Self::compute_hash(roots, node_cursors, attr_cursors),
+            ops,
+            strings,
+            dynamics,
+            hash: Self::compute_hash(ops, strings, dynamics),
         }
     }
 
-    /// Get the template nodes that make up this template.
-    pub const fn roots(&self) -> &'static [TemplateNode] {
-        self.roots
+    /// Get the flat template operations.
+    pub const fn ops(&self) -> &'static [TemplateOp] {
+        self.ops
     }
 
-    /// Get the insertion cursors for each dynamic node.
-    pub const fn node_cursors(&self) -> &'static [TemplateCursor] {
-        self.node_cursors
+    /// Get the template static string pool.
+    pub const fn strings(&self) -> &'static [&'static str] {
+        self.strings
     }
 
-    /// Get the static-node cursors for each dynamic attribute.
-    pub const fn attr_cursors(&self) -> &'static [TemplateCursor] {
-        self.attr_cursors
+    /// Get dynamic paths in document order.
+    pub const fn dynamics(&self) -> &'static [TemplatePath] {
+        self.dynamics
     }
 
-    pub(crate) fn node_at_cursor(&self, cursor: TemplateCursor) -> Option<&'static TemplateNode> {
-        let (root_idx, child_cursor) = cursor.as_slice().split_first()?;
-        self.roots
-            .get(*root_idx as usize)?
-            .node_at_child_cursor(child_cursor)
+    /// Get the number of root positions in this template.
+    pub fn root_count(&self) -> usize {
+        let mut count = 0;
+        let mut op = 0;
+        while op < self.ops.len() {
+            if self.is_static_node_op(op) || self.is_dynamic_node_marker(op) {
+                count += 1;
+            }
+            op = self.next_sibling_op(op);
+        }
+        count
+    }
+
+    /// Get a static string from this template's string pool.
+    pub const fn string(&self, id: u16) -> &'static str {
+        self.strings[id as usize]
+    }
+
+    /// Decode an element op into its subtree length and namespace presence.
+    pub fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
+        match self.ops.get(op).map(|op| op.decode()) {
+            Some(DecodedTemplateOp::Enter { skip, namespace }) => Some((skip as usize, namespace)),
+            _ => None,
+        }
+    }
+
+    /// Return the static string referenced by an op.
+    pub fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
+        match self.ops.get(op).map(|op| op.decode()) {
+            Some(DecodedTemplateOp::Static(id)) => Some(self.string(id)),
+            _ => None,
+        }
+    }
+
+    /// Return the tag and namespace for an element op.
+    pub fn element_meta_at_op(&self, op: usize) -> Option<(&'static str, Option<&'static str>)> {
+        let (_, has_namespace) = self.enter_meta(op)?;
+        let tag = self.static_string_at_op(op + 1)?;
+        let namespace = has_namespace
+            .then(|| self.static_string_at_op(op + 2))
+            .flatten();
+        Some((tag, namespace))
+    }
+
+    /// Return the first child/attribute op inside an element.
+    pub fn element_children_start(&self, op: usize) -> Option<usize> {
+        let (_, has_namespace) = self.enter_meta(op)?;
+        Some(op + if has_namespace { 3 } else { 2 })
+    }
+
+    /// Return the name, value, and namespace for a static attr op.
+    pub fn static_attr_at_op(
+        &self,
+        op: usize,
+    ) -> Option<(&'static str, &'static str, Option<&'static str>)> {
+        let namespace = match self.ops.get(op).map(|op| op.decode()) {
+            Some(DecodedTemplateOp::Attr { namespace }) => namespace,
+            _ => return None,
+        };
+        let name = self.static_string_at_op(op + 1)?;
+        let value = self.static_string_at_op(op + 2)?;
+        let namespace = match namespace {
+            DecodedTemplateAttrNamespace::None => None,
+            DecodedTemplateAttrNamespace::Style => Some("style"),
+            DecodedTemplateAttrNamespace::Custom => self.static_string_at_op(op + 3),
+        };
+        Some((name, value, namespace))
+    }
+
+    /// Return the text for a static `Text, Static` node marker.
+    pub fn static_text_at_op(&self, op: usize) -> Option<&'static str> {
+        (self.ops.get(op).map(|op| op.decode()) == Some(DecodedTemplateOp::Text))
+            .then(|| self.static_string_at_op(op + 1))
+            .flatten()
+    }
+
+    /// Return the number of ops used by a static attr at `op`.
+    pub fn attr_op_len(&self, op: usize) -> Option<usize> {
+        match self.ops.get(op).map(|op| op.decode()) {
+            Some(DecodedTemplateOp::Attr {
+                namespace: DecodedTemplateAttrNamespace::Custom,
+            }) => Some(4),
+            Some(DecodedTemplateOp::Attr { .. }) => Some(3),
+            _ => None,
+        }
+    }
+
+    /// Return the op immediately after an element subtree.
+    pub fn element_end(&self, op: usize) -> Option<usize> {
+        let (skip, _) = self.enter_meta(op)?;
+        Some(op + skip)
+    }
+
+    /// Return the first static or dynamic child marker inside an element.
+    pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
+        let mut cursor = self.element_children_start(element_op)?;
+        let end = self.element_end(element_op)?;
+        while cursor < end {
+            if let Some(len) = self.attr_op_len(cursor) {
+                cursor += len;
+            } else if self.dynamic_op_is_attr(cursor) {
+                cursor += 1;
+            } else {
+                break;
+            }
+        }
+        Some(cursor)
+    }
+
+    /// Find a static attr fallback value for a key in an element.
+    pub fn static_attr_value_for_key(
+        &self,
+        element_op: usize,
+        key: (&'static str, Option<&'static str>),
+    ) -> Option<&'static str> {
+        let mut cursor = self.element_children_start(element_op)?;
+        let end = self.first_child_node_op(element_op)?;
+        let mut found = None;
+        while cursor < end {
+            if let Some((name, value, namespace)) = self.static_attr_at_op(cursor) {
+                if (name, namespace) == key {
+                    found = Some(value);
+                }
+                cursor += self.attr_op_len(cursor)?;
+            } else if self.dynamic_op_is_attr(cursor) {
+                cursor += 1;
+            } else {
+                break;
+            }
+        }
+        found
+    }
+
+    /// Iterate over dynamic node slots as `(dynamic_value_index, path)` pairs.
+    pub fn node_paths(&self) -> impl Iterator<Item = (usize, TemplatePath)> + '_ {
+        self.dynamics
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(move |(idx, _)| self.dynamic_is_node(*idx))
+    }
+
+    /// Iterate over dynamic attribute slots as `(dynamic_value_index, path)` pairs.
+    pub fn attr_paths(&self) -> impl Iterator<Item = (usize, TemplatePath)> + '_ {
+        self.dynamics
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(move |(idx, _)| self.dynamic_is_attr(*idx))
+    }
+
+    /// Get the template path for a dynamic slot by dynamic value index.
+    pub fn dynamic_path(&self, idx: usize) -> TemplatePath {
+        self.dynamics[idx]
+    }
+
+    /// Return the flat op index for a static root at a root position.
+    pub fn root_op_index(&self, root_idx: usize) -> Option<usize> {
+        let mut current_root = 0;
+        let mut idx = 0;
+        while idx < self.ops.len() {
+            if self.is_static_node_op(idx) || self.is_dynamic_node_marker(idx) {
+                if current_root == root_idx {
+                    return self.is_static_node_op(idx).then_some(idx);
+                }
+                current_root += 1;
+                idx = self.next_sibling_op(idx);
+            } else {
+                idx = self.next_sibling_op(idx);
+            }
+        }
+        None
+    }
+
+    /// Return the flat op index for a static node path.
+    pub fn static_node_op_at_path(&self, path: TemplatePath) -> Option<usize> {
+        if path.is_empty() {
+            return None;
+        }
+        let mut op = self.root_op_index(path.segment(0) as usize)?;
+        for depth in 1..path.len() {
+            op = self.static_child_op(op, path.segment(depth) as usize)?;
+        }
+        Some(op)
+    }
+
+    /// Return child indexes for navigating from a static root through a static prototype.
+    pub fn static_prototype_child_indexes(&self, path: TemplatePath) -> Option<Vec<usize>> {
+        if path.is_empty() {
+            return None;
+        }
+        let mut op = self.root_op_index(path.segment(0) as usize)?;
+        let mut indexes = Vec::new();
+        for depth in 1..path.len() {
+            let (child_op, prototype_index) =
+                self.static_child_op_and_prototype_index(op, path.segment(depth) as usize)?;
+            indexes.push(prototype_index);
+            op = child_op;
+        }
+        Some(indexes)
+    }
+
+    /// Return the static-prototype insertion index for a dynamic child slot.
+    pub fn static_prototype_insertion_index(
+        &self,
+        parent_path: TemplatePath,
+        child_idx: usize,
+    ) -> Option<usize> {
+        let parent_op = self.static_node_op_at_path(parent_path)?;
+        self.static_child_insertion_index(parent_op, child_idx)
+    }
+
+    /// Return the flat op index for the static child at `child_idx` under an element op.
+    pub fn static_child_op(&self, element_op: usize, child_idx: usize) -> Option<usize> {
+        self.static_child_op_and_prototype_index(element_op, child_idx)
+            .map(|(op, _)| op)
+    }
+
+    /// Return the static-prototype child index where authored child `child_idx` should be inserted.
+    pub fn static_child_insertion_index(
+        &self,
+        element_op: usize,
+        child_idx: usize,
+    ) -> Option<usize> {
+        let (skip, _) = self.enter_meta(element_op)?;
+        let mut cursor = self.first_child_node_op(element_op)?;
+        let end = element_op + skip;
+        let mut child = 0;
+        let mut static_child = 0;
+
+        while cursor < end {
+            if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
+                if child == child_idx {
+                    return Some(static_child);
+                }
+                if self.is_static_node_op(cursor) {
+                    static_child += 1;
+                }
+                child += 1;
+                cursor = self.next_sibling_op(cursor);
+            } else {
+                cursor += 1;
+            }
+        }
+
+        (child_idx >= child).then_some(static_child)
+    }
+
+    fn static_child_op_and_prototype_index(
+        &self,
+        element_op: usize,
+        child_idx: usize,
+    ) -> Option<(usize, usize)> {
+        let (skip, _) = self.enter_meta(element_op)?;
+        let mut cursor = self.element_children_start(element_op)?;
+        let end = element_op + skip;
+
+        while cursor < end {
+            if let Some(len) = self.attr_op_len(cursor) {
+                cursor += len;
+            } else if self.dynamic_op_is_attr(cursor) {
+                cursor += 1;
+            } else if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
+                break;
+            } else {
+                return None;
+            }
+        }
+
+        let mut child = 0;
+        let mut static_child = 0;
+        while cursor < end {
+            if self.is_static_node_op(cursor) || self.is_dynamic_node_marker(cursor) {
+                if child == child_idx {
+                    return self
+                        .is_static_node_op(cursor)
+                        .then_some((cursor, static_child));
+                }
+                if self.is_static_node_op(cursor) {
+                    static_child += 1;
+                }
+                child += 1;
+                cursor = self.next_sibling_op(cursor);
+            } else {
+                cursor = self.next_sibling_op(cursor);
+            }
+        }
+
+        None
+    }
+
+    /// Return the flat op index immediately after the static node or op at `op`.
+    pub fn next_sibling_op(&self, op: usize) -> usize {
+        match self.ops[op].decode() {
+            DecodedTemplateOp::Enter { skip, .. } => op + skip as usize,
+            DecodedTemplateOp::Text => op + 2,
+            DecodedTemplateOp::Attr {
+                namespace: DecodedTemplateAttrNamespace::Custom,
+            } => op + 4,
+            DecodedTemplateOp::Attr { .. } => op + 3,
+            _ => op + 1,
+        }
+    }
+
+    /// Return true if an op starts an element or static text node.
+    pub fn is_static_node_op(&self, op: usize) -> bool {
+        match self.ops[op].decode() {
+            DecodedTemplateOp::Enter { .. } => true,
+            DecodedTemplateOp::Text => matches!(
+                self.ops.get(op + 1).map(|op| op.decode()),
+                Some(DecodedTemplateOp::Static(_))
+            ),
+            _ => false,
+        }
+    }
+
+    /// Return true if an op starts a dynamic node marker.
+    pub fn is_dynamic_node_marker(&self, op: usize) -> bool {
+        self.ops[op].decode() == DecodedTemplateOp::Text
+            && matches!(
+                self.ops.get(op + 1).map(|op| op.decode()),
+                Some(DecodedTemplateOp::Dynamic)
+            )
+    }
+
+    /// Return the packed op index for a dynamic slot.
+    pub fn dynamic_op_index(&self, dynamic_idx: usize) -> Option<usize> {
+        let mut seen = 0;
+        for (idx, op) in self.ops.iter().enumerate() {
+            if op.decode() == DecodedTemplateOp::Dynamic {
+                if seen == dynamic_idx {
+                    return Some(idx);
+                }
+                seen += 1;
+            }
+        }
+        None
+    }
+
+    /// Return the dynamic value index for a packed dynamic op.
+    pub fn dynamic_index_at_op(&self, op_index: usize) -> Option<usize> {
+        if self.ops.get(op_index).map(|op| op.decode()) != Some(DecodedTemplateOp::Dynamic) {
+            return None;
+        }
+        let mut seen = 0;
+        for (idx, op) in self.ops.iter().enumerate() {
+            if op.decode() == DecodedTemplateOp::Dynamic {
+                if idx == op_index {
+                    return Some(seen);
+                }
+                seen += 1;
+            }
+        }
+        None
+    }
+
+    /// Return true if the dynamic op at `op_index` is a dynamic node slot.
+    pub fn dynamic_op_is_node(&self, op_index: usize) -> bool {
+        self.ops.get(op_index).is_some_and(|op| {
+            op.decode() == DecodedTemplateOp::Dynamic
+                && op_index > 0
+                && self.ops[op_index - 1].decode() == DecodedTemplateOp::Text
+        })
+    }
+
+    /// Return true if the dynamic op at `op_index` is a dynamic attribute slot.
+    pub fn dynamic_op_is_attr(&self, op_index: usize) -> bool {
+        self.ops.get(op_index).is_some_and(|op| {
+            op.decode() == DecodedTemplateOp::Dynamic
+                && (op_index == 0 || self.ops[op_index - 1].decode() != DecodedTemplateOp::Text)
+        })
+    }
+
+    /// Return true if a dynamic slot is a node slot.
+    pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
+        self.dynamic_op_index(dynamic_idx)
+            .is_some_and(|op| self.dynamic_op_is_node(op))
+    }
+
+    /// Return true if a dynamic slot is an attribute slot.
+    pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
+        self.dynamic_op_index(dynamic_idx)
+            .is_some_and(|op| self.dynamic_op_is_attr(op))
     }
 
     /// Compute a content-based hash of template structure.
     /// This is const so it can be used both at compile time and runtime.
     const fn compute_hash(
-        roots: &[TemplateNode],
-        node_cursors: &[TemplateCursor],
-        attr_cursors: &[TemplateCursor],
+        ops: &[TemplateOp],
+        strings: &[&'static str],
+        dynamics: &[TemplatePath],
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
-        const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
-            match node {
-                TemplateNode::Element {
-                    tag,
-                    namespace,
-                    attrs,
-                    children,
-                } => {
-                    let mut h = xxh64(tag.as_bytes(), seed);
-                    if let Some(ns) = *namespace {
-                        h = xxh64(ns.as_bytes(), h);
-                    }
-
-                    // Hash attributes (already in deterministic order from macro)
-                    let mut i = 0;
-                    while i < attrs.len() {
-                        h = match &attrs[i] {
-                            TemplateAttribute::Static {
-                                name,
-                                value,
-                                namespace,
-                            } => {
-                                let mut new_h = xxh64(name.as_bytes(), h);
-                                new_h = xxh64(value.as_bytes(), new_h);
-                                if let Some(ns) = *namespace {
-                                    new_h = xxh64(ns.as_bytes(), new_h);
-                                }
-                                new_h
-                            }
-                            TemplateAttribute::Dynamic { id } => {
-                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFE], h))
-                            }
-                        };
-                        i += 1;
-                    }
-
-                    // Hash children
-                    let mut i = 0;
-                    while i < children.len() {
-                        h = hash_template_node(&children[i], h);
-                        i += 1;
-                    }
-
-                    h
-                }
-                TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
-            }
-        }
-
         let mut hash = 0u64;
 
-        // Hash roots
         let mut i = 0;
-        while i < roots.len() {
-            hash = hash_template_node(&roots[i], hash);
+        while i < ops.len() {
+            hash = match ops[i].decode() {
+                DecodedTemplateOp::Enter { skip, namespace } => {
+                    let mut h = xxh64(&[0x01], hash);
+                    h = xxh64(&skip.to_le_bytes(), h);
+                    xxh64(&[namespace as u8], h)
+                }
+                DecodedTemplateOp::Attr { namespace } => {
+                    let h = xxh64(&[0x02], hash);
+                    xxh64(&[namespace as u8], h)
+                }
+                DecodedTemplateOp::Text => xxh64(&[0x03], hash),
+                DecodedTemplateOp::Static(id) => {
+                    let h = xxh64(&[0x04], hash);
+                    xxh64(strings[id as usize].as_bytes(), h)
+                }
+                DecodedTemplateOp::Dynamic => xxh64(&[0x05], hash),
+            };
             i += 1;
         }
 
-        // Hash node cursors (mixed with a section marker so they can't collapse into attr_cursors)
+        // Hash dynamic metadata.
         hash = xxh64(&[0xA1], hash);
         let mut i = 0;
-        while i < node_cursors.len() {
-            hash = xxh64(node_cursors[i].as_slice(), hash);
-            i += 1;
-        }
-
-        // Hash attr cursors
-        hash = xxh64(&[0xA2], hash);
-        let mut i = 0;
-        while i < attr_cursors.len() {
-            hash = xxh64(attr_cursors[i].as_slice(), hash);
+        while i < dynamics.len() {
+            hash = xxh64(&dynamics[i].path.to_le_bytes(), hash);
             i += 1;
         }
 
@@ -653,29 +1667,18 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_byte_slice_leaky<'a, 'de, D>(deserializer: D) -> Result<&'static [u8], D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Vec::<u8>::deserialize(deserializer)?;
-    Ok(&*Box::leak(deserialized.into_boxed_slice()))
-}
-
-#[cfg(feature = "serialize")]
-pub(crate) fn deserialize_cursors_leaky<'a, 'de, D>(
+pub(crate) fn deserialize_string_array_leaky<'de, D>(
     deserializer: D,
-) -> Result<&'static [TemplateCursor], D::Error>
+) -> Result<&'static [&'static str], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     use serde::Deserialize;
 
-    let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
+    let deserialized = Vec::<String>::deserialize(deserializer)?;
     let deserialized = deserialized
         .into_iter()
-        .map(|v| TemplateCursor(&*Box::leak(v.into_boxed_slice())))
+        .map(|value| &*Box::leak(value.into_boxed_str()) as &'static str)
         .collect::<Vec<_>>();
     Ok(&*Box::leak(deserialized.into_boxed_slice()))
 }
@@ -710,95 +1713,11 @@ impl Template {
     ///
     /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
     pub fn is_completely_dynamic(&self) -> bool {
-        self.roots.is_empty()
-    }
-}
-
-/// A statically known node in a layout.
-///
-/// This can be created at compile time, saving the VirtualDom time when diffing the tree
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum TemplateNode {
-    /// An statically known element in the dom.
-    ///
-    /// In HTML this would be something like `<div id="123"> </div>`
-    Element {
-        /// The name of the element
-        ///
-        /// IE for a div, it would be the string "div"
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky")
-        )]
-        tag: StaticStr,
-
-        /// The namespace of the element
-        ///
-        /// In HTML, this would be a valid URI that defines a namespace for all elements below it
-        /// SVG is an example of this namespace
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky")
-        )]
-        namespace: Option<StaticStr>,
-
-        /// A list of possibly dynamic attributes for this element
-        ///
-        /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_leaky", bound = "")
-        )]
-        attrs: StaticTemplateAttributeArray,
-
-        /// A list of template nodes that define another set of template nodes
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        children: StaticTemplateArray,
-    },
-
-    /// This template node is just a piece of static text
-    Text {
-        /// The actual text
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        text: StaticStr,
-    },
-}
-
-impl TemplateNode {
-    pub(crate) fn element_child(&self, child_idx: usize) -> &'static TemplateNode {
-        let TemplateNode::Element { children, .. } = self else {
-            unreachable!("template attribute paths only pass through elements")
-        };
-        &children[child_idx]
-    }
-
-    pub(crate) fn element_attrs(&self) -> &'static [TemplateAttribute] {
-        let TemplateNode::Element { attrs, .. } = self else {
-            unreachable!("template attribute paths only point to elements")
-        };
-        attrs
-    }
-
-    pub(crate) fn node_at_child_cursor(
-        &'static self,
-        cursor: &[u8],
-    ) -> Option<&'static TemplateNode> {
-        let mut node = self;
-        for child_idx in cursor {
-            let TemplateNode::Element { children, .. } = node else {
-                return None;
-            };
-            node = children.get(*child_idx as usize)?;
-        }
-        Some(node)
+        !self
+            .ops
+            .iter()
+            .enumerate()
+            .any(|(idx, _)| self.is_static_node_op(idx))
     }
 }
 
@@ -836,6 +1755,42 @@ impl DynamicNode {
 impl Default for DynamicNode {
     fn default() -> Self {
         Self::Fragment(Vec::new())
+    }
+}
+
+/// A runtime value for one flat template dynamic slot.
+#[derive(Debug, Clone)]
+pub enum DynamicValue {
+    /// A dynamic node value.
+    Node(DynamicNode),
+    /// A dynamic attribute list value.
+    Attrs(Box<[Attribute]>),
+}
+
+impl DynamicValue {
+    /// Return this value as a dynamic node if it is one.
+    pub fn as_node(&self) -> Option<&DynamicNode> {
+        match self {
+            Self::Node(node) => Some(node),
+            Self::Attrs(_) => None,
+        }
+    }
+
+    /// Return this value as dynamic attributes if it is an attribute slot.
+    pub fn as_attrs(&self) -> Option<&[Attribute]> {
+        match self {
+            Self::Attrs(attrs) => Some(attrs),
+            Self::Node(_) => None,
+        }
+    }
+
+    pub(crate) fn node(&self) -> &DynamicNode {
+        self.as_node().expect("dynamic slot should contain a node")
+    }
+
+    pub(crate) fn attrs(&self) -> &[Attribute] {
+        self.as_attrs()
+            .expect("dynamic slot should contain attributes")
     }
 }
 
@@ -989,115 +1944,6 @@ impl From<Arguments<'_>> for VText {
     }
 }
 
-/// An attribute of the TemplateNode, created at compile time
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum TemplateAttribute {
-    /// This attribute is entirely known at compile time, enabling
-    Static {
-        /// The name of this attribute.
-        ///
-        /// For example, the `href` attribute in `href="https://example.com"`, would have the name "href"
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        name: StaticStr,
-
-        /// The value of this attribute, known at compile time
-        ///
-        /// Currently this only accepts &str, so values, even if they're known at compile time, are not known
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        value: StaticStr,
-
-        /// The namespace of this attribute. Does not exist in the HTML spec
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky", bound = "")
-        )]
-        namespace: Option<StaticStr>,
-    },
-
-    /// The attribute in this position is actually determined dynamically at runtime
-    ///
-    /// This is the index into the dynamic_attributes field on the container VNode
-    Dynamic {
-        /// The index
-        id: usize,
-    },
-}
-
-#[doc(hidden)]
-/// Sort static template attributes by their emitted name while leaving dynamic attributes in place.
-///
-/// The diffing code binary-searches the static prefix by `TemplateAttribute::Static::name` when a
-/// dynamic spread stops overriding a static value. The RSX syntax name is not always the emitted
-/// DOM name (`r#as` emits `as`, `http_equiv` emits `http-equiv`), so this runs after macro
-/// expansion has produced the actual static names.
-pub const fn sort_template_attributes<const N: usize>(
-    mut attrs: [TemplateAttribute; N],
-) -> [TemplateAttribute; N] {
-    // The macro emits static attrs first and dynamic attrs second. Only the static prefix is
-    // sorted because dynamic attrs are addressed by id from the VNode's dynamic attribute list.
-    let mut static_len = 0;
-    while static_len < N {
-        match attrs[static_len] {
-            TemplateAttribute::Static { .. } => static_len += 1,
-            TemplateAttribute::Dynamic { .. } => break,
-        }
-    }
-
-    // Attribute lists are small, and insertion sort is const-friendly on stable Rust.
-    let mut i = 1;
-    while i < static_len {
-        let mut j = i;
-        while j > 0 && template_attribute_name_less(attrs[j], attrs[j - 1]) {
-            let previous = attrs[j - 1];
-            attrs[j - 1] = attrs[j];
-            attrs[j] = previous;
-            j -= 1;
-        }
-        i += 1;
-    }
-
-    attrs
-}
-
-const fn template_attribute_name_less(left: TemplateAttribute, right: TemplateAttribute) -> bool {
-    match (left, right) {
-        (
-            TemplateAttribute::Static { name: left, .. },
-            TemplateAttribute::Static { name: right, .. },
-        ) => static_str_less(left, right),
-        _ => false,
-    }
-}
-
-const fn static_str_less(left: StaticStr, right: StaticStr) -> bool {
-    let left = left.as_bytes();
-    let right = right.as_bytes();
-    let mut idx = 0;
-
-    while idx < left.len() && idx < right.len() {
-        if left[idx] < right[idx] {
-            return true;
-        }
-        if left[idx] > right[idx] {
-            return false;
-        }
-        idx += 1;
-    }
-
-    left.len() < right.len()
-}
-
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
@@ -1132,16 +1978,6 @@ impl Attribute {
             namespace,
             volatile,
             value: value.into_value(),
-        }
-    }
-
-    /// Create a new deep clone of this attribute
-    pub(crate) fn deep_clone(&self) -> Self {
-        Attribute {
-            name: self.name,
-            namespace: self.namespace,
-            volatile: self.volatile,
-            value: self.value.clone(),
         }
     }
 }
@@ -1416,78 +2252,33 @@ impl IntoAttributeValue for String {
     }
 }
 
-impl IntoAttributeValue for f32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self as _)
-    }
-}
-impl IntoAttributeValue for f64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self)
-    }
-}
-
-impl IntoAttributeValue for i8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self)
-    }
-}
-impl IntoAttributeValue for isize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
+macro_rules! impl_float_attribute_value {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl IntoAttributeValue for $ty {
+                fn into_value(self) -> AttributeValue {
+                    AttributeValue::Float(self as _)
+                }
+            }
+        )*
+    };
 }
 
-impl IntoAttributeValue for u8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
+macro_rules! impl_int_attribute_value {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl IntoAttributeValue for $ty {
+                fn into_value(self) -> AttributeValue {
+                    AttributeValue::Int(self as _)
+                }
+            }
+        )*
+    };
 }
-impl IntoAttributeValue for u16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for usize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
+
+impl_float_attribute_value!(f32, f64);
+impl_int_attribute_value!(i8, i16, i32, i64, isize, i128);
+impl_int_attribute_value!(u8, u16, u32, u64, usize, u128);
 
 impl IntoAttributeValue for bool {
     fn into_value(self) -> AttributeValue {
