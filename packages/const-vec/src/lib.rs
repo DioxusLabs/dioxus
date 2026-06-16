@@ -1,26 +1,66 @@
-#![allow(dead_code)]
 use std::{fmt::Debug, hash::Hash, mem::MaybeUninit};
-
-use crate::ConstReadBuffer;
 
 const DEFAULT_MAX_SIZE: usize = 2usize.pow(10);
 
-/// [`ConstVec`] is a version of [`Vec`] that is usable in const contexts. It has
-/// a fixed maximum size, but it can grow and shrink within that size limit
-/// as needed.
+/// A buffer that can be read from at compile time.
+///
+/// This is very similar to [`std::io::Cursor`], but it is designed to be used
+/// in const contexts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConstReadBuffer<'a> {
+    location: usize,
+    memory: &'a [u8],
+}
+
+impl<'a> ConstReadBuffer<'a> {
+    /// Create a new buffer from a byte slice.
+    pub const fn new(memory: &'a [u8]) -> Self {
+        Self {
+            location: 0,
+            memory,
+        }
+    }
+
+    /// Get the next byte from the buffer.
+    ///
+    /// Returns `None` if the buffer is empty. Otherwise this returns the new
+    /// buffer state along with the byte that was read.
+    pub const fn get(mut self) -> Option<(Self, u8)> {
+        if self.location >= self.memory.len() {
+            return None;
+        }
+        let value = self.memory[self.location];
+        self.location += 1;
+        Some((self, value))
+    }
+
+    /// Get a reference to the underlying byte slice.
+    pub const fn as_ref(&self) -> &[u8] {
+        self.memory
+    }
+
+    /// Get a slice of the buffer from the current location to the end.
+    pub const fn remaining(&self) -> &[u8] {
+        self.memory.split_at(self.location).1
+    }
+}
+
+/// A version of [`Vec`] that is usable in const contexts.
+///
+/// `ConstVec` has a fixed maximum size, but it can grow and shrink within that
+/// size limit as needed.
 ///
 /// # Example
+///
 /// ```rust
-/// # use const_serialize::ConstVec;
+/// # use const_vec::ConstVec;
 /// const EMPTY: ConstVec<u8> = ConstVec::new();
-/// // Methods that mutate the vector will return a new vector
 /// const ONE: ConstVec<u8> = EMPTY.push(1);
 /// const TWO: ConstVec<u8> = ONE.push(2);
 /// const THREE: ConstVec<u8> = TWO.push(3);
 /// const FOUR: ConstVec<u8> = THREE.push(4);
-/// // If a value is also returned, that will be placed in a tuple in the return value
-/// // along with the new vector
 /// const POPPED: (ConstVec<u8>, Option<u8>) = FOUR.pop();
+///
 /// assert_eq!(POPPED.0, THREE);
 /// assert_eq!(POPPED.1.unwrap(), 4);
 /// ```
@@ -69,19 +109,21 @@ impl<T: Debug, const MAX_SIZE: usize> Debug for ConstVec<T, MAX_SIZE> {
 }
 
 impl<T> ConstVec<T> {
-    /// Create a new empty [`ConstVec`]
+    /// Create a new empty [`ConstVec`].
     pub const fn new() -> Self {
         Self::new_with_max_size()
     }
 }
 
 impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
-    /// Create a new empty [`ConstVec`] with a custom maximum size
+    /// Create a new empty [`ConstVec`] with a custom maximum size.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8, 10> = ConstVec::new_with_max_size();
+    /// assert!(EMPTY.is_empty());
     /// ```
     pub const fn new_with_max_size() -> Self {
         Self {
@@ -90,26 +132,31 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         }
     }
 
-    /// Push a value onto the end of the [`ConstVec`]
+    /// Push a value onto the end of the [`ConstVec`].
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// assert_eq!(ONE.as_ref(), &[1]);
     /// ```
     pub const fn push(mut self, value: T) -> Self {
+        if self.len as usize >= MAX_SIZE {
+            panic!("const vec capacity exceeded");
+        }
         self.memory[self.len as usize] = MaybeUninit::new(value);
         self.len += 1;
         self
     }
 
-    /// Extend the [`ConstVec`] with the contents of a slice
+    /// Extend the [`ConstVec`] with the contents of a slice.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.extend(&[1, 2, 3]);
     /// assert_eq!(ONE.as_ref(), &[1, 2, 3]);
@@ -126,11 +173,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self
     }
 
-    /// Get a reference to the value at the given index
+    /// Get a reference to the value at the given index.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// assert_eq!(ONE.get(0), Some(&1));
@@ -143,11 +191,25 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         }
     }
 
-    /// Get the length of the [`ConstVec`]
+    /// Get a copy of the value at the given index.
+    ///
+    /// This panics if `index` is out of bounds.
+    pub const fn at(&self, index: usize) -> T
+    where
+        T: Copy,
+    {
+        if index >= self.len as usize {
+            panic!("const vec index out of bounds");
+        }
+        unsafe { self.memory[index].assume_init() }
+    }
+
+    /// Get the length of the [`ConstVec`].
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// assert_eq!(ONE.len(), 1);
@@ -156,11 +218,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self.len as usize
     }
 
-    /// Check if the [`ConstVec`] is empty
+    /// Check if the [`ConstVec`] is empty.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// assert!(EMPTY.is_empty());
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
@@ -170,11 +233,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self.len == 0
     }
 
-    /// Get a reference to the underlying slice
+    /// Get a reference to the underlying slice.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// assert_eq!(ONE.as_ref(), &[1]);
@@ -185,11 +249,17 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         }
     }
 
-    /// Swap the values at the given indices
+    /// Get a reference to the underlying slice.
+    pub const fn as_slice(&self) -> &[T] {
+        self.as_ref()
+    }
+
+    /// Swap the values at the given indices.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.push(2);
@@ -208,11 +278,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self
     }
 
-    /// Pop a value off the end of the [`ConstVec`]
+    /// Pop a value off the end of the [`ConstVec`].
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.push(2);
@@ -236,11 +307,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         (self, value)
     }
 
-    /// Remove the value at the given index
+    /// Remove the value at the given index.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.push(2);
@@ -269,11 +341,12 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         (self, value)
     }
 
-    /// Set the value at the given index
+    /// Set the value at the given index.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.set(0, 2);
@@ -281,21 +354,18 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// ```
     pub const fn set(mut self, index: usize, value: T) -> Self {
         if index >= self.len as usize {
-            panic!("Out of bounds")
+            panic!("const vec index out of bounds")
         }
         self.memory[index] = MaybeUninit::new(value);
         self
     }
 
-    pub(crate) const fn into_parts(self) -> ([MaybeUninit<T>; MAX_SIZE], usize) {
-        (self.memory, self.len as usize)
-    }
-
-    /// Split the [`ConstVec`] into two at the given index
+    /// Split the [`ConstVec`] into two at the given index.
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::ConstVec;
+    /// # use const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.push(2);
@@ -328,15 +398,17 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
 }
 
 impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
-    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`]
+    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`].
     ///
     /// # Example
+    ///
     /// ```rust
-    /// # use const_serialize::{ConstVec, ConstReadBuffer};
+    /// # use const_vec::{ConstReadBuffer, ConstVec};
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// const ONE: ConstVec<u8> = EMPTY.push(1);
     /// const TWO: ConstVec<u8> = ONE.push(2);
     /// const READ: ConstReadBuffer = TWO.read();
+    /// assert_eq!(READ.as_ref(), &[1, 2]);
     /// ```
     pub const fn read(&self) -> ConstReadBuffer<'_> {
         ConstReadBuffer::new(self.as_ref())
@@ -387,6 +459,18 @@ fn test_const_vec_get() {
 }
 
 #[test]
+fn test_const_vec_at() {
+    const VEC: ConstVec<u32> = {
+        let mut vec = ConstVec::new();
+        vec = vec.push(1234);
+        vec = vec.push(5678);
+        vec
+    };
+    assert_eq!(VEC.at(0), 1234);
+    assert_eq!(VEC.at(1), 5678);
+}
+
+#[test]
 fn test_const_vec_swap() {
     const VEC: ConstVec<u32> = {
         let mut vec = ConstVec::new();
@@ -411,7 +495,6 @@ fn test_const_vec_remove() {
         vec
     };
     let vec = VEC;
-    println!("{:?}", vec);
     assert_eq!(vec.as_ref(), &[1234, 5678]);
     let (vec, value) = vec.remove(0);
     assert_eq!(value, Some(1234));
@@ -431,6 +514,5 @@ fn test_const_vec_extend() {
         vec
     };
     let vec = VEC;
-    println!("{:?}", vec);
     assert_eq!(vec.as_ref(), &[1234, 5678, 91011, 1213]);
 }
