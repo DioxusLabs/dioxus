@@ -69,6 +69,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/fullstack-headers",
     "packages/playwright-tests/windows-headless",
 
     # manganis
