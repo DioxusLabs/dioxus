@@ -7,13 +7,13 @@ use crate::{
     model::*,
 };
 use dioxus::prelude::*;
+#[cfg(test)]
+use dioxus_core::DecodedTemplateOp;
 use dioxus_core::internal::{TemplateRawOp, build_template_from_raw_ops};
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
     VComponent, VNode, VText,
 };
-#[cfg(test)]
-use dioxus_core::{DecodedTemplateOp, TemplatePath};
 use std::future::pending;
 
 pub(crate) fn App(context: HarnessContext) -> Element {

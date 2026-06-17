@@ -15,7 +15,7 @@
 //! 3. reduces each side to the effective attribute for each `(name, namespace)` key, keeping the
 //!    last matching attribute; and
 //! 4. merges the old and new effective attribute lists to emit additions, updates, removals, and
-//!    static-template fallbacks.
+//!    static-template restores.
 
 use core::{cmp::Ordering, iter::Peekable};
 
@@ -191,12 +191,12 @@ impl VNode {
             _ => {}
         }
 
-        // Write the new value, or restore the static template attribute, or clear the DOM
-        // attribute. A removed listener has nothing attribute-shaped left to clear.
+        // Write the new value, restore the static template attribute, or clear the DOM attribute.
+        // A removed listener has nothing attribute-shaped left to clear.
         if let Some(new) = new {
             Self::write_attribute_to_current(new, id, mount, dom, to);
         } else if !old_listener {
-            Self::remove_attribute_or_write_fallback(attr_group, key, to)
+            Self::remove_attribute_or_restore_static(attr_group, key, to)
         }
     }
 
@@ -215,7 +215,7 @@ impl VNode {
     /// This is needed when an attribute from a spread disappears. The template load already wrote
     /// the static value during creation, but the dynamic attribute may have overwritten or removed
     /// it on a previous render.
-    fn remove_attribute_or_write_fallback(
+    fn remove_attribute_or_restore_static(
         attr_group: &DynamicAttrGroup<'_>,
         key: AttributeKey,
         to: &mut dyn WriteMutations,
@@ -254,14 +254,10 @@ impl VNode {
         match &attribute.value {
             AttributeValue::Listener(_) => {
                 dom.set_element_ref_for_mount(mount, id);
-                if !WriteMutations::writes_are_noops(to) {
-                    to.add_event_listener(&attribute.name[2..]);
-                }
+                to.add_event_listener(&attribute.name[2..]);
             }
             _ => {
-                if !WriteMutations::writes_are_noops(to) {
-                    to.set_attribute(attribute.name, attribute.namespace, &attribute.value);
-                }
+                to.set_attribute(attribute.name, attribute.namespace, &attribute.value);
             }
         }
     }

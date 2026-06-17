@@ -123,8 +123,8 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             ]
         }),
         case(
-            "dynamic_attribute_static_fallback",
-            dynamic_attribute_static_fallback_recipe(),
+            "dynamic_attribute_static_restore",
+            dynamic_attribute_static_restore_recipe(),
         ),
         case("portal_create_and_remove", {
             vec![
@@ -582,7 +582,7 @@ fn dynamic_attribute_transitions() -> Vec<Op> {
     ]
 }
 
-fn dynamic_attribute_static_fallback_recipe() -> Vec<Op> {
+fn dynamic_attribute_static_restore_recipe() -> Vec<Op> {
     vec![
         Op::template(
             0,

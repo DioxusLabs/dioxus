@@ -1,3 +1,16 @@
+//! Mount-table bookkeeping for committed vnodes.
+//!
+//! Invariants maintained here:
+//! - A live `MountId` owns one committed `VNode`, one render parent, one logical parent, and one
+//!   render target.
+//! - Root slots and dynamic slots are sized from the committed vnode template and remain stable
+//!   until `commit_mount`.
+//! - Non-empty fragment dynamic slots point at an exact contiguous range in
+//!   `fragment_child_mounts`; empty fragments store an empty slot.
+//! - Diff internals must use `mounted_fragment_children_exact` when vnode shape says a fragment has
+//!   children. The permissive `mounted_fragment_children` accessor is for public inspection paths
+//!   where "not a fragment" should produce an empty list.
+
 use crate::{
     DynamicNode, RenderTargetId, ScopeId, VNode,
     arena::{MountId, MountRef, MountedDynamicNodeSlot, MountedElementId},
@@ -127,9 +140,13 @@ impl Mount {
         self.dynamic_slot(idx).mounted_element()
     }
 
-    pub(crate) fn fragment_children(&self, idx: usize, len: usize) -> Option<&[MountId]> {
-        let start = self.dynamic_slot(idx).fragment_start()?;
-        Some(&self.fragment_child_mounts[start..start + len])
+    pub(crate) fn non_empty_fragment_children(&self, idx: usize, len: usize) -> &[MountId] {
+        debug_assert!(len > 0, "fragment child slice accessor requires children");
+        let start = self
+            .dynamic_slot(idx)
+            .fragment_start()
+            .expect("non-empty committed fragment must have mounted children");
+        &self.fragment_child_mounts[start..start + len]
     }
 
     pub(crate) fn component_scope(&self, idx: usize) -> Option<ScopeId> {
@@ -213,7 +230,6 @@ impl VirtualDom {
     pub(crate) fn reuse_mount(
         &mut self,
         mount: MountId,
-        node: &VNode,
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
@@ -222,7 +238,6 @@ impl VirtualDom {
             mount.render_parent = render_parent;
             mount.logical_parent = logical_parent;
             mount.target_id = target_id;
-            mount.node = node.clone();
         });
     }
 
@@ -329,22 +344,9 @@ impl VirtualDom {
         );
     }
 
-    pub(crate) fn set_mounted_fragment_children(
-        &self,
-        mount: MountId,
-        dyn_node_idx: usize,
-        children: &[MountId],
-    ) {
+    pub(crate) fn clear_mounted_fragment_children(&self, mount: MountId, dyn_node_idx: usize) {
         self.with_mount_mut(mount, |mount| {
-            if children.is_empty() {
-                *mount.dynamic_slot_mut(dyn_node_idx) = PackedMountedSlot::empty();
-                return;
-            }
-
-            let start = mount.fragment_child_mounts.len();
-            mount.fragment_child_mounts.extend_from_slice(children);
-            *mount.dynamic_slot_mut(dyn_node_idx) =
-                PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(start));
+            *mount.dynamic_slot_mut(dyn_node_idx) = PackedMountedSlot::empty();
         });
     }
 
@@ -381,11 +383,31 @@ impl VirtualDom {
             if len == 0 {
                 return Vec::new();
             }
-            let Some(start) = mount.dynamic_slot(dyn_node_idx).fragment_start() else {
-                return Vec::new();
-            };
+            let start = mount
+                .dynamic_slot(dyn_node_idx)
+                .fragment_start()
+                .expect("non-empty mounted fragment should have a child range");
             mount.fragment_child_mounts[start..start + len].to_vec()
         })
+    }
+
+    /// Return the fragment child mounts for a vnode fragment whose shape is known.
+    ///
+    /// Invariant: `mount` is live, `dyn_node_idx` is a fragment slot, and `len` is the current
+    /// fragment child count from the vnode that owns the slot.
+    pub(crate) fn mounted_fragment_children_exact(
+        &self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        len: usize,
+    ) -> Vec<MountId> {
+        let children = self.mounted_fragment_children(mount, dyn_node_idx, len);
+        assert_eq!(
+            children.len(),
+            len,
+            "mounted fragment slot must contain one child mount per vnode child"
+        );
+        children
     }
 
     pub(crate) fn mounted_dynamic_component_scope(
@@ -398,13 +420,16 @@ impl VirtualDom {
         })
     }
 
-    pub(crate) fn mounted_dynamic_component_root_mount(
+    pub(crate) fn unchecked_mounted_dynamic_component_root_mount(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
-    ) -> Option<MountId> {
-        let scope = self.mounted_dynamic_component_scope(mount, dyn_node_idx)?;
-        self.runtime.try_get_state(scope)?.root_mount()
+    ) -> MountId {
+        let scope = self.unchecked_mounted_dynamic_component_scope(mount, dyn_node_idx);
+        self.runtime
+            .get_state(scope)
+            .root_mount()
+            .expect("mounted component scope must have a root mount")
     }
 
     pub(crate) fn unchecked_mounted_dynamic_component_scope(
@@ -464,18 +489,20 @@ impl VirtualDom {
     }
 
     pub(crate) fn mount_should_render(&self, mount: MountId) -> bool {
-        self.runtime
-            .mounts
-            .borrow()
-            .get(mount.0)
-            .is_none_or(|mount| mount.mode == RenderMode::Foreground)
+        self.with_mount(mount, |mount| mount.mode == RenderMode::Foreground)
     }
 
+    /// Commit the new vnode for a mount after its roots/dynamic slots have been updated.
+    ///
+    /// Invariant: fragment child storage may contain stale ranges accumulated during the diff; this
+    /// compacts storage so every committed non-empty fragment slot owns exactly its current range.
     pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
         let mut mounts = self.runtime.mounts.borrow_mut();
         let mount_state = &mut mounts[mount.0];
         mount_state.node = node.clone();
         compact_fragment_child_mounts(mount_state, node);
+        #[cfg(all(debug_assertions, not(coverage_nightly)))]
+        assert_committed_fragment_slots(mount_state, node);
     }
 
     pub(crate) fn replace_mounted_component_root_mount(
@@ -540,6 +567,31 @@ fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
             .extend_from_slice(&old_children[range]);
         *mount.dynamic_slot_mut(idx) =
             PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(new_start));
+    }
+}
+
+#[cfg(all(debug_assertions, not(coverage_nightly)))]
+fn assert_committed_fragment_slots(mount: &Mount, node: &VNode) {
+    for (idx, value) in node.dynamic_values.iter().enumerate() {
+        let Some(DynamicNode::Fragment(nodes)) = value.as_node() else {
+            continue;
+        };
+        if nodes.is_empty() {
+            debug_assert!(
+                mount.dynamic_slot(idx).fragment_start().is_none(),
+                "empty fragment dynamic slots must be empty after commit"
+            );
+            continue;
+        }
+
+        let start = mount
+            .dynamic_slot(idx)
+            .fragment_start()
+            .expect("non-empty fragment should have mounted children after commit");
+        debug_assert!(
+            start + nodes.len() <= mount.fragment_child_mounts.len(),
+            "committed fragment dynamic slot range must stay within mount fragment storage"
+        );
     }
 }
 

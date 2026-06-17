@@ -155,6 +155,16 @@ impl VirtualDom {
             .is_some_and(|order| self.dirty_scopes.remove(&order))
     }
 
+    /// Pop the highest-priority dirty scope below `ancestor`.
+    pub(crate) fn pop_dirty_descendant_scope(&mut self, ancestor: ScopeId) -> Option<ScopeOrder> {
+        let order = self
+            .dirty_scopes
+            .iter()
+            .find(|order| self.runtime.is_descendant_of(order.id, ancestor))
+            .copied()?;
+        self.dirty_scopes.take(&order)
+    }
+
     /// Check if there are any dirty scopes
     pub(crate) fn has_dirty_scopes(&self) -> bool {
         !self.dirty_scopes.is_empty()

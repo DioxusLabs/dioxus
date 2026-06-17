@@ -575,9 +575,12 @@ fn MyComponent() -> Element {{
             for idx in anchor.values() {
                 match parent_node.dynamic_values[idx].node() {
                     DynamicNode::Fragment(children) => {
+                        if children.is_empty() {
+                            continue;
+                        }
                         if parent
-                            .fragment_children(idx, children.len())
-                            .is_some_and(|mounts| mounts.contains(&child_mount))
+                            .non_empty_fragment_children(idx, children.len())
+                            .contains(&child_mount)
                         {
                             return Some(EventTargetPath::Slot(path));
                         }

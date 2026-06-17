@@ -26,6 +26,10 @@ fn drive<R>(
 }
 
 impl VirtualDom {
+    /// Run a queued scope diff with an explicit parent diff context.
+    ///
+    /// Invariant: the scope id is live and its render driver owns the scope's current props and
+    /// rendered output.
     pub(crate) fn run_and_diff_scope_with_context(
         &mut self,
         to: Option<&mut dyn WriteMutations>,
@@ -85,9 +89,10 @@ impl VirtualDom {
         })
     }
 
-    /// Create a new [`Scope`](crate::scope_context::Scope) for a component.
+    /// Create or recreate a component scope's rendered output.
     ///
-    /// Returns the number of nodes created on the stack
+    /// Invariant: the render driver sets `last_rendered_node` and the scope root mount before this
+    /// returns. Returns the number of renderer nodes left on the stack.
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
     pub(crate) fn create_scope(
         &mut self,
@@ -157,6 +162,10 @@ impl VirtualDom {
 }
 
 impl VNode {
+    /// Diff a dynamic component value in a same-template vnode.
+    ///
+    /// Invariant: `scope_id` is the component scope mounted in `mount` at `idx`. If the driver
+    /// identity changes, replacement owns both new scope creation and old scope removal.
     pub(crate) fn diff_vcomponent(
         &self,
         mount: MountId,
@@ -198,43 +207,55 @@ impl VNode {
             .dom
             .unchecked_mounted_dynamic_component_scope(mount, idx);
 
-        // Compute the insertion site BEFORE freeing the scope slot — we need
-        // the OLD scope's rendered vnode if it has live DOM. Otherwise we
-        // splice into the dynamic slot itself.
-        let site = state.dom.scopes[scope.index()]
+        // Read the old rendered root before freeing the scope slot. If a
+        // writer is active, this is the first placement anchor for the new
+        // component. Hidden/no-writer diffs do not resolve renderer placement.
+        let live_first = state.dom.scopes[scope.index()]
             .last_rendered_node
             .as_ref()
-            .and_then(|n| n.mounted_vnode().find_first_element(state.dom))
-            .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
-            .unwrap_or_else(|| {
-                let anchor = self
-                    .template
-                    .anchor_for_value(idx)
-                    .expect("a dynamic component value always has an owning anchor");
-                let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
-                insertion_site_for_slot(mount, slot, &[], state.dom, state.context())
-            });
+            .and_then(|n| n.mounted_vnode().find_first_element(state.dom));
+        let context = state.context();
+        let placement_skip = state.placement_skip().to_vec();
 
         // Free the scope slot so `create_component_node` allocates a new scope.
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
-        {
+        if state.to.is_some() {
+            let site = live_first
+                .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
+                .unwrap_or_else(|| {
+                    let anchor = self
+                        .template
+                        .anchor_for_value(idx)
+                        .expect("a dynamic component value always has an owning anchor");
+                    let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
+                    insertion_site_for_slot(mount, slot, &placement_skip, state.dom, context)
+                });
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to = reborrow_writer(&mut state.to);
+            let to = reborrow_writer(&mut state.to)
+                .expect("writer presence checked before component placement");
             at_site(site, to, runtime, |to| {
-                let mut state = DiffState::new(dom, to);
+                let mut state = DiffState::new_with_context_and_placement_skip(
+                    dom,
+                    Some(to),
+                    context,
+                    &placement_skip,
+                );
                 self.create_component_node(mount, idx, new, parent, &mut state)
             });
+        } else {
+            self.create_component_node(mount, idx, new, parent, state);
         }
         state
             .dom
             .remove_component_node(reborrow_writer(&mut state.to), true, scope);
     }
 
-    /// Create a new component (if it doesn't already exist) node and then mount the [`crate::ScopeState`] for a component
+    /// Create or reuse the scope for a dynamic component node.
     ///
-    /// Returns the number of nodes created on the stack
+    /// Invariant: the mounted dynamic slot contains a scope id before driver creation runs, and the
+    /// driver writes a rendered root mount into the scope state before returning.
     pub(super) fn create_component_node(
         &self,
         mount: MountId,
@@ -273,13 +294,16 @@ impl VNode {
         let root_mount = state
             .dom
             .get_scope(scope_id)
-            .and_then(|scope| scope.last_rendered_node.as_ref())
-            .map(MountedOutput::root_mount);
+            .expect("component scope must exist after driver creation")
+            .last_rendered_node
+            .as_ref()
+            .expect("component driver creation must set last_rendered_node")
+            .root_mount();
         state
             .dom
             .runtime
             .get_state(scope_id)
-            .set_root_mount(root_mount);
+            .set_root_mount(Some(root_mount));
         nodes
     }
 }

@@ -130,12 +130,12 @@ fn warmup_keyed_reorder() {
 }
 
 /// Drive a `SuspenseBoundary` through suspend/resolve transitions so the
-/// "hidden subtree" defensive paths fire: vnodes whose mount is
-/// unmounted because they live in the suspended branch and were never
-/// materialized in the renderer arena.
+/// hidden-subtree state paths fire: vnodes whose mount is unmounted because
+/// they live in the suspended branch and were never materialized in the
+/// renderer arena.
 fn warmup_suspense_hidden_paths() {
     use dioxus::prelude::*;
-    use dioxus_core::generation;
+    use dioxus_core::{SuspenseContext, generation};
     use std::cell::Cell;
 
     thread_local! {
@@ -167,7 +167,10 @@ fn warmup_suspense_hidden_paths() {
         fn app_a() -> Element {
             rsx! {
                 SuspenseBoundary {
-                    fallback: |_| rsx! { "loading" },
+                    fallback: |context: SuspenseContext| {
+                        let _ = context.with_suspended_mounted_root(|root| root.vnode().template.root_count());
+                        rsx! { "loading" }
+                    },
                     for i in 0..20u32 {
                         SuspendingChild { key: "{i}", value: i }
                     }
@@ -194,7 +197,10 @@ fn warmup_suspense_hidden_paths() {
             };
             rsx! {
                 SuspenseBoundary {
-                    fallback: |_| rsx! { "loading" },
+                    fallback: |context: SuspenseContext| {
+                        let _ = context.with_suspended_mounted_root(|root| root.vnode().template.root_count());
+                        rsx! { "loading" }
+                    },
                     for key in keys.iter().copied() {
                         SuspendingChild { key: "{key}", value: key }
                     }
@@ -208,6 +214,160 @@ fn warmup_suspense_hidden_paths() {
     // Reset for any subsequent warmups.
     SUSPEND_GEN.with(|c| c.set(usize::MAX));
     SHUFFLE_GEN.with(|c| c.set(usize::MAX));
+}
+
+fn warmup_empty_fallback_slot_promotion() {
+    use dioxus::prelude::*;
+    use dioxus_core::generation;
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn SuspendOnce() -> Element {
+        if generation() == 1 {
+            let task = spawn(async { std::future::pending::<()>().await });
+            suspend(task)?;
+        }
+        rsx! { span { "ready" } }
+    }
+
+    fn app() -> Element {
+        rsx! {
+            div {
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    SuspendOnce {}
+                }
+            }
+        }
+    }
+
+    run_generations(app, 3);
+}
+
+fn warmup_non_root_dynamic_slot_without_adjacent_anchor() {
+    use dioxus::prelude::*;
+    use dioxus_core::generation;
+
+    fn app() -> Element {
+        let g = generation();
+        rsx! {
+            div {
+                if g > 0 {
+                    "left"
+                }
+                span { "middle" }
+                if g > 1 {
+                    "right"
+                }
+            }
+        }
+    }
+
+    run_generations(app, 3);
+}
+
+fn warmup_root_dynamic_slot_anchors() {
+    use dioxus::prelude::*;
+    use dioxus_core::generation;
+
+    fn before_static_root() -> Element {
+        let g = generation();
+        rsx! {
+            if g > 0 {
+                "front"
+            }
+            div { "static" }
+        }
+    }
+
+    fn before_dynamic_root() -> Element {
+        let g = generation();
+        rsx! {
+            Fragment {
+                if g > 0 {
+                    "front"
+                }
+                if g > 1 {
+                    "next"
+                }
+            }
+        }
+    }
+
+    run_generations(before_static_root, 2);
+    run_generations(before_dynamic_root, 3);
+}
+
+fn warmup_keyed_fragment_skip_anchors() {
+    use dioxus::prelude::*;
+    use dioxus_core::generation;
+
+    fn app() -> Element {
+        let g = generation();
+        let order = if g == 0 {
+            [0u32, 1, 2, 3]
+        } else {
+            [2u32, 0, 3, 1]
+        };
+        rsx! {
+            div {
+                for key in order {
+                    Fragment {
+                        key: "{key}",
+                        span { "{key}" }
+                    }
+                }
+            }
+        }
+    }
+
+    run_generations(app, 3);
+}
+
+fn warmup_keyed_fragment_right_edge_anchor() {
+    use dioxus::prelude::*;
+
+    fn app() -> Element {
+        let order: &[u32] = if warmup_gen() == 0 {
+            &[0, 1, 2, 3]
+        } else {
+            &[3, 0, 1, 2, 4, 5]
+        };
+        rsx! {
+            for key in order.iter().copied() {
+                Fragment {
+                    key: "{key}",
+                    for child in 0..2u32 {
+                        span { "{key}:{child}" }
+                    }
+                }
+            }
+        }
+    }
+
+    run_generations(app, 2);
+}
+
+fn warmup_keyed_splice_into_static_slot() {
+    use dioxus::prelude::*;
+
+    fn app() -> Element {
+        let keys: &[u32] = if warmup_gen() == 0 { &[0] } else { &[0, 1] };
+        rsx! {
+            div {
+                for key in keys.iter().copied() {
+                    Fragment {
+                        key: "{key}",
+                        if key != 0 {
+                            span { "{key}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    run_generations(app, 2);
 }
 
 /// Mark a parent scope and all of its descendant scopes dirty at once, then
@@ -601,9 +761,9 @@ fn warmup_keyed_left_prefix_splice() {
 
 /// A spread adds a dynamic attribute that shadows a static template attribute
 /// of the same name, then drops it. Drives the static-template-attribute
-/// fallback in `remove_attribute_or_write_fallback`: the removed dynamic
+/// restore in `remove_attribute_or_restore_static`: the removed dynamic
 /// attribute's static value is restored instead of cleared.
-fn warmup_static_attribute_fallback() {
+fn warmup_static_attribute_restore() {
     use dioxus::prelude::*;
     use dioxus_core::Attribute;
 
@@ -745,6 +905,12 @@ pub fn warmup_deferred_priority_paths() {
     warmup_batched_component_props_diff();
     warmup_keyed_reorder();
     warmup_suspense_hidden_paths();
+    warmup_empty_fallback_slot_promotion();
+    warmup_non_root_dynamic_slot_without_adjacent_anchor();
+    warmup_root_dynamic_slot_anchors();
+    warmup_keyed_fragment_skip_anchors();
+    warmup_keyed_fragment_right_edge_anchor();
+    warmup_keyed_splice_into_static_slot();
     warmup_suspense_then_remove();
     warmup_dropped_scope_anchor_lookup();
     warmup_portal_target_switch();
@@ -753,7 +919,7 @@ pub fn warmup_deferred_priority_paths() {
     warmup_throw_error();
     warmup_deferred_subtree_check();
     warmup_keyed_left_prefix_splice();
-    warmup_static_attribute_fallback();
+    warmup_static_attribute_restore();
     warmup_attribute_value_to_listener();
     warmup_portal_dynamic_text_root();
     warmup_keyed_component_anchor();

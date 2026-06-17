@@ -1,12 +1,19 @@
 use crate::{
     VirtualDom, WriteMutations, innerlude::MountId, mutations::reborrow_writer, nodes::VNode,
 };
+use std::rc::Rc;
 
-/// State required for diffing operations
+/// State required for diffing operations.
+///
+/// Invariant: one `DiffState` owns the active mutable access to the `VirtualDom` and the optional
+/// renderer writer. `context` describes the vnode frame currently being diffed, while
+/// `placement_skip` lists committed mounts that are still visible in parent storage but have
+/// already been claimed by this diff and must not anchor later insertions.
 pub(crate) struct DiffState<'dom, 'ctx, 'writer> {
     pub(crate) dom: &'dom mut VirtualDom,
     pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
     pub(crate) context: Option<DiffContext<'ctx>>,
+    placement_skip: Rc<[MountId]>,
 }
 
 impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
@@ -22,9 +29,27 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
         to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
         context: Option<DiffContext<'ctx>>,
     ) -> Self {
-        Self { dom, to, context }
+        Self::new_with_context_and_placement_skip(dom, to, context, &[])
     }
 
+    pub(crate) fn new_with_context_and_placement_skip(
+        dom: &'dom mut VirtualDom,
+        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+        context: Option<DiffContext<'ctx>>,
+        placement_skip: &[MountId],
+    ) -> Self {
+        Self {
+            dom,
+            to,
+            context,
+            placement_skip: Rc::from(placement_skip),
+        }
+    }
+
+    /// Reborrow this state while optionally disabling renderer writes.
+    ///
+    /// Invariant: disabling writes suppresses renderer mutations only; mount and component state
+    /// still diff normally so hidden suspense branches remain current.
     pub(crate) fn reborrow_with_writes(&mut self, write: bool) -> DiffState<'_, 'ctx, '_> {
         DiffState {
             dom: &mut *self.dom,
@@ -34,6 +59,7 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
                 None
             },
             context: self.context,
+            placement_skip: self.placement_skip.clone(),
         }
     }
 
@@ -41,8 +67,21 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
         self.context
     }
 
+    pub(crate) fn placement_skip(&self) -> &[MountId] {
+        &self.placement_skip
+    }
+
+    pub(crate) fn push_placement_skip(&mut self, mount: MountId) {
+        let mut placement_skip = self.placement_skip.to_vec();
+        placement_skip.push(mount);
+        self.placement_skip = Rc::from(placement_skip);
+    }
+
     /// Create replacement content in an empty dynamic slot, then optionally
     /// restore the old slot while removing the previous live node.
+    ///
+    /// Invariant: the slot is empty only during `create_new`. After the method returns, the slot is
+    /// restored to the new value even if old-node removal needed the old slot temporarily visible.
     pub(crate) fn with_mounted_dynamic_node_slot_replaced<R>(
         &mut self,
         mount: MountId,

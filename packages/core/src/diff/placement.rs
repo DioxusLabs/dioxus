@@ -1,3 +1,15 @@
+//! Renderer insertion-site selection for diff-created nodes.
+//!
+//! Invariants maintained here:
+//! - Placement is chosen from the committed parent view unless a `DiffContext` identifies the
+//!   active vnode currently being diffed.
+//! - Mounts in the caller-provided skip list are still present in committed fragment storage but
+//!   have already been claimed by an earlier replacement/splice; skip filtering happens while
+//!   scanning that fragment's committed child-mount list.
+//! - If a mounted child has a render parent, that parent mount must still be live.
+//! - Exact fragment-child access is used for diff internals; a shorter child-mount list is a mount
+//!   table corruption bug.
+
 use std::rc::Rc;
 
 use crate::{
@@ -16,7 +28,7 @@ use super::{
     },
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) enum ElementEdge {
     First,
     Last,
@@ -84,8 +96,8 @@ impl InsertionSite {
 }
 
 /// Find an insertion site at the given edge of `vnode`'s live DOM: before its
-/// first element, or after its last. Falls back through mounted parent slots
-/// when the vnode has no live DOM.
+/// first element, or after its last. If the vnode has no live DOM, walk mounted
+/// parent slots until a live insertion point is found.
 pub(super) fn insertion_site_at(
     edge: ElementEdge,
     vnode: MountedVNode<'_>,
@@ -98,6 +110,11 @@ pub(super) fn insertion_site_at(
     at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), skip, dom, context))
 }
 
+/// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
+///
+/// Invariant: root-level slots are placed relative to committed root siblings; non-root slots are
+/// placed inside their enclosing static root, which must be mounted before renderer placement is
+/// requested.
 pub(super) fn insertion_site_for_slot(
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
@@ -111,30 +128,29 @@ pub(super) fn insertion_site_for_slot(
     // unreachable in practice.
     if slot.is_root_level() {
         let our_root_idx = root_idx;
-        if let Some(id) = root_content_after_slot(parent_mount, slot, our_root_idx, skip, dom) {
+        if let Some(id) = root_content_after_slot(parent_mount, our_root_idx, dom) {
             return InsertionSite::AtAnchor(DomAnchor::Before(id));
         }
         return insertion_site_for_mounted_child(parent_mount, skip, dom, context);
     }
 
-    // `cursor.len() > 1` means we're walking inside a template element, so
-    // the parent vnode is always mounted and reachable from this diff
-    // context. If the enclosing root has been reclaimed for any reason we
-    // fall through to the slot-level insertion site instead of trying to refer to a
-    // stale element id.
-    if let Some(enclosing) = dom.mounted_root_node(parent_mount, root_idx)
-        && dom.element_exists_for_mount(parent_mount, enclosing)
-    {
-        if let Some(id) = adjacent_dynamic_sibling_after(parent_mount, slot, skip, dom, context) {
-            return InsertionSite::AtAnchor(DomAnchor::Before(id));
-        }
-        return InsertionSite::Slot {
-            parent: enclosing.element_id(),
-            placement: slot.placement(),
-        };
+    // `cursor.len() > 1` means we're walking inside a template element. The
+    // enclosing root is therefore part of the same mounted template and must
+    // exist whenever renderer placement is requested.
+    let enclosing = dom
+        .mounted_root_node(parent_mount, root_idx)
+        .expect("non-root dynamic slot must have a mounted enclosing root");
+    debug_assert!(
+        dom.element_exists_for_mount(parent_mount, enclosing),
+        "non-root dynamic slot must be placed inside a live enclosing root"
+    );
+    if let Some(id) = adjacent_dynamic_sibling_after(parent_mount, slot, dom, context) {
+        return InsertionSite::AtAnchor(DomAnchor::Before(id));
     }
-
-    insertion_site_for_slot(parent_mount, slot.root_slot(), skip, dom, context)
+    InsertionSite::Slot {
+        parent: enclosing.element_id(),
+        placement: slot.placement(),
+    }
 }
 
 pub(super) fn create_at_site(
@@ -142,11 +158,11 @@ pub(super) fn create_at_site(
     parent: Option<MountRef>,
     site: InsertionSite,
     dom: &mut VirtualDom,
-    to: Option<&mut dyn WriteMutations>,
+    to: &mut dyn WriteMutations,
 ) -> CreatedNodes {
     let mut mounts = Vec::new();
     let nodes = at_site(site, to, dom.runtime.clone(), |to| {
-        let created = dom.create_children_with_parents(to, content, parent, parent);
+        let created = dom.create_children_with_parents(Some(to), content, parent, parent);
         mounts = created.mounts;
         created.nodes
     });
@@ -155,15 +171,11 @@ pub(super) fn create_at_site(
 
 pub(super) fn at_site(
     site: InsertionSite,
-    to: Option<&mut dyn WriteMutations>,
+    to: &mut dyn WriteMutations,
     runtime: Rc<Runtime>,
-    create: impl FnOnce(Option<&mut dyn WriteMutations>) -> usize,
+    create: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    if let Some(to_ref) = to {
-        site.create_and_place(to_ref, runtime, |to| create(Some(to)))
-    } else {
-        create(None)
-    }
+    site.create_and_place(to, runtime, create)
 }
 
 fn insert_at_slot(
@@ -212,6 +224,10 @@ fn insertion_site_for_mounted_child(
     insertion_site_for_mounted_child(parent_mount, skip, dom, context)
 }
 
+/// Resolve a child mount's site inside a specific committed parent.
+///
+/// Invariant: if this returns `Some`, `mount` is owned by the returned parent slot. If no slot owns
+/// `mount`, the caller must continue walking render parents.
 fn insertion_site_for_child_in_parent(
     mount: MountId,
     parent_mount: MountId,
@@ -220,13 +236,17 @@ fn insertion_site_for_child_in_parent(
     context: Option<DiffContext<'_>>,
 ) -> Option<InsertionSite> {
     let parent_views = parent_views(dom, parent_mount, context);
-    parent_views.find_map(|parent_vnode| {
+    // Child ownership is a committed-mount-table query. During a parent diff,
+    // the new vnode may already have a different fragment shape, but the
+    // fragment child mount list is not replaced until that parent diff
+    // commits.
+    parent_views.find_committed_map(|parent_vnode| {
         for slot in dynamic_node_slots_in_document_order(parent_vnode.vnode()) {
             let idx = slot.index();
             match parent_vnode.dynamic_values[idx].node() {
                 DynamicNode::Fragment(children) => {
                     let child_mounts =
-                        dom.mounted_fragment_children(parent_mount, idx, children.len());
+                        dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
                     let position = locate_in_fragment(&child_mounts, mount)?;
                     if let Some(id) = first_live_sibling_after(
                         children,
@@ -247,7 +267,9 @@ fn insertion_site_for_child_in_parent(
                     ));
                 }
                 DynamicNode::Component(_) => {
-                    if dom.mounted_dynamic_component_root_mount(parent_mount, idx) == Some(mount) {
+                    if dom.unchecked_mounted_dynamic_component_root_mount(parent_mount, idx)
+                        == mount
+                    {
                         return Some(insertion_site_for_slot(
                             parent_mount,
                             slot,
@@ -267,28 +289,30 @@ fn insertion_site_for_child_in_parent(
 fn adjacent_dynamic_sibling_after(
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
-    skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<ElementId> {
-    parent_views(dom, parent_mount, context).find_map(|parent_vnode| {
-        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, skip, dom)
+    parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     })
 }
 
+/// Find the next live dynamic sibling sharing the active slot's insertion position.
+///
+/// Invariant: `slot.index()` must exist in the committed parent view. Parent diffs only call this
+/// for same-template vnode updates, so a missing slot is a template/diff-context bug.
 fn adjacent_dynamic_sibling_after_in_vnode(
     parent_vnode: &VNode,
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
-    skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let active_slot = dynamic_node_slot(parent_vnode, slot.index()).unwrap_or(slot);
+    let active_slot = dynamic_node_slot(parent_vnode, slot.index())
+        .expect("active dynamic slot must exist in the committed parent view");
     first_live_slot_after(
         parent_vnode,
         parent_mount,
         active_slot.index(),
-        skip,
         dom,
         |sibling| {
             let shares_position = sibling.shares_insertion_position(active_slot);
@@ -305,7 +329,6 @@ fn first_live_slot_after(
     vnode: &VNode,
     mount: MountId,
     after_idx: usize,
-    skip: &[MountId],
     dom: &VirtualDom,
     mut scan: impl FnMut(DynamicNodeSlot<'_>) -> Option<bool>,
 ) -> Option<ElementId> {
@@ -319,14 +342,7 @@ fn first_live_slot_after(
         }
         match scan(slot) {
             Some(true) => {
-                if let Some(id) = live_dynamic_slot_edge(
-                    vnode,
-                    mount,
-                    slot.index(),
-                    skip,
-                    dom,
-                    ElementEdge::First,
-                ) {
+                if let Some(id) = live_dynamic_slot_first_element(vnode, mount, slot.index(), dom) {
                     return Some(id);
                 }
             }
@@ -337,13 +353,16 @@ fn first_live_slot_after(
     None
 }
 
-fn live_dynamic_slot_edge(
+/// Find a live DOM edge for one dynamic slot.
+///
+/// Invariant: component root mounts returned by the scope state own a committed vnode; fragment
+/// slots have exactly one mount per child. The slot being inspected is outside the active committed
+/// fragment child list, so caller skip lists cannot contain the mounts it owns.
+fn live_dynamic_slot_first_element(
     vnode: &VNode,
     mount: MountId,
     idx: usize,
-    skip: &[MountId],
     dom: &VirtualDom,
-    edge: ElementEdge,
 ) -> Option<ElementId> {
     let target_id = dom.current_render_target_id();
     match vnode.dynamic_values[idx].node() {
@@ -352,23 +371,25 @@ fn live_dynamic_slot_edge(
             .filter(|id| dom.element_exists_in_target(target_id, *id))
             .map(|id| id.element_id()),
         DynamicNode::Fragment(children) => {
-            let child_mounts = dom.mounted_fragment_children(mount, idx, children.len());
-            edge.find_map(children.len(), |child_idx| {
-                let child = &children[child_idx];
-                let child_mount = child_mounts.get(child_idx).copied()?;
-                if skip.contains(&child_mount) {
-                    return None;
-                }
-                vnode_edge_element(MountedVNode::new(child, child_mount), dom, edge)
-            })
+            let child_mounts = dom.mounted_fragment_children_exact(mount, idx, children.len());
+            children
+                .iter()
+                .zip(child_mounts)
+                .find_map(|(child, mount)| {
+                    vnode_edge_element(MountedVNode::new(child, mount), dom, ElementEdge::First)
+                })
         }
         DynamicNode::Component(_) => {
-            let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
-            if skip.contains(&component_root_mount) {
-                return None;
-            }
-            let vnode = dom.current_mounted_view(component_root_mount)?;
-            vnode_edge_element(MountedVNode::new(&vnode, component_root_mount), dom, edge)
+            let component_root_mount =
+                dom.unchecked_mounted_dynamic_component_root_mount(mount, idx);
+            let vnode = dom
+                .current_mounted_view(component_root_mount)
+                .expect("mounted component root must have a committed vnode");
+            vnode_edge_element(
+                MountedVNode::new(&vnode, component_root_mount),
+                dom,
+                ElementEdge::First,
+            )
         }
     }
 }
@@ -381,37 +402,27 @@ fn parent_views<'a>(
     if let Some(context) = context.and_then(|context| context.for_mount(parent_mount)) {
         return ParentViews::Context {
             mount: parent_mount,
-            new: context.new,
             old: context.old,
         };
     }
     ParentViews::Mounted {
         mount: parent_mount,
-        view: dom.current_mounted_view(parent_mount),
+        view: dom
+            .current_mounted_view(parent_mount)
+            .expect("parent mount must exist while resolving child placement"),
     }
 }
 
 enum ParentViews<'a> {
-    Context {
-        mount: MountId,
-        new: &'a VNode,
-        old: &'a VNode,
-    },
-    Mounted {
-        mount: MountId,
-        view: Option<VNode>,
-    },
+    Context { mount: MountId, old: &'a VNode },
+    Mounted { mount: MountId, view: VNode },
 }
 
 impl<'a> ParentViews<'a> {
-    fn find_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
+    fn find_committed_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
         match self {
-            Self::Context { mount, new, old } => {
-                f(MountedVNode::new(new, *mount)).or_else(|| f(MountedVNode::new(old, *mount)))
-            }
-            Self::Mounted { mount, view } => view
-                .as_ref()
-                .and_then(|vnode| f(MountedVNode::new(vnode, *mount))),
+            Self::Context { mount, old } => f(MountedVNode::new(old, *mount)),
+            Self::Mounted { mount, view } => f(MountedVNode::new(view, *mount)),
         }
     }
 }
@@ -443,9 +454,7 @@ fn first_live_sibling_after(
 
 fn root_content_after_slot(
     parent_mount: MountId,
-    slot: DynamicNodeSlot<'_>,
     our_root_idx: usize,
-    skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     // Probe the committed mount view of `parent_mount`. The diff context's
@@ -458,28 +467,12 @@ fn root_content_after_slot(
         .current_mounted_view(parent_mount)
         .expect("parent_root_after requires a live parent mount");
 
-    if let Some(id) =
-        first_live_slot_after(&probe, parent_mount, slot.index(), skip, dom, |candidate| {
-            (candidate.is_root_level() && candidate.root_index() == our_root_idx).then_some(true)
-        })
-    {
-        return Some(id);
-    }
-
-    if let Some(id) = static_root_element(&probe, parent_mount, our_root_idx, dom) {
-        return Some(id);
-    }
-
+    // Root-level dynamic slots are unique root positions: template lowering
+    // advances the root cursor for every root dynamic value, so adjacent root
+    // dynamics never share one anchor. Start scanning at the next root.
     ((our_root_idx + 1)..probe.template.root_count()).find_map(|next_cursor| {
-        first_root_dynamic_at_cursor(
-            &probe,
-            parent_mount,
-            next_cursor,
-            skip,
-            dom,
-            ElementEdge::First,
-        )
-        .or_else(|| static_root_element(&probe, parent_mount, next_cursor, dom))
+        first_root_dynamic_at_cursor(&probe, parent_mount, next_cursor, dom)
+            .or_else(|| static_root_element(&probe, parent_mount, next_cursor, dom))
     })
 }
 
@@ -487,12 +480,10 @@ pub(super) fn first_root_dynamic_at_cursor(
     vnode: &VNode,
     mount: MountId,
     cursor_idx: usize,
-    skip: &[MountId],
     dom: &VirtualDom,
-    edge: ElementEdge,
 ) -> Option<ElementId> {
-    find_root_dynamic_slot(vnode, cursor_idx, edge, |slot| {
-        live_dynamic_slot_edge(vnode, mount, slot.index(), skip, dom, edge)
+    find_root_dynamic_slot(vnode, cursor_idx, ElementEdge::First, |slot| {
+        live_dynamic_slot_first_element(vnode, mount, slot.index(), dom)
     })
 }
 
@@ -522,9 +513,10 @@ pub(super) fn static_root_element(
     root_idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    if root_idx >= vnode.template.root_count() {
-        return None;
-    }
+    debug_assert!(
+        root_idx < vnode.template.root_count(),
+        "root lookup must stay within the vnode template"
+    );
     dom.mounted_root_node(mount, root_idx)
         .filter(|id| dom.element_exists_for_mount(mount, *id))
         .map(|id| id.element_id())

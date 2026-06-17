@@ -30,15 +30,6 @@ macro_rules! dioxus_debug_assert_eq {
     }};
 }
 
-macro_rules! dioxus_debug_assert_ne {
-    ($($arg:tt)*) => {{
-        #[cfg(all(debug_assertions, not(coverage_nightly)))]
-        {
-            debug_assert_ne!($($arg)*);
-        }
-    }};
-}
-
 mod arena;
 mod diff;
 mod effect;

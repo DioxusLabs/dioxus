@@ -548,15 +548,15 @@ fn set_namespaced_element(cx: &StrategyCx) -> Vec<Op> {
 }
 
 /// Build the alias-then-remove sequence that drives
-/// `diff_attributes::remove_attribute_or_write_fallback`.
+/// `diff_attributes::remove_attribute_or_restore_static`.
 ///
 /// The first op inserts a *static* template attribute on an element with the
 /// same resolved name as one of its existing dynamic attributes; the second
 /// removes the dynamic side. After the next `Rerender` (the mutator splices
 /// rerenders on its own) the diff sees the dynamic attribute disappear while
-/// the static one stays, falling back to the static value. When the model
-/// has no eligible dynamic attribute, the whole collision is bootstrapped
-/// from scratch.
+/// the static one stays, restoring the static value. When the model has no
+/// eligible dynamic attribute, the whole collision is bootstrapped from
+/// scratch.
 fn alias_attr_collision(cx: &StrategyCx) -> Vec<Op> {
     let candidates = cx.facts.collision_candidates();
     if let Some(pick) = select(candidates, cx.selector) {
@@ -711,7 +711,7 @@ fn biased_template_attr(value: u8) -> TemplateAttrSpec {
         TemplateAttrSpec::Static {
             // Mask the name into the shared pool so this static attribute
             // can collide with a dynamic attribute on the same element and
-            // exercise `remove_attribute_or_write_fallback`.
+            // exercise `remove_attribute_or_restore_static`.
             name: value & ATTR_NAME_POOL_MASK,
             value: value.wrapping_add(1),
             namespace: (value & 2 == 0).then_some(value.wrapping_add(2)),

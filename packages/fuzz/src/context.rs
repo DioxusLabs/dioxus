@@ -118,7 +118,7 @@ impl SuspenseReadyRegistry {
         if let Some((_, existing)) = self
             .wakers
             .iter_mut()
-            .find(|(wake_key, _)| *wake_key == key)
+            .find(|(wake_key, existing)| *wake_key == key && existing.will_wake(&waker))
         {
             *existing = waker;
         } else {
@@ -137,13 +137,19 @@ impl SuspenseReadyRegistry {
             self.wake_counts.push((key, 1));
         }
 
-        if let Some((_, waker)) = self.wakers.iter().find(|(wake_key, _)| *wake_key == key) {
+        for (_, waker) in self.wakers.iter().filter(|(wake_key, _)| *wake_key == key) {
             waker.wake_by_ref();
         }
     }
 
     fn registered_keys(&self) -> Vec<SuspenseReadyKey> {
-        self.wakers.iter().map(|(key, _)| *key).collect()
+        let mut keys = Vec::new();
+        for (key, _) in &self.wakers {
+            if !keys.contains(key) {
+                keys.push(*key);
+            }
+        }
+        keys
     }
 
     fn clear(&mut self) {

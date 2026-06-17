@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Fold every attribute name into a 16-slot pool so static and dynamic
 /// attributes on the same element collide on the same `(name, namespace)`
-/// key often enough for `remove_attribute_or_write_fallback` to fire.
+/// key often enough for `remove_attribute_or_restore_static` to fire.
 pub(crate) const ATTR_NAME_POOL_MASK: u8 = 0x0F;
 
 pub(crate) const MAX_ROOTS: usize = 8;

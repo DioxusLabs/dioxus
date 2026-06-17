@@ -4,28 +4,19 @@ use crate::{Template, TemplatePath, VNode, template::TemplateAnchor};
 ///
 /// An anchor can cover several adjacent node values at the same insertion position (e.g. `{a}{b}`);
 /// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
-///
-/// `path_override` is normally `None`, in which case the slot's navigation path is `anchor.path()`.
-/// `root_slot` produces a slot promoted to a synthetic root-level path for which no real anchor
-/// exists (the enclosing element was reclaimed); that promoted path is carried here as `Some`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct DynamicNodeSlot<'a> {
     anchor: &'a TemplateAnchor,
     index: usize,
-    path_override: Option<TemplatePath>,
 }
 
 impl<'a> DynamicNodeSlot<'a> {
     pub(super) fn new(_template: &'a Template, anchor: &'a TemplateAnchor, index: usize) -> Self {
-        Self {
-            anchor,
-            index,
-            path_override: None,
-        }
+        Self { anchor, index }
     }
 
     fn path(self) -> TemplatePath {
-        self.path_override.unwrap_or_else(|| self.anchor.path())
+        self.anchor.path()
     }
 
     pub(super) fn index(self) -> usize {
@@ -46,15 +37,6 @@ impl<'a> DynamicNodeSlot<'a> {
 
     pub(super) fn child_index(self) -> usize {
         self.path().split_slot().1
-    }
-
-    pub(super) fn root_slot(self) -> Self {
-        Self {
-            path_override: Some(
-                TemplatePath::root(self.root_index()).with_appends(self.path().appends()),
-            ),
-            ..self
-        }
     }
 
     pub(super) fn placement(self) -> SlotPlacement {

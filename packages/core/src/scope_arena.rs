@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     Element, ReactiveContext,
-    innerlude::{RenderError, ScopeState},
+    innerlude::{RenderError, ScopeState, SuspendedTaskRegistration},
     render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
@@ -117,26 +117,39 @@ impl VirtualDom {
                 let task = e.task();
                 // Insert the task into the nearest suspense boundary if it exists
                 let boundary = scope.suspense_location();
-                let already_suspended = self
+                let registration = self
                     .runtime
                     .tasks
                     .borrow()
                     .get(task.id)
                     .expect("Suspended on a task that no longer exists")
                     .suspend(boundary.clone());
-                if !already_suspended {
-                    tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
-                    // Every user-rendered scope sits inside the implicit
-                    // `SuspenseBoundary` from `RootScopeWrapper`, so a
-                    // suspended scope's location always carries a boundary
-                    // context (`UnderSuspense` or `InSuspensePlaceholder`).
-                    boundary
-                        .suspense_context()
-                        .expect("suspended scope must have a SuspenseContext")
-                        .add_suspended_task(e.clone());
-                    self.runtime
-                        .suspended_tasks
-                        .set(self.runtime.suspended_tasks.get() + 1);
+                match registration {
+                    SuspendedTaskRegistration::New | SuspendedTaskRegistration::Moved { .. } => {
+                        tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
+
+                        if let SuspendedTaskRegistration::Moved { old_boundary } = &registration
+                            && let Some(old_boundary) = old_boundary.suspense_context()
+                        {
+                            old_boundary.remove_suspended_task(task);
+                        }
+
+                        // Every user-rendered scope sits inside the implicit
+                        // `SuspenseBoundary` from `RootScopeWrapper`, so a
+                        // suspended scope's location always carries a boundary
+                        // context (`UnderSuspense` or `InSuspensePlaceholder`).
+                        boundary
+                            .suspense_context()
+                            .expect("suspended scope must have a SuspenseContext")
+                            .add_suspended_task(e.clone());
+
+                        if matches!(registration, SuspendedTaskRegistration::New) {
+                            self.runtime
+                                .suspended_tasks
+                                .set(self.runtime.suspended_tasks.get() + 1);
+                        }
+                    }
+                    SuspendedTaskRegistration::Unchanged => {}
                 }
             }
             Ok(_) => {

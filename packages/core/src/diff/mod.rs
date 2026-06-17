@@ -5,7 +5,17 @@
 //! - Diffing nodes that are not mounted
 //! - Mounted nodes that have already been created
 //!
-//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut dyn WriteMutations>
+//! To support those cases, we lazily create components and only optionally write to the real dom
+//! while diffing with `Option<&mut dyn WriteMutations>`.
+//!
+//! Core diff invariants:
+//! - Every live `MountId` points at exactly one committed `VNode` until that vnode is removed.
+//! - A vnode commit is atomic from the parent fragment's point of view: child mount lists are
+//!   replaced only after the whole fragment diff has chosen placement anchors.
+//! - `None` writers mean "maintain mount/component state without renderer mutations", not "the
+//!   mount graph may be incomplete".
+//! - Internal diff code that needs a fragment's child mounts must use exact accessors; permissive
+//!   mounted-node queries are reserved for public inspection/event lookup paths.
 
 #![allow(clippy::too_many_arguments)]
 
@@ -38,6 +48,11 @@ pub(crate) struct CreatedNodes {
 }
 
 impl VirtualDom {
+    /// Create sibling vnodes under one render/logical parent.
+    ///
+    /// Invariant: the returned `mounts` has exactly one mount per input vnode, in input order. If
+    /// `to` is `None`, mount/component state is still fully materialized while renderer nodes are
+    /// not emitted.
     pub(crate) fn create_children_with_parents(
         &mut self,
         mut to: Option<&mut dyn WriteMutations>,
@@ -64,6 +79,10 @@ impl VirtualDom {
         created
     }
 
+    /// Reserve enough mount/scope storage for a fragment creation.
+    ///
+    /// Invariant: this only affects allocation capacity; it does not allocate mount ids or mutate
+    /// the committed mount graph.
     fn reserve_fragment_children(&mut self, nodes: &[VNode]) {
         if nodes.is_empty() {
             return;
@@ -83,8 +102,10 @@ impl VirtualDom {
             .reserve(root_components);
     }
 
-    /// Remove these nodes from the dom
-    /// Wont generate mutations for the inner nodes
+    /// Remove sibling vnodes in reverse order.
+    ///
+    /// Invariant: `nodes` and `mounts` describe the same sibling list. Inner removals do not emit
+    /// their own mutations because the parent-level removal owns those renderer operations.
     fn remove_nodes(
         &mut self,
         mut to: Option<&mut dyn WriteMutations>,
@@ -97,6 +118,10 @@ impl VirtualDom {
     }
 }
 
+/// Count root-level component dynamic nodes for scope storage reservation.
+///
+/// Invariant: this is only a capacity hint. Non-root component scopes are allocated lazily when
+/// their owning template root is materialized.
 fn root_component_count(node: &VNode) -> usize {
     node.template
         .root_slots()

@@ -119,7 +119,7 @@ struct TargetedRendererOracle {
     recent_mutation_len: usize,
 }
 
-const RECENT_MUTATION_LIMIT: usize = 16;
+const RECENT_MUTATION_LIMIT: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct EventListenerTarget {
@@ -248,8 +248,9 @@ impl TargetedRendererOracle {
         }
 
         let incremental_snapshot = self.snapshot();
+        let recent_mutations = self.recent_mutations_text();
         Err(format!(
-            "incremental renderer snapshot does not match fresh render\nincremental:\n{incremental_snapshot:#?}\nfresh:\n{fresh_snapshot:#?}"
+            "incremental renderer snapshot does not match fresh render\nincremental:\n{incremental_snapshot:#?}\nfresh:\n{fresh_snapshot:#?}\nrecent mutations:\n  {recent_mutations}"
         ))
     }
 
@@ -809,7 +810,11 @@ fn lifecycle_is_within_expected_bounds(
     let has_all_visible_fresh_components = fresh
         .iter()
         .filter(|(key, _)| lifecycle_role_is_strict(**key))
-        .all(|(key, count)| incremental.get(key).copied().unwrap_or(0) >= *count);
+        .all(|(key, count)| {
+            let model_count = model.get(key).copied().unwrap_or(0);
+            let required_visible_count = (*count).min(model_count);
+            incremental.get(key).copied().unwrap_or(0) >= required_visible_count
+        });
     let has_no_components_outside_the_model = incremental
         .iter()
         .filter(|(key, _)| lifecycle_role_is_strict(**key))
@@ -1009,6 +1014,28 @@ mod tests {
             0,
             DynamicKind::Suspense {
                 mode: SuspenseMode::Pending,
+            },
+        ));
+    }
+
+    fn set_resolved_suspense_with_component_b_model(context: &HarnessContext) {
+        context.with_model(|model| *model = Model::initial());
+        context.apply_to_model(&Op::template(
+            0,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                }),
+            },
+        ));
+        context.apply_to_model(&Op::template(
+            1,
+            TemplateEdit::Roots {
+                edit: ListEdit::Insert {
+                    index: 0,
+                    item: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
             },
         ));
     }
@@ -1488,6 +1515,28 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn lifecycle_oracle_caps_fresh_suspense_duplicates_at_model_count() {
+        let context = HarnessContext::new();
+        context.lifecycle.reset_all();
+        set_resolved_suspense_with_component_b_model(&context);
+
+        let component = LifecycleKey {
+            role: LifecycleRole::ComponentB,
+            id: 0,
+        };
+        let incremental = LifecycleSnapshot::from([(component, 1)]);
+        let fresh = LifecycleSnapshot::from([(component, 2)]);
+        let model = expected_model_lifecycle_snapshot(&context);
+
+        assert!(lifecycle_is_within_expected_bounds(
+            &context,
+            &incremental,
+            &fresh,
+            &model
+        ));
+    }
+
     // Regression test for a panic in `SuspenseContext::remove_suspended_task` when
     // a nested suspense boundary was unmounted while a child task was still suspended.
     // The boundary scope was dropped before the task cleanup ran, so `needs_update`
@@ -1600,6 +1649,134 @@ mod tests {
                 0,
                 0,
                 FragmentEdit::Children(ListEdit::Move { from: 1, to: 0 }),
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 3,
+                        key_base: Some(206),
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                3,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Placeholder),
+                },
+            ),
+            Op::wake_suspense(110),
+            Op::fragment(
+                0,
+                225,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 138,
+                    item: None,
+                }),
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn non_keyed_fragment_pair_diff_keeps_later_siblings_available_for_placement() {
+        replay_ops([
+            Op::template(
+                165,
+                TemplateEdit::SetNode {
+                    node: 194,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 44 },
+                    }),
+                },
+            ),
+            Op::wake_suspense(22),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 16,
+                        key_base: None,
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                6,
+                TemplateEdit::SetNode {
+                    node: 168,
+                    kind: TemplateNodeKind::Element {
+                        tag: 179,
+                        namespace: Some(178),
+                    },
+                },
+            ),
+            Op::template(
+                12,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Text(199),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn keyed_fragment_removals_stay_mounted_until_placements_finish() {
+        replay_ops([
+            Op::Rerender,
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Pending,
+                    }),
+                },
+            ),
+            Op::wake_suspense(96),
+            Op::template(
+                101,
+                TemplateEdit::Children {
+                    element: 204,
+                    edit: ListEdit::Insert {
+                        index: 240,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                            children: 222,
+                            key_base: Some(127),
+                        }),
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                160,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                    },
+                },
+            ),
+            Op::template(
+                13,
+                TemplateEdit::SetNode {
+                    node: 139,
+                    kind: TemplateNodeKind::Text(58),
+                },
             ),
             Op::Rerender,
         ]);
@@ -1724,6 +1901,641 @@ mod tests {
             Op::wake_suspense(210),
             Op::Rerender,
             Op::suspense(0, SuspenseMode::Pending),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn resolved_suspense_reuses_promoted_mount_when_pending_again() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::wake_suspense(253),
+            Op::suspense(25, SuspenseMode::Pending),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn nested_ready_suspense_promotes_parent_after_last_wake() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 29 },
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::wake_suspense(3),
+            Op::Rerender,
+            Op::wake_suspense(108),
+            Op::wake_suspense(235),
+        ]);
+    }
+
+    #[test]
+    fn nested_suspense_mode_change_to_resolved_replaces_visible_fallback() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Resolved,
+                    }),
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 224,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                            mode: SuspenseMode::Ready { wake_after: 141 },
+                        }),
+                    },
+                },
+            ),
+            Op::suspense_wake_mutation(25, WakeMutationSpec::None),
+            Op::wake_suspense(187),
+            Op::Rerender,
+            Op::suspense(129, SuspenseMode::Resolved),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn hidden_fragment_shape_change_does_not_use_removed_child_mount_as_anchor() {
+        replay_ops([
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::fire_event(9, EventBehaviorSpec::Noop),
+            Op::fire_event(71, EventBehaviorSpec::Noop),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 1,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 3,
+                        key_base: Some(53),
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::fragment(
+                1,
+                61,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 39,
+                    item: None,
+                }),
+            ),
+            Op::Rerender,
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 1,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 2,
+                        key_base: None,
+                    }),
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn keyed_splice_placement_skips_mounts_claimed_by_earlier_splices() {
+        replay_ops([
+            Op::fire_event(90, EventBehaviorSpec::Noop),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                            children: 204,
+                            key_base: Some(173),
+                        }),
+                    },
+                },
+            ),
+            Op::wake_suspense(141),
+            Op::Rerender,
+            Op::template(
+                101,
+                TemplateEdit::Children {
+                    element: 204,
+                    edit: ListEdit::Insert {
+                        index: 240,
+                        item: TemplateNodeKind::Text(252),
+                    },
+                },
+            ),
+            Op::suspense(0, SuspenseMode::Ready { wake_after: 40 }),
+            Op::wake_suspense(145),
+            Op::fragment(
+                1,
+                0,
+                FragmentEdit::Children(ListEdit::Move { from: 229, to: 24 }),
+            ),
+            Op::Rerender,
+            Op::wake_suspense(187),
+            Op::wake_suspense(88),
+            Op::fire_event(16, EventBehaviorSpec::DispatchNestedEvent { target: 235 }),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn hidden_dynamic_replacement_does_not_resolve_renderer_placement() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 255,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Pending,
+                    }),
+                },
+            ),
+            Op::wake_suspense(122),
+            Op::Rerender,
+            Op::template(
+                91,
+                TemplateEdit::Children {
+                    element: 201,
+                    edit: ListEdit::Insert {
+                        index: 41,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Portal),
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 1,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn keyed_splice_placement_skips_mounts_removed_by_earlier_splices() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                },
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: Some(17),
+                }),
+            ),
+            Op::fire_event(127, EventBehaviorSpec::Noop),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fire_event(126, EventBehaviorSpec::DispatchNestedEvent { target: 52 }),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                173,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Move { from: 230, to: 110 }),
+            ),
+            Op::Rerender,
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 45,
+                    edit: ListEdit::Remove { index: 204 },
+                },
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                202,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: Some(254),
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::wake_suspense(235),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 195,
+                    item: Some(162),
+                }),
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 169,
+                    edit: ListEdit::Remove { index: 161 },
+                },
+            ),
+            Op::dynamic(1, 0, DynamicKind::ComponentA),
+            Op::dynamic(2, 0, DynamicKind::Placeholder),
+            Op::dynamic(3, 0, DynamicKind::ComponentA),
+            Op::dynamic(4, 0, DynamicKind::ComponentA),
+            Op::dynamic(6, 0, DynamicKind::ComponentA),
+            Op::wake_suspense(186),
+            Op::Rerender,
+            Op::dynamic(9, 0, DynamicKind::Placeholder),
+            Op::dynamic(10, 0, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::wake_suspense(253),
+            Op::suspense(66, SuspenseMode::Pending),
+            Op::Rerender,
+            Op::dynamic(15, 0, DynamicKind::ComponentA),
+            Op::dynamic(
+                16,
+                0,
+                DynamicKind::Fragment {
+                    children: 31,
+                    key_base: Some(236),
+                },
+            ),
+            Op::suspense_wake_mutation(54, WakeMutationSpec::None),
+            Op::dynamic_attrs(18, 108, ListEdit::Remove { index: 72 }),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn keyed_splice_inner_replacement_keeps_future_siblings_available_for_placement() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::Children {
+                    element: 214,
+                    edit: ListEdit::Remove { index: 215 },
+                },
+            ),
+            Op::suspense_wake_mutation(251, WakeMutationSpec::PrependStaticRoot { tag: 30 }),
+            Op::Rerender,
+            Op::suspense(249, SuspenseMode::Ready { wake_after: 140 }),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fire_event(191, EventBehaviorSpec::DispatchNestedEvent { target: 60 }),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 166 }),
+            ),
+            Op::template(
+                137,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Text(76),
+                },
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::suspense_wake_mutation(38, WakeMutationSpec::None),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::Rerender,
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 197,
+                    edit: ListEdit::Insert {
+                        index: 32,
+                        item: TemplateAttrSpec::Static {
+                            name: 198,
+                            value: 204,
+                            namespace: None,
+                        },
+                    },
+                },
+            ),
+            Op::fragment(
+                0,
+                253,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::Rerender,
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::fragment(
+                1,
+                225,
+                FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 209 }),
+            ),
+            Op::template(
+                2,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Move { from: 142, to: 169 },
+                },
+            ),
+            Op::dynamic(3, 0, DynamicKind::ComponentA),
+            Op::wake_suspense(11),
+            Op::template(
+                5,
+                TemplateEdit::Attrs {
+                    element: 20,
+                    edit: ListEdit::Insert {
+                        index: 245,
+                        item: TemplateAttrSpec::Static {
+                            name: 19,
+                            value: 106,
+                            namespace: Some(62),
+                        },
+                    },
+                },
+            ),
+            Op::fire_event(15, EventBehaviorSpec::DispatchNestedEvent { target: 65 }),
+            Op::template(
+                230,
+                TemplateEdit::Attrs {
+                    element: 139,
+                    edit: ListEdit::Move { from: 77, to: 92 },
+                },
+            ),
+            Op::dynamic(8, 0, DynamicKind::ComponentA),
+            Op::fire_event(238, EventBehaviorSpec::Noop),
+            Op::wake_suspense(40),
+            Op::template(
+                11,
+                TemplateEdit::Children {
+                    element: 171,
+                    edit: ListEdit::Insert {
+                        index: 112,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                    },
+                },
+            ),
+            Op::dynamic(12, 0, DynamicKind::Portal),
+            Op::dynamic(13, 0, DynamicKind::ComponentA),
+            Op::template(
+                14,
+                TemplateEdit::SetNode {
+                    node: 26,
+                    kind: TemplateNodeKind::Text(50),
+                },
+            ),
+            Op::dynamic(15, 0, DynamicKind::Placeholder),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn placement_sibling_scan_uses_committed_fragment_shape() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::template(
+                27,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 158,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                            mode: SuspenseMode::Ready { wake_after: 170 },
+                        }),
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                2,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 204,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Text(204)),
+                    },
+                },
+            ),
+            Op::template(
+                170,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 224,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                            children: 172,
+                            key_base: None,
+                        }),
+                    },
+                },
+            ),
+            Op::fire_event(72, EventBehaviorSpec::Noop),
+            Op::Rerender,
+            Op::Rerender,
+            Op::template(
+                5,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 1,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                40,
+                TemplateEdit::Attrs {
+                    element: 117,
+                    edit: ListEdit::Move { from: 239, to: 214 },
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                2,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Move { from: 236, to: 168 },
+                },
+            ),
+            Op::wake_suspense(50),
             Op::Rerender,
         ]);
     }
@@ -3213,6 +4025,55 @@ mod tests {
             Op::Rerender,
             Op::suspense(240, SuspenseMode::Ready { wake_after: 0 }),
             Op::wake_suspense(197),
+        ];
+
+        let mut harness = Harness::fresh_strict();
+        for op in ops {
+            apply_op(&mut harness, &op).unwrap();
+        }
+    }
+
+    #[test]
+    fn hidden_suspense_branch_retains_background_mode_recursively() {
+        let ops = [
+            Op::Rerender,
+            Op::wake_suspense(166),
+            Op::fire_event(2, EventBehaviorSpec::Noop),
+            Op::Rerender,
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                        mode: SuspenseMode::Ready { wake_after: 0 },
+                    }),
+                },
+            ),
+            Op::template(
+                101,
+                TemplateEdit::Children {
+                    element: 204,
+                    edit: ListEdit::Insert {
+                        index: 240,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                            children: 222,
+                            key_base: Some(127),
+                        }),
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 1,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 2,
+                        key_base: Some(28),
+                    }),
+                },
+            ),
+            Op::Rerender,
         ];
 
         let mut harness = Harness::fresh_strict();
