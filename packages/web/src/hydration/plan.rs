@@ -342,9 +342,9 @@ fn next_consuming_is_text_run(steps: &[EmitStep<'_, '_>], idx: usize) -> bool {
 /// another text run, so cursor must advance past).
 ///
 /// Empty text contributions before the last non-empty get `hy_synth_text`
-/// (virtual sentinel inserted before cursor). Empty contributions after
-/// the last non-empty get `hy_synth_text_after` (virtual sentinel inserted
-/// after cursor). Embedded placeholders use `hy_placeholder`.
+/// (real empty text node inserted before cursor). Empty contributions after
+/// the last non-empty get `hy_synth_text_after` (real empty text node inserted
+/// after cursor).
 ///
 /// Returns the number of DOM siblings this run consumed (0 if all-empty
 /// or `split_tail`, else 1).

@@ -11,38 +11,9 @@ interface ListenerElement extends Element {
   listening?: number;
 }
 
-// Virtual placeholder: empty `DynamicNode::Placeholder` slots have no DOM
-// presence; `nodes[id]` holds one of these sentinels. `before` can chain
-// through other sentinels; `materialized` is set when a chained sibling
-// later allocates a real text/element so chain walkers can short-circuit.
-export interface VirtualPlaceholder {
-  __virtual: true;
-  parent: Node | null;
-  before: Node | VirtualPlaceholder | null;
-  materialized?: Node;
-}
-
-function isVirtual(x: any): x is VirtualPlaceholder {
-  return x !== null && typeof x === "object" && x.__virtual === true;
-}
-
-function resolveAnchorBefore(
-  before: Node | VirtualPlaceholder | null
-): Node | null {
-  while (before && isVirtual(before)) {
-    // Defensive: `materialized` can point to a node that was removed by a
-    // later `Remove` mutation. The anchor itself never sees that removal,
-    // so we check `isConnected` and fall through if the cached node has
-    // been detached.
-    if (before.materialized && before.materialized.isConnected) {
-      return before.materialized;
-    }
-    before = before.before;
-  }
-  return before as Node | null;
-}
-
-type NodeOrVirtual = Node | VirtualPlaceholder;
+// A stack entry pairs a DOM node with the ElementId it was pushed under, or
+// `null` for nodes pushed positionally (e.g. cloned template children).
+type StackEntry = [Node, NodeId | null];
 
 export class BaseInterpreter {
   // non bubbling events listen at the element the listener was created at
@@ -61,9 +32,8 @@ export class BaseInterpreter {
   resizeObserver: ResizeObserver;
   intersectionObserver: IntersectionObserver;
 
-  nodes: NodeOrVirtual[];
-  nodeIds: WeakMap<object, number>;
-  stack: NodeOrVirtual[];
+  nodes: Node[];
+  stack: StackEntry[];
 
   // sledgehammer is generating this...
   m: any;
@@ -76,9 +46,7 @@ export class BaseInterpreter {
     this.root = root;
 
     this.nodes = [root];
-    this.nodeIds = new WeakMap();
-    this.nodeIds.set(root, 0);
-    this.stack = [root];
+    this.stack = [[root, 0]];
 
     this.handler = handler;
 
@@ -205,38 +173,38 @@ export class BaseInterpreter {
   }
 
   getNode(id: NodeId): Node {
-    // Sentinels are returned as-is; Rust `dyn_ref::<Element>()` fails the
-    // `instanceof` check and bails. No comment is ever synthesized here.
-    return this.nodes[id] as Node;
+    return this.nodes[id];
   }
 
-  pushRoot(node: NodeOrVirtual) {
-    this.stack.push(node);
+  setNode(id: NodeId, node: Node) {
+    this.nodes[id] = node;
+  }
+
+  pushRoot(node: Node) {
+    this.stack.push([node, null]);
   }
 
   pushId(id: NodeId) {
-    this.stack.push(this.nodes[id]);
+    this.stack.push([this.nodes[id], id]);
   }
 
   popId(id: NodeId) {
-    const node = this.stack.pop();
-    if (!node) throw new Error("popId: empty stack");
-    this.nodes[id] = node;
-    this.nodeIds.set(node as object, id);
+    const entry = this.stack.pop();
+    if (!entry) throw new Error("popId: empty stack");
+    this.nodes[id] = entry[0];
   }
 
   currentTopId(): NodeId {
-    const node = this.stack[this.stack.length - 1];
-    const id = this.nodeIds.get(node as object);
-    if (id === undefined) throw new Error("currentTopId: top node has no ElementId");
+    const id = this.stack[this.stack.length - 1][1];
+    if (id == null) throw new Error("currentTopId: top node has no ElementId");
     return id;
   }
 
   child(index: number) {
-    const parent = this.stack[this.stack.length - 1] as Node;
+    const parent = this.stack[this.stack.length - 1][0];
     const child = parent.childNodes[index];
     if (!child) throw new Error("child: index out of bounds");
-    this.stack[this.stack.length - 1] = child;
+    this.stack[this.stack.length - 1] = [child, null];
   }
 
   pop() {
@@ -244,117 +212,70 @@ export class BaseInterpreter {
   }
 
   createElementTop(tag: string, ns: string | null) {
-    this.stack.push(ns ? document.createElementNS(ns, tag) : document.createElement(tag));
+    this.stack.push([ns ? document.createElementNS(ns, tag) : document.createElement(tag), null]);
   }
 
   createTextTop(text: string) {
-    this.stack.push(document.createTextNode(text));
+    this.stack.push([document.createTextNode(text), null]);
   }
 
   cloneTop() {
-    const node = this.stack[this.stack.length - 1] as Node;
-    this.stack[this.stack.length - 1] = node.cloneNode(true);
-  }
-
-  clearNodeId(node: NodeOrVirtual) {
-    const id = this.nodeIds.get(node as object);
-    if (id !== undefined) {
-      this.nodes[id] = undefined as any;
-      this.nodeIds.delete(node as object);
-    }
+    const node = this.stack[this.stack.length - 1][0];
+    this.stack[this.stack.length - 1] = [node.cloneNode(true), null];
   }
 
   appendChildrenToTop(many: number) {
     const parentIdx = this.stack.length - many - 1;
-    const parent = this.stack[parentIdx];
+    const parent = this.stack[parentIdx][0];
     const items = this.stack.splice(parentIdx + 1, many);
-    if (isVirtual(parent)) {
-      const resolved = this.resolveAnchor(parent);
-      this.applyChunk(items, parent.parent as Node, resolved);
-      this.materializeAnchor(parent, items);
-    } else {
-      this.applyChunk(items, parent as Node, null);
-    }
+    this.applyChunk(items, parent, null);
   }
 
   replaceTopWith(many: number) {
     const targetIdx = this.stack.length - many - 1;
-    const target = this.stack[targetIdx];
+    const target = this.stack[targetIdx][0];
     const items = this.stack.splice(targetIdx + 1, many);
     this.stack.pop();
-    this.replaceAtResolvedTarget(target, items);
-    this.clearNodeId(target);
+    const real = target as ListenerElement;
+    if (real.listening) this.removeAllNonBubblingListeners(real);
+    const parent = target.parentNode as Node;
+    const next = target.nextSibling;
+    (target as ChildNode).remove();
+    this.applyChunk(items, parent, next);
   }
 
   insertAfterTop(many: number) {
     const anchorIdx = this.stack.length - many - 1;
-    const anchor = this.stack[anchorIdx];
+    const anchor = this.stack[anchorIdx][0];
     const items = this.stack.splice(anchorIdx + 1, many);
-    if (isVirtual(anchor)) {
-      this.applyChunk(items, anchor.parent as Node, this.resolveAnchor(anchor));
-      for (const item of items) {
-        if (!isVirtual(item)) {
-          anchor.before = item;
-          break;
-        }
-      }
-    } else {
-      const node = anchor as Node;
-      this.applyChunk(items, node.parentNode as Node, node.nextSibling);
-    }
+    this.applyChunk(items, anchor.parentNode as Node, anchor.nextSibling);
   }
 
   insertBeforeTop(many: number) {
     const anchorIdx = this.stack.length - many - 1;
-    const anchor = this.stack[anchorIdx];
+    const anchor = this.stack[anchorIdx][0];
     const items = this.stack.splice(anchorIdx + 1, many);
-    if (isVirtual(anchor)) {
-      this.applyChunk(items, anchor.parent as Node, this.resolveAnchor(anchor));
-    } else {
-      const node = anchor as Node;
-      this.applyChunk(items, node.parentNode as Node, node);
-    }
+    this.applyChunk(items, anchor.parentNode as Node, anchor);
   }
 
   setTextTop(text: string) {
-    const target = this.stack[this.stack.length - 1];
-    if (isVirtual(target)) {
-      if (text === "") return;
-      const node = document.createTextNode(text);
-      const insertBefore = this.resolveAnchor(target);
-      if (target.parent) {
-        if (insertBefore) target.parent.insertBefore(node, insertBefore);
-        else target.parent.appendChild(node);
-      }
-      target.materialized = node;
-      const id = this.nodeIds.get(target as object);
-      if (id !== undefined) {
-        this.nodes[id] = node;
-        this.nodeIds.set(node, id);
-        this.nodeIds.delete(target as object);
-      }
-      this.stack[this.stack.length - 1] = node;
-    } else {
-      (target as Node).textContent = text;
-    }
+    this.stack[this.stack.length - 1][0].textContent = text;
   }
 
   removeTop() {
-    const target = this.stack.pop();
-    if (!target) return;
-    this.clearNodeId(target);
-    if (isVirtual(target)) return;
-    const node = target as ListenerElement;
+    const targetEntry = this.stack.pop();
+    if (!targetEntry) return;
+    const node = targetEntry[0] as ListenerElement;
     if (node.listening) this.removeAllNonBubblingListeners(node);
     (node as ChildNode).remove();
   }
 
   setTopAttribute(field: string, value: string, ns: string | null) {
-    this.setAttributeInner(this.stack[this.stack.length - 1] as Node, field, value, ns);
+    this.setAttributeInner(this.stack[this.stack.length - 1][0], field, value, ns);
   }
 
   removeTopAttribute(field: string, ns: string | null) {
-    const node = this.stack[this.stack.length - 1] as any;
+    const node = this.stack[this.stack.length - 1][0] as any;
     if (!ns) {
       switch (field) {
         case "value":
@@ -382,7 +303,7 @@ export class BaseInterpreter {
   }
 
   addTopEventListener(event_name: string, bubbles: boolean) {
-    const node = this.stack[this.stack.length - 1] as ListenerElement;
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     const id = this.currentTopId();
     if (node.listening) node.listening += 1;
     else node.listening = 1;
@@ -391,7 +312,7 @@ export class BaseInterpreter {
   }
 
   addTopForeignEventListener(event_name: string, bubbles: boolean) {
-    const node = this.stack[this.stack.length - 1] as ListenerElement;
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     const id = this.currentTopId();
     if (node.listening) node.listening += 1;
     else node.listening = 1;
@@ -412,82 +333,17 @@ export class BaseInterpreter {
   }
 
   removeTopEventListener(event_name: string, bubbles: boolean) {
-    const node = this.stack[this.stack.length - 1] as ListenerElement;
+    const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     node.listening = (node.listening ?? 1) - 1;
     node.removeAttribute("data-dioxus-id");
     this.removeListener(node, event_name, bubbles);
   }
 
-  createVirtualAnchor(
-    parent: Node | null,
-    before: Node | VirtualPlaceholder | null
-  ): VirtualPlaceholder {
-    return {
-      __virtual: true,
-      parent,
-      before,
-    };
-  }
-
-  resolveAnchor(anchor: VirtualPlaceholder): Node | null {
-    return resolveAnchorBefore(anchor.before);
-  }
-
-  materializeAnchor(anchor: VirtualPlaceholder, items: NodeOrVirtual[]) {
-    for (const it of items) {
-      if (!isVirtual(it)) {
-        anchor.materialized = it as Node;
-        break;
-      }
-    }
-  }
-
-  // Places `items` at `parent`, inserting before `cursorBefore` (or appending
-  // when null). Virtual sentinels record their position via `parent`/`before`
-  // — the sentinel object is identity-shared with `nodes[id]`, so the mapping
-  // updates in place.
-  applyChunk(
-    items: NodeOrVirtual[],
-    parent: Node,
-    cursorBefore: Node | null
-  ) {
-    let cursor = cursorBefore;
-    for (let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      if (isVirtual(it)) {
-        it.parent = parent;
-        it.before = cursor;
-      } else {
-        cursor = it;
-      }
-    }
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (isVirtual(it)) continue;
-      if (cursorBefore) parent.insertBefore(it, cursorBefore);
-      else parent.appendChild(it);
-    }
-  }
-
-  replaceAtResolvedTarget(
-    target: NodeOrVirtual,
-    items: NodeOrVirtual[]
-  ) {
-    if (isVirtual(target)) {
-      // Insert at the virtual anchor's logical position, then materialize
-      // that anchor with the first real node in the inserted run if there is
-      // one. Later chained anchors can then resolve to the right cursor.
-      const parent = target.parent as Node;
-      const cursor = this.resolveAnchor(target);
-      this.applyChunk(items, parent, cursor);
-      this.materializeAnchor(target, items);
-    } else {
-      const real = target as ListenerElement;
-      if (real.listening) this.removeAllNonBubblingListeners(real);
-      const parent = real.parentNode as Node;
-      const next = real.nextSibling;
-      (real as ChildNode).remove();
-      this.applyChunk(items, parent, next);
+  // Insert each node in `items` into `parent` before `cursorBefore`, appending
+  // when `cursorBefore` is null. Insertion order is preserved.
+  applyChunk(items: StackEntry[], parent: Node, cursorBefore: Node | null) {
+    for (const [node] of items) {
+      parent.insertBefore(node, cursorBefore);
     }
   }
 

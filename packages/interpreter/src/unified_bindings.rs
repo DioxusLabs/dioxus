@@ -19,6 +19,9 @@ extern "C" {
 
     #[wasm_bindgen(method, js_name = "currentTopId")]
     pub fn current_top_id(this: &BaseInterpreter) -> u32;
+
+    #[wasm_bindgen(method, js_name = "setNode")]
+    pub fn set_node(this: &BaseInterpreter, id: u32, node: &Node);
 }
 
 // Note that this impl is for the sledgehammer interpreter to allow us to

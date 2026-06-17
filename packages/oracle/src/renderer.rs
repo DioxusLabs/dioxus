@@ -2,17 +2,28 @@ use crate::snapshot::{
     SnapshotAttr, SnapshotNode, attr_key, attr_to_string, format_snapshot_mismatch,
 };
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
-use dioxus_core::{AttributeValue, Element, ElementId, VirtualDom, WriteMutations};
+use dioxus_core::{
+    AttributeValue, Element, ElementId, RealDom, StackState, StackWriter, VirtualDom,
+    WriteMutations,
+};
 use std::fmt;
 
 type NodeId = usize;
 
+/// The provenance of a node, used only to categorize edits (see [`EditSummary`]).
+///
+/// A node built as part of a reusable template prototype is a `PrototypeRoot`;
+/// everything else is `Live`. This drives nothing in the tree itself — it only
+/// lets the edit counters distinguish "assembling a prototype" from "patching
+/// the live tree".
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum NodeRole {
     Live,
     PrototypeRoot,
 }
 
+/// The provenance of a node currently on the mutation stack, used only by the
+/// edit counters. Mirrors what the renderer stack used to track per entry.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum StackSource {
     Live,
@@ -100,16 +111,519 @@ pub struct EventListenerTarget {
     pub id: ElementId,
 }
 
-/// A fast mock renderer that applies Dioxus mutations into an in-memory tree.
-pub struct RendererOracle {
+/// The oracle's in-memory tree — the "real semantics" half of the renderer.
+///
+/// This implements [`RealDom`] (via [`ArenaBackend`]) and knows nothing about
+/// the mutation stack or `ElementId`s; the stack machine lives in core's
+/// [`StackWriter`]/[`StackState`] and the edit counters live in
+/// [`EditCountingWriter`].
+struct OracleArena {
     arena: Vec<Option<Node>>,
-    node_roles: Vec<NodeRole>,
-    element_to_node: Vec<Option<NodeId>>,
-    stack: Vec<NodeId>,
-    stack_sources: Vec<StackSource>,
     root: NodeId,
-    edit_counters: EditSummary,
     historical_event_listener_targets: Vec<EventListenerTarget>,
+}
+
+impl OracleArena {
+    fn new() -> Self {
+        Self {
+            arena: vec![Some(Node {
+                kind: NodeKind::Document,
+                attrs: Vec::new(),
+                listeners: Vec::new(),
+                children: Vec::new(),
+                child_logical_indices: Vec::new(),
+                parent: None,
+            })],
+            root: 0,
+            historical_event_listener_targets: Vec::new(),
+        }
+    }
+
+    fn alloc(&mut self, kind: NodeKind) -> NodeId {
+        let id = self.arena.len();
+        self.arena.push(Some(Node {
+            kind,
+            attrs: Vec::new(),
+            listeners: Vec::new(),
+            children: Vec::new(),
+            child_logical_indices: Vec::new(),
+            parent: None,
+        }));
+        id
+    }
+
+    fn node(&self, id: NodeId) -> &Node {
+        self.arena
+            .get(id)
+            .and_then(Option::as_ref)
+            .unwrap_or_else(|| panic!("renderer referenced dead node {id}"))
+    }
+
+    fn node_mut(&mut self, id: NodeId) -> &mut Node {
+        self.arena
+            .get_mut(id)
+            .and_then(Option::as_mut)
+            .unwrap_or_else(|| panic!("renderer referenced dead node {id}"))
+    }
+
+    fn nth_child(&self, parent: NodeId, index: usize) -> NodeId {
+        *self.node(parent).children.get(index).unwrap_or_else(|| {
+            panic!("renderer child index {index} out of bounds for node {parent}")
+        })
+    }
+
+    fn deep_clone_node(&mut self, node: NodeId) -> NodeId {
+        let node_data = self.node(node).clone();
+        let cloned = self.alloc(match node_data.kind {
+            NodeKind::Document => panic!("renderer cannot clone document root"),
+            NodeKind::Element { tag, namespace } => NodeKind::Element { tag, namespace },
+            NodeKind::Text(text) => NodeKind::Text(text),
+        });
+        {
+            let cloned_node = self.node_mut(cloned);
+            cloned_node.attrs = node_data.attrs;
+            cloned_node.child_logical_indices = node_data.child_logical_indices;
+        }
+        let children = node_data
+            .children
+            .into_iter()
+            .map(|child| {
+                let cloned_child = self.deep_clone_node(child);
+                self.node_mut(cloned_child).parent = Some(cloned);
+                cloned_child
+            })
+            .collect();
+        self.node_mut(cloned).children = children;
+        cloned
+    }
+
+    fn position_in_parent(&self, node: NodeId) -> (NodeId, usize) {
+        let parent = self
+            .node(node)
+            .parent
+            .unwrap_or_else(|| panic!("node {node} has no parent"));
+        let index = self
+            .node(parent)
+            .children
+            .iter()
+            .position(|&child| child == node)
+            .unwrap_or_else(|| panic!("node {node} is missing from parent {parent}"));
+        (parent, index)
+    }
+
+    fn detach(&mut self, node: NodeId) -> (NodeId, usize, u8) {
+        let (parent, index) = self.position_in_parent(node);
+        let parent_node = self.node_mut(parent);
+        let removed = parent_node.children.remove(index);
+        let ti = parent_node.child_logical_indices.remove(index);
+        debug_assert_eq!(removed, node);
+        self.node_mut(node).parent = None;
+        (parent, index, ti)
+    }
+
+    fn unhook(&mut self, node: NodeId) {
+        if self.node(node).parent.is_some() {
+            self.detach(node);
+        }
+    }
+
+    fn unhook_all(&mut self, nodes: &[NodeId]) {
+        for &node in nodes {
+            self.unhook(node);
+        }
+    }
+
+    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: &[NodeId], ti: u8) {
+        if index > self.node(parent).children.len() {
+            panic!(
+                "renderer insertion index {index} out of bounds for parent {parent} with {} children",
+                self.node(parent).children.len()
+            );
+        }
+        for &node in nodes {
+            self.node_mut(node).parent = Some(parent);
+        }
+        let parent_node = self.node_mut(parent);
+        for (offset, &node) in nodes.iter().enumerate() {
+            parent_node.children.insert(index + offset, node);
+            parent_node.child_logical_indices.insert(index + offset, ti);
+        }
+    }
+
+    fn append_detached(&mut self, parent: NodeId, nodes: &[NodeId], ti: u8) {
+        for &node in nodes {
+            self.node_mut(node).parent = Some(parent);
+        }
+        let parent_node = self.node_mut(parent);
+        parent_node.children.extend_from_slice(nodes);
+        parent_node
+            .child_logical_indices
+            .extend(std::iter::repeat_n(ti, nodes.len()));
+    }
+
+    fn drop_subtree(&mut self, node: NodeId) {
+        if node == self.root {
+            panic!("renderer cannot drop document root");
+        }
+        let node_data = self.arena[node]
+            .take()
+            .unwrap_or_else(|| panic!("renderer tried to drop already-dead node {node}"));
+        for child in node_data.children {
+            // Children of a dropped subtree are still attached (in the dead node's
+            // `children`), so just recurse — no need to detach them first.
+            self.arena[child]
+                .as_mut()
+                .map(|n| n.parent = None)
+                .unwrap_or(());
+            self.drop_subtree(child);
+        }
+    }
+
+    fn assert_element(&self, node: NodeId, operation: &str) {
+        if !matches!(self.node(node).kind, NodeKind::Element { .. }) {
+            panic!(
+                "{operation} expected an element node, got {:?}",
+                self.node(node).kind
+            );
+        }
+    }
+
+    fn set_attr(&mut self, node: NodeId, name: String, namespace: Option<String>, value: String) {
+        self.assert_element(node, "set_attribute");
+        let attrs = &mut self.node_mut(node).attrs;
+        match attrs
+            .binary_search_by(|attr| attr_key(attr).cmp(&(name.as_str(), namespace.as_deref())))
+        {
+            Ok(index) => attrs[index].value = value,
+            Err(index) => attrs.insert(
+                index,
+                SnapshotAttr {
+                    name,
+                    namespace,
+                    value,
+                },
+            ),
+        }
+    }
+
+    fn remove_attr(&mut self, node: NodeId, name: &str, namespace: Option<&str>) {
+        self.assert_element(node, "remove_attribute");
+        let attrs = &mut self.node_mut(node).attrs;
+        if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
+            attrs.remove(index);
+        }
+    }
+
+    fn snapshot_node(&self, node: NodeId) -> Option<SnapshotNode> {
+        let node_data = self.node(node);
+        match &node_data.kind {
+            NodeKind::Document => panic!("document root is not part of snapshots"),
+            NodeKind::Element { tag, namespace } => Some(SnapshotNode::Element {
+                tag: tag.clone(),
+                namespace: namespace.clone(),
+                attrs: node_data.attrs.clone(),
+                listeners: node_data.listeners.clone(),
+                children: node_data
+                    .children
+                    .iter()
+                    .filter_map(|&child| self.snapshot_node(child))
+                    .collect(),
+            }),
+            NodeKind::Text(text) => Some(SnapshotNode::Text(text.clone())),
+        }
+    }
+
+    fn snapshot(&self) -> Vec<SnapshotNode> {
+        self.node(self.root)
+            .children
+            .iter()
+            .filter_map(|&child| self.snapshot_node(child))
+            .collect()
+    }
+}
+
+/// The "real semantics" the dioxus stack machine drives. Borrows an
+/// [`OracleArena`] for the duration of one render.
+struct ArenaBackend<'a> {
+    arena: &'a mut OracleArena,
+}
+
+impl RealDom for ArenaBackend<'_> {
+    type NodeId = NodeId;
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) -> NodeId {
+        self.arena.alloc(NodeKind::Element {
+            tag: tag.to_string(),
+            namespace: ns.map(ToString::to_string),
+        })
+    }
+
+    fn create_text(&mut self, value: &str) -> NodeId {
+        self.arena.alloc(NodeKind::Text(value.to_string()))
+    }
+
+    fn deep_clone(&mut self, node: NodeId) -> NodeId {
+        self.arena.deep_clone_node(node)
+    }
+
+    fn nth_child(&mut self, parent: NodeId, index: usize) -> NodeId {
+        self.arena.nth_child(parent, index)
+    }
+
+    fn append_children(&mut self, parent: NodeId, children: &[NodeId]) {
+        self.arena.unhook_all(children);
+        self.arena.append_detached(parent, children, NO_LOGICAL_INDEX);
+    }
+
+    fn insert_after(&mut self, anchor: NodeId, nodes: &[NodeId]) {
+        self.arena.unhook_all(nodes);
+        let (parent, index) = self.arena.position_in_parent(anchor);
+        let ti = self.arena.node(parent).child_logical_indices[index];
+        self.arena.insert_detached(parent, index + 1, nodes, ti);
+    }
+
+    fn insert_before(&mut self, anchor: NodeId, nodes: &[NodeId]) {
+        self.arena.unhook_all(nodes);
+        let (parent, index) = self.arena.position_in_parent(anchor);
+        let ti = self.arena.node(parent).child_logical_indices[index];
+        self.arena.insert_detached(parent, index, nodes, ti);
+    }
+
+    fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
+        self.arena.unhook_all(replacements);
+        let (parent, index, ti) = self.arena.detach(target);
+        self.arena.drop_subtree(target);
+        self.arena.insert_detached(parent, index, replacements, ti);
+    }
+
+    fn remove(&mut self, node: NodeId) {
+        if node == self.arena.root {
+            panic!("renderer cannot remove document root");
+        }
+        self.arena.detach(node);
+        self.arena.drop_subtree(node);
+    }
+
+    fn set_attribute(&mut self, node: NodeId, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        match attr_to_string(value) {
+            Some(value) => {
+                self.arena
+                    .set_attr(node, name.to_string(), ns.map(ToString::to_string), value)
+            }
+            None => self.arena.remove_attr(node, name, ns),
+        }
+    }
+
+    fn set_text(&mut self, node: NodeId, value: &str) {
+        match &mut self.arena.node_mut(node).kind {
+            NodeKind::Text(text) => *text = value.to_string(),
+            other => panic!("set_text expected text node, got {other:?}"),
+        }
+    }
+
+    fn add_event_listener(&mut self, node: NodeId, element_id: ElementId, name: &str) {
+        self.arena.assert_element(node, "add_event_listener");
+        let target = EventListenerTarget {
+            name: name.to_string(),
+            id: element_id,
+        };
+        if !self.arena.historical_event_listener_targets.contains(&target) {
+            self.arena.historical_event_listener_targets.push(target);
+        }
+        let listeners = &mut self.arena.node_mut(node).listeners;
+        let name = name.to_string();
+        match listeners.binary_search(&name) {
+            Ok(_) => {}
+            Err(index) => listeners.insert(index, name),
+        }
+    }
+
+    fn remove_event_listener(&mut self, node: NodeId, _element_id: ElementId, name: &str) {
+        self.arena.assert_element(node, "remove_event_listener");
+        let listeners = &mut self.arena.node_mut(node).listeners;
+        let name = name.to_string();
+        match listeners.binary_search(&name) {
+            Ok(index) => {
+                listeners.remove(index);
+            }
+            Err(_) => panic!("renderer removed missing event listener {name:?}"),
+        }
+    }
+}
+
+/// Wraps an inner [`WriteMutations`] writer and reproduces [`EditSummary`] from
+/// the mutation stream alone.
+///
+/// It needs no tree access: a node's provenance is a pure function of the stack
+/// ops, tracked here as a shadow source stack plus a per-`ElementId` role map
+/// (the role of whatever node is mapped to an id, updated at `pop_id`). This is
+/// the same information the renderer stack used to carry, kept out of the tree
+/// backend so [`RealDom`] stays pure tree operations.
+struct EditCountingWriter<'a, W: WriteMutations> {
+    summary: &'a mut EditSummary,
+    source_stack: &'a mut Vec<StackSource>,
+    roles: &'a mut Vec<NodeRole>,
+    inner: W,
+}
+
+impl<W: WriteMutations> EditCountingWriter<'_, W> {
+    fn role(&self, id: ElementId) -> NodeRole {
+        self.roles.get(id.raw()).copied().unwrap_or(NodeRole::Live)
+    }
+
+    fn set_role(&mut self, id: ElementId, role: NodeRole) {
+        if self.roles.len() <= id.raw() {
+            self.roles.resize(id.raw() + 1, NodeRole::Live);
+        }
+        self.roles[id.raw()] = role;
+    }
+
+    fn top_source(&self, op: &str) -> StackSource {
+        *self
+            .source_stack
+            .last()
+            .unwrap_or_else(|| panic!("renderer source stack unexpectedly empty during {op}"))
+    }
+
+    fn pop_source(&mut self, op: &str) -> StackSource {
+        self.source_stack
+            .pop()
+            .unwrap_or_else(|| panic!("renderer source stack unexpectedly empty during {op}"))
+    }
+
+    fn pop_sources(&mut self, m: usize) {
+        let split = self.source_stack.len() - m;
+        self.source_stack.truncate(split);
+    }
+}
+
+impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
+    fn push_id(&mut self, id: ElementId) {
+        let source = match self.role(id) {
+            NodeRole::Live => StackSource::Live,
+            NodeRole::PrototypeRoot => StackSource::PrototypeBuild,
+        };
+        self.source_stack.push(source);
+        self.inner.push_id(id);
+    }
+
+    fn pop_id(&mut self, id: ElementId) {
+        let source = self.pop_source("pop_id");
+        match source {
+            StackSource::NewText => self.summary.create_texts += 1,
+            StackSource::PrototypeClone => self.summary.loads += 1,
+            StackSource::Live | StackSource::PrototypeBuild => {}
+        }
+        self.set_role(
+            id,
+            if source == StackSource::PrototypeBuild {
+                NodeRole::PrototypeRoot
+            } else {
+                NodeRole::Live
+            },
+        );
+        self.inner.pop_id(id);
+    }
+
+    fn child(&mut self, index: usize) {
+        // The selected child keeps the current top's source, so the shadow stack
+        // is unchanged.
+        self.inner.child(index);
+    }
+
+    fn pop(&mut self) {
+        self.pop_source("pop");
+        self.inner.pop();
+    }
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        self.source_stack.push(StackSource::PrototypeBuild);
+        self.inner.create_element(tag, ns);
+    }
+
+    fn create_text(&mut self, value: &str) {
+        self.source_stack.push(StackSource::NewText);
+        self.inner.create_text(value);
+    }
+
+    fn clone(&mut self) {
+        *self
+            .source_stack
+            .last_mut()
+            .expect("renderer source stack unexpectedly empty during clone") =
+            StackSource::PrototypeClone;
+        WriteMutations::clone(&mut self.inner);
+    }
+
+    fn append_children(&mut self, m: usize) {
+        if self.top_source("append_children") != StackSource::PrototypeBuild {
+            self.summary.inserts += 1;
+        }
+        self.pop_sources(m);
+        self.inner.append_children(m);
+    }
+
+    fn replace_with(&mut self, m: usize) {
+        self.summary.replaces += 1;
+        self.pop_sources(m);
+        self.pop_source("replace_with");
+        self.inner.replace_with(m);
+    }
+
+    fn insert_after(&mut self, m: usize) {
+        self.summary.inserts += 1;
+        self.pop_sources(m);
+        self.inner.insert_after(m);
+    }
+
+    fn insert_before(&mut self, m: usize) {
+        self.summary.inserts += 1;
+        self.pop_sources(m);
+        self.inner.insert_before(m);
+    }
+
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        if self.top_source("set_attribute") != StackSource::PrototypeBuild {
+            self.summary.set_attrs += 1;
+        }
+        self.inner.set_attribute(name, ns, value);
+    }
+
+    fn set_text(&mut self, value: &str) {
+        self.summary.set_texts += 1;
+        self.inner.set_text(value);
+    }
+
+    fn add_event_listener(&mut self, name: &str) {
+        self.inner.add_event_listener(name);
+    }
+
+    fn remove_event_listener(&mut self, name: &str) {
+        self.inner.remove_event_listener(name);
+    }
+
+    fn remove(&mut self) {
+        self.summary.removes += 1;
+        self.pop_source("remove");
+        self.inner.remove();
+    }
+}
+
+/// A fast mock renderer that applies Dioxus mutations into an in-memory tree.
+///
+/// The stack machine and `ElementId -> node` mapping live in core's
+/// [`StackState`]; this renderer supplies the real tree semantics via
+/// [`OracleArena`] and layers edit counting on top with [`EditCountingWriter`].
+pub struct RendererOracle {
+    arena: OracleArena,
+    state: StackState<NodeId>,
+    edit_counters: EditSummary,
+    /// Shadow of the renderer stack's per-node provenance, used only for edit
+    /// counting. Naturally back to `[Live]` (just the root) between balanced
+    /// renders.
+    source_stack: Vec<StackSource>,
+    /// Per-`ElementId` provenance of the mapped node, used to classify pushes.
+    roles: Vec<NodeRole>,
 }
 
 impl Default for RendererOracle {
@@ -121,23 +635,25 @@ impl Default for RendererOracle {
 impl RendererOracle {
     /// Create an empty document with `ElementId::from_raw(0)` mapped to the document root.
     pub fn new() -> Self {
-        let root = 0;
+        let arena = OracleArena::new();
+        let root = arena.root;
         Self {
-            arena: vec![Some(Node {
-                kind: NodeKind::Document,
-                attrs: Vec::new(),
-                listeners: Vec::new(),
-                children: Vec::new(),
-                child_logical_indices: Vec::new(),
-                parent: None,
-            })],
-            node_roles: vec![NodeRole::Live],
-            element_to_node: vec![Some(root)],
-            stack: vec![root],
-            stack_sources: vec![StackSource::Live],
-            root,
+            arena,
+            state: StackState::new(root),
             edit_counters: EditSummary::default(),
-            historical_event_listener_targets: Vec::new(),
+            source_stack: vec![StackSource::Live],
+            roles: Vec::new(),
+        }
+    }
+
+    /// Build a writer that applies dioxus mutations into the arena, driving the
+    /// core-owned stack machine and counting edits.
+    fn writer(&mut self) -> EditCountingWriter<'_, StackWriter<'_, ArenaBackend<'_>>> {
+        EditCountingWriter {
+            summary: &mut self.edit_counters,
+            source_stack: &mut self.source_stack,
+            roles: &mut self.roles,
+            inner: StackWriter::new(&mut self.state, ArenaBackend { arena: &mut self.arena }),
         }
     }
 
@@ -149,14 +665,12 @@ impl RendererOracle {
 
     /// Return every event listener target attached since the last clear/rebuild.
     pub fn historical_event_listener_targets(&self) -> &[EventListenerTarget] {
-        &self.historical_event_listener_targets
+        &self.arena.historical_event_listener_targets
     }
 
     /// Return the live [`ElementId`] mapped to the current stack node.
     pub fn current_stack_element_id(&self) -> Option<ElementId> {
-        self.stack
-            .last()
-            .and_then(|&node| self.element_id_for_node(node))
+        self.state.current_top_element_id()
     }
 
     /// Remove all nodes and reset the renderer to an empty document.
@@ -166,21 +680,17 @@ impl RendererOracle {
 
     /// Return a stable snapshot of the document root's children.
     pub fn snapshot(&self) -> Vec<SnapshotNode> {
-        self.node(self.root)
-            .children
-            .iter()
-            .filter_map(|&child| self.snapshot_node(child))
-            .collect()
+        self.arena.snapshot()
     }
 
     /// Return the number of non-document nodes currently left on the mutation stack.
     pub fn pending_stack_nodes(&self) -> usize {
-        self.stack.len().saturating_sub(1)
+        self.state.stack_depth().saturating_sub(1)
     }
 
     /// Return true when no mutation-created nodes are left on the stack.
     pub fn is_stack_clean(&self) -> bool {
-        self.stack == [self.root]
+        self.state.stack_depth() == 1
     }
 
     /// Assert that the mutation stack only contains the document root.
@@ -289,7 +799,7 @@ impl RendererOracle {
     /// `vdom.runtime().handle_event(...)`.
     pub fn element_id_by_tag(&self, tag: &str) -> ElementId {
         let mut hits = Vec::new();
-        self.collect_element_ids_by_tag(self.root, tag, &mut hits);
+        self.collect_element_ids_by_tag(self.arena.root, tag, &mut hits);
         match hits.as_slice() {
             [id] => *id,
             [] => panic!("no live element with tag `{tag}` found in the oracle DOM"),
@@ -305,7 +815,7 @@ impl RendererOracle {
     /// Panics if zero or more than one element matches.
     pub fn element_id_by_attr(&self, attr_name: &str, attr_value: &str) -> ElementId {
         let mut hits = Vec::new();
-        self.collect_element_ids_by_attr(self.root, attr_name, attr_value, &mut hits);
+        self.collect_element_ids_by_attr(self.arena.root, attr_name, attr_value, &mut hits);
         match hits.as_slice() {
             [id] => *id,
             [] => panic!("no live element with `{attr_name}={attr_value}` found in the oracle DOM"),
@@ -317,7 +827,7 @@ impl RendererOracle {
     }
 
     fn collect_element_ids_by_tag(&self, node: NodeId, tag: &str, out: &mut Vec<ElementId>) {
-        let n = self.node(node);
+        let n = self.arena.node(node);
         if let NodeKind::Element { tag: t, .. } = &n.kind {
             if t == tag {
                 if let Some(id) = self.element_id_for_node(node) {
@@ -337,7 +847,7 @@ impl RendererOracle {
         attr_value: &str,
         out: &mut Vec<ElementId>,
     ) {
-        let n = self.node(node);
+        let n = self.arena.node(node);
         if let NodeKind::Element { .. } = &n.kind {
             for attr in &n.attrs {
                 if attr.name == attr_name && attr.namespace.is_none() && attr.value == attr_value {
@@ -354,12 +864,7 @@ impl RendererOracle {
     }
 
     fn element_id_for_node(&self, node: NodeId) -> Option<ElementId> {
-        for (idx, mapped) in self.element_to_node.iter().enumerate() {
-            if *mapped == Some(node) {
-                return Some(ElementId::from_raw(idx));
-            }
-        }
-        None
+        self.state.node_to_element(node)
     }
 
     /// Walk the DOM and return `(attr_value, identity)` pairs for every element
@@ -371,7 +876,7 @@ impl RendererOracle {
     /// of dropping and re-allocating them.
     pub fn identities_by_attr(&self, attr_name: &str) -> Vec<(String, OracleNodeId)> {
         let mut out = Vec::new();
-        self.collect_identities_by_attr(self.root, attr_name, &mut out);
+        self.collect_identities_by_attr(self.arena.root, attr_name, &mut out);
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
     }
@@ -382,7 +887,7 @@ impl RendererOracle {
         attr_name: &str,
         out: &mut Vec<(String, OracleNodeId)>,
     ) {
-        let n = self.node(node);
+        let n = self.arena.node(node);
         if let NodeKind::Element { .. } = &n.kind {
             for attr in &n.attrs {
                 if attr.name == attr_name && attr.namespace.is_none() {
@@ -412,462 +917,39 @@ impl RendererOracle {
             "renderer DOM diverged from expected rsx tree"
         );
     }
+}
 
-    fn alloc(&mut self, kind: NodeKind) -> NodeId {
-        let id = self.arena.len();
-        self.arena.push(Some(Node {
-            kind,
-            attrs: Vec::new(),
-            listeners: Vec::new(),
-            children: Vec::new(),
-            child_logical_indices: Vec::new(),
-            parent: None,
-        }));
-        self.node_roles.push(NodeRole::Live);
-        id
-    }
-
-    fn push_stack(&mut self, node: NodeId, source: StackSource) {
-        self.stack.push(node);
-        self.stack_sources.push(source);
-    }
-
-    fn pop_stack(&mut self, operation: &str) -> (NodeId, StackSource) {
-        let node = self
-            .stack
-            .pop()
-            .unwrap_or_else(|| panic!("renderer stack unexpectedly empty during {operation}"));
-        let source = self.stack_sources.pop().unwrap_or_else(|| {
-            panic!("renderer stack source unexpectedly empty during {operation}")
-        });
-        (node, source)
-    }
-
-    fn top_stack(&self, operation: &str) -> (NodeId, StackSource) {
-        let node = *self
-            .stack
-            .last()
-            .unwrap_or_else(|| panic!("renderer stack unexpectedly empty during {operation}"));
-        let source = *self.stack_sources.last().unwrap_or_else(|| {
-            panic!("renderer stack source unexpectedly empty during {operation}")
-        });
-        (node, source)
-    }
-
-    fn replace_stack_top(&mut self, node: NodeId, source: StackSource, operation: &str) {
-        *self
-            .stack
-            .last_mut()
-            .unwrap_or_else(|| panic!("renderer stack unexpectedly empty during {operation}")) =
-            node;
-        *self.stack_sources.last_mut().unwrap_or_else(|| {
-            panic!("renderer stack source unexpectedly empty during {operation}")
-        }) = source;
-    }
-
-    fn stack_source_for_node(&self, node: NodeId) -> StackSource {
-        match self.node_roles.get(node).copied().unwrap_or(NodeRole::Live) {
-            NodeRole::Live => StackSource::Live,
-            NodeRole::PrototypeRoot => StackSource::PrototypeBuild,
-        }
-    }
-
-    fn node(&self, id: NodeId) -> &Node {
-        self.arena
-            .get(id)
-            .and_then(Option::as_ref)
-            .unwrap_or_else(|| panic!("renderer referenced dead node {id}"))
-    }
-
-    fn node_mut(&mut self, id: NodeId) -> &mut Node {
-        self.arena
-            .get_mut(id)
-            .and_then(Option::as_mut)
-            .unwrap_or_else(|| panic!("renderer referenced dead node {id}"))
-    }
-
-    fn set_element_mapping(&mut self, id: ElementId, node: NodeId) {
-        if id.raw() == usize::MAX {
-            panic!("renderer cannot map ElementId::from_raw(usize::MAX)");
-        }
-        if self.element_to_node.len() <= id.raw() {
-            self.element_to_node.resize(id.raw() + 1, None);
-        }
-        if let Some(old) = self.element_to_node[id.raw()] {
-            if old != node && self.arena.get(old).is_some_and(Option::is_some) {
-                if self.node(old).parent.is_none() {
-                    self.drop_subtree(old);
-                } else {
-                    panic!(
-                        "renderer remapped live ElementId::from_raw({}) from node {old} to node {node}",
-                        id.raw()
-                    );
-                }
+macro_rules! forward_oracle_mutations {
+    ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
+        $(
+            fn $method(&mut self, $($arg: $arg_ty),*) {
+                self.writer().$method($($arg),*);
             }
-        }
-        self.element_to_node[id.raw()] = Some(node);
-    }
-
-    fn clear_element_mapping_for_node(&mut self, node: NodeId) {
-        for mapped in &mut self.element_to_node {
-            if *mapped == Some(node) {
-                *mapped = None;
-            }
-        }
-    }
-
-    fn lookup(&self, id: ElementId) -> NodeId {
-        self.element_to_node
-            .get(id.raw())
-            .and_then(|id| *id)
-            .filter(|&node| self.arena.get(node).is_some_and(Option::is_some))
-            .unwrap_or_else(|| {
-                panic!(
-                    "renderer asked for unknown ElementId::from_raw({})",
-                    id.raw()
-                )
-            })
-    }
-
-    fn pop_nodes(&mut self, m: usize) -> Vec<NodeId> {
-        let available = self.stack.len().saturating_sub(1);
-        if m > available {
-            panic!(
-                "renderer stack underflow: tried to pop {m} node(s), only {available} available"
-            );
-        }
-        let split = self.stack.len() - m;
-        let _ = self.stack_sources.split_off(split);
-        self.stack.split_off(split)
-    }
-
-    fn deep_clone_node(&mut self, node: NodeId) -> NodeId {
-        let node_data = self.node(node).clone();
-        let cloned = self.alloc(match node_data.kind {
-            NodeKind::Document => panic!("renderer cannot clone document root"),
-            NodeKind::Element { tag, namespace } => NodeKind::Element { tag, namespace },
-            NodeKind::Text(text) => NodeKind::Text(text),
-        });
-        {
-            let cloned_node = self.node_mut(cloned);
-            cloned_node.attrs = node_data.attrs;
-            cloned_node.child_logical_indices = node_data.child_logical_indices;
-        }
-        let children = node_data
-            .children
-            .into_iter()
-            .map(|child| {
-                let cloned_child = self.deep_clone_node(child);
-                self.node_mut(cloned_child).parent = Some(cloned);
-                cloned_child
-            })
-            .collect();
-        self.node_mut(cloned).children = children;
-        cloned
-    }
-
-    fn position_in_parent(&self, node: NodeId) -> (NodeId, usize) {
-        let parent = self
-            .node(node)
-            .parent
-            .unwrap_or_else(|| panic!("node {node} has no parent"));
-        let index = self
-            .node(parent)
-            .children
-            .iter()
-            .position(|&child| child == node)
-            .unwrap_or_else(|| panic!("node {node} is missing from parent {parent}"));
-        (parent, index)
-    }
-
-    fn detach(&mut self, node: NodeId) -> (NodeId, usize, u8) {
-        let (parent, index) = self.position_in_parent(node);
-        let parent_node = self.node_mut(parent);
-        let removed = parent_node.children.remove(index);
-        let ti = parent_node.child_logical_indices.remove(index);
-        debug_assert_eq!(removed, node);
-        self.node_mut(node).parent = None;
-        (parent, index, ti)
-    }
-
-    fn unhook(&mut self, node: NodeId) {
-        if self.node(node).parent.is_some() {
-            self.detach(node);
-        }
-    }
-
-    fn unhook_all(&mut self, nodes: &[NodeId]) {
-        for &node in nodes {
-            self.unhook(node);
-        }
-    }
-
-    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: Vec<NodeId>, ti: u8) {
-        if index > self.node(parent).children.len() {
-            panic!(
-                "renderer insertion index {index} out of bounds for parent {parent} with {} children",
-                self.node(parent).children.len()
-            );
-        }
-        for &node in &nodes {
-            self.node_mut(node).parent = Some(parent);
-        }
-        let parent_node = self.node_mut(parent);
-        for (offset, node) in nodes.into_iter().enumerate() {
-            parent_node.children.insert(index + offset, node);
-            parent_node.child_logical_indices.insert(index + offset, ti);
-        }
-    }
-
-    fn append_detached(&mut self, parent: NodeId, nodes: Vec<NodeId>, ti: u8) {
-        for &node in &nodes {
-            self.node_mut(node).parent = Some(parent);
-        }
-        let parent_node = self.node_mut(parent);
-        let added = nodes.len();
-        parent_node.children.extend(nodes);
-        parent_node
-            .child_logical_indices
-            .extend(std::iter::repeat_n(ti, added));
-    }
-
-    fn drop_subtree(&mut self, node: NodeId) {
-        if node == self.root {
-            panic!("renderer cannot drop document root");
-        }
-        let node_data = self.arena[node]
-            .take()
-            .unwrap_or_else(|| panic!("renderer tried to drop already-dead node {node}"));
-        for mapped in &mut self.element_to_node {
-            if *mapped == Some(node) {
-                *mapped = None;
-            }
-        }
-        for child in node_data.children {
-            // Children of a dropped subtree are still attached (in the dead node's
-            // `children`), so just recurse — no need to detach them first.
-            self.arena[child]
-                .as_mut()
-                .map(|n| n.parent = None)
-                .unwrap_or(());
-            self.drop_subtree(child);
-        }
-    }
-
-    fn assert_element(&self, node: NodeId, operation: &str) {
-        if !matches!(self.node(node).kind, NodeKind::Element { .. }) {
-            panic!(
-                "{operation} expected an element node, got {:?}",
-                self.node(node).kind
-            );
-        }
-    }
-
-    fn set_attr(&mut self, node: NodeId, name: String, namespace: Option<String>, value: String) {
-        self.assert_element(node, "set_attribute");
-        let attrs = &mut self.node_mut(node).attrs;
-        match attrs
-            .binary_search_by(|attr| attr_key(attr).cmp(&(name.as_str(), namespace.as_deref())))
-        {
-            Ok(index) => attrs[index].value = value,
-            Err(index) => attrs.insert(
-                index,
-                SnapshotAttr {
-                    name,
-                    namespace,
-                    value,
-                },
-            ),
-        }
-    }
-
-    fn remove_attr(&mut self, node: NodeId, name: &str, namespace: Option<&str>) {
-        self.assert_element(node, "remove_attribute");
-        let attrs = &mut self.node_mut(node).attrs;
-        if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
-            attrs.remove(index);
-        }
-    }
-
-    fn snapshot_node(&self, node: NodeId) -> Option<SnapshotNode> {
-        let node_data = self.node(node);
-        match &node_data.kind {
-            NodeKind::Document => panic!("document root is not part of snapshots"),
-            NodeKind::Element { tag, namespace } => Some(SnapshotNode::Element {
-                tag: tag.clone(),
-                namespace: namespace.clone(),
-                attrs: node_data.attrs.clone(),
-                listeners: node_data.listeners.clone(),
-                children: node_data
-                    .children
-                    .iter()
-                    .filter_map(|&child| self.snapshot_node(child))
-                    .collect(),
-            }),
-            NodeKind::Text(text) => Some(SnapshotNode::Text(text.clone())),
-        }
-    }
+        )*
+    };
 }
 
 impl WriteMutations for RendererOracle {
-    fn push_id(&mut self, id: ElementId) {
-        let node = self.lookup(id);
-        self.push_stack(node, self.stack_source_for_node(node));
-    }
-
-    fn pop_id(&mut self, id: ElementId) {
-        let (node, source) = self.pop_stack("pop_id");
-        match source {
-            StackSource::NewText => self.edit_counters.create_texts += 1,
-            StackSource::PrototypeClone => self.edit_counters.loads += 1,
-            StackSource::Live | StackSource::PrototypeBuild => {}
-        }
-        self.set_element_mapping(id, node);
-        self.node_roles[node] = if source == StackSource::PrototypeBuild {
-            NodeRole::PrototypeRoot
-        } else {
-            NodeRole::Live
-        };
-    }
-
-    fn child(&mut self, index: usize) {
-        let (parent, source) = self.top_stack("child");
-        let child = *self.node(parent).children.get(index).unwrap_or_else(|| {
-            panic!("renderer child index {index} out of bounds for node {parent}")
-        });
-        self.replace_stack_top(child, source, "child");
-    }
-
-    fn pop(&mut self) {
-        self.pop_stack("pop");
-    }
-
-    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
-        let node = self.alloc(NodeKind::Element {
-            tag: tag.to_string(),
-            namespace: ns.map(ToString::to_string),
-        });
-        self.push_stack(node, StackSource::PrototypeBuild);
-    }
-
-    fn create_text(&mut self, value: &str) {
-        let node = self.alloc(NodeKind::Text(value.to_string()));
-        self.push_stack(node, StackSource::NewText);
+    forward_oracle_mutations! {
+        push_id(id: ElementId);
+        pop_id(id: ElementId);
+        child(index: usize);
+        pop();
+        create_element(tag: &str, ns: Option<&str>);
+        create_text(value: &str);
+        append_children(m: usize);
+        replace_with(m: usize);
+        insert_after(m: usize);
+        insert_before(m: usize);
+        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+        set_text(value: &str);
+        add_event_listener(name: &str);
+        remove_event_listener(name: &str);
+        remove();
     }
 
     fn clone(&mut self) {
-        let (node, _) = self.top_stack("clone");
-        let cloned = self.deep_clone_node(node);
-        self.replace_stack_top(cloned, StackSource::PrototypeClone, "clone");
-    }
-
-    fn append_children(&mut self, m: usize) {
-        let parent_source = self.top_stack("append_children").1;
-        if parent_source != StackSource::PrototypeBuild {
-            self.edit_counters.inserts += 1;
-        }
-        let nodes = self.pop_nodes(m);
-        self.unhook_all(&nodes);
-        let parent = self.top_stack("append_children").0;
-        self.append_detached(parent, nodes, NO_LOGICAL_INDEX);
-    }
-
-    fn replace_with(&mut self, m: usize) {
-        self.edit_counters.replaces += 1;
-        let nodes = self.pop_nodes(m);
-        self.unhook_all(&nodes);
-        let (target, _) = self.pop_stack("replace_with");
-        let (parent, index, ti) = self.detach(target);
-        self.drop_subtree(target);
-        self.clear_element_mapping_for_node(target);
-        self.insert_detached(parent, index, nodes, ti);
-    }
-
-    fn insert_after(&mut self, m: usize) {
-        self.edit_counters.inserts += 1;
-        let nodes = self.pop_nodes(m);
-        self.unhook_all(&nodes);
-        let anchor = self.top_stack("insert_after").0;
-        let (parent, index) = self.position_in_parent(anchor);
-        let ti = self.node(parent).child_logical_indices[index];
-        self.insert_detached(parent, index + 1, nodes, ti);
-    }
-
-    fn insert_before(&mut self, m: usize) {
-        self.edit_counters.inserts += 1;
-        let nodes = self.pop_nodes(m);
-        self.unhook_all(&nodes);
-        let anchor = self.top_stack("insert_before").0;
-        let (parent, index) = self.position_in_parent(anchor);
-        let ti = self.node(parent).child_logical_indices[index];
-        self.insert_detached(parent, index, nodes, ti);
-    }
-
-    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
-        let (node, source) = self.top_stack("set_attribute");
-        if source != StackSource::PrototypeBuild {
-            self.edit_counters.set_attrs += 1;
-        }
-        match attr_to_string(value) {
-            Some(value) => {
-                self.set_attr(node, name.to_string(), ns.map(ToString::to_string), value)
-            }
-            None => self.remove_attr(node, name, ns),
-        }
-    }
-
-    fn set_text(&mut self, value: &str) {
-        self.edit_counters.set_texts += 1;
-        let node = self.top_stack("set_text").0;
-        match &mut self.node_mut(node).kind {
-            NodeKind::Text(text) => *text = value.to_string(),
-            other => panic!("set_text expected text node, got {other:?}"),
-        }
-    }
-
-    fn add_event_listener(&mut self, name: &str) {
-        let node = self.top_stack("add_event_listener").0;
-        self.assert_element(node, "add_event_listener");
-        let id = self
-            .element_id_for_node(node)
-            .unwrap_or_else(|| panic!("event listener target node {node} has no ElementId"));
-        let target = EventListenerTarget {
-            name: name.to_string(),
-            id,
-        };
-        if !self.historical_event_listener_targets.contains(&target) {
-            self.historical_event_listener_targets.push(target.clone());
-        }
-        let listeners = &mut self.node_mut(node).listeners;
-        let name = name.to_string();
-        match listeners.binary_search(&name) {
-            Ok(_) => {}
-            Err(index) => listeners.insert(index, name),
-        }
-    }
-
-    fn remove_event_listener(&mut self, name: &str) {
-        let node = self.top_stack("remove_event_listener").0;
-        self.assert_element(node, "remove_event_listener");
-        let listeners = &mut self.node_mut(node).listeners;
-        let name = name.to_string();
-        match listeners.binary_search(&name) {
-            Ok(index) => {
-                listeners.remove(index);
-            }
-            Err(_) => panic!("renderer removed missing event listener {name:?}"),
-        }
-    }
-
-    fn remove(&mut self) {
-        self.edit_counters.removes += 1;
-        let (node, _) = self.pop_stack("remove");
-        if node == self.root {
-            panic!("renderer cannot remove document root");
-        }
-        self.detach(node);
-        self.drop_subtree(node);
-        self.clear_element_mapping_for_node(node);
+        WriteMutations::clone(&mut self.writer());
     }
 }
 

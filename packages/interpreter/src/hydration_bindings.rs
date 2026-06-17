@@ -7,10 +7,9 @@
 //! beyond the one root-filter pass that selects which roots to enter.
 //!
 //! State shared with the live mutation `BaseInterpreter` lives on `this.base`
-//! (set by `installHydrationState`): `nodes`, `createListener`,
-//! `createVirtualAnchor`, etc. Walker-local state on `this`: `cursor`,
-//! `frames`, `frameWrap`, `lastMapped`, `lastMappedId`, `chainTail`,
-//! `currentRootParent`, `hyUnder`.
+//! (set by `bind_hydration_channel`): `nodes`, `createListener`, etc.
+//! Walker-local state on `this`: `cursor`, `frames`, `frameWrap`,
+//! `lastMapped`, `lastMappedId`, `currentRootParent`, `hyUnder`.
 //!
 //! Tag names are interned via the `el` LRU cache (1-byte slot index after
 //! the first occurrence), the same cache the mutation interpreter uses for
@@ -21,16 +20,16 @@
 mod hydration_js {
     // Empty BASE — the hydration class doesn't extend BaseInterpreter, so it
     // doesn't need core.js prepended. State sharing is via `this.base`, set
-    // by `installHydrationState` (see `js/hydration_helpers.js`).
+    // by `bind_hydration_channel` before the first flush.
     const BASE: &str = "./src/js/hydration_base.js";
 
     pub struct HydrationChannel;
 
-    /// `EnterRoot(idx)` — `cursor = under[idx]`; clear frames and chain tail.
-    /// `currentRootParent` anchors root-level virtual placeholders after the
-    /// cursor advances past the last real root.
+    /// `EnterRoot(idx)` — `cursor = under[idx]`; clear frames.
+    /// `currentRootParent` is the insertion parent for synthesized empty text
+    /// nodes once the cursor advances past the last real root.
     fn hy_enter_root(idx: u32) {
-        "{this.cursor = this.hyUnder[$idx$] ?? null; this.currentRootParent = (this.cursor && this.cursor.parentNode) || this.base.root; this.frames.length = 0; this.frameWrap.length = 0; this.chainTail = null;}"
+        "{this.cursor = this.hyUnder[$idx$] ?? null; this.currentRootParent = (this.cursor && this.cursor.parentNode) || this.base.root; this.frames = []; this.frameWrap = [];}"
     }
 
     /// `MapElement(tag, id)` — verify cursor element matches `tag` (with
@@ -63,7 +62,6 @@ mod hydration_js {
             }
             this.lastMapped = this.cursor;
             this.lastMappedId = id;
-            this.chainTail = null;
         }"#
     }
 
@@ -83,18 +81,18 @@ mod hydration_js {
 
     /// `BeginChildren` — push cursor as a user frame; descend to firstChild.
     fn hy_begin_children() {
-        "{this.frames.push(this.cursor); this.frameWrap.push(0); this.cursor = this.cursor ? this.cursor.firstChild : null; this.chainTail = null;}"
+        "{this.frames.push(this.cursor); this.frameWrap.push(0); this.cursor = this.cursor ? this.cursor.firstChild : null;}"
     }
 
     /// `EndChildren` — drain wrapper frames above the top user frame, then
     /// pop the user frame; cursor returns to that parent.
     fn hy_end_children() {
-        "{while (this.frameWrap.length > 0 && this.frameWrap[this.frameWrap.length-1] === 1) { this.frames.pop(); this.frameWrap.pop(); } this.cursor = this.frames.pop() ?? null; this.frameWrap.pop(); this.chainTail = null;}"
+        "{while (this.frameWrap.length > 0 && this.frameWrap[this.frameWrap.length-1] === 1) { this.frames.pop(); this.frameWrap.pop(); } this.cursor = this.frames.pop() ?? null; this.frameWrap.pop();}"
     }
 
     /// `Advance(n)` — step `n` `nextSibling`s.
     fn hy_advance(n: u32) {
-        "{const n = $n$; for (let k=0; k<n && this.cursor; k++) this.cursor = this.cursor.nextSibling; this.chainTail = null;}"
+        "{const n = $n$; for (let k=0; k<n && this.cursor; k++) this.cursor = this.cursor.nextSibling;}"
     }
 
     /// `TextContrib(utf16_len, id, split_after)` — Map cursor to `id` if
@@ -121,68 +119,55 @@ mod hydration_js {
                 }
                 this.cursor = this.cursor.splitText(len);
             }
-            this.chainTail = null;
         }"#
     }
 
-    /// `SynthText(id)` — virtual sentinel inserted *before* cursor. Chained
-    /// via `chainTail` so consecutive synth ops form a linked list resolved
-    /// at materialization time.
+    /// `SynthText(id)` — empty text nodes don't survive HTML serialization, so
+    /// the server never emits one. Create a real empty text node, insert it
+    /// *before* the cursor, and map `id` to it. The cursor stays put (the new
+    /// node sits behind it), so consecutive `SynthText` ops accumulate in
+    /// source order and the run consumes no extra DOM sibling.
     fn hy_synth_text(id: u32) {
         r#"{
             const id = $id$;
             const parent = (this.cursor && this.cursor.parentNode) || this.frames[this.frames.length-1] || this.currentRootParent || null;
-            const sentinel = this.base.createVirtualAnchor(parent, this.cursor);
-            if (this.chainTail) this.chainTail.before = sentinel;
-            this.chainTail = sentinel;
-            this.base.nodes[id] = sentinel;
+            const node = document.createTextNode("");
+            parent.insertBefore(node, this.cursor || null);
+            this.base.nodes[id] = node;
         }"#
     }
 
-    /// `SynthTextAfter(id)` — trailing virtual sentinel inserted *after*
-    /// cursor. Cursor doesn't advance — virtual sentinels have no DOM
-    /// position — but the chain tail keeps source order intact.
+    /// `SynthTextAfter(id)` — trailing empty text node inserted *after* the
+    /// cursor. Create a real empty text node, insert it after the cursor, then
+    /// advance the cursor onto it. Advancing keeps consecutive trailing synths
+    /// in source order and keeps the run's consumed-sibling count at one (the
+    /// caller still advances past exactly one node to reach the next sibling).
     fn hy_synth_text_after(id: u32) {
         r#"{
             const id = $id$;
             const parent = (this.cursor && this.cursor.parentNode) || this.frames[this.frames.length-1] || this.currentRootParent || null;
             const before = this.cursor ? this.cursor.nextSibling : null;
-            const sentinel = this.base.createVirtualAnchor(parent, before);
-            if (this.chainTail) this.chainTail.before = sentinel;
-            this.chainTail = sentinel;
-            this.base.nodes[id] = sentinel;
+            const node = document.createTextNode("");
+            parent.insertBefore(node, before);
+            this.base.nodes[id] = node;
+            this.cursor = node;
         }"#
     }
 }
 
+/// Wire a fresh [`HydrationChannel`] to the live mutation `BaseInterpreter`
+/// (shared `nodes` / listener state) and the SSR root nodes that `EnterRoot(i)`
+/// indexes into. Must run before the first flush; the channel's per-pass walker
+/// state is (re)initialized by `EnterRoot` itself.
 #[cfg(feature = "webonly")]
-#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/hydration_helpers.js")]
-extern "C" {
-    /// One-shot setup before flushing the queued hydration ops. Binds the
-    /// HydrationChannel JS instance to the live `BaseInterpreter` (for shared
-    /// `nodes`/listener state), installs `hyUnder`, and resets the per-pass
-    /// walker state. Must be called before the first sledgehammer flush.
-    #[wasm_bindgen(js_name = "installHydrationState")]
-    pub fn install_hydration_state(
-        channel: &RawHydrationChannel,
-        base: &crate::unified_bindings::BaseInterpreter,
-        under: Vec<web_sys::Node>,
-    );
-
-    /// Push a hydration-only virtual root onto the live mutation stack for an
-    /// empty streaming-suspense chunk. The returned sentinel is later claimed
-    /// by the resolved scope's first dynamic-root ElementId.
-    #[wasm_bindgen(js_name = "pushHydrationVirtualRoot")]
-    pub fn push_hydration_virtual_root(
-        base: &crate::unified_bindings::BaseInterpreter,
-    ) -> wasm_bindgen::JsValue;
-
-    /// Bind a previously pushed hydration virtual root to an ElementId after
-    /// `replace_with` has populated its live DOM position.
-    #[wasm_bindgen(js_name = "claimHydrationVirtualRoot")]
-    pub fn claim_hydration_virtual_root(
-        base: &crate::unified_bindings::BaseInterpreter,
-        id: u32,
-        sentinel: &wasm_bindgen::JsValue,
-    );
+pub fn bind_hydration_channel(
+    channel: &RawHydrationChannel,
+    base: &crate::unified_bindings::BaseInterpreter,
+    under: Vec<web_sys::Node>,
+) {
+    use wasm_bindgen::JsValue;
+    let channel: &JsValue = channel.as_ref();
+    let under: js_sys::Array = under.into_iter().map(JsValue::from).collect();
+    let _ = js_sys::Reflect::set(channel, &JsValue::from_str("base"), base.as_ref());
+    let _ = js_sys::Reflect::set(channel, &JsValue::from_str("hyUnder"), under.as_ref());
 }

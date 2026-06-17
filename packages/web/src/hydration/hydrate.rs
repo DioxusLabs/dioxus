@@ -6,10 +6,7 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
-use dioxus_interpreter_js::hydration_bindings::{
-    HydrationChannel, claim_hydration_virtual_root, install_hydration_state,
-    push_hydration_virtual_root,
-};
+use dioxus_interpreter_js::hydration_bindings::{HydrationChannel, bind_hydration_channel};
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
 
@@ -71,12 +68,12 @@ impl WebsysDom {
             current_child = node.next_sibling();
         }
 
-        // Empty errored chunks use an anchor ref as the
-        // `replace_with(loading_id, 1)` item. `applyChunk` fills in
-        // `parent`/`before` from the loading slot; hydration later binds the
-        // new scope's placeholder ElementId to that same anchor.
+        // Empty errored chunks use a real empty text node as the
+        // `replace_with(loading_id, 1)` item; the replacement positions it at
+        // the loading slot. Hydration later binds the new scope's placeholder
+        // ElementId to that same node.
         let empty_bootstrap = children.is_empty();
-        let mut empty_bootstrap_anchor = None;
+        let mut empty_bootstrap_node = None;
 
         #[cfg(not(debug_assertions))]
         let debug_types = None;
@@ -100,8 +97,14 @@ impl WebsysDom {
                 },
                 |to| {
                     if empty_bootstrap {
-                        empty_bootstrap_anchor =
-                            Some(push_hydration_virtual_root(to.interpreter.base()));
+                        let node: web_sys::Node = web_sys::window()
+                            .unwrap()
+                            .document()
+                            .unwrap()
+                            .create_text_node("")
+                            .unchecked_into();
+                        to.interpreter.base().push_root(node.clone());
+                        empty_bootstrap_node = Some(node);
                         1
                     } else {
                         for node in &children {
@@ -131,20 +134,17 @@ impl WebsysDom {
             .clone_from(&suspense_path);
 
         if empty_bootstrap {
-            // Empty-chunk path: the anchor pushed earlier already has
-            // `parent`/`before` set from `replace_with`. Bind it to the
-            // resolved scope's first empty dynamic-root ElementId so
-            // subsequent anchor ops resolve through it, then walk the scope
-            // to record nested suspense ids.
-            if let (Some(claim_id), Some(anchor)) = (
+            // Empty-chunk path: the empty text node pushed earlier was placed
+            // at the loading slot by `replace_with`. Bind it to the resolved
+            // scope's first empty dynamic-root ElementId so later mutations
+            // target it, then walk the scope to record nested suspense ids.
+            if let (Some(claim_id), Some(node)) = (
                 first_dynamic_root_element_id(root_scope, dom),
-                empty_bootstrap_anchor.as_ref(),
+                empty_bootstrap_node.as_ref(),
             ) {
-                claim_hydration_virtual_root(
-                    self.interpreter.base(),
-                    claim_id.raw() as u32,
-                    anchor,
-                );
+                self.interpreter
+                    .base()
+                    .set_node(claim_id.raw() as u32, node);
             }
             self.collect_suspense_only(root_scope, dom);
         } else {
@@ -186,7 +186,7 @@ impl WebsysDom {
 
         // Bind the DOM roots to the live mutation interpreter before flushing
         // the queued hydration ops.
-        install_hydration_state(channel.js_channel(), self.interpreter.base(), under);
+        bind_hydration_channel(channel.js_channel(), self.interpreter.base(), under);
         channel.flush();
 
         #[cfg(feature = "mounted")]
