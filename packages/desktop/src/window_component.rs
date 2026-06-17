@@ -3,7 +3,7 @@ use crate::{
 };
 use dioxus_core::{
     ComponentFunctionExt, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime,
-    SuperInto, VNode, View, provide_context, schedule_update, spawn, use_hook,
+    SuperInto, VNode, ViewExt, provide_context, schedule_update, spawn, use_hook,
     use_hook_with_cleanup,
 };
 use dioxus_document::Document;
