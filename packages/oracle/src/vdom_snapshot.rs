@@ -1,6 +1,9 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
-use dioxus_core::{Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VirtualDom};
+use dioxus_core::{
+    Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VirtualDom,
+    internal::TemplateExt,
+};
 use std::any::Any;
 
 /// Render `app` from scratch into a stable snapshot.

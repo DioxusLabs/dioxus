@@ -73,7 +73,11 @@ pub mod internal {
         TemplateGlobalKey,
     };
     #[doc(hidden)]
-    pub use crate::template::{TemplateRawAttrNamespace, TemplateRawOp};
+    pub use crate::template::{
+        DecodedTemplateOp, TemplateAnchor, TemplateAnchorKind, TemplateExt, TemplateOp,
+        TemplatePath, TemplatePathStep, TemplateRawAttrNamespace, TemplateRawOp, TemplateSlotPath,
+        TemplateSlotTarget,
+    };
 
     #[cfg(fuzzing)]
     #[doc(hidden)]
@@ -150,19 +154,20 @@ pub(crate) mod innerlude {
     pub type Component<P = ()> = fn(P) -> Element;
 }
 
+pub(crate) use crate::template::{TemplateOp, TemplatePath};
+
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, ComponentFunctionExt, DecodedTemplateOp, DynamicNode, DynamicValue, Element,
-    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
-    IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode,
-    MultiTargetWriter, MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
-    Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId, RenderedView,
-    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
-    SuperFrom, SuperInto, SuspendedFuture,
-    SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAnchor,
-    TemplateOp, TemplatePath, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations,
-    anyhow, consume_context, consume_context_from_scope, current_owner, current_scope_id,
-    generation, has_context, needs_update, needs_update_any, parent_scope, provide_context,
+    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId,
+    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiTargetWriter,
+    MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps,
+    Properties, ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime,
+    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom,
+    SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task,
+    Template, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow,
+    consume_context, consume_context_from_scope, current_owner, current_scope_id, generation,
+    has_context, needs_update, needs_update_any, parent_scope, provide_context,
     provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
     schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
     throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,

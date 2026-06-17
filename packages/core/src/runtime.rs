@@ -3,7 +3,7 @@ use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, VNode,
-    innerlude::MountId,
+    innerlude::MountId, template::TemplateSlotPath,
 };
 use crate::{CapturedError, arena::RenderTargetState};
 use crate::{
@@ -36,14 +36,14 @@ struct EventTarget {
 #[derive(Clone, Copy, Debug)]
 enum EventTargetPath {
     Static(TemplatePath),
-    Slot(TemplatePath),
+    Slot(TemplateSlotPath),
 }
 
 impl EventTargetPath {
     fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
             Self::Static(path) => path.starts_with(attr),
-            Self::Slot(path) => path.slot_is_inside_static(attr),
+            Self::Slot(path) => path.is_inside_static(attr),
         }
     }
 
@@ -571,7 +571,7 @@ fn MyComponent() -> Element {{
             {
                 continue;
             }
-            let path = anchor.path();
+            let path = anchor.slot_path();
             for idx in anchor.values() {
                 match parent_node.dynamic_values[idx].node() {
                     DynamicNode::Fragment(children) => {

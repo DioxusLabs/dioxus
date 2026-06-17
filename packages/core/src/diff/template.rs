@@ -1,4 +1,7 @@
-use crate::{Template, TemplatePath, VNode, template::TemplateAnchor};
+use crate::{
+    Template, TemplatePath, VNode,
+    template::{TemplateAnchor, TemplateSlotPath, TemplateSlotTarget},
+};
 
 /// One dynamic node value (`index`) viewed over its owning [`TemplateAnchor`].
 ///
@@ -15,8 +18,8 @@ impl<'a> DynamicNodeSlot<'a> {
         Self { anchor, index }
     }
 
-    fn path(self) -> TemplatePath {
-        self.anchor.path()
+    pub(super) fn slot_path(self) -> TemplateSlotPath {
+        self.anchor.slot_path()
     }
 
     pub(super) fn index(self) -> usize {
@@ -24,34 +27,38 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn root_index(self) -> usize {
-        self.path().segment(0) as usize
+        self.slot_path().root_index().unwrap_or(0)
     }
 
     pub(super) fn is_root_level(self) -> bool {
-        self.path().is_root_level_slot()
+        self.slot_path().is_root_level()
     }
 
     pub(super) fn parent_path(self) -> TemplatePath {
-        self.path().split_slot().0
-    }
-
-    pub(super) fn child_index(self) -> usize {
-        self.path().split_slot().1
+        self.slot_path().static_parent()
     }
 
     pub(super) fn placement(self) -> SlotPlacement {
-        let path = self.path();
-        let (parent_path, child_index) = path.split_slot();
-
-        SlotPlacement {
-            parent_path,
-            static_insertion_index: child_index,
-            appends: path.appends(),
+        let target = self.slot_path();
+        match target.target() {
+            TemplateSlotTarget::BeforeStatic(path) => {
+                let (parent_path, static_insertion_index) = split_static_path(path);
+                SlotPlacement {
+                    parent_path,
+                    static_insertion_index,
+                    appends: false,
+                }
+            }
+            TemplateSlotTarget::AppendChildren(parent_path) => SlotPlacement {
+                parent_path,
+                static_insertion_index: 0,
+                appends: true,
+            },
         }
     }
 
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.parent_path() == other.parent_path() && self.child_index() == other.child_index()
+        self.slot_path() == other.slot_path()
     }
 }
 
@@ -60,6 +67,19 @@ pub(super) struct SlotPlacement {
     pub(super) parent_path: TemplatePath,
     pub(super) static_insertion_index: usize,
     pub(super) appends: bool,
+}
+
+fn split_static_path(path: TemplatePath) -> (TemplatePath, usize) {
+    let mut parent = path.bits();
+    let mut insertion_index = 0usize;
+    while parent != 0 && parent & 1 == 0 {
+        insertion_index += 1;
+        parent >>= 1;
+    }
+    if parent != 0 {
+        parent >>= 1;
+    }
+    (TemplatePath::from_bits(parent), insertion_index)
 }
 
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
@@ -84,7 +104,7 @@ impl<'a> DynamicAttrGroup<'a> {
     }
 
     pub(super) fn is_root_level(&self) -> bool {
-        self.anchor.path().is_root_level_slot()
+        self.anchor.path().len() == 1
     }
 
     pub(super) fn first_id(&self) -> usize {

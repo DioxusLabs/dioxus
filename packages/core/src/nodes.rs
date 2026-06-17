@@ -96,11 +96,8 @@ impl VNode {
         thread_local! {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static EMPTY_TEMPLATE: Template = Template::new(
-            &[],
-            &[],
-            &[TemplateAnchor::root_node(0, 0, true)],
-        );
+        static EMPTY_TEMPLATE: Template =
+            Template::new(&[], &[], &[TemplateAnchor::root_node(0, 0, true)]);
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -124,11 +121,8 @@ impl VNode {
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
-            &[],
-            &[],
-            &[TemplateAnchor::root_node(0, 0, true)],
-        );
+        static ERROR_ANCHOR_TEMPLATE: Template =
+            Template::new(&[], &[], &[TemplateAnchor::root_node(0, 0, true)]);
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -243,7 +237,18 @@ impl VNode {
         slot: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
         self.dynamic_node_anchors_for_element(element_op)
-            .filter(move |anchor| anchor.path().split_slot().1 == slot)
+            .filter(move |anchor| match anchor.slot_target() {
+                crate::template::TemplateSlotTarget::BeforeStatic(path) => {
+                    let mut parent = path.bits();
+                    let mut insertion_index = 0usize;
+                    while parent != 0 && parent & 1 == 0 {
+                        insertion_index += 1;
+                        parent >>= 1;
+                    }
+                    insertion_index == slot
+                }
+                crate::template::TemplateSlotTarget::AppendChildren(_) => false,
+            })
     }
 
     #[doc(hidden)]

@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus::{dioxus_core::internal::TemplateExt, prelude::*};
 
 /// Make sure that rsx! is parsing templates and their attributes properly
 #[test]
@@ -21,9 +21,8 @@ fn attributes_pass_properly() {
     assert_eq!(template.dynamic_value_count(), 3);
 
     let circle = template
-        .static_root_ops()
-        .next()
-        .map(|(_, op)| op)
+        .root_slots()
+        .find_map(|(_, op, _)| op)
         .expect("expected one static root element");
     let (tag, namespace) = template
         .element_meta_at_op(circle)

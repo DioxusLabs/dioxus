@@ -2,7 +2,7 @@ use crate::{
     DynamicValue, Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template,
     TemplateOp, TemplatePath, VNode,
     innerlude::{CapturedError, provide_context},
-    template::TemplateAnchor,
+    template::{TemplateAnchor, TemplateSlotPath},
     try_consume_context, use_hook,
 };
 use std::{
@@ -14,7 +14,7 @@ use std::{
 
 const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::new(
     0,
-    TemplatePath::root(0).next_child().with_appends(true),
+    TemplateSlotPath::append_children(TemplatePath::root(0)),
     0,
     1,
 )];
@@ -322,11 +322,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-        static TEMPLATE: Template = Template::new(
-            &[],
-            &[],
-            &[TemplateAnchor::root_node(0, 0, true)],
-        );
+            static TEMPLATE: Template =
+                Template::new(&[], &[], &[TemplateAnchor::root_node(0, 0, true)]);
             VNode::new(
                 None,
                 TEMPLATE,

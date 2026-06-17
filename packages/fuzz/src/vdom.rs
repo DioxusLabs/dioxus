@@ -8,8 +8,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 #[cfg(test)]
-use dioxus_core::DecodedTemplateOp;
-use dioxus_core::internal::{TemplateRawOp, build_template_from_raw_ops};
+use dioxus_core::internal::DecodedTemplateOp;
+use dioxus_core::internal::{TemplateExt, TemplateRawOp, build_template_from_raw_ops};
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
     VComponent, VNode, VText,

@@ -3,10 +3,11 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    DecodedTemplateOp, Template, TemplatePath, VNode,
+    Template, VNode,
     internal::{
-        FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
-        HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+        DecodedTemplateOp, FmtSegment, FmtedSegments, HotReloadAttributeValue,
+        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate,
+        NamedAttribute, TemplatePath,
     },
 };
 use dioxus_core_types::HotReloadingContext;

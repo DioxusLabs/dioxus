@@ -728,7 +728,7 @@ impl VNode {
         let mut next_id = None;
         for_each_dynamic_attr_group(self, |group| {
             // We clean up the roots in the next step, so don't worry about them here
-            if group.path().is_root_level_slot() {
+            if group.path().len() == 1 {
                 return;
             }
 
