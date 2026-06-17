@@ -10,15 +10,6 @@ use std::{collections::BTreeMap, rc::Rc};
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub trait WriteMutations {
-    /// Return true if this writer ignores every mutation.
-    ///
-    /// Diff code can use this to skip placement-only writer work while still
-    /// doing the logical create/diff bookkeeping.
-    #[doc(hidden)]
-    fn writes_are_noops(&self) -> bool {
-        false
-    }
-
     /// Push the node registered to `id` onto the stack.
     fn push_id(&mut self, id: ElementId);
 
@@ -120,22 +111,18 @@ macro_rules! forward_mut_write_mutations {
 /// instantiated at `&mut dyn WriteMutations`.
 impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
     write_mutation_methods!(forward_mut_write_mutations,);
-
-    fn writes_are_noops(&self) -> bool {
-        WriteMutations::writes_are_noops(&**self)
-    }
 }
 
 /// Push `id`, run `with_node`, then pop the node.
-pub(crate) fn with_id<M: WriteMutations + ?Sized, R>(
-    to: &mut M,
+///
+/// Invariant: `with_node` must leave the pushed node on top of the renderer
+/// stack. No-op writers still receive the stack operations; their implementation
+/// is responsible for ignoring them while the diff keeps a single control flow.
+pub(crate) fn with_id<R>(
+    to: &mut dyn WriteMutations,
     id: ElementId,
-    with_node: impl FnOnce(&mut M) -> R,
+    with_node: impl FnOnce(&mut dyn WriteMutations) -> R,
 ) -> R {
-    if WriteMutations::writes_are_noops(to) {
-        return with_node(to);
-    }
-
     to.push_id(id);
     let result = with_node(to);
     to.pop();
@@ -143,21 +130,21 @@ pub(crate) fn with_id<M: WriteMutations + ?Sized, R>(
 }
 
 /// Push `id` and let `consume_node` consume it.
-pub(crate) fn with_consumed_id<M: WriteMutations + ?Sized, R>(
-    to: &mut M,
+///
+/// Invariant: `consume_node` must consume the pushed node with a terminal stack
+/// operation such as `remove`, `replace_with`, or `pop_id`. No-op writers keep
+/// the same logical stack contract and ignore the concrete mutations.
+pub(crate) fn with_consumed_id<R>(
+    to: &mut dyn WriteMutations,
     id: ElementId,
-    consume_node: impl FnOnce(&mut M) -> R,
+    consume_node: impl FnOnce(&mut dyn WriteMutations) -> R,
 ) -> R {
-    if WriteMutations::writes_are_noops(to) {
-        return consume_node(to);
-    }
-
     to.push_id(id);
     consume_node(to)
 }
 
-pub(crate) fn remove_id<M: WriteMutations + ?Sized>(to: &mut M, id: ElementId) {
-    with_consumed_id(to, id, WriteMutations::remove);
+pub(crate) fn remove_id(to: &mut dyn WriteMutations, id: ElementId) {
+    with_consumed_id(to, id, |to| to.remove());
 }
 
 pub(crate) fn reborrow_writer<'borrow, 'writer>(
@@ -172,7 +159,6 @@ pub(crate) fn reborrow_writer<'borrow, 'writer>(
 pub(crate) struct LazyScope<'a, P: FnMut(&mut dyn WriteMutations)> {
     to: &'a mut dyn WriteMutations,
     push: P,
-    target: Option<(Rc<Runtime>, RenderTargetId)>,
     pushed: bool,
 }
 
@@ -181,32 +167,42 @@ impl<'a, P: FnMut(&mut dyn WriteMutations)> LazyScope<'a, P> {
         Self {
             to,
             push,
-            target: None,
-            pushed: false,
-        }
-    }
-
-    pub(crate) fn new_for_current_target(
-        to: &'a mut dyn WriteMutations,
-        runtime: Rc<Runtime>,
-        push: P,
-    ) -> Self {
-        let target = runtime.current_render_target_id();
-        Self {
-            to,
-            push,
-            target: Some((runtime, target)),
             pushed: false,
         }
     }
 
     #[inline]
     fn ensure_pushed(&mut self) {
-        let in_target = match &self.target {
-            Some((runtime, target)) => runtime.current_render_target_id() == *target,
-            None => true,
-        };
-        if !self.pushed && in_target {
+        if !self.pushed {
+            (self.push)(self.to);
+            self.pushed = true;
+        }
+    }
+}
+
+pub(crate) struct TargetedLazyScope<'a, P: FnMut(&mut dyn WriteMutations)> {
+    to: &'a mut dyn WriteMutations,
+    push: P,
+    runtime: Rc<Runtime>,
+    target: RenderTargetId,
+    pushed: bool,
+}
+
+impl<'a, P: FnMut(&mut dyn WriteMutations)> TargetedLazyScope<'a, P> {
+    pub(crate) fn new(to: &'a mut dyn WriteMutations, runtime: Rc<Runtime>, push: P) -> Self {
+        let target = runtime.current_render_target_id();
+        Self {
+            to,
+            push,
+            runtime,
+            target,
+            pushed: false,
+        }
+    }
+
+    #[inline]
+    fn ensure_pushed(&mut self) {
+        if !self.pushed && self.runtime.current_render_target_id() == self.target {
             (self.push)(self.to);
             self.pushed = true;
         }
@@ -214,6 +210,14 @@ impl<'a, P: FnMut(&mut dyn WriteMutations)> LazyScope<'a, P> {
 }
 
 impl<P: FnMut(&mut dyn WriteMutations)> Drop for LazyScope<'_, P> {
+    fn drop(&mut self) {
+        if self.pushed {
+            self.to.pop();
+        }
+    }
+}
+
+impl<P: FnMut(&mut dyn WriteMutations)> Drop for TargetedLazyScope<'_, P> {
     fn drop(&mut self) {
         if self.pushed {
             self.to.pop();
@@ -236,23 +240,38 @@ impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for LazyScope<'_, P> {
     write_mutation_methods!(forward_lazy_scope_write_mutations,);
 }
 
+impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for TargetedLazyScope<'_, P> {
+    write_mutation_methods!(forward_lazy_scope_write_mutations,);
+}
+
 fn create_and_place_at_id(
     to: &mut dyn WriteMutations,
     id: ElementId,
     runtime: Rc<Runtime>,
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
-    place_nodes: impl FnOnce(&mut dyn WriteMutations, usize),
+    placement: PlacementOp,
 ) -> usize {
-    if WriteMutations::writes_are_noops(to) {
-        return create_nodes(to);
-    }
-
-    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| to.push_id(id));
+    let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
     let count = create_nodes(&mut to);
-    if count > 0 {
-        place_nodes(&mut to, count);
-    }
+    place_created_nodes(&mut to, count, placement);
     count
+}
+
+#[derive(Clone, Copy)]
+enum PlacementOp {
+    AppendChildren,
+    InsertBefore,
+    InsertAfter,
+}
+
+fn place_created_nodes(to: &mut dyn WriteMutations, count: usize, placement: PlacementOp) {
+    if count > 0 {
+        match placement {
+            PlacementOp::AppendChildren => to.append_children(count),
+            PlacementOp::InsertBefore => to.insert_before(count),
+            PlacementOp::InsertAfter => to.insert_after(count),
+        }
+    }
 }
 
 pub(crate) fn append_children_to(
@@ -261,9 +280,13 @@ pub(crate) fn append_children_to(
     runtime: Rc<Runtime>,
     create_children: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    create_and_place_at_id(to, id, runtime, create_children, |to, count| {
-        to.append_children(count);
-    })
+    create_and_place_at_id(
+        to,
+        id,
+        runtime,
+        create_children,
+        PlacementOp::AppendChildren,
+    )
 }
 
 pub(crate) fn insert_before_id(
@@ -272,9 +295,7 @@ pub(crate) fn insert_before_id(
     runtime: Rc<Runtime>,
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    create_and_place_at_id(to, id, runtime, create_nodes, |to, count| {
-        to.insert_before(count);
-    })
+    create_and_place_at_id(to, id, runtime, create_nodes, PlacementOp::InsertBefore)
 }
 
 pub(crate) fn insert_after_id(
@@ -283,25 +304,26 @@ pub(crate) fn insert_after_id(
     runtime: Rc<Runtime>,
     create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    create_and_place_at_id(to, id, runtime, create_nodes, |to, count| {
-        to.insert_after(count);
-    })
+    create_and_place_at_id(to, id, runtime, create_nodes, PlacementOp::InsertAfter)
 }
 
-pub(crate) fn replace_id_with<M: WriteMutations + ?Sized>(
+pub(crate) fn replace_id_with<M: WriteMutations>(
     to: &mut M,
     id: ElementId,
     create_replacements: impl FnOnce(&mut M) -> usize,
 ) -> usize {
-    with_consumed_id(to, id, |to| {
-        let count = create_replacements(to);
-        if count > 0 {
-            to.replace_with(count);
-        } else {
-            to.remove();
-        }
-        count
-    })
+    to.push_id(id);
+    let count = create_replacements(to);
+    finish_replacement(to, count);
+    count
+}
+
+fn finish_replacement(to: &mut dyn WriteMutations, count: usize) {
+    if count > 0 {
+        to.replace_with(count);
+    } else {
+        to.remove();
+    }
 }
 
 /// A host's collection of render-target writers.
@@ -318,12 +340,6 @@ pub trait MultiWriter {
 
     /// The writer for `id`, or `None` for a target with no attached host.
     fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Self::Writer>;
-
-    /// Return true if every target write is ignored.
-    #[doc(hidden)]
-    fn writes_are_noops(&self) -> bool {
-        false
-    }
 }
 
 impl<W: WriteMutations> MultiWriter for W {
@@ -335,10 +351,6 @@ impl<W: WriteMutations> MultiWriter for W {
         } else {
             None
         }
-    }
-
-    fn writes_are_noops(&self) -> bool {
-        WriteMutations::writes_are_noops(self)
     }
 }
 
@@ -445,10 +457,6 @@ macro_rules! route_write_mutations {
 
 impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
     write_mutation_methods!(route_write_mutations,);
-
-    fn writes_are_noops(&self) -> bool {
-        self.to.writes_are_noops()
-    }
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -648,8 +656,4 @@ macro_rules! noop_write_mutations {
 
 impl WriteMutations for NoOpMutations {
     write_mutation_methods!(noop_write_mutations,);
-
-    fn writes_are_noops(&self) -> bool {
-        true
-    }
 }

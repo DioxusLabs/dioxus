@@ -565,12 +565,10 @@ impl VirtualDom {
     pub fn rebuild(&mut self, to: &mut impl crate::MultiWriter) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.clear_full_rebuild_state();
-        if crate::MultiWriter::writes_are_noops(to) {
-            self.rebuild_with_writer(&mut NoOpMutations);
-        } else {
-            let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
-            self.rebuild_with_writer(&mut router);
-        }
+        // The target router is the single write boundary for a render pass. No-op
+        // hosts ignore the same mutation stream as every other renderer.
+        let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+        self.rebuild_with_writer(&mut router);
         self.drain_remaining_effects();
     }
 
@@ -583,12 +581,10 @@ impl VirtualDom {
         {
             let _runtime = RuntimeGuard::new(self.runtime.clone());
             {
-                if crate::MultiWriter::writes_are_noops(to) {
-                    self.render_immediate_with_writer(&mut NoOpMutations);
-                } else {
-                    let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
-                    self.render_immediate_with_writer(&mut router);
-                }
+                // Keep incremental renders on the same routed writer boundary
+                // as full rebuilds.
+                let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
+                self.render_immediate_with_writer(&mut router);
             }
             self.drain_remaining_effects();
         }

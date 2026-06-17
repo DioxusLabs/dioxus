@@ -186,7 +186,7 @@ impl VNode {
         // The scope's driver still owns the live props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         let scope_driver = state.dom.runtime.get_state(scope_id).render_driver();
-        if scope_driver.memoize(new.driver.as_any()) {
+        if scope_driver.memoize(new.driver.as_ref()) {
             // The scope's driver still owns the live props; memoizing here
             // implicitly drops the new props since they're unused.
             return;
@@ -265,10 +265,22 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
+        if let Some(existing_scope) = scope_id {
+            let same_component = {
+                let driver = state.dom.runtime.get_state(existing_scope).render_driver();
+                driver.same_component(component.driver.as_ref())
+            };
+            assert!(
+                same_component,
+                "mounted component scope must match the incoming component driver"
+            );
+        }
+
         let new = scope_id.is_none();
 
         // If the scope id is missing, we need to load up a new scope for this
-        // vcomponent. If it's already mounted, then we can just use that.
+        // component. Existing scope ids are reusable because the driver
+        // identity above proves they belong to this component type.
         if new {
             // The scope adopts a duplicate of the vnode's driver so the live
             // scope never aliases props with a vnode (a cached rsx element

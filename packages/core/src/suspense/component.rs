@@ -296,11 +296,12 @@ impl RenderDriver for SuspenseDriver {
         self
     }
 
-    fn memoize(&self, new_driver: &dyn Any) -> bool {
-        match new_driver.downcast_ref::<Self>() {
-            Some(new) => Properties::memoize(&mut *self.props.borrow_mut(), &new.props.borrow()),
-            None => false,
-        }
+    fn memoize(&self, new_driver: &dyn RenderDriver) -> bool {
+        let new = new_driver
+            .as_any()
+            .downcast_ref::<Self>()
+            .expect("same_component must prove matching SuspenseDriver type before memoize");
+        Properties::memoize(&mut *self.props.borrow_mut(), &new.props.borrow())
     }
 
     fn duplicate(&self) -> Rc<dyn RenderDriver> {

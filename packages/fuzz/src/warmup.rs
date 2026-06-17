@@ -953,3 +953,16 @@ pub fn warmup_deferred_priority_paths() {
         drive_render(&mut dom);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn warmup_diff_region_coverage() {
+        std::thread::Builder::new()
+            .stack_size(16 * 1024 * 1024)
+            .spawn(super::warmup_deferred_priority_paths)
+            .expect("warmup coverage thread must spawn")
+            .join()
+            .expect("warmup coverage must not panic");
+    }
+}

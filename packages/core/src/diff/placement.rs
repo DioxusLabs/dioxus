@@ -16,7 +16,7 @@ use crate::{
     MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{MountId, MountRef},
-    mutations::{LazyScope, append_children_to, insert_after_id, insert_before_id},
+    mutations::{TargetedLazyScope, append_children_to, insert_after_id, insert_before_id},
     nodes::DynamicNode,
 };
 
@@ -185,7 +185,7 @@ fn insert_at_slot(
     runtime: Rc<Runtime>,
     create: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    let mut to = LazyScope::new_for_current_target(to, runtime, move |to| {
+    let mut to = TargetedLazyScope::new(to, runtime, move |to| {
         to.push_id(root_id);
         for depth in 1..placement.parent_path.len() {
             to.child(placement.parent_path.segment(depth) as usize);

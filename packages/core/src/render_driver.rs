@@ -40,11 +40,13 @@ pub(crate) trait RenderDriver: 'static {
         self.as_any().type_id() == other.as_any().type_id()
     }
 
-    /// Make this driver's props equal to `new_driver`'s (a driver of the
-    /// same concrete type, guaranteed by the [`Self::same_component`]
-    /// check). Returns whether the props were equal and the scope can be
-    /// memoized.
-    fn memoize(&self, new_driver: &dyn Any) -> bool;
+    /// Make this driver's props equal to `new_driver`'s.
+    ///
+    /// Invariant: the caller must only invoke this after [`Self::same_component`]
+    /// returned true for the same pair of drivers. That makes the concrete driver
+    /// type known, so implementations unwrap the downcast instead of falling back
+    /// to replacement semantics.
+    fn memoize(&self, new_driver: &dyn RenderDriver) -> bool;
 
     /// A fresh driver instance with cloned props, for [`VComponent`] clones
     /// and scope adoption.
@@ -183,11 +185,12 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
             .is_some_and(|other| other.render_fn.fn_ptr() == self.render_fn.fn_ptr())
     }
 
-    fn memoize(&self, new_driver: &dyn Any) -> bool {
-        match new_driver.downcast_ref::<Self>() {
-            Some(new) => (self.memo)(&mut self.props.borrow_mut(), &new.props.borrow()),
-            None => false,
-        }
+    fn memoize(&self, new_driver: &dyn RenderDriver) -> bool {
+        let new = new_driver
+            .as_any()
+            .downcast_ref::<Self>()
+            .expect("same_component must prove matching BodyDriver type before memoize");
+        (self.memo)(&mut self.props.borrow_mut(), &new.props.borrow())
     }
 
     fn duplicate(&self) -> Rc<dyn RenderDriver> {

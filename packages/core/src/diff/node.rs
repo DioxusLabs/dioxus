@@ -944,11 +944,9 @@ impl VNode {
                     let target_id = state.dom.current_render_target_id();
                     let id = state.dom.next_element_in_target(target_id);
                     state.dom.set_mounted_dynamic_text_node(mount, idx, id);
-                    if !WriteMutations::writes_are_noops(to) {
-                        to.create_text(&text.value);
-                        to.pop_id(id.element_id());
-                        to.push_id(id.element_id());
-                    }
+                    to.create_text(&text.value);
+                    to.pop_id(id.element_id());
+                    to.push_id(id.element_id());
                     1
                 } else {
                     0
@@ -965,11 +963,7 @@ impl VNode {
         reuse_existing_mounts: bool,
     ) {
         let slot = DynamicNodeSlot::new(&self.template, anchor, anchor.value_start());
-        let writes_are_noops = state
-            .to
-            .as_ref()
-            .is_none_or(|to| WriteMutations::writes_are_noops(&**to));
-        if writes_are_noops {
+        if state.to.is_none() {
             for dynamic_node_id in anchor.values() {
                 self.create_dynamic_node_inner(
                     self.dynamic_values[dynamic_node_id].node(),
@@ -1093,9 +1087,6 @@ impl VNode {
         let target_id = dom.current_render_target_id();
         let id = dom.next_element_in_target(target_id);
         dom.set_mounted_root_node(mount, root_idx, id);
-        if WriteMutations::writes_are_noops(to) {
-            return id;
-        }
 
         let template_id = match dom.cached_template_root(target_id, self.template, root_idx) {
             Some(id) => id,

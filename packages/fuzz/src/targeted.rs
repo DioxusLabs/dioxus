@@ -163,6 +163,23 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
                 Op::Rerender,
             ]
         }),
+        case("keyed_portal_static_root_reorder", {
+            // Same cross-target push path as the dynamic-text portal case,
+            // but with the portal body left as its default static root. That
+            // proves static roots only push when their mount target matches
+            // the active renderer target.
+            vec![
+                set_root_dynamic(),
+                fragment_with_children(3, Some(50)),
+                set_vnode_root_dynamic(1, DynamicKind::Portal),
+                set_vnode_root_dynamic(3, DynamicKind::Portal),
+                set_vnode_root_dynamic(5, DynamicKind::Portal),
+                Op::Rerender,
+                move_fragment_child(2, 0),
+                move_fragment_child(2, 1),
+                Op::Rerender,
+            ]
+        }),
         case("portal_inside_fragment_and_remove", {
             vec![
                 set_root_dynamic(),
@@ -174,6 +191,10 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
                 Op::Rerender,
             ]
         }),
+        case(
+            "hidden_suspense_portal_diff_without_writer",
+            hidden_suspense_portal_diff_without_writer(),
+        ),
         case("unkeyed_fragment_batched_component_props_diff", {
             // Build an unkeyed fragment whose children are all
             // ComponentA. With >FRAGMENT_WORK_BATCH (16) same-component
@@ -206,6 +227,49 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             "nonsuspense_scope_suspense_immediate",
             nonsuspense_scope_suspense_immediate(),
         ),
+        case("nested_dynamic_attr_values", nested_dynamic_attr_values()),
+        case(
+            "component_replace_without_live_dom",
+            component_replace_without_live_dom(),
+        ),
+        case(
+            "hidden_suspense_fragment_growth_without_writer",
+            hidden_suspense_fragment_growth_without_writer(),
+        ),
+        case(
+            "hidden_suspense_static_root_replace_without_writer",
+            hidden_suspense_static_root_replace_without_writer(),
+        ),
+        case(
+            "visible_root_text_replacement",
+            visible_root_text_replacement(),
+        ),
+        case(
+            "non_root_dynamic_attr_reclaim_on_template_replace",
+            non_root_dynamic_attr_reclaim_on_template_replace(),
+        ),
+        case("visible_adjacent_text_slot", visible_adjacent_text_slot()),
+        case(
+            "visible_adjacent_component_slot",
+            visible_adjacent_component_slot(),
+        ),
+        case("visible_deep_slot_insert", visible_deep_slot_insert()),
+        case(
+            "visible_different_parent_dynamic_scan",
+            visible_different_parent_dynamic_scan(),
+        ),
+        case(
+            "visible_middle_slot_skips_empty_before_later_text",
+            visible_middle_slot_skips_empty_before_later_text(),
+        ),
+        case(
+            "visible_fragment_child_after_text_slot",
+            visible_fragment_child_after_text_slot(),
+        ),
+        case(
+            "sibling_dynamic_listener_event",
+            sibling_dynamic_listener_event(),
+        ),
     ]
 }
 
@@ -228,9 +292,13 @@ fn set_root_dynamic() -> Op {
 }
 
 fn insert_fragment_child(index: u8, key: Option<u8>) -> Op {
+    insert_fragment_child_in(0, 0, index, key)
+}
+
+fn insert_fragment_child_in(vnode: u8, slot: u8, index: u8, key: Option<u8>) -> Op {
     Op::fragment(
-        0,
-        0,
+        vnode,
+        slot,
         FragmentEdit::Children(ListEdit::Insert { index, item: key }),
     )
 }
@@ -259,11 +327,45 @@ fn fragment_with_children(count: u8, key_base: Option<u8>) -> Op {
 }
 
 fn set_vnode_root_dynamic(vnode: u8, kind: DynamicKind) -> Op {
+    set_vnode_node(vnode, 0, TemplateNodeKind::Dynamic(kind))
+}
+
+fn set_vnode_node(vnode: u8, node: u8, kind: TemplateNodeKind) -> Op {
+    Op::template(vnode, TemplateEdit::SetNode { node, kind })
+}
+
+fn insert_child(vnode: u8, element: u8, index: u8, kind: TemplateNodeKind) -> Op {
     Op::template(
         vnode,
-        TemplateEdit::SetNode {
-            node: 0,
-            kind: TemplateNodeKind::Dynamic(kind),
+        TemplateEdit::Children {
+            element,
+            edit: ListEdit::Insert { index, item: kind },
+        },
+    )
+}
+
+fn insert_attr(vnode: u8, element: u8, index: u8, item: TemplateAttrSpec) -> Op {
+    Op::template(
+        vnode,
+        TemplateEdit::Attrs {
+            element,
+            edit: ListEdit::Insert { index, item },
+        },
+    )
+}
+
+fn insert_dynamic_attr(vnode: u8, attr: u8, index: u8, value: AttrValueSpec) -> Op {
+    Op::dynamic_attrs(
+        vnode,
+        attr,
+        ListEdit::Insert {
+            index,
+            item: AttrSpec {
+                name: 5,
+                namespace: None,
+                value,
+                volatile: false,
+            },
         },
     )
 }
@@ -669,5 +771,269 @@ fn dynamic_attribute_static_restore_recipe() -> Vec<Op> {
             },
         ),
         Op::Rerender,
+    ]
+}
+
+fn nested_dynamic_attr_values() -> Vec<Op> {
+    vec![
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_attr(0, 0, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Float(7)),
+        insert_dynamic_attr(0, 1, 0, AttrValueSpec::Listener),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Float(7)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Int(9)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Int(9)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Bool(true)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Bool(true)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Any(11)),
+        Op::Rerender,
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Any(11)),
+        Op::Rerender,
+        Op::fire_event(0, EventBehaviorSpec::Noop),
+        Op::template(
+            0,
+            TemplateEdit::Children {
+                element: 0,
+                edit: ListEdit::Remove { index: 0 },
+            },
+        ),
+        Op::Rerender,
+    ]
+}
+
+fn component_replace_without_live_dom() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        Op::dynamic(0, 0, DynamicKind::ComponentA),
+        set_vnode_root_dynamic(1, DynamicKind::Empty),
+        Op::Rerender,
+        Op::dynamic(0, 0, DynamicKind::ComponentB),
+        Op::Rerender,
+    ]
+}
+
+fn hidden_suspense_fragment_growth_without_writer() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        Op::dynamic(0, 0, suspense_kind(SuspenseMode::Resolved)),
+        set_vnode_root_dynamic(
+            1,
+            DynamicKind::Fragment {
+                children: 0,
+                key_base: None,
+            },
+        ),
+        Op::Rerender,
+        Op::suspense(0, SuspenseMode::Pending),
+        Op::Rerender,
+        set_vnode_root_dynamic(
+            1,
+            DynamicKind::Fragment {
+                children: 1,
+                key_base: None,
+            },
+        ),
+        Op::Rerender,
+        insert_fragment_child_in(1, 0, 1, None),
+        Op::Rerender,
+    ]
+}
+
+fn hidden_suspense_static_root_replace_without_writer() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        Op::dynamic(0, 0, suspense_kind(SuspenseMode::Pending)),
+        insert_child(1, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+        set_vnode_root_dynamic(1, DynamicKind::Text(2)),
+        Op::Rerender,
+    ]
+}
+
+fn visible_root_text_replacement() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        Op::dynamic(0, 0, DynamicKind::Text(1)),
+        Op::Rerender,
+        Op::dynamic(0, 0, DynamicKind::Empty),
+        Op::Rerender,
+    ]
+}
+
+fn non_root_dynamic_attr_reclaim_on_template_replace() -> Vec<Op> {
+    vec![
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_attr(0, 1, 1, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Text(4)),
+        insert_dynamic_attr(0, 1, 0, AttrValueSpec::Text(5)),
+        Op::Rerender,
+        set_vnode_node(0, 0, TemplateNodeKind::Text(9)),
+        Op::Rerender,
+    ]
+}
+
+fn hidden_suspense_portal_diff_without_writer() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        Op::dynamic(0, 0, suspense_kind(SuspenseMode::Resolved)),
+        set_vnode_root_dynamic(1, DynamicKind::Portal),
+        set_vnode_root_dynamic(2, DynamicKind::Text(0)),
+        Op::Rerender,
+        Op::suspense(0, SuspenseMode::Pending),
+        Op::Rerender,
+        set_vnode_root_dynamic(2, DynamicKind::Text(1)),
+        Op::Rerender,
+    ]
+}
+
+fn visible_adjacent_text_slot() -> Vec<Op> {
+    vec![
+        insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(0, 0, 1, TemplateNodeKind::Dynamic(DynamicKind::Text(2))),
+        Op::Rerender,
+        set_vnode_node(0, 1, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn visible_adjacent_component_slot() -> Vec<Op> {
+    vec![
+        insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(0, 0, 1, TemplateNodeKind::Dynamic(DynamicKind::ComponentA)),
+        Op::Rerender,
+        set_vnode_node(0, 1, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn visible_deep_slot_insert() -> Vec<Op> {
+    vec![
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_child(0, 1, 0, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(0, 1, 1, TemplateNodeKind::Text(7)),
+        Op::Rerender,
+        set_vnode_node(0, 2, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn visible_different_parent_dynamic_scan() -> Vec<Op> {
+    vec![
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_child(0, 1, 0, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(
+            0,
+            0,
+            1,
+            TemplateNodeKind::Element {
+                tag: 2,
+                namespace: None,
+            },
+        ),
+        insert_child(0, 2, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(2))),
+        Op::Rerender,
+        set_vnode_node(0, 2, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn visible_middle_slot_skips_empty_before_later_text() -> Vec<Op> {
+    vec![
+        insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(0))),
+        insert_child(0, 0, 1, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(0, 0, 2, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        insert_child(0, 0, 3, TemplateNodeKind::Dynamic(DynamicKind::Text(2))),
+        Op::Rerender,
+        set_vnode_node(0, 2, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn visible_fragment_child_after_text_slot() -> Vec<Op> {
+    vec![
+        insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(0))),
+        insert_child(
+            0,
+            0,
+            1,
+            TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                children: 1,
+                key_base: None,
+            }),
+        ),
+        set_vnode_root_dynamic(1, DynamicKind::Empty),
+        Op::Rerender,
+        set_vnode_root_dynamic(1, DynamicKind::Text(1)),
+        Op::Rerender,
+    ]
+}
+
+fn sibling_dynamic_listener_event() -> Vec<Op> {
+    vec![
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_child(
+            0,
+            0,
+            1,
+            TemplateNodeKind::Element {
+                tag: 2,
+                namespace: None,
+            },
+        ),
+        insert_attr(0, 2, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Listener),
+        insert_dynamic_attr(0, 1, 0, AttrValueSpec::Listener),
+        Op::Rerender,
+        Op::fire_event(0, EventBehaviorSpec::Noop),
+        Op::fire_event(1, EventBehaviorSpec::Noop),
     ]
 }
