@@ -133,7 +133,10 @@ impl Scope {
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        self.render_driver.suspense_context()
+        match &*self.suspense_location.borrow() {
+            SuspenseLocation::SuspenseBoundary(context) => Some(context.clone()),
+            _ => None,
+        }
     }
 
     /// Check if a node should run during suspense

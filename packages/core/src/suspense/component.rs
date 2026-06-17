@@ -342,10 +342,6 @@ impl RenderDriver for SuspenseDriver {
         // same way a plain component's output is.
         remove_rendered_output(dom, scope_id, to, destroy_component_state, replace_with);
     }
-
-    fn suspense_context(&self) -> Option<SuspenseContext> {
-        Some(self.suspense_context.clone())
-    }
 }
 
 #[allow(non_snake_case)]

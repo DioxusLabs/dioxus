@@ -2,7 +2,7 @@ use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 
 use crate::{
     ComponentFunction, Element, WriteMutations,
-    innerlude::{CapturedPanic, ElementRef, ScopeOrder, SuspenseContext},
+    innerlude::{CapturedPanic, ElementRef, ScopeOrder},
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -11,8 +11,8 @@ use crate::{
 ///
 /// Every scope owns exactly one driver via `Rc<dyn RenderDriver>`:
 /// - Plain components use [`BodyDriver`], which owns the component function and props.
-/// - Suspense boundaries use [`SuspenseDriver`](crate::suspense::SuspenseDriver),
-///   which owns the [`SuspenseContext`] and manages children/fallback rendering.
+/// - Custom components may use specialized drivers, such as
+///   [`SuspenseDriver`](crate::suspense::SuspenseDriver).
 pub(crate) trait RenderDriver: 'static {
     fn as_any(&self) -> &dyn Any;
 
@@ -51,11 +51,6 @@ pub(crate) trait RenderDriver: 'static {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     );
-
-    /// If this driver is a suspense boundary, return its context.
-    fn suspense_context(&self) -> Option<SuspenseContext> {
-        None
-    }
 }
 
 /// Remove a scope's rendered output from the DOM, and drop the scope when
