@@ -59,8 +59,8 @@ pub(crate) struct Scope {
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
-    /// The suspense boundary location this scope is rendered under, if any.
-    suspense_location: SuspenseLocation,
+    /// The suspense boundary that this scope is currently in (if any)
+    suspense_boundary: SuspenseLocation,
 
     /// The driver owning this scope's rendered output.
     render_driver: Rc<dyn RenderDriver>,
@@ -74,7 +74,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
-        suspense_location: SuspenseLocation,
+        suspense_boundary: SuspenseLocation,
         render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
@@ -92,7 +92,7 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_location,
+            suspense_boundary,
             render_driver,
         }
     }
@@ -123,20 +123,20 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_location.clone()
+        self.suspense_boundary.clone()
     }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        match &self.suspense_location {
-            SuspenseLocation::SuspenseBoundary(context) => Some(context.clone()),
+        match self.suspense_location() {
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
             _ => None,
         }
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_location.suspense_context() else {
+        let Some(context) = self.suspense_boundary.suspense_context() else {
             return false;
         };
 
