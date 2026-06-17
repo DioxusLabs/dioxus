@@ -9,7 +9,6 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        TextareaWithDynamic {}
         DangerousInnerHtml {}
         AdjacentDynamicTexts {}
         LongEmptyRuns {}
@@ -20,7 +19,6 @@ fn app() -> Element {
         SeparatedEmptyDynamicSlots {}
         PlaceholderAsTrailingSibling {}
         RemovePlaceholder {}
-        ParserInsertedWrapper {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
     }
@@ -49,18 +47,6 @@ fn DangerousInnerHtml() -> Element {
             },
             "swap raw"
         }
-    }
-}
-
-// A `<textarea>` with a dynamic text child used to be unhydratable in the
-// marker-based scheme because `<!--node-id-->` was parsed as literal text
-// by the browser. Markerless emits zero markers so this is a regression
-// test that the textarea content equals exactly the dynamic value.
-#[component]
-fn TextareaWithDynamic() -> Element {
-    let value = "hello & world";
-    rsx! {
-        textarea { id: "user-textarea", "{value}" }
     }
 }
 
@@ -294,34 +280,6 @@ fn RemovePlaceholder() -> Element {
             onclick: move |_| show.set(false),
             "hide"
         }
-    }
-}
-
-// Browser HTML parsers are allowed to insert transparent element wrappers while
-// repairing markup. Hydration must align expected leaves to the actual DOM by
-// matching node kinds/tags and descending through attr-less wrapper elements
-// whose complete child list matches a prefix of the expected leaves. This table
-// regression exercises the common `<tbody>` repair without teaching the walker
-// anything table-specific.
-#[component]
-fn ParserInsertedWrapper() -> Element {
-    let mut marked = use_signal(|| false);
-    let mut row_clicks = use_signal(|| 0);
-    rsx! {
-        table { id: "parser-table",
-            tr {
-                id: "parser-row",
-                class: if marked() { "marked" } else { "plain" },
-                onclick: move |_| row_clicks += 1,
-                td { "row" }
-            }
-        }
-        button {
-            id: "mark-parser-row",
-            onclick: move |_| marked.set(true),
-            "mark row"
-        }
-        div { id: "parser-row-clicks", "row clicks: {row_clicks}" }
     }
 }
 

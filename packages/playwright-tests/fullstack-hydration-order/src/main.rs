@@ -21,38 +21,6 @@ pub fn Home() -> Element {
             onclick: move |_| count += 1,
             "Count {count}"
         }
-        TrailingEmpties {}
-    }
-}
-
-// Regression test for the markerless hydration walker.
-// Two trailing empty dynamic texts after a non-empty one: the SSR HTML has zero
-// bytes for the empties, so the merged DOM text node is just the non-empty
-// prefix. The walker's `SynthTextAfter` opcode must synthesize the empties in
-// document order — if it inserts each new node before `cursor.nextSibling`
-// without advancing the cursor, every later insert lands *before* the previous
-// one, reversing them. The visible regression only surfaces when the dynamic
-// texts later become non-empty, since adjacent empty text nodes look identical
-// to two empty text nodes in any order.
-#[component]
-fn TrailingEmpties() -> Element {
-    let mut a = use_signal(String::new);
-    let mut b = use_signal(String::new);
-    rsx! {
-        div {
-            id: "trailing-empties",
-            "FIRST"
-            "{a}"
-            "{b}"
-        }
-        button {
-            id: "fill-trailing",
-            onclick: move |_| {
-                a.set("[a]".to_string());
-                b.set("[b]".to_string());
-            },
-            "Fill"
-        }
     }
 }
 

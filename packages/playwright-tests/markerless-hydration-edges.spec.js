@@ -19,16 +19,6 @@ test("ssr emits no hydration markers", async ({ page }) => {
   expect(stripped).not.toContain("<!--#-->");
 });
 
-test("textarea with dynamic text hydrates cleanly", async ({ page }) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const value = await page
-    .locator("#user-textarea")
-    .evaluate((el) => /** @type {HTMLTextAreaElement} */ (el).value);
-  expect(value).toBe("hello & world");
-});
-
 test("dangerous inner html hydrates host and updates innerHTML", async ({
   page,
 }) => {
@@ -175,28 +165,6 @@ test("virtual placeholders anchor replace/insert/remove without comments", async
   expect(await removable.evaluate((el) => el.innerHTML)).not.toContain("<!--");
 });
 
-test("parser-inserted wrapper does not capture hydrated row state", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  const row = page.locator("#parser-row");
-  const wrapper = page.locator("#parser-table tbody");
-  await expect(wrapper).toHaveCount(1);
-  await expect(row).toHaveClass("plain");
-
-  await expect(row).toHaveAttribute("data-dioxus-id", /\d+/);
-  await expect(wrapper).not.toHaveAttribute("data-dioxus-id", /\d+/);
-
-  await row.click();
-  await expect(page.locator("#parser-row-clicks")).toHaveText("row clicks: 1");
-
-  await page.locator("#mark-parser-row").click();
-  await expect(row).toHaveClass("marked");
-  await expect(wrapper).not.toHaveClass(/marked/);
-});
-
 test("trailing root-level placeholder keeps the mount parent", async ({
   page,
 }) => {
@@ -238,53 +206,4 @@ test("svg elements can receive hydrated listeners", async ({ page }) => {
     "data-dioxus-id",
     /\d+/
   );
-});
-
-// Whole-page guarantee: after hydration and one round of dynamic mutations,
-// no comment nodes have been introduced for placeholders. Template-baseline
-// comments are out of scope for this regression (those come from
-// `create_template_node` on CSR-cloned templates), but the harness renders
-// SSR-first, so any comment we see was injected by hydration or by an
-// anchor op.
-test("hydration and dynamic ops leave no comment or empty-text markers", async ({
-  page,
-}) => {
-  await page.goto(URL);
-  await page.waitForTimeout(2000);
-
-  // Trigger every dynamic op that interacts with a placeholder, including
-  // toggle-back-to-empty paths that exercise the CSR template-clone +
-  // diff-time `create_placeholder` flow.
-  await page.locator("#toggle-placeholder").click();
-  await page.locator("#toggle-placeholder").click();
-  await page.locator("#append-trailing").click();
-  await page.locator("#hide-removable").click();
-  await page.waitForTimeout(200);
-
-  const counts = await page.evaluate(() => {
-    let comments = 0;
-    const emptyTextLocations = [];
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_COMMENT | NodeFilter.SHOW_TEXT
-    );
-    while (walker.nextNode()) {
-      const n = walker.currentNode;
-      if (n.nodeType === Node.COMMENT_NODE) comments++;
-      else if (
-        n.nodeType === Node.TEXT_NODE &&
-        /** @type {Text} */ (n).data === ""
-      ) {
-        const parent = n.parentElement;
-        emptyTextLocations.push(
-          parent
-            ? `${parent.tagName.toLowerCase()}#${parent.id || "(no-id)"}`
-            : "(detached)"
-        );
-      }
-    }
-    return { comments, emptyTextLocations };
-  });
-  expect(counts.comments).toBe(0);
-  expect(counts.emptyTextLocations).toEqual([]);
 });

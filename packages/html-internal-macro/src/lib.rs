@@ -680,10 +680,11 @@ impl ElementDef {
         {
             let group_camel_name = ident_to_upper_camel(&group.name);
             for attribute in &group.attributes {
+                let attribute_name = attribute.to_string();
                 let has_attribute = self
                     .attributes
                     .iter()
-                    .any(|element_attribute| element_attribute.name == *attribute);
+                    .any(|element_attribute| element_attribute.rust_name() == attribute_name);
 
                 if !has_attribute {
                     let attr_camel_name = ident_to_upper_camel(attribute);

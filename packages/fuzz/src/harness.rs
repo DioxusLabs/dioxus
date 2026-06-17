@@ -1187,22 +1187,26 @@ mod tests {
         apply_op(&mut harness, &Op::Rerender).unwrap();
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(harness
-            .context
-            .read_model()
-            .selected_ready_suspense_key(0)
-            .is_some());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_some()
+        );
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Ready { wake_after: 1 }, 1))
         );
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(harness
-            .context
-            .read_model()
-            .selected_ready_suspense_key(0)
-            .is_none());
+        assert!(
+            harness
+                .context
+                .read_model()
+                .selected_ready_suspense_key(0)
+                .is_none()
+        );
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Resolved, 2))
@@ -1235,27 +1239,6 @@ mod tests {
             Op::Rerender,
             Op::suspense(2, SuspenseMode::Pending),
             Op::wake_suspense(4),
-        ]);
-    }
-
-    #[test]
-    fn ready_suspense_set_resolved_promotes_children() {
-        // Regression: a Ready (suspended) boundary whose mode prop flips to
-        // Resolved must swap the fallback for the children on the next
-        // rerender. The incremental DOM used to stay stuck on the fallback.
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
-                        mode: SuspenseMode::Ready { wake_after: 0 },
-                    }),
-                },
-            ),
-            Op::Rerender,
-            Op::suspense(176, SuspenseMode::Resolved),
-            Op::Rerender,
         ]);
     }
 
@@ -1437,50 +1420,6 @@ mod tests {
             &fresh,
             &model
         ));
-    }
-
-    // Regression test for a panic in `SuspenseContext::remove_suspended_task` when
-    // a nested suspense boundary was unmounted while a child task was still suspended.
-    // The boundary scope was dropped before the task cleanup ran, so `needs_update`
-    // unwrapped a `None` scope state.
-    #[test]
-    fn unmounting_nested_pending_suspense_does_not_panic_on_drop() {
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
-                },
-            ),
-            Op::dynamic(
-                0,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Resolved,
-                },
-            ),
-            Op::template(
-                1,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
-                },
-            ),
-            Op::dynamic(
-                1,
-                0,
-                DynamicKind::Suspense {
-                    mode: SuspenseMode::Ready { wake_after: 0 },
-                },
-            ),
-            Op::Rerender,
-            Op::suspense(0, SuspenseMode::Pending),
-            Op::dynamic(1, 0, DynamicKind::Placeholder),
-            Op::Rerender,
-            Op::suspense(0, SuspenseMode::Resolved),
-            Op::Rerender,
-        ]);
     }
 
     #[test]

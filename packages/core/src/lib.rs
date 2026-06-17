@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![recursion_limit = "256"]
 #![warn(missing_docs)]
 // Coverage runs (`RUSTFLAGS="--cfg coverage_nightly" cargo +nightly fuzz coverage`)
 // opt into nightly's `#[coverage(off)]` attribute so unreachable-by-design

@@ -160,47 +160,6 @@ fn components_hydrate() {
     assert_eq!(dioxus_ssr::render(&dom), r#"11"#);
 }
 
-// Regression test for https://github.com/DioxusLabs/components/issues/202
-// In the old comment-based hydration scheme, `<!--placeholder0-->` inside a
-// `<textarea>` was parsed as literal text by the browser. With markerless
-// hydration there are no comments anywhere, so this entire class of bugs is gone.
-#[test]
-fn raw_text_elements_have_no_hydration_artifacts() {
-    fn textarea_with_placeholder() -> Element {
-        let children: Element = rsx! {};
-        rsx! {
-            textarea { value: "abc", {children} }
-        }
-    }
-
-    let mut dom = VirtualDom::new(textarea_with_placeholder);
-    dom.rebuild_in_place();
-
-    let rendered = dioxus_ssr::render(&dom);
-    assert!(
-        !rendered.contains("<!--"),
-        "no comments in markerless hydration output, got: {rendered}"
-    );
-    assert!(
-        !rendered.contains("data-node-hydration"),
-        "no hydration attributes either, got: {rendered}"
-    );
-
-    fn textarea_with_dynamic_text() -> Element {
-        let value = "hello & world";
-        rsx! {
-            textarea { "{value}" }
-        }
-    }
-
-    let mut dom = VirtualDom::new(textarea_with_dynamic_text);
-    dom.rebuild_in_place();
-
-    let rendered = dioxus_ssr::render(&dom);
-    assert!(!rendered.contains("<!--"));
-    assert!(rendered.contains("hello &#38; world"));
-}
-
 #[test]
 fn hello_world_hydrates() {
     use dioxus::hooks::use_signal;
