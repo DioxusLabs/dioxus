@@ -2,7 +2,7 @@
 
 use self::location::DynIdx;
 use crate::*;
-use dioxus_core_template::{TemplateRawOp, TemplateStorageEstimate};
+use dioxus_core_template::{TemplateRawOp, TemplateStorageStats};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
@@ -538,9 +538,7 @@ impl ViewBuilder {
         }
 
         matches!(context, SiblingContext::Roots) && nodes.len() > ROOT_TUPLE_VIEW_LIMIT
-            || self
-                .estimate_siblings_unwrapped(nodes)
-                .exceeds_storage_limits()
+            || self.sibling_storage_stats(nodes).exceeds_storage_limits()
     }
 
     fn synthetic_chunk_ranges(
@@ -548,8 +546,8 @@ impl ViewBuilder {
         nodes: &[BodyNode],
         context: SiblingContext,
     ) -> Vec<std::ops::Range<usize>> {
-        let estimate = self.estimate_siblings_unwrapped(nodes);
-        let mut chunks = estimate.max_required_chunks();
+        let stats = self.sibling_storage_stats(nodes);
+        let mut chunks = stats.max_required_chunks();
 
         if matches!(context, SiblingContext::Roots) {
             chunks = chunks.max(nodes.len().div_ceil(ROOT_TUPLE_VIEW_LIMIT));
@@ -564,10 +562,10 @@ impl ViewBuilder {
             .collect()
     }
 
-    fn estimate_siblings_unwrapped(&self, nodes: &[BodyNode]) -> TemplateStorageEstimate {
+    fn sibling_storage_stats(&self, nodes: &[BodyNode]) -> TemplateStorageStats {
         let mut raw = Vec::new();
         self.push_sibling_raw_ops(nodes, &mut raw);
-        TemplateStorageEstimate::from_raw_ops(&raw)
+        TemplateStorageStats::from_raw_ops(&raw)
     }
 
     fn push_sibling_raw_ops(&self, nodes: &[BodyNode], raw: &mut Vec<TemplateRawOp>) {

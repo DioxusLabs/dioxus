@@ -22,7 +22,7 @@ pub use serialization::{
 };
 pub use storage::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_MAX_CAP, TEMPLATE_STORAGE_OPS_CAP,
-    TEMPLATE_STORAGE_STRING_CAP, TemplateStorage, TemplateStorageEstimate,
+    TEMPLATE_STORAGE_STRING_CAP, TemplateStorage, TemplateStorageStats,
 };
 
 /// Maximum number of raw template operations a typed view can contribute.

@@ -22,7 +22,7 @@ pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 32;
 const TEMPLATE_PATH_STACK_CAP: usize = 32;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TemplateStorageEstimate {
+pub struct TemplateStorageStats {
     pub raw_ops: usize,
     pub ops: usize,
     pub strings: usize,
@@ -32,7 +32,7 @@ pub struct TemplateStorageEstimate {
 }
 
 #[derive(Clone, Copy)]
-struct AnchorEstimate {
+struct AnchorStats {
     op: u16,
     kind: TemplateAnchorKind,
     path: u128,
@@ -140,7 +140,7 @@ impl RawTemplateLoweringCursor {
         }
     }
 
-    fn next_slot_path_for_estimate(
+    fn try_next_slot_path(
         &self,
         raw: &[TemplateRawOp],
         index: usize,
@@ -209,9 +209,9 @@ impl RawTemplateLoweringCursor {
     }
 }
 
-impl TemplateStorageEstimate {
+impl TemplateStorageStats {
     pub fn from_raw_ops(raw: &[TemplateRawOp]) -> Self {
-        let mut estimate = Self {
+        let mut stats = Self {
             raw_ops: raw.len(),
             ..Self::default()
         };
@@ -223,30 +223,30 @@ impl TemplateStorageEstimate {
             match raw[index] {
                 TemplateRawOp::OpenElement { namespace, .. } => {
                     let has_namespace = namespace.is_some();
-                    cursor.open_element(estimate.ops, has_namespace);
-                    estimate.push_op();
-                    estimate.push_static();
+                    cursor.open_element(stats.ops, has_namespace);
+                    stats.push_op();
+                    stats.push_static();
                     if has_namespace {
-                        estimate.push_static();
+                        stats.push_static();
                     }
                 }
                 TemplateRawOp::CloseElement => {
                     let _ = cursor.close_element();
                 }
                 TemplateRawOp::StaticAttr { namespace, .. } => {
-                    estimate.push_op();
-                    estimate.push_static();
-                    estimate.push_static();
+                    stats.push_op();
+                    stats.push_static();
+                    stats.push_static();
                     if namespace.is_some() {
-                        estimate.push_static();
+                        stats.push_static();
                     }
                 }
                 TemplateRawOp::DynamicAttr => {
                     let path = cursor.current_element_path();
                     if path.is_empty() {
-                        estimate.path_overflow = true;
+                        stats.path_overflow = true;
                     }
-                    estimate.push_anchor(
+                    stats.push_anchor(
                         &mut anchors,
                         cursor.current_element_op(),
                         path.bits(),
@@ -255,37 +255,35 @@ impl TemplateStorageEstimate {
                 }
                 TemplateRawOp::StaticText { .. } => {
                     let _ = cursor.next_node_path();
-                    estimate.push_op();
-                    estimate.push_static();
+                    stats.push_op();
+                    stats.push_static();
                 }
-                TemplateRawOp::DynamicNode => {
-                    match cursor.next_slot_path_for_estimate(raw, index) {
-                        Ok(path) => {
-                            estimate.push_anchor(
-                                &mut anchors,
-                                cursor.node_anchor_op(),
-                                path.bits(),
-                                TemplateAnchorKind::Node,
-                            );
-                        }
-                        Err(()) => {
-                            estimate.path_overflow = true;
-                            estimate.push_anchor(
-                                &mut anchors,
-                                cursor.node_anchor_op(),
-                                0,
-                                TemplateAnchorKind::Node,
-                            );
-                        }
+                TemplateRawOp::DynamicNode => match cursor.try_next_slot_path(raw, index) {
+                    Ok(path) => {
+                        stats.push_anchor(
+                            &mut anchors,
+                            cursor.node_anchor_op(),
+                            path.bits(),
+                            TemplateAnchorKind::Node,
+                        );
                     }
-                }
+                    Err(()) => {
+                        stats.path_overflow = true;
+                        stats.push_anchor(
+                            &mut anchors,
+                            cursor.node_anchor_op(),
+                            0,
+                            TemplateAnchorKind::Node,
+                        );
+                    }
+                },
             }
             index += 1;
         }
 
         cursor.finish();
-        estimate.anchors = anchors.len();
-        estimate
+        stats.anchors = anchors.len();
+        stats
     }
 
     fn push_op(&mut self) {
@@ -299,7 +297,7 @@ impl TemplateStorageEstimate {
 
     fn push_anchor(
         &mut self,
-        anchors: &mut Vec<AnchorEstimate>,
+        anchors: &mut Vec<AnchorStats>,
         op: u16,
         path: u128,
         kind: TemplateAnchorKind,
@@ -322,7 +320,7 @@ impl TemplateStorageEstimate {
             );
         }
 
-        anchors.push(AnchorEstimate {
+        anchors.push(AnchorStats {
             op,
             kind,
             path,
@@ -363,7 +361,7 @@ impl TemplateStorageEstimate {
     }
 }
 
-impl AnchorEstimate {
+impl AnchorStats {
     fn same_slot_bits(self, op: u16, kind: TemplateAnchorKind, path: u128) -> bool {
         self.op == op
             && matches!(
