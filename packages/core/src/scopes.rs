@@ -73,8 +73,8 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-    /// The last node that has been rendered for this component. This node may not be mounted.
-    /// During suspense, this component can be rendered in the background multiple times.
+    /// The last node that has been rendered for this component. This node may not ben mounted
+    /// During suspense, this component can be rendered in the background multiple times
     pub(crate) last_rendered_node: Option<LastRenderedNode>,
     pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,

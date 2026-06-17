@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::{
     any_props::AnyProps,
     innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
@@ -101,19 +103,21 @@ impl VNode {
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
-        // Replace components that have different render fns.
+        // Replace components that have different render fns
         if old.render_fn != new.render_fn {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 
+        // copy out the box for both
         let old_scope = &mut dom.scopes[scope_id.0];
-        let old_props: &mut dyn AnyProps = old_scope.props.as_mut();
-        let new_props: &dyn AnyProps = new.props.as_ref();
+        let old_props: &mut dyn AnyProps = old_scope.props.deref_mut();
+        let new_props: &dyn AnyProps = new.props.deref();
 
-        // If the props are static, then we try to memoize by setting the old props to the new props.
-        // The target ScopeState still has the reference to the old props, so there's no need to update
-        // anything else. This also implicitly drops the new props since they're not used.
+        // If the props are static, then we try to memoize by setting the new with the old
+        // The target ScopeState still has the reference to the old props, so there's no need to update anything
+        // This also implicitly drops the new props since they're not used
         if old_props.memoize(new_props.props()) {
+            tracing::trace!("Memoized props for component {:#?}", scope_id,);
             return;
         }
 
@@ -158,8 +162,7 @@ impl VNode {
         let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
         let new = scope_id.is_placeholder();
 
-        // If the scope id is a placeholder, we need to load up a new scope for this
-        // vcomponent. If it's already mounted, then we can just use that.
+        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if new {
             scope_id = dom
                 .new_scope(

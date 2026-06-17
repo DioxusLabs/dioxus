@@ -9,8 +9,6 @@ use crate::{
 };
 
 impl VirtualDom {
-    /// Create a scope rendering into the current scope's render target (the
-    /// root target when no scope is active).
     pub(super) fn new_scope(
         &mut self,
         name: &'static str,
@@ -36,8 +34,8 @@ impl VirtualDom {
         let scope = entry.insert(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
-            last_rendered_node: Default::default(),
             props,
+            last_rendered_node: Default::default(),
             reactive_context,
         });
 
@@ -46,8 +44,7 @@ impl VirtualDom {
         scope
     }
 
-    /// Run a scope and return the rendered nodes. This will not modify the DOM
-    /// or update the last rendered node of the scope.
+    /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
@@ -67,6 +64,7 @@ impl VirtualDom {
                 }
 
                 let props: &dyn AnyProps = &*scope.props;
+
                 let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
@@ -95,18 +93,16 @@ impl VirtualDom {
                 })
             };
 
-            {
-                let scope_state = scope.state();
+            let scope_state = scope.state();
 
-                // Run all post-render hooks
-                for post_run in scope_state.after_render.borrow_mut().iter_mut() {
-                    post_run();
-                }
+            // Run all post-render hooks
+            for post_run in scope_state.after_render.borrow_mut().iter_mut() {
+                post_run();
             }
 
             // remove this scope from dirty scopes
             self.dirty_scopes
-                .remove(&ScopeOrder::new(scope.state().height, scope_id));
+                .remove(&ScopeOrder::new(scope_state.height, scope_id));
             output
         })
     }

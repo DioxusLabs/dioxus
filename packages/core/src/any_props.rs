@@ -79,6 +79,8 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
             match res {
                 Ok(node) => node,
                 Err(err) => {
+                    // on wasm this massively bloats binary sizes and we can't even capture the panic
+                    // so do nothing
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         tracing::error!("Panic while rendering component `{_name}`: {err:?}");

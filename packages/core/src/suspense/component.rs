@@ -247,7 +247,7 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 /// }
 /// ```
 #[allow(non_snake_case)]
-pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {
+pub fn SuspenseBoundary(mut __props: SuspenseBoundaryProps) -> Element {
     unreachable!("SuspenseBoundary should not be called directly")
 }
 
@@ -642,7 +642,9 @@ impl SuspenseContext {
         runtime: &Runtime,
         scope_id: ScopeId,
     ) -> Option<Self> {
-        runtime.try_get_state(scope_id)?.suspense_boundary()
+        runtime
+            .try_get_state(scope_id)
+            .and_then(|scope| scope.suspense_boundary())
     }
 
     pub(crate) fn remove_suspended_nodes(

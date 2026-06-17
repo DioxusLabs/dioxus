@@ -632,13 +632,13 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The raw pointer to the render function.
+    /// The raw pointer to the render function
     pub(crate) render_fn: usize,
 
     /// The driver owning this component's rendering lifecycle.
     pub(crate) driver: Rc<dyn RenderDriver>,
 
-    /// The props for this component.
+    /// The props for this component
     pub(crate) props: BoxedAnyProps,
 }
 
@@ -646,9 +646,9 @@ impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
+            props: self.props.duplicate(),
             render_fn: self.render_fn,
             driver: self.driver.clone(),
-            props: self.props.duplicate(),
         }
     }
 }
