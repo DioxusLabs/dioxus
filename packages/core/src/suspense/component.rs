@@ -421,11 +421,11 @@ impl SuspenseBoundaryProps {
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
     ///
     /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.
-    pub fn resolve_suspense<W: WriteMutations>(
+    pub fn resolve_suspense<M: WriteMutations>(
         scope_id: ScopeId,
         dom: &mut VirtualDom,
-        to: &mut W,
-        only_write_templates: impl FnOnce(&mut W),
+        to: &mut M,
+        only_write_templates: impl FnOnce(&mut M),
         replace_with: usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
