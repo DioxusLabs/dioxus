@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     Element, ReactiveContext,
-    innerlude::{RenderError, ScopeState, SuspendedTaskRegistration},
+    innerlude::{BoxedAnyProps, RenderError, ScopeState, SuspendedTaskRegistration},
     render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
@@ -18,6 +18,7 @@ impl VirtualDom {
         &mut self,
         name: &'static str,
         driver: Rc<dyn RenderDriver>,
+        props: BoxedAnyProps,
     ) -> &mut ScopeState {
         let target_id = self.runtime.current_render_target_id();
         let parent_id = self.runtime.try_current_scope_id();
@@ -47,6 +48,7 @@ impl VirtualDom {
             runtime: self.runtime.clone(),
             context_id: id,
             height,
+            props,
             last_rendered_node: Default::default(),
             reactive_context,
         });
@@ -56,15 +58,11 @@ impl VirtualDom {
         scope
     }
 
-    /// Run a scope's body via `render` and return the rendered nodes. This
-    /// will not modify the DOM or update the last rendered node of the scope.
-    #[tracing::instrument(skip(self, render), level = "trace", name = "VirtualDom::run_scope")]
+    /// Run a scope's body and return the rendered nodes. This will not modify the DOM or update
+    /// the last rendered node of the scope.
+    #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
-    pub(crate) fn run_scope_with(
-        &mut self,
-        scope_id: ScopeId,
-        render: impl FnOnce() -> Element,
-    ) -> Element {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
         // Ensure we are currently inside a `Runtime`.
         crate::Runtime::current();
 
@@ -83,7 +81,7 @@ impl VirtualDom {
                 let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
-                        let mut render_return = render();
+                        let mut render_return = scope.props.render();
 
                         self.handle_element_return(&mut render_return, &scope.state());
                         render_return

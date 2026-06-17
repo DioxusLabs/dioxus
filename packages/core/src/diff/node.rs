@@ -15,7 +15,7 @@ use crate::{
         },
     },
     innerlude::{MountId, MountRef},
-    mutations::{reborrow_writer, remove_id, with_consumed_id, with_id},
+    mutations::{remove_id, with_consumed_id, with_id},
     nodes::DynamicNode,
     scopes::ScopeId,
     template::TemplateAnchor,
@@ -31,7 +31,7 @@ impl MountedVNode<'_> {
         self,
         new: &VNode,
         dom: &mut VirtualDom,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> MountId {
         let mut state = DiffState::new(dom, to);
         DiffFrame::new(self.mount(), self.vnode(), new).diff_into(&mut state)
@@ -55,7 +55,7 @@ impl<'a> DiffFrame<'a> {
     ///
     /// Invariant: `self.mount` is live, `self.old` is the committed vnode for that mount, and
     /// `self.new` is the next vnode for the same logical position.
-    pub(crate) fn diff_into(self, state: &mut DiffState<'_, '_, '_>) -> MountId {
+    pub(crate) fn diff_into(self, state: &mut DiffState<'_, '_, '_, '_>) -> MountId {
         let old = self.old;
         let new = self.new;
 
@@ -87,7 +87,7 @@ impl<'a> DiffFrame<'a> {
         // If the templates are the same, we can diff the attributes and children
         // Start with the attributes
         // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
-        if let Some(to) = reborrow_writer(&mut state.to) {
+        if let Some(to) = state.to.as_deref_mut() {
             old.diff_attributes(current_mount, new, state.dom, to);
         }
 
@@ -117,13 +117,13 @@ impl VNode {
         slot: DynamicNodeSlot<'_>,
         old_node: &DynamicNode,
         new_node: &DynamicNode,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let idx = slot.index();
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = reborrow_writer(&mut state.to)
+                if let Some(to) = state.to.as_deref_mut()
                     && old.value != new.value
                 {
                     let id = state
@@ -158,7 +158,7 @@ impl VNode {
         slot: DynamicNodeSlot<'_>,
         old: &DynamicNode,
         new: &DynamicNode,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let idx = slot.index();
         let old_has_live_dom = self.dynamic_node_has_live_dom(mount, idx, old, state.dom);
@@ -195,7 +195,9 @@ impl VNode {
                     };
                     let runtime = state.dom.runtime.clone();
                     let dom = &mut *state.dom;
-                    let to = reborrow_writer(&mut state.to)
+                    let to = state
+                        .to
+                        .as_deref_mut()
                         .expect("writer presence checked before dynamic placement");
                     at_site(site, to, runtime, |to| {
                         let mut state = DiffState::new_with_context_and_placement_skip(
@@ -211,14 +213,7 @@ impl VNode {
                 }
             },
             |state| {
-                self.remove_dynamic_node(
-                    mount,
-                    state.dom,
-                    reborrow_writer(&mut state.to),
-                    true,
-                    idx,
-                    old,
-                );
+                self.remove_dynamic_node(mount, state.dom, state.to.as_deref_mut(), true, idx, old);
             },
         );
     }
@@ -233,7 +228,7 @@ impl VNode {
         slot: DynamicNodeSlot<'_>,
         old: &[VNode],
         new: &[VNode],
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let parent = Some(MountRef { mount });
         let old_mounts = state
@@ -257,7 +252,9 @@ impl VNode {
                         state.dom,
                         state.context(),
                     );
-                    let to = reborrow_writer(&mut state.to)
+                    let to = state
+                        .to
+                        .as_deref_mut()
                         .expect("writer presence checked before placement");
                     create_at_site(new, parent, site, state.dom, to)
                 } else {
@@ -272,7 +269,7 @@ impl VNode {
             (false, true) => {
                 state
                     .dom
-                    .remove_nodes(reborrow_writer(&mut state.to), old, &old_mounts);
+                    .remove_nodes(state.to.as_deref_mut(), old, &old_mounts);
                 state
                     .dom
                     .clear_mounted_fragment_children(mount, slot.index());
@@ -405,7 +402,7 @@ impl VNode {
         right_mount: MountId,
         parent: Option<MountRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         let nodes = if state.to.is_some() {
@@ -418,8 +415,10 @@ impl VNode {
             );
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to =
-                reborrow_writer(&mut state.to).expect("writer presence checked before placement");
+            let to = state
+                .to
+                .as_deref_mut()
+                .expect("writer presence checked before placement");
             at_site(site, to, runtime, |to| {
                 right
                     .recreate_with_mount(dom, right_mount, parent, parent, Some(to))
@@ -431,7 +430,7 @@ impl VNode {
                 .nodes
         };
 
-        self.remove_node_inner(mount, state.dom, reborrow_writer(&mut state.to), true);
+        self.remove_node_inner(mount, state.dom, state.to.as_deref_mut(), true);
 
         CreatedVNode {
             nodes,
@@ -448,7 +447,7 @@ impl VNode {
         right: &[VNode],
         parent: Option<MountRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> crate::diff::CreatedNodes {
         let mut state = DiffState::new(dom, to);
         self.replace_inner(mount, right, parent, &mut state, false)
@@ -459,7 +458,7 @@ impl VNode {
         mount: MountId,
         right: &[VNode],
         parent: Option<MountRef>,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
         destroy_component_state: bool,
     ) -> crate::diff::CreatedNodes {
         // When the old subtree has no live DOM and the boundary is hidden, we
@@ -469,7 +468,7 @@ impl VNode {
             self.should_suppress_mutations(mount, state.dom, destroy_component_state);
         let context = state.context();
         let placement_skip = state.placement_skip().to_vec();
-        let mut to_for_create = reborrow_writer(&mut state.to);
+        let mut to_for_create = state.to.as_deref_mut();
         if suppress_mutations {
             to_for_create = None;
         }
@@ -490,7 +489,7 @@ impl VNode {
         let to_for_remove = if suppress_mutations {
             None
         } else {
-            reborrow_writer(&mut state.to)
+            state.to.as_deref_mut()
         };
         self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
         created
@@ -529,7 +528,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         self.remove_node_inner(mount, dom, to, true)
     }
@@ -542,7 +541,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
@@ -567,7 +566,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
         for slot in dynamic_node_slots(self) {
@@ -582,7 +581,7 @@ impl VNode {
                 self.remove_dynamic_node(
                     mount,
                     dom,
-                    reborrow_writer(&mut to),
+                    to.as_deref_mut(),
                     destroy_component_state,
                     id,
                     dynamic_node,
@@ -595,7 +594,7 @@ impl VNode {
                 // Already reclaimed during a previous `move_node_to_background`.
                 continue;
             };
-            if let Some(to) = reborrow_writer(&mut to) {
+            if let Some(to) = to.as_deref_mut() {
                 remove_id(to, id.element_id());
             }
             dom.reclaim_for_mount(mount, id);
@@ -623,7 +622,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         idx: usize,
         node: &DynamicNode,
@@ -652,7 +651,7 @@ impl VNode {
                     node.remove_node_inner(
                         child_mount,
                         dom,
-                        reborrow_writer(&mut to),
+                        to.as_deref_mut(),
                         destroy_component_state,
                     );
                 }
@@ -757,7 +756,7 @@ impl VNode {
         dom: &mut VirtualDom,
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         self.create_with_optional_mount(dom, None, render_parent, logical_parent, to)
     }
@@ -772,7 +771,7 @@ impl VNode {
         mount: MountId,
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         self.create_with_optional_mount(dom, Some(mount), render_parent, logical_parent, to)
     }
@@ -783,7 +782,7 @@ impl VNode {
         existing_mount: Option<MountId>,
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         // Get the most up to date template
@@ -827,7 +826,7 @@ impl VNode {
     fn materialize_template_roots(
         &self,
         mount: MountId,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) -> usize {
         let mut nodes_created = 0;
@@ -848,7 +847,7 @@ impl VNode {
             let root_op = static_op.expect("root slot must be static or dynamic");
 
             let writes_enabled = state.to.is_some();
-            if let Some(to) = reborrow_writer(&mut state.to) {
+            if let Some(to) = state.to.as_deref_mut() {
                 self.load_template_root(mount, root_idx, root_op, state.dom, to);
             }
             nodes_created += usize::from(writes_enabled);
@@ -860,13 +859,13 @@ impl VNode {
     fn fill_dynamic_values(
         &self,
         mount: MountId,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
         for anchor in self.template.anchors() {
             let value = &self.dynamic_values[anchor.value_start()];
             if value.as_attrs().is_some() {
-                if let Some(to) = reborrow_writer(&mut state.to) {
+                if let Some(to) = state.to.as_deref_mut() {
                     let group = DynamicAttrGroup::new(&self.template, anchor);
                     self.write_attr_group(mount, &group, state.dom, to);
                 }
@@ -887,7 +886,7 @@ impl VNode {
         node: &DynamicNode,
         mount: MountId,
         idx: usize,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
         self.create_dynamic_node_inner(node, mount, idx, state, false)
     }
@@ -897,7 +896,7 @@ impl VNode {
         node: &DynamicNode,
         mount: MountId,
         idx: usize,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) -> usize {
         use DynamicNode::*;
@@ -916,7 +915,7 @@ impl VNode {
                             child_mount,
                             parent,
                             parent,
-                            reborrow_writer(&mut state.to),
+                            state.to.as_deref_mut(),
                         );
                         nodes += created.nodes;
                     }
@@ -927,7 +926,7 @@ impl VNode {
                 }
 
                 let created = state.dom.create_children_with_parents(
-                    reborrow_writer(&mut state.to),
+                    state.to.as_deref_mut(),
                     frag,
                     parent,
                     parent,
@@ -940,7 +939,7 @@ impl VNode {
             }
             Text(text) => {
                 // If we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = reborrow_writer(&mut state.to) {
+                if let Some(to) = state.to.as_deref_mut() {
                     let target_id = state.dom.current_render_target_id();
                     let id = state.dom.next_element_in_target(target_id);
                     state.dom.set_mounted_dynamic_text_node(mount, idx, id);
@@ -959,7 +958,7 @@ impl VNode {
         &self,
         mount: MountId,
         anchor: &TemplateAnchor,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
         let slot = DynamicNodeSlot::new(&self.template, anchor, anchor.value_start());
@@ -981,8 +980,10 @@ impl VNode {
         let site = self.template_slot_insertion_site(mount, slot, state.dom);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
-        let to =
-            reborrow_writer(&mut state.to).expect("writer presence checked before anchor loading");
+        let to = state
+            .to
+            .as_deref_mut()
+            .expect("writer presence checked before anchor loading");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context_and_placement_skip(
                 dom,

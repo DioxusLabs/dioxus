@@ -6,7 +6,6 @@ use crate::{
         template::DynamicNodeSlot,
     },
     innerlude::{MountId, MountRef, VComponent, WriteMutations},
-    mutations::reborrow_writer,
     nodes::VNode,
     scopes::{LastRenderedNode, MountedOutput, ScopeId},
     virtual_dom::VirtualDom,
@@ -16,11 +15,11 @@ use crate::{
 /// `dyn WriteMutations`, checking that the driver leaves the runtime scope
 /// stack balanced.
 fn drive<R>(
-    state: &mut DiffState<'_, '_, '_>,
-    f: impl FnOnce(&mut VirtualDom, Option<&mut dyn WriteMutations>) -> R,
+    state: &mut DiffState<'_, '_, '_, '_>,
+    f: impl FnOnce(&mut VirtualDom, Option<&mut (dyn WriteMutations + '_)>) -> R,
 ) -> R {
     let dom = &mut *state.dom;
-    let to = reborrow_writer(&mut state.to);
+    let to = state.to.as_deref_mut();
     let result = f(&mut *dom, to);
     result
 }
@@ -32,7 +31,7 @@ impl VirtualDom {
     /// rendered output.
     pub(crate) fn run_and_diff_scope_with_context(
         &mut self,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope_id: ScopeId,
         parent_context: Option<DiffContext<'_>>,
     ) {
@@ -47,7 +46,7 @@ impl VirtualDom {
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
     pub(crate) fn diff_scope(
         &mut self,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: Element,
         parent_context: Option<DiffContext<'_>>,
@@ -70,7 +69,7 @@ impl VirtualDom {
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
             let mut state =
-                DiffState::new_with_context(self, reborrow_writer(&mut render_to), parent_context);
+                DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             let new_mount =
                 DiffFrame::new(old_mount, old.as_vnode(), new_real_nodes).diff_into(&mut state);
             self.replace_mounted_component_root_mount(old_mount, new_mount);
@@ -96,7 +95,7 @@ impl VirtualDom {
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
     pub(crate) fn create_scope(
         &mut self,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
         parent: Option<MountRef>,
@@ -118,10 +117,10 @@ impl VirtualDom {
                     mount,
                     parent,
                     parent,
-                    reborrow_writer(&mut render_to),
+                    render_to.as_deref_mut(),
                 )
             } else {
-                new_nodes.create_with_parents(self, parent, parent, reborrow_writer(&mut render_to))
+                new_nodes.create_with_parents(self, parent, parent, render_to.as_deref_mut())
             };
 
             // Then set the new node as the last rendered node
@@ -149,7 +148,7 @@ impl VirtualDom {
 
     pub(crate) fn remove_component_node(
         &mut self,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         scope_id: ScopeId,
     ) {
@@ -174,21 +173,18 @@ impl VNode {
         old: &VComponent,
         scope_id: ScopeId,
         parent: Option<MountRef>,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
-        // Replace components whose drivers identify different components
-        // (different driver type, or a different body function value)
-        if !old.driver.same_component(&*new.driver) {
+        // Replace components whose render function or specialized lifecycle driver changed.
+        if old.render_fn != new.render_fn || !old.driver.same_component(&*new.driver) {
             return self.replace_vcomponent(mount, idx, new, parent, state);
         }
 
-        // If the props are static, then we try to memoize by setting the new with the old
-        // The scope's driver still owns the live props, so there's no need to update anything
-        // This also implicitly drops the new props since they're not used
-        let scope_driver = state.dom.runtime.get_state(scope_id).render_driver();
-        if scope_driver.memoize(new.driver.as_ref()) {
-            // The scope's driver still owns the live props; memoizing here
-            // implicitly drops the new props since they're unused.
+        // If the props are static, then we try to memoize by setting the new with the old. The
+        // target ScopeState still has the old props, so a true return means there is no need to
+        // update anything. This also implicitly drops the new props since they are not used.
+        let old_scope = &mut state.dom.scopes[scope_id.index()];
+        if old_scope.props.memoize(new.props.props()) {
             return;
         }
 
@@ -201,7 +197,7 @@ impl VNode {
         idx: usize,
         new: &VComponent,
         parent: Option<MountRef>,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let scope = state
             .dom
@@ -233,7 +229,9 @@ impl VNode {
                 });
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to = reborrow_writer(&mut state.to)
+            let to = state
+                .to
+                .as_deref_mut()
                 .expect("writer presence checked before component placement");
             at_site(site, to, runtime, |to| {
                 let mut state = DiffState::new_with_context_and_placement_skip(
@@ -249,7 +247,7 @@ impl VNode {
         }
         state
             .dom
-            .remove_component_node(reborrow_writer(&mut state.to), true, scope);
+            .remove_component_node(state.to.as_deref_mut(), true, scope);
     }
 
     /// Create or reuse the scope for a dynamic component node.
@@ -262,7 +260,7 @@ impl VNode {
         idx: usize,
         component: &VComponent,
         parent: Option<MountRef>,
-        state: &mut DiffState<'_, '_, '_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
         if let Some(existing_scope) = scope_id {
@@ -287,7 +285,11 @@ impl VNode {
             // hands out the same driver instance every render).
             let new_scope_id = state
                 .dom
-                .new_scope(component.name, component.driver.duplicate())
+                .new_scope(
+                    component.name,
+                    component.driver.clone(),
+                    component.props.duplicate(),
+                )
                 .state()
                 .id;
             scope_id = Some(new_scope_id);

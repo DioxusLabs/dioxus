@@ -1,10 +1,7 @@
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{any::Any, rc::Rc};
 
 use crate::{
-    RenderTargetId,
-    diff::context::DiffContext,
-    innerlude::*,
-    mutations::{append_children_to, reborrow_writer},
+    RenderTargetId, diff::context::DiffContext, innerlude::*, mutations::append_children_to,
     render_driver::RenderDriver,
 };
 
@@ -44,7 +41,14 @@ impl Properties for PortalProps {
 
     fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {
         let type_name = std::any::type_name_of_val(&render_fn);
-        VComponent::new_with_driver(type_name, Rc::new(PortalDriver::new(self)))
+        let render_fn_ptr = render_fn.fn_ptr();
+        let props = Box::new(VProps::new(
+            render_fn,
+            <Self as Properties>::memoize,
+            self,
+            type_name,
+        ));
+        VComponent::new_with_driver(type_name, render_fn_ptr, Rc::new(PortalDriver), props)
     }
 
     fn memoize(&mut self, new: &Self) -> bool {
@@ -139,25 +143,17 @@ pub fn Portal(__props: PortalProps) -> Element {
     unreachable!("Portal should not be called directly")
 }
 
-/// The rendering lifecycle of a portal scope: its output lives at the root of
-/// another render target instead of mounting at the scope's slot. Owns the
-/// [`PortalProps`] it renders from.
-struct PortalDriver {
-    props: RefCell<PortalProps>,
-}
+/// The rendering lifecycle of a portal scope: its output lives at the root of another render
+/// target instead of mounting at the scope's slot.
+struct PortalDriver;
 
-impl PortalDriver {
-    fn new(props: PortalProps) -> Self {
-        Self {
-            props: RefCell::new(props),
-        }
-    }
-
-    /// The portal's current target and children inputs.
-    fn props(&self) -> (RenderTargetId, LastRenderedNode) {
-        let props = self.props.borrow();
-        (props.target, props.children.clone())
-    }
+fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRenderedNode) {
+    let props = dom.scopes[scope_id.index()]
+        .props
+        .props()
+        .downcast_ref::<PortalProps>()
+        .expect("portal scope carries PortalProps");
+    (props.target, props.children.clone())
 }
 
 /// Create `children` inside `target_id`, record them as the scope's
@@ -169,7 +165,7 @@ fn mount_children(
     children: LastRenderedNode,
     parent: Option<MountRef>,
     dom: &mut VirtualDom,
-    to: Option<&mut dyn WriteMutations>,
+    to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
@@ -179,7 +175,7 @@ fn mount_children(
     let mut render_to = to;
     let should_mount = render_to.is_some();
     let mut root_mount = None;
-    if let Some(to) = reborrow_writer(&mut render_to) {
+    if let Some(to) = render_to.as_deref_mut() {
         append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
             let created = dom.create_children_with_parents(
                 Some(to),
@@ -213,28 +209,16 @@ impl RenderDriver for PortalDriver {
         self
     }
 
-    fn memoize(&self, new_driver: &dyn RenderDriver) -> bool {
-        let new = new_driver
-            .as_any()
-            .downcast_ref::<Self>()
-            .expect("same_component must prove matching PortalDriver type before memoize");
-        Properties::memoize(&mut *self.props.borrow_mut(), &new.props.borrow())
-    }
-
-    fn duplicate(&self) -> Rc<dyn RenderDriver> {
-        Rc::new(Self::new(self.props.borrow().clone()))
-    }
-
     fn create(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
         parent: Option<MountRef>,
-        mut to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         let (target_id, children) = if new {
-            let (target_id, children) = self.props();
+            let (target_id, children) = portal_props(dom, scope_id);
             // The scope was allocated with its parent's target; declare it as
             // a retargeting point before anything mounts under it. Later
             // target changes are applied by the retarget arm of `diff`, which
@@ -256,14 +240,7 @@ impl RenderDriver for PortalDriver {
         };
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            mount_children(
-                scope_id,
-                target_id,
-                children,
-                parent,
-                dom,
-                reborrow_writer(&mut to),
-            );
+            mount_children(scope_id, target_id, children, parent, dom, to);
             0
         })
     }
@@ -273,9 +250,9 @@ impl RenderDriver for PortalDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         _parent_context: Option<DiffContext<'_>>,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
-        let (target_id, new_children) = self.props();
+        let (target_id, new_children) = portal_props(dom, scope_id);
 
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let old_children = dom.scopes[scope_id.index()]
@@ -288,12 +265,9 @@ impl RenderDriver for PortalDriver {
                 let old_mount = old_children.root_mount();
                 let logical_parent = dom.mounted_logical_parent(old_mount);
 
-                old_children.as_vnode().remove_node_inner(
-                    old_mount,
-                    dom,
-                    reborrow_writer(&mut to),
-                    true,
-                );
+                old_children
+                    .as_vnode()
+                    .remove_node_inner(old_mount, dom, to.as_deref_mut(), true);
 
                 // Ordering is correctness-critical: writes route through the
                 // portal scope's `target_id`, so the removal above resolves
@@ -307,7 +281,7 @@ impl RenderDriver for PortalDriver {
                     new_children,
                     logical_parent,
                     dom,
-                    reborrow_writer(&mut to),
+                    to.as_deref_mut(),
                 );
                 return;
             }
@@ -316,7 +290,7 @@ impl RenderDriver for PortalDriver {
             let new_mount = old_children.mounted_vnode().diff_node(
                 new_children.as_vnode(),
                 dom,
-                reborrow_writer(&mut render_to),
+                render_to.as_deref_mut(),
             );
             dom.scopes[scope_id.index()].last_rendered_node =
                 Some(MountedOutput::new(new_children, new_mount));
@@ -330,7 +304,7 @@ impl RenderDriver for PortalDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
@@ -346,7 +320,7 @@ impl RenderDriver for PortalDriver {
             node.as_vnode().remove_node_inner(
                 node.root_mount(),
                 dom,
-                reborrow_writer(&mut render_to),
+                render_to.as_deref_mut(),
                 destroy_component_state,
             );
         });

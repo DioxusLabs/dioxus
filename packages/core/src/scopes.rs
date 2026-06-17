@@ -1,6 +1,8 @@
 use crate::{
-    Element, MountedVNode, RenderError, Runtime, VNode, innerlude::MountId,
-    reactive_context::ReactiveContext, scope_context::Scope,
+    Element, MountedVNode, RenderError, Runtime, VNode,
+    innerlude::{BoxedAnyProps, MountId},
+    reactive_context::ReactiveContext,
+    scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -76,6 +78,7 @@ pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
     pub(crate) height: u32,
+    pub(crate) props: BoxedAnyProps,
     /// The last mounted output for this component.
     pub(crate) last_rendered_node: Option<MountedOutput>,
     pub(crate) reactive_context: ReactiveContext,

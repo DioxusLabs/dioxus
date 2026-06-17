@@ -17,13 +17,12 @@ use crate::{
         },
     },
     innerlude::{MountId, MountRef, WriteMutations},
-    mutations::reborrow_writer,
     nodes::VNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-impl DiffState<'_, '_, '_> {
+impl DiffState<'_, '_, '_, '_> {
     /// Diff two non-empty fragment child lists.
     ///
     /// Invariant: both lists are internally homogeneous with respect to keys: either every child is
@@ -95,7 +94,7 @@ impl DiffState<'_, '_, '_> {
             // have selected placement anchors. The committed parent fragment
             // mount list is not replaced until this fragment diff returns.
             self.dom.remove_nodes(
-                reborrow_writer(&mut self.to),
+                self.to.as_deref_mut(),
                 &old[new.len()..],
                 &old_mounts[new.len()..],
             );
@@ -171,7 +170,9 @@ impl DiffState<'_, '_, '_> {
                     self.dom,
                     self.context(),
                 );
-                let to = reborrow_writer(&mut self.to)
+                let to = self
+                    .to
+                    .as_deref_mut()
                     .expect("writer presence checked before placement");
                 create_at_site(new, parent, site, self.dom, to)
             } else {
@@ -179,7 +180,7 @@ impl DiffState<'_, '_, '_> {
                     .create_children_with_parents(None, new, parent, parent)
             };
             self.dom
-                .remove_nodes(reborrow_writer(&mut self.to), old, old_mounts);
+                .remove_nodes(self.to.as_deref_mut(), old, old_mounts);
             return created.mounts;
         }
 
@@ -283,7 +284,7 @@ impl DiffState<'_, '_, '_> {
             .zip(old_mounts)
             .filter(|(child, _)| !shared_keys.contains(child.key.as_ref().unwrap()))
         {
-            child_to_remove.remove_node(*mount_to_remove, self.dom, reborrow_writer(&mut self.to));
+            child_to_remove.remove_node(*mount_to_remove, self.dom, self.to.as_deref_mut());
         }
 
         new_mounts
@@ -359,7 +360,7 @@ impl DiffState<'_, '_, '_> {
         });
         let runtime = self.dom.runtime.clone();
         let dom = &mut *self.dom;
-        let to = reborrow_writer(&mut self.to);
+        let to = self.to.as_deref_mut();
         let mut replaced_nodes = Vec::new();
         if let Some(site) = site {
             let to = to.expect("writer presence checked before splice placement");
@@ -398,7 +399,7 @@ impl DiffState<'_, '_, '_> {
             );
         }
         for (node, mount) in replaced_nodes.into_iter().rev() {
-            node.remove_node(mount, self.dom, reborrow_writer(&mut self.to));
+            node.remove_node(mount, self.dom, self.to.as_deref_mut());
         }
         claimed_splice_mounts.extend(current_splice_mounts);
     }
@@ -432,13 +433,13 @@ impl DiffState<'_, '_, '_> {
                         self.dom,
                         parent,
                         parent,
-                        reborrow_writer(&mut self.to),
+                        self.to.as_deref_mut(),
                     );
                     replaced_nodes.push((old_node, old_mount));
                     (created.nodes, created.mount)
                 } else {
                     let mount = DiffFrame::new(old_mount, old_node, new_node).diff_into(self);
-                    let nodes = if let Some(to) = reborrow_writer(&mut self.to) {
+                    let nodes = if let Some(to) = self.to.as_deref_mut() {
                         crate::MountedVNode::new(new_node, mount).push_all_root_nodes(self.dom, to)
                     } else {
                         0
@@ -448,12 +449,8 @@ impl DiffState<'_, '_, '_> {
                 self.push_placement_skip(old_mount);
                 (nodes, mount)
             } else {
-                let created = new_node.create_with_parents(
-                    self.dom,
-                    parent,
-                    parent,
-                    reborrow_writer(&mut self.to),
-                );
+                let created =
+                    new_node.create_with_parents(self.dom, parent, parent, self.to.as_deref_mut());
                 (created.nodes, created.mount)
             };
             new_mounts[new_index] = Some(mount);
@@ -485,8 +482,10 @@ impl DiffState<'_, '_, '_> {
                 self.dom,
                 self.context(),
             );
-            let to =
-                reborrow_writer(&mut self.to).expect("writer presence checked before placement");
+            let to = self
+                .to
+                .as_deref_mut()
+                .expect("writer presence checked before placement");
             create_at_site(new, parent, site, self.dom, to)
         } else {
             self.dom

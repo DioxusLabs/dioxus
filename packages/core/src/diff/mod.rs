@@ -6,7 +6,7 @@
 //! - Mounted nodes that have already been created
 //!
 //! To support those cases, we lazily create components and only optionally write to the real dom
-//! while diffing with `Option<&mut dyn WriteMutations>`.
+//! while diffing with `Option<&mut (dyn WriteMutations + '_)>`.
 //!
 //! Core diff invariants:
 //! - Every live `MountId` points at exactly one committed `VNode` until that vnode is removed.
@@ -22,7 +22,6 @@
 use crate::{
     DynamicNode,
     innerlude::{MountId, MountRef, WriteMutations},
-    mutations::reborrow_writer,
     nodes::VNode,
     virtual_dom::VirtualDom,
 };
@@ -55,7 +54,7 @@ impl VirtualDom {
     /// not emitted.
     pub(crate) fn create_children_with_parents(
         &mut self,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
@@ -67,12 +66,8 @@ impl VirtualDom {
             mounts: Vec::with_capacity(nodes.len()),
         };
         for child in nodes {
-            let child = child.create_with_parents(
-                self,
-                render_parent,
-                logical_parent,
-                reborrow_writer(&mut to),
-            );
+            let child =
+                child.create_with_parents(self, render_parent, logical_parent, to.as_deref_mut());
             created.nodes += child.nodes;
             created.mounts.push(child.mount);
         }
@@ -108,12 +103,12 @@ impl VirtualDom {
     /// their own mutations because the parent-level removal owns those renderer operations.
     fn remove_nodes(
         &mut self,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
         mounts: &[MountId],
     ) {
         for (node, mount) in nodes.iter().zip(mounts).rev() {
-            node.remove_node(*mount, self, reborrow_writer(&mut to));
+            node.remove_node(*mount, self, to.as_deref_mut());
         }
     }
 }

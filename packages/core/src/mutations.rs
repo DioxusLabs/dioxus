@@ -147,15 +147,6 @@ pub(crate) fn remove_id(to: &mut dyn WriteMutations, id: ElementId) {
     with_consumed_id(to, id, |to| to.remove());
 }
 
-pub(crate) fn reborrow_writer<'borrow, 'writer>(
-    to: &'borrow mut Option<&'writer mut (dyn WriteMutations + 'writer)>,
-) -> Option<&'borrow mut (dyn WriteMutations + 'borrow)> {
-    match to {
-        Some(to) => Some(&mut **to),
-        None => None,
-    }
-}
-
 pub(crate) struct LazyScope<'a, P: FnMut(&mut dyn WriteMutations)> {
     to: &'a mut dyn WriteMutations,
     push: P,

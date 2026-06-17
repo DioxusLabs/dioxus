@@ -2,7 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::Work;
+use crate::innerlude::{VProps, Work};
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -288,13 +288,14 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let driver = Rc::new(crate::render_driver::BodyDriver::new(
-            root,
-            |_, _| true,
-            root_props,
-            "Root",
-        ));
-        Self::new_with_component(VComponent::new_with_driver("root", driver))
+        let render_fn = root.fn_ptr();
+        let props = Box::new(VProps::new(root, |_, _| true, root_props, "Root"));
+        Self::new_with_component(VComponent::new_with_driver(
+            "root",
+            render_fn,
+            Rc::new(crate::render_driver::BodyDriver::new()),
+            props,
+        ))
     }
 
     /// Create a new virtualdom and build it immediately
@@ -317,13 +318,17 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = crate::render_driver::BodyDriver::new(
+        let root_props = Box::new(VProps::new(
             RootScopeWrapper,
             |_, _| true,
             RootProps(root),
             "RootWrapper",
+        ));
+        dom.new_scope(
+            "app",
+            Rc::new(crate::render_driver::BodyDriver::new()),
+            root_props,
         );
-        dom.new_scope("app", Rc::new(root));
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();

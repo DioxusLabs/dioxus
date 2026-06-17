@@ -1,6 +1,4 @@
-use crate::{
-    VirtualDom, WriteMutations, innerlude::MountId, mutations::reborrow_writer, nodes::VNode,
-};
+use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 use std::rc::Rc;
 
 /// State required for diffing operations.
@@ -9,24 +7,24 @@ use std::rc::Rc;
 /// renderer writer. `context` describes the vnode frame currently being diffed, while
 /// `placement_skip` lists committed mounts that are still visible in parent storage but have
 /// already been claimed by this diff and must not anchor later insertions.
-pub(crate) struct DiffState<'dom, 'ctx, 'writer> {
+pub(crate) struct DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) dom: &'dom mut VirtualDom,
-    pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+    pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
     pub(crate) context: Option<DiffContext<'ctx>>,
     placement_skip: Rc<[MountId]>,
 }
 
-impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
+impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) fn new(
         dom: &'dom mut VirtualDom,
-        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+        to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
     ) -> Self {
         Self::new_with_context(dom, to, None)
     }
 
     pub(crate) fn new_with_context(
         dom: &'dom mut VirtualDom,
-        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+        to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
         context: Option<DiffContext<'ctx>>,
     ) -> Self {
         Self::new_with_context_and_placement_skip(dom, to, context, &[])
@@ -34,7 +32,7 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
 
     pub(crate) fn new_with_context_and_placement_skip(
         dom: &'dom mut VirtualDom,
-        to: Option<&'writer mut (dyn WriteMutations + 'writer)>,
+        to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
         context: Option<DiffContext<'ctx>>,
         placement_skip: &[MountId],
     ) -> Self {
@@ -50,14 +48,13 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
     ///
     /// Invariant: disabling writes suppresses renderer mutations only; mount and component state
     /// still diff normally so hidden suspense branches remain current.
-    pub(crate) fn reborrow_with_writes(&mut self, write: bool) -> DiffState<'_, 'ctx, '_> {
+    pub(crate) fn reborrow_with_writes(
+        &mut self,
+        write: bool,
+    ) -> DiffState<'_, 'ctx, '_, 'mutation> {
         DiffState {
             dom: &mut *self.dom,
-            to: if write {
-                reborrow_writer(&mut self.to)
-            } else {
-                None
-            },
+            to: if write { self.to.as_deref_mut() } else { None },
             context: self.context,
             placement_skip: self.placement_skip.clone(),
         }
@@ -87,8 +84,8 @@ impl<'dom, 'ctx, 'writer> DiffState<'dom, 'ctx, 'writer> {
         mount: MountId,
         dyn_node_idx: usize,
         restore_old_slot_for_removal: bool,
-        create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_>) -> R,
-        remove_old: impl FnOnce(&mut DiffState<'_, 'ctx, '_>),
+        create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_, 'mutation>) -> R,
+        remove_old: impl FnOnce(&mut DiffState<'_, 'ctx, '_, 'mutation>),
     ) -> R {
         let old_slot = self
             .dom

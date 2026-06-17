@@ -2,7 +2,7 @@ use crate::{
     Element, Event, Properties, ScopeId, Template, VirtualDom,
     arena::ElementId,
     events::ListenerCallback,
-    innerlude::{MountId, ScopeState},
+    innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
     string_interner::StaticStringInterner,
     template::TemplateAnchor,
@@ -418,19 +418,23 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The rendering lifecycle for this component's scope, owning the props
-    /// it renders from. Plain components use a body-running driver; portal
-    /// and suspense attach drivers in `into_vcomponent` that manage the
-    /// scope's output directly. The driver also identifies the component
-    /// during diffing (see `RenderDriver::same_component`).
+    /// The raw pointer to the render function.
+    pub(crate) render_fn: usize,
+
+    /// The rendering lifecycle for this component's scope.
     pub(crate) driver: Rc<dyn crate::render_driver::RenderDriver>,
+
+    /// The props this component renders from.
+    pub(crate) props: BoxedAnyProps,
 }
 
 impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            driver: self.driver.duplicate(),
+            render_fn: self.render_fn,
+            driver: self.driver.clone(),
+            props: self.props.duplicate(),
         }
     }
 }
@@ -445,26 +449,33 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
+        let render_fn = component.fn_ptr();
+        let props = Box::new(VProps::new(
+            component,
+            <P as Properties>::memoize,
+            props,
+            fn_name,
+        ));
         Self::new_with_driver(
             fn_name,
-            Rc::new(crate::render_driver::BodyDriver::new(
-                component,
-                <P as Properties>::memoize,
-                props,
-                fn_name,
-            )),
+            render_fn,
+            Rc::new(crate::render_driver::BodyDriver::new()),
+            props,
         )
     }
 
-    /// Create a new [`VComponent`] whose scope is rendered by `driver` from
-    /// the props it owns.
+    /// Create a new [`VComponent`] whose scope is rendered by `driver`.
     pub(crate) fn new_with_driver(
         fn_name: &'static str,
+        render_fn: usize,
         driver: Rc<dyn crate::render_driver::RenderDriver>,
+        props: BoxedAnyProps,
     ) -> Self {
         VComponent {
             name: fn_name,
+            render_fn,
             driver,
+            props,
         }
     }
 

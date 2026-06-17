@@ -30,6 +30,7 @@ macro_rules! dioxus_debug_assert_eq {
     }};
 }
 
+mod any_props;
 mod arena;
 mod diff;
 mod effect;
@@ -111,6 +112,7 @@ pub mod internal {
 }
 
 pub(crate) mod innerlude {
+    pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
     pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;
