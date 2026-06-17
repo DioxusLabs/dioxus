@@ -9,7 +9,6 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -62,11 +61,8 @@ pub(crate) struct Scope {
     /// The suspense boundary location this scope is rendered under, if any.
     suspense_location: RefCell<SuspenseLocation>,
 
-    /// The suspense context owned by this scope when this scope is a boundary.
-    suspense_boundary: RefCell<Option<SuspenseContext>>,
-
     /// The driver owning this scope's rendered output.
-    render_driver: Rc<dyn RenderDriver>,
+    render_driver: RenderDriver,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -78,7 +74,7 @@ impl Scope {
         parent_id: Option<ScopeId>,
         height: u32,
         suspense_location: SuspenseLocation,
-        render_driver: Rc<dyn RenderDriver>,
+        render_driver: RenderDriver,
     ) -> Self {
         Self {
             name,
@@ -96,7 +92,6 @@ impl Scope {
                 effects_queued: Vec::new(),
             }),
             suspense_location: RefCell::new(suspense_location),
-            suspense_boundary: RefCell::new(None),
             render_driver,
         }
     }
@@ -106,12 +101,8 @@ impl Scope {
     }
 
     /// The driver owning this scope's rendered output.
-    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
+    pub(crate) fn render_driver(&self) -> RenderDriver {
         self.render_driver.clone()
-    }
-
-    pub(crate) fn set_suspense_boundary(&self, context: SuspenseContext) {
-        self.suspense_boundary.replace(Some(context));
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
@@ -141,7 +132,7 @@ impl Scope {
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        self.suspense_boundary.borrow().clone()
+        self.render_driver.suspense_context()
     }
 
     /// Check if a node should run during suspense

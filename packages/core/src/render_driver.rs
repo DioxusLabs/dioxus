@@ -1,155 +1,135 @@
 use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 
 use crate::{
-    AttributeValue, ComponentFunction, Element, Template, WriteMutations,
-    arena::ElementId,
+    ComponentFunction, Element, WriteMutations,
     innerlude::{CapturedPanic, ElementRef, ScopeOrder},
     scopes::{LastRenderedNode, ScopeId},
+    suspense::{SuspenseContext, SuspenseDriver},
     virtual_dom::VirtualDom,
 };
 
-/// A sized wrapper around `&mut dyn WriteMutations` that itself implements
-/// `WriteMutations`, letting the `dyn RenderDriver` layer bridge into the
-/// generic (`M: WriteMutations + Sized`) diffing methods without requiring
-/// `?Sized` bounds throughout the diff pipeline.
-pub(crate) struct DynWriter<'a>(&'a mut dyn WriteMutations);
-
-impl<'a> DynWriter<'a> {
-    /// Erase a generic `Option<&mut M>` into `Option<&mut DynWriter>`.
-    ///
-    /// The returned option borrows the original writer through the `DynWriter`
-    /// wrapper, so the caller must not use the original `to` while the wrapper
-    /// is alive.
-    #[inline]
-    pub fn erase<M: WriteMutations>(to: Option<&mut M>) -> Option<DynWriter<'_>> {
-        to.map(|m| DynWriter(m as &mut dyn WriteMutations))
-    }
-}
-
-impl WriteMutations for DynWriter<'_> {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        self.0.append_children(id, m)
-    }
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        self.0.assign_node_id(path, id)
-    }
-    fn create_placeholder(&mut self, id: ElementId) {
-        self.0.create_placeholder(id)
-    }
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        self.0.create_text_node(value, id)
-    }
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        self.0.load_template(template, index, id)
-    }
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        self.0.replace_node_with(id, m)
-    }
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        self.0.replace_placeholder_with_nodes(path, m)
-    }
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        self.0.insert_nodes_after(id, m)
-    }
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        self.0.insert_nodes_before(id, m)
-    }
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        self.0.set_attribute(name, ns, value, id)
-    }
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        self.0.set_node_text(value, id)
-    }
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.0.create_event_listener(name, id)
-    }
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        self.0.remove_event_listener(name, id)
-    }
-    fn remove_node(&mut self, id: ElementId) {
-        self.0.remove_node(id)
-    }
-    fn push_root(&mut self, id: ElementId) {
-        self.0.push_root(id)
-    }
-}
-
-/// A scope's rendering lifecycle and the inputs it renders from.
+/// Type-erased interface for a plain component's props and render function.
 ///
-/// Every scope owns exactly one driver, attached when its [`VComponent`] is
-/// constructed and fixed for the scope's lifetime: plain components use
-/// [`BodyDriver`], which owns the component function and its props and
-/// mounts/diffs the element the body returns, while suspense components attach
-/// drivers in their `into_vcomponent` that own their props and manage the
-/// scope's `last_rendered_node` directly, with no body to run.
-///
-/// A driver instance is per component instance: the scope adopts a
-/// [`Self::duplicate`] of the vnode's driver at creation so the live scope
-/// never aliases inputs with a vnode, and [`Self::memoize`] is how a parent
-/// render hands the scope its new inputs.
-pub(crate) trait RenderDriver: 'static {
-    /// The driver as `Any`, for [`Self::memoize`] hand-offs between two
-    /// instances of the same driver type.
+/// This handles the generic `<F, P, M>` parameters of [`BodyDriver`] behind
+/// a trait object so that [`RenderDriver::Body`] can store any component.
+pub(crate) trait BodyProps: 'static {
     fn as_any(&self) -> &dyn Any;
 
-    /// Whether `other` renders the same component as this driver, i.e. a
-    /// scope rendered by this driver can be diffed in place against
-    /// `other`'s props rather than replaced. Two drivers of one type
-    /// identify the same component by default; [`BodyDriver`] also compares
-    /// its function value, since dynamic components can put different
-    /// functions of one type in a slot.
-    fn same_component(&self, other: &dyn RenderDriver) -> bool {
-        self.as_any().type_id() == other.as_any().type_id()
-    }
+    /// Whether `other` renders the same component as this driver.
+    fn same_component(&self, other: &dyn BodyProps) -> bool;
 
-    /// Make this driver's props equal to `new_driver`'s (a driver of the
-    /// same concrete type, guaranteed by the [`Self::same_component`]
-    /// check). Returns whether the props were equal and the scope can be
-    /// memoized.
+    /// Make this driver's props equal to `new_driver`'s. Returns whether the
+    /// props were equal and the scope can be memoized.
     fn memoize(&self, new_driver: &dyn Any) -> bool;
 
-    /// A fresh driver instance with cloned props, for [`VComponent`] clones
-    /// and scope adoption.
-    ///
-    /// [`VComponent`]: crate::nodes::VComponent
-    fn duplicate(&self) -> Rc<dyn RenderDriver>;
+    /// A fresh instance with cloned props.
+    fn duplicate(&self) -> Rc<dyn BodyProps>;
 
-    /// Mount this scope's output. `new` is true when the scope was allocated
-    /// for this create and has never run or rendered.
-    fn create(
+    /// Run the component body and return the rendered element.
+    fn render(&self) -> Element;
+}
+
+/// The rendering lifecycle driver for a scope.
+///
+/// Every scope owns exactly one driver: plain components use
+/// [`RenderDriver::Body`], which owns the component function and its props;
+/// suspense boundaries use [`RenderDriver::Suspense`], which owns the
+/// [`SuspenseContext`] and manages children/fallback rendering.
+///
+/// Because this is an enum (not a trait object), its methods can be generic
+/// over `M: WriteMutations`, using the same pattern as the rest of the codebase.
+#[derive(Clone)]
+pub(crate) enum RenderDriver {
+    Body(Rc<dyn BodyProps>),
+    Suspense(Rc<SuspenseDriver>),
+}
+
+impl RenderDriver {
+    /// Whether `other` renders the same component as this driver.
+    pub fn same_component(&self, other: &RenderDriver) -> bool {
+        match (self, other) {
+            (RenderDriver::Body(a), RenderDriver::Body(b)) => a.same_component(&**b),
+            (RenderDriver::Suspense(_), RenderDriver::Suspense(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Update this driver's props to match `other`'s. Returns `true` if the
+    /// props were equal (memoized).
+    pub fn memoize(&self, other: &RenderDriver) -> bool {
+        match (self, other) {
+            (RenderDriver::Body(a), RenderDriver::Body(b)) => a.memoize(b.as_any()),
+            (RenderDriver::Suspense(a), RenderDriver::Suspense(b)) => a.memoize(b),
+            _ => false,
+        }
+    }
+
+    /// A fresh driver instance with cloned props.
+    pub fn duplicate(&self) -> RenderDriver {
+        match self {
+            RenderDriver::Body(b) => RenderDriver::Body(b.duplicate()),
+            RenderDriver::Suspense(s) => RenderDriver::Suspense(Rc::new(s.duplicate())),
+        }
+    }
+
+    /// Mount this scope's output.
+    pub fn create<M: WriteMutations>(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
         parent: Option<ElementRef>,
-        to: Option<DynWriter<'_>>,
-    ) -> usize;
+        to: Option<&mut M>,
+    ) -> usize {
+        match self {
+            RenderDriver::Body(b) => body_create(b, dom, scope_id, new, parent, to),
+            RenderDriver::Suspense(s) => s.create(dom, scope_id, new, parent, to),
+        }
+    }
 
     /// Diff this scope's output against its current props.
-    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, to: Option<DynWriter<'_>>);
-
-    /// Remove this scope's output. When `destroy_component_state` is false
-    /// the output is only being lifted out of the real DOM and the driver
-    /// must keep component state alive.
-    fn remove(
+    pub fn diff<M: WriteMutations>(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<DynWriter<'_>>,
+        to: Option<&mut M>,
+    ) {
+        match self {
+            RenderDriver::Body(b) => body_diff(b, dom, scope_id, to),
+            RenderDriver::Suspense(s) => s.diff(dom, scope_id, to),
+        }
+    }
+
+    /// Remove this scope's output.
+    pub fn remove<M: WriteMutations>(
+        &self,
+        dom: &mut VirtualDom,
+        scope_id: ScopeId,
+        to: Option<&mut M>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
-    );
+    ) {
+        match self {
+            RenderDriver::Body(_) => {
+                remove_rendered_output(dom, scope_id, to, destroy_component_state, replace_with)
+            }
+            RenderDriver::Suspense(s) => {
+                s.remove(dom, scope_id, to, destroy_component_state, replace_with)
+            }
+        }
+    }
+
+    /// If this driver is a suspense boundary, return its context.
+    pub fn suspense_context(&self) -> Option<SuspenseContext> {
+        match self {
+            RenderDriver::Suspense(s) => Some(s.context()),
+            _ => None,
+        }
+    }
 }
 
 /// Remove a scope's rendered output from the DOM, and drop the scope when
-/// `destroy_component_state` is set. Shared by [`BodyDriver`] and drivers
-/// whose output is removed the same way (suspense).
+/// `destroy_component_state` is set. Shared by body and suspense drivers.
 pub(crate) fn remove_rendered_output<M: WriteMutations>(
     dom: &mut VirtualDom,
     scope_id: ScopeId,
@@ -166,9 +146,46 @@ pub(crate) fn remove_rendered_output<M: WriteMutations>(
     }
 }
 
-/// The rendering lifecycle of a plain component: the driver owns the
-/// component function and its props, runs the body, and the element it
-/// returns is the scope's rendered output.
+/// Mount a plain component scope's output.
+fn body_create<M: WriteMutations>(
+    body: &Rc<dyn BodyProps>,
+    dom: &mut VirtualDom,
+    scope_id: ScopeId,
+    new: bool,
+    parent: Option<ElementRef>,
+    to: Option<&mut M>,
+) -> usize {
+    if new {
+        let body_element = dom.run_scope_with(scope_id, || body.render());
+        dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(body_element));
+
+        // If our scope landed in `dirty_scopes` during its initial render
+        // (e.g. a hook synchronously queued an update for itself), drain the
+        // entry now so we don't re-process the same scope after creation.
+        let height = dom.runtime.get_state(scope_id).height;
+        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+    }
+
+    let new_node = dom.scopes[scope_id.0]
+        .last_rendered_node
+        .clone()
+        .expect("Component to be mounted");
+
+    dom.create_scope(to, scope_id, new_node, parent)
+}
+
+/// Diff a plain component scope against its current output.
+fn body_diff<M: WriteMutations>(
+    body: &Rc<dyn BodyProps>,
+    dom: &mut VirtualDom,
+    scope_id: ScopeId,
+    to: Option<&mut M>,
+) {
+    let element = dom.run_scope_with(scope_id, || body.render());
+    dom.diff_scope(to, scope_id, element);
+}
+
+/// The concrete implementation of [`BodyProps`] for a given component function.
 pub(crate) struct BodyDriver<F: ComponentFunction<P, M>, P, M> {
     render_fn: F,
     memo: fn(&mut P, &P) -> bool,
@@ -192,6 +209,38 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> BodyDri
             phantom: std::marker::PhantomData,
         }
     }
+}
+
+impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> BodyProps
+    for BodyDriver<F, P, M>
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn same_component(&self, other: &dyn BodyProps) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|other| other.render_fn.fn_ptr() == self.render_fn.fn_ptr())
+    }
+
+    fn memoize(&self, new_driver: &dyn Any) -> bool {
+        match new_driver.downcast_ref::<Self>() {
+            Some(new) => (self.memo)(&mut self.props.borrow_mut(), &new.props.borrow()),
+            None => false,
+        }
+    }
+
+    fn duplicate(&self) -> Rc<dyn BodyProps> {
+        Rc::new(Self {
+            render_fn: self.render_fn.clone(),
+            memo: self.memo,
+            props: RefCell::new(self.props.borrow().clone()),
+            name: self.name,
+            phantom: std::marker::PhantomData,
+        })
+    }
 
     fn render(&self) -> Element {
         fn render_inner(_name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
@@ -212,86 +261,5 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> BodyDri
             self.name,
             std::panic::catch_unwind(AssertUnwindSafe(move || self.render_fn.rebuild(props))),
         )
-    }
-}
-
-impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderDriver
-    for BodyDriver<F, P, M>
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn same_component(&self, other: &dyn RenderDriver) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<Self>()
-            .is_some_and(|other| other.render_fn.fn_ptr() == self.render_fn.fn_ptr())
-    }
-
-    fn memoize(&self, new_driver: &dyn Any) -> bool {
-        match new_driver.downcast_ref::<Self>() {
-            Some(new) => (self.memo)(&mut self.props.borrow_mut(), &new.props.borrow()),
-            None => false,
-        }
-    }
-
-    fn duplicate(&self) -> Rc<dyn RenderDriver> {
-        Rc::new(Self {
-            render_fn: self.render_fn.clone(),
-            memo: self.memo,
-            props: RefCell::new(self.props.borrow().clone()),
-            name: self.name,
-            phantom: std::marker::PhantomData,
-        })
-    }
-
-    fn create(
-        &self,
-        dom: &mut VirtualDom,
-        scope_id: ScopeId,
-        new: bool,
-        parent: Option<ElementRef>,
-        mut to: Option<DynWriter<'_>>,
-    ) -> usize {
-        if new {
-            let body = dom.run_scope_with(scope_id, || self.render());
-            dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(body));
-
-            // If our scope landed in `dirty_scopes` during its initial render
-            // (e.g. a hook synchronously queued an update for itself), drain the
-            // entry now so we don't re-process the same scope after creation.
-            let height = dom.runtime.get_state(scope_id).height;
-            dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
-        }
-
-        let new_node = dom.scopes[scope_id.0]
-            .last_rendered_node
-            .clone()
-            .expect("Component to be mounted");
-
-        dom.create_scope(to.as_mut(), scope_id, new_node, parent)
-    }
-
-    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, mut to: Option<DynWriter<'_>>) {
-        let body = dom.run_scope_with(scope_id, || self.render());
-        dom.diff_scope(to.as_mut(), scope_id, body);
-    }
-
-    fn remove(
-        &self,
-        dom: &mut VirtualDom,
-        scope_id: ScopeId,
-        mut to: Option<DynWriter<'_>>,
-        destroy_component_state: bool,
-        replace_with: Option<usize>,
-    ) {
-        remove_rendered_output(
-            dom,
-            scope_id,
-            to.as_mut(),
-            destroy_component_state,
-            replace_with,
-        );
     }
 }

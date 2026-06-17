@@ -4,7 +4,7 @@
 
 use crate::innerlude::Work;
 use crate::properties::RootProps;
-use crate::render_driver::{BodyDriver, DynWriter};
+use crate::render_driver::{BodyDriver, RenderDriver};
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     ComponentFunction, Element, Mutations,
@@ -288,7 +288,12 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let driver = Rc::new(BodyDriver::new(root, |_, _| true, root_props, "Root"));
+        let driver = RenderDriver::Body(Rc::new(BodyDriver::new(
+            root,
+            |_, _| true,
+            root_props,
+            "Root",
+        )));
         Self::new_with_component(VComponent::new_with_driver("root", driver))
     }
 
@@ -312,12 +317,12 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root_driver = Rc::new(BodyDriver::new(
+        let root_driver = RenderDriver::Body(Rc::new(BodyDriver::new(
             RootScopeWrapper,
             |_, _| true,
             RootProps(root),
             "RootWrapper",
-        ));
+        )));
         dom.new_scope("app", root_driver);
 
         #[cfg(debug_assertions)]
@@ -576,9 +581,10 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
-        let m = self.runtime.clone().while_rendering(|| {
-            driver.create(self, ScopeId::ROOT, true, None, DynWriter::erase(Some(to)))
-        });
+        let m = self
+            .runtime
+            .clone()
+            .while_rendering(|| driver.create(self, ScopeId::ROOT, true, None, Some(to)));
 
         to.append_children(ElementId(0), m);
     }

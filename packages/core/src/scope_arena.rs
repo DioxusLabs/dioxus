@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     Element, ReactiveContext,
     innerlude::{RenderError, ScopeOrder, ScopeState},
@@ -16,7 +14,7 @@ impl VirtualDom {
     pub(super) fn new_scope(
         &mut self,
         name: &'static str,
-        driver: Rc<dyn RenderDriver>,
+        driver: RenderDriver,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.try_current_scope_id();
         let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
