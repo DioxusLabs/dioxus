@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/core-template",
     "packages/stack",
     "packages/oracle",
     "packages/fuzz",
@@ -126,6 +127,7 @@ version = "0.8.0-alpha.0"
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.8.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.8.0-alpha.0" }
+dioxus-core-template = { path = "packages/core-template", version = "0.8.0-alpha.0" }
 dioxus-stack = { path = "packages/stack", version = "0.8.0-alpha.0" }
 dioxus-renderer-oracle = { path = "packages/oracle", version = "0.8.0-alpha.0" }
 dioxus-core-types = { path = "packages/core-types", version = "0.8.0-alpha.0" }

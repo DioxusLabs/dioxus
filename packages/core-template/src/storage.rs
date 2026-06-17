@@ -5,20 +5,39 @@ use super::{
     Template, TemplateAnchor, TemplateAnchorKind, TemplateOp, TemplatePath, TemplateRawOp,
     TemplateSlotPath,
 };
+use crate::VIEW_TEMPLATE_TAPE_CAP;
 
 /// Maximum packed template storage capacity.
-pub(crate) const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
+pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
 /// Default packed template operation storage capacity.
-pub(crate) const TEMPLATE_STORAGE_OPS_CAP: usize = 512;
+pub const TEMPLATE_STORAGE_OPS_CAP: usize = 512;
 
 /// Default static string storage capacity.
-pub(crate) const TEMPLATE_STORAGE_STRING_CAP: usize = 256;
+pub const TEMPLATE_STORAGE_STRING_CAP: usize = 256;
 
 /// Default dynamic anchor storage capacity.
-pub(crate) const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 32;
+pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 32;
 
 const TEMPLATE_PATH_STACK_CAP: usize = 32;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TemplateStorageEstimate {
+    pub raw_ops: usize,
+    pub ops: usize,
+    pub strings: usize,
+    pub anchors: usize,
+    pub dynamic_values: usize,
+    pub path_overflow: bool,
+}
+
+#[derive(Clone, Copy)]
+struct AnchorEstimate {
+    op: u16,
+    kind: TemplateAnchorKind,
+    path: u128,
+    value_count: usize,
+}
 
 /// Const storage for a lowered raw template.
 ///
@@ -26,7 +45,7 @@ const TEMPLATE_PATH_STACK_CAP: usize = 32;
 /// raw operation tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by
 /// the runtime.
 #[derive(Clone, Copy)]
-pub(crate) struct TemplateStorage<
+pub struct TemplateStorage<
     const OPS_CAP: usize = TEMPLATE_STORAGE_OPS_CAP,
     const STRING_CAP: usize = TEMPLATE_STORAGE_STRING_CAP,
     const DYNAMIC_CAP: usize = TEMPLATE_STORAGE_DYNAMIC_CAP,
@@ -109,11 +128,7 @@ impl RawTemplateLoweringCursor {
         path
     }
 
-    const fn next_slot_path(
-        &self,
-        raw: &'static [TemplateRawOp],
-        index: usize,
-    ) -> TemplateSlotPath {
+    const fn next_slot_path(&self, raw: &[TemplateRawOp], index: usize) -> TemplateSlotPath {
         if self.dynamic_node_has_following_static_at_parent(raw, index) {
             return TemplateSlotPath::before_static(self.next_paths[self.stack_pointer]);
         }
@@ -125,6 +140,30 @@ impl RawTemplateLoweringCursor {
         }
     }
 
+    fn next_slot_path_for_estimate(
+        &self,
+        raw: &[TemplateRawOp],
+        index: usize,
+    ) -> Result<TemplateSlotPath, ()> {
+        if self.dynamic_node_has_following_static_at_parent(raw, index) {
+            let path = self.next_paths[self.stack_pointer];
+            if path.is_empty() {
+                return Err(());
+            }
+            return Ok(TemplateSlotPath::before_static(path));
+        }
+
+        if self.stack_pointer == 0 {
+            Ok(TemplateSlotPath::append_children(TemplatePath::empty()))
+        } else {
+            let path = self.element_paths[self.stack_pointer - 1];
+            if path.is_empty() {
+                return Err(());
+            }
+            Ok(TemplateSlotPath::append_children(path))
+        }
+    }
+
     const fn finish(&self) {
         if self.stack_pointer != 0 {
             panic!("template raw ops ended with unclosed elements");
@@ -133,7 +172,7 @@ impl RawTemplateLoweringCursor {
 
     const fn dynamic_node_has_following_static_at_parent(
         &self,
-        raw: &'static [TemplateRawOp],
+        raw: &[TemplateRawOp],
         index: usize,
     ) -> bool {
         let parent_depth = self.stack_pointer;
@@ -168,6 +207,176 @@ impl RawTemplateLoweringCursor {
 
         false
     }
+}
+
+impl TemplateStorageEstimate {
+    pub fn from_raw_ops(raw: &[TemplateRawOp]) -> Self {
+        let mut estimate = Self {
+            raw_ops: raw.len(),
+            ..Self::default()
+        };
+        let mut cursor = RawTemplateLoweringCursor::new();
+        let mut anchors = Vec::new();
+        let mut index = 0usize;
+
+        while index < raw.len() {
+            match raw[index] {
+                TemplateRawOp::OpenElement { namespace, .. } => {
+                    let has_namespace = namespace.is_some();
+                    cursor.open_element(estimate.ops, has_namespace);
+                    estimate.push_op();
+                    estimate.push_static();
+                    if has_namespace {
+                        estimate.push_static();
+                    }
+                }
+                TemplateRawOp::CloseElement => {
+                    let _ = cursor.close_element();
+                }
+                TemplateRawOp::StaticAttr { namespace, .. } => {
+                    estimate.push_op();
+                    estimate.push_static();
+                    estimate.push_static();
+                    if namespace.is_some() {
+                        estimate.push_static();
+                    }
+                }
+                TemplateRawOp::DynamicAttr => {
+                    let path = cursor.current_element_path();
+                    if path.is_empty() {
+                        estimate.path_overflow = true;
+                    }
+                    estimate.push_anchor(
+                        &mut anchors,
+                        cursor.current_element_op(),
+                        path.bits(),
+                        TemplateAnchorKind::Attr,
+                    );
+                }
+                TemplateRawOp::StaticText { .. } => {
+                    let _ = cursor.next_node_path();
+                    estimate.push_op();
+                    estimate.push_static();
+                }
+                TemplateRawOp::DynamicNode => {
+                    match cursor.next_slot_path_for_estimate(raw, index) {
+                        Ok(path) => {
+                            estimate.push_anchor(
+                                &mut anchors,
+                                cursor.node_anchor_op(),
+                                path.bits(),
+                                TemplateAnchorKind::Node,
+                            );
+                        }
+                        Err(()) => {
+                            estimate.path_overflow = true;
+                            estimate.push_anchor(
+                                &mut anchors,
+                                cursor.node_anchor_op(),
+                                0,
+                                TemplateAnchorKind::Node,
+                            );
+                        }
+                    }
+                }
+            }
+            index += 1;
+        }
+
+        cursor.finish();
+        estimate.anchors = anchors.len();
+        estimate
+    }
+
+    fn push_op(&mut self) {
+        self.ops += 1;
+    }
+
+    fn push_static(&mut self) {
+        self.strings += 1;
+        self.ops += 1;
+    }
+
+    fn push_anchor(
+        &mut self,
+        anchors: &mut Vec<AnchorEstimate>,
+        op: u16,
+        path: u128,
+        kind: TemplateAnchorKind,
+    ) {
+        self.dynamic_values += 1;
+
+        if let Some(last) = anchors.last_mut() {
+            if last.same_slot_bits(op, kind, path) {
+                last.value_count += 1;
+                return;
+            }
+        }
+
+        if anchors
+            .iter()
+            .any(|anchor| anchor.same_slot_bits(op, kind, path))
+        {
+            panic!(
+                "dynamic values for a template anchor must be contiguous (attributes must precede children)"
+            );
+        }
+
+        anchors.push(AnchorEstimate {
+            op,
+            kind,
+            path,
+            value_count: 1,
+        });
+    }
+
+    pub const fn exceeds_storage_limits(self) -> bool {
+        self.path_overflow
+            || self.raw_ops > VIEW_TEMPLATE_TAPE_CAP
+            || self.ops > TEMPLATE_STORAGE_OPS_CAP
+            || self.strings > TEMPLATE_STORAGE_STRING_CAP
+            || self.anchors > TEMPLATE_STORAGE_DYNAMIC_CAP
+            || self.raw_ops > TEMPLATE_STORAGE_MAX_CAP
+            || self.ops > TEMPLATE_STORAGE_MAX_CAP
+            || self.strings > TEMPLATE_STORAGE_MAX_CAP
+            || self.dynamic_values > u16::MAX as usize
+    }
+
+    pub fn max_required_chunks(self) -> usize {
+        let chunks = required_chunks(self.raw_ops, VIEW_TEMPLATE_TAPE_CAP);
+        let chunks = chunks.max(required_chunks(self.ops, TEMPLATE_STORAGE_OPS_CAP));
+        let chunks = chunks.max(required_chunks(self.strings, TEMPLATE_STORAGE_STRING_CAP));
+        let chunks = chunks.max(required_chunks(self.anchors, TEMPLATE_STORAGE_DYNAMIC_CAP));
+        let chunks = chunks.max(required_chunks(
+            self.raw_ops
+                .max(self.ops)
+                .max(self.strings)
+                .max(self.dynamic_values),
+            TEMPLATE_STORAGE_MAX_CAP,
+        ));
+        let chunks = chunks.max(required_chunks(self.dynamic_values, u16::MAX as usize));
+        if self.path_overflow {
+            chunks.max(2)
+        } else {
+            chunks
+        }
+    }
+}
+
+impl AnchorEstimate {
+    fn same_slot_bits(self, op: u16, kind: TemplateAnchorKind, path: u128) -> bool {
+        self.op == op
+            && matches!(
+                (self.kind, kind),
+                (TemplateAnchorKind::Attr, TemplateAnchorKind::Attr)
+                    | (TemplateAnchorKind::Node, TemplateAnchorKind::Node)
+            )
+            && self.path == path
+    }
+}
+
+const fn required_chunks(value: usize, limit: usize) -> usize {
+    if value == 0 { 1 } else { value.div_ceil(limit) }
 }
 
 const fn lower_raw_template<
@@ -234,7 +443,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
     /// Lower a raw template tape into packed storage in const context.
-    pub(crate) const fn build(raw: &'static [TemplateRawOp]) -> Self {
+    pub const fn build(raw: &'static [TemplateRawOp]) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
             strings: ConstVec::new_with_max_size(),
@@ -247,7 +456,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     }
 
     /// Return this storage as a compact template.
-    pub(crate) const fn as_template(&'static self) -> Template {
+    pub const fn as_template(&'static self) -> Template {
         Template::new(
             self.ops.as_slice(),
             self.strings.as_slice(),
@@ -359,7 +568,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
 
 impl Template {
     /// Lower a raw template tape into a leaked runtime template.
-    pub(crate) fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
+    pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
         TemplateStorage::<
             TEMPLATE_STORAGE_MAX_CAP,
             TEMPLATE_STORAGE_MAX_CAP,

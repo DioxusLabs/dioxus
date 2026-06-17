@@ -2,10 +2,14 @@
 
 use self::location::DynIdx;
 use crate::*;
+use dioxus_core_template::{TemplateRawOp, TemplateStorageEstimate};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
 use syn::parse_quote;
+
+const ROOT_TUPLE_VIEW_LIMIT: usize = 64;
+const MAX_SYNTHETIC_CHUNKS_PER_PARENT: usize = 24;
 
 /// A set of nodes in a template position
 ///
@@ -103,7 +107,7 @@ impl ToTokens for TemplateBody {
                 #[allow(clippy::let_and_return)]
                 let __vnodes = {
                     use dioxus_core::view::View as _;
-                    #view_expr.keyed(__key).into_vnode()
+                    #view_expr.key(__key).into_vnode()
                 };
 
                 #[cfg(debug_assertions)]
@@ -204,6 +208,12 @@ impl ViewExpr {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SiblingContext {
+    Roots,
+    ElementChildren,
+}
+
 struct ViewBuilder {
     definitions: Vec<TokenStream2>,
     dynamic_node_count: usize,
@@ -247,12 +257,45 @@ impl ViewBuilder {
     }
 
     fn visit_roots(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
-        let roots = nodes
-            .iter()
-            .enumerate()
-            .map(|(index, node)| self.visit_node(node, index == 0).expr);
+        self.visit_roots_with_implicit_key(nodes, true)
+    }
+
+    fn visit_roots_with_implicit_key(
+        &mut self,
+        nodes: &[BodyNode],
+        allow_implicit_key: bool,
+    ) -> TokenStream2 {
+        let roots = self
+            .visit_sibling_nodes(nodes, allow_implicit_key, SiblingContext::Roots)
+            .into_iter()
+            .map(|view| view.expr);
 
         quote! { (#(#roots),*) }
+    }
+
+    fn visit_sibling_nodes(
+        &mut self,
+        nodes: &[BodyNode],
+        allow_implicit_key: bool,
+        context: SiblingContext,
+    ) -> Vec<ViewExpr> {
+        if self.should_chunk_siblings(nodes, context) {
+            if matches!(context, SiblingContext::Roots) {
+                return vec![self.synthetic_dynamic_chunk(nodes)];
+            }
+
+            return self
+                .synthetic_chunk_ranges(nodes, context)
+                .into_iter()
+                .map(|range| self.synthetic_dynamic_chunk(&nodes[range]))
+                .collect();
+        }
+
+        nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| self.visit_node(node, allow_implicit_key && index == 0))
+            .collect()
     }
 
     fn visit_node(&mut self, node: &BodyNode, implicit_key: bool) -> ViewExpr {
@@ -288,8 +331,10 @@ impl ViewBuilder {
         }
 
         let mut children = TokenStream2::new();
-        for child in &element.children {
-            let child = self.visit_node(child, false).into_child_arg();
+        for child in
+            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren)
+        {
+            let child = child.into_child_arg();
             children.extend(quote! { .child(#child) });
         }
 
@@ -346,7 +391,6 @@ impl ViewBuilder {
             .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
         self.hot_reload_dynamic_slots
             .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Attribute(#id) });
-
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
             self.allocate_formatted(lit);
         }
@@ -466,6 +510,124 @@ impl ViewBuilder {
         let index = self.next_marker;
         self.next_marker += 1;
         format_ident!("{prefix}{index}")
+    }
+
+    fn synthetic_dynamic_chunk(&mut self, nodes: &[BodyNode]) -> ViewExpr {
+        let mut chunk_builder = ViewBuilder::new();
+        let roots = nodes
+            .iter()
+            .map(|node| chunk_builder.visit_node(node, false))
+            .map(|view| {
+                let expr = view.expr;
+                quote! { #expr.into_vnode() }
+            })
+            .collect::<Vec<_>>();
+        let chunk = chunk_builder.finish(quote! { () });
+        let definitions = chunk.definitions();
+        let tokens = quote! {{
+            use dioxus_core::view::View as _;
+            #(#definitions)*
+            dioxus_core::DynamicNode::Fragment(vec![#(#roots),*])
+        }};
+        self.dynamic_node(tokens)
+    }
+
+    fn should_chunk_siblings(&self, nodes: &[BodyNode], context: SiblingContext) -> bool {
+        if nodes.len() <= 1 {
+            return false;
+        }
+
+        matches!(context, SiblingContext::Roots) && nodes.len() > ROOT_TUPLE_VIEW_LIMIT
+            || self
+                .estimate_siblings_unwrapped(nodes)
+                .exceeds_storage_limits()
+    }
+
+    fn synthetic_chunk_ranges(
+        &self,
+        nodes: &[BodyNode],
+        context: SiblingContext,
+    ) -> Vec<std::ops::Range<usize>> {
+        let estimate = self.estimate_siblings_unwrapped(nodes);
+        let mut chunks = estimate.max_required_chunks();
+
+        if matches!(context, SiblingContext::Roots) {
+            chunks = chunks.max(nodes.len().div_ceil(ROOT_TUPLE_VIEW_LIMIT));
+        }
+
+        chunks = chunks.clamp(2, MAX_SYNTHETIC_CHUNKS_PER_PARENT.min(nodes.len()));
+        let chunk_len = nodes.len().div_ceil(chunks);
+
+        (0..nodes.len())
+            .step_by(chunk_len)
+            .map(|start| start..(start + chunk_len).min(nodes.len()))
+            .collect()
+    }
+
+    fn estimate_siblings_unwrapped(&self, nodes: &[BodyNode]) -> TemplateStorageEstimate {
+        let mut raw = Vec::new();
+        self.push_sibling_raw_ops(nodes, &mut raw);
+        TemplateStorageEstimate::from_raw_ops(&raw)
+    }
+
+    fn push_sibling_raw_ops(&self, nodes: &[BodyNode], raw: &mut Vec<TemplateRawOp>) {
+        for node in nodes {
+            self.push_node_raw_ops(node, raw);
+        }
+    }
+
+    fn push_node_raw_ops(&self, node: &BodyNode, raw: &mut Vec<TemplateRawOp>) {
+        match node {
+            BodyNode::Element(element) => self.push_element_raw_ops(element, raw),
+            BodyNode::Text(text) if text.is_static() => {
+                raw.push(TemplateRawOp::StaticText { value: "" })
+            }
+            BodyNode::Text(_)
+            | BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_) => raw.push(TemplateRawOp::DynamicNode),
+        }
+    }
+
+    fn push_element_raw_ops(&self, element: &Element, raw: &mut Vec<TemplateRawOp>) {
+        raw.push(TemplateRawOp::OpenElement {
+            tag: "",
+            namespace: None,
+        });
+
+        for attr in &element.merged_attributes {
+            self.push_attribute_raw_op(element, attr, raw);
+        }
+
+        if self.should_chunk_siblings(&element.children, SiblingContext::ElementChildren) {
+            for _ in self.synthetic_chunk_ranges(&element.children, SiblingContext::ElementChildren)
+            {
+                raw.push(TemplateRawOp::DynamicNode);
+            }
+        } else {
+            self.push_sibling_raw_ops(&element.children, raw);
+        }
+
+        raw.push(TemplateRawOp::CloseElement);
+    }
+
+    fn push_attribute_raw_op(
+        &self,
+        element: &Element,
+        attr: &Attribute,
+        raw: &mut Vec<TemplateRawOp>,
+    ) {
+        if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
+            let namespace = attr.name.resolved(&element.name).namespace.map(|_| "");
+            raw.push(TemplateRawOp::StaticAttr {
+                name: "",
+                value: "",
+                namespace,
+            });
+        } else {
+            raw.push(TemplateRawOp::DynamicAttr);
+        }
     }
 }
 

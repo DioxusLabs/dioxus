@@ -40,10 +40,10 @@ impl TemplateOp {
     const ATTR_CUSTOM_NS_CODE: u16 = 0x8001;
     const TEXT_CODE: u16 = 0x8002;
     const STATIC_BASE: u16 = 0x8003;
-    pub(super) const MAX_CAP: usize = 16_383;
+    pub const MAX_CAP: usize = 16_383;
 
     /// Create a packed enter op.
-    pub(crate) const fn enter(skip: u16, namespace: bool) -> Self {
+    pub const fn enter(skip: u16, namespace: bool) -> Self {
         if skip as usize > Self::MAX_CAP {
             panic!("op skip exceeds packed op capacity");
         }
@@ -51,7 +51,7 @@ impl TemplateOp {
     }
 
     /// Create a packed static attribute op.
-    pub(crate) const fn attr(namespace: bool) -> Self {
+    pub const fn attr(namespace: bool) -> Self {
         if namespace {
             Self(Self::ATTR_CUSTOM_NS_CODE)
         } else {
@@ -60,17 +60,17 @@ impl TemplateOp {
     }
 
     /// Create a packed static attribute op with a following custom namespace string.
-    pub(crate) const fn attr_custom_namespace() -> Self {
+    pub const fn attr_custom_namespace() -> Self {
         Self(Self::ATTR_CUSTOM_NS_CODE)
     }
 
     /// Create a packed text marker op.
-    pub(crate) const fn text() -> Self {
+    pub const fn text() -> Self {
         Self(Self::TEXT_CODE)
     }
 
     /// Create a packed static string reference op.
-    pub(crate) const fn static_text(id: u16) -> Self {
+    pub const fn static_text(id: u16) -> Self {
         if id as usize >= Self::MAX_CAP {
             panic!("static op id exceeds packed op capacity");
         }

@@ -30,7 +30,7 @@
 //!```
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
-use dioxus_core::{VNode, internal::TemplateExt};
+use dioxus_core::VNode;
 use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]

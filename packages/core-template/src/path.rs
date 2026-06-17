@@ -86,7 +86,7 @@ impl TemplatePath {
     }
 
     /// Return the path segment at `index`.
-    pub(crate) fn segment(self, index: usize) -> u8 {
+    pub fn segment(self, index: usize) -> u8 {
         let mut current_segment = 0usize;
         let mut current_index = 0u8;
         let mut started = false;
@@ -126,7 +126,7 @@ impl TemplatePath {
     }
 
     /// Return the number of raw child/sibling bits in this path.
-    pub(crate) fn bit_len(self) -> u32 {
+    pub fn bit_len(self) -> u32 {
         u128::BITS - self.path.leading_zeros()
     }
 

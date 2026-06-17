@@ -6,20 +6,18 @@
 
 use std::marker::PhantomData;
 
+use dioxus_core_template::VIEW_TEMPLATE_TAPE_CAP;
 use dioxus_const_vec::ConstVec;
 
 use crate::{
-    nodes::IntoVNode,
-    template::{
-        TemplateRawOp, TemplateStorage, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP,
-        TEMPLATE_STORAGE_STRING_CAP,
-    },
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
     RenderedView, Template, VComponent, VNode,
+    nodes::IntoVNode,
+    template::{
+        TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
+        TemplateRawOp, TemplateStorage,
+    },
 };
-
-/// Maximum number of raw template operations a typed view can contribute.
-pub(crate) const VIEW_TEMPLATE_TAPE_CAP: usize = 256;
 
 /// A const template-v2-style raw operation tape.
 #[doc(hidden)]
@@ -154,7 +152,7 @@ pub trait View: ViewTemplate + Sized {
 
     /// Attach a root key to this view.
     #[inline]
-    fn keyed(self, key: impl IntoViewKey) -> KeyedViewBuilder<Self> {
+    fn key(self, key: impl IntoViewKey) -> KeyedViewBuilder<Self> {
         KeyedViewBuilder {
             view: self,
             key: key.into_key(),
@@ -209,22 +207,70 @@ macro_rules! impl_tuple_views {
 
 impl_tuple_views! {
     ();
-    A a,
-    B b,
-    C c,
-    D d,
-    E e,
-    F f,
-    G g,
-    H h,
-    I i,
-    J j,
-    K k,
-    L l,
-    M m,
-    N n,
-    O o,
-    P p,
+    T00 t00,
+    T01 t01,
+    T02 t02,
+    T03 t03,
+    T04 t04,
+    T05 t05,
+    T06 t06,
+    T07 t07,
+    T08 t08,
+    T09 t09,
+    T10 t10,
+    T11 t11,
+    T12 t12,
+    T13 t13,
+    T14 t14,
+    T15 t15,
+    T16 t16,
+    T17 t17,
+    T18 t18,
+    T19 t19,
+    T20 t20,
+    T21 t21,
+    T22 t22,
+    T23 t23,
+    T24 t24,
+    T25 t25,
+    T26 t26,
+    T27 t27,
+    T28 t28,
+    T29 t29,
+    T30 t30,
+    T31 t31,
+    T32 t32,
+    T33 t33,
+    T34 t34,
+    T35 t35,
+    T36 t36,
+    T37 t37,
+    T38 t38,
+    T39 t39,
+    T40 t40,
+    T41 t41,
+    T42 t42,
+    T43 t43,
+    T44 t44,
+    T45 t45,
+    T46 t46,
+    T47 t47,
+    T48 t48,
+    T49 t49,
+    T50 t50,
+    T51 t51,
+    T52 t52,
+    T53 t53,
+    T54 t54,
+    T55 t55,
+    T56 t56,
+    T57 t57,
+    T58 t58,
+    T59 t59,
+    T60 t60,
+    T61 t61,
+    T62 t62,
+    T63 t63,
 }
 
 /// A static element tag marker.
@@ -292,7 +338,7 @@ pub struct ViewChildMarker;
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
-    use crate::{template::TemplateRawOp, IntoDynNode};
+    use crate::{IntoDynNode, template::TemplateRawOp};
 
     use super::{DynamicViewValues, View, ViewTemplate, ViewTemplateTape};
 
@@ -410,8 +456,8 @@ pub struct StaticAttributeBuilder<A>(PhantomData<A>);
 /// Create a static attribute view for an attribute marker.
 #[doc(hidden)]
 #[inline]
-pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>(
-) -> StaticAttributeBuilder<A> {
+pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>()
+-> StaticAttributeBuilder<A> {
     StaticAttributeBuilder(PhantomData)
 }
 

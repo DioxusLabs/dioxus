@@ -2,7 +2,7 @@ use super::{TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 
 /// Sentinel `op` value marking a [`TemplateAnchor`] for a root-level dynamic node slot, which has no
 /// enclosing static element.
-pub(super) const ROOT_ANCHOR_OP: u16 = u16::MAX;
+pub const ROOT_ANCHOR_OP: u16 = u16::MAX;
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -16,11 +16,11 @@ pub enum TemplateAnchorKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateAnchor {
-    pub(super) op: u16,
-    pub(super) kind: TemplateAnchorKind,
-    pub(super) path: u128,
-    pub(super) value_start: u16,
-    pub(super) value_count: u16,
+    pub op: u16,
+    pub kind: TemplateAnchorKind,
+    pub path: u128,
+    pub value_start: u16,
+    pub value_count: u16,
 }
 
 impl TemplateAnchor {
@@ -28,12 +28,7 @@ impl TemplateAnchor {
         Self::node(op, path, value_start, value_count)
     }
 
-    pub(super) const fn attr(
-        op: u16,
-        path: TemplatePath,
-        value_start: u16,
-        value_count: u16,
-    ) -> Self {
+    pub const fn attr(op: u16, path: TemplatePath, value_start: u16, value_count: u16) -> Self {
         if value_count == 0 {
             panic!("template anchors must cover at least one dynamic value");
         }
@@ -46,12 +41,7 @@ impl TemplateAnchor {
         }
     }
 
-    pub(super) const fn node(
-        op: u16,
-        path: TemplateSlotPath,
-        value_start: u16,
-        value_count: u16,
-    ) -> Self {
+    pub const fn node(op: u16, path: TemplateSlotPath, value_start: u16, value_count: u16) -> Self {
         if value_count == 0 {
             panic!("template anchors must cover at least one dynamic value");
         }
@@ -64,11 +54,11 @@ impl TemplateAnchor {
         }
     }
 
-    pub(super) const fn single_attr(op: u16, path: TemplatePath, value_start: u16) -> Self {
+    pub const fn single_attr(op: u16, path: TemplatePath, value_start: u16) -> Self {
         Self::attr(op, path, value_start, 1)
     }
 
-    pub(super) const fn single_node(op: u16, path: TemplateSlotPath, value_start: u16) -> Self {
+    pub const fn single_node(op: u16, path: TemplateSlotPath, value_start: u16) -> Self {
         Self::node(op, path, value_start, 1)
     }
 
@@ -81,11 +71,11 @@ impl TemplateAnchor {
         Self::single_node(ROOT_ANCHOR_OP, slot, value_index)
     }
 
-    pub(super) const fn kind(self) -> TemplateAnchorKind {
+    pub const fn kind(self) -> TemplateAnchorKind {
         self.kind
     }
 
-    pub(super) const fn path_bits(self) -> u128 {
+    pub const fn path_bits(self) -> u128 {
         self.path
     }
 
@@ -97,7 +87,7 @@ impl TemplateAnchor {
         self.kind == TemplateAnchorKind::Node && self.op == ROOT_ANCHOR_OP
     }
 
-    pub(crate) const fn path(self) -> TemplatePath {
+    pub const fn path(self) -> TemplatePath {
         TemplatePath::from_bits(self.path)
     }
 
@@ -121,12 +111,7 @@ impl TemplateAnchor {
         self.value_start as usize..(self.value_start as usize + self.value_count as usize)
     }
 
-    pub(super) const fn same_slot_bits(
-        self,
-        op: u16,
-        kind: TemplateAnchorKind,
-        path: u128,
-    ) -> bool {
+    pub const fn same_slot_bits(self, op: u16, kind: TemplateAnchorKind, path: u128) -> bool {
         self.op == op
             && matches!(
                 (self.kind, kind),
@@ -136,7 +121,7 @@ impl TemplateAnchor {
             && self.path == path
     }
 
-    pub(super) const fn should_fill_before(self, other: Self) -> bool {
+    pub const fn should_fill_before(self, other: Self) -> bool {
         let self_depth = if matches!(self.kind, TemplateAnchorKind::Node) {
             self.slot_path().fill_depth()
         } else {

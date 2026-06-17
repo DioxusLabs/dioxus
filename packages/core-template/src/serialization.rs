@@ -1,7 +1,5 @@
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_string_leaky<'a, 'de, D>(
-    deserializer: D,
-) -> Result<&'static str, D::Error>
+pub fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'static str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -12,7 +10,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
+pub fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -24,7 +22,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_strings_leaky<'a, 'de, D>(
+pub fn deserialize_strings_leaky<'a, 'de, D>(
     deserializer: D,
 ) -> Result<&'static [&'static str], D::Error>
 where
@@ -41,7 +39,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_option_leaky<'a, 'de, D>(
+pub fn deserialize_option_leaky<'a, 'de, D>(
     deserializer: D,
 ) -> Result<Option<&'static str>, D::Error>
 where

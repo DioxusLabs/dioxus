@@ -60,7 +60,7 @@ workspace = true
 features = ["Document", "HtmlElement", "Window"]
 
 [features]
-serialize = ["dep:serde"]
+serialize = ["dep:serde", "dioxus-core-template/serialize"]
 
 [[bench]]
 name = "jsframework"

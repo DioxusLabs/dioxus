@@ -3402,6 +3402,7 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-const-vec",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-html",
  "dioxus-renderer-oracle",
@@ -3443,6 +3444,15 @@ dependencies = [
  "syn 2.0.117",
  "tokio",
  "trybuild",
+]
+
+[[package]]
+name = "dioxus-core-template"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus-const-vec",
+ "serde",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -4093,6 +4103,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.8.0-alpha.0"
 dependencies = [
+ "dioxus-core-template",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
