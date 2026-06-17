@@ -51,9 +51,13 @@ where
         SuspenseBoundaryProps::builder()
     }
     fn memoize(&mut self, new: &Self) -> bool {
+        let equal = self == new;
         self.fallback.__point_to(&new.fallback);
-        self.children = new.children.clone();
-        false
+        if !equal {
+            let new_clone = new.clone();
+            self.children = new_clone.children;
+        }
+        equal
     }
 }
 #[doc(hidden)]
@@ -175,9 +179,9 @@ impl SuspenseBoundaryPropsWithOwner {
     /// Create a component from the props.
     pub fn into_vcomponent<M: 'static>(
         self,
-        _render_fn: impl ComponentFunction<SuspenseBoundaryProps, M>,
+        render_fn: impl ComponentFunction<SuspenseBoundaryProps, M>,
     ) -> VComponent {
-        let component_name = std::any::type_name_of_val(&_render_fn);
+        let component_name = std::any::type_name_of_val(&render_fn);
         VComponent::new_with_driver(
             component_name,
             Rc::new(SuspenseDriver::new(self)) as Rc<dyn RenderDriver>,
