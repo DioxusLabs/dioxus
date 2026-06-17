@@ -53,7 +53,7 @@ impl<'a> ConstReadBuffer<'a> {
 /// # Example
 ///
 /// ```rust
-/// # use const_vec::ConstVec;
+/// # use dioxus_const_vec::ConstVec;
 /// const VEC: ConstVec<u8> = {
 ///     let mut vec = ConstVec::new();
 ///     vec.push(1);
@@ -123,7 +123,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8, 10> = ConstVec::new_with_max_size();
     /// assert!(EMPTY.is_empty());
     /// ```
@@ -154,7 +154,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const ONE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -175,7 +175,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const ONE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.extend(&[1, 2, 3]);
@@ -199,7 +199,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const ONE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -233,7 +233,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const ONE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -250,7 +250,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const EMPTY: ConstVec<u8> = ConstVec::new();
     /// assert!(EMPTY.is_empty());
     /// const ONE: ConstVec<u8> = {
@@ -269,7 +269,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const ONE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -293,7 +293,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const THREE: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -319,7 +319,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const POPPED: (ConstVec<u8>, Option<u8>) = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -350,7 +350,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const REMOVED: (ConstVec<u8>, Option<u8>) = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -385,7 +385,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const TWO: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -406,7 +406,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::ConstVec;
+    /// # use dioxus_const_vec::ConstVec;
     /// const SPLIT: (ConstVec<u8>, ConstVec<u8>) = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);
@@ -446,7 +446,7 @@ impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
     /// # Example
     ///
     /// ```rust
-    /// # use const_vec::{ConstReadBuffer, ConstVec};
+    /// # use dioxus_const_vec::{ConstReadBuffer, ConstVec};
     /// const TWO: ConstVec<u8> = {
     ///     let mut vec = ConstVec::new();
     ///     vec.push(1);

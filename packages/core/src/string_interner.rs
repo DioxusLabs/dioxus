@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use const_vec::ConstVec;
+use dioxus_const_vec::ConstVec;
 use xxhash_rust::const_xxh64::xxh64;
 
 /// A byte range for one interned template string.

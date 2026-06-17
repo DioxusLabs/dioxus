@@ -1,4 +1,4 @@
-use const_vec::ConstVec;
+use dioxus_const_vec::ConstVec;
 
 use crate::string_interner::{RuntimeStringInterner, StaticStringInterner, StringInterner};
 

@@ -6,7 +6,7 @@
 
 use std::marker::PhantomData;
 
-use const_vec::ConstVec;
+use dioxus_const_vec::ConstVec;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
