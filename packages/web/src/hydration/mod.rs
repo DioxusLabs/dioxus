@@ -3,7 +3,7 @@ mod cursor;
 #[cfg(feature = "hydrate")]
 mod hydrate;
 #[cfg(feature = "hydrate")]
-mod plan;
+mod walk;
 #[cfg(feature = "hydrate")]
 mod suspense;
 

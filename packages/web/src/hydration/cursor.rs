@@ -1,7 +1,7 @@
 //! A DOM cursor that hydrates server-rendered markup by walking the real DOM
 //! in lockstep with a pure-VDOM walk.
 //!
-//! The SSR HTML carries **no** hydration markers. Instead, [`crate::hydration::plan`]
+//! The SSR HTML carries **no** hydration markers. Instead, [`super::walk`]
 //! walks the rebuilt VDOM and calls these cursor methods, which navigate the
 //! actual DOM via `web-sys` (tag matching, transparent-wrapper tolerance, text
 //! splitting) and bind nodes/listeners on the live mutation interpreter. Because
