@@ -268,6 +268,7 @@ impl VNode {
         element_op: usize,
         slot: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        let trailing_slot = self.template.static_children(element_op).count();
         self.dynamic_node_anchors_for_element(element_op)
             .filter(move |anchor| match anchor.slot_target() {
                 crate::template::TemplateSlotTarget::BeforeStatic(path) => {
@@ -279,7 +280,7 @@ impl VNode {
                     }
                     insertion_index == slot
                 }
-                crate::template::TemplateSlotTarget::AppendChildren(_) => false,
+                crate::template::TemplateSlotTarget::AppendChildren(_) => slot == trailing_slot,
             })
     }
 

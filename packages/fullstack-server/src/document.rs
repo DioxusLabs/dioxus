@@ -98,7 +98,7 @@ impl Document for ServerDocument {
                 name: props.name,
                 charset: props.charset,
                 http_equiv: props.http_equiv,
-                "content": props.content,
+                content: props.content,
                 property: props.property,
                 "data": props.data,
                 ..props.additional_attributes,
@@ -116,7 +116,7 @@ impl Document for ServerDocument {
                 fetchpriority: props.fetchpriority,
                 integrity: props.integrity,
                 nomodule: props.nomodule,
-                "nonce": props.nonce,
+                nonce: props.nonce,
                 referrerpolicy: props.referrerpolicy,
                 r#type: props.r#type,
                 ..props.additional_attributes,
@@ -130,8 +130,8 @@ impl Document for ServerDocument {
         self.0.borrow_mut().script.push(rsx! {
             style {
                 media: props.media,
-                "nonce": props.nonce,
-                "title": props.title,
+                nonce: props.nonce,
+                title: props.title,
                 ..props.additional_attributes,
                 {contents}
             }
@@ -143,7 +143,7 @@ impl Document for ServerDocument {
             link {
                 rel: props.rel,
                 media: props.media,
-                "title": props.title,
+                title: props.title,
                 disabled: props.disabled,
                 r#as: props.r#as,
                 sizes: props.sizes,

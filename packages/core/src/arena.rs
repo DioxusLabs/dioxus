@@ -1,4 +1,4 @@
-use crate::{ScopeId, Template, virtual_dom::VirtualDom};
+use crate::{ScopeId, Template, scheduler::ScopeOrder, virtual_dom::VirtualDom};
 use slab::Slab;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -241,54 +241,13 @@ impl VirtualDom {
     //
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        let stale_dirty_scopes: Vec<_> = self
-            .dirty_scopes
-            .iter()
-            .filter_map(|order| {
-                (order.id == id || self.runtime.is_descendant_of(order.id, id)).then_some(*order)
-            })
-            .collect();
+        let height = {
+            let scope = self.scopes.remove(id.index());
+            let context = scope.state();
+            context.height
+        };
 
-        let stale_dirty_tasks: Vec<_> = self
-            .runtime
-            .dirty_tasks
-            .borrow()
-            .iter()
-            .filter_map(|tasks| {
-                (tasks.order.id == id || self.runtime.is_descendant_of(tasks.order.id, id))
-                    .then_some(tasks.order)
-            })
-            .collect();
-
-        let stale_pending_effects: Vec<_> = self
-            .runtime
-            .pending_effects
-            .borrow()
-            .iter()
-            .filter_map(|effect| {
-                (effect.order.id == id || self.runtime.is_descendant_of(effect.order.id, id))
-                    .then_some(effect.order)
-            })
-            .collect();
-
-        self.mark_clean(id);
-        let _scope = self.scopes.remove(id.index());
-
-        for order in stale_dirty_scopes {
-            self.dirty_scopes.remove(&order);
-        }
-        {
-            let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-            for order in stale_dirty_tasks {
-                dirty_tasks.remove(&order);
-            }
-        }
-        {
-            let mut pending_effects = self.runtime.pending_effects.borrow_mut();
-            for order in stale_pending_effects {
-                pending_effects.remove(&order);
-            }
-        }
+        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
 
         // If this scope was a suspense boundary, remove it from the resolved scopes
         self.resolved_scopes.retain(|s| s != &id);
