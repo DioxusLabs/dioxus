@@ -178,11 +178,10 @@ pub use crate::innerlude::{
 
 pub use crate::view::{
     AttributeBuilderTarget, AttributeDescriptor, DynamicAttributesBuilder, DynamicViewValues,
-    ElementBuilder, ElementTag, IntoAttributeBuilderValue, IntoViewChild, IntoViewKey,
-    KeyedViewBuilder, StaticAttributeBuilder, StaticAttributeValue, StaticAttributeValueBuilder,
-    StaticAttributeValueBuilderMarker, StaticAttributeWithValue, StaticText, StaticTextBuilder,
-    View, ViewChildMarker, ViewTemplate, ViewTemplateTape, dynamic_attribute, element_builder,
-    static_attribute, static_attribute_value, static_text,
+    ElementBuilder, ElementTag, IntoAttributeBuilderValue, IntoViewChild, StaticAttributeBuilder,
+    StaticAttributeValue, StaticAttributeValueBuilder, StaticAttributeValueBuilderMarker,
+    StaticText, StaticTextBuilder, View, ViewChildMarker, ViewExt, ViewTemplate, dynamic_attribute,
+    element_builder, static_attribute, static_attribute_value, static_text,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

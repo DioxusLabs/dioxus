@@ -1,4 +1,4 @@
-use dioxus::core::view::View;
+use dioxus::core::view::ViewExt;
 use dioxus::prelude::*;
 
 #[test]

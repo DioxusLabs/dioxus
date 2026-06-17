@@ -13,7 +13,7 @@ pub use data::Template;
 pub use ext::TemplateExt;
 pub use op::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateOp};
 pub use path::{TemplatePath, TemplatePathStep, TemplateSlotPath, TemplateSlotTarget};
-pub use raw::TemplateRawOp;
+pub use raw::{TemplateRawOp, TemplateRawTree};
 #[cfg(feature = "serialize")]
 #[doc(hidden)]
 pub use serialization::{
@@ -25,5 +25,5 @@ pub use storage::{
     TEMPLATE_STORAGE_STRING_CAP, TemplateStorage, TemplateStorageStats,
 };
 
-/// Maximum number of raw template operations a typed view can contribute.
-pub const VIEW_TEMPLATE_TAPE_CAP: usize = 256;
+/// Default raw template operation storage capacity.
+pub const TEMPLATE_RAW_OPS_CAP: usize = 256;

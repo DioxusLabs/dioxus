@@ -60,3 +60,37 @@ impl TemplateRawOp {
         Self::DynamicNode
     }
 }
+
+/// A compact static tree of unlowered template structure.
+///
+/// Typed view builders use this instead of eagerly concatenating raw operation
+/// tapes at every intermediate builder type. The tree stores references to
+/// child template descriptions while the builder type graph is being assembled,
+/// then [`TemplateStorage`](crate::TemplateStorage) lowers it once at the final
+/// template boundary.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TemplateRawTree {
+    Empty,
+    Sequence(&'static [&'static TemplateRawTree]),
+    Element {
+        tag: &'static str,
+        namespace: Option<&'static str>,
+        attrs: &'static TemplateRawTree,
+        children: &'static TemplateRawTree,
+    },
+    StaticAttr {
+        name: &'static str,
+        value: &'static str,
+        namespace: Option<&'static str>,
+    },
+    DynamicAttr,
+    StaticText(&'static str),
+    DynamicNode,
+}
+
+impl TemplateRawTree {
+    pub const DYNAMIC_ATTR: &'static Self = &Self::DynamicAttr;
+    pub const DYNAMIC_NODE: &'static Self = &Self::DynamicNode;
+    pub const EMPTY: &'static Self = &Self::Empty;
+}

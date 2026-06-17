@@ -1,5 +1,15 @@
 use dioxus::prelude::*;
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
+
+dioxus::html::define_elements! {
+    #[element(name = "style-panel")]
+    stylePanel {}
+
+    #[element(name = "sized-panel")]
+    sizedPanel {
+        width,
+    }
+}
 
 fn typed_dynamic_attrs() -> Element {
     let color = "red";
@@ -35,6 +45,20 @@ fn mixed_dynamic_attr_and_child() -> Element {
     }
 }
 
+fn custom_element_gated_attrs() -> Element {
+    let css_width = "12px";
+    let element_width = "7";
+
+    rsx! {
+        stylePanel {
+            width: "{css_width}",
+        }
+        sizedPanel {
+            width: "{element_width}",
+        }
+    }
+}
+
 #[test]
 fn typed_dynamic_attr_metadata_survives_direct_rsx_codegen() {
     let mut dom = VirtualDom::new(typed_dynamic_attrs);
@@ -43,6 +67,39 @@ fn typed_dynamic_attr_metadata_survives_direct_rsx_codegen() {
 
     oracle.assert_matches(typed_dynamic_attrs);
     assert_eq!(summary.set_attrs, 4);
+}
+
+#[test]
+fn custom_elements_get_gated_global_attrs_unless_they_define_the_attr() {
+    let snapshot = fresh_snapshot(custom_element_gated_attrs);
+
+    assert_eq!(
+        snapshot,
+        vec![
+            SnapshotNode::Element {
+                tag: "style-panel".to_string(),
+                namespace: None,
+                attrs: vec![SnapshotAttr {
+                    name: "width".to_string(),
+                    namespace: Some("style".to_string()),
+                    value: "12px".to_string(),
+                }],
+                listeners: Vec::new(),
+                children: Vec::new(),
+            },
+            SnapshotNode::Element {
+                tag: "sized-panel".to_string(),
+                namespace: None,
+                attrs: vec![SnapshotAttr {
+                    name: "width".to_string(),
+                    namespace: None,
+                    value: "7".to_string(),
+                }],
+                listeners: Vec::new(),
+                children: Vec::new(),
+            },
+        ]
+    );
 }
 
 #[test]

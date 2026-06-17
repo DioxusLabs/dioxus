@@ -1,8 +1,11 @@
 use dioxus_const_vec::ConstVec;
 
 use super::anchor::ROOT_ANCHOR_OP;
-use super::{Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp, TemplateSlotPath};
-use crate::VIEW_TEMPLATE_TAPE_CAP;
+use super::{
+    Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp, TemplateRawTree,
+    TemplateSlotPath,
+};
+use crate::TEMPLATE_RAW_OPS_CAP;
 
 /// Maximum packed template storage capacity.
 pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
@@ -51,22 +54,27 @@ pub struct TemplateStorage<
     anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
 }
 
-struct RawTemplateLoweringCursor {
-    enter_stack: [usize; TEMPLATE_PATH_STACK_CAP],
-    element_namespaces: [bool; TEMPLATE_PATH_STACK_CAP],
-    element_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
+#[derive(Clone, Copy)]
+struct TemplateElementFrame {
+    enter_index: usize,
+    namespace: bool,
+}
+
+struct TemplateLoweringCursor {
+    enter_stack: [TemplateElementFrame; TEMPLATE_PATH_STACK_CAP],
     next_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
     stack_pointer: usize,
 }
 
-impl RawTemplateLoweringCursor {
+impl TemplateLoweringCursor {
     const fn new() -> Self {
         let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
         next_paths[0] = TemplatePath::root(0);
         Self {
-            enter_stack: [0; TEMPLATE_PATH_STACK_CAP],
-            element_namespaces: [false; TEMPLATE_PATH_STACK_CAP],
-            element_paths: [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP],
+            enter_stack: [TemplateElementFrame {
+                enter_index: 0,
+                namespace: false,
+            }; TEMPLATE_PATH_STACK_CAP],
             next_paths,
             stack_pointer: 0,
         }
@@ -78,9 +86,10 @@ impl RawTemplateLoweringCursor {
         }
         let path = self.next_paths[self.stack_pointer];
         self.next_paths[self.stack_pointer] = path.next_sibling();
-        self.element_paths[self.stack_pointer] = path;
-        self.enter_stack[self.stack_pointer] = enter_index;
-        self.element_namespaces[self.stack_pointer] = namespace;
+        self.enter_stack[self.stack_pointer] = TemplateElementFrame {
+            enter_index,
+            namespace,
+        };
         self.next_paths[self.stack_pointer + 1] = path.next_child();
         self.stack_pointer += 1;
     }
@@ -90,32 +99,38 @@ impl RawTemplateLoweringCursor {
             panic!("template close op without matching open op");
         }
         self.stack_pointer -= 1;
-        (
-            self.enter_stack[self.stack_pointer],
-            self.element_namespaces[self.stack_pointer],
-        )
+        let frame = self.enter_stack[self.stack_pointer];
+        (frame.enter_index, frame.namespace)
     }
 
     const fn current_element_path(&self) -> TemplatePath {
         if self.stack_pointer == 0 {
             panic!("dynamic attr raw op without an open element");
         }
-        self.element_paths[self.stack_pointer - 1]
+        self.next_paths[self.stack_pointer].parent()
     }
 
     const fn current_element_op(&self) -> u16 {
-        if self.stack_pointer == 0 {
-            panic!("dynamic attr raw op without an open element");
-        }
-        self.enter_stack[self.stack_pointer - 1] as u16
+        self.current_element_frame().enter_index as u16
     }
 
     const fn node_anchor_op(&self) -> u16 {
         if self.stack_pointer == 0 {
             ROOT_ANCHOR_OP
         } else {
-            self.enter_stack[self.stack_pointer - 1] as u16
+            self.current_element_frame().enter_index as u16
         }
+    }
+
+    const fn current_element_frame(&self) -> TemplateElementFrame {
+        if self.stack_pointer == 0 {
+            panic!("template cursor is not inside an element");
+        }
+        let frame = self.enter_stack[self.stack_pointer - 1];
+        if frame.enter_index > TemplateOp::MAX_CAP {
+            panic!("template enter op exceeds packed op capacity");
+        }
+        frame
     }
 
     const fn next_node_path(&mut self) -> TemplatePath {
@@ -125,14 +140,23 @@ impl RawTemplateLoweringCursor {
     }
 
     const fn next_slot_path(&self, raw: &[TemplateRawOp], index: usize) -> TemplateSlotPath {
-        if self.dynamic_node_has_following_static_at_parent(raw, index) {
+        self.next_slot_path_after_dynamic_node(
+            self.dynamic_node_has_following_static_at_parent(raw, index),
+        )
+    }
+
+    const fn next_slot_path_after_dynamic_node(
+        &self,
+        has_following_static_at_parent: bool,
+    ) -> TemplateSlotPath {
+        if has_following_static_at_parent {
             return TemplateSlotPath::before_static(self.next_paths[self.stack_pointer]);
         }
 
         if self.stack_pointer == 0 {
             TemplateSlotPath::append_children(TemplatePath::empty())
         } else {
-            TemplateSlotPath::append_children(self.element_paths[self.stack_pointer - 1])
+            TemplateSlotPath::append_children(self.current_element_path())
         }
     }
 
@@ -141,7 +165,16 @@ impl RawTemplateLoweringCursor {
         raw: &[TemplateRawOp],
         index: usize,
     ) -> Result<TemplateSlotPath, ()> {
-        if self.dynamic_node_has_following_static_at_parent(raw, index) {
+        self.try_next_slot_path_after_dynamic_node(
+            self.dynamic_node_has_following_static_at_parent(raw, index),
+        )
+    }
+
+    fn try_next_slot_path_after_dynamic_node(
+        &self,
+        has_following_static_at_parent: bool,
+    ) -> Result<TemplateSlotPath, ()> {
+        if has_following_static_at_parent {
             let path = self.next_paths[self.stack_pointer];
             if path.is_empty() {
                 return Err(());
@@ -152,7 +185,7 @@ impl RawTemplateLoweringCursor {
         if self.stack_pointer == 0 {
             Ok(TemplateSlotPath::append_children(TemplatePath::empty()))
         } else {
-            let path = self.element_paths[self.stack_pointer - 1];
+            let path = self.current_element_path();
             if path.is_empty() {
                 return Err(());
             }
@@ -211,7 +244,7 @@ impl TemplateStorageStats {
             raw_ops: raw.len(),
             ..Self::default()
         };
-        let mut cursor = RawTemplateLoweringCursor::new();
+        let mut cursor = TemplateLoweringCursor::new();
         let mut anchors = Vec::new();
         let mut index = 0usize;
 
@@ -303,7 +336,7 @@ impl TemplateStorageStats {
 
     pub const fn exceeds_storage_limits(self) -> bool {
         self.path_overflow
-            || self.raw_ops > VIEW_TEMPLATE_TAPE_CAP
+            || self.raw_ops > TEMPLATE_RAW_OPS_CAP
             || self.ops > TEMPLATE_STORAGE_OPS_CAP
             || self.strings > TEMPLATE_STORAGE_STRING_CAP
             || self.anchors > TEMPLATE_STORAGE_DYNAMIC_CAP
@@ -314,7 +347,7 @@ impl TemplateStorageStats {
     }
 
     pub fn max_required_chunks(self) -> usize {
-        let chunks = required_chunks(self.raw_ops, VIEW_TEMPLATE_TAPE_CAP);
+        let chunks = required_chunks(self.raw_ops, TEMPLATE_RAW_OPS_CAP);
         let chunks = chunks.max(required_chunks(self.ops, TEMPLATE_STORAGE_OPS_CAP));
         let chunks = chunks.max(required_chunks(self.strings, TEMPLATE_STORAGE_STRING_CAP));
         let chunks = chunks.max(required_chunks(self.anchors, TEMPLATE_STORAGE_DYNAMIC_CAP));
@@ -344,6 +377,142 @@ const fn required_chunks(value: usize, limit: usize) -> usize {
     if value == 0 { 1 } else { value.div_ceil(limit) }
 }
 
+const fn tree_has_static_root_node(tree: &'static TemplateRawTree) -> bool {
+    match tree {
+        TemplateRawTree::Empty
+        | TemplateRawTree::StaticAttr { .. }
+        | TemplateRawTree::DynamicAttr
+        | TemplateRawTree::DynamicNode => false,
+        TemplateRawTree::Element { .. } | TemplateRawTree::StaticText(_) => true,
+        TemplateRawTree::Sequence(children) => children_have_static_root_node(children, 0),
+    }
+}
+
+const fn children_have_static_root_node(
+    children: &'static [&'static TemplateRawTree],
+    start: usize,
+) -> bool {
+    let mut index = start;
+    while index < children.len() {
+        if tree_has_static_root_node(children[index]) {
+            return true;
+        }
+        index += 1;
+    }
+
+    false
+}
+
+const fn push_element_start<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+>(
+    storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    cursor: &mut TemplateLoweringCursor,
+    tag: &'static str,
+    namespace: Option<&'static str>,
+) {
+    let has_namespace = namespace.is_some();
+    cursor.open_element(storage.ops_len(), has_namespace);
+    storage.push_op(TemplateOp::enter(0, has_namespace));
+    storage.push_static(tag);
+    if let Some(namespace) = namespace {
+        storage.push_static(namespace);
+    }
+}
+
+const fn push_element_end<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+>(
+    storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    cursor: &mut TemplateLoweringCursor,
+) {
+    let (enter_index, namespace) = cursor.close_element();
+    let skip = storage.ops_len() - enter_index;
+    if skip > TemplateOp::MAX_CAP {
+        panic!("template op skip exceeds packed op capacity");
+    }
+    storage.set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
+}
+
+const fn push_static_attr<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+>(
+    storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    name: &'static str,
+    value: &'static str,
+    namespace: Option<&'static str>,
+) {
+    storage.push_op(TemplateOp::attr(namespace.is_some()));
+    storage.push_static(name);
+    storage.push_static(value);
+    if let Some(namespace) = namespace {
+        storage.push_static(namespace);
+    }
+}
+
+const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>(
+    tree: &'static TemplateRawTree,
+    storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    cursor: &mut TemplateLoweringCursor,
+    following_static_at_parent: bool,
+) {
+    match tree {
+        TemplateRawTree::Empty => {}
+        TemplateRawTree::Sequence(children) => {
+            let mut index = 0;
+            while index < children.len() {
+                lower_raw_tree(
+                    children[index],
+                    storage,
+                    cursor,
+                    following_static_at_parent
+                        || children_have_static_root_node(children, index + 1),
+                );
+                index += 1;
+            }
+        }
+        TemplateRawTree::Element {
+            tag,
+            namespace,
+            attrs,
+            children,
+        } => {
+            push_element_start(storage, cursor, tag, *namespace);
+            lower_raw_tree(attrs, storage, cursor, false);
+            lower_raw_tree(children, storage, cursor, false);
+            push_element_end(storage, cursor);
+        }
+        TemplateRawTree::StaticAttr {
+            name,
+            value,
+            namespace,
+        } => {
+            push_static_attr(storage, name, value, *namespace);
+        }
+        TemplateRawTree::DynamicAttr => {
+            storage.push_anchor(
+                cursor.current_element_op(),
+                TemplateSlotPath::append_children(cursor.current_element_path()).bits(),
+            );
+        }
+        TemplateRawTree::StaticText(value) => {
+            let _ = cursor.next_node_path();
+            storage.push_op(TemplateOp::text());
+            storage.push_static(value);
+        }
+        TemplateRawTree::DynamicNode => {
+            let path = cursor.next_slot_path_after_dynamic_node(following_static_at_parent);
+            storage.push_anchor(cursor.node_anchor_op(), path.bits());
+        }
+    }
+}
+
 const fn lower_raw_template<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
@@ -352,38 +521,22 @@ const fn lower_raw_template<
     raw: &[TemplateRawOp],
     storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
 ) {
-    let mut cursor = RawTemplateLoweringCursor::new();
+    let mut cursor = TemplateLoweringCursor::new();
     let mut index = 0usize;
     while index < raw.len() {
         match raw[index] {
             TemplateRawOp::OpenElement { tag, namespace } => {
-                let has_namespace = namespace.is_some();
-                cursor.open_element(storage.ops_len(), has_namespace);
-                storage.push_op(TemplateOp::enter(0, has_namespace));
-                storage.push_static(tag);
-                if let Some(namespace) = namespace {
-                    storage.push_static(namespace);
-                }
+                push_element_start(storage, &mut cursor, tag, namespace);
             }
             TemplateRawOp::CloseElement => {
-                let (enter_index, namespace) = cursor.close_element();
-                let skip = storage.ops_len() - enter_index;
-                if skip > TemplateOp::MAX_CAP {
-                    panic!("template op skip exceeds packed op capacity");
-                }
-                storage.set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
+                push_element_end(storage, &mut cursor);
             }
             TemplateRawOp::StaticAttr {
                 name,
                 value,
                 namespace,
             } => {
-                storage.push_op(TemplateOp::attr(namespace.is_some()));
-                storage.push_static(name);
-                storage.push_static(value);
-                if let Some(namespace) = namespace {
-                    storage.push_static(namespace);
-                }
+                push_static_attr(storage, name, value, namespace);
             }
             TemplateRawOp::DynamicAttr => {
                 storage.push_anchor(
@@ -422,6 +575,21 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         storage
     }
 
+    /// Lower a raw template tree into packed storage in const context.
+    pub const fn build_from_tree(tree: &'static TemplateRawTree) -> Self {
+        let mut storage = Self {
+            ops: ConstVec::new_with_max_size(),
+            strings: ConstVec::new_with_max_size(),
+            anchors: ConstVec::new_with_max_size(),
+        };
+        let mut cursor = TemplateLoweringCursor::new();
+
+        lower_raw_tree(tree, &mut storage, &mut cursor, false);
+        cursor.finish();
+        storage.sort_anchors_in_fill_order();
+        storage
+    }
+
     /// Return this storage as a compact template.
     pub const fn as_template(&'static self) -> Template {
         Template::new(
@@ -446,7 +614,8 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         self.anchors.as_slice()
     }
 
-    fn into_leaked_template(self) -> Template {
+    #[doc(hidden)]
+    pub fn into_leaked_template(self) -> Template {
         Template::new(
             Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
             Box::leak(self.strings.as_slice().to_vec().into_boxed_slice()),

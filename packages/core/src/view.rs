@@ -1,13 +1,12 @@
 //! Typed, const-driven view builders.
 //!
 //! This module mirrors the template-v2 builder model: each view type contributes
-//! a const raw template tape, and the composed type is promoted to a static
+//! const raw template structure, and the composed type is promoted to a static
 //! [`Template`] through [`ViewTemplate`].
 
 use std::marker::PhantomData;
-
-use dioxus_const_vec::ConstVec;
-use dioxus_core_template::VIEW_TEMPLATE_TAPE_CAP;
+#[cfg(debug_assertions)]
+use std::sync::OnceLock;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
@@ -15,75 +14,47 @@ use crate::{
     nodes::IntoVNode,
     template::{
         TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
-        TemplateRawOp, TemplateStorage,
+        TemplateRawTree, TemplateStorage,
     },
 };
-
-/// A const template-v2-style raw operation tape.
-#[doc(hidden)]
-#[derive(Clone, Copy)]
-pub struct ViewTemplateTape {
-    ops: ConstVec<TemplateRawOp, VIEW_TEMPLATE_TAPE_CAP>,
-}
-
-impl ViewTemplateTape {
-    /// Create an empty raw tape.
-    pub(crate) const fn new() -> Self {
-        Self {
-            ops: ConstVec::new_with_max_size(),
-        }
-    }
-
-    /// Create a raw tape with one raw template operation.
-    pub(crate) const fn single(op: TemplateRawOp) -> Self {
-        let mut raw = Self::new();
-        raw.push(op);
-        raw
-    }
-
-    /// Push one raw template operation.
-    pub(crate) const fn push(&mut self, op: TemplateRawOp) {
-        self.ops.push(op);
-    }
-
-    /// Append another raw tape.
-    pub(crate) const fn concat(&mut self, other: &ViewTemplateTape) {
-        let mut index = 0;
-        while index < other.ops.len() {
-            self.ops.push(other.ops.at(index));
-            index += 1;
-        }
-    }
-
-    /// Borrow the tape as a static slice during const promotion.
-    pub(crate) const fn as_slice(&self) -> &[TemplateRawOp] {
-        self.ops.as_slice()
-    }
-}
-
-impl Default for ViewTemplateTape {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// A type that contributes static template structure.
 #[doc(hidden)]
 pub trait ViewTemplate {
-    /// The raw template-v2-style tape for this view type.
-    const TEMPLATE_TAPE: ViewTemplateTape;
+    /// The raw template-v2-style tree for this view type.
+    const TEMPLATE_TREE: &'static TemplateRawTree;
 
     /// The static template for this view type.
+    #[cfg(not(debug_assertions))]
     const TEMPLATE: &'static Template = &TemplateStorage::<
         TEMPLATE_STORAGE_OPS_CAP,
         TEMPLATE_STORAGE_STRING_CAP,
         TEMPLATE_STORAGE_DYNAMIC_CAP,
-    >::build(Self::TEMPLATE_TAPE.as_slice())
+    >::build_from_tree(Self::TEMPLATE_TREE)
     .as_template();
+
+    /// Build the static template for this view type.
+    #[cfg(debug_assertions)]
+    #[inline]
+    fn build_template() -> Template {
+        TemplateStorage::<
+            TEMPLATE_STORAGE_OPS_CAP,
+            TEMPLATE_STORAGE_STRING_CAP,
+            TEMPLATE_STORAGE_DYNAMIC_CAP,
+        >::build_from_tree(Self::TEMPLATE_TREE)
+        .into_leaked_template()
+    }
+
+    /// Return the template for this view type from a call-site cache.
+    #[cfg(debug_assertions)]
+    #[inline]
+    fn template_from_cell(cell: &'static OnceLock<Template>) -> &'static Template {
+        cell.get_or_init(Self::build_template)
+    }
 }
 
 impl ViewTemplate for () {
-    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::new();
+    const TEMPLATE_TREE: &'static TemplateRawTree = TemplateRawTree::EMPTY;
 }
 
 /// Runtime dynamic values collected while consuming a typed view.
@@ -138,32 +109,68 @@ pub trait View: ViewTemplate + Sized {
     /// Push runtime dynamic values in template order.
     #[inline]
     fn push(self, _dynamic: &mut DynamicViewValues) {}
+}
 
+/// Extension methods for typed views.
+pub trait ViewExt: View {
     /// Convert this view into a [`VNode`].
+    fn into_vnode(self) -> VNode;
+}
+
+impl<V: View> ViewExt for V {
     #[inline]
     fn into_vnode(self) -> VNode {
-        let mut dynamic = DynamicViewValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
-        self.push(&mut dynamic);
-        VNode::new_with_rendered_view(
-            *Self::TEMPLATE,
-            dynamic.into_rendered_view_for_template(None, Self::TEMPLATE),
-        )
+        into_vnode_with_key(self, None)
+    }
+}
+
+/// Convert a view into a [`VNode`] using a prepared template.
+#[doc(hidden)]
+#[inline]
+pub fn into_vnode_with_template<V: View>(
+    view: V,
+    key: Option<String>,
+    template: &Template,
+) -> VNode {
+    let mut dynamic = DynamicViewValues::with_capacity(template.dynamic_value_count());
+    view.push(&mut dynamic);
+    VNode::new_with_rendered_view(
+        *template,
+        dynamic.into_rendered_view_for_template(key, template),
+    )
+}
+
+/// Convert a view into a keyed [`VNode`].
+#[doc(hidden)]
+#[inline]
+pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
+    #[cfg(debug_assertions)]
+    {
+        into_vnode_with_template(view, key, &V::build_template())
     }
 
-    /// Attach a root key to this view.
-    #[inline]
-    fn key(self, key: impl IntoViewKey) -> KeyedViewBuilder<Self> {
-        KeyedViewBuilder {
-            view: self,
-            key: key.into_key(),
-        }
+    #[cfg(not(debug_assertions))]
+    {
+        into_vnode_with_template(view, key, V::TEMPLATE)
     }
+}
+
+/// Convert a view into a keyed [`VNode`] using a lazily initialized template cache.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+#[inline]
+pub fn into_vnode_with_key_and_template_cell<V: View>(
+    view: V,
+    key: Option<String>,
+    template_cell: &'static OnceLock<Template>,
+) -> VNode {
+    into_vnode_with_template(view, key, V::template_from_cell(template_cell))
 }
 
 impl View for () {}
 
 impl ViewTemplate for VComponent {
-    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::DynamicNode);
+    const TEMPLATE_TREE: &'static TemplateRawTree = TemplateRawTree::DYNAMIC_NODE;
 }
 
 impl View for VComponent {
@@ -176,7 +183,7 @@ impl View for VComponent {
 impl IntoVNode for VComponent {
     #[inline]
     fn into_vnode(self) -> VNode {
-        View::into_vnode(self)
+        ViewExt::into_vnode(self)
     }
 }
 
@@ -186,20 +193,31 @@ macro_rules! impl_tuple_views {
         impl_tuple_views!(@impl $($name $value,)* $next_name $next_value,);
         impl_tuple_views!(($($name $value,)* $next_name $next_value,) ; $($rest)*);
     };
-    (@impl $($name:ident $value:ident,)+) => {
-        impl<$($name: ViewTemplate),+> ViewTemplate for ($($name,)+) {
-            const TEMPLATE_TAPE: ViewTemplateTape = {
-                let mut raw = ViewTemplateTape::new();
-                $(raw.concat(&$name::TEMPLATE_TAPE);)+
-                raw
-            };
+    (@impl $first_name:ident $first_value:ident,) => {
+        impl<$first_name: ViewTemplate> ViewTemplate for ($first_name,) {
+            const TEMPLATE_TREE: &'static TemplateRawTree = $first_name::TEMPLATE_TREE;
         }
 
-        impl<$($name: View),+> View for ($($name,)+) {
+        impl<$first_name: View> View for ($first_name,) {
             #[inline]
             fn push(self, dynamic: &mut DynamicViewValues) {
-                let ($($value,)+) = self;
-                $($value.push(dynamic);)+
+                let ($first_value,) = self;
+                $first_value.push(dynamic);
+            }
+        }
+    };
+    (@impl $first_name:ident $first_value:ident, $($name:ident $value:ident,)+) => {
+        impl<$first_name: ViewTemplate, $($name: ViewTemplate),*> ViewTemplate for ($first_name, $($name,)*) {
+            const TEMPLATE_TREE: &'static TemplateRawTree =
+                &TemplateRawTree::Sequence(&[$first_name::TEMPLATE_TREE, $($name::TEMPLATE_TREE,)*]);
+        }
+
+        impl<$first_name: View, $($name: View),*> View for ($first_name, $($name,)*) {
+            #[inline]
+            fn push(self, dynamic: &mut DynamicViewValues) {
+                let ($first_value, $($value,)*) = self;
+                $first_value.push(dynamic);
+                $($value.push(dynamic);)*
             }
         }
     };
@@ -329,6 +347,20 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
             _tag: PhantomData,
         }
     }
+
+    /// Replace the children with an already-normalized typed view tuple.
+    #[doc(hidden)]
+    #[inline]
+    pub fn with_children<NewChildren>(
+        self,
+        children: NewChildren,
+    ) -> ElementBuilder<Tag, Attributes, NewChildren> {
+        ElementBuilder {
+            attrs: self.attrs,
+            children,
+            _tag: PhantomData,
+        }
+    }
 }
 
 /// Marker for child values that are already typed views.
@@ -338,9 +370,9 @@ pub struct ViewChildMarker;
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
-    use crate::{IntoDynNode, template::TemplateRawOp};
+    use crate::{IntoDynNode, template::TemplateRawTree};
 
-    use super::{DynamicViewValues, View, ViewTemplate, ViewTemplateTape};
+    use super::{DynamicViewValues, View, ViewTemplate};
 
     /// Marker for child values that should become dynamic node slots.
     pub struct DynamicViewChildMarker<Marker>(PhantomData<Marker>);
@@ -364,8 +396,7 @@ pub(crate) mod dynamic_node {
     }
 
     impl<N, Marker> ViewTemplate for DynamicNodeBuilder<N, Marker> {
-        const TEMPLATE_TAPE: ViewTemplateTape =
-            ViewTemplateTape::single(TemplateRawOp::DynamicNode);
+        const TEMPLATE_TREE: &'static TemplateRawTree = TemplateRawTree::DYNAMIC_NODE;
     }
 
     impl<N, Marker> View for DynamicNodeBuilder<N, Marker>
@@ -413,16 +444,11 @@ where
 impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
     for ElementBuilder<Tag, Attributes, Children>
 {
-    const TEMPLATE_TAPE: ViewTemplateTape = {
-        let mut raw = ViewTemplateTape::new();
-        raw.push(TemplateRawOp::OpenElement {
-            tag: Tag::NAME,
-            namespace: Tag::NAMESPACE,
-        });
-        raw.concat(&Attributes::TEMPLATE_TAPE);
-        raw.concat(&Children::TEMPLATE_TAPE);
-        raw.push(TemplateRawOp::CloseElement);
-        raw
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Element {
+        tag: Tag::NAME,
+        namespace: Tag::NAMESPACE,
+        attrs: Attributes::TEMPLATE_TREE,
+        children: Children::TEMPLATE_TREE,
     };
 }
 
@@ -451,7 +477,7 @@ pub trait AttributeDescriptor {
 
 /// A static attribute view.
 #[doc(hidden)]
-pub struct StaticAttributeBuilder<A>(PhantomData<A>);
+pub struct StaticAttributeBuilder<Descriptor, Value = Descriptor>(PhantomData<(Descriptor, Value)>);
 
 /// Create a static attribute view for an attribute marker.
 #[doc(hidden)]
@@ -461,15 +487,24 @@ pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>()
     StaticAttributeBuilder(PhantomData)
 }
 
-impl<A: AttributeDescriptor + StaticAttributeValue> ViewTemplate for StaticAttributeBuilder<A> {
-    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::StaticAttr {
-        name: A::NAME,
-        value: A::VALUE,
-        namespace: A::NAMESPACE,
-    });
+impl<Descriptor, Value> ViewTemplate for StaticAttributeBuilder<Descriptor, Value>
+where
+    Descriptor: AttributeDescriptor,
+    Value: StaticAttributeValue,
+{
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::StaticAttr {
+        name: Descriptor::NAME,
+        value: Value::VALUE,
+        namespace: Descriptor::NAMESPACE,
+    };
 }
 
-impl<A: AttributeDescriptor + StaticAttributeValue> View for StaticAttributeBuilder<A> {}
+impl<Descriptor, Value> View for StaticAttributeBuilder<Descriptor, Value>
+where
+    Descriptor: AttributeDescriptor,
+    Value: StaticAttributeValue,
+{
+}
 
 /// A marker for one static attribute value.
 #[doc(hidden)]
@@ -487,28 +522,6 @@ pub struct StaticAttributeValueBuilder<V>(PhantomData<V>);
 #[inline]
 pub const fn static_attribute_value<V: StaticAttributeValue>() -> StaticAttributeValueBuilder<V> {
     StaticAttributeValueBuilder(PhantomData)
-}
-
-/// A static attribute assembled from a generated descriptor and a static value.
-#[doc(hidden)]
-pub struct StaticAttributeWithValue<Descriptor, Value>(PhantomData<(Descriptor, Value)>);
-
-impl<Descriptor, Value> AttributeDescriptor for StaticAttributeWithValue<Descriptor, Value>
-where
-    Descriptor: AttributeDescriptor,
-    Value: StaticAttributeValue,
-{
-    const NAME: &'static str = Descriptor::NAME;
-    const NAMESPACE: Option<&'static str> = Descriptor::NAMESPACE;
-    const VOLATILE: bool = Descriptor::VOLATILE;
-}
-
-impl<Descriptor, Value> StaticAttributeValue for StaticAttributeWithValue<Descriptor, Value>
-where
-    Descriptor: AttributeDescriptor,
-    Value: StaticAttributeValue,
-{
-    const VALUE: &'static str = Value::VALUE;
 }
 
 #[doc(hidden)]
@@ -554,7 +567,7 @@ pub fn dynamic_attribute<T>(
 }
 
 impl ViewTemplate for DynamicAttributesBuilder {
-    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::DynamicAttr);
+    const TEMPLATE_TREE: &'static TemplateRawTree = TemplateRawTree::DYNAMIC_ATTR;
 }
 
 impl View for DynamicAttributesBuilder {
@@ -640,20 +653,12 @@ where
     Descriptor: AttributeDescriptor,
     Value: StaticAttributeValue,
 {
-    type Output = ElementBuilder<
-        Tag,
-        (
-            Attributes,
-            StaticAttributeBuilder<StaticAttributeWithValue<Descriptor, Value>>,
-        ),
-        Children,
-    >;
+    type Output =
+        ElementBuilder<Tag, (Attributes, StaticAttributeBuilder<Descriptor, Value>), Children>;
 
     #[inline]
     fn append_to(self, target: ElementBuilder<Tag, Attributes, Children>) -> Self::Output {
-        target.attribute(static_attribute::<
-            StaticAttributeWithValue<Descriptor, Value>,
-        >())
+        target.attribute(StaticAttributeBuilder(PhantomData))
     }
 }
 
@@ -676,68 +681,10 @@ pub const fn static_text<T: StaticText>() -> StaticTextBuilder<T> {
 }
 
 impl<T: StaticText> ViewTemplate for StaticTextBuilder<T> {
-    const TEMPLATE_TAPE: ViewTemplateTape =
-        ViewTemplateTape::single(TemplateRawOp::StaticText { value: T::TEXT });
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::StaticText(T::TEXT);
 }
 
 impl<T: StaticText> View for StaticTextBuilder<T> {}
-
-/// A typed view with a root key.
-#[doc(hidden)]
-pub struct KeyedViewBuilder<V> {
-    view: V,
-    key: Option<String>,
-}
-
-/// Convert a value into an optional root key.
-#[doc(hidden)]
-pub trait IntoViewKey {
-    /// Convert this value into an optional key.
-    fn into_key(self) -> Option<String>;
-}
-
-impl IntoViewKey for String {
-    #[inline]
-    fn into_key(self) -> Option<String> {
-        Some(self)
-    }
-}
-
-impl IntoViewKey for &str {
-    #[inline]
-    fn into_key(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
-impl IntoViewKey for Option<String> {
-    #[inline]
-    fn into_key(self) -> Option<String> {
-        self
-    }
-}
-
-impl<V: ViewTemplate> ViewTemplate for KeyedViewBuilder<V> {
-    const TEMPLATE_TAPE: ViewTemplateTape = V::TEMPLATE_TAPE;
-}
-
-impl<V: View> View for KeyedViewBuilder<V> {
-    #[inline]
-    fn push(self, dynamic: &mut DynamicViewValues) {
-        self.view.push(dynamic);
-    }
-
-    #[inline]
-    fn into_vnode(self) -> VNode {
-        let key = self.key;
-        let mut dynamic = DynamicViewValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
-        self.view.push(&mut dynamic);
-        VNode::new_with_rendered_view(
-            *Self::TEMPLATE,
-            dynamic.into_rendered_view_for_template(key, Self::TEMPLATE),
-        )
-    }
-}
 
 /// Declare a static text marker type.
 #[macro_export]

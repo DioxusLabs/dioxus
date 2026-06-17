@@ -1,6 +1,6 @@
 use crate::{
     ComponentFunctionExt, Element, ErrorBoundary, Properties, SuspenseBoundary, VComponent, VNode,
-    properties::RootProps, view::View,
+    properties::RootProps, view::ViewExt,
 };
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary

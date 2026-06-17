@@ -103,11 +103,25 @@ impl ToTokens for TemplateBody {
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 let __key = #key_tokens;
 
+                #[cfg(debug_assertions)]
+                static __VIEW_TEMPLATE: std::sync::OnceLock<dioxus_core::Template> = std::sync::OnceLock::new();
+
                 // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                 #[allow(clippy::let_and_return)]
                 let __vnodes = {
-                    use dioxus_core::view::View as _;
-                    #view_expr.key(__key).into_vnode()
+                    #[cfg(debug_assertions)]
+                    {
+                        dioxus_core::view::into_vnode_with_key_and_template_cell(
+                            #view_expr,
+                            __key,
+                            &__VIEW_TEMPLATE,
+                        )
+                    }
+
+                    #[cfg(not(debug_assertions))]
+                    {
+                        dioxus_core::view::into_vnode_with_key(#view_expr, __key)
+                    }
                 };
 
                 #[cfg(debug_assertions)]
@@ -157,7 +171,7 @@ impl ViewBuilderPieces {
 
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
-        let view = builder.visit_element(element, true).expr;
+        let view = builder.visit_element(element, true);
         builder.finish(view)
     }
 
@@ -194,17 +208,6 @@ impl ViewBuilderPieces {
                 vec![ #( #dynamic_slots ),* ],
             )
         }
-    }
-}
-
-struct ViewExpr {
-    expr: TokenStream2,
-    child_arg: Option<TokenStream2>,
-}
-
-impl ViewExpr {
-    fn into_child_arg(self) -> TokenStream2 {
-        self.child_arg.unwrap_or(self.expr)
     }
 }
 
@@ -265,10 +268,7 @@ impl ViewBuilder {
         nodes: &[BodyNode],
         allow_implicit_key: bool,
     ) -> TokenStream2 {
-        let roots = self
-            .visit_sibling_nodes(nodes, allow_implicit_key, SiblingContext::Roots)
-            .into_iter()
-            .map(|view| view.expr);
+        let roots = self.visit_sibling_nodes(nodes, allow_implicit_key, SiblingContext::Roots);
 
         quote! { (#(#roots),*) }
     }
@@ -278,7 +278,7 @@ impl ViewBuilder {
         nodes: &[BodyNode],
         allow_implicit_key: bool,
         context: SiblingContext,
-    ) -> Vec<ViewExpr> {
+    ) -> Vec<TokenStream2> {
         if self.should_chunk_siblings(nodes, context) {
             if matches!(context, SiblingContext::Roots) {
                 return vec![self.synthetic_dynamic_chunk(nodes)];
@@ -298,7 +298,7 @@ impl ViewBuilder {
             .collect()
     }
 
-    fn visit_node(&mut self, node: &BodyNode, implicit_key: bool) -> ViewExpr {
+    fn visit_node(&mut self, node: &BodyNode, implicit_key: bool) -> TokenStream2 {
         match node {
             BodyNode::Element(element) => self.visit_element(element, implicit_key),
             BodyNode::Text(text) if text.is_static() => self.static_text(text),
@@ -316,7 +316,7 @@ impl ViewBuilder {
         }
     }
 
-    fn visit_element(&mut self, element: &Element, implicit_key: bool) -> ViewExpr {
+    fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TokenStream2 {
         let tag = self.element_tag(element);
         let mut attrs = TokenStream2::new();
         for attr in &element.merged_attributes {
@@ -330,40 +330,26 @@ impl ViewBuilder {
             }
         }
 
-        let mut children = TokenStream2::new();
-        for child in
-            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren)
-        {
-            let child = child.into_child_arg();
-            children.extend(quote! { .child(#child) });
-        }
+        let children =
+            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren);
+        let children = quote! { (#(#children,)*) };
 
-        ViewExpr {
-            expr: quote! { #tag #attrs #children },
-            child_arg: None,
-        }
+        quote! { #tag #attrs.with_children(#children) }
     }
 
-    fn static_text(&mut self, text: &TextNode) -> ViewExpr {
+    fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
         let value = text.input.to_static().unwrap();
-        let expr = quote_spanned! { text.input.span() => dioxus_core::static_text!(#value) };
-        ViewExpr {
-            expr,
-            child_arg: None,
-        }
+        quote_spanned! { text.input.span() => dioxus_core::static_text!(#value) }
     }
 
-    fn dynamic_node(&mut self, tokens: TokenStream2) -> ViewExpr {
+    fn dynamic_node(&mut self, tokens: TokenStream2) -> TokenStream2 {
         let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
         self.hot_reload_dynamic_nodes
             .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
         self.hot_reload_dynamic_slots
             .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
-        ViewExpr {
-            expr: quote! { dioxus_core::internal::dynamic_node_builder::<_, ()>(#tokens) },
-            child_arg: Some(tokens),
-        }
+        quote! { dioxus_core::internal::dynamic_node_builder::<_, ()>(#tokens) }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
@@ -512,20 +498,17 @@ impl ViewBuilder {
         format_ident!("{prefix}{index}")
     }
 
-    fn synthetic_dynamic_chunk(&mut self, nodes: &[BodyNode]) -> ViewExpr {
+    fn synthetic_dynamic_chunk(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
         let mut chunk_builder = ViewBuilder::new();
         let roots = nodes
             .iter()
             .map(|node| chunk_builder.visit_node(node, false))
-            .map(|view| {
-                let expr = view.expr;
-                quote! { #expr.into_vnode() }
-            })
+            .map(|expr| quote! { #expr.into_vnode() })
             .collect::<Vec<_>>();
         let chunk = chunk_builder.finish(quote! { () });
         let definitions = chunk.definitions();
         let tokens = quote! {{
-            use dioxus_core::view::View as _;
+            use dioxus_core::view::ViewExt as _;
             #(#definitions)*
             dioxus_core::DynamicNode::Fragment(vec![#(#roots),*])
         }};
