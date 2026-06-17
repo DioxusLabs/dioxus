@@ -211,7 +211,6 @@ impl VNode {
             .as_ref()
             .and_then(|n| n.mounted_vnode().find_first_element(state.dom));
         let context = state.context();
-        let placement_skip = state.placement_skip().to_vec();
 
         // Free the scope slot so `create_component_node` allocates a new scope.
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
@@ -225,7 +224,7 @@ impl VNode {
                         .anchor_for_value(idx)
                         .expect("a dynamic component value always has an owning anchor");
                     let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
-                    insertion_site_for_slot(mount, slot, &placement_skip, state.dom, context)
+                    insertion_site_for_slot(mount, slot, state.dom, context)
                 });
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
@@ -234,12 +233,7 @@ impl VNode {
                 .as_deref_mut()
                 .expect("writer presence checked before component placement");
             at_site(site, to, runtime, |to| {
-                let mut state = DiffState::new_with_context_and_placement_skip(
-                    dom,
-                    Some(to),
-                    context,
-                    &placement_skip,
-                );
+                let mut state = DiffState::new_with_context(dom, Some(to), context);
                 self.create_component_node(mount, idx, new, parent, &mut state)
             });
         } else {

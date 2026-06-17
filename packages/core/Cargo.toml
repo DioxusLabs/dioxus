@@ -22,6 +22,7 @@ bench = false
 
 [dependencies]
 dioxus-const-vec = { workspace = true }
+dioxus-core-template = { workspace = true }
 dioxus-core-types = { workspace = true }
 const_format = { workspace = true }
 futures-channel = { workspace = true }
@@ -64,6 +65,10 @@ serialize = ["dep:serde", "dioxus-core-template/serialize"]
 
 [[bench]]
 name = "jsframework"
+harness = false
+
+[[bench]]
+name = "keyed_diff"
 harness = false
 
 [package.metadata.docs.rs]

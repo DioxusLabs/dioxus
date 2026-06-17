@@ -101,13 +101,12 @@ impl InsertionSite {
 pub(super) fn insertion_site_at(
     edge: ElementEdge,
     vnode: MountedVNode<'_>,
-    skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     let at_edge =
         vnode_edge_element(vnode, dom, edge).map(|id| InsertionSite::AtAnchor(edge.anchor(id)));
-    at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), skip, dom, context))
+    at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), dom, context))
 }
 
 /// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
@@ -118,7 +117,6 @@ pub(super) fn insertion_site_at(
 pub(super) fn insertion_site_for_slot(
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
-    skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
@@ -131,7 +129,7 @@ pub(super) fn insertion_site_for_slot(
         if let Some(id) = root_content_after_slot(parent_mount, our_root_idx, dom) {
             return InsertionSite::AtAnchor(DomAnchor::Before(id));
         }
-        return insertion_site_for_mounted_child(parent_mount, skip, dom, context);
+        return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
     // `cursor.len() > 1` means we're walking inside a template element. The
@@ -207,7 +205,6 @@ fn insert_at_slot(
 
 fn insertion_site_for_mounted_child(
     mount: MountId,
-    skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
@@ -216,12 +213,11 @@ fn insertion_site_for_mounted_child(
     };
     let parent_mount = parent_ref.mount;
 
-    if let Some(site) = insertion_site_for_child_in_parent(mount, parent_mount, skip, dom, context)
-    {
+    if let Some(site) = insertion_site_for_child_in_parent(mount, parent_mount, dom, context) {
         return site;
     }
 
-    insertion_site_for_mounted_child(parent_mount, skip, dom, context)
+    insertion_site_for_mounted_child(parent_mount, dom, context)
 }
 
 /// Resolve a child mount's site inside a specific committed parent.
@@ -231,7 +227,6 @@ fn insertion_site_for_mounted_child(
 fn insertion_site_for_child_in_parent(
     mount: MountId,
     parent_mount: MountId,
-    skip: &[MountId],
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<InsertionSite> {
@@ -248,35 +243,18 @@ fn insertion_site_for_child_in_parent(
                     let child_mounts =
                         dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
                     let position = locate_in_fragment(&child_mounts, mount)?;
-                    if let Some(id) = first_live_sibling_after(
-                        children,
-                        &child_mounts,
-                        position,
-                        mount,
-                        skip,
-                        dom,
-                    ) {
+                    if let Some(id) =
+                        first_live_sibling_after(children, &child_mounts, position, mount, dom)
+                    {
                         return Some(InsertionSite::AtAnchor(DomAnchor::Before(id)));
                     }
-                    return Some(insertion_site_for_slot(
-                        parent_mount,
-                        slot,
-                        skip,
-                        dom,
-                        context,
-                    ));
+                    return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                 }
                 DynamicNode::Component(_) => {
                     if dom.unchecked_mounted_dynamic_component_root_mount(parent_mount, idx)
                         == mount
                     {
-                        return Some(insertion_site_for_slot(
-                            parent_mount,
-                            slot,
-                            skip,
-                            dom,
-                            context,
-                        ));
+                        return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                     }
                 }
                 DynamicNode::Text(_) => {}
@@ -436,7 +414,6 @@ fn first_live_sibling_after(
     child_mounts: &[MountId],
     position: usize,
     mount: MountId,
-    skip: &[MountId],
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     children
@@ -445,7 +422,9 @@ fn first_live_sibling_after(
         .skip(position + 1)
         .find_map(|(child, m)| {
             let m = *m;
-            if skip.contains(&m) || m == mount {
+            // Skip the node itself and any sibling the active diff has already
+            // moved/replaced — its committed position is stale.
+            if m == mount || dom.runtime.is_placement_stale(m) {
                 return None;
             }
             child.find_first_element(m, dom)

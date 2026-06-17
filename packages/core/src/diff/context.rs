@@ -1,17 +1,15 @@
 use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
-use std::rc::Rc;
 
 /// State required for diffing operations.
 ///
 /// Invariant: one `DiffState` owns the active mutable access to the `VirtualDom` and the optional
-/// renderer writer. `context` describes the vnode frame currently being diffed, while
-/// `placement_skip` lists committed mounts that are still visible in parent storage but have
-/// already been claimed by this diff and must not anchor later insertions.
+/// renderer writer. `context` describes the vnode frame currently being diffed. Mounts whose
+/// committed position is stale (moved or replaced by the active diff) are tracked on the
+/// `Runtime`, not here, so placement scans can consult them in O(1) without threading a list.
 pub(crate) struct DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) dom: &'dom mut VirtualDom,
     pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
     pub(crate) context: Option<DiffContext<'ctx>>,
-    placement_skip: Rc<[MountId]>,
 }
 
 impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
@@ -27,21 +25,7 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
         context: Option<DiffContext<'ctx>>,
     ) -> Self {
-        Self::new_with_context_and_placement_skip(dom, to, context, &[])
-    }
-
-    pub(crate) fn new_with_context_and_placement_skip(
-        dom: &'dom mut VirtualDom,
-        to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
-        context: Option<DiffContext<'ctx>>,
-        placement_skip: &[MountId],
-    ) -> Self {
-        Self {
-            dom,
-            to,
-            context,
-            placement_skip: Rc::from(placement_skip),
-        }
+        Self { dom, to, context }
     }
 
     /// Reborrow this state while optionally disabling renderer writes.
@@ -56,22 +40,11 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
             dom: &mut *self.dom,
             to: if write { self.to.as_deref_mut() } else { None },
             context: self.context,
-            placement_skip: self.placement_skip.clone(),
         }
     }
 
     pub(crate) fn context(&self) -> Option<DiffContext<'ctx>> {
         self.context
-    }
-
-    pub(crate) fn placement_skip(&self) -> &[MountId] {
-        &self.placement_skip
-    }
-
-    pub(crate) fn push_placement_skip(&mut self, mount: MountId) {
-        let mut placement_skip = self.placement_skip.to_vec();
-        placement_skip.push(mount);
-        self.placement_skip = Rc::from(placement_skip);
     }
 
     /// Create replacement content in an empty dynamic slot, then optionally

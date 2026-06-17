@@ -175,7 +175,6 @@ impl VNode {
             None
         };
         let context = state.context();
-        let placement_skip = state.placement_skip().to_vec();
 
         state.with_mounted_dynamic_node_slot_replaced(
             mount,
@@ -185,13 +184,7 @@ impl VNode {
                 if state.to.is_some() {
                     let site = match live_first {
                         Some(first) => InsertionSite::AtAnchor(DomAnchor::Before(first)),
-                        None => insertion_site_for_slot(
-                            mount,
-                            slot,
-                            &placement_skip,
-                            state.dom,
-                            context,
-                        ),
+                        None => insertion_site_for_slot(mount, slot, state.dom, context),
                     };
                     let runtime = state.dom.runtime.clone();
                     let dom = &mut *state.dom;
@@ -200,12 +193,7 @@ impl VNode {
                         .as_deref_mut()
                         .expect("writer presence checked before dynamic placement");
                     at_site(site, to, runtime, |to| {
-                        let mut state = DiffState::new_with_context_and_placement_skip(
-                            dom,
-                            Some(to),
-                            context,
-                            &placement_skip,
-                        );
+                        let mut state = DiffState::new_with_context(dom, Some(to), context);
                         self.create_dynamic_node(new, mount, idx, &mut state)
                     });
                 } else {
@@ -245,13 +233,8 @@ impl VNode {
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
                 let created = if state.to.is_some() {
-                    let site = insertion_site_for_slot(
-                        mount,
-                        slot,
-                        state.placement_skip(),
-                        state.dom,
-                        state.context(),
-                    );
+                    let site =
+                        insertion_site_for_slot(mount, slot, state.dom, state.context());
                     let to = state
                         .to
                         .as_deref_mut()
@@ -406,13 +389,16 @@ impl VNode {
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         let nodes = if state.to.is_some() {
+            // The replacement mount is already allocated and must not anchor the
+            // insertion against itself; mark it stale for this lookup only.
+            state.dom.runtime.mark_placement_stale(right_mount);
             let site = insertion_site_at(
                 ElementEdge::First,
                 MountedVNode::new(self, mount),
-                &[right_mount],
                 state.dom,
                 state.context(),
             );
+            state.dom.runtime.unmark_placement_stale(right_mount);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state
@@ -467,7 +453,6 @@ impl VNode {
         let suppress_mutations =
             self.should_suppress_mutations(mount, state.dom, destroy_component_state);
         let context = state.context();
-        let placement_skip = state.placement_skip().to_vec();
         let mut to_for_create = state.to.as_deref_mut();
         if suppress_mutations {
             to_for_create = None;
@@ -476,7 +461,6 @@ impl VNode {
             let site = insertion_site_at(
                 ElementEdge::First,
                 MountedVNode::new(self, mount),
-                &placement_skip,
                 state.dom,
                 context,
             );
@@ -976,7 +960,6 @@ impl VNode {
         }
 
         let context = state.context();
-        let placement_skip = state.placement_skip().to_vec();
         let site = self.template_slot_insertion_site(mount, slot, state.dom);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
@@ -985,12 +968,7 @@ impl VNode {
             .as_deref_mut()
             .expect("writer presence checked before anchor loading");
         at_site(site, to, runtime, |to| {
-            let mut state = DiffState::new_with_context_and_placement_skip(
-                dom,
-                Some(to),
-                context,
-                &placement_skip,
-            );
+            let mut state = DiffState::new_with_context(dom, Some(to), context);
             anchor
                 .values()
                 .map(|dynamic_node_id| {

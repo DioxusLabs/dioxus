@@ -6,8 +6,8 @@
 
 use std::marker::PhantomData;
 
-use dioxus_core_template::VIEW_TEMPLATE_TAPE_CAP;
 use dioxus_const_vec::ConstVec;
+use dioxus_core_template::VIEW_TEMPLATE_TAPE_CAP;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
@@ -96,7 +96,7 @@ pub struct DynamicViewValues {
 impl DynamicViewValues {
     /// Create a dynamic-value buffer with known capacity.
     #[inline]
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
             values: Vec::with_capacity(capacity),
         }
@@ -116,7 +116,7 @@ impl DynamicViewValues {
 
     /// Convert this buffer into the boxed slice expected by [`VNode`].
     #[inline]
-    pub(crate) fn into_boxed_slice_for_template(self, template: &Template) -> Box<[DynamicValue]> {
+    pub fn into_boxed_slice_for_template(self, template: &Template) -> Box<[DynamicValue]> {
         template
             .reorder_dynamic_values_from_document_order(self.values)
             .into_boxed_slice()
@@ -124,7 +124,7 @@ impl DynamicViewValues {
 
     /// Convert this buffer into the rendered view payload expected by [`VNode`].
     #[inline]
-    pub(crate) fn into_rendered_view_for_template(
+    pub fn into_rendered_view_for_template(
         self,
         key: Option<String>,
         template: &Template,
