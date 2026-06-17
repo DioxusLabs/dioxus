@@ -331,7 +331,7 @@ impl RenderDriver for SuspenseDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        mut to: Option<&mut (dyn WriteMutations + '_)>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
@@ -339,12 +339,7 @@ impl RenderDriver for SuspenseDriver {
         SuspenseContext::remove_suspended_nodes(dom, scope_id, destroy_component_state);
 
         if let Some(node) = dom.scopes[scope_id.0].last_rendered_node.clone() {
-            node.remove_node_inner(
-                dom,
-                to.as_deref_mut(),
-                destroy_component_state,
-                replace_with,
-            )
+            node.remove_node_inner(dom, to, destroy_component_state, replace_with)
         };
 
         if destroy_component_state {
@@ -375,7 +370,7 @@ fn suspense_create(
     scope_id: ScopeId,
     parent: Option<ElementRef>,
     dom: &mut VirtualDom,
-    mut to: Option<&mut (dyn WriteMutations + '_)>,
+    to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> usize {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let suspense_context = driver.context();
@@ -397,7 +392,7 @@ fn suspense_create(
                     suspense_context.set_suspended_nodes(children.as_vnode().clone());
                     let suspense_placeholder =
                         LastRenderedNode::new(driver.fallback().call(suspense_context.clone()));
-                    let nodes_created = suspense_placeholder.create(dom, parent, to.as_deref_mut());
+                    let nodes_created = suspense_placeholder.create(dom, parent, to);
                     (suspense_placeholder, nodes_created)
                 });
 
@@ -406,9 +401,8 @@ fn suspense_create(
         } else {
             // Otherwise just render the children in the real dom
             debug_assert!(children.mount.get().mounted());
-            let nodes_created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children.create(dom, parent, to.as_deref_mut())
-            });
+            let nodes_created = suspense_context
+                .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
             dom.scopes[scope_id.0].last_rendered_node = children.into();
             suspense_context.take_suspended_nodes();
             mark_suspense_resolved(&suspense_context, dom, scope_id);
@@ -451,7 +445,11 @@ impl SuspenseBoundaryProps {
                     .parent
             };
 
-            let driver = suspense_driver(dom, scope_id);
+            let driver_rc = dom.runtime.get_state(scope_id).render_driver();
+            let driver = driver_rc
+                .as_any()
+                .downcast_ref::<SuspenseDriver>()
+                .expect("expected suspense driver on scope");
 
             // Unmount any children to reset any scopes under this suspense boundary
             let children = driver.children();
@@ -493,7 +491,7 @@ fn suspense_diff(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
     dom: &mut VirtualDom,
-    mut to: Option<&mut (dyn WriteMutations + '_)>,
+    to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let scope = &mut dom.scopes[scope_id.0];
@@ -517,7 +515,7 @@ fn suspense_diff(
                         let new_placeholder =
                             LastRenderedNode::new(fallback.call(suspense_context.clone()));
 
-                        last_rendered_node.diff_node(&new_placeholder, dom, to.as_deref_mut());
+                        last_rendered_node.diff_node(&new_placeholder, dom, to);
                         new_placeholder
                     });
 
@@ -539,7 +537,7 @@ fn suspense_diff(
             // We have no suspended nodes, and we are not suspended. Just diff the children like normal
             (None, false) => {
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    last_rendered_node.diff_node(&children, dom, to.as_deref_mut());
+                    last_rendered_node.diff_node(&children, dom, to);
                 });
 
                 // Set the last rendered node to the new children
@@ -563,7 +561,7 @@ fn suspense_diff(
                         std::slice::from_ref(&new_placeholder),
                         parent,
                         dom,
-                        to.as_deref_mut(),
+                        to,
                     );
                 });
 
@@ -596,12 +594,7 @@ fn suspense_diff(
                     // Then replace the placeholder with the new children
                     let mount = old_placeholder.mount.get();
                     let parent = dom.get_mounted_parent(mount);
-                    old_placeholder.replace(
-                        std::slice::from_ref(&children),
-                        parent,
-                        dom,
-                        to.as_deref_mut(),
-                    );
+                    old_placeholder.replace(std::slice::from_ref(&children), parent, dom, to);
                 });
 
                 // Set the last rendered node to the new children
@@ -628,24 +621,6 @@ fn mark_suspense_resolved(
 /// Move from a resolved suspense state to an suspended state
 fn un_resolve_suspense(dom: &mut VirtualDom, scope_id: ScopeId) {
     dom.resolved_scopes.retain(|&id| id != scope_id);
-}
-
-/// Get the SuspenseDriver for a given scope.
-fn suspense_driver(dom: &VirtualDom, scope_id: ScopeId) -> Rc<SuspenseDriver> {
-    let driver = dom.runtime.get_state(scope_id).render_driver();
-    // Safety: we know suspense boundary scopes have SuspenseDriver as their driver.
-    let ptr = Rc::into_raw(driver);
-    // Check the downcast via as_any
-    unsafe {
-        let dyn_ref = &*ptr;
-        assert!(
-            dyn_ref.as_any().is::<SuspenseDriver>(),
-            "expected suspense driver on scope"
-        );
-        // Reconstruct Rc<SuspenseDriver> from the raw pointer
-        let typed_ptr = ptr as *const SuspenseDriver;
-        Rc::from_raw(typed_ptr)
-    }
 }
 
 impl SuspenseContext {
