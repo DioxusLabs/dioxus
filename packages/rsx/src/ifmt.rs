@@ -230,7 +230,7 @@ impl ToTokens for IfmtInput {
         // If the segments are not complex exprs, we can just use format! directly to take advantage of RA rename/expansion
         if self.is_simple_expr() {
             let raw = &self.source;
-            return quote_spanned! { raw.span() => ::std::format!(#raw) }.to_tokens(tokens);
+            return quote! { ::std::format!(#raw) }.to_tokens(tokens);
         }
 
         // build format_literal
