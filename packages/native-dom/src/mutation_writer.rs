@@ -3,18 +3,15 @@ use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
 use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{AttributeValue, ElementId, WriteMutations};
-use rustc_hash::FxHashMap;
 use std::str::FromStr as _;
 
 /// The state of the Dioxus integration with the RealDom
 #[derive(Debug)]
 pub struct DioxusState {
     /// Stack machine state for applying dioxus mutations
-    pub(crate) stack: Vec<NodeId>,
+    pub(crate) stack: Vec<(NodeId, Option<ElementId>)>,
     /// Mapping from vdom ElementId -> rdom NodeId
     pub(crate) node_id_mapping: Vec<Option<NodeId>>,
-    /// Mapping from rdom NodeId -> vdom ElementId
-    pub(crate) element_id_mapping: FxHashMap<NodeId, ElementId>,
     /// Count of each handler type
     pub(crate) event_handler_counts: [u32; 32],
     /// Mounted events queued as elements are mounted
@@ -24,12 +21,9 @@ pub struct DioxusState {
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
     pub fn create(root_id: usize) -> Self {
-        let mut element_id_mapping = FxHashMap::default();
-        element_id_mapping.insert(root_id, ElementId::ROOT);
         Self {
-            stack: vec![root_id],
+            stack: vec![(root_id, Some(ElementId::ROOT))],
             node_id_mapping: vec![Some(root_id)],
-            element_id_mapping,
             event_handler_counts: [0; 32],
             queued_mounted_events: Vec::new(),
         }
@@ -49,7 +43,11 @@ impl DioxusState {
     }
 
     pub(crate) fn m_stack_nodes(&mut self, m: usize) -> Vec<usize> {
-        self.stack.split_off(self.stack.len() - m)
+        self.stack
+            .split_off(self.stack.len() - m)
+            .into_iter()
+            .map(|entry| entry.0)
+            .collect()
     }
 
     pub(crate) fn queue_mount_event(&mut self, id: ElementId) {
@@ -86,35 +84,25 @@ impl MutationWriter<'_> {
 
         // Set the new mapping
         self.state.node_id_mapping[element_id] = Some(node_id);
-        self.state
-            .element_id_mapping
-            .insert(node_id, ElementId::from_raw(element_id));
     }
 
-    /// Find the current stack node's `index`th child.
-    fn nth_child(&self, index: usize) -> NodeId {
-        let top_of_stack_node_id = *self.state.stack.last().unwrap();
-        self.docm.node_at_path(top_of_stack_node_id, &[index as u8])
+    /// Find a child in the document by child index path
+    fn load_child(&self, path: &[u8]) -> NodeId {
+        let top_of_stack_node_id = self.top_node();
+        self.docm.node_at_path(top_of_stack_node_id, path)
     }
 
     fn top_node(&self) -> NodeId {
-        *self.state.stack.last().unwrap()
+        self.state.stack.last().unwrap().0
     }
 
     fn top_element_id(&self) -> ElementId {
-        *self
-            .state
-            .element_id_mapping
-            .get(&self.top_node())
+        self.state
+            .stack
+            .last()
+            .unwrap()
+            .1
             .expect("top node must be mapped to an ElementId")
-    }
-
-    fn clear_node_mapping(&mut self, node_id: NodeId) {
-        if let Some(element_id) = self.state.element_id_mapping.remove(&node_id)
-            && let Some(slot) = self.state.node_id_mapping.get_mut(element_id.raw())
-        {
-            *slot = None;
-        }
     }
 }
 
@@ -122,19 +110,19 @@ impl WriteMutations for MutationWriter<'_> {
     fn push_id(&mut self, id: ElementId) {
         trace!("push_id id:{}", id.raw());
         let node_id = self.state.element_to_node_id(id);
-        self.state.stack.push(node_id);
+        self.state.stack.push((node_id, Some(id)));
     }
 
     fn pop_id(&mut self, id: ElementId) {
         trace!("pop_id id:{}", id.raw());
-        let node_id = self.state.stack.pop().unwrap();
-        self.set_id_mapping(node_id, id);
+        let entry = self.state.stack.pop().unwrap();
+        self.set_id_mapping(entry.0, id);
     }
 
     fn child(&mut self, index: usize) {
         trace!("child index:{index}");
-        let child = self.nth_child(index);
-        *self.state.stack.last_mut().unwrap() = child;
+        let child = self.load_child(&[index as u8]);
+        *self.state.stack.last_mut().unwrap() = (child, None);
     }
 
     fn pop(&mut self) {
@@ -145,19 +133,19 @@ impl WriteMutations for MutationWriter<'_> {
     fn create_element(&mut self, tag: &str, ns: Option<&str>) {
         trace!("create_element tag:{tag} ns:{ns:?}");
         let node_id = self.docm.create_element(qual_name(tag, ns), Vec::new());
-        self.state.stack.push(node_id);
+        self.state.stack.push((node_id, None));
     }
 
     fn create_text(&mut self, value: &str) {
         trace!("create_text text:{}", value);
         let node_id = self.docm.create_text_node(value);
-        self.state.stack.push(node_id);
+        self.state.stack.push((node_id, None));
     }
 
     fn clone(&mut self) {
         trace!("clone");
         let node_id = self.top_node();
-        *self.state.stack.last_mut().unwrap() = self.docm.deep_clone_node(node_id);
+        *self.state.stack.last_mut().unwrap() = (self.docm.deep_clone_node(node_id), None);
     }
 
     fn append_children(&mut self, m: usize) {
@@ -171,8 +159,7 @@ impl WriteMutations for MutationWriter<'_> {
         trace!("replace_with m:{m}");
         let new_node_ids = self.state.m_stack_nodes(m);
         let target = self.state.stack.pop().unwrap();
-        self.docm.replace_node_with(target, &new_node_ids);
-        self.clear_node_mapping(target);
+        self.docm.replace_node_with(target.0, &new_node_ids);
     }
 
     fn insert_after(&mut self, m: usize) {
@@ -191,9 +178,8 @@ impl WriteMutations for MutationWriter<'_> {
 
     fn remove(&mut self) {
         trace!("remove");
-        let node_id = self.state.stack.pop().unwrap();
-        self.docm.remove_node(node_id);
-        self.clear_node_mapping(node_id);
+        let entry = self.state.stack.pop().unwrap();
+        self.docm.remove_node(entry.0);
     }
 
     fn set_text(&mut self, value: &str) {
