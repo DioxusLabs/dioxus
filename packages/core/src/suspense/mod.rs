@@ -188,7 +188,7 @@ impl SuspenseContext {
 }
 
 /// A boundary that will capture any errors from child components
-pub struct SuspenseBoundaryInner {
+pub(crate) struct SuspenseBoundaryInner {
     rt: Rc<Runtime>,
 
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,

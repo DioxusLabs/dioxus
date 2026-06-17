@@ -316,7 +316,7 @@ impl ViewBuilder {
         self.hot_reload_dynamic_slots
             .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
         ViewExpr {
-            expr: quote! { dioxus_core::internal::node_dyn::<_, ()>(#tokens) },
+            expr: quote! { dioxus_core::internal::dynamic_node_builder::<_, ()>(#tokens) },
             child_arg: Some(tokens),
         }
     }
@@ -324,7 +324,7 @@ impl ViewBuilder {
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
-        quote! { .attr(dioxus_core::internal::attrs_dyn(#attrs)) }
+        quote! { .attribute(dioxus_core::internal::dynamic_attributes_builder(#attrs)) }
     }
 
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
@@ -425,8 +425,8 @@ impl ViewBuilder {
                 const VALUE: &'static str = #value;
             }
         });
-        let attr = quote_spanned! { span => dioxus_core::view::attr::<#marker>() };
-        quote! { .attr(#attr) }
+        let attr = quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() };
+        quote! { .attribute(#attr) }
     }
 
     fn static_builder_attr(
@@ -435,7 +435,7 @@ impl ViewBuilder {
         value: TokenStream2,
         method: Ident,
     ) -> TokenStream2 {
-        let value = quote_spanned! { span => dioxus_core::static_value!(#value) };
+        let value = quote_spanned! { span => dioxus_core::static_attribute_value!(#value) };
         quote! { .#method(#value) }
     }
 
@@ -444,7 +444,7 @@ impl ViewBuilder {
             ElementName::Ident(tag) => quote_spanned! { element.name.span() => #tag() },
             ElementName::Custom(_) => {
                 let tag = self.define_tag(element);
-                quote! { dioxus_core::view::el::<#tag>() }
+                quote! { dioxus_core::view::element_builder::<#tag>() }
             }
         }
     }
@@ -455,7 +455,7 @@ impl ViewBuilder {
         self.definitions
             .push(quote_spanned! { element.name.span() =>
                 struct #marker;
-                impl dioxus_core::view::TagName for #marker {
+                impl dioxus_core::view::ElementTag for #marker {
                     const NAME: &'static str = #tag;
                 }
             });

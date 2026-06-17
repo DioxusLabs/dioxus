@@ -156,7 +156,7 @@ impl Scope {
         }
     }
 
-    pub fn parent_id(&self) -> Option<ScopeId> {
+    pub(crate) fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
     }
 

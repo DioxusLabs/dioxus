@@ -2434,12 +2434,16 @@ pub trait GlobalAttributesElement {}
 /// Marker for tag types that support SVG attributes.
 pub trait SvgAttributesElement {}
 
-impl<Tag, Attrs, Children> GlobalAttributesExtension for dioxus_core::view::El<Tag, Attrs, Children> where
-    Tag: GlobalAttributesElement
+impl<Tag, Attributes, Children> GlobalAttributesExtension
+    for dioxus_core::view::ElementBuilder<Tag, Attributes, Children>
+where
+    Tag: GlobalAttributesElement,
 {
 }
 
-impl<Tag, Attrs, Children> SvgAttributesExtension for dioxus_core::view::El<Tag, Attrs, Children> where
-    Tag: SvgAttributesElement
+impl<Tag, Attributes, Children> SvgAttributesExtension
+    for dioxus_core::view::ElementBuilder<Tag, Attributes, Children>
+where
+    Tag: SvgAttributesElement,
 {
 }

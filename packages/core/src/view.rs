@@ -2,7 +2,7 @@
 //!
 //! This module mirrors the template-v2 builder model: each view type contributes
 //! a const raw template tape, and the composed type is promoted to a static
-//! [`Template`] through [`Raw`].
+//! [`Template`] through [`ViewTemplate`].
 
 use std::marker::PhantomData;
 
@@ -16,16 +16,16 @@ use crate::{
 };
 
 /// Maximum number of raw template operations a typed view can contribute.
-pub(crate) const RAW_TAPE_CAP: usize = TEMPLATE_STORAGE_MAX_CAP;
+pub(crate) const VIEW_TEMPLATE_TAPE_CAP: usize = TEMPLATE_STORAGE_MAX_CAP;
 
 /// A const template-v2-style raw operation tape.
 #[doc(hidden)]
 #[derive(Clone, Copy)]
-pub struct RawTape {
-    ops: ConstVec<TemplateRawOp, RAW_TAPE_CAP>,
+pub struct ViewTemplateTape {
+    ops: ConstVec<TemplateRawOp, VIEW_TEMPLATE_TAPE_CAP>,
 }
 
-impl RawTape {
+impl ViewTemplateTape {
     /// Create an empty raw tape.
     pub(crate) const fn new() -> Self {
         Self {
@@ -46,7 +46,7 @@ impl RawTape {
     }
 
     /// Append another raw tape.
-    pub(crate) const fn concat(&mut self, other: &RawTape) {
+    pub(crate) const fn concat(&mut self, other: &ViewTemplateTape) {
         let mut index = 0;
         while index < other.ops.len() {
             self.ops.push(other.ops.at(index));
@@ -60,7 +60,7 @@ impl RawTape {
     }
 }
 
-impl Default for RawTape {
+impl Default for ViewTemplateTape {
     fn default() -> Self {
         Self::new()
     }
@@ -68,28 +68,31 @@ impl Default for RawTape {
 
 /// A type that contributes static template structure.
 #[doc(hidden)]
-pub trait Raw {
+pub trait ViewTemplate {
     /// The raw template-v2-style tape for this view type.
-    const RAW: RawTape;
+    const TEMPLATE_TAPE: ViewTemplateTape;
 
     /// The static template for this view type.
-    const TEMPLATE: &'static Template =
-        &TemplateStorage::<RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP>::build(Self::RAW.as_slice())
-            .as_template();
+    const TEMPLATE: &'static Template = &TemplateStorage::<
+        VIEW_TEMPLATE_TAPE_CAP,
+        VIEW_TEMPLATE_TAPE_CAP,
+        VIEW_TEMPLATE_TAPE_CAP,
+    >::build(Self::TEMPLATE_TAPE.as_slice())
+    .as_template();
 }
 
-impl Raw for () {
-    const RAW: RawTape = RawTape::new();
+impl ViewTemplate for () {
+    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::new();
 }
 
 /// Runtime dynamic values collected while consuming a typed view.
 #[doc(hidden)]
 #[derive(Debug, Default)]
-pub struct DynamicValues {
+pub struct DynamicViewValues {
     values: Vec<DynamicValue>,
 }
 
-impl DynamicValues {
+impl DynamicViewValues {
     /// Create a dynamic-value buffer with known capacity.
     #[inline]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
@@ -130,15 +133,15 @@ impl DynamicValues {
 }
 
 /// A typed view that can collect runtime dynamic values.
-pub trait View: Raw + Sized {
+pub trait View: ViewTemplate + Sized {
     /// Push runtime dynamic values in template order.
     #[inline]
-    fn push(self, _dynamic: &mut DynamicValues) {}
+    fn push(self, _dynamic: &mut DynamicViewValues) {}
 
     /// Convert this view into a [`VNode`].
     #[inline]
     fn into_vnode(self) -> VNode {
-        let mut dynamic = DynamicValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
+        let mut dynamic = DynamicViewValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
         self.push(&mut dynamic);
         VNode::new_with_rendered_view(
             *Self::TEMPLATE,
@@ -148,8 +151,8 @@ pub trait View: Raw + Sized {
 
     /// Attach a root key to this view.
     #[inline]
-    fn keyed(self, key: impl IntoKey) -> Keyed<Self> {
-        Keyed {
+    fn keyed(self, key: impl IntoViewKey) -> KeyedViewBuilder<Self> {
+        KeyedViewBuilder {
             view: self,
             key: key.into_key(),
         }
@@ -158,13 +161,13 @@ pub trait View: Raw + Sized {
 
 impl View for () {}
 
-impl Raw for VComponent {
-    const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicNode);
+impl ViewTemplate for VComponent {
+    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::DynamicNode);
 }
 
 impl View for VComponent {
     #[inline]
-    fn push(self, dynamic: &mut DynamicValues) {
+    fn push(self, dynamic: &mut DynamicViewValues) {
         dynamic.push_node(DynamicNode::Component(self));
     }
 }
@@ -183,17 +186,17 @@ macro_rules! impl_tuple_views {
         impl_tuple_views!(($($name $value,)* $next_name $next_value,) ; $($rest)*);
     };
     (@impl $($name:ident $value:ident,)+) => {
-        impl<$($name: Raw),+> Raw for ($($name,)+) {
-            const RAW: RawTape = {
-                let mut raw = RawTape::new();
-                $(raw.concat(&$name::RAW);)+
+        impl<$($name: ViewTemplate),+> ViewTemplate for ($($name,)+) {
+            const TEMPLATE_TAPE: ViewTemplateTape = {
+                let mut raw = ViewTemplateTape::new();
+                $(raw.concat(&$name::TEMPLATE_TAPE);)+
                 raw
             };
         }
 
         impl<$($name: View),+> View for ($($name,)+) {
             #[inline]
-            fn push(self, dynamic: &mut DynamicValues) {
+            fn push(self, dynamic: &mut DynamicViewValues) {
                 let ($($value,)+) = self;
                 $($value.push(dynamic);)+
             }
@@ -223,7 +226,7 @@ impl_tuple_views! {
 
 /// A static element tag marker.
 #[doc(hidden)]
-pub trait TagName {
+pub trait ElementTag {
     /// The renderer tag name.
     const NAME: &'static str;
 
@@ -232,27 +235,30 @@ pub trait TagName {
 }
 
 /// A typed element view.
-pub struct El<Tag, Attrs, Children> {
-    attrs: Attrs,
+pub struct ElementBuilder<Tag, Attributes, Children> {
+    attrs: Attributes,
     children: Children,
     _tag: PhantomData<Tag>,
 }
 
 /// Create an empty typed element for a tag marker.
 #[inline]
-pub const fn el<Tag>() -> El<Tag, (), ()> {
-    El {
+pub const fn element_builder<Tag>() -> ElementBuilder<Tag, (), ()> {
+    ElementBuilder {
         attrs: (),
         children: (),
         _tag: PhantomData,
     }
 }
 
-impl<Tag, Attrs, Children> El<Tag, Attrs, Children> {
+impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
     /// Append one attribute view.
     #[inline]
-    pub fn attr<Attr>(self, attr: Attr) -> El<Tag, (Attrs, Attr), Children> {
-        El {
+    pub fn attribute<AttributeView>(
+        self,
+        attr: AttributeView,
+    ) -> ElementBuilder<Tag, (Attributes, AttributeView), Children> {
+        ElementBuilder {
             attrs: (self.attrs, attr),
             children: self.children,
             _tag: PhantomData,
@@ -264,11 +270,11 @@ impl<Tag, Attrs, Children> El<Tag, Attrs, Children> {
     pub fn child<Child, Marker>(
         self,
         child: Child,
-    ) -> El<Tag, Attrs, (Children, <Child as IntoChild<Marker>>::Output)>
+    ) -> ElementBuilder<Tag, Attributes, (Children, <Child as IntoViewChild<Marker>>::Output)>
     where
-        Child: IntoChild<Marker>,
+        Child: IntoViewChild<Marker>,
     {
-        El {
+        ElementBuilder {
             attrs: self.attrs,
             children: (self.children, child.into_child()),
             _tag: PhantomData,
@@ -278,54 +284,55 @@ impl<Tag, Attrs, Children> El<Tag, Attrs, Children> {
 
 /// Marker for child values that are already typed views.
 #[doc(hidden)]
-pub struct ViewChild;
+pub struct ViewChildMarker;
 
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
     use crate::{IntoDynNode, template::TemplateRawOp};
 
-    use super::{DynamicValues, Raw, RawTape, View};
+    use super::{DynamicViewValues, View, ViewTemplate, ViewTemplateTape};
 
     /// Marker for child values that should become dynamic node slots.
-    pub struct DynamicChild<Marker>(PhantomData<Marker>);
+    pub struct DynamicViewChildMarker<Marker>(PhantomData<Marker>);
 
     /// A dynamic node slot.
-    pub struct DynNode<N, Marker = ()> {
+    pub struct DynamicNodeBuilder<N, Marker = ()> {
         node: N,
         _marker: PhantomData<Marker>,
     }
 
     /// Create a dynamic node slot from any [`IntoDynNode`] value.
     #[inline]
-    pub fn node_dyn<N, Marker>(node: N) -> DynNode<N, Marker>
+    pub(crate) fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
     where
         N: IntoDynNode<Marker>,
     {
-        DynNode {
+        DynamicNodeBuilder {
             node,
             _marker: PhantomData,
         }
     }
 
-    impl<N, Marker> Raw for DynNode<N, Marker> {
-        const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicNode);
+    impl<N, Marker> ViewTemplate for DynamicNodeBuilder<N, Marker> {
+        const TEMPLATE_TAPE: ViewTemplateTape =
+            ViewTemplateTape::single(TemplateRawOp::DynamicNode);
     }
 
-    impl<N, Marker> View for DynNode<N, Marker>
+    impl<N, Marker> View for DynamicNodeBuilder<N, Marker>
     where
         N: IntoDynNode<Marker>,
     {
         #[inline]
-        fn push(self, dynamic: &mut DynamicValues) {
+        fn push(self, dynamic: &mut DynamicViewValues) {
             dynamic.push_node(self.node.into_dyn_node());
         }
     }
 }
 
-/// Convert a value passed to [`El::child`] into a typed child view.
+/// Convert a value passed to [`ElementBuilder::child`] into a typed child view.
 #[doc(hidden)]
-pub trait IntoChild<Marker = ViewChild> {
+pub trait IntoViewChild<Marker = ViewChildMarker> {
     /// The typed view contributed by this child.
     type Output: View;
 
@@ -333,7 +340,7 @@ pub trait IntoChild<Marker = ViewChild> {
     fn into_child(self) -> Self::Output;
 }
 
-impl<V: View> IntoChild<ViewChild> for V {
+impl<V: View> IntoViewChild<ViewChildMarker> for V {
     type Output = V;
 
     #[inline]
@@ -342,35 +349,39 @@ impl<V: View> IntoChild<ViewChild> for V {
     }
 }
 
-impl<N, Marker> IntoChild<dynamic_node::DynamicChild<Marker>> for N
+impl<N, Marker> IntoViewChild<dynamic_node::DynamicViewChildMarker<Marker>> for N
 where
     N: IntoDynNode<Marker>,
 {
-    type Output = dynamic_node::DynNode<N, Marker>;
+    type Output = dynamic_node::DynamicNodeBuilder<N, Marker>;
 
     #[inline]
     fn into_child(self) -> Self::Output {
-        dynamic_node::node_dyn(self)
+        dynamic_node::dynamic_node_builder(self)
     }
 }
 
-impl<Tag: TagName, Attrs: Raw, Children: Raw> Raw for El<Tag, Attrs, Children> {
-    const RAW: RawTape = {
-        let mut raw = RawTape::new();
+impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
+    for ElementBuilder<Tag, Attributes, Children>
+{
+    const TEMPLATE_TAPE: ViewTemplateTape = {
+        let mut raw = ViewTemplateTape::new();
         raw.push(TemplateRawOp::OpenElement {
             tag: Tag::NAME,
             namespace: Tag::NAMESPACE,
         });
-        raw.concat(&Attrs::RAW);
-        raw.concat(&Children::RAW);
+        raw.concat(&Attributes::TEMPLATE_TAPE);
+        raw.concat(&Children::TEMPLATE_TAPE);
         raw.push(TemplateRawOp::CloseElement);
         raw
     };
 }
 
-impl<Tag: TagName, Attrs: View, Children: View> View for El<Tag, Attrs, Children> {
+impl<Tag: ElementTag, Attributes: View, Children: View> View
+    for ElementBuilder<Tag, Attributes, Children>
+{
     #[inline]
-    fn push(self, dynamic: &mut DynamicValues) {
+    fn push(self, dynamic: &mut DynamicViewValues) {
         self.attrs.push(dynamic);
         self.children.push(dynamic);
     }
@@ -391,24 +402,25 @@ pub trait AttributeDescriptor {
 
 /// A static attribute view.
 #[doc(hidden)]
-pub struct Attr<A>(PhantomData<A>);
+pub struct StaticAttributeBuilder<A>(PhantomData<A>);
 
 /// Create a static attribute view for an attribute marker.
 #[doc(hidden)]
 #[inline]
-pub const fn attr<A: AttributeDescriptor + StaticAttributeValue>() -> Attr<A> {
-    Attr(PhantomData)
+pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>()
+-> StaticAttributeBuilder<A> {
+    StaticAttributeBuilder(PhantomData)
 }
 
-impl<A: AttributeDescriptor + StaticAttributeValue> Raw for Attr<A> {
-    const RAW: RawTape = RawTape::single(TemplateRawOp::StaticAttr {
+impl<A: AttributeDescriptor + StaticAttributeValue> ViewTemplate for StaticAttributeBuilder<A> {
+    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::StaticAttr {
         name: A::NAME,
         value: A::VALUE,
         namespace: A::NAMESPACE,
     });
 }
 
-impl<A: AttributeDescriptor + StaticAttributeValue> View for Attr<A> {}
+impl<A: AttributeDescriptor + StaticAttributeValue> View for StaticAttributeBuilder<A> {}
 
 /// A marker for one static attribute value.
 #[doc(hidden)]
@@ -419,20 +431,20 @@ pub trait StaticAttributeValue {
 
 /// A static attribute value that can be passed to generated attribute builder methods.
 #[doc(hidden)]
-pub struct StaticValue<V>(PhantomData<V>);
+pub struct StaticAttributeValueBuilder<V>(PhantomData<V>);
 
 /// Create a static attribute value from a marker type.
 #[doc(hidden)]
 #[inline]
-pub const fn static_value<V: StaticAttributeValue>() -> StaticValue<V> {
-    StaticValue(PhantomData)
+pub const fn static_attribute_value<V: StaticAttributeValue>() -> StaticAttributeValueBuilder<V> {
+    StaticAttributeValueBuilder(PhantomData)
 }
 
 /// A static attribute assembled from a generated descriptor and a static value.
 #[doc(hidden)]
-pub struct StaticAttr<Descriptor, Value>(PhantomData<(Descriptor, Value)>);
+pub struct StaticAttributeWithValue<Descriptor, Value>(PhantomData<(Descriptor, Value)>);
 
-impl<Descriptor, Value> AttributeDescriptor for StaticAttr<Descriptor, Value>
+impl<Descriptor, Value> AttributeDescriptor for StaticAttributeWithValue<Descriptor, Value>
 where
     Descriptor: AttributeDescriptor,
     Value: StaticAttributeValue,
@@ -442,7 +454,7 @@ where
     const VOLATILE: bool = Descriptor::VOLATILE;
 }
 
-impl<Descriptor, Value> StaticAttributeValue for StaticAttr<Descriptor, Value>
+impl<Descriptor, Value> StaticAttributeValue for StaticAttributeWithValue<Descriptor, Value>
 where
     Descriptor: AttributeDescriptor,
     Value: StaticAttributeValue,
@@ -451,13 +463,13 @@ where
 }
 
 #[doc(hidden)]
-pub struct StaticAttributeBuilderMarker;
+pub struct StaticAttributeValueBuilderMarker;
 
 /// A value that can be appended by a generated attribute builder method.
 #[doc(hidden)]
 pub trait IntoAttributeBuilderValue<Target, Descriptor, Marker>
 where
-    Target: AttributeTarget,
+    Target: AttributeBuilderTarget,
     Descriptor: AttributeDescriptor,
 {
     /// The target returned after appending this attribute value.
@@ -469,43 +481,43 @@ where
 
 /// A dynamic attribute slot.
 #[doc(hidden)]
-pub struct DynAttrs {
+pub struct DynamicAttributesBuilder {
     attrs: Box<[Attribute]>,
 }
 
 /// Create a dynamic attribute slot from an already boxed attribute list.
 #[inline]
-pub(crate) fn attrs_dyn(attrs: Box<[Attribute]>) -> DynAttrs {
-    DynAttrs { attrs }
+pub(crate) fn dynamic_attributes_builder(attrs: Box<[Attribute]>) -> DynamicAttributesBuilder {
+    DynamicAttributesBuilder { attrs }
 }
 
 /// Create a dynamic attribute slot with a single attribute.
 #[inline]
-pub fn attr_dyn<T>(
+pub fn dynamic_attribute<T>(
     name: &'static str,
     value: impl IntoAttributeValue<T>,
     namespace: Option<&'static str>,
     volatile: bool,
-) -> DynAttrs {
-    DynAttrs {
+) -> DynamicAttributesBuilder {
+    DynamicAttributesBuilder {
         attrs: Box::new([Attribute::new(name, value, namespace, volatile)]),
     }
 }
 
-impl Raw for DynAttrs {
-    const RAW: RawTape = RawTape::single(TemplateRawOp::DynamicAttr);
+impl ViewTemplate for DynamicAttributesBuilder {
+    const TEMPLATE_TAPE: ViewTemplateTape = ViewTemplateTape::single(TemplateRawOp::DynamicAttr);
 }
 
-impl View for DynAttrs {
+impl View for DynamicAttributesBuilder {
     #[inline]
-    fn push(self, dynamic: &mut DynamicValues) {
+    fn push(self, dynamic: &mut DynamicViewValues) {
         dynamic.push_attrs(self.attrs);
     }
 }
 
 /// A builder target that can accept one attribute.
 #[doc(hidden)]
-pub trait AttributeTarget: Sized {
+pub trait AttributeBuilderTarget: Sized {
     /// The target returned after adding the attribute.
     type Output;
 
@@ -513,7 +525,7 @@ pub trait AttributeTarget: Sized {
     fn append_attribute(self, attr: Attribute) -> Self::Output;
 }
 
-impl<Target> AttributeTarget for Target
+impl<Target> AttributeBuilderTarget for Target
 where
     Target: HasAttributes,
 {
@@ -525,16 +537,18 @@ where
     }
 }
 
-impl<Tag, Attrs, Children> AttributeTarget for El<Tag, Attrs, Children> {
-    type Output = El<Tag, (Attrs, DynAttrs), Children>;
+impl<Tag, Attributes, Children> AttributeBuilderTarget
+    for ElementBuilder<Tag, Attributes, Children>
+{
+    type Output = ElementBuilder<Tag, (Attributes, DynamicAttributesBuilder), Children>;
 
     #[inline]
     fn append_attribute(self, attr: Attribute) -> Self::Output {
-        self.attr(attrs_dyn(Box::new([attr])))
+        self.attribute(dynamic_attributes_builder(Box::new([attr])))
     }
 }
 
-impl AttributeTarget for Vec<Attribute> {
+impl AttributeBuilderTarget for Vec<Attribute> {
     type Output = Self;
 
     #[inline]
@@ -547,15 +561,15 @@ impl AttributeTarget for Vec<Attribute> {
 impl<Target, Descriptor, Marker, Value> IntoAttributeBuilderValue<Target, Descriptor, Marker>
     for Value
 where
-    Target: AttributeTarget,
+    Target: AttributeBuilderTarget,
     Descriptor: AttributeDescriptor,
     Value: IntoAttributeValue<Marker>,
 {
-    type Output = <Target as AttributeTarget>::Output;
+    type Output = <Target as AttributeBuilderTarget>::Output;
 
     #[inline]
     fn append_to(self, target: Target) -> Self::Output {
-        AttributeTarget::append_attribute(
+        AttributeBuilderTarget::append_attribute(
             target,
             Attribute::new(
                 Descriptor::NAME,
@@ -567,18 +581,30 @@ where
     }
 }
 
-impl<Tag, Attrs, Children, Descriptor, Value>
-    IntoAttributeBuilderValue<El<Tag, Attrs, Children>, Descriptor, StaticAttributeBuilderMarker>
-    for StaticValue<Value>
+impl<Tag, Attributes, Children, Descriptor, Value>
+    IntoAttributeBuilderValue<
+        ElementBuilder<Tag, Attributes, Children>,
+        Descriptor,
+        StaticAttributeValueBuilderMarker,
+    > for StaticAttributeValueBuilder<Value>
 where
     Descriptor: AttributeDescriptor,
     Value: StaticAttributeValue,
 {
-    type Output = El<Tag, (Attrs, Attr<StaticAttr<Descriptor, Value>>), Children>;
+    type Output = ElementBuilder<
+        Tag,
+        (
+            Attributes,
+            StaticAttributeBuilder<StaticAttributeWithValue<Descriptor, Value>>,
+        ),
+        Children,
+    >;
 
     #[inline]
-    fn append_to(self, target: El<Tag, Attrs, Children>) -> Self::Output {
-        target.attr(attr::<StaticAttr<Descriptor, Value>>())
+    fn append_to(self, target: ElementBuilder<Tag, Attributes, Children>) -> Self::Output {
+        target.attribute(static_attribute::<
+            StaticAttributeWithValue<Descriptor, Value>,
+        >())
     }
 }
 
@@ -591,70 +617,71 @@ pub trait StaticText {
 
 /// A static text view.
 #[doc(hidden)]
-pub struct Text<T>(PhantomData<T>);
+pub struct StaticTextBuilder<T>(PhantomData<T>);
 
 /// Create a static text view for a text marker.
 #[doc(hidden)]
 #[inline]
-pub const fn text<T: StaticText>() -> Text<T> {
-    Text(PhantomData)
+pub const fn static_text<T: StaticText>() -> StaticTextBuilder<T> {
+    StaticTextBuilder(PhantomData)
 }
 
-impl<T: StaticText> Raw for Text<T> {
-    const RAW: RawTape = RawTape::single(TemplateRawOp::StaticText { value: T::TEXT });
+impl<T: StaticText> ViewTemplate for StaticTextBuilder<T> {
+    const TEMPLATE_TAPE: ViewTemplateTape =
+        ViewTemplateTape::single(TemplateRawOp::StaticText { value: T::TEXT });
 }
 
-impl<T: StaticText> View for Text<T> {}
+impl<T: StaticText> View for StaticTextBuilder<T> {}
 
 /// A typed view with a root key.
 #[doc(hidden)]
-pub struct Keyed<V> {
+pub struct KeyedViewBuilder<V> {
     view: V,
     key: Option<String>,
 }
 
 /// Convert a value into an optional root key.
 #[doc(hidden)]
-pub trait IntoKey {
+pub trait IntoViewKey {
     /// Convert this value into an optional key.
     fn into_key(self) -> Option<String>;
 }
 
-impl IntoKey for String {
+impl IntoViewKey for String {
     #[inline]
     fn into_key(self) -> Option<String> {
         Some(self)
     }
 }
 
-impl IntoKey for &str {
+impl IntoViewKey for &str {
     #[inline]
     fn into_key(self) -> Option<String> {
         Some(self.to_string())
     }
 }
 
-impl IntoKey for Option<String> {
+impl IntoViewKey for Option<String> {
     #[inline]
     fn into_key(self) -> Option<String> {
         self
     }
 }
 
-impl<V: Raw> Raw for Keyed<V> {
-    const RAW: RawTape = V::RAW;
+impl<V: ViewTemplate> ViewTemplate for KeyedViewBuilder<V> {
+    const TEMPLATE_TAPE: ViewTemplateTape = V::TEMPLATE_TAPE;
 }
 
-impl<V: View> View for Keyed<V> {
+impl<V: View> View for KeyedViewBuilder<V> {
     #[inline]
-    fn push(self, dynamic: &mut DynamicValues) {
+    fn push(self, dynamic: &mut DynamicViewValues) {
         self.view.push(dynamic);
     }
 
     #[inline]
     fn into_vnode(self) -> VNode {
         let key = self.key;
-        let mut dynamic = DynamicValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
+        let mut dynamic = DynamicViewValues::with_capacity(Self::TEMPLATE.dynamic_value_count());
         self.view.push(&mut dynamic);
         VNode::new_with_rendered_view(
             *Self::TEMPLATE,
@@ -667,12 +694,12 @@ impl<V: View> View for Keyed<V> {
 #[macro_export]
 macro_rules! static_text {
     ($value:literal) => {{
-        struct Text;
-        impl $crate::view::StaticText for Text {
+        struct StaticTextMarker;
+        impl $crate::view::StaticText for StaticTextMarker {
             const TEXT: &'static str = $value;
         }
 
-        $crate::view::text::<Text>()
+        $crate::view::static_text::<StaticTextMarker>()
     }};
     ($name:ident, $value:literal) => {
         $crate::static_text!(pub struct $name, $value);
@@ -687,14 +714,14 @@ macro_rules! static_text {
 
 /// Declare a static attribute value for generated attribute builder methods.
 #[macro_export]
-macro_rules! static_value {
+macro_rules! static_attribute_value {
     ($value:literal) => {{
-        struct Value;
+        struct StaticAttributeValueMarker;
 
-        impl $crate::view::StaticAttributeValue for Value {
+        impl $crate::view::StaticAttributeValue for StaticAttributeValueMarker {
             const VALUE: &'static str = $value;
         }
 
-        $crate::view::static_value::<Value>()
+        $crate::view::static_attribute_value::<StaticAttributeValueMarker>()
     }};
 }

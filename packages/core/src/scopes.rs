@@ -168,7 +168,7 @@ impl std::ops::Deref for MountedOutput {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum LastRenderedNode {
+pub(crate) enum LastRenderedNode {
     Real(VNode),
     Placeholder(VNode, RenderError),
 }
@@ -185,7 +185,7 @@ impl std::ops::Deref for LastRenderedNode {
 }
 
 impl LastRenderedNode {
-    pub fn new(node: Element) -> Self {
+    pub(crate) fn new(node: Element) -> Self {
         match node {
             Ok(vnode) => LastRenderedNode::Real(vnode),
             // Use an empty-text anchor so the parent slot keeps a 1-node DOM presence to diff
@@ -195,7 +195,7 @@ impl LastRenderedNode {
         }
     }
 
-    pub fn as_vnode(&self) -> &VNode {
+    pub(crate) fn as_vnode(&self) -> &VNode {
         match self {
             LastRenderedNode::Real(vnode) => vnode,
             LastRenderedNode::Placeholder(vnode, _err) => vnode,

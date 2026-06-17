@@ -327,8 +327,8 @@ impl ToTokens for EventExtensions {
                 fn #name<__Marker>(
                     self,
                     event_handler: impl super::EventHandlerValue<#data, __Marker>,
-                ) -> <Self as ::dioxus_core::view::AttributeTarget>::Output {
-                    ::dioxus_core::view::AttributeTarget::append_attribute(
+                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output {
+                    ::dioxus_core::view::AttributeBuilderTarget::append_attribute(
                         self,
                         super::event_attribute::<#data, __Marker>(#on_name, event_handler),
                     )
@@ -340,7 +340,7 @@ impl ToTokens for EventExtensions {
                 fn #explicit_closure<__Marker, __Return>(
                     self,
                     event_handler: impl FnMut(::dioxus_core::Event<#data>) -> __Return + 'static,
-                ) -> <Self as ::dioxus_core::view::AttributeTarget>::Output
+                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output
                 where
                     __Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
                 {
@@ -352,13 +352,13 @@ impl ToTokens for EventExtensions {
 
         tokens.append_all(quote! {
             /// Event handler extension methods for typed HTML builders.
-            pub trait EventsExtension: ::dioxus_core::view::AttributeTarget + Sized {
+            pub trait EventsExtension: ::dioxus_core::view::AttributeBuilderTarget + Sized {
                 #(#methods)*
             }
 
             impl<Target> EventsExtension for Target
             where
-                Target: ::dioxus_core::view::AttributeTarget,
+                Target: ::dioxus_core::view::AttributeBuilderTarget,
             {
             }
         });
@@ -546,25 +546,25 @@ impl ElementDef {
 
             quote! {
                 #[allow(non_snake_case)]
-                fn #ident<__DioxusAttrMarker, __DioxusAttrValue>(
+                fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
                     self,
-                    value: __DioxusAttrValue,
-                ) -> <__DioxusAttrValue as #core::view::IntoAttributeBuilderValue<
+                    value: __DioxusAttributeValue,
+                ) -> <__DioxusAttributeValue as #core::view::IntoAttributeBuilderValue<
                     Self,
                     #descriptor,
-                    __DioxusAttrMarker,
+                    __DioxusAttributeMarker,
                 >>::Output
                 where
-                    __DioxusAttrValue: #core::view::IntoAttributeBuilderValue<
+                    __DioxusAttributeValue: #core::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
-                        __DioxusAttrMarker,
+                        __DioxusAttributeMarker,
                     >,
                 {
-                    <__DioxusAttrValue as #core::view::IntoAttributeBuilderValue<
+                    <__DioxusAttributeValue as #core::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
-                        __DioxusAttrMarker,
+                        __DioxusAttributeMarker,
                     >>::append_to(value, self)
                 }
             }
@@ -575,27 +575,27 @@ impl ElementDef {
             #[doc(hidden)]
             pub struct #tag;
 
-            impl #core::view::TagName for #tag {
+            impl #core::view::ElementTag for #tag {
                 const NAME: &'static str = #tag_name;
                 const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
             }
 
             #[allow(non_snake_case)]
             #(#attrs)*
-            pub const fn #name() -> #core::view::El<#tag, (), ()> {
-                #core::view::el::<#tag>()
+            pub const fn #name() -> #core::view::ElementBuilder<#tag, (), ()> {
+                #core::view::element_builder::<#tag>()
             }
 
             impl #attribute_group_marker for #tag {}
 
             #(#descriptors)*
 
-            pub trait #extension_name: #core::view::AttributeTarget + Sized {
+            pub trait #extension_name: #core::view::AttributeBuilderTarget + Sized {
                 #(#methods)*
             }
 
-            impl<__DioxusAttrs, __DioxusChildren> #extension_name
-                for #core::view::El<#tag, __DioxusAttrs, __DioxusChildren>
+            impl<__DioxusAttributes, __DioxusChildren> #extension_name
+                for #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>
             {
             }
         }
@@ -831,40 +831,40 @@ impl ToTokens for ImplExtensionAttributes {
             );
             quote! {
                 #[allow(non_snake_case)]
-                fn #ident<__DioxusAttrMarker, __DioxusAttrValue>(
+                fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
                     self,
-                    value: __DioxusAttrValue,
-                ) -> <__DioxusAttrValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                    value: __DioxusAttributeValue,
+                ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
                     Self,
                     #descriptor,
-                    __DioxusAttrMarker,
+                    __DioxusAttributeMarker,
                 >>::Output
                 where
-                    __DioxusAttrValue: ::dioxus_core::view::IntoAttributeBuilderValue<
+                    __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
-                        __DioxusAttrMarker,
+                        __DioxusAttributeMarker,
                     >,
                 {
-                    <__DioxusAttrValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                    <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
                         Self,
                         #descriptor,
-                        __DioxusAttrMarker,
+                        __DioxusAttributeMarker,
                     >>::append_to(value, self)
                 }
             }
         });
         let element_impl = self.for_el.then(|| {
             quote! {
-                impl<__DioxusAttrs, __DioxusChildren> #extension_name
-                    for ::dioxus_core::view::El<#name::Tag, __DioxusAttrs, __DioxusChildren>
+                impl<__DioxusAttributes, __DioxusChildren> #extension_name
+                    for ::dioxus_core::view::ElementBuilder<#name::Tag, __DioxusAttributes, __DioxusChildren>
                 {}
             }
         });
         tokens.append_all(quote! {
             #(#descriptors)*
 
-            pub trait #extension_name: ::dioxus_core::view::AttributeTarget + Sized {
+            pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
                 #(#impls)*
             }
 

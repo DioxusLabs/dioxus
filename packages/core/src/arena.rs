@@ -139,7 +139,7 @@ impl RenderTargetState {
 pub(crate) struct MountId(pub(crate) usize);
 
 #[derive(Debug, Clone, Copy)]
-pub struct MountRef {
+pub(crate) struct MountRef {
     // The mount that owns the renderer element.
     pub(crate) mount: MountId,
 }

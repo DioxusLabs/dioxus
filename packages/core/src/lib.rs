@@ -86,19 +86,22 @@ pub mod internal {
     }
 
     #[doc(hidden)]
-    pub type DynamicNodeView<N, Marker = ()> = crate::view::dynamic_node::DynNode<N, Marker>;
+    pub type DynamicNodeBuilder<N, Marker = ()> =
+        crate::view::dynamic_node::DynamicNodeBuilder<N, Marker>;
 
     #[doc(hidden)]
-    pub fn node_dyn<N, Marker>(node: N) -> DynamicNodeView<N, Marker>
+    pub fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
     where
         N: crate::nodes::IntoDynNode<Marker>,
     {
-        crate::view::dynamic_node::node_dyn(node)
+        crate::view::dynamic_node::dynamic_node_builder(node)
     }
 
     #[doc(hidden)]
-    pub fn attrs_dyn(attrs: Box<[crate::nodes::Attribute]>) -> crate::view::DynAttrs {
-        crate::view::attrs_dyn(attrs)
+    pub fn dynamic_attributes_builder(
+        attrs: Box<[crate::nodes::Attribute]>,
+    ) -> crate::view::DynamicAttributesBuilder {
+        crate::view::dynamic_attributes_builder(attrs)
     }
 
     #[allow(non_snake_case)]
@@ -130,7 +133,7 @@ pub(crate) mod innerlude {
     pub use crate::reactive_context::*;
     pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
-    pub use crate::scheduler::*;
+    pub(crate) use crate::scheduler::*;
     pub use crate::scopes::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
@@ -175,10 +178,12 @@ pub use crate::innerlude::{
 };
 
 pub use crate::view::{
-    Attr, AttributeDescriptor, AttributeTarget, DynAttrs, DynamicValues, El,
-    IntoAttributeBuilderValue, IntoChild, IntoKey, Keyed, Raw, RawTape, StaticAttr,
-    StaticAttributeBuilderMarker, StaticAttributeValue, StaticText, StaticValue, TagName, Text,
-    View, ViewChild, attr, attr_dyn, el, static_value, text,
+    AttributeBuilderTarget, AttributeDescriptor, DynamicAttributesBuilder, DynamicViewValues,
+    ElementBuilder, ElementTag, IntoAttributeBuilderValue, IntoViewChild, IntoViewKey,
+    KeyedViewBuilder, StaticAttributeBuilder, StaticAttributeValue, StaticAttributeValueBuilder,
+    StaticAttributeValueBuilderMarker, StaticAttributeWithValue, StaticText, StaticTextBuilder,
+    View, ViewChildMarker, ViewTemplate, ViewTemplateTape, dynamic_attribute, element_builder,
+    static_attribute, static_attribute_value, static_text,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

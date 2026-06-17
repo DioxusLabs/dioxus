@@ -237,7 +237,7 @@ impl VirtualDom {
 }
 
 #[derive(Debug)]
-pub enum Work {
+pub(crate) enum Work {
     RerunScope(ScopeOrder),
     PollTask(Task),
 }
@@ -258,7 +258,7 @@ impl From<ScopeOrder> for DirtyTasks {
 }
 
 impl DirtyTasks {
-    pub fn queue_task(&self, task: Task) {
+    pub(crate) fn queue_task(&self, task: Task) {
         let mut borrow_mut = self.tasks_queued.borrow_mut();
         // If the task is already queued, we don't need to do anything
         if borrow_mut.contains(&task) {
