@@ -573,14 +573,14 @@ impl VirtualDom {
     /// dom.rebuild(&mut mutations);
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
-    pub fn rebuild(&mut self, to: &mut (dyn WriteMutations + '_)) {
+    pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
         let m = self
             .runtime
             .clone()
-            .while_rendering(|| driver.create(self, ScopeId::ROOT, true, None, Some(&mut *to)));
+            .while_rendering(|| driver.create(self, ScopeId::ROOT, true, None, Some(to)));
 
         to.append_children(ElementId(0), m);
     }
@@ -588,7 +588,7 @@ impl VirtualDom {
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
-    pub fn render_immediate(&mut self, to: &mut (dyn WriteMutations + '_)) {
+    pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
         // This also processes futures which might progress into immediately rerunning a scope
@@ -607,7 +607,7 @@ impl VirtualDom {
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope(Some(&mut *to), scope.id);
+                        self.run_and_diff_scope(Some(to), scope.id);
                     });
                 }
             }

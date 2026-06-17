@@ -117,60 +117,6 @@ pub trait WriteMutations {
     fn push_root(&mut self, id: ElementId);
 }
 
-impl<T: WriteMutations + ?Sized> WriteMutations for &mut T {
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        (**self).append_children(id, m)
-    }
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        (**self).assign_node_id(path, id)
-    }
-    fn create_placeholder(&mut self, id: ElementId) {
-        (**self).create_placeholder(id)
-    }
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        (**self).create_text_node(value, id)
-    }
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        (**self).load_template(template, index, id)
-    }
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        (**self).replace_node_with(id, m)
-    }
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        (**self).replace_placeholder_with_nodes(path, m)
-    }
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        (**self).insert_nodes_after(id, m)
-    }
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        (**self).insert_nodes_before(id, m)
-    }
-    fn set_attribute(
-        &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
-    ) {
-        (**self).set_attribute(name, ns, value, id)
-    }
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        (**self).set_node_text(value, id)
-    }
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        (**self).create_event_listener(name, id)
-    }
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        (**self).remove_event_listener(name, id)
-    }
-    fn remove_node(&mut self, id: ElementId) {
-        (**self).remove_node(id)
-    }
-    fn push_root(&mut self, id: ElementId) {
-        (**self).push_root(id)
-    }
-}
-
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
 /// of the Dioxus VirtualDom.
 ///
