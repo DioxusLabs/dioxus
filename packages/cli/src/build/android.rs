@@ -120,6 +120,7 @@ impl BuildRequest {
             application_id: String,
             app_name: String,
             version: String,
+            version_code: u64,
             android_bundle: Option<crate::AndroidSettings>,
             /// Android SDK version settings
             min_sdk: u32,
@@ -176,10 +177,13 @@ impl BuildRequest {
         // Foreground service types as pipe-separated string
         let foreground_service_type = mapper.android_foreground_service_types.join("|");
 
+        let version = self.crate_version();
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
-            version: self.crate_version(),
+            version: version.to_string(),
+            version_code: version.major * 1_000_000 + version.minor * 1_000 + version.patch,
             android_bundle: self.config.bundle.android.clone(),
             min_sdk: self.config.android.min_sdk.unwrap_or(24),
             target_sdk: self.config.android.target_sdk.unwrap_or(34),
