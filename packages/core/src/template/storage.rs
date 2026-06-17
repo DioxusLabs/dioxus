@@ -9,7 +9,16 @@ use super::{
 /// Maximum packed template storage capacity.
 pub(crate) const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
-const TEMPLATE_PATH_STACK_CAP: usize = 129;
+/// Default packed template operation storage capacity.
+pub(crate) const TEMPLATE_STORAGE_OPS_CAP: usize = 512;
+
+/// Default static string storage capacity.
+pub(crate) const TEMPLATE_STORAGE_STRING_CAP: usize = 256;
+
+/// Default dynamic anchor storage capacity.
+pub(crate) const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 32;
+
+const TEMPLATE_PATH_STACK_CAP: usize = 32;
 
 /// Const storage for a lowered raw template.
 ///
@@ -18,9 +27,9 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 /// the runtime.
 #[derive(Clone, Copy)]
 pub(crate) struct TemplateStorage<
-    const OPS_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
-    const STRING_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
-    const DYNAMIC_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
+    const OPS_CAP: usize = TEMPLATE_STORAGE_OPS_CAP,
+    const STRING_CAP: usize = TEMPLATE_STORAGE_STRING_CAP,
+    const DYNAMIC_CAP: usize = TEMPLATE_STORAGE_DYNAMIC_CAP,
 > {
     ops: ConstVec<TemplateOp, OPS_CAP>,
     strings: ConstVec<&'static str, STRING_CAP>,

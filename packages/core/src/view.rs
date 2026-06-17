@@ -9,14 +9,17 @@ use std::marker::PhantomData;
 use dioxus_const_vec::ConstVec;
 
 use crate::{
+    nodes::IntoVNode,
+    template::{
+        TemplateRawOp, TemplateStorage, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP,
+        TEMPLATE_STORAGE_STRING_CAP,
+    },
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
     RenderedView, Template, VComponent, VNode,
-    nodes::IntoVNode,
-    template::{TEMPLATE_STORAGE_MAX_CAP, TemplateRawOp, TemplateStorage},
 };
 
 /// Maximum number of raw template operations a typed view can contribute.
-pub(crate) const VIEW_TEMPLATE_TAPE_CAP: usize = TEMPLATE_STORAGE_MAX_CAP;
+pub(crate) const VIEW_TEMPLATE_TAPE_CAP: usize = 256;
 
 /// A const template-v2-style raw operation tape.
 #[doc(hidden)]
@@ -74,9 +77,9 @@ pub trait ViewTemplate {
 
     /// The static template for this view type.
     const TEMPLATE: &'static Template = &TemplateStorage::<
-        VIEW_TEMPLATE_TAPE_CAP,
-        VIEW_TEMPLATE_TAPE_CAP,
-        VIEW_TEMPLATE_TAPE_CAP,
+        TEMPLATE_STORAGE_OPS_CAP,
+        TEMPLATE_STORAGE_STRING_CAP,
+        TEMPLATE_STORAGE_DYNAMIC_CAP,
     >::build(Self::TEMPLATE_TAPE.as_slice())
     .as_template();
 }
@@ -289,7 +292,7 @@ pub struct ViewChildMarker;
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
-    use crate::{IntoDynNode, template::TemplateRawOp};
+    use crate::{template::TemplateRawOp, IntoDynNode};
 
     use super::{DynamicViewValues, View, ViewTemplate, ViewTemplateTape};
 
@@ -407,8 +410,8 @@ pub struct StaticAttributeBuilder<A>(PhantomData<A>);
 /// Create a static attribute view for an attribute marker.
 #[doc(hidden)]
 #[inline]
-pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>()
--> StaticAttributeBuilder<A> {
+pub const fn static_attribute<A: AttributeDescriptor + StaticAttributeValue>(
+) -> StaticAttributeBuilder<A> {
     StaticAttributeBuilder(PhantomData)
 }
 
