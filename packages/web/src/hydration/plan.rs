@@ -1,91 +1,107 @@
-use crate::dom::WebsysDom;
-use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, VirtualDom,
-    internal::{
-        StaticAttribute, StaticChildren, StaticNode, StaticNodeKind, TemplateChild, TemplatePath,
-    },
-};
-use dioxus_interpreter_js::hydration_bindings::HydrationChannel;
+//! The markerless hydration walk.
+//!
+//! SSR emits no hydration markers, so the client reconstructs the DOM shape by
+//! walking the rebuilt VDOM and matching it against the real DOM with a
+//! [`HydrationCursor`]. Each level of the VDOM is flattened into ordered
+//! [`Leaf`]s (components and fragments are transparent); adjacent text leaves
+//! are grouped into text-runs because the browser merges them into a single DOM
+//! text node, which the cursor addresses with `splitText` offsets.
+//!
+//! The template structure comes from the flat op-tape [`dioxus_core::Template`]
+//! (`root_slots` / `static_children` / dynamic anchors, the same document-order
+//! walk SSR uses in `dioxus_ssr`); mounted `ElementId`s come from the rendered
+//! `MountedVNode`. No DOM reads happen here — the cursor performs them.
 
+use dioxus_core::{
+    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, VNode, VirtualDom,
+    internal::TemplateExt,
+};
+
+use crate::dom::WebsysDom;
+
+use super::cursor::HydrationCursor;
 use super::{RehydrationError, RehydrationError::*};
 
 impl WebsysDom {
-    /// Top-level hydration emitter. Walks the rebuilt VDOM for `scope` and
-    /// emits declarative `HydrationChannel` ops describing the expected DOM
-    /// shape. Performs no DOM reads — element matching and transparent-
-    /// wrapper tolerance happen on the JS side during op execution.
-    pub(super) fn emit_scope(
+    /// Top-level hydration emitter. Walks the rebuilt VDOM for `scope` and drives
+    /// the [`HydrationCursor`] over the matching server-rendered DOM.
+    pub(super) fn emit_scope<'a>(
         &mut self,
-        scope: &ScopeState,
-        dom: &VirtualDom,
-        channel: &mut HydrationChannel,
+        scope: &'a ScopeState,
+        dom: &'a VirtualDom,
+        cursor: &mut HydrationCursor,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         self.collect_suspense_only(scope, dom);
 
-        let mut leaves: Vec<Leaf<'_>> = Vec::new();
+        let mut leaves: Vec<Leaf<'a>> = Vec::new();
         let root = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
         self.collect_vnode_root_leaves(root, dom, &mut leaves)?;
-        self.emit_leaves(&leaves, channel, dom, to_mount)
+        self.emit_leaves(&leaves, cursor, dom, to_mount)
     }
 
-    /// Flatten a VNode's roots into leaves at the current DOM level.
+    /// Flatten a VNode's template roots into leaves at the current DOM level.
     fn collect_vnode_root_leaves<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        self.collect_template_child_leaves(vnode, StaticChildren::roots(vnode.vnode()), dom, out)?;
+        let roots: Vec<_> = vnode.vnode().template.root_slots().collect();
+        for (root_idx, static_op, dynamic_anchor) in roots {
+            if let Some(anchor) = dynamic_anchor {
+                for value_idx in anchor.values() {
+                    self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
+                }
+            } else {
+                let op = static_op.expect("template root slot is static or dynamic");
+                let root_id = vnode.mounted_root(root_idx, dom);
+                self.collect_template_node_leaves(vnode, op, root_id, out)?;
+            }
+        }
         Ok(())
     }
 
-    fn collect_template_child_leaves<'a>(
+    /// Flatten an element's children into leaves, interleaving static children
+    /// with dynamic node slots in document order (mirrors `dioxus_ssr`).
+    fn collect_element_child_leaves<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        children: StaticChildren<'a>,
+        element_op: usize,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        children.try_for_each(|child| {
-            match child {
-                TemplateChild::DynamicSlot { slot } => {
-                    let index = slot.index();
-                    self.collect_dynamic_node_leaves(vnode, index, dom, out)?;
-                }
-                TemplateChild::Static { node } => {
-                    let root_id = node
-                        .root_index()
-                        .and_then(|root_idx| vnode.mounted_root(root_idx, dom));
-                    self.collect_template_node_leaves(vnode, node, root_id, out)?;
+        let static_children: Vec<usize> =
+            vnode.vnode().template.static_children(element_op).collect();
+        for slot in 0..=static_children.len() {
+            let anchors: Vec<_> = vnode
+                .vnode()
+                .dynamic_node_anchors_for_slot(element_op, slot)
+                .collect();
+            for anchor in anchors {
+                for value_idx in anchor.values() {
+                    self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
                 }
             }
-            Ok(())
-        })?;
-
+            if let Some(&op) = static_children.get(slot) {
+                self.collect_template_node_leaves(vnode, op, None, out)?;
+            }
+        }
         Ok(())
     }
 
     fn collect_template_node_leaves<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        node: StaticNode<'a>,
+        op: usize,
         root_id: Option<ElementId>,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        let path = node.path();
-        match node.kind() {
-            StaticNodeKind::Element(_) => {
-                out.push(Leaf::Element {
-                    vnode,
-                    node,
-                    path,
-                    root_id,
-                });
-            }
-            StaticNodeKind::Text(text) => {
-                out.push(Leaf::StaticText { text, id: root_id });
-            }
+        let template = vnode.vnode().template;
+        if template.element_meta_at_op(op).is_some() {
+            out.push(Leaf::Element { vnode, op, root_id });
+        } else if let Some(text) = template.static_text_at_op(op) {
+            out.push(Leaf::StaticText { text, id: root_id });
         }
         Ok(())
     }
@@ -93,17 +109,17 @@ impl WebsysDom {
     fn collect_dynamic_node_leaves<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        dyn_idx: usize,
+        value_idx: usize,
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        match vnode.dynamic_values[dyn_idx]
+        match vnode.vnode().dynamic_values[value_idx]
             .as_node()
             .expect("hydration node slot must point at a dynamic node")
         {
             DynamicNode::Text(text) => {
                 let id = vnode
-                    .mounted_dynamic_node(dyn_idx, dom)
+                    .mounted_dynamic_node(value_idx, dom)
                     .ok_or(VNodeNotInitialized)?;
                 out.push(Leaf::DynamicText {
                     value: &text.value,
@@ -112,13 +128,13 @@ impl WebsysDom {
             }
             DynamicNode::Component(comp) => {
                 let scope = comp
-                    .mounted_scope(dyn_idx, vnode, dom)
+                    .mounted_scope(value_idx, vnode, dom)
                     .ok_or(VNodeNotInitialized)?;
                 let child = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
                 self.collect_vnode_root_leaves(child, dom, out)?;
             }
             DynamicNode::Fragment(fragment) => {
-                let mounted_children = vnode.mounted_fragment_children(dyn_idx, dom);
+                let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
                 if mounted_children.len() != fragment.len() {
                     return Err(VNodeNotInitialized);
                 }
@@ -131,14 +147,14 @@ impl WebsysDom {
         Ok(())
     }
 
-    /// Emit ops for the leaves at one DOM level, grouping adjacent text and
-    /// embedded-placeholder leaves into text-runs (the browser merges them
+    /// Drive the cursor over the leaves at one DOM level, grouping adjacent text
+    /// and embedded-placeholder leaves into text-runs (the browser merges them
     /// into one DOM text node).
-    pub(super) fn emit_leaves<'a>(
+    fn emit_leaves<'a>(
         &mut self,
         leaves: &[Leaf<'a>],
-        channel: &mut HydrationChannel,
-        dom: &VirtualDom,
+        cursor: &mut HydrationCursor,
+        dom: &'a VirtualDom,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         let steps = group_steps(leaves);
@@ -146,16 +162,16 @@ impl WebsysDom {
         let mut prev_consumed: u32 = 0;
         for (idx, step) in steps.iter().enumerate() {
             if prev_consumed > 0 {
-                channel.hy_advance(prev_consumed);
+                cursor.advance(prev_consumed);
             }
             prev_consumed = match step {
                 EmitStep::Element(leaf) => {
-                    self.emit_element(leaf, channel, dom, to_mount)?;
+                    self.emit_element(leaf, cursor, dom, to_mount)?;
                     1
                 }
                 EmitStep::TextRun(run) => {
                     let split_tail = next_consuming_is_text_run(&steps, idx);
-                    emit_text_run(run, channel, split_tail)
+                    emit_text_run(run, cursor, split_tail)?
                 }
             };
         }
@@ -165,35 +181,30 @@ impl WebsysDom {
     fn emit_element<'a>(
         &mut self,
         leaf: &Leaf<'a>,
-        channel: &mut HydrationChannel,
-        dom: &VirtualDom,
+        cursor: &mut HydrationCursor,
+        dom: &'a VirtualDom,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        let Leaf::Element {
-            vnode,
-            node,
-            path,
-            root_id,
-        } = leaf
-        else {
+        let &Leaf::Element { vnode, op, root_id } = leaf else {
             unreachable!("emit_element only accepts element leaves");
         };
-        let StaticNodeKind::Element(element) = node.kind() else {
-            unreachable!("Leaf::Element wraps a static element");
-        };
-        let tag = element.tag();
+        let (tag, _namespace) = vnode
+            .vnode()
+            .template
+            .element_meta_at_op(op)
+            .expect("element leaf wraps an element op");
 
-        // Resolve mounted ElementId (root_id is overridden by the dynamic attr
+        // Resolve the mounted ElementId (the dynamic attr id overrides the root
         // id when present) and collect dynamic listeners + onmounted events.
-        let mut mounted_id = *root_id;
+        let mut mounted_id = root_id;
         let mut listeners: Vec<(&'static str, bool)> = Vec::new();
-        for attr in element.attrs().iter() {
-            if let StaticAttribute::Dynamic { id } = attr {
+        for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
+            for value_idx in anchor.values() {
                 let attr_id = vnode
-                    .mounted_dynamic_attribute(id, dom)
+                    .mounted_dynamic_attribute(value_idx, dom)
                     .ok_or(VNodeNotInitialized)?;
                 mounted_id = Some(attr_id);
-                let attrs = vnode.dynamic_values[id]
+                let attrs = vnode.vnode().dynamic_values[value_idx]
                     .as_attrs()
                     .expect("hydration attr slot must point at dynamic attributes");
                 for attribute in attrs {
@@ -211,50 +222,72 @@ impl WebsysDom {
             }
         }
 
-        // Always emit `hy_map_element` so JS can verify the tag and handle
-        // parser-inserted wrappers (e.g. `<tbody>`). id == 0 indicates the
-        // element doesn't need a mapping but still needs a positional anchor.
+        // Always map the element so the cursor can verify the tag and step past
+        // parser-inserted wrappers. id == 0 means the element needs no node
+        // binding but still occupies a positional slot.
         let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
-        channel.hy_map_element(tag, id_arg);
+        let element = cursor.map_element(tag, id_arg)?;
 
         for (name, bubbles) in listeners {
-            channel.hy_attach_listener(name, if bubbles { 1 } else { 0 });
+            cursor.attach_listener(&element, id_arg, name, bubbles);
         }
 
-        // Descend only if the subtree contains any dynamic content. Pure-
-        // static subtrees need no hydration walk — `hy_advance(1)` past the
-        // mapped element steps over them at the parent level.
-        let children = element.children();
-        if children.has_dynamic_content() {
-            let mut child_leaves: Vec<Leaf<'_>> = Vec::new();
-            self.collect_template_child_leaves(*vnode, children, dom, &mut child_leaves)?;
-            channel.hy_begin_children();
-            self.emit_leaves(&child_leaves, channel, dom, to_mount)?;
-            channel.hy_end_children();
+        // Descend only if the subtree contains dynamic content. Pure-static
+        // subtrees match the server output by construction and need no walk —
+        // `advance(1)` past the mapped element steps over them.
+        if element_has_dynamic_content(vnode.vnode(), op) {
+            cursor.begin_children();
+            let mut child_leaves: Vec<Leaf<'a>> = Vec::new();
+            self.collect_element_child_leaves(vnode, op, dom, &mut child_leaves)?;
+            self.emit_leaves(&child_leaves, cursor, dom, to_mount)?;
+            cursor.end_children();
         }
 
         Ok(())
     }
 }
 
-/// A flattened item at one DOM level. Components and fragments are
-/// transparent — expanded into their constituent leaves.
-#[derive(Clone)]
+/// True if `op`'s element subtree contains any dynamic node child or a nested
+/// element with dynamic attributes / dynamic content. Used to skip the walk
+/// (and DOM reads) for purely static subtrees. Uses only public template API.
+fn element_has_dynamic_content(vnode: &VNode, op: usize) -> bool {
+    if vnode.dynamic_node_anchors_for_element(op).next().is_some() {
+        return true;
+    }
+    for child_op in vnode.template.static_children(op).collect::<Vec<_>>() {
+        if vnode.template.element_meta_at_op(child_op).is_some() {
+            if vnode
+                .dynamic_attr_anchors_for_element(child_op)
+                .next()
+                .is_some()
+            {
+                return true;
+            }
+            if element_has_dynamic_content(vnode, child_op) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// A flattened item at one DOM level. Components and fragments are transparent —
+/// expanded into their constituent leaves.
+#[derive(Clone, Copy)]
 pub(super) enum Leaf<'a> {
-    /// Static literal text from the flat template. `id` is `Some` only
-    /// when this text is a *root* of some VNode.
+    /// Static literal text from the template. `id` is `Some` only when this text
+    /// is a *root* of some VNode.
     StaticText {
         text: &'a str,
         id: Option<ElementId>,
     },
     /// Runtime text from a `DynamicNode::Text`.
     DynamicText { value: &'a str, id: ElementId },
-    /// A static template element plus the owning VNode (for resolving
-    /// dynamic attribute slots).
+    /// A static template element plus the owning VNode (for resolving dynamic
+    /// attribute slots and children) and its op index in the template tape.
     Element {
         vnode: MountedVNode<'a>,
-        node: StaticNode<'a>,
-        path: TemplatePath,
+        op: usize,
         root_id: Option<ElementId>,
     },
 }
@@ -285,40 +318,30 @@ impl EmitStep<'_, '_> {
     }
 }
 
-/// Group leaves into emit steps. A text leaf greedy-extends across
-/// consecutive text leaves AND across placeholders sandwiched between two
-/// text leaves (the browser merges all text contributions into one DOM
-/// node, with placeholders contributing zero HTML).
+/// Group leaves into emit steps. A text leaf greedy-extends across consecutive
+/// text leaves (the browser merges all text contributions into one DOM node).
 fn group_steps<'a, 'b>(leaves: &'b [Leaf<'a>]) -> Vec<EmitStep<'a, 'b>> {
     let mut steps = Vec::new();
     let mut i = 0;
     while i < leaves.len() {
         if leaves[i].is_text() {
             let mut end = i + 1;
-            loop {
-                while end < leaves.len() && leaves[end].is_text() {
-                    end += 1;
-                }
-                break;
+            while end < leaves.len() && leaves[end].is_text() {
+                end += 1;
             }
             steps.push(EmitStep::TextRun(&leaves[i..end]));
             i = end;
         } else {
-            match leaves[i] {
-                Leaf::Element { .. } => steps.push(EmitStep::Element(&leaves[i])),
-                Leaf::StaticText { .. } | Leaf::DynamicText { .. } => {
-                    unreachable!("text leaves handled above")
-                }
-            }
+            steps.push(EmitStep::Element(&leaves[i]));
             i += 1;
         }
     }
     steps
 }
 
-/// True when the next *consuming* step after `idx` is a text run, meaning
-/// our last non-empty text contribution needs `split_after` so the cursor
-/// advances past it (instead of parking on it for the caller to advance 1).
+/// True when the next *consuming* step after `idx` is a text run, meaning our
+/// last non-empty text contribution needs `split_after` so the cursor advances
+/// past it (instead of parking on it for the caller to advance 1).
 fn next_consuming_is_text_run(steps: &[EmitStep<'_, '_>], idx: usize) -> bool {
     let mut next = idx + 1;
     while let Some(step) = steps.get(next) {
@@ -333,60 +356,54 @@ fn next_consuming_is_text_run(steps: &[EmitStep<'_, '_>], idx: usize) -> bool {
     false
 }
 
-/// Emit ops for one text run. All contributions share a single browser-
-/// merged DOM text node (or zero, if every text contribution is empty).
+/// Drive the cursor over one text run. All contributions share a single
+/// browser-merged DOM text node (or zero, if every contribution is empty).
 ///
-/// For each non-empty text contribution we emit `hy_text_contrib`
-/// (mapping + optional `splitText`). The last non-empty contribution
-/// doesn't split unless `split_tail` is true (next consuming step is
-/// another text run, so cursor must advance past).
-///
-/// Empty text contributions before the last non-empty get `hy_synth_text`
-/// (real empty text node inserted before cursor). Empty contributions after
-/// the last non-empty get `hy_synth_text_after` (real empty text node inserted
-/// after cursor).
-///
-/// Returns the number of DOM siblings this run consumed (0 if all-empty
-/// or `split_tail`, else 1).
-fn emit_text_run(run: &[Leaf<'_>], channel: &mut HydrationChannel, split_tail: bool) -> u32 {
+/// Returns the number of DOM siblings this run consumed (0 if all-empty or
+/// `split_tail`, else 1).
+fn emit_text_run(
+    run: &[Leaf<'_>],
+    cursor: &mut HydrationCursor,
+    split_tail: bool,
+) -> Result<u32, RehydrationError> {
     let last_nonempty = run.iter().rposition(leaf_text_is_non_empty);
 
     for (i, leaf) in run.iter().enumerate() {
         match *leaf {
             Leaf::StaticText { text, id } => {
-                emit_text_leaf(channel, utf16_len(text), id, i, last_nonempty, split_tail);
+                emit_text_leaf(cursor, utf16_len(text), id, i, last_nonempty, split_tail)?;
             }
             Leaf::DynamicText { value, id } => {
                 emit_text_leaf(
-                    channel,
+                    cursor,
                     utf16_len(value),
                     Some(id),
                     i,
                     last_nonempty,
                     split_tail,
-                );
+                )?;
             }
             Leaf::Element { .. } => unreachable!("non-text leaf in text run"),
         }
     }
 
     if last_nonempty.is_none() || split_tail {
-        0
+        Ok(0)
     } else {
-        1
+        Ok(1)
     }
 }
 
 fn emit_text_leaf(
-    channel: &mut HydrationChannel,
+    cursor: &mut HydrationCursor,
     len: u32,
     id: Option<ElementId>,
     i: usize,
     last_nonempty: Option<usize>,
     split_tail: bool,
-) {
+) -> Result<(), RehydrationError> {
     if len == 0 {
-        let Some(id) = id else { return };
+        let Some(id) = id else { return Ok(()) };
         // All-empty runs park every sentinel before the cursor (which is on
         // whatever follows the run). Otherwise position relative to the last
         // non-empty contribution: before goes _before_ the cursor, after goes
@@ -396,16 +413,17 @@ fn emit_text_leaf(
             Some(last) => i < last,
         };
         if before_cursor {
-            channel.hy_synth_text(id.raw() as u32);
+            cursor.synth_text(id.raw() as u32)?;
         } else {
-            channel.hy_synth_text_after(id.raw() as u32);
+            cursor.synth_text_after(id.raw() as u32)?;
         }
     } else {
         let id_arg = id.map(|i| i.raw() as u32).unwrap_or(0);
         let split_after = matches!(last_nonempty, Some(last) if i < last)
             || (split_tail && Some(i) == last_nonempty);
-        channel.hy_text_contrib(len, id_arg, if split_after { 1 } else { 0 });
+        cursor.text_contrib(len, id_arg, split_after)?;
     }
+    Ok(())
 }
 
 fn leaf_text_is_non_empty(leaf: &Leaf<'_>) -> bool {

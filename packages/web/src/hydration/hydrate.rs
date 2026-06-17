@@ -6,9 +6,10 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
-use dioxus_interpreter_js::hydration_bindings::{HydrationChannel, bind_hydration_channel};
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
+
+use super::cursor::HydrationCursor;
 
 use super::SuspenseMessage;
 use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
@@ -22,6 +23,9 @@ pub(crate) enum RehydrationError {
     SuspenseHydrationIdNotFound,
     /// The client tried to rehydrate a dom id that was not found on the server
     ElementNotFound,
+    /// The server-rendered DOM did not match the shape the client expected
+    /// while walking the VDOM (e.g. a tag, text node, or split offset mismatch).
+    HydrationMismatch,
 }
 
 impl WebsysDom {
@@ -166,28 +170,23 @@ impl WebsysDom {
         } else {
             under
         };
-        let mut channel = HydrationChannel::default();
+        let mut cursor = HydrationCursor::new(self.interpreter.base(), self.root.clone(), under);
         let mut to_mount = Vec::new();
 
         if under_is_empty {
             // No real root nodes were emitted by SSR. Hydrate under the mount
             // element so zero-DOM root ids still get anchors with a concrete
             // parent.
-            channel.hy_enter_root(0);
-            channel.hy_begin_children();
-            self.emit_scope(scope, dom, &mut channel, &mut to_mount)?;
-            channel.hy_end_children();
+            cursor.enter_root(0);
+            cursor.begin_children();
+            self.emit_scope(scope, dom, &mut cursor, &mut to_mount)?;
+            cursor.end_children();
         } else {
             // Park the cursor on the first root; subsequent roots are stepped via
-            // `Advance(1)` ops emitted by the VDOM walker.
-            channel.hy_enter_root(0);
-            self.emit_scope(scope, dom, &mut channel, &mut to_mount)?;
+            // `advance(1)` as the VDOM walker descends siblings.
+            cursor.enter_root(0);
+            self.emit_scope(scope, dom, &mut cursor, &mut to_mount)?;
         }
-
-        // Bind the DOM roots to the live mutation interpreter before flushing
-        // the queued hydration ops.
-        bind_hydration_channel(channel.js_channel(), self.interpreter.base(), under);
-        channel.flush();
 
         #[cfg(feature = "mounted")]
         for id in to_mount {

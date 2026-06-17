@@ -1,4 +1,6 @@
 #[cfg(feature = "hydrate")]
+mod cursor;
+#[cfg(feature = "hydrate")]
 mod hydrate;
 #[cfg(feature = "hydrate")]
 mod plan;

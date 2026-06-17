@@ -22,6 +22,14 @@ extern "C" {
 
     #[wasm_bindgen(method, js_name = "setNode")]
     pub fn set_node(this: &BaseInterpreter, id: u32, node: &Node);
+
+    #[wasm_bindgen(method, js_name = "createListener")]
+    pub fn create_listener(
+        this: &BaseInterpreter,
+        event_name: &str,
+        element: &web_sys::Element,
+        bubbles: bool,
+    );
 }
 
 // Note that this impl is for the sledgehammer interpreter to allow us to
