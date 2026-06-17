@@ -3,6 +3,7 @@ use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 use crate::{
     ComponentFunction, Element, WriteMutations,
     innerlude::{CapturedPanic, ElementRef, ScopeOrder},
+    scope_context::SuspenseLocation,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -27,6 +28,12 @@ pub(crate) trait RenderDriver: 'static {
 
     /// A fresh instance with cloned props.
     fn duplicate(&self) -> Rc<dyn RenderDriver>;
+
+    /// The suspense location to store on a newly-created scope owned by this
+    /// driver.
+    fn initial_suspense_location(&self, parent: SuspenseLocation) -> SuspenseLocation {
+        parent
+    }
 
     /// Mount this scope's output. `to` receives DOM mutations; pass `None` for
     /// background rendering (e.g. suspended children).
@@ -56,29 +63,6 @@ pub(crate) trait RenderDriver: 'static {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     );
-}
-
-/// Remove a scope's rendered output from the DOM, and drop the scope when
-/// `destroy_component_state` is set. Shared by body and suspense drivers.
-pub(crate) fn remove_rendered_output(
-    dom: &mut VirtualDom,
-    scope_id: ScopeId,
-    mut to: Option<&mut (dyn WriteMutations + '_)>,
-    destroy_component_state: bool,
-    replace_with: Option<usize>,
-) {
-    if let Some(node) = dom.scopes[scope_id.0].last_rendered_node.clone() {
-        node.remove_node_inner(
-            dom,
-            to.as_deref_mut(),
-            destroy_component_state,
-            replace_with,
-        )
-    };
-
-    if destroy_component_state {
-        dom.drop_scope(scope_id);
-    }
 }
 
 /// The concrete driver for plain (non-suspense) components.
@@ -194,10 +178,21 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut (dyn WriteMutations + '_)>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        remove_rendered_output(dom, scope_id, to, destroy_component_state, replace_with);
+        if let Some(node) = dom.scopes[scope_id.0].last_rendered_node.clone() {
+            node.remove_node_inner(
+                dom,
+                to.as_deref_mut(),
+                destroy_component_state,
+                replace_with,
+            )
+        };
+
+        if destroy_component_state {
+            dom.drop_scope(scope_id);
+        }
     }
 }

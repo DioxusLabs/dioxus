@@ -1,10 +1,6 @@
 use std::{any::Any, cell::RefCell, rc::Rc};
 
-use crate::{
-    innerlude::*,
-    render_driver::{RenderDriver, remove_rendered_output},
-    scope_context::SuspenseLocation,
-};
+use crate::{innerlude::*, render_driver::RenderDriver, scope_context::SuspenseLocation};
 
 /// Properties for the [`SuspenseBoundary()`] component.
 #[allow(non_camel_case_types)]
@@ -304,6 +300,10 @@ impl RenderDriver for SuspenseDriver {
         Rc::new(Self::new(self.props.borrow().clone()))
     }
 
+    fn initial_suspense_location(&self, _parent: SuspenseLocation) -> SuspenseLocation {
+        SuspenseLocation::SuspenseBoundary(self.suspense_context.clone())
+    }
+
     fn create(
         &self,
         dom: &mut VirtualDom,
@@ -314,10 +314,6 @@ impl RenderDriver for SuspenseDriver {
     ) -> usize {
         if new {
             self.suspense_context.mount(scope_id);
-            let scope_state = dom.runtime.get_state(scope_id);
-            scope_state.set_suspense_location(SuspenseLocation::SuspenseBoundary(
-                self.suspense_context.clone(),
-            ));
         }
         suspense_create(self, scope_id, parent, dom, to)
     }
@@ -335,16 +331,25 @@ impl RenderDriver for SuspenseDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut (dyn WriteMutations + '_)>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
         // If this is a suspense boundary, remove the suspended nodes as well
         SuspenseContext::remove_suspended_nodes(dom, scope_id, destroy_component_state);
 
-        // The scope's rendered output (children or fallback) is removed the
-        // same way a plain component's output is.
-        remove_rendered_output(dom, scope_id, to, destroy_component_state, replace_with);
+        if let Some(node) = dom.scopes[scope_id.0].last_rendered_node.clone() {
+            node.remove_node_inner(
+                dom,
+                to.as_deref_mut(),
+                destroy_component_state,
+                replace_with,
+            )
+        };
+
+        if destroy_component_state {
+            dom.drop_scope(scope_id);
+        }
     }
 }
 

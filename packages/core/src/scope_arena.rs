@@ -23,14 +23,15 @@ impl VirtualDom {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
-        let suspense_boundary = self
+        let parent_suspense_location = self
             .runtime
             .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
+        let suspense_location = driver.initial_suspense_location(parent_suspense_location);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
-        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary, driver);
+        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_location, driver);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {

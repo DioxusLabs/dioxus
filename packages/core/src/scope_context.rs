@@ -60,7 +60,7 @@ pub(crate) struct Scope {
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
     /// The suspense boundary location this scope is rendered under, if any.
-    suspense_location: RefCell<SuspenseLocation>,
+    suspense_location: SuspenseLocation,
 
     /// The driver owning this scope's rendered output.
     render_driver: Rc<dyn RenderDriver>,
@@ -92,7 +92,7 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_location: RefCell::new(suspense_location),
+            suspense_location,
             render_driver,
         }
     }
@@ -123,17 +123,12 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_location.borrow().clone()
-    }
-
-    /// Set the suspense location for this scope
-    pub(crate) fn set_suspense_location(&self, location: SuspenseLocation) {
-        *self.suspense_location.borrow_mut() = location;
+        self.suspense_location.clone()
     }
 
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        match &*self.suspense_location.borrow() {
+        match &self.suspense_location {
             SuspenseLocation::SuspenseBoundary(context) => Some(context.clone()),
             _ => None,
         }
@@ -141,8 +136,7 @@ impl Scope {
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let location = self.suspense_location.borrow();
-        let Some(context) = location.suspense_context() else {
+        let Some(context) = self.suspense_location.suspense_context() else {
             return false;
         };
 
