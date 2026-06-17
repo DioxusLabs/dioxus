@@ -1,7 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
     DynamicNode, ElementId, MountedVNode, ScopeId, ScopeState, SuspenseContext, VirtualDom,
-    internal::TemplateExt,
 };
 use std::fmt::Write;
 

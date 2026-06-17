@@ -14,7 +14,6 @@
 
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, VNode, VirtualDom,
-    internal::TemplateExt,
 };
 
 use crate::dom::WebsysDom;

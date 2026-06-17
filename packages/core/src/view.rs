@@ -23,17 +23,31 @@ use crate::{
 pub trait ViewTemplate {
     /// The raw template-v2-style tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
+}
 
+trait StaticViewTemplate: ViewTemplate {
     /// The static template for this view type.
+    #[cfg(not(debug_assertions))]
+    const TEMPLATE: &'static Template;
+
+    /// Build the static template for this view type.
+    #[cfg(debug_assertions)]
+    fn build_template() -> Template;
+
+    /// Return the template for this view type from a call-site cache.
+    #[cfg(debug_assertions)]
+    fn template_from_cell(cell: &'static OnceLock<Template>) -> &'static Template;
+}
+
+impl<T: ViewTemplate> StaticViewTemplate for T {
     #[cfg(not(debug_assertions))]
     const TEMPLATE: &'static Template = &TemplateStorage::<
         TEMPLATE_STORAGE_OPS_CAP,
         TEMPLATE_STORAGE_STRING_CAP,
         TEMPLATE_STORAGE_DYNAMIC_CAP,
-    >::build_from_tree(Self::TEMPLATE_TREE)
+    >::build_from_tree(T::TEMPLATE_TREE)
     .as_template();
 
-    /// Build the static template for this view type.
     #[cfg(debug_assertions)]
     #[inline]
     fn build_template() -> Template {
@@ -41,11 +55,10 @@ pub trait ViewTemplate {
             TEMPLATE_STORAGE_OPS_CAP,
             TEMPLATE_STORAGE_STRING_CAP,
             TEMPLATE_STORAGE_DYNAMIC_CAP,
-        >::build_from_tree(Self::TEMPLATE_TREE)
+        >::build_from_tree(T::TEMPLATE_TREE)
         .into_leaked_template()
     }
 
-    /// Return the template for this view type from a call-site cache.
     #[cfg(debug_assertions)]
     #[inline]
     fn template_from_cell(cell: &'static OnceLock<Template>) -> &'static Template {
@@ -146,12 +159,12 @@ pub fn into_vnode_with_template<V: View>(
 pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     #[cfg(debug_assertions)]
     {
-        into_vnode_with_template(view, key, &V::build_template())
+        into_vnode_with_template(view, key, &<V as StaticViewTemplate>::build_template())
     }
 
     #[cfg(not(debug_assertions))]
     {
-        into_vnode_with_template(view, key, V::TEMPLATE)
+        into_vnode_with_template(view, key, <V as StaticViewTemplate>::TEMPLATE)
     }
 }
 
@@ -164,7 +177,11 @@ pub fn into_vnode_with_key_and_template_cell<V: View>(
     key: Option<String>,
     template_cell: &'static OnceLock<Template>,
 ) -> VNode {
-    into_vnode_with_template(view, key, V::template_from_cell(template_cell))
+    into_vnode_with_template(
+        view,
+        key,
+        <V as StaticViewTemplate>::template_from_cell(template_cell),
+    )
 }
 
 impl View for () {}

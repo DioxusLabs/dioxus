@@ -1,6 +1,5 @@
 mod anchor;
 mod data;
-mod ext;
 mod op;
 mod path;
 mod raw;
@@ -10,7 +9,6 @@ mod storage;
 
 pub use anchor::TemplateAnchor;
 pub use data::Template;
-pub use ext::TemplateExt;
 pub use op::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateOp};
 pub use path::{TemplatePath, TemplatePathStep, TemplateSlotPath, TemplateSlotTarget};
 pub use raw::{TemplateRawOp, TemplateRawTree};

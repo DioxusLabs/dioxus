@@ -15,6 +15,7 @@
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
 
+#[macro_use]
 pub mod elements;
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
@@ -40,7 +41,8 @@ pub use dioxus_html_internal_macro::define_elements as __define_elements;
 #[macro_export]
 macro_rules! define_elements {
     ($($tokens:tt)*) => {
-        $crate::__define_elements! {
+        $crate::__dioxus_html_define_elements_with_detected_gated_attributes! {
+            $crate::__define_elements,
             core = $crate::dioxus_core,
             html = $crate;
             $($tokens)*
@@ -67,7 +69,7 @@ pub mod traits {
 }
 
 pub mod extensions {
-    pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
+    pub use crate::attribute_groups::*;
     pub use crate::elements::extensions::*;
     pub use crate::events::EventsExtension;
 }

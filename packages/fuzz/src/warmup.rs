@@ -2,8 +2,6 @@
 //! per-input sync replay in [`crate::case::run_case`] cannot reach. Run once
 //! per fuzz process so the coverage-instrumented binary records them.
 
-use dioxus_core::internal::TemplateExt;
-
 /// Drive the VirtualDom's pending work to completion synchronously.
 fn drive_render(dom: &mut dioxus_core::VirtualDom) {
     dom.render_immediate(&mut dioxus_core::Mutations::default());

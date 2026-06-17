@@ -114,14 +114,17 @@ macro_rules! attribute_group {
             None
         }
 
-        impl_extension_attributes![$mod {
-            $(
-                $(#[$attr])*
-                $(#[attr(name = $js_name)])?
-                $(#[attr(namespace = $ns)])?
-                $name,
-            )*
-        }];
+        __dioxus_html_impl_extension_attributes_with_detected_gated_attributes! {
+            impl_extension_attributes,
+            $mod {
+                $(
+                    $(#[$attr])*
+                    $(#[attr(name = $js_name)])?
+                    $(#[attr(namespace = $ns)])?
+                    $name,
+                )*
+            }
+        }
     };
 }
 

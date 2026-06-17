@@ -1,4 +1,5 @@
 use proc_macro::TokenStream;
+use std::collections::BTreeMap;
 
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
@@ -39,6 +40,7 @@ struct ImplExtensionAttributes {
     name: Ident,
     attrs: Punctuated<ExtensionAttribute, Token![,]>,
     for_el: bool,
+    gated_attribute_groups: Vec<GatedAttributeGroup>,
 }
 
 struct ExtensionAttribute {
@@ -51,13 +53,21 @@ struct AttributeMetadata {
     name: Option<LitStr>,
     namespace: Option<LitStr>,
     volatile: bool,
+    gated: bool,
 }
 
 struct DefineElements {
     core_path: Path,
     html_path: Path,
     context: bool,
+    gated_attribute_groups: Vec<GatedAttributeGroup>,
+    explicit_gated_attribute_groups: bool,
     elements: Vec<ElementDef>,
+}
+
+struct GatedAttributeGroup {
+    name: Ident,
+    attributes: Punctuated<Ident, Token![,]>,
 }
 
 struct ElementDef {
@@ -80,23 +90,33 @@ impl Parse for ImplExtensionAttributes {
         let name = input.parse()?;
         braced!(content in input);
         let attrs = content.parse_terminated(ExtensionAttribute::parse, Token![,])?;
-        let for_el = if input.is_empty() {
-            false
-        } else {
-            let marker: Ident = input.parse()?;
-            if marker != "for_el" {
+
+        let mut for_el = false;
+        let mut gated_attribute_groups = Vec::new();
+        while !input.is_empty() {
+            let marker: Ident = input.call(Ident::parse_any)?;
+            if marker == "for_el" {
+                for_el = true;
+            } else if marker == "gated_attributes" {
+                let content;
+                braced!(content in input);
+                while !content.is_empty() {
+                    gated_attribute_groups.push(content.parse()?);
+                    let _ = content.parse::<Token![,]>();
+                }
+            } else {
                 return Err(syn::Error::new(
                     marker.span(),
-                    "expected `for_el` after extension attribute list",
+                    "expected `for_el` or `gated_attributes` after extension attribute list",
                 ));
             }
-            true
-        };
+        }
 
         Ok(ImplExtensionAttributes {
             name,
             attrs,
             for_el,
+            gated_attribute_groups,
         })
     }
 }
@@ -126,6 +146,9 @@ impl AttributeMetadata {
                     Meta::Path(path) if path.is_ident("volatile") => {
                         metadata.volatile = true;
                     }
+                    Meta::Path(path) if path.is_ident("gated") => {
+                        metadata.gated = true;
+                    }
                     Meta::NameValue(name_value)
                         if name_value.path.is_ident("name")
                             || name_value.path.is_ident("rename") =>
@@ -141,7 +164,7 @@ impl AttributeMetadata {
                     other => {
                         return Err(syn::Error::new_spanned(
                             other,
-                            "expected `volatile`, `name = \"...\"`, or `namespace = \"...\"`",
+                            "expected `volatile`, `gated`, `name = \"...\"`, or `namespace = \"...\"`",
                         ));
                     }
                 }
@@ -191,6 +214,24 @@ impl Parse for DefineElements {
 
         input.parse::<Token![;]>()?;
 
+        let mut gated_attribute_groups = Vec::new();
+        let mut explicit_gated_attribute_groups = false;
+        if !input.is_empty() {
+            let fork = input.fork();
+            if let Ok(marker) = fork.call(Ident::parse_any) {
+                if marker == "gated_attributes" {
+                    explicit_gated_attribute_groups = true;
+                    let _marker: Ident = input.call(Ident::parse_any)?;
+                    let content;
+                    braced!(content in input);
+                    while !content.is_empty() {
+                        gated_attribute_groups.push(content.parse()?);
+                        let _ = content.parse::<Token![,]>();
+                    }
+                }
+            }
+        }
+
         let mut elements = Vec::new();
         while !input.is_empty() {
             elements.push(input.parse()?);
@@ -200,8 +241,22 @@ impl Parse for DefineElements {
             core_path,
             html_path,
             context,
+            gated_attribute_groups,
+            explicit_gated_attribute_groups,
             elements,
         })
+    }
+}
+
+impl Parse for GatedAttributeGroup {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name = input.call(Ident::parse_any)?;
+
+        let content;
+        braced!(content in input);
+        let attributes = content.parse_terminated(Ident::parse_any, Token![,])?;
+
+        Ok(Self { name, attributes })
     }
 }
 
@@ -374,17 +429,38 @@ fn lit_str_from_expr(expr: &Expr) -> syn::Result<LitStr> {
     }
 }
 
+fn ident_to_upper_camel(ident: &Ident) -> String {
+    let ident_string = ident.to_string();
+    ident_string
+        .strip_prefix("r#")
+        .unwrap_or(&ident_string)
+        .to_case(Case::UpperCamel)
+}
+
 impl ToTokens for DefineElements {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let core = &self.core_path;
         let html = &self.html_path;
+        let detected_gated_attribute_groups;
+        let gated_attribute_groups = if self.explicit_gated_attribute_groups {
+            &self.gated_attribute_groups
+        } else {
+            detected_gated_attribute_groups = self.detected_gated_attribute_groups();
+            &detected_gated_attribute_groups
+        };
         let elements = self
             .elements
             .iter()
-            .map(|element| element.to_tokens_with_paths(core, html));
+            .map(|element| element.to_tokens_with_paths(core, html, gated_attribute_groups));
         let context = self.context.then(|| self.context_tokens(html));
+        let detected_duplicate_macros = (!self.explicit_gated_attribute_groups)
+            .then(|| self.detected_duplicate_macro_tokens(gated_attribute_groups));
+        let marker_traits = (!self.explicit_gated_attribute_groups)
+            .then(|| self.gated_attribute_marker_trait_tokens(gated_attribute_groups));
 
         tokens.append_all(quote! {
+            #detected_duplicate_macros
+            #marker_traits
             #(#elements)*
             #context
         });
@@ -392,6 +468,108 @@ impl ToTokens for DefineElements {
 }
 
 impl DefineElements {
+    fn detected_gated_attribute_groups(&self) -> Vec<GatedAttributeGroup> {
+        let mut groups = BTreeMap::<&'static str, BTreeMap<String, Ident>>::new();
+
+        for element in &self.elements {
+            let group = element.attribute_group_name();
+            let attributes = groups.entry(group).or_default();
+            for attribute in &element.attributes {
+                attributes
+                    .entry(attribute.rust_name())
+                    .or_insert_with(|| attribute.name.clone());
+            }
+        }
+
+        groups
+            .into_iter()
+            .map(|(group, attributes)| GatedAttributeGroup {
+                name: Ident::new(group, proc_macro2::Span::call_site()),
+                attributes: attributes.into_values().collect(),
+            })
+            .collect()
+    }
+
+    fn detected_duplicate_macro_tokens(
+        &self,
+        gated_attribute_groups: &[GatedAttributeGroup],
+    ) -> TokenStream2 {
+        let group_blocks = gated_attribute_groups.iter().map(|group| {
+            let name = &group.name;
+            let attributes = group.attributes.iter();
+            quote! {
+                #name { #(#attributes,)* }
+            }
+        });
+        let define_group_blocks = group_blocks.clone();
+
+        quote! {
+            #[doc(hidden)]
+            #[macro_export]
+            macro_rules! __dioxus_html_define_elements_with_detected_gated_attributes {
+                (
+                    $target_macro:path,
+                    core = $core:path,
+                    html = $html:path
+                    $(, $option:ident = $enabled:tt)* $(,)?
+                    ;
+                    $($body:tt)*
+                ) => {
+                    $target_macro! {
+                        core = $core,
+                        html = $html
+                        $(, $option = $enabled)*;
+                        gated_attributes {
+                            #(#define_group_blocks)*
+                        }
+                        $($body)*
+                    }
+                };
+            }
+
+            #[doc(hidden)]
+            #[macro_export]
+            macro_rules! __dioxus_html_impl_extension_attributes_with_detected_gated_attributes {
+                (
+                    $target_macro:path,
+                    $name:ident { $($attrs:tt)* }
+                    $($rest:tt)*
+                ) => {
+                    $target_macro![
+                        $name { $($attrs)* }
+                        gated_attributes {
+                            #(#group_blocks)*
+                        }
+                        $($rest)*
+                    ];
+                };
+            }
+        }
+    }
+
+    fn gated_attribute_marker_trait_tokens(
+        &self,
+        gated_attribute_groups: &[GatedAttributeGroup],
+    ) -> TokenStream2 {
+        let markers = gated_attribute_groups.iter().flat_map(|group| {
+            let group_camel_name = ident_to_upper_camel(&group.name);
+            group.attributes.iter().map(move |attribute| {
+                let attr_camel_name = ident_to_upper_camel(attribute);
+                Ident::new(
+                    format!("{group_camel_name}{attr_camel_name}Element").as_str(),
+                    attribute.span(),
+                )
+            })
+        });
+
+        quote! {
+            #(
+                #[doc(hidden)]
+                pub trait #markers {}
+            )*
+        }
+    }
+
     fn context_tokens(&self, html: &Path) -> TokenStream2 {
         let map_attribute = self
             .elements
@@ -464,7 +642,12 @@ impl DefineElements {
 }
 
 impl ElementDef {
-    fn to_tokens_with_paths(&self, core: &Path, html: &Path) -> TokenStream2 {
+    fn to_tokens_with_paths(
+        &self,
+        core: &Path,
+        html: &Path,
+        gated_attribute_groups: &[GatedAttributeGroup],
+    ) -> TokenStream2 {
         let name = &self.name;
         let name_string = self.rust_name();
         let camel_name = self.camel_name();
@@ -489,6 +672,30 @@ impl ElementDef {
             Some("http://www.w3.org/2000/svg") => quote! { #html::SvgAttributesElement },
             _ => quote! { #html::GlobalAttributesElement },
         };
+        let attribute_group_name = self.attribute_group_name();
+        let mut gated_marker_impls = Vec::new();
+        for group in gated_attribute_groups
+            .iter()
+            .filter(|group| group.name == attribute_group_name)
+        {
+            let group_camel_name = ident_to_upper_camel(&group.name);
+            for attribute in &group.attributes {
+                let has_attribute = self
+                    .attributes
+                    .iter()
+                    .any(|element_attribute| element_attribute.name == *attribute);
+
+                if !has_attribute {
+                    let attr_camel_name = ident_to_upper_camel(attribute);
+                    let marker = Ident::new(
+                        format!("{group_camel_name}{attr_camel_name}Element").as_str(),
+                        attribute.span(),
+                    );
+
+                    gated_marker_impls.push(quote! { impl #html::#marker for #tag {} });
+                }
+            }
+        }
         let attrs = self
             .attrs
             .iter()
@@ -587,6 +794,7 @@ impl ElementDef {
             }
 
             impl #attribute_group_marker for #tag {}
+            #(#gated_marker_impls)*
 
             #(#descriptors)*
 
@@ -624,6 +832,13 @@ impl ElementDef {
 
     fn namespace_value(&self) -> Option<String> {
         self.metadata.namespace.as_ref().map(LitStr::value)
+    }
+
+    fn attribute_group_name(&self) -> &'static str {
+        match self.namespace_value().as_deref() {
+            Some("http://www.w3.org/2000/svg") => "svg_attributes",
+            _ => "global_attributes",
+        }
     }
 
     fn camel_name(&self) -> String {
@@ -707,6 +922,13 @@ impl ElementDef {
 }
 
 impl ExtensionAttribute {
+    fn is_gated_by(&self, gated_attributes: &[String]) -> bool {
+        self.metadata.gated
+            || gated_attributes
+                .iter()
+                .any(|attr| attr == &self.rust_name())
+    }
+
     fn rust_name(&self) -> String {
         self.name.to_string()
     }
@@ -778,6 +1000,19 @@ impl ToTokens for ImplExtensionAttributes {
             .unwrap_or(&name_string)
             .to_case(Case::UpperCamel);
         let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
+        let group_marker = Ident::new(format!("{camel_name}Element").as_str(), name.span());
+        let gated_attributes = self
+            .gated_attribute_groups
+            .iter()
+            .find(|group| group.name == *name)
+            .map(|group| {
+                group
+                    .attributes
+                    .iter()
+                    .map(Ident::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         let descriptors = self.attrs.iter().map(|attr| {
             let ident = &attr.name;
@@ -818,39 +1053,97 @@ impl ToTokens for ImplExtensionAttributes {
             }
         });
 
-        let impls = self.attrs.iter().map(|attr| {
+        let impls = self
+            .attrs
+            .iter()
+            .filter(|attr| !attr.is_gated_by(&gated_attributes))
+            .map(|attr| {
+                let ident = &attr.name;
+                let ident_string = ident.to_string();
+                let attr_camel_name = ident_string
+                    .strip_prefix("r#")
+                    .unwrap_or(&ident_string)
+                    .to_case(Case::UpperCamel);
+                let descriptor = Ident::new(
+                    format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
+                    ident.span(),
+                );
+                quote! {
+                    #[allow(non_snake_case)]
+                    fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
+                        self,
+                        value: __DioxusAttributeValue,
+                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                        Self,
+                        #descriptor,
+                        __DioxusAttributeMarker,
+                    >>::Output
+                    where
+                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
+                            Self,
+                            #descriptor,
+                            __DioxusAttributeMarker,
+                        >,
+                    {
+                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                            Self,
+                            #descriptor,
+                            __DioxusAttributeMarker,
+                        >>::append_to(value, self)
+                    }
+                }
+            });
+        let gated_extensions = self.attrs.iter().filter(|attr| attr.is_gated_by(&gated_attributes)).map(|attr| {
             let ident = &attr.name;
-            let ident_string = ident.to_string();
-            let attr_camel_name = ident_string
-                .strip_prefix("r#")
-                .unwrap_or(&ident_string)
-                .to_case(Case::UpperCamel);
+            let attr_camel_name = ident_to_upper_camel(ident);
             let descriptor = Ident::new(
                 format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                 ident.span(),
             );
+            let extension_name = Ident::new(
+                format!("{camel_name}{attr_camel_name}Extension").as_str(),
+                ident.span(),
+            );
+            let marker = Ident::new(
+                format!("{camel_name}{attr_camel_name}Element").as_str(),
+                ident.span(),
+            );
+
             quote! {
-                #[allow(non_snake_case)]
-                fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
-                    self,
-                    value: __DioxusAttributeValue,
-                ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                    Self,
-                    #descriptor,
-                    __DioxusAttributeMarker,
-                >>::Output
+                pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+                    #[allow(non_snake_case)]
+                    fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
+                        self,
+                        value: __DioxusAttributeValue,
+                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                        Self,
+                        #descriptor,
+                        __DioxusAttributeMarker,
+                    >>::Output
+                    where
+                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
+                            Self,
+                            #descriptor,
+                            __DioxusAttributeMarker,
+                        >,
+                    {
+                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
+                            Self,
+                            #descriptor,
+                            __DioxusAttributeMarker,
+                        >>::append_to(value, self)
+                    }
+                }
+
+                impl<__DioxusTag, __DioxusAttributes, __DioxusChildren> #extension_name
+                    for ::dioxus_core::view::ElementBuilder<
+                        __DioxusTag,
+                        __DioxusAttributes,
+                        __DioxusChildren,
+                    >
                 where
-                    __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
-                        Self,
-                        #descriptor,
-                        __DioxusAttributeMarker,
-                    >,
+                    __DioxusTag: #group_marker + crate::#marker,
                 {
-                    <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                        Self,
-                        #descriptor,
-                        __DioxusAttributeMarker,
-                    >>::append_to(value, self)
                 }
             }
         });
@@ -869,6 +1162,7 @@ impl ToTokens for ImplExtensionAttributes {
             }
 
             #element_impl
+            #(#gated_extensions)*
         });
     }
 }

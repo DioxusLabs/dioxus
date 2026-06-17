@@ -1,4 +1,4 @@
-use dioxus::{dioxus_core::internal::TemplateExt, prelude::*};
+use dioxus::prelude::*;
 
 /// Make sure that rsx! is parsing templates and their attributes properly
 #[test]

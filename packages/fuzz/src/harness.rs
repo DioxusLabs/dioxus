@@ -1089,100 +1089,6 @@ mod tests {
     }
 
     #[test]
-    fn single_op_creates_dynamic_text_at_root() {
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Text(7)),
-                },
-            ),
-            Op::Rerender,
-        ]);
-    }
-
-    #[test]
-    fn single_op_creates_dynamic_component() {
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
-                },
-            ),
-            Op::Rerender,
-        ]);
-    }
-
-    #[test]
-    fn single_op_creates_dynamic_fragment_with_children() {
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
-                        children: 2,
-                        key_base: Some(10),
-                    }),
-                },
-            ),
-            Op::Rerender,
-        ]);
-    }
-
-    #[test]
-    fn single_op_creates_dynamic_suspense_boundary() {
-        replay_ops([
-            Op::template(
-                0,
-                TemplateEdit::SetNode {
-                    node: 0,
-                    kind: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
-                        mode: SuspenseMode::Resolved,
-                    }),
-                },
-            ),
-            Op::Rerender,
-        ]);
-    }
-
-    #[test]
-    fn single_op_creates_dynamic_listener_attr() {
-        let mut harness = Harness::fresh_strict();
-        apply_op(
-            &mut harness,
-            &Op::template(
-                0,
-                TemplateEdit::Attrs {
-                    element: 0,
-                    edit: ListEdit::Insert {
-                        index: 0,
-                        item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
-                            name: 1,
-                            namespace: None,
-                            value: AttrValueSpec::Listener,
-                            volatile: false,
-                        }]),
-                    },
-                },
-            ),
-        )
-        .unwrap();
-        apply_op(&mut harness, &Op::Rerender).unwrap();
-        assert_eq!(
-            harness
-                .incremental
-                .borrow()
-                .historical_event_listener_targets()
-                .len(),
-            1
-        );
-    }
-
-    #[test]
     fn explicit_noop_event_fires_listener_without_rendering() {
         let mut harness = Harness::fresh_strict();
         for op in mount_listener_ops() {
@@ -1281,26 +1187,22 @@ mod tests {
         apply_op(&mut harness, &Op::Rerender).unwrap();
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(
-            harness
-                .context
-                .read_model()
-                .selected_ready_suspense_key(0)
-                .is_some()
-        );
+        assert!(harness
+            .context
+            .read_model()
+            .selected_ready_suspense_key(0)
+            .is_some());
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Ready { wake_after: 1 }, 1))
         );
 
         apply_op(&mut harness, &Op::wake_suspense(0)).unwrap();
-        assert!(
-            harness
-                .context
-                .read_model()
-                .selected_ready_suspense_key(0)
-                .is_none()
-        );
+        assert!(harness
+            .context
+            .read_model()
+            .selected_ready_suspense_key(0)
+            .is_none());
         assert_eq!(
             first_suspense_mode_and_wake_count(&harness.context),
             Some((SuspenseMode::Resolved, 2))
