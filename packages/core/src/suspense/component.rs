@@ -310,17 +310,15 @@ impl RenderDriver for SuspenseDriver {
             let suspense_context = SuspenseContext::new();
             let scope_state = dom.runtime.get_state(scope_id);
             scope_state.set_suspense_boundary(suspense_context.clone());
+            scope_state.set_suspense_location(
+                crate::scope_context::SuspenseLocation::SuspenseBoundary(suspense_context.clone()),
+            );
             suspense_context.mount(scope_id);
         }
         suspense_create(self, scope_id, parent, dom, to)
     }
 
-    fn diff(
-        &self,
-        dom: &mut VirtualDom,
-        scope_id: ScopeId,
-        to: Option<DynWriter<'_>>,
-    ) {
+    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, to: Option<DynWriter<'_>>) {
         suspense_diff(self, scope_id, dom, to)
     }
 
@@ -337,7 +335,13 @@ impl RenderDriver for SuspenseDriver {
 
         // The scope's rendered output (children or fallback) is removed the
         // same way a plain component's output is.
-        remove_rendered_output(dom, scope_id, to.as_mut(), destroy_component_state, replace_with);
+        remove_rendered_output(
+            dom,
+            scope_id,
+            to.as_mut(),
+            destroy_component_state,
+            replace_with,
+        );
     }
 }
 
@@ -394,8 +398,9 @@ fn suspense_create(
         } else {
             // Otherwise just render the children in the real dom
             debug_assert!(children.mount.get().mounted());
-            let nodes_created = suspense_context
-                .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to.as_mut()));
+            let nodes_created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
+                children.create(dom, parent, to.as_mut())
+            });
             dom.scopes[scope_id.0].last_rendered_node = children.into();
             suspense_context.take_suspended_nodes();
             mark_suspense_resolved(&suspense_context, dom, scope_id);
@@ -521,11 +526,9 @@ fn suspense_diff(
                     );
                 });
 
-                let suspense_context = SuspenseContext::downcast_suspense_boundary_from_scope(
-                    &dom.runtime,
-                    scope_id,
-                )
-                .unwrap();
+                let suspense_context =
+                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                        .unwrap();
                 suspense_context.set_suspended_nodes(new_suspended_nodes);
 
                 driver.store_children(&children);
@@ -563,21 +566,15 @@ fn suspense_diff(
 
                 // Then diff the new children in the background
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    old_children.diff_node(
-                        &new_children,
-                        dom,
-                        Option::<&mut NoOpMutations>::None,
-                    );
+                    old_children.diff_node(&new_children, dom, Option::<&mut NoOpMutations>::None);
                 });
 
                 // Set the last rendered node to the new suspense placeholder
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
 
-                let suspense_context = SuspenseContext::downcast_suspense_boundary_from_scope(
-                    &dom.runtime,
-                    scope_id,
-                )
-                .unwrap();
+                let suspense_context =
+                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                        .unwrap();
                 suspense_context.set_suspended_nodes(new_children);
 
                 driver.store_children(&children);

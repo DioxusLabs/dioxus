@@ -25,6 +25,7 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
+    SuspenseBoundary(SuspenseContext),
     UnderSuspense(SuspenseContext),
     InSuspensePlaceholder(SuspenseContext),
 }
@@ -34,6 +35,7 @@ impl SuspenseLocation {
         match self {
             SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
             SuspenseLocation::UnderSuspense(context) => Some(context),
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
             _ => None,
         }
     }
@@ -58,7 +60,7 @@ pub(crate) struct Scope {
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
     /// The suspense boundary location this scope is rendered under, if any.
-    suspense_location: SuspenseLocation,
+    suspense_location: RefCell<SuspenseLocation>,
 
     /// The suspense context owned by this scope when this scope is a boundary.
     suspense_boundary: RefCell<Option<SuspenseContext>>,
@@ -93,7 +95,7 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_location,
+            suspense_location: RefCell::new(suspense_location),
             suspense_boundary: RefCell::new(None),
             render_driver,
         }
@@ -129,7 +131,12 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_location.clone()
+        self.suspense_location.borrow().clone()
+    }
+
+    /// Set the suspense location for this scope
+    pub(crate) fn set_suspense_location(&self, location: SuspenseLocation) {
+        *self.suspense_location.borrow_mut() = location;
     }
 
     /// If this scope is a suspense boundary, return the suspense context
@@ -139,7 +146,8 @@ impl Scope {
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_location.suspense_context() else {
+        let location = self.suspense_location.borrow();
+        let Some(context) = location.suspense_context() else {
             return false;
         };
 

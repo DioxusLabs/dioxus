@@ -669,10 +669,7 @@ impl VComponent {
     }
 
     /// Create a [`VComponent`] with a custom [`RenderDriver`].
-    pub(crate) fn new_with_driver(
-        name: &'static str,
-        driver: Rc<dyn RenderDriver>,
-    ) -> Self {
+    pub(crate) fn new_with_driver(name: &'static str, driver: Rc<dyn RenderDriver>) -> Self {
         VComponent { name, driver }
     }
 

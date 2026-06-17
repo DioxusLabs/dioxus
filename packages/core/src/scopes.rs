@@ -1,6 +1,5 @@
 use crate::{
-    Element, RenderError, Runtime, VNode,
-    reactive_context::ReactiveContext, scope_context::Scope,
+    Element, RenderError, Runtime, VNode, reactive_context::ReactiveContext, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 

@@ -2,6 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::render_driver::{BodyDriver, DynWriter};
 use crate::root_wrapper::RootScopeWrapper;
@@ -13,7 +14,6 @@ use crate::{
     scopes::ScopeId,
 };
 use crate::{Task, VComponent};
-use crate::innerlude::Work;
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
@@ -576,12 +576,9 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
-        let m = self
-            .runtime
-            .clone()
-            .while_rendering(|| {
-                driver.create(self, ScopeId::ROOT, true, None, DynWriter::erase(Some(to)))
-            });
+        let m = self.runtime.clone().while_rendering(|| {
+            driver.create(self, ScopeId::ROOT, true, None, DynWriter::erase(Some(to)))
+        });
 
         to.append_children(ElementId(0), m);
     }

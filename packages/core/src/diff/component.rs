@@ -1,11 +1,9 @@
 use crate::{
-    innerlude::{
-        ElementRef, MountId, ScopeOrder, VComponent, WriteMutations,
-    },
+    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
+    nodes::VNode,
     render_driver::DynWriter,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
-    nodes::VNode,
 };
 
 impl VirtualDom {
@@ -87,7 +85,13 @@ impl VirtualDom {
         replace_with: Option<usize>,
     ) {
         let driver = self.runtime.get_state(scope_id).render_driver();
-        driver.remove(self, scope_id, DynWriter::erase(to), destroy_component_state, replace_with);
+        driver.remove(
+            self,
+            scope_id,
+            DynWriter::erase(to),
+            destroy_component_state,
+            replace_with,
+        );
     }
 }
 

@@ -27,21 +27,57 @@ impl<'a> DynWriter<'a> {
 }
 
 impl WriteMutations for DynWriter<'_> {
-    fn append_children(&mut self, id: ElementId, m: usize) { self.0.append_children(id, m) }
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) { self.0.assign_node_id(path, id) }
-    fn create_placeholder(&mut self, id: ElementId) { self.0.create_placeholder(id) }
-    fn create_text_node(&mut self, value: &str, id: ElementId) { self.0.create_text_node(value, id) }
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) { self.0.load_template(template, index, id) }
-    fn replace_node_with(&mut self, id: ElementId, m: usize) { self.0.replace_node_with(id, m) }
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) { self.0.replace_placeholder_with_nodes(path, m) }
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) { self.0.insert_nodes_after(id, m) }
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) { self.0.insert_nodes_before(id, m) }
-    fn set_attribute(&mut self, name: &'static str, ns: Option<&'static str>, value: &AttributeValue, id: ElementId) { self.0.set_attribute(name, ns, value, id) }
-    fn set_node_text(&mut self, value: &str, id: ElementId) { self.0.set_node_text(value, id) }
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) { self.0.create_event_listener(name, id) }
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) { self.0.remove_event_listener(name, id) }
-    fn remove_node(&mut self, id: ElementId) { self.0.remove_node(id) }
-    fn push_root(&mut self, id: ElementId) { self.0.push_root(id) }
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        self.0.append_children(id, m)
+    }
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        self.0.assign_node_id(path, id)
+    }
+    fn create_placeholder(&mut self, id: ElementId) {
+        self.0.create_placeholder(id)
+    }
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        self.0.create_text_node(value, id)
+    }
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.0.load_template(template, index, id)
+    }
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        self.0.replace_node_with(id, m)
+    }
+    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+        self.0.replace_placeholder_with_nodes(path, m)
+    }
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        self.0.insert_nodes_after(id, m)
+    }
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        self.0.insert_nodes_before(id, m)
+    }
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
+    ) {
+        self.0.set_attribute(name, ns, value, id)
+    }
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        self.0.set_node_text(value, id)
+    }
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.0.create_event_listener(name, id)
+    }
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        self.0.remove_event_listener(name, id)
+    }
+    fn remove_node(&mut self, id: ElementId) {
+        self.0.remove_node(id)
+    }
+    fn push_root(&mut self, id: ElementId) {
+        self.0.push_root(id)
+    }
 }
 
 /// A scope's rendering lifecycle and the inputs it renders from.
@@ -96,12 +132,7 @@ pub(crate) trait RenderDriver: 'static {
     ) -> usize;
 
     /// Diff this scope's output against its current props.
-    fn diff(
-        &self,
-        dom: &mut VirtualDom,
-        scope_id: ScopeId,
-        to: Option<DynWriter<'_>>,
-    );
+    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, to: Option<DynWriter<'_>>);
 
     /// Remove this scope's output. When `destroy_component_state` is false
     /// the output is only being lifted out of the real DOM and the driver
@@ -226,13 +257,13 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         if new {
             let body = dom.run_scope_with(scope_id, || self.render());
             dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(body));
-        }
 
-        // If our scope landed in `dirty_scopes` during its initial render
-        // (e.g. a hook synchronously queued an update for itself), drain the
-        // entry now so we don't re-process the same scope after creation.
-        let height = dom.runtime.get_state(scope_id).height;
-        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+            // If our scope landed in `dirty_scopes` during its initial render
+            // (e.g. a hook synchronously queued an update for itself), drain the
+            // entry now so we don't re-process the same scope after creation.
+            let height = dom.runtime.get_state(scope_id).height;
+            dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+        }
 
         let new_node = dom.scopes[scope_id.0]
             .last_rendered_node
@@ -242,12 +273,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         dom.create_scope(to.as_mut(), scope_id, new_node, parent)
     }
 
-    fn diff(
-        &self,
-        dom: &mut VirtualDom,
-        scope_id: ScopeId,
-        mut to: Option<DynWriter<'_>>,
-    ) {
+    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, mut to: Option<DynWriter<'_>>) {
         let body = dom.run_scope_with(scope_id, || self.render());
         dom.diff_scope(to.as_mut(), scope_id, body);
     }
@@ -260,6 +286,12 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        remove_rendered_output(dom, scope_id, to.as_mut(), destroy_component_state, replace_with);
+        remove_rendered_output(
+            dom,
+            scope_id,
+            to.as_mut(),
+            destroy_component_state,
+            replace_with,
+        );
     }
 }
