@@ -9,13 +9,18 @@ use crate::{
 /// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct DynamicNodeSlot<'a> {
+    template: &'a Template,
     anchor: &'a TemplateAnchor,
     index: usize,
 }
 
 impl<'a> DynamicNodeSlot<'a> {
-    pub(super) fn new(_template: &'a Template, anchor: &'a TemplateAnchor, index: usize) -> Self {
-        Self { anchor, index }
+    pub(super) fn new(template: &'a Template, anchor: &'a TemplateAnchor, index: usize) -> Self {
+        Self {
+            template,
+            anchor,
+            index,
+        }
     }
 
     pub(super) fn slot_path(self) -> TemplateSlotPath {
@@ -27,7 +32,30 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn root_index(self) -> usize {
-        self.slot_path().root_index().unwrap_or(0)
+        if self.is_root_level() {
+            for (root_idx, _, dynamic_anchor) in self.template.root_slots() {
+                if dynamic_anchor.is_some_and(|anchor| *anchor == *self.anchor) {
+                    return root_idx;
+                }
+            }
+            panic!("root-level dynamic slot must appear in template root slots");
+        }
+
+        let static_root_idx = self
+            .slot_path()
+            .root_index()
+            .expect("non-root dynamic slot must target a static root");
+        let mut current_static_root = 0;
+        for (root_idx, static_op, _) in self.template.root_slots() {
+            if static_op.is_none() {
+                continue;
+            }
+            if current_static_root == static_root_idx {
+                return root_idx;
+            }
+            current_static_root += 1;
+        }
+        panic!("non-root dynamic slot must belong to a static template root");
     }
 
     pub(super) fn is_root_level(self) -> bool {

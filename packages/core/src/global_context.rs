@@ -227,10 +227,11 @@ pub fn remove_future(id: Task) {
 ///
 /// pub fn Comp() -> Element {
 ///     let count = use_hook(|| Rc::new(RefCell::new(0)));
+///     let count_for_click = count.clone();
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *count.borrow_mut() += 1,
+///             onclick: move |_| *count_for_click.borrow_mut() += 1,
 ///             "{count.borrow()}"
 ///         }
 ///     }

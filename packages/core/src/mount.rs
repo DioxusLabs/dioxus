@@ -184,6 +184,7 @@ macro_rules! mounted_element_accessors {
             self.with_mount(mount, $get)
         }
 
+        #[track_caller]
         pub(crate) fn $unchecked(&self, mount: MountId, $idx: usize) -> MountedElementId {
             self.$mounted(mount, $idx).expect($expect)
         }

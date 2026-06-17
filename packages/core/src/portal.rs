@@ -204,6 +204,41 @@ fn mount_children(
     }
 }
 
+fn remount_children(
+    scope_id: ScopeId,
+    target_id: RenderTargetId,
+    children: LastRenderedNode,
+    root_mount: MountId,
+    parent: Option<MountRef>,
+    dom: &mut VirtualDom,
+    to: Option<&mut (dyn WriteMutations + '_)>,
+) {
+    debug_assert_eq!(
+        dom.runtime.current_render_target_id(),
+        target_id,
+        "portal remount runs inside the portal scope, whose target_id routes its writes"
+    );
+    let mut render_to = to;
+    let should_mount = render_to.is_some();
+    if let Some(to) = render_to.as_deref_mut() {
+        append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
+            children
+                .as_vnode()
+                .recreate_with_mount(dom, root_mount, None, parent, Some(to))
+                .nodes
+        });
+    } else {
+        children
+            .as_vnode()
+            .recreate_with_mount(dom, root_mount, None, parent, None);
+    }
+    dom.scopes[scope_id.index()].last_rendered_node =
+        Some(MountedOutput::new(children, root_mount));
+    if should_mount {
+        dom.runtime.get_state(scope_id).mount(&dom.runtime);
+    }
+}
+
 impl RenderDriver for PortalDriver {
     fn as_any(&self) -> &dyn Any {
         self
@@ -217,32 +252,36 @@ impl RenderDriver for PortalDriver {
         parent: Option<MountRef>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
-        let (target_id, children) = if new {
+        if new {
             let (target_id, children) = portal_props(dom, scope_id);
             // The scope was allocated with its parent's target; declare it as
             // a retargeting point before anything mounts under it. Later
             // target changes are applied by the retarget arm of `diff`, which
             // must observe the old target first.
             dom.runtime.set_scope_target_id(scope_id, target_id);
-            (target_id, children)
+
+            dom.runtime.clone().with_scope_on_stack(scope_id, || {
+                mount_children(scope_id, target_id, children, parent, dom, to);
+                0
+            })
         } else {
             // Re-creating a live scope: the props' children handle is not
             // mount-accurate (mounts land on the clone the first create
             // rendered), so re-create from the mounted output and the scope's
             // current target. Pending prop changes apply on the next `diff`.
-            let children = dom.scopes[scope_id.index()]
+            let old_output = dom.scopes[scope_id.index()]
                 .last_rendered_node
-                .as_ref()
-                .map(MountedOutput::node)
-                .cloned()
+                .clone()
                 .expect("portal scope must have rendered before re-create");
-            (dom.runtime.get_state(scope_id).target_id(), children)
-        };
+            let target_id = dom.runtime.get_state(scope_id).target_id();
+            let root_mount = old_output.root_mount();
+            let children = old_output.node().clone();
 
-        dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            mount_children(scope_id, target_id, children, parent, dom, to);
-            0
-        })
+            dom.runtime.clone().with_scope_on_stack(scope_id, || {
+                remount_children(scope_id, target_id, children, root_mount, parent, dom, to);
+                0
+            })
+        }
     }
 
     fn diff(

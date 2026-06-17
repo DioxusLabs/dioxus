@@ -58,6 +58,7 @@ pub struct TemplateStorage<
 struct TemplateElementFrame {
     enter_index: usize,
     namespace: bool,
+    path: TemplatePath,
 }
 
 struct TemplateLoweringCursor {
@@ -74,6 +75,7 @@ impl TemplateLoweringCursor {
             enter_stack: [TemplateElementFrame {
                 enter_index: 0,
                 namespace: false,
+                path: TemplatePath::empty(),
             }; TEMPLATE_PATH_STACK_CAP],
             next_paths,
             stack_pointer: 0,
@@ -89,6 +91,7 @@ impl TemplateLoweringCursor {
         self.enter_stack[self.stack_pointer] = TemplateElementFrame {
             enter_index,
             namespace,
+            path,
         };
         self.next_paths[self.stack_pointer + 1] = path.next_child();
         self.stack_pointer += 1;
@@ -107,7 +110,7 @@ impl TemplateLoweringCursor {
         if self.stack_pointer == 0 {
             panic!("dynamic attr raw op without an open element");
         }
-        self.next_paths[self.stack_pointer].parent()
+        self.current_element_frame().path
     }
 
     const fn current_element_op(&self) -> u16 {
