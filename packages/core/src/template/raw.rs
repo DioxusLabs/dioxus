@@ -1,7 +1,3 @@
-/// Static attribute namespace information in a raw template tape.
-#[doc(hidden)]
-pub type TemplateRawAttrNamespace = Option<&'static str>;
-
 /// One unlowered operation in a template tape.
 ///
 /// The RSX macro emits this raw tape directly. [`TemplateStorage::build`] lowers it into packed
@@ -25,7 +21,7 @@ pub enum TemplateRawOp {
         /// Static attribute value.
         value: &'static str,
         /// Attribute namespace.
-        namespace: TemplateRawAttrNamespace,
+        namespace: Option<&'static str>,
     },
     /// Dynamic attribute slot on the current element.
     DynamicAttr,

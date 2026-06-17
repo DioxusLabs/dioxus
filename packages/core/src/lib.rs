@@ -75,8 +75,7 @@ pub mod internal {
     #[doc(hidden)]
     pub use crate::template::{
         DecodedTemplateOp, TemplateAnchor, TemplateAnchorKind, TemplateExt, TemplateOp,
-        TemplatePath, TemplatePathStep, TemplateRawAttrNamespace, TemplateRawOp, TemplateSlotPath,
-        TemplateSlotTarget,
+        TemplatePath, TemplatePathStep, TemplateRawOp, TemplateSlotPath, TemplateSlotTarget,
     };
 
     #[cfg(fuzzing)]

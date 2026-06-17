@@ -1,6 +1,6 @@
 use super::{
-    DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, TemplateAnchorKind,
-    TemplateOp, TemplatePath, TemplateSlotTarget,
+    DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, TemplateOp, TemplatePath,
+    TemplateSlotTarget,
 };
 
 type StaticTemplateOpArray = &'static [TemplateOp];
@@ -15,7 +15,10 @@ type StaticTemplateStringArray = &'static [&'static str];
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
     /// Flat static template operations.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "super::serialization::deserialize_leaky"))]
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "super::serialization::deserialize_leaky")
+    )]
     ops: StaticTemplateOpArray,
 
     /// Static strings referenced by [`TemplateOp::Static`].
@@ -26,7 +29,10 @@ pub struct Template {
     strings: StaticTemplateStringArray,
 
     /// Dynamic value groups in reverse breadth-first fill order, each anchored to a static element.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "super::serialization::deserialize_leaky"))]
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "super::serialization::deserialize_leaky")
+    )]
     anchors: &'static [TemplateAnchor],
 
     /// Total number of runtime dynamic values this template expects.

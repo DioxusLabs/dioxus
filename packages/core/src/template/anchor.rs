@@ -2,7 +2,7 @@ use super::{TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 
 /// Sentinel `op` value marking a [`TemplateAnchor`] for a root-level dynamic node slot, which has no
 /// enclosing static element.
-pub(crate) const ROOT_ANCHOR_OP: u16 = u16::MAX;
+pub(super) const ROOT_ANCHOR_OP: u16 = u16::MAX;
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -16,11 +16,11 @@ pub enum TemplateAnchorKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateAnchor {
-    op: u16,
-    kind: TemplateAnchorKind,
-    path: u128,
-    value_start: u16,
-    value_count: u16,
+    pub(super) op: u16,
+    pub(super) kind: TemplateAnchorKind,
+    pub(super) path: u128,
+    pub(super) value_start: u16,
+    pub(super) value_count: u16,
 }
 
 impl TemplateAnchor {
@@ -28,7 +28,12 @@ impl TemplateAnchor {
         Self::node(op, path, value_start, value_count)
     }
 
-    pub(super) const fn attr(op: u16, path: TemplatePath, value_start: u16, value_count: u16) -> Self {
+    pub(super) const fn attr(
+        op: u16,
+        path: TemplatePath,
+        value_start: u16,
+        value_count: u16,
+    ) -> Self {
         if value_count == 0 {
             panic!("template anchors must cover at least one dynamic value");
         }
@@ -41,7 +46,12 @@ impl TemplateAnchor {
         }
     }
 
-    pub(super) const fn node(op: u16, path: TemplateSlotPath, value_start: u16, value_count: u16) -> Self {
+    pub(super) const fn node(
+        op: u16,
+        path: TemplateSlotPath,
+        value_start: u16,
+        value_count: u16,
+    ) -> Self {
         if value_count == 0 {
             panic!("template anchors must cover at least one dynamic value");
         }
@@ -111,7 +121,12 @@ impl TemplateAnchor {
         self.value_start as usize..(self.value_start as usize + self.value_count as usize)
     }
 
-    pub(super) const fn same_slot_bits(self, op: u16, kind: TemplateAnchorKind, path: u128) -> bool {
+    pub(super) const fn same_slot_bits(
+        self,
+        op: u16,
+        kind: TemplateAnchorKind,
+        path: u128,
+    ) -> bool {
         self.op == op
             && matches!(
                 (self.kind, kind),
