@@ -4,12 +4,12 @@
 
 use crate::innerlude::Work;
 use crate::properties::RootProps;
-use crate::render_driver::{BodyDriver, RenderDriver};
+use crate::render_driver::BodyDriver;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     ComponentFunction, Element, Mutations,
     arena::ElementId,
-    innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, WriteMutations},
+    innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
 };
@@ -288,9 +288,15 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let driver: Rc<dyn RenderDriver> =
-            Rc::new(BodyDriver::new(root, |_, _| true, root_props, "Root"));
-        Self::new_with_component(VComponent::new_with_driver("root", driver))
+        let render_fn = root.fn_ptr();
+        let props = VProps::new(root, |_, _| true, root_props, "Root");
+        let driver = BodyDriver::new();
+        Self::new_with_component(VComponent::new_with_driver(
+            "root",
+            render_fn,
+            driver,
+            Box::new(props),
+        ))
     }
 
     /// Create a new virtualdom and build it immediately
@@ -313,13 +319,8 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root_driver: Rc<dyn RenderDriver> = Rc::new(BodyDriver::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
-        ));
-        dom.new_scope("app", root_driver);
+        let root = VComponent::new(RootScopeWrapper, RootProps(root), "RootWrapper");
+        dom.new_scope("app", root.driver.clone(), root.props.duplicate());
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();

@@ -1,8 +1,6 @@
-use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
-
 use crate::{
-    ComponentFunction, Element, WriteMutations,
-    innerlude::{CapturedPanic, ElementRef},
+    WriteMutations,
+    innerlude::ElementRef,
     scope_context::SuspenseLocation,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
@@ -10,25 +8,11 @@ use crate::{
 
 /// The rendering lifecycle driver for a scope.
 ///
-/// Every scope owns exactly one driver via `Rc<dyn RenderDriver>`:
-/// - Plain components use [`BodyDriver`], which owns the component function and props.
+/// Every scope owns exactly one driver:
+/// - Plain components use [`BodyDriver`].
 /// - Custom components may use specialized drivers, such as
 ///   [`SuspenseDriver`](crate::suspense::SuspenseDriver).
 pub(crate) trait RenderDriver: 'static {
-    fn as_any(&self) -> &dyn Any;
-
-    /// Whether `other` renders the same component as this driver.
-    fn same_component(&self, other: &dyn RenderDriver) -> bool {
-        self.as_any().type_id() == other.as_any().type_id()
-    }
-
-    /// Update this driver's props to match `new_driver`'s. Returns `true` if
-    /// the props were equal (memoized).
-    fn memoize(&self, new_driver: &dyn Any) -> bool;
-
-    /// A fresh instance with cloned props.
-    fn duplicate(&self) -> Rc<dyn RenderDriver>;
-
     /// The suspense location to store on a newly-created scope owned by this
     /// driver.
     fn initial_suspense_location(&self, parent: SuspenseLocation) -> SuspenseLocation {
@@ -66,83 +50,15 @@ pub(crate) trait RenderDriver: 'static {
 }
 
 /// The concrete driver for plain (non-suspense) components.
-pub(crate) struct BodyDriver<F: ComponentFunction<P, M>, P, M> {
-    render_fn: F,
-    memo: fn(&mut P, &P) -> bool,
-    props: RefCell<P>,
-    name: &'static str,
-    phantom: std::marker::PhantomData<M>,
-}
+pub(crate) struct BodyDriver;
 
-impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> BodyDriver<F, P, M> {
-    pub fn new(
-        render_fn: F,
-        memo: fn(&mut P, &P) -> bool,
-        props: P,
-        name: &'static str,
-    ) -> BodyDriver<F, P, M> {
-        BodyDriver {
-            render_fn,
-            memo,
-            props: RefCell::new(props),
-            name,
-            phantom: std::marker::PhantomData,
-        }
-    }
-
-    fn render(&self) -> Element {
-        fn render_inner(_name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
-            match res {
-                Ok(node) => node,
-                Err(err) => {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        tracing::error!("Panic while rendering component `{_name}`: {err:?}");
-                    }
-                    Element::Err(CapturedPanic(err).into())
-                }
-            }
-        }
-
-        let props = self.props.borrow().clone();
-        render_inner(
-            self.name,
-            std::panic::catch_unwind(AssertUnwindSafe(move || self.render_fn.rebuild(props))),
-        )
+impl BodyDriver {
+    pub fn new() -> BodyDriver {
+        BodyDriver
     }
 }
 
-impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderDriver
-    for BodyDriver<F, P, M>
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn same_component(&self, other: &dyn RenderDriver) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<Self>()
-            .is_some_and(|other| other.render_fn.fn_ptr() == self.render_fn.fn_ptr())
-    }
-
-    fn memoize(&self, new_driver: &dyn Any) -> bool {
-        match new_driver.downcast_ref::<Self>() {
-            Some(new) => (self.memo)(&mut self.props.borrow_mut(), &new.props.borrow()),
-            None => false,
-        }
-    }
-
-    fn duplicate(&self) -> Rc<dyn RenderDriver> {
-        Rc::new(Self {
-            render_fn: self.render_fn.clone(),
-            memo: self.memo,
-            props: RefCell::new(self.props.borrow().clone()),
-            name: self.name,
-            phantom: std::marker::PhantomData,
-        })
-    }
-
+impl RenderDriver for BodyDriver {
     fn create(
         &self,
         dom: &mut VirtualDom,
@@ -152,7 +68,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         if new {
-            let body = dom.run_scope_with(scope_id, || self.render());
+            let body = dom.run_scope(scope_id);
             dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(body));
         }
         let new_node = dom.scopes[scope_id.0]
@@ -168,7 +84,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         scope_id: ScopeId,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
-        let body = dom.run_scope_with(scope_id, || self.render());
+        let body = dom.run_scope(scope_id);
         dom.diff_scope(to, scope_id, body);
     }
 

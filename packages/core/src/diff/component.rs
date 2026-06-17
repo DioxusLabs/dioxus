@@ -1,4 +1,5 @@
 use crate::{
+    any_props::AnyProps,
     innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
@@ -100,17 +101,19 @@ impl VNode {
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
-        // Replace components whose drivers identify different components
-        // (different driver type, or a different body function value)
-        if !old.driver.same_component(&*new.driver) {
+        // Replace components that have different render fns.
+        if old.render_fn != new.render_fn {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 
-        // If the props are static, then we try to memoize by setting the new with the old
-        // The scope's driver still owns the live props, so there's no need to update anything
-        // This also implicitly drops the new props since they're not used
-        let scope_driver = dom.runtime.get_state(scope_id).render_driver();
-        if scope_driver.memoize(new.driver.as_any()) {
+        let old_scope = &mut dom.scopes[scope_id.0];
+        let old_props: &mut dyn AnyProps = old_scope.props.as_mut();
+        let new_props: &dyn AnyProps = new.props.as_ref();
+
+        // If the props are static, then we try to memoize by setting the old props to the new props.
+        // The target ScopeState still has the reference to the old props, so there's no need to update
+        // anything else. This also implicitly drops the new props since they're not used.
+        if old_props.memoize(new_props.props()) {
             return;
         }
 
@@ -159,7 +162,11 @@ impl VNode {
         // vcomponent. If it's already mounted, then we can just use that.
         if new {
             scope_id = dom
-                .new_scope(component.name, component.driver.duplicate())
+                .new_scope(
+                    component.name,
+                    component.driver.clone(),
+                    component.props.duplicate(),
+                )
                 .state()
                 .id;
 

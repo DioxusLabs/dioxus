@@ -1,15 +1,15 @@
-use std::rc::Rc;
-
 use crate::{
     Element, Event, Properties, ScopeId, VirtualDom,
+    any_props::BoxedAnyProps,
     arena::ElementId,
     events::ListenerCallback,
-    innerlude::{ElementRef, MountId, ScopeState},
+    innerlude::{ElementRef, MountId, ScopeState, VProps},
     properties::ComponentFunction,
     render_driver::{BodyDriver, RenderDriver},
 };
 use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;
+use std::rc::Rc;
 use std::vec;
 use std::{
     any::{Any, TypeId},
@@ -632,15 +632,23 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The driver owning this component's rendering lifecycle and props.
+    /// The raw pointer to the render function.
+    pub(crate) render_fn: usize,
+
+    /// The driver owning this component's rendering lifecycle.
     pub(crate) driver: Rc<dyn RenderDriver>,
+
+    /// The props for this component.
+    pub(crate) props: BoxedAnyProps,
 }
 
 impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            driver: self.driver.duplicate(),
+            render_fn: self.render_fn,
+            driver: self.driver.clone(),
+            props: self.props.duplicate(),
         }
     }
 }
@@ -655,22 +663,31 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let driver: Rc<dyn RenderDriver> = Rc::new(BodyDriver::new(
+        let render_fn = component.fn_ptr();
+        let props = Box::new(VProps::new(
             component,
             <P as Properties>::memoize,
             props,
             fn_name,
         ));
+        let driver = BodyDriver::new();
 
-        VComponent {
-            name: fn_name,
-            driver,
-        }
+        Self::new_with_driver(fn_name, render_fn, driver, props)
     }
 
     /// Create a [`VComponent`] with a custom [`RenderDriver`].
-    pub(crate) fn new_with_driver(name: &'static str, driver: Rc<dyn RenderDriver>) -> Self {
-        VComponent { name, driver }
+    pub(crate) fn new_with_driver(
+        name: &'static str,
+        render_fn: usize,
+        driver: impl RenderDriver,
+        props: BoxedAnyProps,
+    ) -> Self {
+        VComponent {
+            name,
+            render_fn,
+            driver: Rc::new(driver),
+            props,
+        }
     }
 
     /// Get the [`ScopeId`] this node is mounted to if it's mounted

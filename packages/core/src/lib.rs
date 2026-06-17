@@ -3,6 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![warn(missing_docs)]
 
+mod any_props;
 mod arena;
 mod diff;
 mod effect;
@@ -54,6 +55,7 @@ pub mod internal {
 }
 
 pub(crate) mod innerlude {
+    pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
     pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;

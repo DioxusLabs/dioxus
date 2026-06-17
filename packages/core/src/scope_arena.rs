@@ -1,7 +1,6 @@
-use std::rc::Rc;
-
 use crate::{
     Element, ReactiveContext,
+    any_props::{AnyProps, BoxedAnyProps},
     innerlude::{RenderError, ScopeOrder, ScopeState},
     render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
@@ -11,12 +10,12 @@ use crate::{
 
 impl VirtualDom {
     /// Create a scope rendering into the current scope's render target (the
-    /// root target when no scope is active). `driver` owns the scope's
-    /// rendering lifecycle and props.
+    /// root target when no scope is active).
     pub(super) fn new_scope(
         &mut self,
         name: &'static str,
-        driver: Rc<dyn RenderDriver>,
+        driver: std::rc::Rc<dyn RenderDriver>,
+        props: BoxedAnyProps,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.try_current_scope_id();
         let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
@@ -38,6 +37,7 @@ impl VirtualDom {
             runtime: self.runtime.clone(),
             context_id: id,
             last_rendered_node: Default::default(),
+            props,
             reactive_context,
         });
 
@@ -46,15 +46,11 @@ impl VirtualDom {
         scope
     }
 
-    /// Run a scope's body via `render` and return the rendered nodes. This
-    /// will not modify the DOM or update the last rendered node of the scope.
-    #[tracing::instrument(skip(self, render), level = "trace", name = "VirtualDom::run_scope")]
+    /// Run a scope and return the rendered nodes. This will not modify the DOM
+    /// or update the last rendered node of the scope.
+    #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
-    pub(crate) fn run_scope_with(
-        &mut self,
-        scope_id: ScopeId,
-        render: impl FnOnce() -> Element,
-    ) -> Element {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
         // Ensure we are currently inside a `Runtime`.
         crate::Runtime::current();
 
@@ -70,10 +66,11 @@ impl VirtualDom {
                     pre_run();
                 }
 
+                let props: &dyn AnyProps = &*scope.props;
                 let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
-                        let render_return = render();
+                        let render_return = props.render();
                         // After the component is run, we need to do a deep clone of the VNode. This
                         // breaks any references to mounted parts of the VNode from the component.
                         // Without this, the component could store a mounted version of the VNode
