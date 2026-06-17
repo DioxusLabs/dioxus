@@ -173,7 +173,7 @@ fn valid_reorder() {
         ]
     );
     assert_eq!(template.strings().len(), 1);
-    assert_eq!(template.strings().str_at(0), "div");
+    assert_eq!(template.strings()[0], "div");
     assert_eq!(
         template.dynamics(),
         &[
@@ -290,7 +290,7 @@ fn valid_new_dynamic_attribute() {
         ]
     );
     assert_eq!(template.strings().len(), 1);
-    assert_eq!(template.strings().str_at(0), "div");
+    assert_eq!(template.strings()[0], "div");
     assert_eq!(
         template.dynamics(),
         &[
@@ -497,7 +497,7 @@ fn invalid_cases() {
         ]
     );
     assert_eq!(template.strings().len(), 1);
-    assert_eq!(template.strings().str_at(0), "div");
+    assert_eq!(template.strings()[0], "div");
     assert_eq!(
         template.dynamics(),
         &[TemplatePath::empty().next_child().next_child()]

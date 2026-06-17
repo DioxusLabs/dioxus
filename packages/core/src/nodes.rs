@@ -4,7 +4,6 @@ use crate::{
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
-    string_interner::StaticStringInterner,
     template::TemplateAnchor,
 };
 use dioxus_core_types::DioxusFormattable;
@@ -99,7 +98,7 @@ impl VNode {
         }
         static EMPTY_TEMPLATE: Template = Template::new(
             &[],
-            StaticStringInterner::empty(),
+            &[],
             &[TemplateAnchor::root_node(0, 0, true)],
         );
         let vnode = EMPTY_VNODE.with(|cell| {
@@ -127,7 +126,7 @@ impl VNode {
         }
         static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
             &[],
-            StaticStringInterner::empty(),
+            &[],
             &[TemplateAnchor::root_node(0, 0, true)],
         );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {

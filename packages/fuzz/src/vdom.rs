@@ -799,8 +799,7 @@ mod tests {
         // A shared `ops` pointer proves the interning cache returned the identical leaked template
         // (a fresh compile would leak new slices).
         assert!(ptr::eq(first.ops(), second.ops()));
-        assert!(ptr::eq(first.strings().blob(), second.strings().blob()));
-        assert!(ptr::eq(first.strings().spans(), second.strings().spans()));
+        assert!(ptr::eq(first.strings(), second.strings()));
     }
 
     #[test]
@@ -832,7 +831,7 @@ mod tests {
                 DecodedTemplateOp::Static(0),
             ]
         );
-        assert_eq!(template.strings().str_at(0), "tag1");
+        assert_eq!(template.strings()[0], "tag1");
         assert_eq!(template.root_count(), 1);
         assert_eq!(template.dynamic_value_count(), 1);
     }

@@ -447,7 +447,7 @@ impl HotReloadedTemplate {
         self.template.ops()
     }
 
-    pub fn strings(&self) -> crate::StaticStringInterner {
+    pub fn strings(&self) -> &'static [&'static str] {
         self.template.strings()
     }
 
@@ -478,7 +478,8 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
         struct SerializedTemplate {
             #[serde(deserialize_with = "crate::template::deserialize_leaky")]
             ops: &'static [crate::TemplateOp],
-            strings: crate::StaticStringInterner,
+            #[serde(deserialize_with = "crate::template::deserialize_strings_leaky")]
+            strings: &'static [&'static str],
             #[serde(deserialize_with = "crate::template::deserialize_leaky")]
             anchors: &'static [crate::template::TemplateAnchor],
             hash: u64,

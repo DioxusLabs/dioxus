@@ -74,10 +74,8 @@ pub trait Raw {
 
     /// The static template for this view type.
     const TEMPLATE: &'static Template =
-        &TemplateStorage::<RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP>::build(
-            Self::RAW.as_slice(),
-        )
-        .as_template();
+        &TemplateStorage::<RAW_TAPE_CAP, RAW_TAPE_CAP, RAW_TAPE_CAP>::build(Self::RAW.as_slice())
+            .as_template();
 }
 
 impl Raw for () {

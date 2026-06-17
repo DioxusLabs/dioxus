@@ -54,7 +54,6 @@ mod scheduler;
 mod scope_arena;
 mod scope_context;
 mod scopes;
-mod string_interner;
 mod suspense;
 mod tasks;
 mod template;
@@ -129,7 +128,6 @@ pub(crate) mod innerlude {
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
     pub use crate::scopes::*;
-    pub use crate::string_interner::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::template::*;
@@ -159,16 +157,16 @@ pub use crate::innerlude::{
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode,
     MultiTargetWriter, MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
     Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId, RenderedView,
-    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, StaticStringInterner,
-    StringInterner, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,
+    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
+    SuperFrom, SuperInto, SuspendedFuture,
     SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAnchor,
-    TemplateOp, TemplatePath, TemplateStringSpan, VComponent, VNode, VNodeInner, VText, VirtualDom,
-    WriteMutations, anyhow, consume_context, consume_context_from_scope, current_owner,
-    current_scope_id, generation, has_context, needs_update, needs_update_any, parent_scope,
-    provide_context, provide_create_error_boundary, provide_root_context, queue_effect,
-    remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
-    suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
-    use_hook, use_hook_with_cleanup, with_owner,
+    TemplateOp, TemplatePath, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations,
+    anyhow, consume_context, consume_context_from_scope, current_owner, current_scope_id,
+    generation, has_context, needs_update, needs_update_any, parent_scope, provide_context,
+    provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
+    schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
+    throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
+    use_hook_with_cleanup, with_owner,
 };
 
 pub use crate::view::{

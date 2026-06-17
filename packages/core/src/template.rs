@@ -1,8 +1,7 @@
 use dioxus_const_vec::ConstVec;
 
-use crate::string_interner::{RuntimeStringInterner, StaticStringInterner, StringInterner};
-
 type StaticTemplateOpArray = &'static [TemplateOp];
+type StaticTemplateStringArray = &'static [&'static str];
 
 /// A compact path from a template root to a dynamic node or dynamic attribute.
 ///
@@ -562,18 +561,17 @@ const TEMPLATE_PATH_STACK_CAP: usize = 129;
 
 /// Const storage for a lowered raw template.
 ///
-/// The RSX macro emits a `static TemplateStorage<OPS, STRING_BLOB, STRING_SPANS, DYNAMICS>` from a
+/// The RSX macro emits a `static TemplateStorage<OPS, STRINGS, DYNAMICS>` from a
 /// raw operation tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by
 /// the runtime.
 #[derive(Clone, Copy)]
 pub(crate) struct TemplateStorage<
     const OPS_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
-    const STRING_BLOB_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
-    const STRING_SPAN_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
+    const STRING_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
     const DYNAMIC_CAP: usize = TEMPLATE_STORAGE_MAX_CAP,
 > {
     ops: ConstVec<TemplateOp, OPS_CAP>,
-    strings: StringInterner<STRING_BLOB_CAP, STRING_SPAN_CAP>,
+    strings: ConstVec<&'static str, STRING_CAP>,
     anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
 }
 
@@ -751,16 +749,15 @@ macro_rules! lower_raw_template {
 
 impl<
     const OPS_CAP: usize,
-    const STRING_BLOB_CAP: usize,
-    const STRING_SPAN_CAP: usize,
+    const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
-> TemplateStorage<OPS_CAP, STRING_BLOB_CAP, STRING_SPAN_CAP, DYNAMIC_CAP>
+> TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
     /// Lower a raw template tape into packed storage in const context.
     pub(crate) const fn build(raw: &'static [TemplateRawOp]) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
-            strings: StringInterner::new(),
+            strings: ConstVec::new_with_max_size(),
             anchors: ConstVec::new_with_max_size(),
         };
 
@@ -771,17 +768,16 @@ impl<
 
     /// Return this storage as a compact template.
     pub(crate) const fn as_template(&'static self) -> Template {
-        Template::new(
-            self.ops.as_slice(),
-            self.strings.as_static(),
-            self.anchors.as_slice(),
-        )
+        Template::new(self.ops.as_slice(), self.strings.as_slice(), self.anchors.as_slice())
     }
 
     const fn push_static(&mut self, value: &'static str) {
-        let (strings, id) = self.strings.intern(value);
-        self.strings = strings;
-        self.ops.push(TemplateOp::static_text(id));
+        let id = self.strings.len();
+        if id >= TemplateOp::MAX_CAP {
+            panic!("static op id exceeds packed op capacity");
+        }
+        self.strings.push(value);
+        self.ops.push(TemplateOp::static_text(id as u16));
     }
 
     const fn ops_len(&self) -> usize {
@@ -860,7 +856,7 @@ impl<
 
 struct RuntimeTemplateBuilder {
     ops: Vec<TemplateOp>,
-    strings: RuntimeStringInterner,
+    strings: Vec<&'static str>,
     anchors: Vec<TemplateAnchor>,
 }
 
@@ -868,7 +864,7 @@ impl RuntimeTemplateBuilder {
     fn new() -> Self {
         Self {
             ops: Vec::new(),
-            strings: RuntimeStringInterner::new(),
+            strings: Vec::new(),
             anchors: Vec::new(),
         }
     }
@@ -890,8 +886,13 @@ impl RuntimeTemplateBuilder {
     }
 
     fn push_static(&mut self, value: &'static str) {
-        let id = self.strings.intern(value);
-        self.ops.push(TemplateOp::static_text(id));
+        let id = self.strings.len();
+        assert!(
+            id < TemplateOp::MAX_CAP,
+            "static op id exceeds packed op capacity"
+        );
+        self.strings.push(value);
+        self.ops.push(TemplateOp::static_text(id as u16));
     }
 
     fn push_anchor(&mut self, op: u16, path: TemplatePath) {
@@ -924,7 +925,7 @@ impl RuntimeTemplateBuilder {
         });
         Template::new(
             Box::leak(self.ops.into_boxed_slice()),
-            self.strings.leak(),
+            Box::leak(self.strings.into_boxed_slice()),
             Box::leak(anchors.into_boxed_slice()),
         )
     }
@@ -958,7 +959,8 @@ pub struct Template {
     ops: StaticTemplateOpArray,
 
     /// Static strings referenced by [`TemplateOp::Static`].
-    strings: StaticStringInterner,
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_strings_leaky"))]
+    strings: StaticTemplateStringArray,
 
     /// Dynamic value groups in reverse breadth-first fill order, each anchored to a static element.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
@@ -988,7 +990,7 @@ impl Template {
     /// The hash is computed automatically from the template content.
     pub(crate) const fn new(
         ops: &'static [TemplateOp],
-        strings: StaticStringInterner,
+        strings: StaticTemplateStringArray,
         anchors: &'static [TemplateAnchor],
     ) -> Self {
         Self::validate_anchors(anchors);
@@ -1007,7 +1009,7 @@ impl Template {
     }
 
     /// Get the template static string pool.
-    pub const fn strings(&self) -> StaticStringInterner {
+    pub const fn strings(&self) -> &'static [&'static str] {
         self.strings
     }
 
@@ -1112,7 +1114,7 @@ impl Template {
 
     /// Get a static string from this template's string pool.
     pub fn string(&self, id: u16) -> &'static str {
-        self.strings.str_at(id)
+        self.strings[id as usize]
     }
 
     /// Decode an element op into its subtree length and namespace presence.
@@ -1380,7 +1382,7 @@ impl Template {
     /// This is const so it can be used both at compile time and runtime.
     const fn compute_hash(
         ops: &[TemplateOp],
-        strings: StaticStringInterner,
+        strings: StaticTemplateStringArray,
         anchors: &[TemplateAnchor],
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
@@ -1402,7 +1404,7 @@ impl Template {
                 DecodedTemplateOp::Text => xxh64(&[0x03], hash),
                 DecodedTemplateOp::Static(id) => {
                     let h = xxh64(&[0x04], hash);
-                    strings.hash_at(id, h)
+                    xxh64(strings[id as usize].as_bytes(), h)
                 }
             };
             i += 1;
@@ -1459,6 +1461,23 @@ where
 
     let deserialized = Box::<[T]>::deserialize(deserializer)?;
     Ok(&*Box::leak(deserialized))
+}
+
+#[cfg(feature = "serialize")]
+pub(crate) fn deserialize_strings_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<&'static [&'static str], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = Vec::<String>::deserialize(deserializer)?;
+    let strings: Vec<&'static str> = deserialized
+        .into_iter()
+        .map(|string| &*Box::leak(string.into_boxed_str()))
+        .collect::<Vec<_>>();
+    Ok(&*Box::leak(strings.into_boxed_slice()))
 }
 
 #[cfg(feature = "serialize")]
