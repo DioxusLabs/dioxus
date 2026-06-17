@@ -84,31 +84,44 @@ fn split_static_path(path: TemplatePath) -> (TemplatePath, usize) {
 
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
 /// its [`TemplateAnchor`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct DynamicAttrGroup<'a> {
     template: &'a Template,
+    dynamic_values: &'a [crate::DynamicValue],
     anchor: &'a TemplateAnchor,
 }
 
 impl<'a> DynamicAttrGroup<'a> {
-    pub(super) fn new(template: &'a Template, anchor: &'a TemplateAnchor) -> Self {
-        Self { template, anchor }
+    pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor) -> Self {
+        Self {
+            template: &vnode.template,
+            dynamic_values: &vnode.dynamic_values,
+            anchor,
+        }
     }
 
     pub(super) fn ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.anchor.values()
+        self.anchor
+            .values()
+            .filter(|&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
-    pub(super) fn path(&self) -> TemplatePath {
-        self.anchor.path()
+    pub(super) fn has_attrs(&self) -> bool {
+        self.ids().next().is_some()
+    }
+
+    pub(super) fn static_path(&self) -> TemplatePath {
+        self.anchor.static_path()
     }
 
     pub(super) fn is_root_level(&self) -> bool {
-        self.anchor.path().len() == 1
+        self.anchor.static_path().len() == 1
     }
 
     pub(super) fn first_id(&self) -> usize {
-        self.anchor.value_start()
+        self.ids()
+            .next()
+            .expect("dynamic attribute group must contain at least one dynamic attribute")
     }
 
     pub(super) fn static_attr_value_for_key(
@@ -144,15 +157,10 @@ where
 {
     let template = &vnode.template;
     anchors.flat_map(move |anchor| {
-        let is_node = vnode.dynamic_values[anchor.value_start()]
-            .as_node()
-            .is_some();
-        let values = if is_node {
-            anchor.values()
-        } else {
-            anchor.value_start()..anchor.value_start()
-        };
-        values.map(move |index| DynamicNodeSlot::new(template, anchor, index))
+        anchor
+            .values()
+            .filter(|&index| vnode.dynamic_values[index].as_node().is_some())
+            .map(move |index| DynamicNodeSlot::new(template, anchor, index))
     })
 }
 
@@ -165,11 +173,9 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
     mut visit: impl FnMut(DynamicAttrGroup<'a>),
 ) {
     for anchor in vnode.template.anchors() {
-        if vnode.dynamic_values[anchor.value_start()]
-            .as_attrs()
-            .is_some()
-        {
-            visit(DynamicAttrGroup::new(&vnode.template, anchor));
+        let group = DynamicAttrGroup::new(vnode, anchor);
+        if group.has_attrs() {
+            visit(group);
         }
     }
 }

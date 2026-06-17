@@ -469,7 +469,9 @@ impl DiffState<'_, '_, '_, '_> {
         // both consult the runtime's stale set so they never anchor mid-move.
         let site = self.to.is_some().then(|| {
             direct_edge_site(edge, &new[sibling_idx], sibling_mount, self.dom)
-                .or_else(|| insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom))
+                .or_else(|| {
+                    insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom)
+                })
                 .unwrap_or_else(|| {
                     insertion_site_at(
                         edge,
@@ -685,8 +687,9 @@ impl crate::MountedVNode<'_> {
         let mut count = 0;
         for (root_idx, static_op, dynamic_anchor) in self.template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
-                count +=
-                    self.push_dynamic_root_node(anchor.value_start(), mount, target_id, dom, to);
+                for index in self.dynamic_node_indices_for_anchor(anchor) {
+                    count += self.push_dynamic_root_node(index, mount, target_id, dom, to);
+                }
                 continue;
             }
 

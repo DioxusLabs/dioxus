@@ -820,13 +820,7 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
     set_suspense_mounts_render_mode(dom, vnode, mount, RenderMode::Foreground);
 
     for anchor in vnode.template.anchors() {
-        if vnode.dynamic_values[anchor.value_start()]
-            .as_node()
-            .is_none()
-        {
-            continue;
-        }
-        for idx in anchor.values() {
+        for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
             match vnode.dynamic_values[idx].node() {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
@@ -869,13 +863,7 @@ fn set_suspense_mounts_render_mode(
     dom.set_mount_mode(mount, mode);
 
     for anchor in vnode.template.anchors() {
-        if vnode.dynamic_values[anchor.value_start()]
-            .as_node()
-            .is_none()
-        {
-            continue;
-        }
-        for idx in anchor.values() {
+        for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
             match vnode.dynamic_values[idx].node() {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);

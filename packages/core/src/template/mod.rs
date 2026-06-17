@@ -1,6 +1,6 @@
 pub use dioxus_core_template::{
-    DecodedTemplateOp, Template, TemplateAnchor, TemplateAnchorKind, TemplateExt, TemplateOp,
-    TemplatePath, TemplatePathStep, TemplateRawOp, TemplateSlotPath, TemplateSlotTarget,
+    DecodedTemplateOp, Template, TemplateAnchor, TemplateExt, TemplateOp, TemplatePath,
+    TemplatePathStep, TemplateRawOp, TemplateSlotPath, TemplateSlotTarget,
 };
 
 #[cfg(feature = "serialize")]

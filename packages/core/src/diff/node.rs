@@ -233,8 +233,7 @@ impl VNode {
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
                 let created = if state.to.is_some() {
-                    let site =
-                        insertion_site_for_slot(mount, slot, state.dom, state.context());
+                    let site = insertion_site_for_slot(mount, slot, state.dom, state.context());
                     let to = state
                         .to
                         .as_deref_mut()
@@ -712,7 +711,7 @@ impl VNode {
         let mut next_id = None;
         for_each_dynamic_attr_group(self, |group| {
             // We clean up the roots in the next step, so don't worry about them here
-            if group.path().len() == 1 {
+            if group.static_path().len() == 1 {
                 return;
             }
 
@@ -817,14 +816,15 @@ impl VNode {
 
         for (root_idx, static_op, dynamic_anchor) in self.template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
-                let index = anchor.value_start();
-                nodes_created += self.create_dynamic_node_inner(
-                    self.dynamic_values[index].node(),
-                    mount,
-                    index,
-                    state,
-                    reuse_existing_mounts,
-                );
+                for index in self.dynamic_node_indices_for_anchor(anchor) {
+                    nodes_created += self.create_dynamic_node_inner(
+                        self.dynamic_values[index].node(),
+                        mount,
+                        index,
+                        state,
+                        reuse_existing_mounts,
+                    );
+                }
                 continue;
             }
 
@@ -847,16 +847,17 @@ impl VNode {
         reuse_existing_mounts: bool,
     ) {
         for anchor in self.template.anchors() {
-            let value = &self.dynamic_values[anchor.value_start()];
-            if value.as_attrs().is_some() {
+            let group = DynamicAttrGroup::new(self, anchor);
+            if group.has_attrs() {
                 if let Some(to) = state.to.as_deref_mut() {
-                    let group = DynamicAttrGroup::new(&self.template, anchor);
                     self.write_attr_group(mount, &group, state.dom, to);
                 }
-                continue;
             }
 
-            if value.as_node().is_some() && !anchor.is_root_level() {
+            let has_dynamic_nodes = anchor
+                .values()
+                .any(|idx| self.dynamic_values[idx].as_node().is_some());
+            if has_dynamic_nodes && !anchor.is_root_level() {
                 self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
             }
         }
@@ -945,9 +946,16 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
-        let slot = DynamicNodeSlot::new(&self.template, anchor, anchor.value_start());
+        let first_node_id = anchor
+            .values()
+            .find(|&idx| self.dynamic_values[idx].as_node().is_some())
+            .expect("dynamic node anchor must contain at least one dynamic node");
+        let slot = DynamicNodeSlot::new(&self.template, anchor, first_node_id);
         if state.to.is_none() {
-            for dynamic_node_id in anchor.values() {
+            for dynamic_node_id in anchor
+                .values()
+                .filter(|&idx| self.dynamic_values[idx].as_node().is_some())
+            {
                 self.create_dynamic_node_inner(
                     self.dynamic_values[dynamic_node_id].node(),
                     mount,
@@ -971,6 +979,7 @@ impl VNode {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
             anchor
                 .values()
+                .filter(|&idx| self.dynamic_values[idx].as_node().is_some())
                 .map(|dynamic_node_id| {
                     self.create_dynamic_node_inner(
                         self.dynamic_values[dynamic_node_id].node(),
@@ -1033,7 +1042,7 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> MountedElementId {
-        let cursor = group.path();
+        let cursor = group.static_path();
         // This is just the root node. We already know it's id
         if group.is_root_level() {
             return dom.unchecked_mounted_root_node(mount, cursor.segment(0) as usize);

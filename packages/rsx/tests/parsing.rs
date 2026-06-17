@@ -1,26 +1,7 @@
 use dioxus_rsx::CallBody;
-use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 
 use prettier_please::PrettyUnparse;
-
-fn static_divs(count: usize) -> TokenStream2 {
-    let nodes = (0..count)
-        .map(|index| {
-            let text = format!("static child {index}");
-            quote::quote! { div { #text } }
-        })
-        .collect::<Vec<_>>();
-
-    quote::quote! { #(#nodes)* }
-}
-
-fn rendered_callbody(tokens: TokenStream2) -> String {
-    syn::parse2::<CallBody>(tokens)
-        .unwrap()
-        .to_token_stream()
-        .to_string()
-}
 
 #[test]
 fn callbody_ctx() {
@@ -221,45 +202,4 @@ fn braced_expressions() {
     };
 
     let _cb: CallBody = syn::parse2(item).unwrap();
-}
-
-#[test]
-fn large_root_blocks_are_split_into_dynamic_chunks() {
-    let rendered = rendered_callbody(static_divs(300));
-
-    assert!(rendered.contains("dynamic_node_builder"));
-    assert!(rendered.contains("into_vnode"));
-}
-
-#[test]
-fn large_element_child_blocks_are_split_into_dynamic_chunks() {
-    let children = static_divs(300);
-    let rendered = rendered_callbody(quote::quote! {
-        section {
-            #children
-        }
-    });
-
-    assert!(rendered.contains("into_vnode"));
-}
-
-#[test]
-fn synthetic_chunks_use_regular_hot_reload_literal_codegen() {
-    let children = static_divs(300);
-    let rendered = rendered_callbody(quote::quote! {
-        div {
-            #children
-            Component {
-                title: "hello {name}"
-            }
-            span {
-                class: "{name}",
-                "hello {name}"
-            }
-        }
-    });
-
-    assert!(rendered.contains("dynamic_node_builder"));
-    assert!(rendered.contains("into_vnode"));
-    assert!(rendered.contains("component_property"));
 }

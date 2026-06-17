@@ -12,11 +12,10 @@ use std::{
     rc::Rc,
 };
 
-const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::new(
+const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::from_raw_parts(
     0,
-    TemplateSlotPath::append_children(TemplatePath::root(0)),
-    0,
-    1,
+    TemplateSlotPath::append_children(TemplatePath::root(0)).bits(),
+    0..1,
 )];
 
 /// Return early with an error.

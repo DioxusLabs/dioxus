@@ -34,8 +34,7 @@ fn attributes_pass_properly() {
     let static_attr_count = template.static_attrs(circle).count();
     let dynamic_attr_count = template
         .element_dynamic_anchors(circle)
-        .filter(|anchor| o.dynamic_values[anchor.value_start()].as_attrs().is_some())
-        .map(|anchor| anchor.value_count())
+        .map(|anchor| o.dynamic_attr_indices_for_anchor(anchor).count())
         .sum::<usize>();
     assert_eq!(static_attr_count + dynamic_attr_count, 5);
 }

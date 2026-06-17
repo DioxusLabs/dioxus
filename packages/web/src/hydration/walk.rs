@@ -50,7 +50,7 @@ impl WebsysDom {
         let roots: Vec<_> = vnode.vnode().template.root_slots().collect();
         for (root_idx, static_op, dynamic_anchor) in roots {
             if let Some(anchor) = dynamic_anchor {
-                for value_idx in anchor.values() {
+                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
                 }
             } else {
@@ -79,7 +79,7 @@ impl WebsysDom {
                 .dynamic_node_anchors_for_slot(element_op, slot)
                 .collect();
             for anchor in anchors {
-                for value_idx in anchor.values() {
+                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
                 }
             }
@@ -199,7 +199,7 @@ impl WebsysDom {
         let mut mounted_id = root_id;
         let mut listeners: Vec<(&'static str, bool)> = Vec::new();
         for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
-            for value_idx in anchor.values() {
+            for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
                 let attr_id = vnode
                     .mounted_dynamic_attribute(value_idx, dom)
                     .ok_or(VNodeNotInitialized)?;

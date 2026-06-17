@@ -143,10 +143,12 @@ impl StringCache {
 
         for (_, static_op, dynamic_anchor) in vnode.template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
-                chain.push(Segment::Node {
-                    index: anchor.value_start(),
-                    escape_text: EscapeText::ParentEscape,
-                });
+                for index in vnode.dynamic_node_indices_for_anchor(anchor) {
+                    chain.push(Segment::Node {
+                        index,
+                        escape_text: EscapeText::ParentEscape,
+                    });
+                }
                 continue;
             }
 
@@ -172,7 +174,7 @@ fn from_template_children(
         .collect::<Vec<_>>();
     for slot in 0..=static_children.len() {
         for anchor in vnode.dynamic_node_anchors_for_slot(element_op, slot) {
-            for index in anchor.values() {
+            for index in vnode.dynamic_node_indices_for_anchor(anchor) {
                 chain.push(Segment::Node { index, escape_text });
             }
         }
@@ -221,7 +223,7 @@ fn from_template_recursive(
         }
 
         for anchor in vnode.dynamic_attr_anchors_for_element(op) {
-            for index in anchor.values() {
+            for index in vnode.dynamic_attr_indices_for_anchor(anchor) {
                 *chain += Segment::Attr(index);
                 has_dyn_attrs = true;
             }

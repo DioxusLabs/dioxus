@@ -67,7 +67,9 @@ fn vnode_snapshot(vdom: &VirtualDom, vnode: MountedVNode<'_>) -> Vec<SnapshotNod
     let mut out = Vec::new();
     for (_, static_op, dynamic_anchor) in vnode.template.root_slots() {
         if let Some(anchor) = dynamic_anchor {
-            out.extend(dynamic_node_snapshot(vdom, vnode, anchor.value_start()));
+            for index in vnode.dynamic_node_indices_for_anchor(anchor) {
+                out.extend(dynamic_node_snapshot(vdom, vnode, index));
+            }
             continue;
         }
 
@@ -86,7 +88,7 @@ fn element_children_snapshot(
     let static_children = vnode.template.static_children(op).collect::<Vec<_>>();
     for slot in 0..=static_children.len() {
         for anchor in vnode.dynamic_node_anchors_for_slot(op, slot) {
-            for idx in anchor.values() {
+            for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
                 out.extend(dynamic_node_snapshot(vdom, vnode, idx));
             }
         }
@@ -116,7 +118,7 @@ fn template_node_snapshot(
         }
 
         for anchor in vnode.dynamic_attr_anchors_for_element(op) {
-            for id in anchor.values() {
+            for id in vnode.dynamic_attr_indices_for_anchor(anchor) {
                 let attrs = vnode.dynamic_values[id]
                     .as_attrs()
                     .expect("snapshot attr slot must point at attributes");

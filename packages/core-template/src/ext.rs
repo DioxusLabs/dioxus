@@ -1,4 +1,4 @@
-use super::{Template, TemplateAnchor, TemplateAnchorKind, TemplateOp, TemplateSlotTarget};
+use super::{Template, TemplateAnchor, TemplateOp};
 
 #[doc(hidden)]
 #[allow(missing_docs)]
@@ -21,8 +21,6 @@ pub trait TemplateExt {
     ) -> Option<(&'static str, &'static str, Option<&'static str>)>;
 
     fn static_text_at_op(&self, op: usize) -> Option<&'static str>;
-
-    fn dynamic_slot_target(&self, idx: usize) -> Option<TemplateSlotTarget>;
 
     fn root_slots(
         &self,
@@ -75,13 +73,6 @@ impl TemplateExt for Template {
 
     fn static_text_at_op(&self, op: usize) -> Option<&'static str> {
         Template::static_text_at_op(self, op)
-    }
-
-    fn dynamic_slot_target(&self, idx: usize) -> Option<TemplateSlotTarget> {
-        let anchor = self
-            .anchor_for_value(idx)
-            .expect("dynamic value index out of range");
-        matches!(anchor.kind(), TemplateAnchorKind::Node).then(|| anchor.slot_target())
     }
 
     fn root_slots(

@@ -504,7 +504,6 @@ impl Template {
         while i < anchors.len() {
             let anchor = anchors[i];
             hash = xxh64(&anchor.op.to_le_bytes(), hash);
-            hash = xxh64(&[anchor.kind as u8], hash);
             hash = xxh64(&anchor.path_bits().to_le_bytes(), hash);
             hash = xxh64(&anchor.value_count.to_le_bytes(), hash);
             i += 1;

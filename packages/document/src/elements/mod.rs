@@ -3,8 +3,7 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use dioxus_core::{
-    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId,
-    internal::{TemplateExt, TemplateSlotTarget},
+    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, internal::TemplateSlotTarget,
 };
 use dioxus_core_macro::*;
 
@@ -92,9 +91,10 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     if template.root_count() == 0
         && template.dynamic_value_count() == 1
         && vnode.dynamic_values[0].as_node().is_some()
+        && let Some(anchor) = template.anchor_for_value(0)
         && matches!(
-            template.dynamic_slot_target(0),
-            Some(TemplateSlotTarget::AppendChildren(path)) if path.is_empty()
+            anchor.slot_target(),
+            TemplateSlotTarget::AppendChildren(path) if path.is_empty()
         )
     {
         let node = vnode.dynamic_values[0]

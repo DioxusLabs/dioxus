@@ -90,7 +90,7 @@ pub(super) fn first_dynamic_root_element_id(
         let roots: Vec<_> = vnode.vnode().template.root_slots().collect();
         for (root_idx, _static_op, dynamic_anchor) in roots {
             if let Some(anchor) = dynamic_anchor {
-                for value_idx in anchor.values() {
+                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     if let Some(id) = from_dynamic(vnode, value_idx, dom) {
                         return Some(id);
                     }

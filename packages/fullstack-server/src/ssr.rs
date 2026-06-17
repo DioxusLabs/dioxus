@@ -9,7 +9,7 @@ use dioxus_cli_config::base_path;
 use dioxus_core::{
     DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, VNode, VirtualDom,
     consume_context, has_context,
-    internal::{TemplateAnchor, TemplateExt, TemplatePath},
+    internal::{TemplateAnchor, TemplatePath},
     try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};

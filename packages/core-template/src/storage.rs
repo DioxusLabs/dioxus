@@ -1,10 +1,7 @@
 use dioxus_const_vec::ConstVec;
 
 use super::anchor::ROOT_ANCHOR_OP;
-use super::{
-    Template, TemplateAnchor, TemplateAnchorKind, TemplateOp, TemplatePath, TemplateRawOp,
-    TemplateSlotPath,
-};
+use super::{Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp, TemplateSlotPath};
 use crate::VIEW_TEMPLATE_TAPE_CAP;
 
 /// Maximum packed template storage capacity.
@@ -34,7 +31,6 @@ pub struct TemplateStorageStats {
 #[derive(Clone, Copy)]
 struct AnchorStats {
     op: u16,
-    kind: TemplateAnchorKind,
     path: u128,
     value_count: usize,
 }
@@ -249,8 +245,7 @@ impl TemplateStorageStats {
                     stats.push_anchor(
                         &mut anchors,
                         cursor.current_element_op(),
-                        path.bits(),
-                        TemplateAnchorKind::Attr,
+                        TemplateSlotPath::append_children(path).bits(),
                     );
                 }
                 TemplateRawOp::StaticText { .. } => {
@@ -260,21 +255,11 @@ impl TemplateStorageStats {
                 }
                 TemplateRawOp::DynamicNode => match cursor.try_next_slot_path(raw, index) {
                     Ok(path) => {
-                        stats.push_anchor(
-                            &mut anchors,
-                            cursor.node_anchor_op(),
-                            path.bits(),
-                            TemplateAnchorKind::Node,
-                        );
+                        stats.push_anchor(&mut anchors, cursor.node_anchor_op(), path.bits());
                     }
                     Err(()) => {
                         stats.path_overflow = true;
-                        stats.push_anchor(
-                            &mut anchors,
-                            cursor.node_anchor_op(),
-                            0,
-                            TemplateAnchorKind::Node,
-                        );
+                        stats.push_anchor(&mut anchors, cursor.node_anchor_op(), 0);
                     }
                 },
             }
@@ -295,34 +280,22 @@ impl TemplateStorageStats {
         self.ops += 1;
     }
 
-    fn push_anchor(
-        &mut self,
-        anchors: &mut Vec<AnchorStats>,
-        op: u16,
-        path: u128,
-        kind: TemplateAnchorKind,
-    ) {
+    fn push_anchor(&mut self, anchors: &mut Vec<AnchorStats>, op: u16, path: u128) {
         self.dynamic_values += 1;
 
         if let Some(last) = anchors.last_mut() {
-            if last.same_slot_bits(op, kind, path) {
+            if last.same_anchor(op, path) {
                 last.value_count += 1;
                 return;
             }
         }
 
-        if anchors
-            .iter()
-            .any(|anchor| anchor.same_slot_bits(op, kind, path))
-        {
-            panic!(
-                "dynamic values for a template anchor must be contiguous (attributes must precede children)"
-            );
+        if anchors.iter().any(|anchor| anchor.same_anchor(op, path)) {
+            panic!("dynamic values for a template anchor must be contiguous");
         }
 
         anchors.push(AnchorStats {
             op,
-            kind,
             path,
             value_count: 1,
         });
@@ -362,14 +335,8 @@ impl TemplateStorageStats {
 }
 
 impl AnchorStats {
-    fn same_slot_bits(self, op: u16, kind: TemplateAnchorKind, path: u128) -> bool {
-        self.op == op
-            && matches!(
-                (self.kind, kind),
-                (TemplateAnchorKind::Attr, TemplateAnchorKind::Attr)
-                    | (TemplateAnchorKind::Node, TemplateAnchorKind::Node)
-            )
-            && self.path == path
+    fn same_anchor(self, op: u16, path: u128) -> bool {
+        self.op == op && self.path == path
     }
 }
 
@@ -382,7 +349,7 @@ const fn lower_raw_template<
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
 >(
-    raw: &'static [TemplateRawOp],
+    raw: &[TemplateRawOp],
     storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
 ) {
     let mut cursor = RawTemplateLoweringCursor::new();
@@ -419,8 +386,10 @@ const fn lower_raw_template<
                 }
             }
             TemplateRawOp::DynamicAttr => {
-                storage
-                    .push_attr_anchor(cursor.current_element_op(), cursor.current_element_path());
+                storage.push_anchor(
+                    cursor.current_element_op(),
+                    TemplateSlotPath::append_children(cursor.current_element_path()).bits(),
+                );
             }
             TemplateRawOp::StaticText { value } => {
                 let _ = cursor.next_node_path();
@@ -429,7 +398,7 @@ const fn lower_raw_template<
             }
             TemplateRawOp::DynamicNode => {
                 let path = cursor.next_slot_path(raw, index);
-                storage.push_node_anchor(cursor.node_anchor_op(), path);
+                storage.push_anchor(cursor.node_anchor_op(), path.bits());
             }
         }
         index += 1;
@@ -441,7 +410,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
     /// Lower a raw template tape into packed storage in const context.
-    pub const fn build(raw: &'static [TemplateRawOp]) -> Self {
+    pub const fn build(raw: &[TemplateRawOp]) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
             strings: ConstVec::new_with_max_size(),
@@ -460,6 +429,21 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             self.strings.as_slice(),
             self.anchors.as_slice(),
         )
+    }
+
+    /// Borrow the lowered packed ops.
+    pub fn ops(&self) -> &[TemplateOp] {
+        self.ops.as_slice()
+    }
+
+    /// Borrow the lowered static string pool.
+    pub fn strings(&self) -> &[&'static str] {
+        self.strings.as_slice()
+    }
+
+    /// Borrow the lowered dynamic anchors.
+    pub fn anchors(&self) -> &[TemplateAnchor] {
+        self.anchors.as_slice()
     }
 
     fn into_leaked_template(self) -> Template {
@@ -491,19 +475,11 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         self.ops.set(index, op);
     }
 
-    const fn push_attr_anchor(&mut self, op: u16, path: TemplatePath) {
-        self.push_anchor_bits(op, path.bits(), TemplateAnchorKind::Attr);
-    }
-
-    const fn push_node_anchor(&mut self, op: u16, path: TemplateSlotPath) {
-        self.push_anchor_bits(op, path.bits(), TemplateAnchorKind::Node);
-    }
-
-    const fn push_anchor_bits(&mut self, op: u16, path: u128, kind: TemplateAnchorKind) {
+    const fn push_anchor(&mut self, op: u16, path: u128) {
         let len = self.anchors.len();
         if len > 0 {
             let last = self.anchors.at(len - 1);
-            if last.same_slot_bits(op, kind, path) {
+            if last.same_anchor(op, path) {
                 self.anchors.set(
                     len - 1,
                     TemplateAnchor {
@@ -516,10 +492,8 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         }
         let mut i = 0;
         while i < len {
-            if self.anchors.at(i).same_slot_bits(op, kind, path) {
-                panic!(
-                    "dynamic values for a template anchor must be contiguous (attributes must precede children)"
-                );
+            if self.anchors.at(i).same_anchor(op, path) {
+                panic!("dynamic values for a template anchor must be contiguous");
             }
             i += 1;
         }
@@ -529,13 +503,11 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             let last = self.anchors.at(len - 1);
             last.value_start + last.value_count
         };
-        let anchor = match kind {
-            TemplateAnchorKind::Attr => {
-                TemplateAnchor::single_attr(op, TemplatePath::from_bits(path), value_start)
-            }
-            TemplateAnchorKind::Node => {
-                TemplateAnchor::single_node(op, TemplateSlotPath::from_bits(path), value_start)
-            }
+        let anchor = TemplateAnchor {
+            op,
+            path,
+            value_start,
+            value_count: 1,
         };
         self.anchors.push(anchor);
     }

@@ -8,7 +8,7 @@ mod raw;
 mod serialization;
 mod storage;
 
-pub use anchor::{TemplateAnchor, TemplateAnchorKind};
+pub use anchor::TemplateAnchor;
 pub use data::Template;
 pub use ext::TemplateExt;
 pub use op::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateOp};

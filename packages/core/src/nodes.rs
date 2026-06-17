@@ -197,10 +197,36 @@ impl VNode {
             .and_then(|_| self.dynamic_values[idx].as_node())
     }
 
-    fn anchor_is_node(&self, anchor: &TemplateAnchor) -> bool {
-        self.dynamic_values[anchor.value_start()]
-            .as_node()
+    fn anchor_has_node(&self, anchor: &TemplateAnchor) -> bool {
+        self.dynamic_node_indices_for_anchor(anchor)
+            .next()
             .is_some()
+    }
+
+    fn anchor_has_attrs(&self, anchor: &TemplateAnchor) -> bool {
+        self.dynamic_attr_indices_for_anchor(anchor)
+            .next()
+            .is_some()
+    }
+
+    #[doc(hidden)]
+    pub fn dynamic_node_indices_for_anchor<'a>(
+        &'a self,
+        anchor: &'a TemplateAnchor,
+    ) -> impl Iterator<Item = usize> + 'a {
+        anchor
+            .values()
+            .filter(move |&idx| self.dynamic_values[idx].as_node().is_some())
+    }
+
+    #[doc(hidden)]
+    pub fn dynamic_attr_indices_for_anchor<'a>(
+        &'a self,
+        anchor: &'a TemplateAnchor,
+    ) -> impl Iterator<Item = usize> + 'a {
+        anchor
+            .values()
+            .filter(move |&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
     pub(crate) fn dynamic_attr_anchors(
@@ -209,7 +235,7 @@ impl VNode {
         self.template
             .anchors()
             .iter()
-            .filter(move |anchor| !self.anchor_is_node(anchor))
+            .filter(move |anchor| self.anchor_has_attrs(anchor))
     }
 
     fn dynamic_anchors_in_document_order(
@@ -218,7 +244,13 @@ impl VNode {
     ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
         self.template
             .anchors_in_document_order()
-            .filter(move |anchor| self.anchor_is_node(anchor) == nodes)
+            .filter(move |anchor| {
+                if nodes {
+                    self.anchor_has_node(anchor)
+                } else {
+                    self.anchor_has_attrs(anchor)
+                }
+            })
     }
 
     #[doc(hidden)]
