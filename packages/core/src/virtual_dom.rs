@@ -288,12 +288,8 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let driver = RenderDriver::Body(Rc::new(BodyDriver::new(
-            root,
-            |_, _| true,
-            root_props,
-            "Root",
-        )));
+        let driver: Rc<dyn RenderDriver> =
+            Rc::new(BodyDriver::new(root, |_, _| true, root_props, "Root"));
         Self::new_with_component(VComponent::new_with_driver("root", driver))
     }
 
@@ -317,12 +313,12 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root_driver = RenderDriver::Body(Rc::new(BodyDriver::new(
+        let root_driver: Rc<dyn RenderDriver> = Rc::new(BodyDriver::new(
             RootScopeWrapper,
             |_, _| true,
             RootProps(root),
             "RootWrapper",
-        )));
+        ));
         dom.new_scope("app", root_driver);
 
         #[cfg(debug_assertions)]
@@ -581,10 +577,15 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
-        let m = self
-            .runtime
-            .clone()
-            .while_rendering(|| driver.create(self, ScopeId::ROOT, true, None, Some(to)));
+        let m = self.runtime.clone().while_rendering(|| {
+            driver.create(
+                self,
+                ScopeId::ROOT,
+                true,
+                None,
+                Some(to as &mut dyn WriteMutations),
+            )
+        });
 
         to.append_children(ElementId(0), m);
     }

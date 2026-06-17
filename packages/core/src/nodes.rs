@@ -633,7 +633,7 @@ pub struct VComponent {
     pub name: &'static str,
 
     /// The driver owning this component's rendering lifecycle and props.
-    pub(crate) driver: RenderDriver,
+    pub(crate) driver: Rc<dyn RenderDriver>,
 }
 
 impl Clone for VComponent {
@@ -655,12 +655,12 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let driver = RenderDriver::Body(Rc::new(BodyDriver::new(
+        let driver: Rc<dyn RenderDriver> = Rc::new(BodyDriver::new(
             component,
             <P as Properties>::memoize,
             props,
             fn_name,
-        )));
+        ));
 
         VComponent {
             name: fn_name,
@@ -669,7 +669,7 @@ impl VComponent {
     }
 
     /// Create a [`VComponent`] with a custom [`RenderDriver`].
-    pub(crate) fn new_with_driver(name: &'static str, driver: RenderDriver) -> Self {
+    pub(crate) fn new_with_driver(name: &'static str, driver: Rc<dyn RenderDriver>) -> Self {
         VComponent { name, driver }
     }
 

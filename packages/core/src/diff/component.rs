@@ -12,7 +12,7 @@ impl VirtualDom {
         scope_id: ScopeId,
     ) {
         let driver = self.runtime.get_state(scope_id).render_driver();
-        driver.diff(self, scope_id, to);
+        driver.diff(self, scope_id, to.map(|m| m as &mut dyn WriteMutations));
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
@@ -84,7 +84,13 @@ impl VirtualDom {
         replace_with: Option<usize>,
     ) {
         let driver = self.runtime.get_state(scope_id).render_driver();
-        driver.remove(self, scope_id, to, destroy_component_state, replace_with);
+        driver.remove(
+            self,
+            scope_id,
+            to.map(|m| m as &mut dyn WriteMutations),
+            destroy_component_state,
+            replace_with,
+        );
     }
 }
 
@@ -102,7 +108,7 @@ impl VNode {
     ) {
         // Replace components whose drivers identify different components
         // (different driver type, or a different body function value)
-        if !old.driver.same_component(&new.driver) {
+        if !old.driver.same_component(&*new.driver) {
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
 
@@ -110,7 +116,7 @@ impl VNode {
         // The scope's driver still owns the live props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         let scope_driver = dom.runtime.get_state(scope_id).render_driver();
-        if scope_driver.memoize(&new.driver) {
+        if scope_driver.memoize(new.driver.as_any()) {
             return;
         }
 
@@ -168,6 +174,12 @@ impl VNode {
         }
 
         let driver = dom.runtime.get_state(scope_id).render_driver();
-        driver.create(dom, scope_id, new, parent, to)
+        driver.create(
+            dom,
+            scope_id,
+            new,
+            parent,
+            to.map(|m| m as &mut dyn WriteMutations),
+        )
     }
 }

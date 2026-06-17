@@ -9,6 +9,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -62,7 +63,7 @@ pub(crate) struct Scope {
     suspense_location: RefCell<SuspenseLocation>,
 
     /// The driver owning this scope's rendered output.
-    render_driver: RenderDriver,
+    render_driver: Rc<dyn RenderDriver>,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -74,7 +75,7 @@ impl Scope {
         parent_id: Option<ScopeId>,
         height: u32,
         suspense_location: SuspenseLocation,
-        render_driver: RenderDriver,
+        render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
             name,
@@ -101,7 +102,7 @@ impl Scope {
     }
 
     /// The driver owning this scope's rendered output.
-    pub(crate) fn render_driver(&self) -> RenderDriver {
+    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
         self.render_driver.clone()
     }
 
