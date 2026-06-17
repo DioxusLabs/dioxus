@@ -46,7 +46,6 @@ mod nodes;
 mod portal;
 mod properties;
 mod reactive_context;
-mod real_dom;
 mod render_driver;
 mod render_error;
 mod root_wrapper;
@@ -126,7 +125,6 @@ pub(crate) mod innerlude {
     pub use crate::portal::*;
     pub use crate::properties::*;
     pub use crate::reactive_context::*;
-    pub use crate::real_dom::*;
     pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
@@ -160,9 +158,8 @@ pub use crate::innerlude::{
     ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode,
     MultiTargetWriter, MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
-    Portal, PortalProps, Properties, ReactiveContext, RealDom, RenderError, RenderTargetId,
-    RenderedView, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, StackState,
-    StackWriter, StaticStringInterner,
+    Portal, PortalProps, Properties, ReactiveContext, RenderError, RenderTargetId, RenderedView,
+    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, StaticStringInterner,
     StringInterner, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,
     SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAnchor,
     TemplateOp, TemplatePath, TemplateStringSpan, VComponent, VNode, VNodeInner, VText, VirtualDom,

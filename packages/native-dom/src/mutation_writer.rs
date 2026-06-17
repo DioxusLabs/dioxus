@@ -2,7 +2,8 @@
 use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
 use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
 use blitz_traits::events::DomEventKind;
-use dioxus_core::{AttributeValue, ElementId, RealDom, StackState, StackWriter};
+use dioxus_core::{AttributeValue, ElementId};
+use dioxus_stack::{RealDom, StackState, StackWriter};
 use std::str::FromStr as _;
 
 /// The state of the Dioxus integration with the RealDom

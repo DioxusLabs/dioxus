@@ -3902,6 +3902,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-html",
+ "dioxus-stack",
  "futures-util",
  "keyboard-types 0.7.0",
  "rustc-hash 2.1.2",
@@ -4042,6 +4043,7 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-stack",
  "pretty_assertions",
 ]
 
@@ -4222,6 +4224,13 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "rustc-hash 2.1.2",
+]
+
+[[package]]
+name = "dioxus-stack"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus-core",
 ]
 
 [[package]]

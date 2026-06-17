@@ -2,10 +2,8 @@ use crate::snapshot::{
     SnapshotAttr, SnapshotNode, attr_key, attr_to_string, format_snapshot_mismatch,
 };
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
-use dioxus_core::{
-    AttributeValue, Element, ElementId, RealDom, StackState, StackWriter, VirtualDom,
-    WriteMutations,
-};
+use dioxus_core::{AttributeValue, Element, ElementId, VirtualDom, WriteMutations};
+use dioxus_stack::{RealDom, StackState, StackWriter};
 use std::fmt;
 
 type NodeId = usize;
@@ -60,6 +58,11 @@ struct Node {
     /// lives at the end").
     child_logical_indices: Vec<u8>,
     parent: Option<NodeId>,
+    /// The `ElementId` this node is currently mapped to, recorded at `pop_id`.
+    /// Lets semantic lookups (`element_id_by_tag`/`_attr`) resolve a tree node
+    /// back to its id without core owning a reverse index. Clones start `None`
+    /// and get an id only when the diff assigns one.
+    element_id: Option<ElementId>,
 }
 
 const NO_LOGICAL_INDEX: u8 = u8::MAX;
@@ -133,6 +136,7 @@ impl OracleArena {
                 children: Vec::new(),
                 child_logical_indices: Vec::new(),
                 parent: None,
+                element_id: Some(ElementId::ROOT),
             })],
             root: 0,
             historical_event_listener_targets: Vec::new(),
@@ -148,6 +152,7 @@ impl OracleArena {
             children: Vec::new(),
             child_logical_indices: Vec::new(),
             parent: None,
+            element_id: None,
         }));
         id
     }
@@ -372,7 +377,8 @@ impl RealDom for ArenaBackend<'_> {
 
     fn append_children(&mut self, parent: NodeId, children: &[NodeId]) {
         self.arena.unhook_all(children);
-        self.arena.append_detached(parent, children, NO_LOGICAL_INDEX);
+        self.arena
+            .append_detached(parent, children, NO_LOGICAL_INDEX);
     }
 
     fn insert_after(&mut self, anchor: NodeId, nodes: &[NodeId]) {
@@ -404,7 +410,13 @@ impl RealDom for ArenaBackend<'_> {
         self.arena.drop_subtree(node);
     }
 
-    fn set_attribute(&mut self, node: NodeId, name: &str, ns: Option<&str>, value: &AttributeValue) {
+    fn set_attribute(
+        &mut self,
+        node: NodeId,
+        name: &str,
+        ns: Option<&str>,
+        value: &AttributeValue,
+    ) {
         match attr_to_string(value) {
             Some(value) => {
                 self.arena
@@ -427,7 +439,11 @@ impl RealDom for ArenaBackend<'_> {
             name: name.to_string(),
             id: element_id,
         };
-        if !self.arena.historical_event_listener_targets.contains(&target) {
+        if !self
+            .arena
+            .historical_event_listener_targets
+            .contains(&target)
+        {
             self.arena.historical_event_listener_targets.push(target);
         }
         let listeners = &mut self.arena.node_mut(node).listeners;
@@ -653,7 +669,12 @@ impl RendererOracle {
             summary: &mut self.edit_counters,
             source_stack: &mut self.source_stack,
             roles: &mut self.roles,
-            inner: StackWriter::new(&mut self.state, ArenaBackend { arena: &mut self.arena }),
+            inner: StackWriter::new(
+                &mut self.state,
+                ArenaBackend {
+                    arena: &mut self.arena,
+                },
+            ),
         }
     }
 
@@ -864,7 +885,7 @@ impl RendererOracle {
     }
 
     fn element_id_for_node(&self, node: NodeId) -> Option<ElementId> {
-        self.state.node_to_element(node)
+        self.arena.node(node).element_id
     }
 
     /// Walk the DOM and return `(attr_value, identity)` pairs for every element
@@ -932,7 +953,6 @@ macro_rules! forward_oracle_mutations {
 impl WriteMutations for RendererOracle {
     forward_oracle_mutations! {
         push_id(id: ElementId);
-        pop_id(id: ElementId);
         child(index: usize);
         pop();
         create_element(tag: &str, ns: Option<&str>);
@@ -946,6 +966,15 @@ impl WriteMutations for RendererOracle {
         add_event_listener(name: &str);
         remove_event_listener(name: &str);
         remove();
+    }
+
+    fn pop_id(&mut self, id: ElementId) {
+        self.writer().pop_id(id);
+        // Record the id on the node core just mapped it to, so semantic lookups
+        // can resolve node -> ElementId without core owning a reverse index.
+        if let Some(node) = self.state.element_to_node(id) {
+            self.arena.node_mut(node).element_id = Some(id);
+        }
     }
 
     fn clone(&mut self) {

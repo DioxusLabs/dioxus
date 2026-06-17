@@ -1,19 +1,14 @@
 [package]
-name = "dioxus-renderer-oracle"
+name = "dioxus-stack"
 version = { workspace = true }
 authors = ["Dioxus Labs"]
 edition = "2024"
-description = "A fast oracle renderer for validating Dioxus VirtualDom mutations."
+description = "A reusable stack machine for Dioxus renderers that materialize a real Rust-side node tree."
 license = "MIT OR Apache-2.0"
-publish = false
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
+keywords = ["dioxus", "renderer", "dom", "mutations"]
 rust-version = "1.85.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-stack = { workspace = true }
-pretty_assertions = { workspace = true }
-
-[dev-dependencies]
-dioxus = { workspace = true }

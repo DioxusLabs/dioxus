@@ -9,13 +9,13 @@
 //! bookkeeping: a node stack, an `ElementId -> node` map, and the translation of
 //! every stack op into an explicit-node tree operation.
 //!
-//! This module factors that out. A renderer implements [`RealDom`] (the "real
+//! This crate factors that out. A renderer implements [`RealDom`] (the "real
 //! semantics" — the operations that actually touch its tree, addressed by
 //! explicit node handle) and lets [`StackWriter`] provide its
 //! [`WriteMutations`] implementation. The stack and mapping live in
 //! [`StackState`], which persists across renders.
 
-use crate::{AttributeValue, WriteMutations, arena::ElementId};
+use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 
 /// A renderer's real-DOM tree, addressed by explicit node handle.
 ///
@@ -98,7 +98,7 @@ pub struct StackState<N> {
     element_to_node: Vec<Option<N>>,
 }
 
-impl<N: Copy + Eq> StackState<N> {
+impl<N: Copy> StackState<N> {
     /// Create stack state seeded with `root` mapped to [`ElementId::ROOT`].
     pub fn new(root: N) -> Self {
         Self {
@@ -126,17 +126,6 @@ impl<N: Copy + Eq> StackState<N> {
     /// stack is clean.
     pub fn stack_depth(&self) -> usize {
         self.stack.len()
-    }
-
-    /// The lowest [`ElementId`] currently mapped to `node`, if any.
-    ///
-    /// This is a linear scan intended for renderer tooling and tests (semantic
-    /// element lookup, event-target resolution), not hot paths.
-    pub fn node_to_element(&self, node: N) -> Option<ElementId> {
-        self.element_to_node
-            .iter()
-            .position(|mapped| *mapped == Some(node))
-            .map(ElementId::from_raw)
     }
 
     fn lookup(&self, id: ElementId) -> N {
@@ -169,12 +158,17 @@ impl<N: Copy + Eq> StackState<N> {
     }
 
     fn top(&self) -> StackEntry<N> {
-        *self.stack.last().expect("renderer stack unexpectedly empty")
+        *self
+            .stack
+            .last()
+            .expect("renderer stack unexpectedly empty")
     }
 
     fn replace_top(&mut self, node: N, element_id: Option<ElementId>) {
-        *self.stack.last_mut().expect("renderer stack unexpectedly empty") =
-            StackEntry { node, element_id };
+        *self
+            .stack
+            .last_mut()
+            .expect("renderer stack unexpectedly empty") = StackEntry { node, element_id };
     }
 
     fn pop_nodes(&mut self, m: usize) -> Vec<N> {
@@ -203,16 +197,6 @@ impl<'a, R: RealDom> StackWriter<'a, R> {
     /// Drive `backend` from `state` for the duration of one render pass.
     pub fn new(state: &'a mut StackState<R::NodeId>, backend: R) -> Self {
         Self { state, backend }
-    }
-
-    /// The backend being driven.
-    pub fn backend(&self) -> &R {
-        &self.backend
-    }
-
-    /// The backend being driven.
-    pub fn backend_mut(&mut self) -> &mut R {
-        &mut self.backend
     }
 }
 
@@ -293,7 +277,8 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         let element_id = entry
             .element_id
             .expect("event listener target must be mapped to an ElementId");
-        self.backend.add_event_listener(entry.node, element_id, name);
+        self.backend
+            .add_event_listener(entry.node, element_id, name);
     }
 
     fn remove_event_listener(&mut self, name: &str) {
