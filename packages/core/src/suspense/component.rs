@@ -240,7 +240,6 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 /// }
 /// ```
 #[allow(non_snake_case)]
-#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {
     unreachable!("SuspenseBoundary should not be called directly")
 }
@@ -311,7 +310,7 @@ impl RenderDriver for SuspenseDriver {
         scope_id: ScopeId,
         new: bool,
         parent: Option<ElementRef>,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         if new {
             self.suspense_context.mount(scope_id);
@@ -323,7 +322,12 @@ impl RenderDriver for SuspenseDriver {
         suspense_create(self, scope_id, parent, dom, to)
     }
 
-    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, to: Option<&mut dyn WriteMutations>) {
+    fn diff(
+        &self,
+        dom: &mut VirtualDom,
+        scope_id: ScopeId,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+    ) {
         suspense_diff(self, scope_id, dom, to)
     }
 
@@ -331,7 +335,7 @@ impl RenderDriver for SuspenseDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
@@ -366,7 +370,7 @@ fn suspense_create(
     scope_id: ScopeId,
     parent: Option<ElementRef>,
     dom: &mut VirtualDom,
-    mut to: Option<&mut dyn WriteMutations>,
+    mut to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> usize {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let suspense_context = driver.context();
@@ -375,7 +379,7 @@ fn suspense_create(
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         suspense_context.under_suspense_boundary(&dom.runtime(), || {
-            children.create(dom, parent, Option::<&mut NoOpMutations>::None);
+            children.create(dom, parent, None);
         });
 
         // Store the (now mounted) children back
@@ -388,7 +392,7 @@ fn suspense_create(
                     suspense_context.set_suspended_nodes(children.as_vnode().clone());
                     let suspense_placeholder =
                         LastRenderedNode::new(driver.fallback().call(suspense_context.clone()));
-                    let nodes_created = suspense_placeholder.create(dom, parent, to.as_mut());
+                    let nodes_created = suspense_placeholder.create(dom, parent, to.as_deref_mut());
                     (suspense_placeholder, nodes_created)
                 });
 
@@ -398,7 +402,7 @@ fn suspense_create(
             // Otherwise just render the children in the real dom
             debug_assert!(children.mount.get().mounted());
             let nodes_created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children.create(dom, parent, to.as_mut())
+                children.create(dom, parent, to.as_deref_mut())
             });
             dom.scopes[scope_id.0].last_rendered_node = children.into();
             suspense_context.take_suspended_nodes();
@@ -414,11 +418,11 @@ impl SuspenseBoundaryProps {
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
     ///
     /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.
-    pub fn resolve_suspense<M: WriteMutations>(
+    pub fn resolve_suspense(
         scope_id: ScopeId,
         dom: &mut VirtualDom,
-        to: &mut M,
-        only_write_templates: impl FnOnce(&mut M),
+        to: &mut (dyn WriteMutations + '_),
+        only_write_templates: impl FnOnce(&mut (dyn WriteMutations + '_)),
         replace_with: usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
@@ -453,11 +457,11 @@ impl SuspenseBoundaryProps {
             // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
             let suspended = suspense_context.take_suspended_nodes();
             if let Some(node) = suspended {
-                node.remove_node(&mut *dom, Option::<&mut NoOpMutations>::None, None);
+                node.remove_node(&mut *dom, None, None);
             }
 
             // Replace the rendered nodes with resolved nodes
-            currently_rendered.remove_node(&mut *dom, Some(to), Some(replace_with));
+            currently_rendered.remove_node(&mut *dom, Some(&mut *to), Some(replace_with));
 
             // Switch to only writing templates
             only_write_templates(to);
@@ -466,7 +470,7 @@ impl SuspenseBoundaryProps {
 
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
             suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children.create(dom, parent, Some(to));
+                children.create(dom, parent, Some(&mut *to));
             });
 
             // Store the (now mounted) children back
@@ -484,7 +488,7 @@ fn suspense_diff(
     driver: &SuspenseDriver,
     scope_id: ScopeId,
     dom: &mut VirtualDom,
-    mut to: Option<&mut dyn WriteMutations>,
+    mut to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     dom.runtime.clone().with_scope_on_stack(scope_id, || {
         let scope = &mut dom.scopes[scope_id.0];
@@ -508,7 +512,7 @@ fn suspense_diff(
                         let new_placeholder =
                             LastRenderedNode::new(fallback.call(suspense_context.clone()));
 
-                        last_rendered_node.diff_node(&new_placeholder, dom, to.as_mut());
+                        last_rendered_node.diff_node(&new_placeholder, dom, to.as_deref_mut());
                         new_placeholder
                     });
 
@@ -517,11 +521,7 @@ fn suspense_diff(
 
                 // Diff the suspended nodes in the background
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    suspended_nodes.diff_node(
-                        &new_suspended_nodes,
-                        dom,
-                        Option::<&mut NoOpMutations>::None,
-                    );
+                    suspended_nodes.diff_node(&new_suspended_nodes, dom, None);
                 });
 
                 let suspense_context =
@@ -534,7 +534,7 @@ fn suspense_diff(
             // We have no suspended nodes, and we are not suspended. Just diff the children like normal
             (None, false) => {
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    last_rendered_node.diff_node(&children, dom, to.as_mut());
+                    last_rendered_node.diff_node(&children, dom, to.as_deref_mut());
                 });
 
                 // Set the last rendered node to the new children
@@ -558,13 +558,13 @@ fn suspense_diff(
                         std::slice::from_ref(&new_placeholder),
                         parent,
                         dom,
-                        to.as_mut(),
+                        to.as_deref_mut(),
                     );
                 });
 
                 // Then diff the new children in the background
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    old_children.diff_node(&new_children, dom, Option::<&mut NoOpMutations>::None);
+                    old_children.diff_node(&new_children, dom, None);
                 });
 
                 // Set the last rendered node to the new suspense placeholder
@@ -586,11 +586,7 @@ fn suspense_diff(
 
                 // First diff the two children nodes in the background
                 suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                    old_suspended_nodes.diff_node(
-                        &children,
-                        dom,
-                        Option::<&mut NoOpMutations>::None,
-                    );
+                    old_suspended_nodes.diff_node(&children, dom, None);
 
                     // Then replace the placeholder with the new children
                     let mount = old_placeholder.mount.get();
@@ -599,7 +595,7 @@ fn suspense_diff(
                         std::slice::from_ref(&children),
                         parent,
                         dom,
-                        to.as_mut(),
+                        to.as_deref_mut(),
                     );
                 });
 
@@ -677,12 +673,7 @@ impl SuspenseContext {
         };
         // Remove the suspended nodes
         if let Some(node) = scope.take_suspended_nodes() {
-            node.remove_node_inner(
-                dom,
-                Option::<&mut NoOpMutations>::None,
-                destroy_component_state,
-                None,
-            )
+            node.remove_node_inner(dom, None, destroy_component_state, None)
         }
     }
 }

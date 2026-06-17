@@ -36,18 +36,23 @@ pub(crate) trait RenderDriver: 'static {
         scope_id: ScopeId,
         new: bool,
         parent: Option<ElementRef>,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize;
 
     /// Diff this scope's output against its current props.
-    fn diff(&self, dom: &mut VirtualDom, scope_id: ScopeId, to: Option<&mut dyn WriteMutations>);
+    fn diff(
+        &self,
+        dom: &mut VirtualDom,
+        scope_id: ScopeId,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+    );
 
     /// Remove this scope's output.
     fn remove(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     );
@@ -58,12 +63,17 @@ pub(crate) trait RenderDriver: 'static {
 pub(crate) fn remove_rendered_output(
     dom: &mut VirtualDom,
     scope_id: ScopeId,
-    mut to: Option<&mut dyn WriteMutations>,
+    mut to: Option<&mut (dyn WriteMutations + '_)>,
     destroy_component_state: bool,
     replace_with: Option<usize>,
 ) {
     if let Some(node) = dom.scopes[scope_id.0].last_rendered_node.clone() {
-        node.remove_node_inner(dom, to.as_mut(), destroy_component_state, replace_with)
+        node.remove_node_inner(
+            dom,
+            to.as_deref_mut(),
+            destroy_component_state,
+            replace_with,
+        )
     };
 
     if destroy_component_state {
@@ -155,7 +165,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
         scope_id: ScopeId,
         new: bool,
         parent: Option<ElementRef>,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         if new {
             let body = dom.run_scope_with(scope_id, || self.render());
@@ -167,24 +177,24 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> RenderD
             .last_rendered_node
             .clone()
             .expect("Component to be mounted");
-        dom.create_scope(to.as_mut(), scope_id, new_node, parent)
+        dom.create_scope(to.as_deref_mut(), scope_id, new_node, parent)
     }
 
     fn diff(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        mut to: Option<&mut dyn WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         let body = dom.run_scope_with(scope_id, || self.render());
-        dom.diff_scope(to.as_mut(), scope_id, body);
+        dom.diff_scope(to.as_deref_mut(), scope_id, body);
     }
 
     fn remove(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut dyn WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {

@@ -6,19 +6,19 @@ use crate::{
 };
 
 impl VirtualDom {
-    pub(crate) fn run_and_diff_scope<M: WriteMutations>(
+    pub(crate) fn run_and_diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope_id: ScopeId,
     ) {
         let driver = self.runtime.get_state(scope_id).render_driver();
-        driver.diff(self, scope_id, to.map(|m| m as &mut dyn WriteMutations));
+        driver.diff(self, scope_id, to);
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
-    pub(crate) fn diff_scope<M: WriteMutations>(
+    pub(crate) fn diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: crate::Element,
     ) {
@@ -49,9 +49,9 @@ impl VirtualDom {
     ///
     /// Returns the number of nodes created on the stack
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
-    pub(crate) fn create_scope<M: WriteMutations>(
+    pub(crate) fn create_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
         parent: Option<ElementRef>,
@@ -76,21 +76,15 @@ impl VirtualDom {
         })
     }
 
-    pub(crate) fn remove_component_node<M: WriteMutations>(
+    pub(crate) fn remove_component_node(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         scope_id: ScopeId,
         replace_with: Option<usize>,
     ) {
         let driver = self.runtime.get_state(scope_id).render_driver();
-        driver.remove(
-            self,
-            scope_id,
-            to.map(|m| m as &mut dyn WriteMutations),
-            destroy_component_state,
-            replace_with,
-        );
+        driver.remove(self, scope_id, to, destroy_component_state, replace_with);
     }
 }
 
@@ -104,7 +98,7 @@ impl VNode {
         scope_id: ScopeId,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         // Replace components whose drivers identify different components
         // (different driver type, or a different body function value)
@@ -134,7 +128,7 @@ impl VNode {
         new: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
@@ -156,7 +150,7 @@ impl VNode {
         component: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
         let new = scope_id.is_placeholder();
@@ -174,12 +168,6 @@ impl VNode {
         }
 
         let driver = dom.runtime.get_state(scope_id).render_driver();
-        driver.create(
-            dom,
-            scope_id,
-            new,
-            parent,
-            to.map(|m| m as &mut dyn WriteMutations),
-        )
+        driver.create(dom, scope_id, new, parent, to)
     }
 }
