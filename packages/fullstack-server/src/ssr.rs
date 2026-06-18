@@ -7,10 +7,9 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, VNode, VirtualDom,
+    DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, VirtualDom,
     consume_context, has_context, try_consume_context,
 };
-use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -569,8 +568,10 @@ impl SsrRendererPool {
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
         let template = vnode.template;
 
-        let mut static_root_idx = 0;
-        for (_root_idx, static_op, dynamic_anchor) in template.root_slots() {
+        // Match core's creation order exactly:
+        // 1. root-level dynamic slots are created while materializing roots;
+        // 2. nested dynamic slots are created later in native anchor fill order.
+        for (_root_idx, _static_op, dynamic_anchor) in template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
                 for node_index in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     let dynamic_node = vnode.dynamic_values()[node_index]
@@ -578,49 +579,21 @@ impl SsrRendererPool {
                         .expect("hydration data node slot must point at a dynamic node");
                     Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
                 }
+            }
+        }
+
+        for anchor in template.anchors() {
+            if anchor.parent_element_op_index().is_none() {
                 continue;
             }
 
-            let op = static_op.expect("root slot must be static or dynamic");
-            let root_path = TemplatePath::root(static_root_idx);
-            static_root_idx += 1;
-            if template.element_meta_at_op(op).is_some() {
-                for anchor in template.anchors().iter().filter(|anchor| {
-                    Self::node_anchor_inside_static_root(vnode.vnode(), **anchor, root_path)
-                }) {
-                    for dynamic_node_id in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
-                        let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
-                            .as_node()
-                            .expect("hydration data node slot must point at a dynamic node");
-                        Self::take_from_dynamic_node(
-                            context,
-                            vdom,
-                            vnode,
-                            dynamic_node,
-                            dynamic_node_id,
-                        );
-                    }
-                }
+            for dynamic_node_id in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
+                let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
+                    .as_node()
+                    .expect("hydration data node slot must point at a dynamic node");
+                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dynamic_node_id);
             }
         }
-    }
-
-    fn node_anchor_inside_static_root(
-        vnode: &VNode,
-        anchor: TemplateAnchor,
-        root_path: TemplatePath,
-    ) -> bool {
-        vnode
-            .dynamic_node_indices_for_anchor(&anchor)
-            .next()
-            .is_some()
-            && anchor.parent_element_op_index().is_some()
-            && match anchor.slot_target() {
-                TemplateSlotTarget::BeforeStatic(path) => {
-                    path.split_insertion().0.starts_with(root_path)
-                }
-                TemplateSlotTarget::AppendChildren(path) => path.starts_with(root_path),
-            }
     }
 
     fn take_from_dynamic_node(

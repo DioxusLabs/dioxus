@@ -123,11 +123,22 @@ impl TemplatePath {
 
     /// Return true if this compact path starts with `ancestor`.
     pub fn starts_with(self, ancestor: TemplatePath) -> bool {
-        let self_len = self.bit_len();
-        let ancestor_len = ancestor.bit_len();
-        ancestor.path == 0
-            || (ancestor_len <= self_len
-                && (self.path >> (self_len - ancestor_len)) == ancestor.path)
+        let ancestor_len = ancestor.len();
+        if ancestor_len == 0 {
+            return true;
+        }
+
+        if ancestor_len > self.len() {
+            return false;
+        }
+
+        for index in 0..ancestor_len {
+            if self.segment(index) != ancestor.segment(index) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Return the number of raw child/sibling bits in this path.
