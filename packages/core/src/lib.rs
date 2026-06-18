@@ -67,10 +67,6 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
-    pub use dioxus_core_template::{
-        DecodedTemplateOp, RuntimeTemplateBuilder, TemplateAnchor, TemplateOp, TemplatePath,
-        TemplateSlotPath, TemplateSlotTarget,
-    };
 
     pub type DynamicNodeBuilder<N, Marker = ()> =
         crate::view::dynamic_node::DynamicNodeBuilder<N, Marker>;

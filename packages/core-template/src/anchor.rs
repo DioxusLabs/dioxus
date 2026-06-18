@@ -1,8 +1,7 @@
-use super::{TemplateOp, TemplatePath, TemplateSlotPath, TemplateSlotTarget};
+use super::{TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 
 /// Sentinel `parent_op_index` value marking a [`TemplateAnchor`] for a root-level dynamic node slot,
 /// which has no enclosing static element.
-#[doc(hidden)]
 pub(crate) const ROOT_PARENT_OP_INDEX: u16 = u16::MAX;
 
 /// A dynamic value anchor in a static template.
@@ -20,49 +19,11 @@ pub struct TemplateAnchor {
 }
 
 impl TemplateAnchor {
-    /// Create an anchor from typed template coordinates.
-    pub const fn new(
-        parent_op: Option<usize>,
-        path: TemplateSlotPath,
-        values: std::ops::Range<usize>,
-    ) -> Self {
-        let parent_op_index = Self::parent_op_index(parent_op);
-        let (value_start, value_count) = Self::range_parts(values);
-        Self {
-            path: path.bits(),
-            parent_op_index,
-            value_start,
-            value_count,
-        }
-    }
-
-    const fn parent_op_index(parent_op: Option<usize>) -> u16 {
-        match parent_op {
-            Some(parent_op) => {
-                if parent_op >= TemplateOp::MAX_CAP {
-                    panic!("anchor parent op exceeds packed op capacity");
-                }
-                parent_op as u16
-            }
-            None => ROOT_PARENT_OP_INDEX,
-        }
-    }
-
-    const fn range_parts(values: std::ops::Range<usize>) -> (u16, u16) {
-        if values.start >= values.end {
-            panic!("bad anchor");
-        }
-        if values.end > u16::MAX as usize {
-            panic!("anchor overflow");
-        }
-        (values.start as u16, (values.end - values.start) as u16)
-    }
-
     pub fn parent_element_op_index(self) -> Option<usize> {
         (self.parent_op_index != ROOT_PARENT_OP_INDEX).then_some(self.parent_op_index as usize)
     }
 
-    pub const fn slot_path(self) -> TemplateSlotPath {
+    pub(crate) const fn slot_path(self) -> TemplateSlotPath {
         TemplateSlotPath::from_bits(self.path)
     }
 

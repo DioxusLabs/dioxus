@@ -1023,7 +1023,9 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn extends_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref builder_name, ..
+                ref builder_name,
+                ref component_builder_name,
+                ..
             } = *self;
 
             let field_name = field.extends_vec_ident().unwrap();
@@ -1097,6 +1099,13 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
 
+            // The component-aware builder wraps the inner builder, so it needs its
+            // own `HasAttributes` and extension-trait impls to accept spreads and
+            // attribute extension methods (e.g. `.id(..)`) directly in `rsx!`.
+            let component_builder_generics = self.with_component_builder_params(generics.clone());
+            let (component_builder_impl_generics, _, component_builder_where_clause) =
+                component_builder_generics.split_for_impl();
+
             let forward_extended_fields = self.extend_fields().map(|f| {
                 let name = f.extends_vec_ident();
                 quote!(#name: self.#name)
@@ -1117,6 +1126,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     impl #impl_generics dioxus_elements::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #component_builder_impl_generics dioxus_elements::extensions::#marker_name for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {}
                 }
             });
 
@@ -1144,6 +1155,29 @@ Finally, call `.build()` to create the instance of `{name}`.
                             #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
+                        }
+                    }
+                }
+
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #component_builder_impl_generics dioxus_core::HasAttributes for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {
+                    fn push_attribute<L>(
+                        self,
+                        ____name: &'static str,
+                        ____ns: Option<&'static str>,
+                        ____attr: impl dioxus_core::IntoAttributeValue<L>,
+                        ____volatile: bool
+                    ) -> Self {
+                        #component_builder_name {
+                            render_fn: self.render_fn,
+                            builder: dioxus_core::HasAttributes::push_attribute(
+                                self.builder,
+                                ____name,
+                                ____ns,
+                                ____attr,
+                                ____volatile,
+                            ),
+                            _marker: self._marker,
                         }
                     }
                 }

@@ -27,7 +27,7 @@ use std::{
 };
 use tracing::instrument;
 
-use dioxus_core_template::{TemplatePath, TemplateSlotPath};
+use dioxus_core_template::{TemplatePath, TemplateSlotTarget};
 
 #[derive(Clone, Copy)]
 struct EventTarget {
@@ -38,14 +38,17 @@ struct EventTarget {
 #[derive(Clone, Copy)]
 enum EventTargetPath {
     Static(TemplatePath),
-    Slot(TemplateSlotPath),
+    Slot(TemplateSlotTarget),
 }
 
 impl EventTargetPath {
     fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
             Self::Static(path) => path.starts_with(attr),
-            Self::Slot(path) => path.is_inside_static(attr),
+            Self::Slot(TemplateSlotTarget::BeforeStatic(path)) => {
+                path.split_insertion().0.starts_with(attr)
+            }
+            Self::Slot(TemplateSlotTarget::AppendChildren(path)) => path.starts_with(attr),
         }
     }
 
@@ -265,6 +268,36 @@ fn MyComponent() -> Element {{
     pub fn create_render_target(&self) -> RenderTargetId {
         let mut targets = self.render_targets.borrow_mut();
         RenderTargetId::new(targets.insert(RenderTargetState::new()))
+    }
+
+    /// Remove a render target previously created with [`create_render_target`](Self::create_render_target).
+    ///
+    /// This drops the target's [`ElementId`](crate::ElementId) arena and template
+    /// cache, freeing the slot so its [`RenderTargetId`] may be handed back out by
+    /// a later [`create_render_target`](Self::create_render_target). The root target
+    /// ([`RenderTargetId::ROOT`]) is permanent and is never removed.
+    ///
+    /// The caller must ensure nothing renders into the target anymore: every node
+    /// mounted into it — for example the [`Portal`](crate::Portal) feeding it — must
+    /// already have been removed from the tree. Removing a target that still has
+    /// live mounts leaves those mounts dangling and panics on the next render that
+    /// touches the target.
+    ///
+    /// Returns `true` if a target was removed, or `false` if `id` was the root or
+    /// referred to a target that was already gone.
+    pub fn remove_render_target(&self, id: RenderTargetId) -> bool {
+        if id == RenderTargetId::ROOT {
+            return false;
+        }
+        let mut targets = self.render_targets.borrow_mut();
+        #[cfg(debug_assertions)]
+        if let Some(target) = targets.get(id.index()) {
+            debug_assert!(
+                target.elements.iter().all(|(_, slot)| slot.is_none()),
+                "removing render target {id:?} while it still has live mounted elements"
+            );
+        }
+        targets.try_remove(id.index()).is_some()
     }
 
     /// Drain every pending effect, in `ScopeOrder` (height-asc, id-asc).
@@ -596,7 +629,7 @@ fn MyComponent() -> Element {{
             if indices.peek().is_none() {
                 continue;
             }
-            let path = anchor.slot_path();
+            let target = anchor.slot_target();
             for idx in indices {
                 match parent_node.dynamic_values[idx].node() {
                     DynamicNode::Fragment(children) => {
@@ -607,7 +640,7 @@ fn MyComponent() -> Element {{
                             .non_empty_fragment_children(idx, children.len())
                             .contains(&child_mount)
                         {
-                            return Some(EventTargetPath::Slot(path));
+                            return Some(EventTargetPath::Slot(target));
                         }
                     }
                     DynamicNode::Component(_) => {
@@ -621,7 +654,7 @@ fn MyComponent() -> Element {{
                             .and_then(|scope| scope.as_ref())
                             .and_then(|scope| scope.root_mount());
                         if root_mount == Some(child_mount) {
-                            return Some(EventTargetPath::Slot(path));
+                            return Some(EventTargetPath::Slot(target));
                         }
                     }
                     DynamicNode::Text(_) => {}

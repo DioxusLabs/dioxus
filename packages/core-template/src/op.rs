@@ -2,7 +2,7 @@
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub struct TemplateOp(u16);
+pub(crate) struct TemplateOp(u16);
 
 /// Decoded static attribute namespace storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,7 +13,7 @@ pub enum DecodedTemplateAttrNamespace {
     Custom,
 }
 
-/// Decoded representation of a packed [`TemplateOp`].
+/// Decoded representation of a packed template operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodedTemplateOp {
     /// Enter an element. `skip` is the number of ops in this element subtree.
@@ -73,7 +73,7 @@ impl TemplateOp {
     }
 
     /// Decode this packed op.
-    pub const fn decode(self) -> DecodedTemplateOp {
+    pub(crate) const fn decode(self) -> DecodedTemplateOp {
         if self.0 <= Self::ENTER_MAX_CODE {
             DecodedTemplateOp::Enter {
                 skip: self.0 >> 1,
@@ -91,17 +91,6 @@ impl TemplateOp {
             DecodedTemplateOp::Text
         } else {
             DecodedTemplateOp::Static(self.0 - Self::STATIC_BASE)
-        }
-    }
-
-    /// Return the namespace bit for element and attr ops.
-    pub const fn has_namespace(self) -> bool {
-        match self.decode() {
-            DecodedTemplateOp::Enter { namespace, .. } => namespace,
-            DecodedTemplateOp::Attr { namespace } => {
-                !matches!(namespace, DecodedTemplateAttrNamespace::None)
-            }
-            _ => false,
         }
     }
 }

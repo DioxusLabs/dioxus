@@ -1014,6 +1014,12 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
+        // A pure dynamic-node anchor (e.g. a root-level node slot) decorates no
+        // static element, so it has no attributes to write and no static path to
+        // resolve. Skip it before `assign_static_node_as_dynamic` tries to.
+        if group.ids().next().is_none() {
+            return;
+        }
         let id = self.assign_static_node_as_dynamic(mount, group, dom, to);
         for attribute_idx in group.ids() {
             for attr in self.dynamic_values[attribute_idx].attrs() {

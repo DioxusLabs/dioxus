@@ -43,8 +43,8 @@ impl SuspenseBoundaryProps {
     }
 }
 #[must_use]
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Builder for [`SuspenseBoundaryProps`].
 pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     owner: Owner,
     fields: TypedBuilderFields,
@@ -52,8 +52,8 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
 }
 
 #[must_use]
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Component builder for [`SuspenseBoundary`].
 pub struct SuspenseBoundaryComponentBuilder<RenderFn, Marker, TypedBuilderFields> {
     render_fn: RenderFn,
     builder: SuspenseBoundaryPropsBuilder<TypedBuilderFields>,
@@ -126,9 +126,10 @@ impl<RenderFn, ComponentMarker, __fallback>
         }
     }
 }
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Helper trait used by the generated suspense boundary props builder.
 pub trait SuspenseBoundaryPropsBuilder_Optional<T> {
+    /// Convert the optional builder field into a value.
     fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
 }
 impl<T> SuspenseBoundaryPropsBuilder_Optional<T> for () {
@@ -159,10 +160,9 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
         }
     }
 }
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Error marker for setting the `fallback` field more than once.
 pub enum SuspenseBoundaryPropsBuilder_Error_Repeated_field_fallback {}
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<__children> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)> {
     #[deprecated(note = "Repeated field fallback")]
@@ -190,10 +190,9 @@ impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, ())> {
         }
     }
 }
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Error marker for setting the `children` field more than once.
 pub enum SuspenseBoundaryPropsBuilder_Error_Repeated_field_children {}
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
     #[deprecated(note = "Repeated field children")]
@@ -205,10 +204,9 @@ impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
         self
     }
 }
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+/// Error marker for missing the required `fallback` field.
 pub enum SuspenseBoundaryPropsBuilder_Error_Missing_required_field_fallback {}
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic)]
 impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     #[deprecated(note = "Missing required field fallback")]
@@ -219,8 +217,8 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
         panic!()
     }
 }
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+/// [`SuspenseBoundaryProps`] bundled with the owner that created its callbacks.
 pub struct SuspenseBoundaryPropsWithOwner {
     inner: SuspenseBoundaryProps,
     owner: Owner,
@@ -453,12 +451,11 @@ impl RenderDriver for SuspenseDriver {
     }
 }
 #[allow(non_snake_case)]
-#[doc(hidden)]
 mod SuspenseBoundary_completions {
-    #[doc(hidden)]
     #[allow(non_camel_case_types)]
     /// This enum is generated to help autocomplete the braces after the component. It does nothing
     pub enum Component {
+        /// Autocomplete variant for `SuspenseBoundary`.
         SuspenseBoundary {},
     }
 }
@@ -525,7 +522,6 @@ fn suspense_create(
 }
 
 impl SuspenseBoundaryProps {
-    #[doc(hidden)]
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
     ///
     /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_core::{Mutation, Mutations, ScopeId, VNode, internal::TemplateSlotTarget};
+use dioxus_core::{Mutation, Mutations, ScopeId, VNode};
+use dioxus_core_template::TemplateSlotTarget;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 
 dioxus::html::define_elements! {

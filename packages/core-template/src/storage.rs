@@ -1,24 +1,19 @@
 use dioxus_const_vec::ConstVec;
 
 use super::anchor::ROOT_PARENT_OP_INDEX;
-use super::{
-    Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawTree, TemplateSlotPath,
-};
+use super::{Template, TemplateAnchor, TemplatePath, TemplateRawTree, TemplateSlotPath};
+use crate::op::TemplateOp;
 
 /// Maximum packed template storage capacity.
-#[doc(hidden)]
 pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
 /// Default packed template operation storage capacity.
-#[doc(hidden)]
 pub const TEMPLATE_STORAGE_OPS_CAP: usize = 128;
 
 /// Default static string storage capacity.
-#[doc(hidden)]
 pub const TEMPLATE_STORAGE_STRING_CAP: usize = 128;
 
 /// Default dynamic anchor storage capacity.
-#[doc(hidden)]
 pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 
 const TEMPLATE_PATH_STACK_CAP: usize = 32;
@@ -46,7 +41,6 @@ struct AnchorStats {
 }
 
 /// Const storage for a template.
-#[doc(hidden)]
 #[derive(Clone, Copy)]
 pub struct TemplateStorage<
     const OPS_CAP: usize = TEMPLATE_STORAGE_OPS_CAP,
@@ -202,7 +196,6 @@ impl TemplateLoweringCursor {
 }
 
 /// Counts storage requirements for a template without building an operation tape.
-#[doc(hidden)]
 pub struct TemplateStatsBuilder {
     stats: TemplateStorageStats,
     cursor: TemplateLoweringCursor,
@@ -683,7 +676,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         )
     }
 
-    #[doc(hidden)]
+    /// Leak this storage into a compact runtime template.
     pub fn into_leaked_template(self) -> Template {
         Template::new(
             Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
@@ -696,7 +689,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
 }
 
 /// Builds a leaked runtime template directly from semantic template events.
-#[doc(hidden)]
 pub struct RuntimeTemplateBuilder {
     storage: RuntimeTemplateStorage,
     cursor: TemplateLoweringCursor,
@@ -846,7 +838,10 @@ mod tests {
     }
 
     fn assert_same_template(actual: Template, expected: Template) {
-        assert_eq!(actual.ops(), expected.ops());
+        assert_eq!(
+            actual.decoded_ops().collect::<Vec<_>>(),
+            expected.decoded_ops().collect::<Vec<_>>()
+        );
         assert_eq!(actual.strings(), expected.strings());
         assert_eq!(anchor_parts(actual), anchor_parts(expected));
     }
@@ -940,7 +935,7 @@ mod tests {
         };
         let template = template_from_tree(&TREE);
 
-        assert!(stats.ops >= template.ops().len());
+        assert!(stats.ops >= template.decoded_ops().len());
         assert!(stats.strings >= template.strings().len());
         assert_eq!(stats.anchors, template.anchors().len());
         assert_eq!(stats.dynamic_values, template.dynamic_value_count());

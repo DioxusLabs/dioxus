@@ -2,10 +2,9 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{
-    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, internal::TemplateSlotTarget,
-};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId};
 use dioxus_core_macro::*;
+use dioxus_core_template::TemplateSlotTarget;
 
 mod link;
 pub use link::*;

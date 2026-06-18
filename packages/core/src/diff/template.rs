@@ -1,5 +1,5 @@
 use crate::{Template, VNode};
-use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotPath, TemplateSlotTarget};
+use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
 
 /// One dynamic node value (`index`) viewed over its owning [`TemplateAnchor`].
 ///
@@ -21,8 +21,17 @@ impl<'a> DynamicNodeSlot<'a> {
         }
     }
 
-    pub(super) fn slot_path(self) -> TemplateSlotPath {
-        self.anchor.slot_path()
+    fn slot_target(self) -> TemplateSlotTarget {
+        self.anchor.slot_target()
+    }
+
+    fn static_root_index(self) -> Option<usize> {
+        match self.slot_target() {
+            TemplateSlotTarget::BeforeStatic(path) => Some(path.segment(0) as usize),
+            TemplateSlotTarget::AppendChildren(path) => {
+                (!path.is_empty()).then(|| path.segment(0) as usize)
+            }
+        }
     }
 
     pub(super) fn index(self) -> usize {
@@ -39,7 +48,7 @@ impl<'a> DynamicNodeSlot<'a> {
             panic!("bad root slot");
         }
 
-        let static_root_idx = self.slot_path().root_index().expect("bad slot root");
+        let static_root_idx = self.static_root_index().expect("bad slot root");
         self.template
             .materialization_root_for_static(static_root_idx)
             .expect("bad slot root")
@@ -48,16 +57,18 @@ impl<'a> DynamicNodeSlot<'a> {
     /// Return true when this dynamic node is inserted at the vnode root level, with no enclosing
     /// static element.
     pub(super) fn is_root_level(self) -> bool {
-        self.slot_path().is_root_level()
+        match self.slot_target() {
+            TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
+            TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
+        }
     }
 
     pub(super) fn parent_path(self) -> TemplatePath {
-        self.slot_path().static_parent()
+        self.anchor.static_path()
     }
 
     pub(super) fn placement(self) -> SlotPlacement {
-        let target = self.slot_path();
-        match target.target() {
+        match self.slot_target() {
             TemplateSlotTarget::BeforeStatic(path) => {
                 let (parent_path, static_insertion_index) = path.split_insertion();
                 SlotPlacement {
@@ -75,7 +86,7 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.slot_path() == other.slot_path()
+        self.slot_target() == other.slot_target()
     }
 }
 
@@ -182,6 +193,10 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
 ) {
     for anchor in vnode.template.anchors() {
         let group = DynamicAttrGroup::new(vnode, anchor);
-        visit(group);
+        // Anchors that carry only dynamic nodes (e.g. a root-level node slot)
+        // decorate no static element, so they are not attribute groups.
+        if group.ids().next().is_some() {
+            visit(group);
+        }
     }
 }

@@ -136,12 +136,9 @@ impl TemplatePath {
     }
 }
 
-/// A tagged dynamic node slot target.
-///
-/// The low bit is the target kind. The remaining high bits are a [`TemplatePath`] payload.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub struct TemplateSlotPath(NonZeroU128);
+pub(crate) struct TemplateSlotPath(NonZeroU128);
 
 /// The resolved renderer target for a dynamic node slot.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -171,16 +168,14 @@ impl TemplateSlotPath {
         payload << 1
     }
 
-    /// Create a dynamic slot target before a static node.
-    pub const fn before_static(path: TemplatePath) -> Self {
+    pub(crate) const fn before_static(path: TemplatePath) -> Self {
         if path.is_empty() {
             panic!("bad slot target");
         }
         Self::new(Self::encode_payload(path))
     }
 
-    /// Create a dynamic slot target that appends to a parent.
-    pub const fn append_children(path: TemplatePath) -> Self {
+    pub(crate) const fn append_children(path: TemplatePath) -> Self {
         Self::new(Self::encode_payload(path) | Self::TARGET_APPEND_CHILDREN)
     }
 
@@ -194,8 +189,7 @@ impl TemplateSlotPath {
         self.0.get()
     }
 
-    /// Decode the target kind and path payload.
-    pub const fn target(self) -> TemplateSlotTarget {
+    pub(crate) const fn target(self) -> TemplateSlotTarget {
         let bits = self.bits();
         let path = TemplatePath::from_bits(bits >> 1);
         if bits & Self::TARGET_APPEND_CHILDREN == Self::TARGET_APPEND_CHILDREN {
@@ -205,43 +199,18 @@ impl TemplateSlotPath {
         }
     }
 
-    /// Return true if this slot is mounted at the vnode root level.
-    pub const fn is_root_level(self) -> bool {
-        match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.len() == 1,
-            TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
-        }
-    }
-
-    /// Return the static parent path used for containment checks.
-    pub const fn static_parent(self) -> TemplatePath {
+    pub(crate) const fn static_parent(self) -> TemplatePath {
         match self.target() {
             TemplateSlotTarget::BeforeStatic(path) => path.parent(),
             TemplateSlotTarget::AppendChildren(path) => path,
         }
     }
 
-    /// Return the root index of the static node or parent this slot targets.
-    pub fn root_index(self) -> Option<usize> {
-        match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => Some(path.segment(0) as usize),
-            TemplateSlotTarget::AppendChildren(path) => {
-                (!path.is_empty()).then(|| path.segment(0) as usize)
-            }
-        }
-    }
-
-    /// Return the fill-order depth for this slot.
     pub(crate) const fn fill_depth(self) -> usize {
         match self.target() {
             TemplateSlotTarget::BeforeStatic(path) => path.len(),
             TemplateSlotTarget::AppendChildren(path) => path.len() + 1,
         }
-    }
-
-    /// Return true if this slot is mounted inside `ancestor`.
-    pub fn is_inside_static(self, ancestor: TemplatePath) -> bool {
-        self.static_parent().starts_with(ancestor)
     }
 }
 

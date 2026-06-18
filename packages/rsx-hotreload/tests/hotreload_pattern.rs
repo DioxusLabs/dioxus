@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use dioxus_core::{
     Template, VNode,
     internal::{
-        DecodedTemplateOp, FmtSegment, FmtedSegments, HotReloadAttributeValue,
-        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate,
-        NamedAttribute,
+        FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
+        HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
 };
+use dioxus_core_template::DecodedTemplateOp;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{self, ChangedRsx, HotReloadResult, diff_rsx};
@@ -91,7 +91,7 @@ fn base() -> CallBody {
 }
 
 fn decoded_ops(template: &HotReloadedTemplate) -> Vec<DecodedTemplateOp> {
-    template.ops().iter().map(|op| op.decode()).collect()
+    template.decoded_ops()
 }
 
 #[test]
@@ -169,8 +169,8 @@ fn valid_reorder() {
             DecodedTemplateOp::Static(0),
         ]
     );
-    assert_eq!(template.strings().len(), 1);
-    assert_eq!(template.strings()[0], "div");
+    assert_eq!(template.static_strings().len(), 1);
+    assert_eq!(template.static_strings()[0], "div");
     assert!(template.dynamic_is_node(0));
     assert!(template.dynamic_is_node(1));
     assert_eq!(
@@ -276,9 +276,9 @@ fn valid_new_dynamic_attribute() {
             DecodedTemplateOp::Static(1),
         ]
     );
-    assert_eq!(template.strings().len(), 2);
-    assert_eq!(template.strings()[0], "div");
-    assert_eq!(template.strings()[1], "div");
+    assert_eq!(template.static_strings().len(), 2);
+    assert_eq!(template.static_strings()[0], "div");
+    assert_eq!(template.static_strings()[1], "div");
     assert!(template.dynamic_is_attr(0));
     assert!(template.dynamic_is_attr(1));
 
@@ -471,8 +471,8 @@ fn invalid_cases() {
             DecodedTemplateOp::Static(0),
         ]
     );
-    assert_eq!(template.strings().len(), 1);
-    assert_eq!(template.strings()[0], "div");
+    assert_eq!(template.static_strings().len(), 1);
+    assert_eq!(template.static_strings()[0], "div");
     assert!(template.dynamic_is_node(0));
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 

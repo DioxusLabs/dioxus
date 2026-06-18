@@ -397,6 +397,23 @@ fn app(props: AppProps) -> Element {
     }
 }
 
+fn removable_target_app(props: AppProps) -> Element {
+    let mut show = use_signal(|| true);
+
+    rsx! {
+        button {
+            onclick: move |_| show.set(false),
+            "hide"
+        }
+        if show() {
+            Portal {
+                target: props.target.get(),
+                div { "portal" }
+            }
+        }
+    }
+}
+
 #[test]
 fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
     ROOT_CLICKS.store(0, Ordering::SeqCst);
@@ -651,6 +668,54 @@ fn can_open_new_dynamic_target_after_closing_previous_keyed_portal() {
         edits.get(&second_target).unwrap(),
         ElementId::from_raw(1)
     ));
+}
+
+#[test]
+fn removing_render_target_frees_and_recycles_the_slot() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+
+    let target_slot = TargetSlot::new();
+    let mut dom =
+        VirtualDom::new_with_props(removable_target_app, AppProps { target: target_slot.clone() });
+    let target = dom.runtime().create_render_target();
+    target_slot.set(target);
+
+    let edits = rebuild_to_targeted_vec(&mut dom);
+    let hide_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
+    assert!(edits.contains_key(&target));
+
+    // The root target is permanent and can never be removed.
+    assert!(!dom.runtime().remove_render_target(RenderTargetId::ROOT));
+
+    // Drop the portal so its content is reclaimed from the target, leaving it
+    // empty and safe to remove.
+    dom.runtime()
+        .handle_event("click", click_event(), hide_button);
+    let _ = render_immediate_to_targeted_vec(&mut dom);
+
+    assert!(dom.runtime().remove_render_target(target));
+    // Removing a target that is already gone is a no-op.
+    assert!(!dom.runtime().remove_render_target(target));
+
+    // The freed slot is handed back out to the next target.
+    let recycled = dom.runtime().create_render_target();
+    assert_eq!(recycled, target);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic = "live mounted elements"]
+fn removing_render_target_with_live_content_panics() {
+    let target_slot = TargetSlot::new();
+    let mut dom = VirtualDom::new_with_props(app, AppProps { target: target_slot.clone() });
+    let target = dom.runtime().create_render_target();
+    target_slot.set(target);
+
+    let _ = rebuild_to_targeted_vec(&mut dom);
+
+    // The portal is still mounted into `target`, so removing it would orphan
+    // live mounts. The debug-only contract check catches the misuse.
+    dom.runtime().remove_render_target(target);
 }
 
 static PORTAL_STATE_INITS: AtomicUsize = AtomicUsize::new(0);

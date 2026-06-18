@@ -378,7 +378,7 @@ where
     }
 }
 
-#[doc(hidden)]
+/// Marker used to convert `&str` into `Option<String>` through [`SuperFrom`].
 pub struct OptionStringFromMarker;
 
 impl<'a> SuperFrom<&'a str, OptionStringFromMarker> for Option<String> {
@@ -387,7 +387,7 @@ impl<'a> SuperFrom<&'a str, OptionStringFromMarker> for Option<String> {
     }
 }
 
-#[doc(hidden)]
+/// Marker used to convert [`Arguments`] into `Option<String>` through [`SuperFrom`].
 pub struct OptionArgumentsFromMarker;
 
 impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> {
@@ -396,7 +396,7 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
     }
 }
 
-#[doc(hidden)]
+/// Marker used to convert a callback into `Option<Callback<_, _>>` through [`SuperFrom`].
 pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 
 // Closure can be created from FnMut -> async { anything } or FnMut -> Ret

@@ -143,12 +143,21 @@ impl WindowState {
     /// Close the underlying window. Closing drops the app-side webview and
     /// its `WryQueue`, so later render passes see the target writerless and
     /// skip its writes.
+    ///
+    /// Runs from the `Window` scope's drop cleanup, after its rendered subtree
+    /// (the portal feeding `target_id`) has already been torn down, so the
+    /// render target is empty and safe to reclaim. `try_current` is `None`
+    /// during full `VirtualDom` teardown, where the whole arena is dropped
+    /// anyway, so the reclaim is simply skipped.
     fn close_window(&self) {
         self.remove_close_handler();
         if let Some(providers) = self.providers.borrow_mut().take() {
             if !self.closed.get() {
                 providers.context.close();
             }
+        }
+        if let Some(runtime) = Runtime::try_current() {
+            runtime.remove_render_target(self.target_id);
         }
     }
 

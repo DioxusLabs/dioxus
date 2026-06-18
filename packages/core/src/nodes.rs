@@ -697,10 +697,15 @@ impl PartialEq for AttributeValue {
     }
 }
 
-#[doc(hidden)]
+/// Trait object support for custom [`AttributeValue::Any`] values.
 pub trait AnyValue: 'static {
+    /// Compare this value with another erased value.
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+
+    /// Return this value as [`Any`] for downcasting.
     fn as_any(&self) -> &dyn Any;
+
+    /// Return the underlying value's [`TypeId`].
     fn type_id(&self) -> TypeId {
         self.as_any().type_id()
     }

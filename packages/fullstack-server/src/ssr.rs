@@ -8,10 +8,9 @@ use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
     DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, VNode, VirtualDom,
-    consume_context, has_context,
-    internal::{TemplateAnchor, TemplatePath},
-    try_consume_context,
+    consume_context, has_context, try_consume_context,
 };
+use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
@@ -616,7 +615,12 @@ impl SsrRendererPool {
             .next()
             .is_some_and(|idx| vnode.dynamic_values[idx].as_node().is_some())
             && anchor.parent_element_op_index().is_some()
-            && anchor.slot_path().is_inside_static(root_path)
+            && match anchor.slot_target() {
+                TemplateSlotTarget::BeforeStatic(path) => {
+                    path.split_insertion().0.starts_with(root_path)
+                }
+                TemplateSlotTarget::AppendChildren(path) => path.starts_with(root_path),
+            }
     }
 
     fn take_from_dynamic_node(

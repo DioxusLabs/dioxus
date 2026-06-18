@@ -1,7 +1,6 @@
-use super::{
-    DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, TemplateOp, TemplatePath,
-    TemplateSlotTarget,
-};
+use super::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, TemplatePath};
+use crate::TemplateSlotTarget;
+use crate::op::TemplateOp;
 
 type StaticTemplateOpArray = &'static [TemplateOp];
 type StaticTemplateStringArray = &'static [&'static str];
@@ -20,7 +19,7 @@ pub struct Template {
     )]
     ops: StaticTemplateOpArray,
 
-    /// Static strings referenced by [`TemplateOp::Static`].
+    /// Static strings referenced by static string operations.
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "super::serialization::deserialize_strings_leaky")
@@ -81,14 +80,14 @@ impl Template {
         }
     }
 
-    /// Get the flat template operations.
-    pub const fn ops(&self) -> &'static [TemplateOp] {
-        self.ops
-    }
-
     /// Get the template static string pool.
     pub const fn strings(&self) -> &'static [&'static str] {
         self.strings
+    }
+
+    /// Iterate decoded template operations.
+    pub fn decoded_ops(&self) -> impl ExactSizeIterator<Item = DecodedTemplateOp> + '_ {
+        self.ops.iter().map(|op| op.decode())
     }
 
     const fn validate_anchors(anchors: &[TemplateAnchor]) {

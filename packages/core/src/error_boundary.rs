@@ -63,7 +63,6 @@ impl Default for CreateErrorBoundary {
 
 /// Provides a method that is used to create error boundaries in `use_error_boundary_provider`.
 /// This is only called from fullstack to create a hydration compatible error boundary
-#[doc(hidden)]
 pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
     provide_context(CreateErrorBoundary(create_error_boundary));
 }

@@ -7,13 +7,13 @@ use crate::{
     model::*,
 };
 use dioxus::prelude::*;
-#[cfg(test)]
-use dioxus_core::internal::DecodedTemplateOp;
-use dioxus_core::internal::RuntimeTemplateBuilder;
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
     VComponent, VNode, VText,
 };
+#[cfg(test)]
+use dioxus_core_template::DecodedTemplateOp;
+use dioxus_core_template::RuntimeTemplateBuilder;
 use std::future::pending;
 
 pub(crate) fn App(context: HarnessContext) -> Element {
@@ -796,9 +796,9 @@ mod tests {
         let first = compile_template(&spec);
         let second = compile_template(&spec);
 
-        // A shared `ops` pointer proves the interning cache returned the identical leaked template
+        // Shared leaked slices prove the interning cache returned the identical leaked template
         // (a fresh compile would leak new slices).
-        assert!(ptr::eq(first.ops(), second.ops()));
+        assert!(ptr::eq(first.anchors(), second.anchors()));
         assert!(ptr::eq(first.strings(), second.strings()));
     }
 
@@ -816,11 +816,7 @@ mod tests {
         });
 
         // The dynamic child no longer appears in the op tape; only the static element remains.
-        let decoded_ops = template
-            .ops()
-            .iter()
-            .map(|op| op.decode())
-            .collect::<Vec<_>>();
+        let decoded_ops = template.decoded_ops().collect::<Vec<_>>();
         assert_eq!(
             decoded_ops,
             vec![

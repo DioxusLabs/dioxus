@@ -3555,6 +3555,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-html",
  "futures-channel",
@@ -4116,6 +4117,7 @@ name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-core",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-rsx",
  "internment",
@@ -4158,6 +4160,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-template",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",
@@ -4282,6 +4285,7 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-core-template",
  "dioxus-renderer-oracle",
  "dioxus-ssr",
  "mutatis",

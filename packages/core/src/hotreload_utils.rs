@@ -9,24 +9,31 @@ use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
 use dioxus_core_template::deserialize_string_leaky;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
+/// A named literal captured for hot reload.
 pub struct HotreloadedLiteral {
+    /// The literal name.
     pub name: String,
+    /// The literal value.
     pub value: HotReloadLiteral,
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
+/// A literal value that can be replayed during hot reload.
 pub enum HotReloadLiteral {
+    /// A formatted string literal.
     Fmted(FmtedSegments),
+    /// A floating point literal.
     Float(f64),
+    /// An integer literal.
     Int(i64),
+    /// A boolean literal.
     Bool(bool),
 }
 
 impl HotReloadLiteral {
+    /// Return the formatted string segments if this is a formatted literal.
     pub fn as_fmted(&self) -> Option<&FmtedSegments> {
         match self {
             Self::Fmted(segments) => Some(segments),
@@ -34,6 +41,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the float value if this is a float literal.
     pub fn as_float(&self) -> Option<f64> {
         match self {
             Self::Float(f) => Some(*f),
@@ -41,6 +49,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the integer value if this is an integer literal.
     pub fn as_int(&self) -> Option<i64> {
         match self {
             Self::Int(i) => Some(*i),
@@ -48,6 +57,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the boolean value if this is a boolean literal.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Self::Bool(b) => Some(*b),
@@ -68,13 +78,14 @@ impl Hash for HotReloadLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+/// A formatted string split into static and dynamic segments.
 pub struct FmtedSegments {
     pub(crate) segments: Vec<FmtSegment>,
 }
 
 impl FmtedSegments {
+    /// Create formatted string segments.
     pub fn new(segments: Vec<FmtSegment>) -> Self {
         Self { segments }
     }
@@ -97,17 +108,21 @@ impl FmtedSegments {
 type StaticStr = &'static str;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+/// One segment of a formatted string used by hot reload.
 pub enum FmtSegment {
+    /// A static string segment.
     Literal {
+        /// The static string value.
         #[cfg_attr(
             feature = "serialize",
             serde(deserialize_with = "deserialize_string_leaky")
         )]
         value: StaticStr,
     },
+    /// A dynamic string segment.
     Dynamic {
+        /// The dynamic text value index.
         id: usize,
     },
 }
@@ -124,12 +139,13 @@ pub enum FmtSegment {
 // - Should non-string hot literals go through the centralized pool?
 // - Should formatted strings be a runtime concept?
 
-#[doc(hidden)]
+/// Pool of dynamic literal values used to replay a hot-reloaded template.
 pub struct DynamicLiteralPool {
     dynamic_text: Box<[String]>,
 }
 
 impl DynamicLiteralPool {
+    /// Create a dynamic literal pool from dynamic text values.
     pub fn new(dynamic_text: Vec<String>) -> Self {
         Self {
             dynamic_text: dynamic_text.into_boxed_slice(),
@@ -137,6 +153,7 @@ impl DynamicLiteralPool {
     }
 
     // TODO: This should be marked as private in the next major release
+    /// Get a component property from a hot-reload literal.
     pub fn get_component_property<'a, T>(
         &self,
         id: usize,
@@ -226,11 +243,12 @@ impl DynamicLiteralPool {
         }
     }
 
+    /// Render formatted segments using the current dynamic text pool.
     pub fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
 }
-#[doc(hidden)]
+/// Pool of dynamic nodes and attributes used to replay a hot-reloaded template.
 pub struct DynamicValuePool {
     dynamic_attributes: Box<[Box<[Attribute]>]>,
     dynamic_nodes: Box<[DynamicNode]>,
@@ -238,6 +256,7 @@ pub struct DynamicValuePool {
 }
 
 impl DynamicValuePool {
+    /// Create a dynamic value pool.
     pub fn new(
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attributes: Vec<Box<[Attribute]>>,
@@ -250,6 +269,7 @@ impl DynamicValuePool {
         }
     }
 
+    /// Create a dynamic value pool from a vnode.
     pub fn from_vnode(vnode: &VNode, literal_pool: DynamicLiteralPool) -> Self {
         let mut dynamic_nodes = Vec::new();
         let mut dynamic_attributes = Vec::new();
@@ -266,6 +286,7 @@ impl DynamicValuePool {
         Self::new(dynamic_nodes, dynamic_attributes, literal_pool)
     }
 
+    /// Render a vnode from a hot-reloaded template.
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
         let key = hot_reload
             .key
@@ -331,31 +352,41 @@ impl DynamicValuePool {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// A hot-reloaded template with its source location key.
 pub struct HotReloadTemplateWithLocation {
+    /// The source location key.
     pub key: TemplateGlobalKey,
+    /// The hot-reloaded template.
     pub template: HotReloadedTemplate,
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Hash, PartialOrd, Eq, Ord)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// Source location key for a hot-reload template.
 pub struct TemplateGlobalKey {
+    /// Source file path.
     pub file: String,
+    /// Source line.
     pub line: usize,
+    /// Source column.
     pub column: usize,
+    /// Template index at the source location.
     pub index: usize,
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+/// Template data and dynamic value mapping for hot reload.
 pub struct HotReloadedTemplate {
+    /// Optional dynamic key segments.
     pub key: Option<FmtedSegments>,
+    /// Dynamic node mappings.
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
+    /// Dynamic attribute mappings.
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+    /// Component literal values.
     pub component_values: Vec<HotReloadLiteral>,
     dynamic_slots: Vec<HotReloadDynamicSlot>,
     template: Template,
@@ -380,6 +411,7 @@ impl HotReloadedTemplate {
         }
     }
 
+    /// Create hot-reload data from a template and dynamic value mappings.
     pub fn from_template(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
@@ -398,15 +430,18 @@ impl HotReloadedTemplate {
         )
     }
 
+    /// Return the number of root positions in the template.
     pub fn root_count(&self) -> usize {
         self.template.root_count()
     }
 
-    pub fn ops(&self) -> &'static [dioxus_core_template::TemplateOp] {
-        self.template.ops()
+    /// Return decoded template operations for inspection.
+    pub fn decoded_ops(&self) -> Vec<dioxus_core_template::DecodedTemplateOp> {
+        self.template.decoded_ops().collect()
     }
 
-    pub fn strings(&self) -> &'static [&'static str] {
+    /// Return the static string pool for inspection.
+    pub fn static_strings(&self) -> &'static [&'static str] {
         self.template.strings()
     }
 
@@ -455,33 +490,39 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// The kind and source index of a hot-reload dynamic value slot.
 pub enum HotReloadDynamicSlot {
+    /// Dynamic node slot.
     Node(usize),
+    /// Dynamic attribute slot.
     Attribute(usize),
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// Dynamic node source for hot reload.
 pub enum HotReloadDynamicNode {
+    /// Reuse a dynamic node by index.
     Dynamic(usize),
+    /// Create a text node from formatted segments.
     Formatted(FmtedSegments),
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// Dynamic attribute source for hot reload.
 pub enum HotReloadDynamicAttribute {
+    /// Reuse a dynamic attribute by index.
     Dynamic(usize),
+    /// Create an attribute from a named value.
     Named(NamedAttribute),
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// A named attribute generated for hot reload.
 pub struct NamedAttribute {
     /// The name of this attribute.
     #[cfg_attr(
@@ -495,11 +536,12 @@ pub struct NamedAttribute {
         serde(deserialize_with = "dioxus_core_template::deserialize_option_leaky")
     )]
     namespace: Option<StaticStr>,
-
+    /// Attribute value.
     value: HotReloadAttributeValue,
 }
 
 impl NamedAttribute {
+    /// Create a named hot-reload attribute.
     pub fn new(
         name: &'static str,
         namespace: Option<&'static str>,
@@ -513,10 +555,12 @@ impl NamedAttribute {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+/// Attribute value source for hot reload.
 pub enum HotReloadAttributeValue {
+    /// Literal attribute value.
     Literal(HotReloadLiteral),
+    /// Reuse a dynamic attribute value by index.
     Dynamic(usize),
 }

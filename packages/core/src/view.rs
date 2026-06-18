@@ -155,7 +155,6 @@ impl<V: View> ViewExt for V {
 }
 
 /// Convert a view into a [`VNode`] using a prepared template.
-#[doc(hidden)]
 #[inline]
 pub fn into_vnode_with_template<V: View>(
     view: V,
@@ -168,7 +167,6 @@ pub fn into_vnode_with_template<V: View>(
 }
 
 /// Convert a view into a keyed [`VNode`].
-#[doc(hidden)]
 #[inline]
 pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     #[cfg(debug_assertions)]
@@ -182,7 +180,6 @@ pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     }
 }
 
-#[doc(hidden)]
 #[inline]
 pub(crate) fn into_vnode_with_key_and_capacity<
     const OPS_CAP: usize,
@@ -202,7 +199,6 @@ pub(crate) fn into_vnode_with_key_and_capacity<
 
 /// Convert a view into a keyed [`VNode`] using a lazily initialized template cache.
 #[cfg(debug_assertions)]
-#[doc(hidden)]
 #[inline]
 pub fn into_vnode_with_key_and_template_cell<V: View>(
     view: V,
@@ -552,7 +548,6 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
     }
 
     /// Replace the children with an already-normalized typed view tuple.
-    #[doc(hidden)]
     #[inline]
     pub fn with_children<NewChildren>(
         self,

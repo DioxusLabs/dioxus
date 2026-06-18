@@ -1,5 +1,6 @@
 use dioxus_core::Template;
-use dioxus_core::internal::{HotReloadDynamicSlot, RuntimeTemplateBuilder};
+use dioxus_core::internal::HotReloadDynamicSlot;
+use dioxus_core_template::RuntimeTemplateBuilder;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use internment::Intern;
