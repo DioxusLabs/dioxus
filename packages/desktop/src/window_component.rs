@@ -2,8 +2,8 @@ use crate::{
     Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
 };
 use dioxus_core::{
-    ComponentFunctionExt, Element, EventHandler, Portal, Properties, RenderTargetId, Runtime,
-    SuperInto, VNode, ViewExt, provide_context, schedule_update, spawn, use_hook,
+    ComponentBuilder, Element, EventHandler, Portal, PortalProps, Properties, RenderTargetId,
+    Runtime, SuperInto, VNode, ViewExt, provide_context, schedule_update, spawn, use_hook,
     use_hook_with_cleanup,
 };
 use dioxus_document::Document;
@@ -27,6 +27,8 @@ pub struct WindowProps {
 
 impl Properties for WindowProps {
     type Builder = WindowPropsBuilder<()>;
+    type ComponentBuilder<RenderFn, Marker> =
+        ComponentBuilder<RenderFn, Self::Builder, Self, Marker>;
 
     fn builder() -> Self::Builder {
         WindowPropsBuilder {
@@ -34,6 +36,12 @@ impl Properties for WindowProps {
             onclose: None,
             children: (),
         }
+    }
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        ComponentBuilder::new(render_fn, Self::builder())
     }
 
     fn memoize(&mut self, new: &Self) -> bool {
@@ -265,12 +273,20 @@ struct WindowContextProviderProps {
 
 impl Properties for WindowContextProviderProps {
     type Builder = WindowContextProviderPropsBuilder<((), ())>;
+    type ComponentBuilder<RenderFn, Marker> =
+        ComponentBuilder<RenderFn, Self::Builder, Self, Marker>;
 
     fn builder() -> Self::Builder {
         WindowContextProviderPropsBuilder {
             fields: ((), ()),
             _phantom: (),
         }
+    }
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        ComponentBuilder::new(render_fn, Self::builder())
     }
 
     fn memoize(&mut self, new: &Self) -> bool {
@@ -332,22 +348,22 @@ fn WindowContextProvider(props: WindowContextProviderProps) -> Element {
 
 fn context_provider_element(providers: WindowProviders, children: Element) -> Element {
     Element::Ok(
-        WindowContextProvider
-            .with_props(
-                WindowContextProvider
-                    .builder()
-                    .providers(providers)
-                    .children(children)
-                    .build(),
-            )
+        <WindowContextProviderProps as Properties>::builder()
+            .providers(providers)
+            .children(children)
+            .build()
+            .into_vcomponent(WindowContextProvider)
             .into_vnode(),
     )
 }
 
 fn portal_element(target: RenderTargetId, children: Element) -> Element {
     Element::Ok(
-        Portal
-            .with_props(Portal.builder().target(target).children(children).build())
+        <PortalProps as Properties>::builder()
+            .target(target)
+            .children(children)
+            .build()
+            .into_vcomponent(Portal)
             .into_vnode(),
     )
 }

@@ -154,7 +154,7 @@ impl Template {
         (0..self.dynamic_value_count()).filter_map(move |idx| {
             self.anchors
                 .iter()
-                .find(|anchor| anchor.value_start() == idx)
+                .find(|anchor| anchor.value_start as usize == idx)
         })
     }
 
@@ -479,7 +479,7 @@ impl Template {
 
         let mut i = 0usize;
         while i < anchors.len() {
-            if anchors[i].op == super::anchor::ROOT_ANCHOR_OP {
+            if anchors[i].parent_op_index == super::anchor::ROOT_PARENT_OP_INDEX {
                 count += 1;
             }
             i += 1;
@@ -555,8 +555,9 @@ impl Template {
         let mut i = 0;
         while i < anchors.len() {
             let anchor = anchors[i];
-            hash = xxh64(&anchor.op.to_le_bytes(), hash);
-            hash = xxh64(&anchor.path_bits().to_le_bytes(), hash);
+            hash = xxh64(&anchor.parent_op_index.to_le_bytes(), hash);
+            hash = xxh64(&anchor.path.to_le_bytes(), hash);
+            hash = xxh64(&anchor.value_start.to_le_bytes(), hash);
             hash = xxh64(&anchor.value_count.to_le_bytes(), hash);
             i += 1;
         }

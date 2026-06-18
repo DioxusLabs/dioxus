@@ -78,3 +78,57 @@ fn builder_extensions_compile_from_prelude() {
         }
     }
 }
+
+#[test]
+#[allow(unused)]
+fn component_builders_compile_as_nodes() {
+    fn app() -> Element {
+        Ok(Dashboard
+            .builder()
+            .title("HTML builder API")
+            .count(3)
+            .build()
+            .into_vnode())
+    }
+
+    #[component]
+    fn Dashboard(#[props(into)] title: String, count: usize) -> Element {
+        Ok(dioxus::html::main()
+            .child((
+                Header.builder().title(title).build(),
+                (0..count).map(|index| Card.builder().index(index).build()),
+            ))
+            .into_vnode())
+    }
+
+    #[component]
+    fn Header(#[props(into)] title: String) -> Element {
+        rsx! {
+            h1 { "{title}" }
+        }
+    }
+
+    #[component]
+    fn Card(index: usize) -> Element {
+        rsx! {
+            article { "{index}" }
+        }
+    }
+}
+
+#[test]
+#[allow(unused)]
+fn child_owned_component_builders_compile_as_nodes() {
+    fn app() -> Element {
+        let count = use_signal(|| 0);
+
+        Ok(TakesSignal.builder().count(count).build().into_vnode())
+    }
+
+    #[component]
+    fn TakesSignal(count: ReadSignal<i32>) -> Element {
+        rsx! {
+            "{count}"
+        }
+    }
+}

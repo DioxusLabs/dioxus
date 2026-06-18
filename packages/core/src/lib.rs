@@ -9,6 +9,11 @@
 // don't drag the coverage metric down. Stable builds see no effect.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
+// Lets the `Props`/`component` derive macros refer to this crate as `dioxus_core::` even when they
+// are expanded *inside* `dioxus-core` itself (e.g. for `ErrorBoundary`/`Fragment`), so those
+// components can use the derive instead of hand-written builders.
+extern crate self as dioxus_core;
+
 // Debug assertions document internal invariants, but the standard
 // `debug_assert*` macros leave unreachable `cfg!(debug_assertions)` branches in
 // coverage builds. These compile away completely under `coverage_nightly` so the
@@ -63,14 +68,9 @@ pub mod internal {
         TemplateGlobalKey,
     };
     pub use crate::template::{
-        DecodedTemplateOp, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp,
+        DecodedTemplateOp, RuntimeTemplateBuilder, TemplateAnchor, TemplateOp, TemplatePath,
         TemplateSlotPath, TemplateSlotTarget,
     };
-
-    #[cfg(fuzzing)]
-    pub fn build_template_from_raw_ops(raw: &'static [TemplateRawOp]) -> crate::Template {
-        crate::Template::from_raw_ops(raw)
-    }
 
     pub type DynamicNodeBuilder<N, Marker = ()> =
         crate::view::dynamic_node::DynamicNodeBuilder<N, Marker>;
@@ -88,7 +88,6 @@ pub mod internal {
         crate::view::dynamic_attributes_builder(attrs)
     }
 
-    #[cfg(not(debug_assertions))]
     #[allow(private_bounds)]
     pub fn into_vnode_with_key_and_capacity<
         const OPS_CAP: usize,
@@ -156,17 +155,18 @@ pub(crate) mod innerlude {
     pub type Component<P = ()> = fn(P) -> Element;
 }
 
-pub(crate) use crate::template::{TemplateOp, TemplatePath};
-
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId,
-    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiWriter,
-    Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
-    ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard,
-    ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto,
-    SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template,
+    ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender, ComponentFunction,
+    ComponentFunctionExt, DecodedTemplateAttrNamespace, DecodedTemplateOp, DynamicNode,
+    DynamicValue, Element, ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment,
+    HasAttributes, IntoAttributeValue, IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback,
+    MarkerWrapper, MountedVNode, MultiWriter, Mutation, Mutations, NoOpMutations,
+    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
+    RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAnchor, TemplateOp,
+    TemplatePath, TemplateRawTree, TemplateSlotPath, TemplateSlotTarget, TemplateStorageStats,
     VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
     consume_context_from_scope, current_owner, current_scope_id, generation, has_context,
     needs_update, needs_update_any, parent_scope, provide_context, provide_create_error_boundary,

@@ -9,7 +9,7 @@ use crate::{
 use dioxus::prelude::*;
 #[cfg(test)]
 use dioxus_core::internal::DecodedTemplateOp;
-use dioxus_core::internal::{TemplateRawOp, build_template_from_raw_ops};
+use dioxus_core::internal::RuntimeTemplateBuilder;
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
     VComponent, VNode, VText,
@@ -637,25 +637,24 @@ fn compile_template_uncached(spec: &TemplateSpec) -> Template {
 }
 
 fn compile_flat_template(roots: &[TemplateNodeShape]) -> Template {
-    let mut builder = FuzzRawTemplateBuilder::default();
+    let mut builder = FuzzTemplateBuilder::default();
     builder.push_roots(roots);
-    let raw_ops = Box::leak(builder.raw_ops.into_boxed_slice());
-    build_template_from_raw_ops(raw_ops)
+    builder.template.finish()
 }
 
 #[derive(Default)]
-struct FuzzRawTemplateBuilder {
-    raw_ops: Vec<TemplateRawOp>,
+struct FuzzTemplateBuilder {
+    template: RuntimeTemplateBuilder,
 }
 
-impl FuzzRawTemplateBuilder {
+impl FuzzTemplateBuilder {
     fn push_roots(&mut self, roots: &[TemplateNodeShape]) {
-        for root in roots {
-            self.push_node(root);
+        for (index, root) in roots.iter().enumerate() {
+            self.push_node(root, Self::siblings_have_static_node(roots, index + 1));
         }
     }
 
-    fn push_node(&mut self, node: &TemplateNodeShape) {
+    fn push_node(&mut self, node: &TemplateNodeShape, following_static_at_parent: bool) {
         match node {
             TemplateNodeShape::Element {
                 tag,
@@ -663,10 +662,8 @@ impl FuzzRawTemplateBuilder {
                 attrs,
                 children,
             } => self.push_element(*tag, *namespace, attrs, children),
-            TemplateNodeShape::Text(value) => self
-                .raw_ops
-                .push(TemplateRawOp::static_text(text_value(*value))),
-            TemplateNodeShape::Dynamic => self.raw_ops.push(TemplateRawOp::dynamic_node()),
+            TemplateNodeShape::Text(value) => self.template.static_text(text_value(*value)),
+            TemplateNodeShape::Dynamic => self.template.dynamic_node(following_static_at_parent),
         }
     }
 
@@ -677,10 +674,8 @@ impl FuzzRawTemplateBuilder {
         attrs: &[TemplateAttrShape],
         children: &[TemplateNodeShape],
     ) {
-        self.raw_ops.push(TemplateRawOp::open_element(
-            tag_name(tag),
-            namespace.map(namespace_name),
-        ));
+        self.template
+            .open_element(tag_name(tag), namespace.map(namespace_name));
 
         let mut static_attrs = Vec::new();
         let mut dynamic_attr_count = 0usize;
@@ -701,22 +696,29 @@ impl FuzzRawTemplateBuilder {
         static_attrs.sort_by_key(|(name, _, _)| *name);
 
         for (name, value, namespace) in static_attrs {
-            self.raw_ops.push(TemplateRawOp::StaticAttr {
-                name,
-                value,
-                namespace,
-            });
+            self.template.static_attr(name, value, namespace);
         }
 
         for _ in 0..dynamic_attr_count {
-            self.raw_ops.push(TemplateRawOp::dynamic_attr());
+            self.template.dynamic_attr();
         }
 
-        for child in children {
-            self.push_node(child);
+        for (index, child) in children.iter().enumerate() {
+            self.push_node(child, Self::siblings_have_static_node(children, index + 1));
         }
 
-        self.raw_ops.push(TemplateRawOp::close_element());
+        self.template.close_element();
+    }
+
+    fn siblings_have_static_node(nodes: &[TemplateNodeShape], start: usize) -> bool {
+        nodes[start..].iter().any(Self::node_has_static_root)
+    }
+
+    fn node_has_static_root(node: &TemplateNodeShape) -> bool {
+        matches!(
+            node,
+            TemplateNodeShape::Element { .. } | TemplateNodeShape::Text(_)
+        )
     }
 }
 

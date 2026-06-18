@@ -1,4 +1,4 @@
-use std::fmt::Arguments;
+use std::{fmt::Arguments, marker::PhantomData};
 
 use crate::innerlude::*;
 
@@ -50,8 +50,16 @@ pub trait Properties: Clone + Sized + 'static {
     /// Used to create "in-progress" versions of the props.
     type Builder;
 
+    /// The type of the builder for this component when starting from a component function.
+    type ComponentBuilder<RenderFn, Marker>;
+
     /// Create a builder for this component.
     fn builder() -> Self::Builder;
+
+    /// Create a builder that remembers the component function it came from.
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker>;
 
     /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &Self) -> bool;
@@ -65,9 +73,18 @@ pub trait Properties: Clone + Sized + 'static {
 
 impl Properties for () {
     type Builder = EmptyBuilder;
+    type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, EmptyBuilder, (), Marker>;
+
     fn builder() -> Self::Builder {
         EmptyBuilder {}
     }
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        ComponentBuilder::new(render_fn, Self::builder())
+    }
+
     fn memoize(&mut self, _other: &Self) -> bool {
         true
     }
@@ -90,9 +107,18 @@ where
     P: Clone + 'static,
 {
     type Builder = P;
+    type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, P, Self, Marker>;
+
     fn builder() -> Self::Builder {
         unreachable!("Root props technically are never built")
     }
+
+    fn component_builder<RenderFn, Marker>(
+        _render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        unreachable!("Root props technically are never built")
+    }
+
     fn memoize(&mut self, _other: &Self) -> bool {
         true
     }
@@ -103,6 +129,25 @@ where
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     pub fn build(self) {}
+}
+
+impl<RenderFn, Marker> ComponentBuilder<RenderFn, EmptyBuilder, (), Marker> {
+    /// Build an empty-props component.
+    pub fn build(self) -> ComponentBuilderOutput<RenderFn, (), Marker> {
+        let (render_fn, builder) = self.into_parts();
+        builder.build();
+        ComponentBuilderOutput::new(render_fn, ())
+    }
+}
+
+impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for ()
+where
+    RenderFn: ComponentFunction<(), Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        <Self as Properties>::into_vcomponent(self, render_fn)
+    }
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
@@ -147,24 +192,15 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
 ///     rsx! { "Hello {name}" }
 /// }
 ///
-/// let props = Greeting.builder().name("Ada").build();
-/// let component = Greeting.with_props(props);
+/// let vnode = Greeting.builder().name("Ada").build().into_vnode();
 /// ```
 pub trait ComponentFunctionExt<Props, Marker>: ComponentFunction<Props, Marker> + Sized
 where
     Props: Properties,
 {
     /// Create the generated props builder for this component.
-    fn builder(self) -> Props::Builder {
-        Props::builder()
-    }
-
-    /// Create a [`VComponent`] from already-built props.
-    fn with_props(self, props: Props) -> VComponent
-    where
-        Marker: 'static,
-    {
-        props.into_vcomponent(self)
+    fn builder(self) -> Props::ComponentBuilder<Self, Marker> {
+        Props::component_builder(self)
     }
 }
 
@@ -173,6 +209,113 @@ where
     F: ComponentFunction<P, M>,
     P: Properties,
 {
+}
+
+/// A props builder that remembers the component function it came from.
+#[must_use]
+pub struct ComponentBuilder<RenderFn, Builder, Props, Marker> {
+    render_fn: RenderFn,
+    builder: Builder,
+    _marker: PhantomData<fn() -> (Props, Marker)>,
+}
+
+impl<RenderFn, Builder, Props, Marker> ComponentBuilder<RenderFn, Builder, Props, Marker> {
+    /// Create a component-aware props builder.
+    pub fn new(render_fn: RenderFn, builder: Builder) -> Self {
+        Self {
+            render_fn,
+            builder,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Convert the inner builder while preserving the component function.
+    pub fn map_builder<NewBuilder>(
+        self,
+        map: impl FnOnce(Builder) -> NewBuilder,
+    ) -> ComponentBuilder<RenderFn, NewBuilder, Props, Marker> {
+        ComponentBuilder::new(self.render_fn, map(self.builder))
+    }
+
+    /// Split this builder into its component function and inner props builder.
+    pub fn into_parts(self) -> (RenderFn, Builder) {
+        (self.render_fn, self.builder)
+    }
+}
+
+impl<RenderFn, Builder, Props, Marker> HasAttributes
+    for ComponentBuilder<RenderFn, Builder, Props, Marker>
+where
+    Builder: HasAttributes,
+{
+    fn push_attribute<T>(
+        self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        attr: impl IntoAttributeValue<T>,
+        volatile: bool,
+    ) -> Self {
+        self.map_builder(|builder| builder.push_attribute(name, ns, attr, volatile))
+    }
+}
+
+/// A built set of props paired with the component function that renders them.
+#[must_use]
+pub struct ComponentBuilderOutput<RenderFn, Props, Marker> {
+    render_fn: RenderFn,
+    props: Props,
+    _marker: PhantomData<fn() -> Marker>,
+}
+
+impl<RenderFn, Props, Marker> ComponentBuilderOutput<RenderFn, Props, Marker> {
+    /// Create built component props from a render function and props value.
+    pub fn new(render_fn: RenderFn, props: Props) -> Self {
+        Self {
+            render_fn,
+            props,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a [`VComponent`] from these props and the remembered component function.
+    pub fn into_vcomponent(self) -> VComponent
+    where
+        Props: ComponentBuilderRender<RenderFn, Marker>,
+    {
+        self.props.into_vcomponent(self.render_fn)
+    }
+
+    /// Convert this built component into a [`VNode`].
+    pub fn into_vnode(self) -> VNode
+    where
+        Props: ComponentBuilderRender<RenderFn, Marker>,
+    {
+        crate::view::ViewExt::into_vnode(self.into_vcomponent())
+    }
+}
+
+impl<RenderFn, Props, Marker> IntoDynNode for ComponentBuilderOutput<RenderFn, Props, Marker>
+where
+    Props: ComponentBuilderRender<RenderFn, Marker>,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Component(self.into_vcomponent())
+    }
+}
+
+impl<RenderFn, Props, Marker> IntoVNode for ComponentBuilderOutput<RenderFn, Props, Marker>
+where
+    Props: ComponentBuilderRender<RenderFn, Marker>,
+{
+    fn into_vnode(self) -> VNode {
+        ComponentBuilderOutput::into_vnode(self)
+    }
+}
+
+/// Convert built props into a component with a specific render function.
+pub trait ComponentBuilderRender<RenderFn, Marker>: Sized {
+    /// Create a [`VComponent`] from these props and the render function.
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent;
 }
 
 /// Accept any callbacks that take props

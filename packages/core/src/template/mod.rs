@@ -1,6 +1,6 @@
 pub use dioxus_core_template::{
-    DecodedTemplateOp, Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp,
-    TemplateRawTree, TemplateSlotPath, TemplateSlotTarget,
+    DecodedTemplateAttrNamespace, DecodedTemplateOp, Template, TemplateAnchor, TemplateOp,
+    TemplatePath, TemplateRawTree, TemplateSlotPath, TemplateSlotTarget, TemplateStorageStats,
 };
 
 #[cfg(feature = "serialize")]
@@ -9,6 +9,8 @@ pub(crate) use dioxus_core_template::{
     deserialize_strings_leaky,
 };
 
+#[doc(hidden)]
+pub use dioxus_core_template::RuntimeTemplateBuilder;
 pub(crate) use dioxus_core_template::TemplateStorage;
 #[cfg(debug_assertions)]
 pub(crate) use dioxus_core_template::{

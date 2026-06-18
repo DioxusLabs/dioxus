@@ -1,6 +1,6 @@
 use crate::{
-    ComponentFunctionExt, Element, ErrorBoundary, Properties, SuspenseBoundary, VComponent, VNode,
-    properties::RootProps,
+    Element, ErrorBoundary, Properties, SuspenseBoundary, VComponent, VNode,
+    error_boundary::ErrorBoundaryProps, properties::RootProps, suspense::SuspenseBoundaryProps,
 };
 
 #[cfg(debug_assertions)]
@@ -21,12 +21,10 @@ fn component_vnode(component: VComponent) -> VNode {
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
     Element::Ok(component_vnode(
-        SuspenseBoundary
-            .builder()
+        <SuspenseBoundaryProps as Properties>::builder()
             .fallback(|_| Element::Ok(VNode::placeholder()))
             .children(Element::Ok(component_vnode(
-                ErrorBoundary
-                    .builder()
+                <ErrorBoundaryProps as Properties>::builder()
                     .children(Element::Ok(component_vnode(props.0)))
                     .build()
                     .into_vcomponent(ErrorBoundary),

@@ -112,8 +112,11 @@ impl VNode {
         thread_local! {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static EMPTY_TEMPLATE: Template =
-            Template::new(&[], &[], &[TemplateAnchor::root_node(0, 0, true)]);
+        static EMPTY_TEMPLATE: Template = Template::new(
+            &[],
+            &[],
+            &[TemplateAnchor::from_raw_parts(u16::MAX, 1, 0..1)],
+        );
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -137,8 +140,11 @@ impl VNode {
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static ERROR_ANCHOR_TEMPLATE: Template =
-            Template::new(&[], &[], &[TemplateAnchor::root_node(0, 0, true)]);
+        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
+            &[],
+            &[],
+            &[TemplateAnchor::from_raw_parts(u16::MAX, 1, 0..1)],
+        );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -813,7 +819,9 @@ impl IntoDynNode for &VNode {
     }
 }
 
+/// Convert a value into a [`VNode`].
 pub trait IntoVNode {
+    /// Convert this value into a [`VNode`].
     fn into_vnode(self) -> VNode;
 }
 impl IntoVNode for VNode {

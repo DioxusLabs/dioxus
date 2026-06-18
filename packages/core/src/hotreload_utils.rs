@@ -384,24 +384,6 @@ impl HotReloadedTemplate {
         }
     }
 
-    pub fn from_raw_ops(
-        key: Option<FmtedSegments>,
-        dynamic_nodes: Vec<HotReloadDynamicNode>,
-        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
-        component_values: Vec<HotReloadLiteral>,
-        raw_ops: &'static [crate::template::TemplateRawOp],
-        dynamic_slots: Vec<HotReloadDynamicSlot>,
-    ) -> Self {
-        Self::new(
-            key,
-            dynamic_nodes,
-            dynamic_attributes,
-            component_values,
-            Template::from_raw_ops(raw_ops),
-            dynamic_slots,
-        )
-    }
-
     pub fn from_template(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,

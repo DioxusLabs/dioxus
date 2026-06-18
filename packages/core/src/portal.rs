@@ -33,9 +33,17 @@ pub struct PortalPropsBuilder<TypedBuilderFields> {
 
 impl Properties for PortalProps {
     type Builder = PortalPropsBuilder<((), ())>;
+    type ComponentBuilder<RenderFn, Marker> =
+        ComponentBuilder<RenderFn, Self::Builder, Self, Marker>;
 
     fn builder() -> Self::Builder {
         PortalProps::builder()
+    }
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        ComponentBuilder::new(render_fn, Self::builder())
     }
 
     fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {

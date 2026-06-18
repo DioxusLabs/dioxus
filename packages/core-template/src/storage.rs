@@ -1,11 +1,9 @@
 use dioxus_const_vec::ConstVec;
 
-use super::anchor::ROOT_ANCHOR_OP;
+use super::anchor::ROOT_PARENT_OP_INDEX;
 use super::{
-    Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp, TemplateRawTree,
-    TemplateSlotPath,
+    Template, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawTree, TemplateSlotPath,
 };
-use crate::TEMPLATE_RAW_OPS_CAP;
 
 /// Maximum packed template storage capacity.
 #[doc(hidden)]
@@ -25,20 +23,24 @@ pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 
 const TEMPLATE_PATH_STACK_CAP: usize = 32;
 
-#[doc(hidden)]
+/// Storage requirements for lowering a template.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct TemplateStorageStats {
-    pub raw_ops: usize,
+    /// Number of packed template operations.
     pub ops: usize,
+    /// Number of static strings.
     pub strings: usize,
+    /// Number of dynamic anchors.
     pub anchors: usize,
+    /// Number of runtime dynamic values.
     pub dynamic_values: usize,
+    /// Whether lowering overflowed the path stack.
     pub path_overflow: bool,
 }
 
 #[derive(Clone, Copy)]
 struct AnchorStats {
-    op: u16,
+    parent_op_index: u16,
     path: u128,
     value_count: usize,
 }
@@ -61,6 +63,7 @@ struct TemplateElementFrame {
     enter_index: usize,
     namespace: bool,
     path: TemplatePath,
+    dynamic_attrs: usize,
 }
 
 struct TemplateLoweringCursor {
@@ -78,6 +81,7 @@ impl TemplateLoweringCursor {
                 enter_index: 0,
                 namespace: false,
                 path: TemplatePath::empty(),
+                dynamic_attrs: 0,
             }; TEMPLATE_PATH_STACK_CAP],
             next_paths,
             stack_pointer: 0,
@@ -94,18 +98,30 @@ impl TemplateLoweringCursor {
             enter_index,
             namespace,
             path,
+            dynamic_attrs: 0,
         };
         self.next_paths[self.stack_pointer + 1] = path.next_child();
         self.stack_pointer += 1;
     }
 
-    const fn close_element(&mut self) -> (usize, bool) {
+    const fn close_element(&mut self) -> TemplateElementFrame {
         if self.stack_pointer == 0 {
             panic!("template close op without matching open op");
         }
         self.stack_pointer -= 1;
-        let frame = self.enter_stack[self.stack_pointer];
-        (frame.enter_index, frame.namespace)
+        self.enter_stack[self.stack_pointer]
+    }
+
+    const fn defer_dynamic_attr(&mut self) {
+        if self.stack_pointer == 0 {
+            panic!("dynamic attr raw op without an open element");
+        }
+        let index = self.stack_pointer - 1;
+        let frame = self.enter_stack[index];
+        self.enter_stack[index] = TemplateElementFrame {
+            dynamic_attrs: frame.dynamic_attrs + 1,
+            ..frame
+        };
     }
 
     const fn current_element_path(&self) -> TemplatePath {
@@ -115,13 +131,9 @@ impl TemplateLoweringCursor {
         self.current_element_frame().path
     }
 
-    const fn current_element_op(&self) -> u16 {
-        self.current_element_frame().enter_index as u16
-    }
-
-    const fn node_anchor_op(&self) -> u16 {
+    const fn node_anchor_parent_op_index(&self) -> u16 {
         if self.stack_pointer == 0 {
-            ROOT_ANCHOR_OP
+            ROOT_PARENT_OP_INDEX
         } else {
             self.current_element_frame().enter_index as u16
         }
@@ -144,12 +156,6 @@ impl TemplateLoweringCursor {
         path
     }
 
-    const fn next_slot_path(&self, raw: &[TemplateRawOp], index: usize) -> TemplateSlotPath {
-        self.next_slot_path_after_dynamic_node(
-            self.dynamic_node_has_following_static_at_parent(raw, index),
-        )
-    }
-
     const fn next_slot_path_after_dynamic_node(
         &self,
         has_following_static_at_parent: bool,
@@ -163,16 +169,6 @@ impl TemplateLoweringCursor {
         } else {
             TemplateSlotPath::append_children(self.current_element_path())
         }
-    }
-
-    fn try_next_slot_path(
-        &self,
-        raw: &[TemplateRawOp],
-        index: usize,
-    ) -> Result<TemplateSlotPath, ()> {
-        self.try_next_slot_path_after_dynamic_node(
-            self.dynamic_node_has_following_static_at_parent(raw, index),
-        )
     }
 
     fn try_next_slot_path_after_dynamic_node(
@@ -200,115 +196,124 @@ impl TemplateLoweringCursor {
 
     const fn finish(&self) {
         if self.stack_pointer != 0 {
-            panic!("template raw ops ended with unclosed elements");
+            panic!("template ended with unclosed elements");
+        }
+    }
+}
+
+/// Counts storage requirements for a template without building an operation tape.
+#[doc(hidden)]
+pub struct TemplateStatsBuilder {
+    stats: TemplateStorageStats,
+    cursor: TemplateLoweringCursor,
+    anchors: Vec<AnchorStats>,
+    namespace_slack: usize,
+}
+
+impl Default for TemplateStatsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TemplateStatsBuilder {
+    /// Create a new stats builder.
+    pub fn new() -> Self {
+        Self {
+            stats: TemplateStorageStats::default(),
+            cursor: TemplateLoweringCursor::new(),
+            anchors: Vec::new(),
+            namespace_slack: 0,
         }
     }
 
-    const fn dynamic_node_has_following_static_at_parent(
-        &self,
-        raw: &[TemplateRawOp],
-        index: usize,
-    ) -> bool {
-        let parent_depth = self.stack_pointer;
-        let mut depth = parent_depth;
-        let mut cursor = index + 1;
-
-        while cursor < raw.len() {
-            match raw[cursor] {
-                TemplateRawOp::OpenElement { .. } => {
-                    if depth == parent_depth {
-                        return true;
-                    }
-                    depth += 1;
-                }
-                TemplateRawOp::StaticText { .. } => {
-                    if depth == parent_depth {
-                        return true;
-                    }
-                }
-                TemplateRawOp::CloseElement => {
-                    if depth == parent_depth {
-                        return false;
-                    }
-                    depth -= 1;
-                }
-                TemplateRawOp::StaticAttr { .. }
-                | TemplateRawOp::DynamicAttr
-                | TemplateRawOp::DynamicNode => {}
-            }
-            cursor += 1;
+    /// Count an element start.
+    ///
+    /// `namespace` is `Some(true)` when a namespace is known, `Some(false)` when no namespace is
+    /// known, and `None` when macro expansion cannot know whether the typed builder will add one.
+    pub fn open_element(&mut self, namespace: Option<bool>) {
+        let has_namespace = namespace.unwrap_or(false);
+        self.cursor.open_element(self.stats.ops, has_namespace);
+        self.stats.push_op();
+        self.stats.push_static();
+        if has_namespace {
+            self.stats.push_static();
+        } else if namespace.is_none() {
+            self.namespace_slack += 1;
         }
+    }
 
-        false
+    /// Count the end of the current element.
+    pub fn close_element(&mut self) {
+        self.stats
+            .flush_dynamic_attrs(&mut self.anchors, &self.cursor);
+        let _ = self.cursor.close_element();
+    }
+
+    /// Count a static attribute.
+    ///
+    /// `namespace` follows the same convention as [`Self::open_element`].
+    pub fn static_attr(&mut self, namespace: Option<bool>) {
+        self.stats.push_op();
+        self.stats.push_static();
+        self.stats.push_static();
+        if namespace == Some(true) {
+            self.stats.push_static();
+        } else if namespace.is_none() {
+            self.namespace_slack += 1;
+        }
+    }
+
+    /// Count a dynamic attribute slot on the current element.
+    pub fn dynamic_attr(&mut self) {
+        self.cursor.defer_dynamic_attr();
+    }
+
+    /// Count a static text node.
+    pub fn static_text(&mut self) {
+        let _ = self.cursor.next_node_path();
+        self.stats.push_op();
+        self.stats.push_static();
+    }
+
+    /// Count a dynamic node slot.
+    pub fn dynamic_node(&mut self, following_static_at_parent: bool) {
+        match self
+            .cursor
+            .try_next_slot_path_after_dynamic_node(following_static_at_parent)
+        {
+            Ok(path) => {
+                self.stats.push_anchor(
+                    &mut self.anchors,
+                    self.cursor.node_anchor_parent_op_index(),
+                    path.bits(),
+                );
+            }
+            Err(()) => {
+                self.stats.path_overflow = true;
+                self.stats.push_anchor(
+                    &mut self.anchors,
+                    self.cursor.node_anchor_parent_op_index(),
+                    0,
+                );
+            }
+        }
+    }
+
+    /// Finish counting and return the storage requirements.
+    pub fn finish(mut self) -> TemplateStorageStats {
+        self.cursor.finish();
+        self.stats.anchors = self.anchors.len();
+
+        // Each unknown namespace may emit one extra static string and one extra packed op.
+        self.stats.ops += self.namespace_slack;
+        self.stats.strings += self.namespace_slack;
+
+        self.stats
     }
 }
 
 impl TemplateStorageStats {
-    pub fn from_raw_ops(raw: &[TemplateRawOp]) -> Self {
-        let mut stats = Self {
-            raw_ops: raw.len(),
-            ..Self::default()
-        };
-        let mut cursor = TemplateLoweringCursor::new();
-        let mut anchors = Vec::new();
-        let mut index = 0usize;
-
-        while index < raw.len() {
-            match raw[index] {
-                TemplateRawOp::OpenElement { namespace, .. } => {
-                    let has_namespace = namespace.is_some();
-                    cursor.open_element(stats.ops, has_namespace);
-                    stats.push_op();
-                    stats.push_static();
-                    if has_namespace {
-                        stats.push_static();
-                    }
-                }
-                TemplateRawOp::CloseElement => {
-                    let _ = cursor.close_element();
-                }
-                TemplateRawOp::StaticAttr { namespace, .. } => {
-                    stats.push_op();
-                    stats.push_static();
-                    stats.push_static();
-                    if namespace.is_some() {
-                        stats.push_static();
-                    }
-                }
-                TemplateRawOp::DynamicAttr => {
-                    let path = cursor.current_element_path();
-                    if path.is_empty() {
-                        stats.path_overflow = true;
-                    }
-                    stats.push_anchor(
-                        &mut anchors,
-                        cursor.current_element_op(),
-                        TemplateSlotPath::append_children(path).bits(),
-                    );
-                }
-                TemplateRawOp::StaticText { .. } => {
-                    let _ = cursor.next_node_path();
-                    stats.push_op();
-                    stats.push_static();
-                }
-                TemplateRawOp::DynamicNode => match cursor.try_next_slot_path(raw, index) {
-                    Ok(path) => {
-                        stats.push_anchor(&mut anchors, cursor.node_anchor_op(), path.bits());
-                    }
-                    Err(()) => {
-                        stats.path_overflow = true;
-                        stats.push_anchor(&mut anchors, cursor.node_anchor_op(), 0);
-                    }
-                },
-            }
-            index += 1;
-        }
-
-        cursor.finish();
-        stats.anchors = anchors.len();
-        stats
-    }
-
     fn push_op(&mut self) {
         self.ops += 1;
     }
@@ -318,49 +323,62 @@ impl TemplateStorageStats {
         self.ops += 1;
     }
 
-    fn push_anchor(&mut self, anchors: &mut Vec<AnchorStats>, op: u16, path: u128) {
+    fn push_anchor(&mut self, anchors: &mut Vec<AnchorStats>, parent_op_index: u16, path: u128) {
         self.dynamic_values += 1;
 
         if let Some(last) = anchors.last_mut() {
-            if last.same_anchor(op, path) {
+            if last.same_anchor(parent_op_index, path) {
                 last.value_count += 1;
                 return;
             }
         }
 
-        if anchors.iter().any(|anchor| anchor.same_anchor(op, path)) {
+        if anchors
+            .iter()
+            .any(|anchor| anchor.same_anchor(parent_op_index, path))
+        {
             panic!("anchor gap");
         }
 
         anchors.push(AnchorStats {
-            op,
+            parent_op_index,
             path,
             value_count: 1,
         });
     }
 
+    fn flush_dynamic_attrs(
+        &mut self,
+        anchors: &mut Vec<AnchorStats>,
+        cursor: &TemplateLoweringCursor,
+    ) {
+        let frame = cursor.current_element_frame();
+        let path = frame.path;
+        if path.is_empty() {
+            self.path_overflow = true;
+        }
+        let path = TemplateSlotPath::append_children(path).bits();
+        for _ in 0..frame.dynamic_attrs {
+            self.push_anchor(anchors, frame.enter_index as u16, path);
+        }
+    }
+
     pub const fn exceeds_storage_limits(self) -> bool {
         self.path_overflow
-            || self.raw_ops > TEMPLATE_RAW_OPS_CAP
             || self.ops > TEMPLATE_STORAGE_OPS_CAP
             || self.strings > TEMPLATE_STORAGE_STRING_CAP
             || self.anchors > TEMPLATE_STORAGE_DYNAMIC_CAP
-            || self.raw_ops > TEMPLATE_STORAGE_MAX_CAP
             || self.ops > TEMPLATE_STORAGE_MAX_CAP
             || self.strings > TEMPLATE_STORAGE_MAX_CAP
             || self.dynamic_values > u16::MAX as usize
     }
 
     pub fn max_required_chunks(self) -> usize {
-        let chunks = required_chunks(self.raw_ops, TEMPLATE_RAW_OPS_CAP);
-        let chunks = chunks.max(required_chunks(self.ops, TEMPLATE_STORAGE_OPS_CAP));
+        let chunks = required_chunks(self.ops, TEMPLATE_STORAGE_OPS_CAP);
         let chunks = chunks.max(required_chunks(self.strings, TEMPLATE_STORAGE_STRING_CAP));
         let chunks = chunks.max(required_chunks(self.anchors, TEMPLATE_STORAGE_DYNAMIC_CAP));
         let chunks = chunks.max(required_chunks(
-            self.raw_ops
-                .max(self.ops)
-                .max(self.strings)
-                .max(self.dynamic_values),
+            self.ops.max(self.strings).max(self.dynamic_values),
             TEMPLATE_STORAGE_MAX_CAP,
         ));
         let chunks = chunks.max(required_chunks(self.dynamic_values, u16::MAX as usize));
@@ -373,8 +391,8 @@ impl TemplateStorageStats {
 }
 
 impl AnchorStats {
-    fn same_anchor(self, op: u16, path: u128) -> bool {
-        self.op == op && self.path == path
+    fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
+        self.parent_op_index == parent_op_index && self.path == path
     }
 }
 
@@ -408,6 +426,148 @@ const fn children_have_static_root_node(
     false
 }
 
+// Replace this macro with a const trait once const trait methods are stable enough for this shared
+// lowering path.
+macro_rules! template_lowering {
+    (open_element($storage:expr, $cursor:expr, $tag:expr, $namespace:expr)) => {{
+        let namespace = $namespace;
+        let has_namespace = namespace.is_some();
+        ($cursor).open_element(($storage).ops_len(), has_namespace);
+        ($storage).push_op(TemplateOp::enter(0, has_namespace));
+        ($storage).push_static($tag);
+        if let Some(namespace) = namespace {
+            ($storage).push_static(namespace);
+        }
+    }};
+    (close_element($storage:expr, $cursor:expr)) => {{
+        template_lowering!(dynamic_attrs($storage, $cursor));
+        let frame = ($cursor).close_element();
+        let enter_index = frame.enter_index;
+        let namespace = frame.namespace;
+        let skip = ($storage).ops_len() - enter_index;
+        if skip > TemplateOp::MAX_CAP {
+            panic!("template op skip exceeds packed op capacity");
+        }
+        ($storage).set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
+    }};
+    (dynamic_attrs($storage:expr, $cursor:expr)) => {{
+        let frame = ($cursor).current_element_frame();
+        let path = TemplateSlotPath::append_children(frame.path).bits();
+        let mut index = 0;
+        while index < frame.dynamic_attrs {
+            ($storage).push_anchor(frame.enter_index as u16, path);
+            index += 1;
+        }
+    }};
+    (static_attr($storage:expr, $name:expr, $value:expr, $namespace:expr)) => {{
+        let namespace = $namespace;
+        ($storage).push_op(TemplateOp::attr(namespace.is_some()));
+        ($storage).push_static($name);
+        ($storage).push_static($value);
+        if let Some(namespace) = namespace {
+            ($storage).push_static(namespace);
+        }
+    }};
+    (static_text($storage:expr, $cursor:expr, $value:expr)) => {{
+        let _ = ($cursor).next_node_path();
+        ($storage).push_op(TemplateOp::text());
+        ($storage).push_static($value);
+    }};
+    (dynamic_node($storage:expr, $cursor:expr, $following_static_at_parent:expr)) => {{
+        let path = ($cursor).next_slot_path_after_dynamic_node($following_static_at_parent);
+        ($storage).push_anchor(($cursor).node_anchor_parent_op_index(), path.bits());
+    }};
+}
+
+macro_rules! template_storage_methods {
+    ($($constness:tt)?) => {
+        $($constness)? fn push_static(&mut self, value: &'static str) {
+            let id = self.strings.len();
+            if id >= TemplateOp::MAX_CAP {
+                panic!("static op id exceeds packed op capacity");
+            }
+            self.strings.push(value);
+            self.push_op(TemplateOp::static_text(id as u16));
+        }
+
+        $($constness)? fn ops_len(&self) -> usize {
+            self.ops.len()
+        }
+
+        $($constness)? fn push_op(&mut self, op: TemplateOp) {
+            if self.ops.len() >= TemplateOp::MAX_CAP {
+                panic!("template ops exceed packed op capacity");
+            }
+            self.ops.push(op);
+        }
+
+        $($constness)? fn set_op(&mut self, index: usize, op: TemplateOp) {
+            self.ops.set(index, op);
+        }
+
+        $($constness)? fn push_anchor(&mut self, parent_op_index: u16, path: u128) {
+            let len = self.anchors.len();
+            if len > 0 {
+                let last = self.anchors.at(len - 1);
+                if last.same_anchor(parent_op_index, path) {
+                    self.anchors.set(
+                        len - 1,
+                        TemplateAnchor {
+                            value_count: last.value_count + 1,
+                            ..last
+                        },
+                    );
+                    return;
+                }
+            }
+
+            let mut i = 0;
+            while i < len {
+                if self.anchors.at(i).same_anchor(parent_op_index, path) {
+                    panic!("anchor gap");
+                }
+                i += 1;
+            }
+
+            let value_start = if len == 0 {
+                0
+            } else {
+                let last = self.anchors.at(len - 1);
+                last.value_start + last.value_count
+            };
+            self.anchors.push(TemplateAnchor {
+                parent_op_index,
+                path,
+                value_start,
+                value_count: 1,
+            });
+        }
+
+        $($constness)? fn sort_anchors_in_fill_order(&mut self) {
+            let len = self.anchors.len();
+            let mut index = 0;
+            while index < len {
+                let mut best = index;
+                let mut candidate = index + 1;
+                while candidate < len {
+                    if self
+                        .anchors
+                        .at(candidate)
+                        .should_fill_before(self.anchors.at(best))
+                    {
+                        best = candidate;
+                    }
+                    candidate += 1;
+                }
+                if best != index {
+                    self.anchors.swap(index, best);
+                }
+                index += 1;
+            }
+        }
+    };
+}
+
 const fn push_element_start<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
@@ -418,13 +578,7 @@ const fn push_element_start<
     tag: &'static str,
     namespace: Option<&'static str>,
 ) {
-    let has_namespace = namespace.is_some();
-    cursor.open_element(storage.ops_len(), has_namespace);
-    storage.push_op(TemplateOp::enter(0, has_namespace));
-    storage.push_static(tag);
-    if let Some(namespace) = namespace {
-        storage.push_static(namespace);
-    }
+    template_lowering!(open_element(storage, cursor, tag, namespace));
 }
 
 const fn push_element_end<
@@ -435,12 +589,7 @@ const fn push_element_end<
     storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
     cursor: &mut TemplateLoweringCursor,
 ) {
-    let (enter_index, namespace) = cursor.close_element();
-    let skip = storage.ops_len() - enter_index;
-    if skip > TemplateOp::MAX_CAP {
-        panic!("template op skip exceeds packed op capacity");
-    }
-    storage.set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
+    template_lowering!(close_element(storage, cursor));
 }
 
 const fn push_static_attr<
@@ -453,12 +602,7 @@ const fn push_static_attr<
     value: &'static str,
     namespace: Option<&'static str>,
 ) {
-    storage.push_op(TemplateOp::attr(namespace.is_some()));
-    storage.push_static(name);
-    storage.push_static(value);
-    if let Some(namespace) = namespace {
-        storage.push_static(namespace);
-    }
+    template_lowering!(static_attr(storage, name, value, namespace));
 }
 
 const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>(
@@ -501,85 +645,20 @@ const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYN
             push_static_attr(storage, name, value, *namespace);
         }
         TemplateRawTree::DynamicAttr => {
-            storage.push_anchor(
-                cursor.current_element_op(),
-                TemplateSlotPath::append_children(cursor.current_element_path()).bits(),
-            );
+            cursor.defer_dynamic_attr();
         }
         TemplateRawTree::StaticText(value) => {
-            let _ = cursor.next_node_path();
-            storage.push_op(TemplateOp::text());
-            storage.push_static(value);
+            template_lowering!(static_text(storage, cursor, value));
         }
         TemplateRawTree::DynamicNode => {
-            let path = cursor.next_slot_path_after_dynamic_node(following_static_at_parent);
-            storage.push_anchor(cursor.node_anchor_op(), path.bits());
+            template_lowering!(dynamic_node(storage, cursor, following_static_at_parent));
         }
     }
-}
-
-const fn lower_raw_template<
-    const OPS_CAP: usize,
-    const STRING_CAP: usize,
-    const DYNAMIC_CAP: usize,
->(
-    raw: &[TemplateRawOp],
-    storage: &mut TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
-) {
-    let mut cursor = TemplateLoweringCursor::new();
-    let mut index = 0usize;
-    while index < raw.len() {
-        match raw[index] {
-            TemplateRawOp::OpenElement { tag, namespace } => {
-                push_element_start(storage, &mut cursor, tag, namespace);
-            }
-            TemplateRawOp::CloseElement => {
-                push_element_end(storage, &mut cursor);
-            }
-            TemplateRawOp::StaticAttr {
-                name,
-                value,
-                namespace,
-            } => {
-                push_static_attr(storage, name, value, namespace);
-            }
-            TemplateRawOp::DynamicAttr => {
-                storage.push_anchor(
-                    cursor.current_element_op(),
-                    TemplateSlotPath::append_children(cursor.current_element_path()).bits(),
-                );
-            }
-            TemplateRawOp::StaticText { value } => {
-                let _ = cursor.next_node_path();
-                storage.push_op(TemplateOp::text());
-                storage.push_static(value);
-            }
-            TemplateRawOp::DynamicNode => {
-                let path = cursor.next_slot_path(raw, index);
-                storage.push_anchor(cursor.node_anchor_op(), path.bits());
-            }
-        }
-        index += 1;
-    }
-    cursor.finish();
 }
 
 impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
-    /// Build storage from a raw template description.
-    pub const fn build(raw: &[TemplateRawOp]) -> Self {
-        let mut storage = Self {
-            ops: ConstVec::new_with_max_size(),
-            strings: ConstVec::new_with_max_size(),
-            anchors: ConstVec::new_with_max_size(),
-        };
-
-        lower_raw_template(raw, &mut storage);
-        storage.sort_anchors_in_fill_order();
-        storage
-    }
-
     /// Build storage from a template tree.
     pub const fn build_from_tree(tree: &'static TemplateRawTree) -> Self {
         let mut storage = Self {
@@ -613,96 +692,257 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         )
     }
 
-    const fn push_static(&mut self, value: &'static str) {
-        let id = self.strings.len();
-        if id >= TemplateOp::MAX_CAP {
-            panic!("static op id exceeds packed op capacity");
-        }
-        self.strings.push(value);
-        self.ops.push(TemplateOp::static_text(id as u16));
-    }
+    template_storage_methods!(const);
+}
 
-    const fn ops_len(&self) -> usize {
-        self.ops.len()
-    }
+/// Builds a leaked runtime template directly from semantic template events.
+#[doc(hidden)]
+pub struct RuntimeTemplateBuilder {
+    storage: RuntimeTemplateStorage,
+    cursor: TemplateLoweringCursor,
+}
 
-    const fn push_op(&mut self, op: TemplateOp) {
-        self.ops.push(op);
-    }
+#[derive(Default)]
+struct RuntimeTemplateStorage {
+    ops: RuntimeTemplateVec<TemplateOp>,
+    strings: RuntimeTemplateVec<&'static str>,
+    anchors: RuntimeTemplateVec<TemplateAnchor>,
+}
 
-    const fn set_op(&mut self, index: usize, op: TemplateOp) {
-        self.ops.set(index, op);
-    }
+struct RuntimeTemplateVec<T>(Vec<T>);
 
-    const fn push_anchor(&mut self, op: u16, path: u128) {
-        let len = self.anchors.len();
-        if len > 0 {
-            let last = self.anchors.at(len - 1);
-            if last.same_anchor(op, path) {
-                self.anchors.set(
-                    len - 1,
-                    TemplateAnchor {
-                        value_count: last.value_count + 1,
-                        ..last
-                    },
-                );
-                return;
-            }
-        }
-        let mut i = 0;
-        while i < len {
-            if self.anchors.at(i).same_anchor(op, path) {
-                panic!("anchor gap");
-            }
-            i += 1;
-        }
-        let value_start = if len == 0 {
-            0
-        } else {
-            let last = self.anchors.at(len - 1);
-            last.value_start + last.value_count
-        };
-        let anchor = TemplateAnchor {
-            op,
-            path,
-            value_start,
-            value_count: 1,
-        };
-        self.anchors.push(anchor);
-    }
-
-    const fn sort_anchors_in_fill_order(&mut self) {
-        let len = self.anchors.len();
-        let mut index = 0;
-        while index < len {
-            let mut best = index;
-            let mut candidate = index + 1;
-            while candidate < len {
-                if self
-                    .anchors
-                    .at(candidate)
-                    .should_fill_before(self.anchors.at(best))
-                {
-                    best = candidate;
-                }
-                candidate += 1;
-            }
-            if best != index {
-                self.anchors.swap(index, best);
-            }
-            index += 1;
-        }
+impl<T> Default for RuntimeTemplateVec<T> {
+    fn default() -> Self {
+        Self(Vec::new())
     }
 }
 
-impl Template {
-    /// Build a leaked runtime template from a raw template description.
-    pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
-        TemplateStorage::<
-            TEMPLATE_STORAGE_MAX_CAP,
-            TEMPLATE_STORAGE_MAX_CAP,
-            TEMPLATE_STORAGE_MAX_CAP,
-        >::build(raw)
-        .into_leaked_template()
+impl<T: Copy> RuntimeTemplateVec<T> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn push(&mut self, value: T) {
+        self.0.push(value);
+    }
+
+    fn set(&mut self, index: usize, value: T) {
+        self.0[index] = value;
+    }
+
+    fn at(&self, index: usize) -> T {
+        self.0[index]
+    }
+
+    fn swap(&mut self, a: usize, b: usize) {
+        self.0.swap(a, b);
+    }
+
+    fn into_boxed_slice(self) -> Box<[T]> {
+        self.0.into_boxed_slice()
+    }
+}
+
+impl Default for RuntimeTemplateBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RuntimeTemplateBuilder {
+    /// Create a new runtime template builder.
+    pub fn new() -> Self {
+        Self {
+            storage: RuntimeTemplateStorage::default(),
+            cursor: TemplateLoweringCursor::new(),
+        }
+    }
+
+    /// Emit an element start.
+    pub fn open_element(&mut self, tag: &'static str, namespace: Option<&'static str>) {
+        template_lowering!(open_element(
+            &mut self.storage,
+            &mut self.cursor,
+            tag,
+            namespace
+        ));
+    }
+
+    /// Emit the end of the current element.
+    pub fn close_element(&mut self) {
+        template_lowering!(close_element(&mut self.storage, &mut self.cursor));
+    }
+
+    /// Emit a static attribute.
+    pub fn static_attr(
+        &mut self,
+        name: &'static str,
+        value: &'static str,
+        namespace: Option<&'static str>,
+    ) {
+        template_lowering!(static_attr(&mut self.storage, name, value, namespace));
+    }
+
+    /// Emit a dynamic attribute slot on the current element.
+    pub fn dynamic_attr(&mut self) {
+        self.cursor.defer_dynamic_attr();
+    }
+
+    /// Emit a static text node.
+    pub fn static_text(&mut self, value: &'static str) {
+        template_lowering!(static_text(&mut self.storage, &mut self.cursor, value));
+    }
+
+    /// Emit a dynamic node slot.
+    pub fn dynamic_node(&mut self, following_static_at_parent: bool) {
+        template_lowering!(dynamic_node(
+            &mut self.storage,
+            &mut self.cursor,
+            following_static_at_parent
+        ));
+    }
+
+    /// Finish this builder and return a leaked template.
+    pub fn finish(mut self) -> Template {
+        self.cursor.finish();
+        self.storage.sort_anchors_in_fill_order();
+        self.storage.into_leaked_template()
+    }
+}
+
+impl RuntimeTemplateStorage {
+    fn into_leaked_template(self) -> Template {
+        Template::new(
+            Box::leak(self.ops.into_boxed_slice()),
+            Box::leak(self.strings.into_boxed_slice()),
+            Box::leak(self.anchors.into_boxed_slice()),
+        )
+    }
+
+    template_storage_methods!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn template_from_tree(tree: &'static TemplateRawTree) -> Template {
+        TemplateStorage::<64, 64, 16>::build_from_tree(tree).into_leaked_template()
+    }
+
+    fn anchor_parts(template: Template) -> Vec<(u16, u128, u16, u16)> {
+        template
+            .anchors()
+            .iter()
+            .map(|anchor| {
+                (
+                    anchor.parent_op_index,
+                    anchor.path,
+                    anchor.value_start,
+                    anchor.value_count,
+                )
+            })
+            .collect()
+    }
+
+    fn assert_same_template(actual: Template, expected: Template) {
+        assert_eq!(actual.ops(), expected.ops());
+        assert_eq!(actual.strings(), expected.strings());
+        assert_eq!(anchor_parts(actual), anchor_parts(expected));
+    }
+
+    #[test]
+    fn runtime_builder_matches_tree_for_nested_namespaces_and_dynamic_attrs() {
+        static ATTR: TemplateRawTree = TemplateRawTree::StaticAttr {
+            name: "fill",
+            value: "red",
+            namespace: Some("style"),
+        };
+        static ATTRS: [&TemplateRawTree; 2] = [&ATTR, &TemplateRawTree::DynamicAttr];
+        static ATTRS_TREE: TemplateRawTree = TemplateRawTree::Sequence(&ATTRS);
+        static TEXT: TemplateRawTree = TemplateRawTree::StaticText("hello");
+        static INNER_CHILDREN: [&TemplateRawTree; 1] = [&TemplateRawTree::DynamicNode];
+        static INNER_CHILDREN_TREE: TemplateRawTree = TemplateRawTree::Sequence(&INNER_CHILDREN);
+        static INNER: TemplateRawTree = TemplateRawTree::Element {
+            tag: "span",
+            namespace: None,
+            attrs: &TemplateRawTree::Empty,
+            children: &INNER_CHILDREN_TREE,
+        };
+        static CHILDREN: [&TemplateRawTree; 2] = [&TEXT, &INNER];
+        static CHILDREN_TREE: TemplateRawTree = TemplateRawTree::Sequence(&CHILDREN);
+        static TREE: TemplateRawTree = TemplateRawTree::Element {
+            tag: "svg",
+            namespace: Some("svg"),
+            attrs: &ATTRS_TREE,
+            children: &CHILDREN_TREE,
+        };
+
+        let mut builder = RuntimeTemplateBuilder::new();
+        builder.open_element("svg", Some("svg"));
+        builder.static_attr("fill", "red", Some("style"));
+        builder.dynamic_attr();
+        builder.static_text("hello");
+        builder.open_element("span", None);
+        builder.dynamic_node(false);
+        builder.close_element();
+        builder.close_element();
+
+        assert_same_template(builder.finish(), template_from_tree(&TREE));
+    }
+
+    #[test]
+    fn runtime_builder_places_dynamic_nodes_before_static_siblings() {
+        static TEXT: TemplateRawTree = TemplateRawTree::StaticText("after");
+        static CHILDREN: [&TemplateRawTree; 2] = [&TemplateRawTree::DynamicNode, &TEXT];
+        static TREE: TemplateRawTree = TemplateRawTree::Sequence(&CHILDREN);
+
+        let mut builder = RuntimeTemplateBuilder::new();
+        builder.dynamic_node(true);
+        builder.static_text("after");
+
+        assert_same_template(builder.finish(), template_from_tree(&TREE));
+    }
+
+    #[test]
+    fn runtime_builder_groups_adjacent_trailing_dynamic_nodes() {
+        static CHILDREN: [&TemplateRawTree; 2] =
+            [&TemplateRawTree::DynamicNode, &TemplateRawTree::DynamicNode];
+        static TREE: TemplateRawTree = TemplateRawTree::Sequence(&CHILDREN);
+
+        let mut builder = RuntimeTemplateBuilder::new();
+        builder.dynamic_node(false);
+        builder.dynamic_node(false);
+
+        let template = builder.finish();
+        assert_same_template(template, template_from_tree(&TREE));
+        assert_eq!(template.anchors()[0].values(), 0..2);
+    }
+
+    #[test]
+    fn stats_builder_can_overestimate_unknown_namespaces() {
+        let mut stats = TemplateStatsBuilder::new();
+        stats.open_element(None);
+        stats.static_attr(None);
+        stats.close_element();
+        let stats = stats.finish();
+
+        static ATTR: TemplateRawTree = TemplateRawTree::StaticAttr {
+            name: "class",
+            value: "name",
+            namespace: None,
+        };
+        static TREE: TemplateRawTree = TemplateRawTree::Element {
+            tag: "div",
+            namespace: None,
+            attrs: &ATTR,
+            children: &TemplateRawTree::Empty,
+        };
+        let template = template_from_tree(&TREE);
+
+        assert!(stats.ops >= template.ops().len());
+        assert!(stats.strings >= template.strings().len());
+        assert_eq!(stats.anchors, template.anchors().len());
+        assert_eq!(stats.dynamic_values, template.dynamic_value_count());
     }
 }

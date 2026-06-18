@@ -4,7 +4,7 @@
 //! better fit than an `rsx!` block. It supports the same elements, attributes,
 //! events, and child values you would use in regular Dioxus components.
 
-use dioxus::{dioxus_core::view::ViewExt, html, prelude::*};
+use dioxus::{html, prelude::*};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Metric {
@@ -37,13 +37,10 @@ fn main() {
 
 fn app() -> Element {
     Ok(Dashboard
-        .with_props(
-            Dashboard
-                .builder()
-                .title("HTML builder API")
-                .metrics(METRICS)
-                .build(),
-        )
+        .builder()
+        .title("HTML builder API")
+        .metrics(METRICS)
+        .build()
         .into_vnode())
 }
 
@@ -52,19 +49,18 @@ fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Elemen
     Ok(html::main()
         .onclick(|event| println!("{event:?}"))
         .class("dashboard")
-        .child(Header.with_props(Header.builder().title(title).total(metrics.len()).build()))
-        .child(
+        .child((
+            Header.builder().title(title).total(metrics.len()).build(),
             html::section().class("metric-grid").child(
-                metrics.iter().copied().map(|metric| {
-                    MetricCard.with_props(MetricCard.builder().metric(metric).build())
-                }),
+                metrics
+                    .iter()
+                    .copied()
+                    .map(|metric| MetricCard.builder().metric(metric).build()),
             ),
-        )
-        .child(
             html::footer()
                 .class("note")
                 .child("Created with typed HTML builders and component props builders."),
-        )
+        ))
         .into_vnode())
 }
 
@@ -72,11 +68,13 @@ fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Elemen
 fn Header(#[props(into)] title: String, total: usize) -> Element {
     Ok(html::header()
         .class("intro")
-        .child(html::p().class("eyebrow").child("typed views"))
-        .child(html::h1().child(title))
-        .child(html::p().child(format!(
-            "{total} cards are rendered from a runtime iterator."
-        )))
+        .child((
+            html::p().class("eyebrow").child("typed views"),
+            html::h1().child(title),
+            html::p().child(format!(
+                "{total} cards are rendered from a runtime iterator."
+            )),
+        ))
         .into_vnode())
 }
 
@@ -84,12 +82,12 @@ fn Header(#[props(into)] title: String, total: usize) -> Element {
 fn MetricCard(metric: Metric) -> Element {
     Ok(html::article()
         .class("metric-card")
-        .child(html::span().class("metric-label").child(metric.label))
-        .child(html::strong().child(metric.value))
-        .child(
+        .child((
+            html::span().class("metric-label").child(metric.label),
+            html::strong().child(metric.value),
             html::small()
                 .class("metric-status")
                 .child(format!("status: {}", metric.status)),
-        )
+        ))
         .into_vnode())
 }

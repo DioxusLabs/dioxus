@@ -46,20 +46,21 @@ impl PlatformEventData {
     }
 }
 
-#[doc(hidden)]
+/// Marker for event handlers provided as closures.
 pub struct EventClosureMarker<Marker>(std::marker::PhantomData<Marker>);
 
-#[doc(hidden)]
+/// Marker for event handlers provided as listener callbacks.
 pub struct EventListenerMarker;
 
-#[doc(hidden)]
+/// Marker for event handlers provided as callbacks.
 pub struct EventCallbackMarker;
 
-#[doc(hidden)]
+/// A value that can be converted into a platform event listener.
 pub trait EventHandlerValue<Data, Marker>
 where
     Data: for<'a> From<&'a PlatformEventData> + 'static,
 {
+    /// Convert this handler into a platform event listener.
     fn into_platform_listener(self) -> ::dioxus_core::ListenerCallback<PlatformEventData>;
 }
 

@@ -46,6 +46,31 @@ fn mixed_dynamic_attr_and_child() -> Element {
     }
 }
 
+fn dynamic_attr_and_trailing_dynamic_child() -> Element {
+    let id = "outer";
+    let label = "before";
+
+    rsx! {
+        div {
+            id: "{id}",
+            "{label}"
+            button { "middle" }
+            TailComponent {
+                id: 7
+            }
+        }
+    }
+}
+
+#[component]
+fn TailComponent(id: i32) -> Element {
+    rsx! {
+        span {
+            "{id}"
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 fn EmptyHeadLikeComponent() -> Element {
     VNode::empty()
@@ -182,7 +207,7 @@ fn dynamic_attr_and_child_share_one_anchor() {
         .collect::<Vec<_>>();
 
     assert_eq!(anchors.len(), 1);
-    assert_eq!(anchors[0].value_count(), 2);
+    assert_eq!(anchors[0].values(), 0..2);
     assert_eq!(vnode.dynamic_attr_indices_for_anchor(anchors[0]).count(), 1);
     assert_eq!(vnode.dynamic_node_indices_for_anchor(anchors[0]).count(), 1);
 
@@ -190,6 +215,48 @@ fn dynamic_attr_and_child_share_one_anchor() {
     let mut oracle = RendererOracle::new();
     oracle.rebuild(&mut dom);
     oracle.assert_matches(mixed_dynamic_attr_and_child);
+}
+
+#[test]
+fn dynamic_attr_and_trailing_dynamic_child_share_append_anchor() {
+    let vnode = dynamic_attr_and_trailing_dynamic_child().unwrap();
+    let div = vnode
+        .template
+        .root_slots()
+        .find_map(|(_, op, _)| op)
+        .expect("expected a static root element");
+    let anchors = vnode
+        .template
+        .element_dynamic_anchors(div)
+        .collect::<Vec<_>>();
+
+    assert_eq!(anchors.len(), 2);
+
+    let append_anchor = anchors
+        .iter()
+        .copied()
+        .find(|anchor| {
+            matches!(
+                anchor.slot_target(),
+                TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
+            )
+        })
+        .expect("expected parent append anchor");
+
+    assert_eq!(append_anchor.values(), 1..3);
+    assert_eq!(
+        vnode.dynamic_attr_indices_for_anchor(append_anchor).count(),
+        1
+    );
+    assert_eq!(
+        vnode.dynamic_node_indices_for_anchor(append_anchor).count(),
+        1
+    );
+
+    let mut dom = VirtualDom::new(dynamic_attr_and_trailing_dynamic_child);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(dynamic_attr_and_trailing_dynamic_child);
 }
 
 #[test]
@@ -222,7 +289,7 @@ fn separated_empty_fragment_slots_stay_inside_static_parent() {
     let before_span = anchors
         .iter()
         .copied()
-        .find(|anchor| anchor.value_start() == 0)
+        .find(|anchor| anchor.values() == (0..1))
         .expect("expected leading empty fragment anchor");
     assert!(matches!(
         before_span.slot_target(),
@@ -232,7 +299,7 @@ fn separated_empty_fragment_slots_stay_inside_static_parent() {
     let after_span = anchors
         .iter()
         .copied()
-        .find(|anchor| anchor.value_start() == 1)
+        .find(|anchor| anchor.values() == (1..2))
         .expect("expected trailing empty fragment anchor");
     assert!(matches!(
         after_span.slot_target(),

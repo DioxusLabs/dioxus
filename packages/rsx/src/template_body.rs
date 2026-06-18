@@ -2,7 +2,7 @@
 
 use self::location::DynIdx;
 use crate::*;
-use dioxus_core_template::{TemplateRawOp, TemplateStorageStats};
+use dioxus_core_template::{TemplateStatsBuilder, TemplateStorageStats};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
@@ -184,9 +184,7 @@ impl ViewBuilderPieces {
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
         let view = builder.visit_element(element, true);
-        let mut raw = Vec::new();
-        builder.push_element_raw_ops(element, &mut raw);
-        let template_stats = TemplateStorageStats::from_raw_ops(&raw);
+        let template_stats = builder.element_storage_stats(element);
         builder.finish(view, template_stats)
     }
 
@@ -338,6 +336,10 @@ impl ViewBuilder {
 
     fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TokenStream2 {
         let tag = self.element_tag(element);
+        let children =
+            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren);
+        let children = quote! { (#(#children,)*) };
+
         let mut attrs = TokenStream2::new();
         for attr in &element.merged_attributes {
             attrs.extend(element.typed_builder_attribute(attr, self));
@@ -349,10 +351,6 @@ impl ViewBuilder {
                 self.hot_reload_key = Some(key);
             }
         }
-
-        let children =
-            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren);
-        let children = quote! { (#(#children,)*) };
 
         quote! { #tag #attrs.with_children(#children) }
     }
@@ -522,15 +520,32 @@ impl ViewBuilder {
         let mut chunk_builder = ViewBuilder::new();
         let roots = nodes
             .iter()
-            .map(|node| chunk_builder.visit_node(node, false))
-            .map(|expr| quote! { #expr.into_vnode() })
+            .map(|node| {
+                // Each chunk root becomes its own template, so it needs its own storage capacity,
+                // computed the same way as the top-level view. A bare `ViewExt::into_vnode` would
+                // fall back to the fixed `RELEASE_FALLBACK_*_CAP`, which overflows for large
+                // chunked subtrees — and chunking is triggered precisely because the template is
+                // large.
+                let stats = chunk_builder.sibling_storage_stats(std::slice::from_ref(node));
+                let ops = stats.ops;
+                let strings = stats.strings;
+                let dynamic = stats.anchors;
+                let expr = chunk_builder.visit_node(node, false);
+                quote! {
+                    dioxus_core::internal::into_vnode_with_key_and_capacity::<
+                        #ops,
+                        #strings,
+                        #dynamic,
+                        _,
+                    >(#expr, None)
+                }
+            })
             .collect::<Vec<_>>();
         let template_stats =
             chunk_builder.final_sibling_storage_stats(nodes, SiblingContext::Roots);
         let chunk = chunk_builder.finish(quote! { () }, template_stats);
         let definitions = chunk.definitions();
         let tokens = quote! {{
-            use dioxus_core::view::ViewExt as _;
             #(#definitions)*
             dioxus_core::DynamicNode::Fragment(vec![#(#roots),*])
         }};
@@ -568,9 +583,9 @@ impl ViewBuilder {
     }
 
     fn sibling_storage_stats(&self, nodes: &[BodyNode]) -> TemplateStorageStats {
-        let mut raw = Vec::new();
-        self.push_sibling_raw_ops(nodes, &mut raw);
-        TemplateStorageStats::from_raw_ops(&raw)
+        let mut stats = TemplateStatsBuilder::new();
+        self.push_sibling_stats(nodes, &mut stats);
+        stats.finish()
     }
 
     fn final_sibling_storage_stats(
@@ -578,16 +593,22 @@ impl ViewBuilder {
         nodes: &[BodyNode],
         context: SiblingContext,
     ) -> TemplateStorageStats {
-        let mut raw = Vec::new();
-        self.push_final_sibling_raw_ops(nodes, context, &mut raw);
-        TemplateStorageStats::from_raw_ops(&raw)
+        let mut stats = TemplateStatsBuilder::new();
+        self.push_final_sibling_stats(nodes, context, &mut stats);
+        stats.finish()
     }
 
-    fn push_final_sibling_raw_ops(
+    fn element_storage_stats(&self, element: &Element) -> TemplateStorageStats {
+        let mut stats = TemplateStatsBuilder::new();
+        self.push_element_stats(element, &mut stats);
+        stats.finish()
+    }
+
+    fn push_final_sibling_stats(
         &self,
         nodes: &[BodyNode],
         context: SiblingContext,
-        raw: &mut Vec<TemplateRawOp>,
+        stats: &mut TemplateStatsBuilder,
     ) {
         if self.should_chunk_siblings(nodes, context) {
             let chunks = if matches!(context, SiblingContext::Roots) {
@@ -595,70 +616,87 @@ impl ViewBuilder {
             } else {
                 self.synthetic_chunk_ranges(nodes, context).len()
             };
-            raw.extend(std::iter::repeat_n(TemplateRawOp::DynamicNode, chunks));
+            for _ in 0..chunks {
+                stats.dynamic_node(false);
+            }
             return;
         }
 
-        self.push_sibling_raw_ops(nodes, raw);
+        self.push_sibling_stats(nodes, stats);
     }
 
-    fn push_sibling_raw_ops(&self, nodes: &[BodyNode], raw: &mut Vec<TemplateRawOp>) {
-        for node in nodes {
-            self.push_node_raw_ops(node, raw);
+    fn push_sibling_stats(&self, nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
+        for (index, node) in nodes.iter().enumerate() {
+            self.push_node_stats(
+                node,
+                Self::siblings_have_static_node(nodes, index + 1),
+                stats,
+            );
         }
     }
 
-    fn push_node_raw_ops(&self, node: &BodyNode, raw: &mut Vec<TemplateRawOp>) {
+    fn push_node_stats(
+        &self,
+        node: &BodyNode,
+        following_static_at_parent: bool,
+        stats: &mut TemplateStatsBuilder,
+    ) {
         match node {
-            BodyNode::Element(element) => self.push_element_raw_ops(element, raw),
-            BodyNode::Text(text) if text.is_static() => {
-                raw.push(TemplateRawOp::StaticText { value: "" })
-            }
+            BodyNode::Element(element) => self.push_element_stats(element, stats),
+            BodyNode::Text(text) if text.is_static() => stats.static_text(),
             BodyNode::Text(_)
             | BodyNode::RawExpr(_)
             | BodyNode::Component(_)
             | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_) => raw.push(TemplateRawOp::DynamicNode),
+            | BodyNode::IfChain(_) => stats.dynamic_node(following_static_at_parent),
         }
     }
 
-    fn push_element_raw_ops(&self, element: &Element, raw: &mut Vec<TemplateRawOp>) {
-        raw.push(TemplateRawOp::OpenElement {
-            tag: "",
-            namespace: None,
-        });
+    fn push_element_stats(&self, element: &Element, stats: &mut TemplateStatsBuilder) {
+        stats.open_element(None);
 
         for attr in &element.merged_attributes {
-            self.push_attribute_raw_op(element, attr, raw);
+            self.push_attribute_stats(element, attr, stats);
         }
 
         if self.should_chunk_siblings(&element.children, SiblingContext::ElementChildren) {
             for _ in self.synthetic_chunk_ranges(&element.children, SiblingContext::ElementChildren)
             {
-                raw.push(TemplateRawOp::DynamicNode);
+                stats.dynamic_node(false);
             }
         } else {
-            self.push_sibling_raw_ops(&element.children, raw);
+            self.push_sibling_stats(&element.children, stats);
         }
 
-        raw.push(TemplateRawOp::CloseElement);
+        stats.close_element();
     }
 
-    fn push_attribute_raw_op(
+    fn push_attribute_stats(
         &self,
         element: &Element,
         attr: &Attribute,
-        raw: &mut Vec<TemplateRawOp>,
+        stats: &mut TemplateStatsBuilder,
     ) {
         if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
-            let namespace = attr.name.resolved(&element.name).namespace.map(|_| "");
-            raw.push(TemplateRawOp::StaticAttr {
-                name: "",
-                value: "",
-                namespace,
-            });
+            let namespace = attr.name.resolved(&element.name).namespace.map(|_| true);
+            stats.static_attr(namespace);
         } else {
-            raw.push(TemplateRawOp::DynamicAttr);
+            stats.dynamic_attr();
+        }
+    }
+
+    fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
+        nodes[start..].iter().any(Self::node_has_static_root)
+    }
+
+    fn node_has_static_root(node: &BodyNode) -> bool {
+        match node {
+            BodyNode::Element(_) => true,
+            BodyNode::Text(text) => text.is_static(),
+            BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_) => false,
         }
     }
 }

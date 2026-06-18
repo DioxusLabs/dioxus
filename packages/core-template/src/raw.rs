@@ -1,87 +1,34 @@
-/// One operation in a raw template description.
-#[doc(hidden)]
+/// A compact static tree of template structure.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TemplateRawOp {
-    /// Open an element.
-    OpenElement {
+pub enum TemplateRawTree {
+    /// No template structure.
+    Empty,
+    /// A sequence of template trees.
+    Sequence(&'static [&'static TemplateRawTree]),
+    /// An element with static attributes and children.
+    Element {
         /// Static tag name.
         tag: &'static str,
         /// Optional element namespace.
         namespace: Option<&'static str>,
+        /// Static and dynamic attributes.
+        attrs: &'static TemplateRawTree,
+        /// Child nodes.
+        children: &'static TemplateRawTree,
     },
-    /// Close the current element.
-    CloseElement,
-    /// Static attribute on the current element.
+    /// A static attribute.
     StaticAttr {
         /// Static attribute name.
         name: &'static str,
         /// Static attribute value.
         value: &'static str,
-        /// Attribute namespace.
+        /// Optional attribute namespace.
         namespace: Option<&'static str>,
     },
-    /// Dynamic attribute slot on the current element.
+    /// A dynamic attribute slot.
     DynamicAttr,
-    /// Static text node.
-    StaticText {
-        /// Static text value.
-        value: &'static str,
-    },
-    /// Dynamic node slot.
-    DynamicNode,
-}
-
-impl TemplateRawOp {
-    /// Create an open-element raw op.
-    pub const fn open_element(tag: &'static str, namespace: Option<&'static str>) -> Self {
-        Self::OpenElement { tag, namespace }
-    }
-
-    /// Create a close-element raw op.
-    pub const fn close_element() -> Self {
-        Self::CloseElement
-    }
-
-    /// Create a dynamic-attribute raw op.
-    pub const fn dynamic_attr() -> Self {
-        Self::DynamicAttr
-    }
-
-    /// Create a static-text raw op.
-    pub const fn static_text(value: &'static str) -> Self {
-        Self::StaticText { value }
-    }
-
-    /// Create a dynamic-node raw op.
-    pub const fn dynamic_node() -> Self {
-        Self::DynamicNode
-    }
-}
-
-/// A compact static tree of template structure.
-#[doc(hidden)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TemplateRawTree {
-    Empty,
-    Sequence(&'static [&'static TemplateRawTree]),
-    Element {
-        tag: &'static str,
-        namespace: Option<&'static str>,
-        attrs: &'static TemplateRawTree,
-        children: &'static TemplateRawTree,
-    },
-    StaticAttr {
-        name: &'static str,
-        value: &'static str,
-        namespace: Option<&'static str>,
-    },
-    DynamicAttr,
+    /// A static text node.
     StaticText(&'static str),
+    /// A dynamic node slot.
     DynamicNode,
-}
-
-impl TemplateRawTree {
-    pub const DYNAMIC_ATTR: &'static Self = &Self::DynamicAttr;
-    pub const DYNAMIC_NODE: &'static Self = &Self::DynamicNode;
-    pub const EMPTY: &'static Self = &Self::Empty;
 }

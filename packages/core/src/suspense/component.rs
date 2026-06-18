@@ -50,18 +50,80 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
+
+#[must_use]
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub struct SuspenseBoundaryComponentBuilder<RenderFn, Marker, TypedBuilderFields> {
+    render_fn: RenderFn,
+    builder: SuspenseBoundaryPropsBuilder<TypedBuilderFields>,
+    _marker: std::marker::PhantomData<fn() -> Marker>,
+}
+
 impl Properties for SuspenseBoundaryProps
 where
     Self: Clone,
 {
     type Builder = SuspenseBoundaryPropsBuilder<((), ())>;
+    type ComponentBuilder<RenderFn, Marker> =
+        SuspenseBoundaryComponentBuilder<RenderFn, Marker, ((), ())>;
+
     fn builder() -> Self::Builder {
         SuspenseBoundaryProps::builder()
     }
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        SuspenseBoundaryComponentBuilder {
+            render_fn,
+            builder: Self::builder(),
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     fn memoize(&mut self, new: &Self) -> bool {
         self.fallback.__point_to(&new.fallback);
         self.children = new.children.clone();
         false
+    }
+}
+
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<RenderFn, ComponentMarker, __children>
+    SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, ((), __children)>
+{
+    #[allow(clippy::type_complexity)]
+    pub fn fallback<__Marker>(
+        self,
+        fallback: impl SuperInto<Callback<SuspenseContext, Element>, __Marker>,
+    ) -> SuspenseBoundaryComponentBuilder<
+        RenderFn,
+        ComponentMarker,
+        ((Callback<SuspenseContext, Element>,), __children),
+    > {
+        SuspenseBoundaryComponentBuilder {
+            render_fn: self.render_fn,
+            builder: self.builder.fallback(fallback),
+            _marker: self._marker,
+        }
+    }
+}
+
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<RenderFn, ComponentMarker, __fallback>
+    SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, (__fallback, ())>
+{
+    #[allow(clippy::type_complexity)]
+    pub fn children(
+        self,
+        children: Element,
+    ) -> SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, (__fallback, (Element,))> {
+        SuspenseBoundaryComponentBuilder {
+            render_fn: self.render_fn,
+            builder: self.builder.children(children),
+            _marker: self._marker,
+        }
     }
 }
 #[doc(hidden)]
@@ -201,11 +263,31 @@ impl SuspenseBoundaryPropsWithOwner {
         )
     }
 }
+
+impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for SuspenseBoundaryPropsWithOwner
+where
+    RenderFn: ComponentFunction<SuspenseBoundaryProps, Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        SuspenseBoundaryPropsWithOwner::into_vcomponent(self, render_fn)
+    }
+}
+
 impl Properties for SuspenseBoundaryPropsWithOwner {
     type Builder = ();
+    type ComponentBuilder<RenderFn, Marker> = ();
+
     fn builder() -> Self::Builder {
         unreachable!()
     }
+
+    fn component_builder<RenderFn, Marker>(
+        _render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        unreachable!()
+    }
+
     fn memoize(&mut self, new: &Self) -> bool {
         self.inner.memoize(&new.inner)
     }
@@ -227,6 +309,22 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
         }
     }
 }
+
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<RenderFn, ComponentMarker, __children: SuspenseBoundaryPropsBuilder_Optional<Element>>
+    SuspenseBoundaryComponentBuilder<
+        RenderFn,
+        ComponentMarker,
+        ((Callback<SuspenseContext, Element>,), __children),
+    >
+{
+    pub fn build(
+        self,
+    ) -> ComponentBuilderOutput<RenderFn, SuspenseBoundaryPropsWithOwner, ComponentMarker> {
+        ComponentBuilderOutput::new(self.render_fn, self.builder.build())
+    }
+}
+
 #[automatically_derived]
 #[allow(non_camel_case_types)]
 impl ::core::cmp::PartialEq for SuspenseBoundaryProps {

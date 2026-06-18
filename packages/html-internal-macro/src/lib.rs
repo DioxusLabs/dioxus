@@ -564,7 +564,7 @@ impl DefineElements {
 
         quote! {
             #(
-                #[doc(hidden)]
+                /// Marker trait for elements that support a gated attribute.
                 pub trait #markers {}
             )*
         }
@@ -730,7 +730,7 @@ impl ElementDef {
             let volatile = attr.metadata.volatile;
 
             quote! {
-                #[doc(hidden)]
+                /// Static metadata for this generated attribute.
                 pub struct #descriptor;
 
                 impl #core::view::AttributeDescriptor for #descriptor {
@@ -780,7 +780,7 @@ impl ElementDef {
 
         quote! {
             #[allow(non_camel_case_types)]
-            #[doc(hidden)]
+            /// Static metadata for this generated element.
             pub struct #tag;
 
             impl #core::view::ElementTag for #tag {
@@ -1043,7 +1043,7 @@ impl ToTokens for ImplExtensionAttributes {
                 .unwrap_or_else(|| quote! { ::std::option::Option::None });
             let volatile = attr.metadata.volatile;
             quote! {
-                #[doc(hidden)]
+                /// Static metadata for this generated attribute.
                 pub struct #descriptor;
 
                 impl ::dioxus_core::view::AttributeDescriptor for #descriptor {

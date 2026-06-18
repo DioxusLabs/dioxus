@@ -1,7 +1,6 @@
 use std::num::NonZeroU128;
 
 /// A compact path from a template root to a static node or dynamic attribute.
-#[doc(hidden)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TemplatePath {
     path: u128,
@@ -9,7 +8,7 @@ pub struct TemplatePath {
 
 impl TemplatePath {
     /// Create an empty path.
-    pub const fn empty() -> Self {
+    pub(crate) const fn empty() -> Self {
         Self { path: 0 }
     }
 
@@ -35,21 +34,21 @@ impl TemplatePath {
     }
 
     /// Return the path for the first child of this path.
-    pub const fn next_child(self) -> Self {
+    pub(crate) const fn next_child(self) -> Self {
         Self {
             path: (self.path << 1) | 1,
         }
     }
 
     /// Return the path for the next sibling of this path.
-    pub const fn next_sibling(self) -> Self {
+    pub(crate) const fn next_sibling(self) -> Self {
         Self {
             path: self.path << 1,
         }
     }
 
     /// Return the parent path.
-    pub const fn parent(self) -> Self {
+    pub(crate) const fn parent(self) -> Self {
         Self {
             path: self.path >> 1,
         }
@@ -112,7 +111,7 @@ impl TemplatePath {
     }
 
     /// Return the number of raw child/sibling bits in this path.
-    pub fn bit_len(self) -> u32 {
+    pub(crate) fn bit_len(self) -> u32 {
         u128::BITS - self.path.leading_zeros()
     }
 }
@@ -120,13 +119,11 @@ impl TemplatePath {
 /// A tagged dynamic node slot target.
 ///
 /// The low bit is the target kind. The remaining high bits are a [`TemplatePath`] payload.
-#[doc(hidden)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateSlotPath(NonZeroU128);
 
 /// The resolved renderer target for a dynamic node slot.
-#[doc(hidden)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TemplateSlotTarget {
     /// Insert before a static node.
@@ -155,7 +152,7 @@ impl TemplateSlotPath {
     }
 
     /// Create a dynamic slot target before a static node.
-    pub const fn before_static(path: TemplatePath) -> Self {
+    pub(crate) const fn before_static(path: TemplatePath) -> Self {
         if path.is_empty() {
             panic!("bad slot target");
         }
@@ -163,17 +160,17 @@ impl TemplateSlotPath {
     }
 
     /// Create a dynamic slot target that appends to a parent.
-    pub const fn append_children(path: TemplatePath) -> Self {
+    pub(crate) const fn append_children(path: TemplatePath) -> Self {
         Self::new(Self::encode_payload(path) | Self::TARGET_APPEND_CHILDREN)
     }
 
     /// Create a slot path from raw bits.
-    pub const fn from_bits(bits: u128) -> Self {
+    pub(crate) const fn from_bits(bits: u128) -> Self {
         Self::new(bits)
     }
 
     /// Return the raw tagged bits.
-    pub const fn bits(self) -> u128 {
+    pub(crate) const fn bits(self) -> u128 {
         self.0.get()
     }
 
@@ -215,7 +212,7 @@ impl TemplateSlotPath {
     }
 
     /// Return the fill-order depth for this slot.
-    pub const fn fill_depth(self) -> usize {
+    pub(crate) const fn fill_depth(self) -> usize {
         match self.target() {
             TemplateSlotTarget::BeforeStatic(path) => path.len(),
             TemplateSlotTarget::AppendChildren(path) => path.len() + 1,

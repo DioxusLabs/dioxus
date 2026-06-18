@@ -89,6 +89,21 @@ impl Component {
 
         // Create props either from manual props or from the builder approach
         let props = self.create_props(literal_ids);
+        let component = if self.manual_props().is_some() {
+            quote! {
+                ({
+                    #props
+                }).into_vcomponent(
+                    #name #generics,
+                )
+            }
+        } else {
+            quote! {
+                ({
+                    #props
+                }).into_vcomponent()
+            }
+        };
 
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
@@ -99,11 +114,7 @@ impl Component {
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
                 use dioxus_core::Properties;
-                let __comp = ({
-                    #props
-                }).into_vcomponent(
-                    #name #generics,
-                );
+                let __comp = #component;
                 #diagnostics
                 __comp
             })

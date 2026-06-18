@@ -572,7 +572,10 @@ impl SsrRendererPool {
 
         for (root_idx, static_op, dynamic_anchor) in template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
-                let node_index = anchor.value_start();
+                let node_index = anchor
+                    .values()
+                    .next()
+                    .expect("hydration data anchor must contain a dynamic value");
                 let dynamic_node = vnode.dynamic_values[node_index]
                     .as_node()
                     .expect("hydration data node slot must point at a dynamic node");
@@ -608,9 +611,10 @@ impl SsrRendererPool {
         anchor: TemplateAnchor,
         root_path: TemplatePath,
     ) -> bool {
-        vnode.dynamic_values[anchor.value_start()]
-            .as_node()
-            .is_some()
+        anchor
+            .values()
+            .next()
+            .is_some_and(|idx| vnode.dynamic_values[idx].as_node().is_some())
             && !anchor.is_root_level()
             && anchor.slot_path().is_inside_static(root_path)
     }
