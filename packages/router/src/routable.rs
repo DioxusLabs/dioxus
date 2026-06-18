@@ -168,6 +168,7 @@ where
 }
 
 /// A marker type for `Option<T>` to implement `FromQueryArgument`.
+#[doc(hidden)]
 pub struct OptionMarker;
 
 impl<T: Default + FromStr> FromQueryArgument<OptionMarker> for Option<T>

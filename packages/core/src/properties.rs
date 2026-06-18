@@ -333,6 +333,7 @@ where
 }
 
 /// Accept any callbacks that take no props
+#[doc(hidden)]
 pub struct EmptyMarker;
 impl<F> ComponentFunction<(), EmptyMarker> for F
 where

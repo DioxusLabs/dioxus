@@ -59,7 +59,7 @@ mod virtual_dom;
 mod hotreload_utils;
 
 /// Items exported from this module are used in macros and should not be used directly.
-#[allow(missing_docs)]
+#[doc(hidden)]
 pub mod internal {
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,

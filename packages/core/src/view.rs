@@ -558,6 +558,7 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
 }
 
 /// Marker for child values that are already typed views.
+#[doc(hidden)]
 pub struct ViewChildMarker;
 
 pub(crate) mod dynamic_node {
@@ -712,6 +713,7 @@ pub const fn static_attribute_value<V: StaticAttributeValue>() -> StaticAttribut
 }
 
 /// Marker for static attribute values passed to typed attribute methods.
+#[doc(hidden)]
 pub struct StaticAttributeValueBuilderMarker;
 
 /// A value that can be appended by a generated attribute builder method.

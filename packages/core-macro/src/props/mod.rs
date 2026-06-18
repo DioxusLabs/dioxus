@@ -1119,15 +1119,18 @@ Finally, call `.build()` to create the instance of `{name}`.
             let extends_impl = field.builder_attr.extends.iter().map(|path| {
                 let name_str = path_to_single_string(path).unwrap();
                 let camel_name = name_str.to_case(Case::UpperCamel);
-                let marker_name = Ident::new(
-                    format!("{}Extension", &camel_name).as_str(),
+                // A spread field accepts every attribute the extended element/group exposes, so
+                // the builder only implements this one marker "super trait". `html` blankets the
+                // umbrella and gated attribute extension traits over it, granting every method.
+                let spread_marker_name = Ident::new(
+                    format!("{}SpreadTarget", &camel_name).as_str(),
                     path.span(),
                 );
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics dioxus_elements::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                    impl #impl_generics dioxus_elements::extensions::#spread_marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #component_builder_impl_generics dioxus_elements::extensions::#marker_name for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {}
+                    impl #component_builder_impl_generics dioxus_elements::extensions::#spread_marker_name for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {}
                 }
             });
 

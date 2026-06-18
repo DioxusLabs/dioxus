@@ -9,6 +9,7 @@ use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
 use dioxus_core_template::deserialize_string_leaky;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 /// A literal value that can be replayed during hot reload.
 pub enum HotReloadLiteral {
@@ -68,6 +69,7 @@ impl Hash for HotReloadLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 /// A formatted string split into static and dynamic segments.
 pub struct FmtedSegments {
@@ -98,6 +100,7 @@ impl FmtedSegments {
 type StaticStr = &'static str;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 /// One segment of a formatted string used by hot reload.
 pub enum FmtSegment {
@@ -129,7 +132,7 @@ pub enum FmtSegment {
 // - Should non-string hot literals go through the centralized pool?
 // - Should formatted strings be a runtime concept?
 
-/// Pool of dynamic literal values used to replay a hot-reloaded template.
+#[doc(hidden)]
 pub struct DynamicLiteralPool {
     dynamic_text: Box<[String]>,
 }
@@ -237,7 +240,7 @@ impl DynamicLiteralPool {
         segments.render_with(&self.dynamic_text)
     }
 }
-/// Pool of dynamic nodes and attributes used to replay a hot-reloaded template.
+#[doc(hidden)]
 pub struct DynamicValuePool {
     dynamic_attributes: Box<[Box<[Attribute]>]>,
     dynamic_nodes: Box<[DynamicNode]>,
@@ -343,6 +346,7 @@ impl DynamicValuePool {
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// A hot-reloaded template with its source location key.
 pub struct HotReloadTemplateWithLocation {
     /// The source location key.
@@ -353,6 +357,7 @@ pub struct HotReloadTemplateWithLocation {
 
 #[derive(Debug, Clone, PartialEq, Hash, PartialOrd, Eq, Ord)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// Source location key for a hot-reload template.
 pub struct TemplateGlobalKey {
     /// Source file path.
@@ -367,6 +372,7 @@ pub struct TemplateGlobalKey {
 
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[doc(hidden)]
 /// Template data and dynamic value mapping for hot reload.
 pub struct HotReloadedTemplate {
     /// Optional dynamic key segments.
@@ -481,6 +487,7 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// The kind and source index of a hot-reload dynamic value slot.
 pub enum HotReloadDynamicSlot {
     /// Dynamic node slot.
@@ -491,6 +498,7 @@ pub enum HotReloadDynamicSlot {
 
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// Dynamic node source for hot reload.
 pub enum HotReloadDynamicNode {
     /// Reuse a dynamic node by index.
@@ -501,6 +509,7 @@ pub enum HotReloadDynamicNode {
 
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// Dynamic attribute source for hot reload.
 pub enum HotReloadDynamicAttribute {
     /// Reuse a dynamic attribute by index.
@@ -511,6 +520,7 @@ pub enum HotReloadDynamicAttribute {
 
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// A named attribute generated for hot reload.
 pub struct NamedAttribute {
     /// The name of this attribute.
@@ -546,6 +556,7 @@ impl NamedAttribute {
 
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 /// Attribute value source for hot reload.
 pub enum HotReloadAttributeValue {
     /// Literal attribute value.

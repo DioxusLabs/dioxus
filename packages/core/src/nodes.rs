@@ -575,9 +575,9 @@ pub struct VText {
 impl VText {
     /// Create a new VText
     #[inline]
-    pub fn new(value: impl Into<String>) -> Self {
+    pub fn new(value: impl ToString) -> Self {
         Self {
-            value: value.into(),
+            value: value.to_string(),
         }
     }
 }
@@ -990,6 +990,7 @@ impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
     }
 }
 
+#[doc(hidden)]
 pub struct AnyFmtMarker;
 impl<T> IntoAttributeValue<AnyFmtMarker> for T
 where

@@ -50,9 +50,11 @@ impl PlatformEventData {
 pub struct EventClosureMarker<Marker>(std::marker::PhantomData<Marker>);
 
 /// Marker for event handlers provided as listener callbacks.
+#[doc(hidden)]
 pub struct EventListenerMarker;
 
 /// Marker for event handlers provided as callbacks.
+#[doc(hidden)]
 pub struct EventCallbackMarker;
 
 /// A value that can be converted into a platform event listener.

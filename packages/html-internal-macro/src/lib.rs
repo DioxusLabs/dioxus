@@ -653,6 +653,7 @@ impl ElementDef {
         let camel_name = self.camel_name();
         let tag = Ident::new(format!("{camel_name}Element").as_str(), name.span());
         let extension_name = self.extension_ident();
+        let spread_marker = self.spread_marker_ident();
         let tag_name = self
             .metadata
             .name
@@ -807,6 +808,18 @@ impl ElementDef {
                 for #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>
             {
             }
+
+            /// Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
+            /// builders) that accept this element's attributes. A spread builder implements only
+            /// this marker; the blanket below grants it the element's attribute methods.
+            pub trait #spread_marker {}
+
+            impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
+            where
+                __DioxusSpreadTarget:
+                    #spread_marker + #core::view::AttributeBuilderTarget,
+            {
+            }
         }
     }
 }
@@ -849,6 +862,16 @@ impl ElementDef {
     fn extension_ident(&self) -> Ident {
         Ident::new(
             format!("{}Extension", self.camel_name()).as_str(),
+            self.name.span(),
+        )
+    }
+
+    /// Marker that lets `#[props(extends = ...)]` spread builders opt into this element's
+    /// attributes. Element extensions are not gated, so it is an empty marker; it exists so
+    /// the props macro can reference one uniformly across element and group extensions.
+    fn spread_marker_ident(&self) -> Ident {
+        Ident::new(
+            format!("{}SpreadTarget", self.camel_name()).as_str(),
             self.name.span(),
         )
     }
@@ -916,8 +939,10 @@ impl ElementDef {
 
     fn extension_export_tokens(&self) -> TokenStream2 {
         let extension = self.extension_ident();
+        let spread_marker = self.spread_marker_ident();
         quote! {
             pub use super::#extension;
+            pub use super::#spread_marker;
         }
     }
 }
@@ -1002,6 +1027,9 @@ impl ToTokens for ImplExtensionAttributes {
             .to_case(Case::UpperCamel);
         let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
         let group_marker = Ident::new(format!("{camel_name}Element").as_str(), name.span());
+        // Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
+        // builders) that accept every attribute in this group, gated ones included.
+        let spread_marker = Ident::new(format!("{camel_name}SpreadTarget").as_str(), name.span());
         let gated_attributes = self
             .gated_attribute_groups
             .iter()
@@ -1146,6 +1174,15 @@ impl ToTokens for ImplExtensionAttributes {
                     __DioxusTag: #group_marker + crate::#marker,
                 {
                 }
+
+                // Spread targets accept every attribute in the group, so they get
+                // gated attributes unconditionally (no per-element marker required).
+                impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
+                where
+                    __DioxusSpreadTarget:
+                        crate::#spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
+                {
+                }
             }
         });
         let element_impl = self.for_el.then(|| {
@@ -1158,11 +1195,27 @@ impl ToTokens for ImplExtensionAttributes {
         tokens.append_all(quote! {
             #(#descriptors)*
 
+            /// Marker for catch-all attribute targets that accept every attribute in this
+            /// group. A `#[props(extends = ...)]` spread builder implements only this marker;
+            /// the blanket impls below grant it the group's full (non-gated and gated)
+            /// attribute extension methods.
+            pub trait #spread_marker {}
+
             pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
                 #(#impls)*
             }
 
             #element_impl
+
+            // Spread targets accept every attribute in the group, so route the (non-gated)
+            // umbrella extension through the marker as well.
+            impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
+            where
+                __DioxusSpreadTarget:
+                    #spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
+            {
+            }
+
             #(#gated_extensions)*
         });
     }
