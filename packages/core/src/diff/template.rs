@@ -146,6 +146,26 @@ impl<'a> DynamicAttrGroup<'a> {
         self.anchor.static_path().len() == 1
     }
 
+    pub(super) fn root_index(&self) -> usize {
+        let path = self.static_path();
+        debug_assert!(
+            !path.is_empty(),
+            "dynamic attribute group must target a static root"
+        );
+        let static_root_idx = path.segment(0) as usize;
+        let mut current_static_root = 0;
+        for (root_idx, static_op, _) in self.template.root_slots() {
+            if static_op.is_none() {
+                continue;
+            }
+            if current_static_root == static_root_idx {
+                return root_idx;
+            }
+            current_static_root += 1;
+        }
+        panic!("dynamic attribute group must belong to a static template root");
+    }
+
     pub(super) fn first_id(&self) -> usize {
         self.ids()
             .next()

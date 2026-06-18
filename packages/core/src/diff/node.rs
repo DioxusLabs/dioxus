@@ -1043,16 +1043,16 @@ impl VNode {
         to: &mut dyn WriteMutations,
     ) -> MountedElementId {
         let cursor = group.static_path();
+        let root_idx = group.root_index();
         // This is just the root node. We already know it's id
         if group.is_root_level() {
-            return dom.unchecked_mounted_root_node(mount, cursor.segment(0) as usize);
+            return dom.unchecked_mounted_root_node(mount, root_idx);
         }
 
         // The node is deeper in the template and we should create a new id for it
         let target_id = dom.current_render_target_id();
         let id = dom.next_element_in_target(target_id);
 
-        let root_idx = cursor.segment(0) as usize;
         let root_id = dom.unchecked_mounted_root_node(mount, root_idx);
         with_consumed_id(to, root_id.element_id(), |to| {
             for depth in 1..cursor.len() {

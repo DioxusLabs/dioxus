@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_core::VNode;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 
 dioxus::html::define_elements! {
@@ -41,6 +42,25 @@ fn mixed_dynamic_attr_and_child() -> Element {
         div {
             class: "{class}",
             "{label}"
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+fn EmptyHeadLikeComponent() -> Element {
+    VNode::empty()
+}
+
+fn root_dynamic_before_static_root_with_nested_dynamic_attr() -> Element {
+    let class = "body";
+
+    rsx! {
+        EmptyHeadLikeComponent {}
+        section {
+            span {
+                class: "{class}",
+                "body"
+            }
         }
     }
 }
@@ -124,4 +144,13 @@ fn dynamic_attr_and_child_share_one_anchor() {
     let mut oracle = RendererOracle::new();
     oracle.rebuild(&mut dom);
     oracle.assert_matches(mixed_dynamic_attr_and_child);
+}
+
+#[test]
+fn nested_dynamic_attr_after_root_dynamic_uses_static_root_slot() {
+    let mut dom = VirtualDom::new(root_dynamic_before_static_root_with_nested_dynamic_attr);
+    let mut oracle = RendererOracle::new();
+
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(root_dynamic_before_static_root_with_nested_dynamic_attr);
 }
