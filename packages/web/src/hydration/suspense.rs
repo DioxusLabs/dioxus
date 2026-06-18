@@ -235,14 +235,7 @@ impl WebsysDom {
         if let Some(suspense) =
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
         {
-            let has_tasks = suspense.has_suspended_tasks();
-            tracing::error!(
-                "tracking suspense {:?}: has_tasks={has_tasks} is_suspended={} has_dom_root={}",
-                scope.id(),
-                suspense.is_suspended(),
-                scope_has_dom_root(scope, dom)
-            );
-            if !has_tasks {
+            if !suspense.is_suspended() || !suspense.has_suspended_tasks() {
                 return;
             }
             // Streaming hydration can only target boundaries that rendered a

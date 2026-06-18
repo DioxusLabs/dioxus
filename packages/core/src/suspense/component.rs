@@ -522,6 +522,162 @@ fn suspense_create(
 }
 
 impl SuspenseBoundaryProps {
+    /// During hydration, SSR may have emitted a suspense boundary's primary
+    /// branch even though the client rebuild initially sees the boundary as
+    /// suspended. If the fallback has no DOM roots, there is no placeholder to
+    /// hydrate; the existing server DOM corresponds to the retained primary
+    /// branch. Promote those retained branches before the hydration walker
+    /// assigns DOM ids.
+    ///
+    /// This should only be called by renderers while hydrating existing DOM.
+    pub fn hydrate_suspended_primary_branches(scope_id: ScopeId, dom: &mut VirtualDom) {
+        fn vnode_has_dom_root(vnode: MountedVNode<'_>, dom: &VirtualDom) -> bool {
+            for (_root_idx, static_op, dynamic_anchor) in vnode.vnode().template.root_slots() {
+                if static_op.is_some() {
+                    return true;
+                }
+
+                let Some(anchor) = dynamic_anchor else {
+                    continue;
+                };
+
+                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
+                    if dynamic_node_has_dom_root(vnode, value_idx, dom) {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        }
+
+        fn dynamic_node_has_dom_root(
+            vnode: MountedVNode<'_>,
+            value_idx: usize,
+            dom: &VirtualDom,
+        ) -> bool {
+            let Some(node) = vnode.vnode().dynamic_values()[value_idx].as_node() else {
+                return false;
+            };
+
+            match node {
+                DynamicNode::Text(_) => true,
+                DynamicNode::Component(comp) => comp
+                    .mounted_scope(value_idx, vnode, dom)
+                    .and_then(|child| child.try_mounted_root_node())
+                    .is_some_and(|child| vnode_has_dom_root(child, dom)),
+                DynamicNode::Fragment(fragment) => {
+                    let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
+                    if mounted_children.len() != fragment.len() {
+                        return false;
+                    }
+
+                    mounted_children
+                        .into_iter()
+                        .any(|child| vnode_has_dom_root(child, dom))
+                }
+            }
+        }
+
+        fn promote_suspended_branch(scope_id: ScopeId, dom: &mut VirtualDom) -> bool {
+            let Some(suspense_context) =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+            else {
+                return false;
+            };
+
+            if !suspense_context.is_suspended() {
+                return false;
+            }
+
+            let Some(scope) = dom.get_scope(scope_id) else {
+                return false;
+            };
+
+            if scope
+                .try_mounted_root_node()
+                .is_some_and(|root| vnode_has_dom_root(root, dom))
+            {
+                return false;
+            }
+
+            let Some(branch) = suspense_context.take_suspended_branch() else {
+                return false;
+            };
+            suspense_context.inner.suspended_tasks.borrow_mut().clear();
+            let branch_root = branch.root();
+            let branch_mount = branch.root_mount();
+            set_suspense_mounts_render_mode(
+                dom,
+                &branch_root,
+                branch_mount,
+                RenderMode::Foreground,
+            );
+            let render_parent = dom.mounted_render_parent(branch_mount);
+            let logical_parent = dom.mounted_logical_parent(branch_mount);
+            let mut no_op = crate::NoOpMutations;
+            branch_root.recreate_with_mount(
+                dom,
+                branch_mount,
+                render_parent,
+                logical_parent,
+                Some(&mut no_op),
+            );
+            set_rendered_children(
+                dom,
+                scope_id,
+                LastRenderedNode::Real(branch_root),
+                branch_mount,
+            );
+            true
+        }
+
+        fn visit_scope(scope_id: ScopeId, dom: &mut VirtualDom) {
+            promote_suspended_branch(scope_id, dom);
+
+            let mut child_scopes = Vec::new();
+            if let Some(root) = dom
+                .get_scope(scope_id)
+                .and_then(|scope| scope.try_mounted_root_node())
+            {
+                collect_child_scopes(root, dom, &mut child_scopes);
+            }
+
+            for child_scope in child_scopes {
+                visit_scope(child_scope, dom);
+            }
+        }
+
+        fn collect_child_scopes(vnode: MountedVNode<'_>, dom: &VirtualDom, out: &mut Vec<ScopeId>) {
+            for (idx, value) in vnode.vnode().dynamic_values().iter().enumerate() {
+                let Some(node) = value.as_node() else {
+                    continue;
+                };
+
+                match node {
+                    DynamicNode::Component(comp) => {
+                        if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
+                            out.push(child_scope.id());
+                        }
+                    }
+                    DynamicNode::Fragment(fragment) => {
+                        let mounted_children = vnode.mounted_fragment_children(idx, dom);
+                        if mounted_children.len() != fragment.len() {
+                            continue;
+                        }
+
+                        for sub in mounted_children {
+                            collect_child_scopes(sub, dom, out);
+                        }
+                    }
+                    DynamicNode::Text(_) => {}
+                }
+            }
+        }
+
+        visit_scope(scope_id, dom);
+    }
+
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
     ///
     /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.

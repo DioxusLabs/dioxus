@@ -36,6 +36,7 @@ fn use_update_warning<T: PartialEq + Clone + 'static>(value: &T, name: &'static 
 }
 
 /// An error that can occur when extracting a single text node from a component
+#[derive(Debug)]
 pub enum ExtractSingleTextNodeError<'a> {
     /// The node contained an render error, so we can't extract the text node
     RenderError(&'a RenderError),
@@ -87,7 +88,7 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Ok(text.to_string());
     }
     // rsx! { "title: {dynamic_text}" }
-    if template.root_count() == 0
+    if template.root_count() == 1
         && template.dynamic_value_count() == 1
         && vnode.dynamic_values()[0].as_node().is_some()
         && let Some(anchor) = template.anchor_for_value(0)
@@ -106,6 +107,49 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     }
 
     Err(ExtractSingleTextNodeError::NonTemplate)
+}
+
+#[cfg(test)]
+mod tests {
+    use dioxus_core::{DynamicNode, DynamicValue, DynamicValues, VNode, VText};
+    use dioxus_core_template::{TemplateRawTree, TemplateStorage};
+
+    use super::*;
+
+    #[test]
+    fn extracts_static_text() {
+        static TREE: TemplateRawTree = TemplateRawTree::StaticText("static text");
+        static STORAGE: TemplateStorage<2, 1, 0> = TemplateStorage::build_from_tree(&TREE);
+        let children = Ok(VNode::new(
+            STORAGE.as_template(),
+            DynamicValues::new(None, Box::new([])),
+        ));
+
+        assert_eq!(
+            extract_single_text_node(&children).expect("static text should extract"),
+            "static text"
+        );
+    }
+
+    #[test]
+    fn extracts_formatted_text() {
+        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
+        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
+        let children = Ok(VNode::new(
+            STORAGE.as_template(),
+            DynamicValues::new(
+                None,
+                Box::new([DynamicValue::Node(DynamicNode::Text(VText::new(
+                    "title: dynamic text",
+                )))]),
+            ),
+        ));
+
+        assert_eq!(
+            extract_single_text_node(&children).expect("formatted text should extract"),
+            "title: dynamic text"
+        );
+    }
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {

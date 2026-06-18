@@ -111,12 +111,12 @@ impl WebsysDom {
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
-            tracing::error!("streamed error for suspense {id:?}: {error:?}");
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
             if let Some(boundary) = nearest_error_boundary(dom, id) {
-                tracing::error!("marking nearest error boundary {boundary:?} dirty");
                 dom.mark_dirty(boundary);
             }
+            resolved_suspense_element.remove();
+            return Ok(());
         }
         server_data.in_context(|| {
             // rerun the scope with the new data
@@ -214,7 +214,7 @@ impl WebsysDom {
 
     pub fn rehydrate(
         &mut self,
-        vdom: &VirtualDom,
+        vdom: &mut VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
         // A single registration path for both build profiles. The JS side always
@@ -242,6 +242,8 @@ impl WebsysDom {
         // EnterRoot(i) parks the cursor on under[i], so pass the mount
         // children. The JS cursor filters dx-injected hydration scripts before
         // exposing the root list.
+        let base_scope = vdom.base_scope().id();
+        SuspenseBoundaryProps::hydrate_suspended_primary_branches(base_scope, vdom);
         let roots = children_array(&self.root);
         self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true)?;
 
