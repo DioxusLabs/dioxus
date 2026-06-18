@@ -24,7 +24,7 @@ fn node_array(node: &web_sys::Node) -> js_sys::Array {
     array
 }
 
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum RehydrationError {
     /// The client tried to rehydrate a vnode before the dom was built
