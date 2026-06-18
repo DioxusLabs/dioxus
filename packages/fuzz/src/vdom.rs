@@ -454,9 +454,11 @@ enum FuzzDynamicSlot {
     Attrs(usize),
 }
 
-/// Compute the node/attribute classification of each dynamic value in document order, mirroring the
-/// raw-op emission in [`FuzzRawTemplateBuilder`] (dynamic attributes before children). This is the
-/// fuzz-side source of truth for slot kinds; the lowered template no longer records it.
+/// Compute the node/attribute classification of each dynamic value in template fill order: an
+/// element's children are filled before its own dynamic attributes, because attribute anchors are
+/// lowered at `close_element` (after the children). This mirrors the typed view builder, which
+/// pushes children then attributes, and is the fuzz-side source of truth for slot kinds; the
+/// lowered template no longer records it.
 fn dynamic_slots_for_template(spec: &TemplateSpec, _template: &Template) -> Vec<FuzzDynamicSlot> {
     let shapes = spec
         .roots
@@ -482,15 +484,25 @@ fn collect_fuzz_slots(
         TemplateNodeShape::Element {
             attrs, children, ..
         } => {
+            // An element's dynamic-attribute slots are lowered to anchors at its
+            // `close_element` — *after* its children — so the template fills the
+            // children's dynamic values before the element's attributes (matching
+            // the typed view builder, which pushes `children` then `attrs`). Mirror
+            // that fill order here: emit the attribute slots after recursing the
+            // children. Attribute *ids* are still reserved before the children so
+            // they stay aligned with `collect_dynamic_attr_lists`, which numbers a
+            // parent's attribute lists ahead of its descendants'.
+            let mut attr_slots = Vec::new();
             for attr in attrs {
                 if matches!(attr, TemplateAttrShape::Dynamic) {
-                    slots.push(FuzzDynamicSlot::Attrs(*next_attr));
+                    attr_slots.push(FuzzDynamicSlot::Attrs(*next_attr));
                     *next_attr += 1;
                 }
             }
             for child in children {
                 collect_fuzz_slots(child, slots, next_node, next_attr);
             }
+            slots.extend(attr_slots);
         }
         TemplateNodeShape::Dynamic => {
             slots.push(FuzzDynamicSlot::Node(*next_node));
