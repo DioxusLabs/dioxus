@@ -50,6 +50,10 @@ pub struct TemplateStorage<
     ops: ConstVec<TemplateOp, OPS_CAP>,
     strings: ConstVec<&'static str, STRING_CAP>,
     anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
+    /// Running hash of each dynamic value's kind (attribute vs node) in fill
+    /// order. Folded into the template hash so kind-incompatible templates that
+    /// share an op tape compare unequal; never stored on the template itself.
+    value_kind_hash: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -448,7 +452,7 @@ macro_rules! template_lowering {
         let path = TemplateSlotPath::append_children(frame.path).bits();
         let mut index = 0;
         while index < frame.dynamic_attrs {
-            ($storage).push_anchor(frame.enter_index as u16, path);
+            ($storage).push_anchor(frame.enter_index as u16, path, true);
             index += 1;
         }
     }};
@@ -468,7 +472,7 @@ macro_rules! template_lowering {
     }};
     (dynamic_node($storage:expr, $cursor:expr, $following_static_at_parent:expr)) => {{
         let path = ($cursor).next_slot_path_after_dynamic_node($following_static_at_parent);
-        ($storage).push_anchor(($cursor).node_anchor_parent_op_index(), path.bits());
+        ($storage).push_anchor(($cursor).node_anchor_parent_op_index(), path.bits(), false);
     }};
 }
 
@@ -498,7 +502,14 @@ macro_rules! template_storage_methods {
             self.ops.set(index, op);
         }
 
-        $($constness)? fn push_anchor(&mut self, parent_op_index: u16, path: u128) {
+        $($constness)? fn push_anchor(&mut self, parent_op_index: u16, path: u128, is_attr: bool) {
+            // Fold this value's kind into the running signature in fill order
+            // (one value per call, including merges into the previous anchor).
+            // The template hash mixes this in so an attribute slot and a node
+            // slot at the same anchor never produce equal templates.
+            self.value_kind_hash =
+                xxhash_rust::const_xxh64::xxh64(&[is_attr as u8], self.value_kind_hash);
+
             let len = self.anchors.len();
             if len > 0 {
                 let last = self.anchors.at(len - 1);
@@ -658,6 +669,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             ops: ConstVec::new_with_max_size(),
             strings: ConstVec::new_with_max_size(),
             anchors: ConstVec::new_with_max_size(),
+            value_kind_hash: 0,
         };
         let mut cursor = TemplateLoweringCursor::new();
 
@@ -673,6 +685,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             self.ops.as_slice(),
             self.strings.as_slice(),
             self.anchors.as_slice(),
+            self.value_kind_hash,
         )
     }
 
@@ -682,6 +695,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
             Box::leak(self.strings.as_slice().to_vec().into_boxed_slice()),
             Box::leak(self.anchors.as_slice().to_vec().into_boxed_slice()),
+            self.value_kind_hash,
         )
     }
 
@@ -699,6 +713,9 @@ struct RuntimeTemplateStorage {
     ops: RuntimeTemplateVec<TemplateOp>,
     strings: RuntimeTemplateVec<&'static str>,
     anchors: RuntimeTemplateVec<TemplateAnchor>,
+    /// Running hash of each dynamic value's kind (attribute vs node) in fill
+    /// order. See [`TemplateStorage::value_kind_hash`].
+    value_kind_hash: u64,
 }
 
 struct RuntimeTemplateVec<T>(Vec<T>);
@@ -808,6 +825,7 @@ impl RuntimeTemplateStorage {
             Box::leak(self.ops.into_boxed_slice()),
             Box::leak(self.strings.into_boxed_slice()),
             Box::leak(self.anchors.into_boxed_slice()),
+            self.value_kind_hash,
         )
     }
 

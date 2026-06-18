@@ -38,6 +38,10 @@ impl WebsysDom {
 
 impl WriteMutations for WebsysDom {
     fn push_id(&mut self, id: ElementId) {
+        #[cfg(feature = "mounted")]
+        {
+            self.current_writing_id = id;
+        }
         self.interpreter.push_id(id.raw() as u32)
     }
 
@@ -116,9 +120,7 @@ impl WriteMutations for WebsysDom {
         // mounted events are fired immediately after the element is mounted.
         if name == "mounted" {
             #[cfg(feature = "mounted")]
-            self.send_mount_event(ElementId::from_raw(
-                self.interpreter.base().current_top_id() as usize,
-            ));
+            self.send_mount_event(self.current_writing_id);
             return;
         }
 

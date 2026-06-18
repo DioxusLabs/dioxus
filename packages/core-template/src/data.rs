@@ -64,10 +64,19 @@ impl std::fmt::Debug for Template {
 
 impl Template {
     /// Create a new template.
+    ///
+    /// `value_kind_hash` folds in the per-dynamic-value kind (attribute vs node)
+    /// in fill order. Attributes and nodes share kind-agnostic anchors — the
+    /// runtime value decides which a slot is — so two templates with the same op
+    /// tape and anchors but a different kind layout (`{attr}` where the other has
+    /// `{node}`) must not compare equal. Folding the kind layout into the hash
+    /// keeps `Template` equality meaning "structurally interchangeable for
+    /// diffing" without storing the kinds anywhere on the template.
     pub(crate) const fn new(
         ops: &'static [TemplateOp],
         strings: StaticTemplateStringArray,
         anchors: &'static [TemplateAnchor],
+        value_kind_hash: u64,
     ) -> Self {
         Self::validate_anchors(anchors);
         Self {
@@ -76,7 +85,7 @@ impl Template {
             anchors,
             dynamic_value_count: Self::compute_dynamic_value_count(anchors),
             root_count: Self::compute_root_count(ops, anchors),
-            hash: Self::compute_hash(ops, strings, anchors),
+            hash: Self::compute_hash(ops, strings, anchors, value_kind_hash),
         }
     }
 
@@ -518,6 +527,7 @@ impl Template {
         ops: &[TemplateOp],
         strings: StaticTemplateStringArray,
         anchors: &[TemplateAnchor],
+        value_kind_hash: u64,
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
@@ -556,6 +566,11 @@ impl Template {
             i += 1;
         }
 
+        // Fold the per-value kind layout (attribute vs node) so structurally
+        // incompatible templates that share an op tape and anchors hash apart.
+        hash = xxh64(&[0xA2], hash);
+        hash = xxh64(&value_kind_hash.to_le_bytes(), hash);
+
         hash
     }
 }
@@ -578,12 +593,18 @@ impl<'de> serde::Deserialize<'de> for Template {
         }
 
         let serialized = SerializedTemplate::deserialize(deserializer)?;
-        let _serialized_hash = serialized.hash;
-        Ok(Self::new(
-            serialized.ops,
-            serialized.strings,
-            serialized.anchors,
-        ))
+        // The hash folds in the per-value kind layout, which is not recoverable
+        // from the op tape and anchors alone, so trust the serialized hash that
+        // the original builder computed rather than recomputing it here.
+        Self::validate_anchors(serialized.anchors);
+        Ok(Self {
+            ops: serialized.ops,
+            strings: serialized.strings,
+            anchors: serialized.anchors,
+            dynamic_value_count: Self::compute_dynamic_value_count(serialized.anchors),
+            root_count: Self::compute_root_count(serialized.ops, serialized.anchors),
+            hash: serialized.hash,
+        })
     }
 }
 

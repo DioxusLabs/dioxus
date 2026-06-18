@@ -28,6 +28,12 @@ pub struct WebsysDom {
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
 
+    /// The id most recently pushed via `push_id`. `mounted` events need the id of the
+    /// element being written. `push_id` is always called immediately before the `mounted`
+    /// listener is registered, so this captures the right id in mutation order.
+    #[cfg(feature = "mounted")]
+    pub(crate) current_writing_id: ElementId,
+
     #[cfg(feature = "hydrate")]
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
@@ -107,6 +113,8 @@ impl WebsysDom {
             runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "mounted")]
+            current_writing_id: ElementId::from_raw(0),
             #[cfg(feature = "hydrate")]
             suspense_hydration_ids: Default::default(),
         }

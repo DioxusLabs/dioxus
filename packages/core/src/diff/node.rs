@@ -63,7 +63,11 @@ impl<'a> DiffFrame<'a> {
         let writes_enabled = state.dom.mount_should_render(current_mount) && state.to.is_some();
         let mut state = state.reborrow_with_writes(writes_enabled);
 
-        // If the templates are different, we need to replace the entire template
+        // If the templates are different, we need to replace the entire template.
+        // `Template` equality includes the per-slot kind layout (see
+        // `compute_hash`), so two vnodes that place an attribute where the other
+        // places a node compare unequal here and take the full-replace path rather
+        // than reaching the kind-assuming in-place diff below.
         if old.template != new.template {
             let parent = state.dom.mounted_render_parent(current_mount);
             let created = old.replace_inner(

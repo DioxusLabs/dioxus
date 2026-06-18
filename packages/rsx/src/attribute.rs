@@ -130,7 +130,7 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    pub(crate) fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
+    pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {
             let AttributeValue::AttrExpr(expr) = &self.value else {
