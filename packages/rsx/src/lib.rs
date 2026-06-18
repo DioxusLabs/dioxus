@@ -34,13 +34,24 @@ mod location;
 mod partial_closure;
 mod util;
 
-// Re-export the namespaces into each other
+// Public API used by the proc macro and workspace tooling. Keep parser-internal
+// helpers in `innerlude` instead of glob-reexporting the whole crate.
+pub use attribute::{Attribute, AttributeName, AttributeValue, IfAttributeValue, Spread};
+pub use component::Component;
 pub use diagnostics::Diagnostics;
-pub use ifmt::*;
-pub use node::*;
+pub use element::{Element, ElementName};
+pub use expr_node::ExprNode;
+pub use forloop::ForLoop;
+pub use ifchain::IfChain;
+pub use ifmt::{FormattedSegment, IfmtInput, Segment};
+pub use literal::{HotLiteral, HotReloadFormattedSegment};
+pub use location::DynIdx;
+pub use node::BodyNode;
 pub use partial_closure::PartialClosure;
-pub use rsx_call::*;
+pub use raw_expr::PartialExpr;
+pub use rsx_call::CallBody;
 pub use template_body::TemplateBody;
+pub use text_node::TextNode;
 
 use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
@@ -56,7 +67,6 @@ pub(crate) mod innerlude {
     pub use crate::expr_node::*;
     pub use crate::forloop::*;
     pub use crate::ifchain::*;
-    pub use crate::location::*;
     pub use crate::node::*;
     pub use crate::raw_expr::*;
     pub use crate::rsx_block::*;

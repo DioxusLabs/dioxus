@@ -245,7 +245,9 @@ impl Parse for ElementName {
         let raw =
             Punctuated::<Ident, Token![-]>::parse_separated_nonempty_with(stream, parse_raw_ident)?;
         if raw.len() == 1 {
-            Ok(ElementName::Path(Path::from(raw.into_iter().next().unwrap())))
+            Ok(ElementName::Path(Path::from(
+                raw.into_iter().next().unwrap(),
+            )))
         } else {
             let span = raw.span();
             let tag = raw
@@ -615,13 +617,12 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 3);
 
         // style should not generate a diagnostic
-        assert!(
-            !parsed
-                .diagnostics
-                .diagnostics
-                .into_iter()
-                .any(|f| f.emit_as_item_tokens().to_string().contains("style"))
-        );
+        assert!(!parsed.diagnostics.iter().any(|f| {
+            f.clone()
+                .emit_as_item_tokens()
+                .to_string()
+                .contains("style")
+        }));
     }
 
     #[test]

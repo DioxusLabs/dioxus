@@ -26,7 +26,7 @@ impl PartialEq for DynIdx {
 impl Eq for DynIdx {}
 
 impl DynIdx {
-    pub fn set(&self, idx: usize) {
+    pub(crate) fn set(&self, idx: usize) {
         self.idx.set(Some(idx));
     }
 

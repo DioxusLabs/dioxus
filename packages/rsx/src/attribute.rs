@@ -40,7 +40,7 @@ pub struct Attribute {
     pub name: AttributeName,
 
     /// The colon that separates the name and value - keep this for lossless parsing
-    pub colon: Option<Token![:]>,
+    pub(crate) colon: Option<Token![:]>,
 
     /// The value of the attribute
     ///
@@ -116,27 +116,6 @@ impl Attribute {
         self.name.span()
     }
 
-    pub fn as_lit(&self) -> Option<&HotLiteral> {
-        match &self.value {
-            AttributeValue::AttrLiteral(lit) => Some(lit),
-            _ => None,
-        }
-    }
-
-    /// Run this closure against the attribute if it's hotreloadable
-    pub fn with_literal(&self, f: impl FnOnce(&HotLiteral)) {
-        if let AttributeValue::AttrLiteral(ifmt) = &self.value {
-            f(ifmt);
-        }
-    }
-
-    pub fn ifmt(&self) -> Option<&IfmtInput> {
-        match &self.value {
-            AttributeValue::AttrLiteral(HotLiteral::Fmted(input)) => Some(input),
-            _ => None,
-        }
-    }
-
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => match &lit {
@@ -151,7 +130,7 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
+    pub(crate) fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {
             let AttributeValue::AttrExpr(expr) = &self.value else {
@@ -346,7 +325,7 @@ impl AttributeName {
         }
     }
 
-    pub fn is_likely_event(&self) -> bool {
+    pub(crate) fn is_likely_event(&self) -> bool {
         matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
     }
 
@@ -392,9 +371,9 @@ impl ToTokens for AttributeName {
 // ..spread attribute
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Spread {
-    pub dots: Token![..],
+    pub(crate) dots: Token![..],
     pub expr: Expr,
-    pub comma: Option<Token![,]>,
+    pub(crate) comma: Option<Token![,]>,
 }
 
 impl Spread {
@@ -496,7 +475,6 @@ impl AttributeValue {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfAttributeValue {
     pub if_expr: ExprIf,
-    pub condition: Expr,
     pub then_value: Box<AttributeValue>,
     pub else_value: Option<Box<AttributeValue>>,
 }
@@ -729,7 +707,6 @@ impl Parse for IfAttributeValue {
         };
 
         Ok(Self {
-            condition: *if_expr.cond.clone(),
             if_expr,
             then_value,
             else_value,

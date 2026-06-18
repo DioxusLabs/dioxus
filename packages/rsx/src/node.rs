@@ -141,10 +141,6 @@ impl ToTokens for BodyNode {
 }
 
 impl BodyNode {
-    pub fn is_litstr(&self) -> bool {
-        matches!(self, BodyNode::Text { .. })
-    }
-
     pub fn span(&self) -> Span {
         match self {
             BodyNode::Element(el) => el.name.span(),
@@ -153,20 +149,6 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
-        }
-    }
-
-    pub fn element_children(&self) -> &[BodyNode] {
-        match self {
-            BodyNode::Element(el) => &el.children,
-            _ => panic!("Children not available for this node"),
-        }
-    }
-
-    pub fn el_name(&self) -> &ElementName {
-        match self {
-            BodyNode::Element(el) => &el.name,
-            _ => panic!("Element name not available for this node"),
         }
     }
 

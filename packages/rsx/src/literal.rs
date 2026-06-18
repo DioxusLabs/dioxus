@@ -90,21 +90,6 @@ impl HotLiteral {
 }
 
 impl HotLiteral {
-    // We can only handle a few types of literals - the rest need to be expressions
-    // todo on adding more of course - they're not hard to support, just work
-    pub fn peek(input: ParseStream) -> bool {
-        if input.peek(Lit) {
-            let lit = input.fork().parse::<Lit>().unwrap();
-
-            matches!(
-                lit,
-                Lit::Str(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_)
-            )
-        } else {
-            false
-        }
-    }
-
     pub fn is_static(&self) -> bool {
         match &self {
             HotLiteral::Fmted(fmt) => fmt.is_static(),
@@ -134,7 +119,7 @@ impl Display for HotLiteral {
 /// A formatted segment that can be hot reloaded
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct HotReloadFormattedSegment {
-    pub formatted_input: IfmtInput,
+    pub(crate) formatted_input: IfmtInput,
 }
 
 impl HotReloadFormattedSegment {

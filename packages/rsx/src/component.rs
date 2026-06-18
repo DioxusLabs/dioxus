@@ -176,7 +176,7 @@ impl Component {
         }
     }
 
-    pub fn get_key(&self) -> Option<&AttributeValue> {
+    pub(crate) fn get_key(&self) -> Option<&AttributeValue> {
         self.fields
             .iter()
             .find(|attr| attr.name.is_likely_key())

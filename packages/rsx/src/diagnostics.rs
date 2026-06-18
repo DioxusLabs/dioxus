@@ -7,21 +7,21 @@ use quote::ToTokens;
 /// This also lets us choose the expansion strategy for the diagnostics.
 #[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
-    pub diagnostics: Vec<Diagnostic>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl Diagnostics {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             diagnostics: vec![],
         }
     }
 
-    pub fn push(&mut self, diagnostic: Diagnostic) {
+    pub(crate) fn push(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);
     }
 
-    pub fn extend(&mut self, diagnostics: Vec<Diagnostic>) {
+    pub(crate) fn extend(&mut self, diagnostics: Vec<Diagnostic>) {
         self.diagnostics.extend(diagnostics);
     }
 
@@ -29,12 +29,18 @@ impl Diagnostics {
         self.diagnostics.is_empty()
     }
 
-    pub fn into_diagnostics(self) -> Vec<Diagnostic> {
+    pub(crate) fn into_diagnostics(self) -> Vec<Diagnostic> {
         self.diagnostics
     }
 
-    pub fn len(&self) -> usize {
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
         self.diagnostics.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.diagnostics.iter()
     }
 }
 

@@ -22,7 +22,7 @@ pub struct IfChain {
 }
 
 impl IfChain {
-    pub fn for_each_branch(&self, f: &mut impl FnMut(&TemplateBody)) {
+    pub(crate) fn for_each_branch(&self, f: &mut impl FnMut(&TemplateBody)) {
         f(&self.then_branch);
 
         if let Some(else_if) = &self.else_if_branch {

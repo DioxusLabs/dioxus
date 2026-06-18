@@ -19,16 +19,16 @@ use syn::{BoundLifetimes, ExprClosure};
 /// Otherwise, it's a direct copy of the original.
 #[derive(Debug, Clone)]
 pub struct PartialClosure {
-    pub lifetimes: Option<BoundLifetimes>,
-    pub constness: Option<Token![const]>,
-    pub movability: Option<Token![static]>,
-    pub asyncness: Option<Token![async]>,
-    pub capture: Option<Token![move]>,
-    pub or1_token: Token![|],
-    pub inputs: Punctuated<Pat, Token![,]>,
-    pub or2_token: Token![|],
-    pub output: ReturnType,
-    pub body: PartialExpr,
+    lifetimes: Option<BoundLifetimes>,
+    constness: Option<Token![const]>,
+    movability: Option<Token![static]>,
+    asyncness: Option<Token![async]>,
+    capture: Option<Token![move]>,
+    or1_token: Token![|],
+    inputs: Punctuated<Pat, Token![,]>,
+    or2_token: Token![|],
+    output: ReturnType,
+    body: PartialExpr,
 }
 
 impl Parse for PartialClosure {
