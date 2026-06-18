@@ -4,7 +4,7 @@
 //! better fit than an `rsx!` block. It supports the same elements, attributes,
 //! events, and child values you would use in regular Dioxus components.
 
-use dioxus::{html, prelude::*};
+use dioxus::{core::view::ViewExt, html, prelude::*};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Metric {

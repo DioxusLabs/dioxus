@@ -146,6 +146,17 @@ fn Errors() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
+    #[cfg(feature = "web")]
+    {
+        let runtime = dioxus::core::Runtime::current();
+        let current = dioxus::core::current_scope_id();
+        let parent = runtime.parent_scope(current);
+        let grandparent = parent.and_then(|parent| runtime.parent_scope(parent));
+        let great_grandparent = grandparent.and_then(|parent| runtime.parent_scope(parent));
+        println!(
+            "ThrowsError scope chain: current={current:?} parent={parent:?} grandparent={grandparent:?} great_grandparent={great_grandparent:?}"
+        );
+    }
     use_server_future(server_error)?.unwrap()?;
     rsx! {
         "success"

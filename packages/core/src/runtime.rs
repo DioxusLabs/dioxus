@@ -677,7 +677,7 @@ fn MyComponent() -> Element {{
         path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
         mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
     ) {
-        for anchor in node.dynamic_attr_anchors() {
+        for anchor in node.dynamic_attr_anchors_in_document_order() {
             let attr_path = anchor.static_path();
             if !path_matches(target_path, attr_path) {
                 continue;

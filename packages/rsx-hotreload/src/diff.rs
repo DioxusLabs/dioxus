@@ -277,6 +277,7 @@ impl HotReloadResult {
             BodyNode::IfChain(ifchain) => self.hotreload_if_chain::<Ctx>(ifchain),
             BodyNode::RawExpr(expr) => self.hotreload_raw_expr(expr),
             BodyNode::Element(_) => Some(()),
+            BodyNode::SyntheticBoundary(_) => Some(()),
         }
     }
 

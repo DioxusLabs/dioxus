@@ -42,6 +42,10 @@ impl Harness {
         Self::fresh_with_strict_options(cfg!(fuzzing), cfg!(fuzzing))
     }
 
+    pub(crate) fn dump_model(&self) {
+        eprintln!("[model] {:#?}", self.context.read_model().root);
+    }
+
     #[cfg(test)]
     pub(crate) fn fresh_strict() -> Self {
         Self::fresh_with_strict_options(true, false)

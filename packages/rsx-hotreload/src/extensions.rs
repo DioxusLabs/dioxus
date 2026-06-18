@@ -93,7 +93,10 @@ impl<'a> NativeTemplateBuilder<'a> {
             BodyNode::RawExpr(_)
             | BodyNode::Component(_)
             | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_) => self.push_dynamic_node(node, following_static_at_parent),
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
+                self.push_dynamic_node(node, following_static_at_parent)
+            }
         }
     }
 
@@ -159,7 +162,8 @@ impl<'a> NativeTemplateBuilder<'a> {
             BodyNode::RawExpr(_)
             | BodyNode::Component(_)
             | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_) => false,
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => false,
         }
     }
 }

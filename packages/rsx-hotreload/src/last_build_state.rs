@@ -229,7 +229,10 @@ impl TemplateBodyPools {
                 self.component_literal_indexes_by_dynamic_node[dynamic_node_index] =
                     Some(literal_indexes);
             }
-            BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
+            BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
                 self.push_dynamic_node(node.clone(), None);
             }
         }

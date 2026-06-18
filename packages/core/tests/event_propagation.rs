@@ -4,6 +4,7 @@ use dioxus_renderer_oracle::RendererOracle;
 use std::{any::Any, rc::Rc, sync::Mutex};
 
 static CLICKS: Mutex<usize> = Mutex::new(0);
+static CLICK_ORDER: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
 fn click_event() -> Event<dyn Any> {
     Event::new(
@@ -73,4 +74,36 @@ fn events_propagate() {
 
     dom.mark_dirty(ScopeId::APP);
     oracle.render(&mut dom);
+}
+
+#[test]
+fn nested_listeners_in_one_vnode_bubble_from_target_first() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    CLICK_ORDER.lock().unwrap().clear();
+
+    fn app() -> Element {
+        rsx! {
+            div {
+                onclick: move |_| {
+                    CLICK_ORDER.lock().unwrap().push("parent");
+                },
+                button {
+                    onclick: move |evt: MouseEvent| {
+                        CLICK_ORDER.lock().unwrap().push("child");
+                        evt.stop_propagation();
+                    }
+                }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    let target = oracle.element_id_by_tag("button");
+    dom.runtime().handle_event("click", click_event(), target);
+
+    let order = CLICK_ORDER.lock().unwrap();
+    assert_eq!(&*order, &["child"]);
 }

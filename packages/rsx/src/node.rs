@@ -28,6 +28,9 @@ pub enum BodyNode {
 
     /// if cond {} else if cond {} (else {}?)
     IfChain(IfChain),
+
+    /// A macro-inserted dynamic boundary around a nested static template.
+    SyntheticBoundary(Box<TemplateBody>),
 }
 
 impl Parse for BodyNode {
@@ -136,6 +139,14 @@ impl ToTokens for BodyNode {
             BodyNode::ForLoop(floop) => floop.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::IfChain(ifchain) => ifchain.to_tokens(tokens),
+            BodyNode::SyntheticBoundary(body) => {
+                tokens.extend(quote::quote! {
+                    {
+                        let ___nodes = dioxus_core::IntoDynNode::into_dyn_node({ #body });
+                        ___nodes
+                    }
+                });
+            }
         }
     }
 }
@@ -149,6 +160,7 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
+            BodyNode::SyntheticBoundary(body) => body.first_root_span(),
         }
     }
 
@@ -156,6 +168,7 @@ impl BodyNode {
         match self {
             Self::Element(el) => el.key(),
             Self::Component(comp) => comp.get_key(),
+            Self::SyntheticBoundary(body) => body.implicit_key(),
             _ => None,
         }
     }

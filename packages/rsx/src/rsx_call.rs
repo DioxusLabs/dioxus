@@ -48,7 +48,9 @@ impl CallBody {
     /// Create a new CallBody from a TemplateBody
     ///
     /// This will overwrite all internal metadata regarding hotreloading.
-    pub fn new(body: TemplateBody) -> Self {
+    pub fn new(mut body: TemplateBody) -> Self {
+        body.split_oversized_templates();
+
         let body = CallBody {
             body,
             template_idx: Cell::new(0),
@@ -114,6 +116,11 @@ impl CallBody {
                     body.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&body.roots)
                 }),
+
+                BodyNode::SyntheticBoundary(body) => {
+                    body.template_idx.set(self.next_template_idx());
+                    self.cascade_hotreload_info(&body.roots);
+                }
 
                 _ => {}
             }

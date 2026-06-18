@@ -262,6 +262,14 @@ impl VNode {
             .filter(move |anchor| self.anchor_has_attrs(anchor))
     }
 
+    pub(crate) fn dynamic_attr_anchors_in_document_order(
+        &self,
+    ) -> impl Iterator<Item = &'static TemplateAnchor> {
+        let mut anchors = self.dynamic_attr_anchors().collect::<Vec<_>>();
+        anchors.sort_by_key(|anchor| (anchor.static_path(), anchor.values().start));
+        anchors.into_iter()
+    }
+
     fn dynamic_anchors_in_document_order(
         &self,
         nodes: bool,

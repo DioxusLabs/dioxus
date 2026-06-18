@@ -106,6 +106,8 @@ pub mod internal {
 
     pub use anyhow::__anyhow;
 
+    pub use dioxus_core_template::{TemplateRawTree, TemplateStorage};
+
     pub use generational_box;
 }
 

@@ -569,26 +569,26 @@ impl SsrRendererPool {
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
         let template = vnode.template;
 
-        for (root_idx, static_op, dynamic_anchor) in template.root_slots() {
+        let mut static_root_idx = 0;
+        for (_root_idx, static_op, dynamic_anchor) in template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
-                let node_index = anchor
-                    .values()
-                    .next()
-                    .expect("hydration data anchor must contain a dynamic value");
-                let dynamic_node = vnode.dynamic_values()[node_index]
-                    .as_node()
-                    .expect("hydration data node slot must point at a dynamic node");
-                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
+                for node_index in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
+                    let dynamic_node = vnode.dynamic_values()[node_index]
+                        .as_node()
+                        .expect("hydration data node slot must point at a dynamic node");
+                    Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
+                }
                 continue;
             }
 
             let op = static_op.expect("root slot must be static or dynamic");
+            let root_path = TemplatePath::root(static_root_idx);
+            static_root_idx += 1;
             if template.element_meta_at_op(op).is_some() {
-                let root_path = TemplatePath::root(root_idx);
                 for anchor in template.anchors().iter().filter(|anchor| {
                     Self::node_anchor_inside_static_root(vnode.vnode(), **anchor, root_path)
                 }) {
-                    for dynamic_node_id in anchor.values() {
+                    for dynamic_node_id in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                         let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
                             .as_node()
                             .expect("hydration data node slot must point at a dynamic node");
@@ -610,10 +610,10 @@ impl SsrRendererPool {
         anchor: TemplateAnchor,
         root_path: TemplatePath,
     ) -> bool {
-        anchor
-            .values()
+        vnode
+            .dynamic_node_indices_for_anchor(&anchor)
             .next()
-            .is_some_and(|idx| vnode.dynamic_values()[idx].as_node().is_some())
+            .is_some()
             && anchor.parent_element_op_index().is_some()
             && match anchor.slot_target() {
                 TemplateSlotTarget::BeforeStatic(path) => {
@@ -745,5 +745,81 @@ impl SsrRendererPool {
         to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use dioxus::prelude::*;
+    use std::io::Cursor;
+
+    #[component]
+    fn HydrationMarker(value: &'static str) -> Element {
+        let context = HydrationContext::default();
+        let entry = context.create_entry::<String>();
+        let value = value.to_string();
+        entry.insert::<()>(&value, std::panic::Location::caller());
+        provide_context(context);
+
+        rsx! {
+            span { "{value}" }
+        }
+    }
+
+    fn collected_hydration_strings(dom: &VirtualDom) -> Vec<String> {
+        let context = SsrRendererPool::extract_from_suspense_boundary(dom, ScopeId::ROOT);
+        let serialized = context.serialized();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(serialized.data)
+            .unwrap();
+        let entries: Vec<Option<Vec<u8>>> = ciborium::from_reader(Cursor::new(bytes)).unwrap();
+
+        entries
+            .into_iter()
+            .skip(1)
+            .filter_map(|entry| {
+                entry.map(|bytes| ciborium::from_reader(Cursor::new(bytes)).unwrap())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn hydration_visits_every_adjacent_root_dynamic_value() {
+        fn app() -> Element {
+            rsx! {
+                HydrationMarker { value: "first" }
+                HydrationMarker { value: "second" }
+            }
+        }
+
+        let mut dom = VirtualDom::new(app);
+        dom.rebuild_in_place();
+
+        assert_eq!(
+            collected_hydration_strings(&dom),
+            ["first".to_string(), "second".to_string()]
+        );
+    }
+
+    #[test]
+    fn hydration_uses_static_root_index_after_root_dynamic_value() {
+        fn app() -> Element {
+            rsx! {
+                {rsx! { span { "prefix" } }}
+                div {
+                    HydrationMarker { value: "inside-static-root" }
+                }
+            }
+        }
+
+        let mut dom = VirtualDom::new(app);
+        dom.rebuild_in_place();
+
+        assert_eq!(
+            collected_hydration_strings(&dom),
+            ["inside-static-root".to_string()]
+        );
     }
 }

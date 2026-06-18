@@ -1,8 +1,8 @@
-//! Lower parsed RSX bodies into typed view builders.
+//! Lower parsed RSX bodies into static templates and dynamic values.
 
 use self::location::DynIdx;
 use crate::*;
-use dioxus_core_template::{TemplateStatsBuilder, TemplateStorageStats};
+use dioxus_core_template::{TEMPLATE_STORAGE_MAX_CAP, TemplateStatsBuilder, TemplateStorageStats};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
@@ -10,6 +10,7 @@ use syn::parse_quote;
 
 const ROOT_TUPLE_VIEW_LIMIT: usize = 64;
 const MAX_SYNTHETIC_CHUNKS_PER_PARENT: usize = 24;
+const TEMPLATE_PATH_BITS_SPLIT_LIMIT: usize = 96;
 
 /// A set of nodes in a template position
 ///
@@ -56,18 +57,20 @@ impl ToTokens for TemplateBody {
 
         let key_warnings = self.check_for_duplicate_keys();
 
-        let view = node.view_builder_pieces();
-        let view_definitions = view.definitions();
-        let view_expr = view.view_expr();
-        let template_stats = view.template_stats();
+        let template = StaticTemplateBuilder::from_body(&node);
+        let template_definitions = template.definitions.iter();
+        let template_tree = &template.root;
+        let dynamic_values = DynamicValueBuilder::from_body(&node);
+        let dynamic_value_tokens = dynamic_values.values.iter();
+        let dynamic_text = dynamic_values.dynamic_text_tokens.iter();
+        let template_stats = node.template_stats();
         let template_ops_cap = template_stats.ops;
         let template_string_cap = template_stats.strings;
         let template_dynamic_cap = template_stats.anchors;
-        let dynamic_text = view.dynamic_text_tokens().iter();
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
-        let hot_reload_mapping = view.hot_reload_template_tokens(quote! { __template });
+        let hot_reload_mapping = dynamic_values.hot_reload_template_tokens(quote! { __TEMPLATE });
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -75,7 +78,14 @@ impl ToTokens for TemplateBody {
 
                 #key_warnings
 
-                #(#view_definitions)*
+                #(#template_definitions)*
+
+                static __TEMPLATE_STORAGE: dioxus_core::internal::TemplateStorage<
+                    #template_ops_cap,
+                    #template_string_cap,
+                    #template_dynamic_cap,
+                > = dioxus_core::internal::TemplateStorage::build_from_tree(#template_tree);
+                static __TEMPLATE: dioxus_core::Template = __TEMPLATE_STORAGE.as_template();
 
                 #[cfg(debug_assertions)]
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
@@ -93,7 +103,7 @@ impl ToTokens for TemplateBody {
 
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
-                    static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
+                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
                         || None::<dioxus_core::internal::HotReloadedTemplate>,
                         __NORMALIZED_FILE,
                         line!(),
@@ -101,41 +111,26 @@ impl ToTokens for TemplateBody {
                         #index
                     );
 
-                    dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
+                    dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
                 };
 
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 let __key = #key_tokens;
 
-                #[cfg(debug_assertions)]
-                static __VIEW_TEMPLATE: std::sync::OnceLock<dioxus_core::Template> = std::sync::OnceLock::new();
-
                 // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                 #[allow(clippy::let_and_return)]
                 let __vnodes = {
-                    #[cfg(debug_assertions)]
-                    {
-                        dioxus_core::view::into_vnode_with_key_and_template_cell(
-                            #view_expr,
-                            __key,
-                            &__VIEW_TEMPLATE,
-                        )
-                    }
-
-                    #[cfg(not(debug_assertions))]
-                    {
-                        dioxus_core::internal::into_vnode_with_key_and_capacity::<
-                            #template_ops_cap,
-                            #template_string_cap,
-                            #template_dynamic_cap,
-                            _,
-                        >(#view_expr, __key)
-                    }
+                    let __dynamic_values: Box<[dioxus_core::DynamicValue]> = Box::new([
+                        #(#dynamic_value_tokens),*
+                    ]);
+                    dioxus_core::VNode::new(
+                        __TEMPLATE,
+                        dioxus_core::DynamicValues::new(__key, __dynamic_values),
+                    )
                 };
 
                 #[cfg(debug_assertions)]
                 {
-                    let __template = __vnodes.template;
                     let __original_template = #hot_reload_mapping;
                     // If the template has not been hot reloaded, we always use the original template
                     // Templates nested within macros may be merged because they have the same file-line-column-index
@@ -160,50 +155,159 @@ impl ToTokens for TemplateBody {
     }
 }
 
-pub(crate) struct ViewBuilderPieces {
+struct StaticTemplatePieces {
     definitions: Vec<TokenStream2>,
-    view: TokenStream2,
+    root: TokenStream2,
+}
+
+struct StaticTemplateBuilder {
+    definitions: Vec<TokenStream2>,
+    next_marker: usize,
+}
+
+impl StaticTemplateBuilder {
+    fn from_body(body: &TemplateBody) -> StaticTemplatePieces {
+        let mut builder = Self {
+            definitions: Vec::new(),
+            next_marker: 0,
+        };
+        let root = builder.sibling_sequence(&body.roots);
+        StaticTemplatePieces {
+            definitions: builder.definitions,
+            root,
+        }
+    }
+
+    fn sibling_sequence(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
+        let children = nodes.iter().map(|node| self.node(node)).collect::<Vec<_>>();
+        self.sequence(children)
+    }
+
+    fn node(&mut self, node: &BodyNode) -> TokenStream2 {
+        match node {
+            BodyNode::Element(element) => self.element(element),
+            BodyNode::Text(text) if text.is_static() => {
+                let value = text.input.to_static().unwrap();
+                self.tree(quote_spanned! { text.input.span() =>
+                    dioxus_core::internal::TemplateRawTree::StaticText(#value)
+                })
+            }
+            BodyNode::Text(_)
+            | BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::Component(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
+                self.tree(quote! { dioxus_core::internal::TemplateRawTree::DynamicNode })
+            }
+        }
+    }
+
+    fn element(&mut self, element: &Element) -> TokenStream2 {
+        let tag = self.element_tag(element);
+        let namespace = self.element_namespace(element);
+        let attrs = element
+            .merged_attributes
+            .iter()
+            .map(|attr| self.attribute(element, attr))
+            .collect::<Vec<_>>();
+        let attrs = self.sequence(attrs);
+        let children = self.sibling_sequence(&element.children);
+        let diagnostics = &element.diagnostics;
+
+        self.tree(quote_spanned! { element.name.span() =>
+            {
+                #diagnostics
+                dioxus_core::internal::TemplateRawTree::Element {
+                    tag: #tag,
+                    namespace: #namespace,
+                    attrs: #attrs,
+                    children: #children,
+                }
+            }
+        })
+    }
+
+    fn attribute(&mut self, element: &Element, attr: &Attribute) -> TokenStream2 {
+        if let Some((name, value)) = attr.as_static_str_literal()
+            && !attr.name.is_likely_event()
+        {
+            let resolved = name.resolved(&element.name);
+            let name = resolved.name;
+            let namespace = match resolved.namespace {
+                Some(namespace) => quote! { Some(#namespace) },
+                None => quote! { None },
+            };
+            let value = value.to_static().unwrap();
+            return self.tree(quote_spanned! { attr.span() =>
+                dioxus_core::internal::TemplateRawTree::StaticAttr {
+                    name: #name,
+                    value: #value,
+                    namespace: #namespace,
+                }
+            });
+        }
+
+        self.tree(quote_spanned! { attr.span() =>
+            dioxus_core::internal::TemplateRawTree::DynamicAttr
+        })
+    }
+
+    fn element_tag(&self, element: &Element) -> TokenStream2 {
+        match &element.name {
+            ElementName::Path(path) => quote_spanned! { element.name.span() =>
+                dioxus_core::view::element_builder_tag_name(&#path())
+            },
+            ElementName::Custom(_) => element.name.tag_name(),
+        }
+    }
+
+    fn element_namespace(&self, element: &Element) -> TokenStream2 {
+        match &element.name {
+            ElementName::Path(path) => quote_spanned! { element.name.span() =>
+                dioxus_core::view::element_builder_namespace(&#path())
+            },
+            ElementName::Custom(_) => quote! { None },
+        }
+    }
+
+    fn sequence(&mut self, children: Vec<TokenStream2>) -> TokenStream2 {
+        let len = children.len();
+        let sequence = self.next_ident("__DIOXUS_TEMPLATE_SEQUENCE");
+        self.definitions.push(quote! {
+            static #sequence: [&'static dioxus_core::internal::TemplateRawTree; #len] = [
+                #(#children),*
+            ];
+        });
+        self.tree(quote! { dioxus_core::internal::TemplateRawTree::Sequence(&#sequence) })
+    }
+
+    fn tree(&mut self, value: TokenStream2) -> TokenStream2 {
+        let tree = self.next_ident("__DIOXUS_TEMPLATE_TREE");
+        self.definitions.push(quote! {
+            static #tree: dioxus_core::internal::TemplateRawTree = #value;
+        });
+        quote! { &#tree }
+    }
+
+    fn next_ident(&mut self, prefix: &str) -> Ident {
+        let index = self.next_marker;
+        self.next_marker += 1;
+        format_ident!("{prefix}_{index}")
+    }
+}
+
+struct DynamicValuePieces {
+    values: Vec<TokenStream2>,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
     hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
-    template_stats: TemplateStorageStats,
 }
 
-impl ViewBuilderPieces {
-    fn from_body(body: &TemplateBody) -> Self {
-        let mut builder = ViewBuilder::new();
-        let view = builder.visit_roots(&body.roots);
-        let template_stats =
-            builder.final_sibling_storage_stats(&body.roots, SiblingContext::Roots);
-        builder.finish(view, template_stats)
-    }
-
-    fn from_element(element: &Element) -> Self {
-        let mut builder = ViewBuilder::new();
-        let view = builder.visit_element(element, true);
-        let template_stats = builder.element_storage_stats(element);
-        builder.finish(view, template_stats)
-    }
-
-    pub(crate) fn definitions(&self) -> impl Iterator<Item = &TokenStream2> {
-        self.definitions.iter()
-    }
-
-    pub(crate) fn view_expr(&self) -> &TokenStream2 {
-        &self.view
-    }
-
-    fn dynamic_text_tokens(&self) -> &[TokenStream2] {
-        &self.dynamic_text_tokens
-    }
-
-    fn template_stats(&self) -> TemplateStorageStats {
-        self.template_stats
-    }
-
+impl DynamicValuePieces {
     fn hot_reload_template_tokens(&self, template: TokenStream2) -> TokenStream2 {
         let key = self
             .hot_reload_key
@@ -225,6 +329,203 @@ impl ViewBuilderPieces {
                 vec![ #( #dynamic_slots ),* ],
             )
         }
+    }
+}
+
+struct DynamicValueBuilder {
+    values: Vec<TokenStream2>,
+    dynamic_node_count: usize,
+    dynamic_attr_count: usize,
+    dynamic_text_tokens: Vec<TokenStream2>,
+    component_value_tokens: Vec<TokenStream2>,
+    hot_reload_dynamic_nodes: Vec<TokenStream2>,
+    hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    hot_reload_dynamic_slots: Vec<TokenStream2>,
+    hot_reload_key: Option<TokenStream2>,
+}
+
+impl DynamicValueBuilder {
+    fn from_body(body: &TemplateBody) -> DynamicValuePieces {
+        let mut builder = Self::new();
+        builder.roots(&body.roots);
+        builder.finish()
+    }
+
+    fn new() -> Self {
+        Self {
+            values: Vec::new(),
+            dynamic_node_count: 0,
+            dynamic_attr_count: 0,
+            dynamic_text_tokens: Vec::new(),
+            component_value_tokens: Vec::new(),
+            hot_reload_dynamic_nodes: Vec::new(),
+            hot_reload_dynamic_attrs: Vec::new(),
+            hot_reload_dynamic_slots: Vec::new(),
+            hot_reload_key: None,
+        }
+    }
+
+    fn finish(self) -> DynamicValuePieces {
+        DynamicValuePieces {
+            values: self.values,
+            dynamic_text_tokens: self.dynamic_text_tokens,
+            component_value_tokens: self.component_value_tokens,
+            hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
+            hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
+            hot_reload_dynamic_slots: self.hot_reload_dynamic_slots,
+            hot_reload_key: self.hot_reload_key,
+        }
+    }
+
+    fn roots(&mut self, nodes: &[BodyNode]) {
+        for (index, node) in nodes.iter().enumerate() {
+            self.node(node, index == 0);
+        }
+    }
+
+    fn node(&mut self, node: &BodyNode, implicit_key: bool) {
+        match node {
+            BodyNode::Element(element) => self.element(element, implicit_key),
+            BodyNode::Text(text) if text.is_static() => {}
+            BodyNode::Text(text) => {
+                self.allocate_formatted(&text.input);
+                self.dynamic_node(quote! { #text });
+            }
+            BodyNode::Component(component) => {
+                let literal_ids = self.component_literal_ids(component, implicit_key);
+                self.dynamic_node(component.to_tokens_with_literal_ids(&literal_ids));
+            }
+            BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
+                self.dynamic_node(quote! { #node });
+            }
+        }
+    }
+
+    fn element(&mut self, element: &Element, implicit_key: bool) {
+        for child in &element.children {
+            self.node(child, false);
+        }
+
+        for attr in &element.merged_attributes {
+            if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
+                continue;
+            }
+
+            self.dynamic_attr(attr);
+        }
+
+        if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element.key() {
+            let key = self.allocate_formatted(key);
+            if implicit_key {
+                self.hot_reload_key = Some(key);
+            }
+        }
+    }
+
+    fn dynamic_node(&mut self, tokens: TokenStream2) {
+        let id = self.dynamic_node_count;
+        self.dynamic_node_count += 1;
+        self.hot_reload_dynamic_nodes
+            .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
+        self.hot_reload_dynamic_slots
+            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
+        self.values
+            .push(quote! { dioxus_core::DynamicValue::Node(#tokens) });
+    }
+
+    fn dynamic_attr(&mut self, attr: &Attribute) {
+        let id = self.dynamic_attr_count;
+        self.dynamic_attr_count += 1;
+        self.hot_reload_dynamic_attrs
+            .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
+        self.hot_reload_dynamic_slots
+            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Attribute(#id) });
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
+            self.allocate_formatted(lit);
+        }
+        let attrs = attr.rendered_as_dynamic_attr();
+        self.values
+            .push(quote! { dioxus_core::DynamicValue::Attrs(#attrs) });
+    }
+
+    fn component_literal_ids(&mut self, component: &Component, implicit_key: bool) -> Vec<usize> {
+        let mut literal_ids = Vec::with_capacity(component.literal_component_property_count());
+
+        for property in &component.fields {
+            let AttributeValue::AttrLiteral(literal) = &property.value else {
+                continue;
+            };
+
+            if property.name.is_likely_key() {
+                if let HotLiteral::Fmted(fmted) = literal {
+                    let fmted = self.allocate_formatted(fmted);
+                    if implicit_key {
+                        self.hot_reload_key = Some(fmted);
+                    }
+                }
+                continue;
+            }
+
+            let hot_literal = match literal {
+                HotLiteral::Fmted(fmted) => {
+                    let fmted = self.allocate_formatted(fmted);
+                    quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#fmted) }
+                }
+                HotLiteral::Float(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Float(#value as _) }
+                }
+                HotLiteral::Int(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Int(#value as _) }
+                }
+                HotLiteral::Bool(value) => {
+                    quote! { dioxus_core::internal::HotReloadLiteral::Bool(#value) }
+                }
+            };
+
+            let id = self.component_value_tokens.len();
+            self.component_value_tokens.push(hot_literal);
+            literal_ids.push(id);
+        }
+
+        literal_ids
+    }
+
+    fn allocate_formatted(&mut self, formatted: &HotReloadFormattedSegment) -> TokenStream2 {
+        let mut dynamic_ids = Vec::with_capacity(formatted.formatted_segment_count());
+        for segment in &formatted.segments {
+            if let Segment::Formatted(segment) = segment {
+                let id = self.dynamic_text_tokens.len();
+                dynamic_ids.push(id);
+                self.dynamic_text_tokens
+                    .push(quote! { #segment.to_string() });
+            }
+        }
+        formatted.quote_with_dynamic_ids(&dynamic_ids)
+    }
+}
+
+pub(crate) struct ViewBuilderPieces {
+    definitions: Vec<TokenStream2>,
+    view: TokenStream2,
+}
+
+impl ViewBuilderPieces {
+    fn from_element(element: &Element) -> Self {
+        let mut builder = ViewBuilder::new();
+        let view = builder.visit_element(element, true);
+        let template_stats = builder.element_storage_stats(element);
+        builder.finish(view, template_stats)
+    }
+
+    pub(crate) fn definitions(&self) -> impl Iterator<Item = &TokenStream2> {
+        self.definitions.iter()
+    }
+
+    pub(crate) fn view_expr(&self) -> &TokenStream2 {
+        &self.view
     }
 }
 
@@ -263,24 +564,15 @@ impl ViewBuilder {
         }
     }
 
-    fn finish(self, view: TokenStream2, template_stats: TemplateStorageStats) -> ViewBuilderPieces {
+    fn finish(
+        self,
+        view: TokenStream2,
+        _template_stats: TemplateStorageStats,
+    ) -> ViewBuilderPieces {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
-            dynamic_text_tokens: self.dynamic_text_tokens,
-            component_value_tokens: self.component_value_tokens,
-            hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
-            hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
-            hot_reload_dynamic_slots: self.hot_reload_dynamic_slots,
-            hot_reload_key: self.hot_reload_key,
-            template_stats,
         }
-    }
-
-    fn visit_roots(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
-        let roots = self.visit_sibling_nodes(nodes, true, SiblingContext::Roots);
-
-        quote! { (#(#roots),*) }
     }
 
     fn visit_sibling_nodes(
@@ -323,6 +615,7 @@ impl ViewBuilder {
             BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
                 self.dynamic_node(quote! { #node })
             }
+            BodyNode::SyntheticBoundary(_) => self.dynamic_node(quote! { #node }),
         }
     }
 
@@ -499,37 +792,9 @@ impl ViewBuilder {
     }
 
     fn synthetic_dynamic_chunk(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
-        let mut chunk_builder = ViewBuilder::new();
-        let roots = nodes
-            .iter()
-            .map(|node| {
-                // Each chunk root becomes its own template, so it needs its own storage capacity,
-                // computed the same way as the top-level view. A bare `ViewExt::into_vnode` would
-                // fall back to the fixed `RELEASE_FALLBACK_*_CAP`, which overflows for large
-                // chunked subtrees — and chunking is triggered precisely because the template is
-                // large.
-                let stats = chunk_builder.sibling_storage_stats(std::slice::from_ref(node));
-                let ops = stats.ops;
-                let strings = stats.strings;
-                let dynamic = stats.anchors;
-                let expr = chunk_builder.visit_node(node, false);
-                quote! {
-                    dioxus_core::internal::into_vnode_with_key_and_capacity::<
-                        #ops,
-                        #strings,
-                        #dynamic,
-                        _,
-                    >(#expr, None)
-                }
-            })
-            .collect::<Vec<_>>();
-        let template_stats =
-            chunk_builder.final_sibling_storage_stats(nodes, SiblingContext::Roots);
-        let chunk = chunk_builder.finish(quote! { () }, template_stats);
-        let definitions = chunk.definitions();
+        let chunk = TemplateBody::new(nodes.to_vec());
         let tokens = quote! {{
-            #(#definitions)*
-            dioxus_core::DynamicNode::Fragment(vec![#(#roots),*])
+            dioxus_core::IntoDynNode::into_dyn_node({ #chunk })
         }};
         self.dynamic_node(tokens)
     }
@@ -570,41 +835,10 @@ impl ViewBuilder {
         stats.finish()
     }
 
-    fn final_sibling_storage_stats(
-        &self,
-        nodes: &[BodyNode],
-        context: SiblingContext,
-    ) -> TemplateStorageStats {
-        let mut stats = TemplateStatsBuilder::new();
-        self.push_final_sibling_stats(nodes, context, &mut stats);
-        stats.finish()
-    }
-
     fn element_storage_stats(&self, element: &Element) -> TemplateStorageStats {
         let mut stats = TemplateStatsBuilder::new();
         self.push_element_stats(element, &mut stats);
         stats.finish()
-    }
-
-    fn push_final_sibling_stats(
-        &self,
-        nodes: &[BodyNode],
-        context: SiblingContext,
-        stats: &mut TemplateStatsBuilder,
-    ) {
-        if self.should_chunk_siblings(nodes, context) {
-            let chunks = if matches!(context, SiblingContext::Roots) {
-                1
-            } else {
-                self.synthetic_chunk_ranges(nodes, context).len()
-            };
-            for _ in 0..chunks {
-                stats.dynamic_node(false);
-            }
-            return;
-        }
-
-        self.push_sibling_stats(nodes, stats);
     }
 
     fn push_sibling_stats(&self, nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
@@ -630,7 +864,8 @@ impl ViewBuilder {
             | BodyNode::RawExpr(_)
             | BodyNode::Component(_)
             | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_) => stats.dynamic_node(following_static_at_parent),
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => stats.dynamic_node(following_static_at_parent),
         }
     }
 
@@ -678,7 +913,8 @@ impl ViewBuilder {
             BodyNode::RawExpr(_)
             | BodyNode::Component(_)
             | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_) => false,
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => false,
         }
     }
 }
@@ -732,8 +968,8 @@ impl Element {
 }
 
 impl TemplateBody {
-    pub(crate) fn view_builder_pieces(&self) -> ViewBuilderPieces {
-        ViewBuilderPieces::from_body(self)
+    pub(crate) fn split_oversized_templates(&mut self) {
+        Self::split_nodes(&mut self.roots, SiblingContext::Roots);
     }
 
     /// Create a new TemplateBody from a set of nodes
@@ -755,6 +991,182 @@ impl TemplateBody {
         body.validate_key();
 
         body
+    }
+
+    fn split_nodes(nodes: &mut Vec<BodyNode>, context: SiblingContext) {
+        for node in nodes.iter_mut() {
+            Self::split_nested_templates(node);
+        }
+
+        if nodes.len() == 1 && Self::exceeds_hard_limits(nodes, context) {
+            if matches!(context, SiblingContext::ElementChildren) {
+                let node = nodes.pop().unwrap();
+                *nodes = vec![BodyNode::SyntheticBoundary(Box::new(TemplateBody::new(
+                    vec![node],
+                )))];
+            }
+            return;
+        }
+
+        if nodes.len() <= 1 || !Self::exceeds_hard_limits(nodes, context) {
+            return;
+        }
+
+        let original = std::mem::take(nodes);
+        let chunk_len = original.len().div_ceil(2);
+        *nodes = original
+            .chunks(chunk_len)
+            .map(|chunk| {
+                let mut body = TemplateBody::new(chunk.to_vec());
+                body.split_oversized_templates();
+                BodyNode::SyntheticBoundary(Box::new(body))
+            })
+            .collect();
+    }
+
+    fn split_nested_templates(node: &mut BodyNode) {
+        match node {
+            BodyNode::Element(element) => {
+                Self::split_nodes(&mut element.children, SiblingContext::ElementChildren);
+            }
+            BodyNode::Component(component) => {
+                component.children.split_oversized_templates();
+            }
+            BodyNode::ForLoop(for_loop) => {
+                for_loop.body.split_oversized_templates();
+            }
+            BodyNode::IfChain(if_chain) => {
+                Self::split_if_chain(if_chain);
+            }
+            BodyNode::SyntheticBoundary(body) => {
+                body.split_oversized_templates();
+            }
+            BodyNode::Text(_) | BodyNode::RawExpr(_) => {}
+        }
+    }
+
+    fn split_if_chain(if_chain: &mut IfChain) {
+        if_chain.then_branch.split_oversized_templates();
+        if let Some(else_if) = &mut if_chain.else_if_branch {
+            Self::split_if_chain(else_if);
+        }
+        if let Some(else_branch) = &mut if_chain.else_branch {
+            else_branch.split_oversized_templates();
+        }
+    }
+
+    fn exceeds_hard_limits(nodes: &[BodyNode], context: SiblingContext) -> bool {
+        if Self::path_bits_exceed_limit(nodes) {
+            return true;
+        }
+
+        let stats = Self::sibling_storage_stats(nodes);
+        stats.path_overflow
+            || stats.ops > TEMPLATE_STORAGE_MAX_CAP
+            || stats.strings > TEMPLATE_STORAGE_MAX_CAP
+            || stats.dynamic_values > u16::MAX as usize
+            || matches!(context, SiblingContext::Roots) && nodes.len() > u16::MAX as usize
+    }
+
+    fn template_stats(&self) -> TemplateStorageStats {
+        Self::sibling_storage_stats(&self.roots)
+    }
+
+    fn sibling_storage_stats(nodes: &[BodyNode]) -> TemplateStorageStats {
+        let mut stats = TemplateStatsBuilder::new();
+        Self::push_sibling_stats(nodes, &mut stats);
+        stats.finish()
+    }
+
+    fn push_sibling_stats(nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
+        for (index, node) in nodes.iter().enumerate() {
+            Self::push_node_stats(
+                node,
+                Self::siblings_have_static_node(nodes, index + 1),
+                stats,
+            );
+        }
+    }
+
+    fn push_node_stats(
+        node: &BodyNode,
+        following_static_at_parent: bool,
+        stats: &mut TemplateStatsBuilder,
+    ) {
+        match node {
+            BodyNode::Element(element) => Self::push_element_stats(element, stats),
+            BodyNode::Text(text) if text.is_static() => stats.static_text(),
+            BodyNode::Text(_)
+            | BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => stats.dynamic_node(following_static_at_parent),
+        }
+    }
+
+    fn push_element_stats(element: &Element, stats: &mut TemplateStatsBuilder) {
+        stats.open_element(None);
+
+        for attr in &element.merged_attributes {
+            if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
+                let namespace = attr.name.resolved(&element.name).namespace.map(|_| true);
+                stats.static_attr(namespace);
+            } else {
+                stats.dynamic_attr();
+            }
+        }
+
+        Self::push_sibling_stats(&element.children, stats);
+        stats.close_element();
+    }
+
+    fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
+        nodes[start..].iter().any(Self::node_has_static_root)
+    }
+
+    fn node_has_static_root(node: &BodyNode) -> bool {
+        match node {
+            BodyNode::Element(_) => true,
+            BodyNode::Text(text) => text.is_static(),
+            BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => false,
+        }
+    }
+
+    fn path_bits_exceed_limit(nodes: &[BodyNode]) -> bool {
+        Self::sibling_path_bits_exceed_limit(nodes, 0)
+    }
+
+    fn sibling_path_bits_exceed_limit(nodes: &[BodyNode], parent_bits: usize) -> bool {
+        for (index, node) in nodes.iter().enumerate() {
+            let node_bits = parent_bits + 1 + index;
+            if Self::node_path_bits_exceed_limit(node, node_bits) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn node_path_bits_exceed_limit(node: &BodyNode, node_bits: usize) -> bool {
+        if node_bits > TEMPLATE_PATH_BITS_SPLIT_LIMIT {
+            return true;
+        }
+
+        match node {
+            BodyNode::Element(element) => {
+                Self::sibling_path_bits_exceed_limit(&element.children, node_bits)
+            }
+            BodyNode::Text(_)
+            | BodyNode::RawExpr(_)
+            | BodyNode::Component(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => false,
+        }
     }
 
     /// Normalize the Template body for rendering. If the body is completely empty, insert a placeholder node

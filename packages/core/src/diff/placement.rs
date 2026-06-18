@@ -142,7 +142,12 @@ pub(super) fn insertion_site_for_slot(
         // scanning later root positions or walking up to committed root siblings.
         if let Some(id) =
             parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
-                adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
+                adjacent_dynamic_sibling_after_in_vnode(
+                    parent_vnode.vnode(),
+                    parent_mount,
+                    slot,
+                    dom,
+                )
             })
         {
             return InsertionSite::AtAnchor(DomAnchor::Before(id));
@@ -269,9 +274,14 @@ fn insertion_site_for_child_in_parent(
                     else {
                         continue;
                     };
-                    if let Some(id) =
-                        first_live_sibling_after(children, &child_mounts, position, mount, dom)
-                    {
+                    let sib = first_live_sibling_after(children, &child_mounts, position, mount, dom);
+                    if std::env::var_os("FUZZ_DBG").is_some() {
+                        eprintln!(
+                            "[walk] FRAGMENT idx={idx} len={} mount={mount:?} pos={position} child_mounts={child_mounts:?} sibling_after={sib:?}",
+                            children.len()
+                        );
+                    }
+                    if let Some(id) = sib {
                         return Some(InsertionSite::AtAnchor(DomAnchor::Before(id)));
                     }
                     return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
@@ -280,6 +290,9 @@ fn insertion_site_for_child_in_parent(
                     if dom.unchecked_mounted_dynamic_component_root_mount(parent_mount, idx)
                         == mount
                     {
+                        if std::env::var_os("FUZZ_DBG").is_some() {
+                            eprintln!("[walk] COMPONENT idx={idx} root mount={mount:?}");
+                        }
                         return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                     }
                 }
