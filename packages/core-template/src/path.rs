@@ -8,7 +8,7 @@ pub struct TemplatePath {
 
 impl TemplatePath {
     /// Create an empty path.
-    pub(crate) const fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self { path: 0 }
     }
 
@@ -152,7 +152,7 @@ impl TemplateSlotPath {
     }
 
     /// Create a dynamic slot target before a static node.
-    pub(crate) const fn before_static(path: TemplatePath) -> Self {
+    pub const fn before_static(path: TemplatePath) -> Self {
         if path.is_empty() {
             panic!("bad slot target");
         }
@@ -160,7 +160,7 @@ impl TemplateSlotPath {
     }
 
     /// Create a dynamic slot target that appends to a parent.
-    pub(crate) const fn append_children(path: TemplatePath) -> Self {
+    pub const fn append_children(path: TemplatePath) -> Self {
         Self::new(Self::encode_payload(path) | Self::TARGET_APPEND_CHILDREN)
     }
 

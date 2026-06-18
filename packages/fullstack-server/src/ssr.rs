@@ -615,7 +615,7 @@ impl SsrRendererPool {
             .values()
             .next()
             .is_some_and(|idx| vnode.dynamic_values[idx].as_node().is_some())
-            && !anchor.is_root_level()
+            && anchor.parent_element_op_index().is_some()
             && anchor.slot_path().is_inside_static(root_path)
     }
 

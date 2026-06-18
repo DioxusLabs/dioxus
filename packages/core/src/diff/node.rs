@@ -850,16 +850,14 @@ impl VNode {
     ) {
         for anchor in self.template.anchors() {
             let group = DynamicAttrGroup::new(self, anchor);
-            if group.has_attrs() {
-                if let Some(to) = state.to.as_deref_mut() {
-                    self.write_attr_group(mount, &group, state.dom, to);
-                }
+            if let Some(to) = state.to.as_deref_mut() {
+                self.write_attr_group(mount, &group, state.dom, to);
             }
 
             let has_dynamic_nodes = anchor
                 .values()
                 .any(|idx| self.dynamic_values[idx].as_node().is_some());
-            if has_dynamic_nodes && !anchor.is_root_level() {
+            if has_dynamic_nodes && anchor.parent_element_op_index().is_some() {
                 self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
             }
         }

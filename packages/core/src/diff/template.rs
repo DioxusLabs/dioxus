@@ -131,10 +131,6 @@ impl<'a> DynamicAttrGroup<'a> {
             .filter(|&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
-    pub(super) fn has_attrs(&self) -> bool {
-        self.ids().next().is_some()
-    }
-
     pub(super) fn static_path(&self) -> TemplatePath {
         self.anchor.static_path()
     }
@@ -168,7 +164,10 @@ impl<'a> DynamicAttrGroup<'a> {
         &self,
         key: (&'static str, Option<&'static str>),
     ) -> Option<&'static str> {
-        let element_op = self.anchor.element_op().expect("bad attr anchor");
+        let element_op = self
+            .anchor
+            .parent_element_op_index()
+            .expect("bad attr anchor");
         self.template.static_attr_value_for_key(element_op, key)
     }
 }
@@ -211,8 +210,6 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
 ) {
     for anchor in vnode.template.anchors() {
         let group = DynamicAttrGroup::new(vnode, anchor);
-        if group.has_attrs() {
-            visit(group);
-        }
+        visit(group);
     }
 }

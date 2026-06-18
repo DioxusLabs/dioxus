@@ -283,7 +283,7 @@ fn separated_empty_fragment_slots_stay_inside_static_parent() {
 
     assert_eq!(anchors.len(), 2);
     for anchor in &anchors {
-        assert!(!anchor.is_root_level());
+        assert!(anchor.parent_element_op_index().is_some());
     }
 
     let before_span = anchors

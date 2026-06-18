@@ -304,7 +304,7 @@ impl Template {
 
     fn root_dynamic_anchor_before(&self, path: TemplatePath) -> Option<&'static TemplateAnchor> {
         self.anchors.iter().find(|anchor| {
-            anchor.is_root_level()
+            anchor.parent_element_op_index().is_none()
                 && matches!(
                     anchor.slot_target(),
                     TemplateSlotTarget::BeforeStatic(target) if target == path
@@ -314,7 +314,7 @@ impl Template {
 
     fn trailing_root_dynamic_anchor(&self) -> Option<&'static TemplateAnchor> {
         self.anchors.iter().find(|anchor| {
-            anchor.is_root_level()
+            anchor.parent_element_op_index().is_none()
                 && matches!(
                     anchor.slot_target(),
                     TemplateSlotTarget::AppendChildren(path) if path.is_empty()
@@ -428,7 +428,7 @@ impl Template {
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
         self.anchors
             .iter()
-            .filter(move |anchor| anchor.element_op() == Some(element_op))
+            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
     }
 
     /// Iterate static attributes of an element.

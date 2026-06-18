@@ -1,7 +1,7 @@
 use crate::{
     DynamicValue, Element, IntoDynNode, ReactiveContext, Subscribers, Template, TemplateOp, VNode,
     innerlude::{CapturedError, provide_context},
-    template::TemplateAnchor,
+    template::{TemplateAnchor, TemplatePath, TemplateSlotPath},
     try_consume_context, use_hook,
 };
 use std::{
@@ -11,7 +11,11 @@ use std::{
     rc::Rc,
 };
 
-const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::from_raw_parts(0, 3, 0..1)];
+const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::new(
+    Some(0),
+    TemplateSlotPath::append_children(TemplatePath::root(0)),
+    0..1,
+)];
 
 /// Return early with an error.
 #[macro_export]
@@ -329,7 +333,11 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
             static TEMPLATE: Template = Template::new(
                 &[],
                 &[],
-                &[TemplateAnchor::from_raw_parts(u16::MAX, 1, 0..1)],
+                &[TemplateAnchor::new(
+                    None,
+                    TemplateSlotPath::append_children(TemplatePath::empty()),
+                    0..1,
+                )],
             );
             VNode::new(
                 None,
@@ -339,4 +347,3 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         })
     }
 }
-

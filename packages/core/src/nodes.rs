@@ -4,7 +4,7 @@ use crate::{
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
-    template::TemplateAnchor,
+    template::{TemplateAnchor, TemplatePath, TemplateSlotPath},
 };
 use dioxus_core_types::DioxusFormattable;
 
@@ -115,7 +115,11 @@ impl VNode {
         static EMPTY_TEMPLATE: Template = Template::new(
             &[],
             &[],
-            &[TemplateAnchor::from_raw_parts(u16::MAX, 1, 0..1)],
+            &[TemplateAnchor::new(
+                None,
+                TemplateSlotPath::append_children(TemplatePath::empty()),
+                0..1,
+            )],
         );
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
@@ -143,7 +147,11 @@ impl VNode {
         static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
             &[],
             &[],
-            &[TemplateAnchor::from_raw_parts(u16::MAX, 1, 0..1)],
+            &[TemplateAnchor::new(
+                None,
+                TemplateSlotPath::append_children(TemplatePath::empty()),
+                0..1,
+            )],
         );
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
@@ -214,7 +222,7 @@ impl VNode {
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
         self.template
             .anchor_for_value(idx)
-            .filter(|anchor| anchor.is_root_level())
+            .filter(|anchor| anchor.parent_element_op_index().is_none())
             .and_then(|_| self.dynamic_values[idx].as_node())
     }
 
@@ -280,7 +288,7 @@ impl VNode {
         element_op: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
         self.dynamic_anchors_in_document_order(true)
-            .filter(move |anchor| anchor.element_op() == Some(element_op))
+            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
     }
 
     #[doc(hidden)]
@@ -311,7 +319,7 @@ impl VNode {
         element_op: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
         self.dynamic_anchors_in_document_order(false)
-            .filter(move |anchor| anchor.element_op() == Some(element_op))
+            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
     }
 }
 
