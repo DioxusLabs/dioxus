@@ -14,7 +14,17 @@ use super::cursor::HydrationCursor;
 use super::SuspenseMessage;
 use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
 
-#[derive(Debug)]
+fn children_array(parent: &web_sys::Node) -> js_sys::Array {
+    js_sys::Array::from(parent.child_nodes().unchecked_ref())
+}
+
+fn node_array(node: &web_sys::Node) -> js_sys::Array {
+    let array = js_sys::Array::new();
+    array.push(node.unchecked_ref());
+    array
+}
+
+#[cfg_attr(debug_assertions, derive(Debug))]
 #[non_exhaustive]
 pub(crate) enum RehydrationError {
     /// The client tried to rehydrate a vnode before the dom was built
@@ -31,7 +41,13 @@ pub(crate) enum RehydrationError {
 impl WebsysDom {
     pub fn rehydrate_streaming(&mut self, message: SuspenseMessage, dom: &mut VirtualDom) {
         if let Err(err) = self.rehydrate_streaming_inner(message, dom) {
+            #[cfg(debug_assertions)]
             tracing::error!("Rehydration failed. {:?}", err);
+            #[cfg(not(debug_assertions))]
+            {
+                let _ = err;
+                tracing::error!("Rehydration failed.");
+            }
         }
     }
 
@@ -63,20 +79,16 @@ impl WebsysDom {
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
-        // Collect the new nodes. `resolve_suspense` pushes them after it
+        // Snapshot the new nodes. `resolve_suspense` pushes them after it
         // pushes the placeholder target so replacement stays stack-only.
-        let mut current_child = resolved_suspense_element.first_child();
-        let mut children = Vec::new();
-        while let Some(node) = current_child {
-            children.push(node.clone());
-            current_child = node.next_sibling();
-        }
+        let children = children_array(resolved_suspense_element.unchecked_ref());
+        let children_len = children.length();
 
         // Empty errored chunks use a real empty text node as the
         // `replace_with(loading_id, 1)` item; the replacement positions it at
         // the loading slot. Hydration later binds the new scope's placeholder
         // ElementId to that same node.
-        let empty_bootstrap = children.is_empty();
+        let empty_bootstrap = children_len == 0;
         let mut empty_bootstrap_node = None;
 
         #[cfg(not(debug_assertions))]
@@ -91,34 +103,20 @@ impl WebsysDom {
         }
         server_data.in_context(|| {
             // rerun the scope with the new data
-            SuspenseBoundaryProps::resolve_suspense(
-                id,
-                dom,
-                self,
-                |to| {
-                    // Resolve the VDOM bookkeeping without writing duplicate DOM nodes.
-                    to.skip_mutations = true;
-                },
-                |to| {
-                    if empty_bootstrap {
-                        let node: web_sys::Node = web_sys::window()
-                            .unwrap()
-                            .document()
-                            .unwrap()
-                            .create_text_node("")
-                            .unchecked_into();
-                        to.interpreter.base().push_root(node.clone());
-                        empty_bootstrap_node = Some(node);
-                        1
-                    } else {
-                        for node in &children {
-                            to.interpreter.base().push_root(node.clone());
-                        }
-                        children.len()
+            SuspenseBoundaryProps::resolve_suspense(id, dom, self, |to| {
+                if empty_bootstrap {
+                    let node: web_sys::Node = document.create_text_node("").unchecked_into();
+                    to.interpreter.base().push_root(node.clone());
+                    empty_bootstrap_node = Some(node);
+                    1
+                } else {
+                    for index in 0..children_len {
+                        let node: web_sys::Node = children.get(index).unchecked_into();
+                        to.interpreter.base().push_root(node);
                     }
-                },
-            );
-            self.skip_mutations = false;
+                    children_len as usize
+                }
+            });
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -146,13 +144,13 @@ impl WebsysDom {
                 first_dynamic_root_element_id(root_scope, dom),
                 empty_bootstrap_node.as_ref(),
             ) {
-                self.interpreter
-                    .base()
-                    .set_node(claim_id.raw() as u32, node);
+                self.interpreter.base().push_root(node.clone());
+                self.interpreter.pop_id(claim_id.raw() as u32);
+                self.flush_edits();
             }
             self.collect_suspense_only(root_scope, dom);
         } else {
-            self.start_hydration_at_scope(root_scope, dom, children)?;
+            self.start_hydration_at_scope(root_scope, dom, children, false)?;
         }
 
         Ok(())
@@ -162,35 +160,36 @@ impl WebsysDom {
         &mut self,
         scope: &ScopeState,
         dom: &VirtualDom,
-        under: Vec<web_sys::Node>,
+        under: js_sys::Array,
+        filter_scripts: bool,
     ) -> Result<(), RehydrationError> {
-        let under_is_empty = under.is_empty();
-        let under = if under_is_empty {
-            vec![self.root.clone()]
-        } else {
-            under
-        };
-        let mut cursor = HydrationCursor::new(self.interpreter.base(), self.root.clone(), under);
-        let mut to_mount = Vec::new();
+        let mut cursor = HydrationCursor::new(
+            self.interpreter.base(),
+            self.root.clone(),
+            under,
+            filter_scripts,
+        );
+        let under_is_empty = cursor.root_count() == 0;
 
         if under_is_empty {
             // No real root nodes were emitted by SSR. Hydrate under the mount
             // element so zero-DOM root ids still get anchors with a concrete
             // parent.
+            cursor = HydrationCursor::new(
+                self.interpreter.base(),
+                self.root.clone(),
+                node_array(&self.root),
+                false,
+            );
             cursor.enter_root(0);
             cursor.begin_children();
-            self.emit_scope(scope, dom, &mut cursor, &mut to_mount)?;
+            self.emit_scope(scope, dom, &mut cursor)?;
             cursor.end_children();
         } else {
             // Park the cursor on the first root; subsequent roots are stepped via
             // `advance(1)` as the VDOM walker descends siblings.
             cursor.enter_root(0);
-            self.emit_scope(scope, dom, &mut cursor, &mut to_mount)?;
-        }
-
-        #[cfg(feature = "mounted")]
-        for id in to_mount {
-            self.send_mount_event(id);
+            self.emit_scope(scope, dom, &mut cursor)?;
         }
 
         Ok(())
@@ -201,42 +200,35 @@ impl WebsysDom {
         vdom: &VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
-        let closure =
-            move |path: Vec<u32>,
-                  data: js_sys::Uint8Array,
-                  #[allow(unused)] debug_types: Option<Vec<String>>,
-                  #[allow(unused)] debug_locations: Option<Vec<String>>| {
-                let data = data.to_vec();
-                _ = tx.start_send(SuspenseMessage {
-                    suspense_path: path,
-                    data,
-                    #[cfg(debug_assertions)]
-                    debug_types,
-                    #[cfg(debug_assertions)]
-                    debug_locations,
-                });
-            };
+        // A single registration path for both build profiles. The JS side always
+        // invokes the callback with four arguments; in release the trailing
+        // type/location metadata arrives as `null` (the server omits it) and is
+        // dropped before the message is sent.
+        let closure = move |path: Vec<u32>,
+                            data: js_sys::Uint8Array,
+                            debug_types: Option<Vec<String>>,
+                            debug_locations: Option<Vec<String>>| {
+            let data = data.to_vec();
+            #[cfg(not(debug_assertions))]
+            let _ = (debug_types, debug_locations);
+            _ = tx.start_send(SuspenseMessage {
+                suspense_path: path,
+                data,
+                #[cfg(debug_assertions)]
+                debug_types,
+                #[cfg(debug_assertions)]
+                debug_locations,
+            });
+        };
         let closure = wasm_bindgen::closure::Closure::new(closure);
-        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming_debug(
-            &closure,
-        );
+        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
         closure.forget();
 
-        // EnterRoot(i) parks the cursor on under[i], so pass the rendered app
-        // roots. The dx build injects `<script>` tags before/after the app for
-        // hydration-data plumbing; those are not part of the rendered app.
-        let mut roots: Vec<web_sys::Node> = Vec::new();
-        let mut current = self.root.first_child();
-        while let Some(node) = current {
-            current = node.next_sibling();
-            let is_injected_script = node
-                .dyn_ref::<web_sys::Element>()
-                .is_some_and(|el| el.tag_name().eq_ignore_ascii_case("script"));
-            if !is_injected_script {
-                roots.push(node);
-            }
-        }
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, roots)?;
+        // EnterRoot(i) parks the cursor on under[i], so pass the mount
+        // children. The JS cursor filters dx-injected hydration scripts before
+        // exposing the root list.
+        let roots = children_array(&self.root);
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true)?;
 
         Ok(rx)
     }

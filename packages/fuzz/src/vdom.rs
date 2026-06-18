@@ -433,7 +433,7 @@ fn build_vnode_with_suspense(
         .collect::<Vec<_>>();
     let dynamic_slots = dynamic_slots_for_template(&spec.template, &template);
 
-    let dynamic_values = dynamic_slots
+    let dynamic_values: Vec<DynamicValue> = dynamic_slots
         .into_iter()
         .map(|slot| match slot {
             FuzzDynamicSlot::Node(id) => DynamicValue::Node(dynamic_nodes[id].clone()),
@@ -444,9 +444,7 @@ fn build_vnode_with_suspense(
     VNode::new(
         spec.key.map(|key| format!("k{key}")),
         template,
-        template
-            .reorder_dynamic_values_from_document_order(dynamic_values)
-            .into_boxed_slice(),
+        dynamic_values.into_boxed_slice(),
     )
 }
 

@@ -47,6 +47,15 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         self.context
     }
 
+    /// Whether a renderer writer is attached for the current diff.
+    ///
+    /// A no-op writer still counts as attached: it absorbs the same mutation
+    /// stream as a real renderer so the diff keeps one control flow. Only a
+    /// hidden/suppressed diff (no writer at all) skips renderer placement.
+    pub(crate) fn has_writer(&mut self) -> bool {
+        self.to.is_some()
+    }
+
     /// Create replacement content in an empty dynamic slot, then optionally
     /// restore the old slot while removing the previous live node.
     ///
@@ -91,7 +100,7 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct DiffFrame<'a> {
     pub(crate) mount: MountId,
     pub(crate) old: &'a VNode,
@@ -104,7 +113,7 @@ pub(crate) struct DiffFrame<'a> {
 /// The committed mount still points at the old vnode until a vnode finishes
 /// diffing, so placement resolution needs these temporary old/new pairs to reason
 /// about slots inside the active vnode and sibling order in the active parent.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct DiffContext<'a> {
     current: DiffFrame<'a>,
     parent: Option<DiffFrame<'a>>,

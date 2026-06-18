@@ -14,6 +14,10 @@ use std::{
 };
 
 /// Properties for the [`Window()`] component.
+///
+/// Use the `config` prop to set the initial native window configuration, the
+/// `onclose` prop to handle a user-initiated close, and children to choose what
+/// the window renders. Configuration is applied when the window is opened.
 #[derive(Clone)]
 pub struct WindowProps {
     config: Rc<RefCell<Option<Config>>>,
@@ -146,7 +150,30 @@ impl WindowState {
     }
 }
 
-/// Render children into a separate desktop window while keeping them in the same logical Dioxus tree.
+/// Render children into a separate desktop window.
+///
+/// `Window` behaves like an ordinary component from the app's point of view:
+/// it accepts children, can read the same context as its parent, and can update
+/// in response to the same state changes. The difference is that its children
+/// are displayed in their own native desktop window.
+///
+/// The optional `config` prop customizes the window when it is opened. The
+/// optional `onclose` handler runs when the user closes the native window.
+///
+/// ```rust,ignore
+/// use dioxus::prelude::*;
+/// use dioxus::desktop::{Config, Window, WindowBuilder};
+///
+/// fn App() -> Element {
+///     rsx! {
+///         Window {
+///             config: Config::new().with_window(WindowBuilder::new().with_title("Inspector")),
+///             onclose: move |_| tracing::info!("inspector closed"),
+///             div { "Tools" }
+///         }
+///     }
+/// }
+/// ```
 #[allow(non_snake_case)]
 pub fn Window(props: WindowProps) -> Element {
     let schedule_update = schedule_update();

@@ -176,8 +176,21 @@ export class BaseInterpreter {
     return this.nodes[id];
   }
 
+  // Bind an ElementId to a DOM node. Used by the Rust hydration cursor to
+  // record the nodes it matches against the server-rendered DOM.
   setNode(id: NodeId, node: Node) {
     this.nodes[id] = node;
+  }
+
+  // Attach an event listener to a previously-bound node. Mirrors
+  // `addTopEventListener`, but addresses the element by id rather than the
+  // working stack, so the Rust hydration cursor can drive it directly.
+  setNodeListener(id: NodeId, event_name: string, bubbles: boolean) {
+    const node = this.nodes[id] as ListenerElement;
+    if (node.listening) node.listening += 1;
+    else node.listening = 1;
+    node.setAttribute("data-dioxus-id", `${id}`);
+    this.createListener(event_name, node, bubbles);
   }
 
   pushRoot(node: Node) {

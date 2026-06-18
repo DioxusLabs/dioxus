@@ -3,13 +3,20 @@ use dioxus_core::AttributeValue;
 /// A stable, comparable view of the mock renderer tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SnapshotNode {
+    /// An element node in renderer output.
     Element {
+        /// The element tag name.
         tag: String,
+        /// The element namespace, if any.
         namespace: Option<String>,
+        /// The element attributes after renderer-side updates.
         attrs: Vec<SnapshotAttr>,
+        /// Event listener names attached to the element.
         listeners: Vec<String>,
+        /// Child nodes in document order.
         children: Vec<SnapshotNode>,
     },
+    /// A text node.
     Text(String),
 }
 
@@ -24,8 +31,11 @@ pub(crate) fn format_snapshot_mismatch(
 /// A stable attribute snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SnapshotAttr {
+    /// The attribute name.
     pub name: String,
+    /// The attribute namespace, if any.
     pub namespace: Option<String>,
+    /// The rendered attribute value.
     pub value: String,
 }
 

@@ -7,7 +7,7 @@ use crate::{
     vdom::App,
 };
 use dioxus_core::{AttributeValue, ElementId, Event, ScopeId, VirtualDom, WriteMutations};
-use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode};
 use std::{
     any::Any,
     cell::RefCell,
@@ -43,7 +43,7 @@ impl Harness {
     }
 
     #[cfg(test)]
-    fn fresh_strict() -> Self {
+    pub(crate) fn fresh_strict() -> Self {
         Self::fresh_with_strict_options(true, false)
     }
 
@@ -120,26 +120,6 @@ struct TargetedRendererOracle {
 }
 
 const RECENT_MUTATION_LIMIT: usize = 64;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct EventListenerTarget {
-    name: String,
-    id: ElementId,
-}
-
-impl PartialOrd for EventListenerTarget {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for EventListenerTarget {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.name
-            .cmp(&other.name)
-            .then_with(|| self.id.raw().cmp(&other.id.raw()))
-    }
-}
 
 #[derive(Clone, Debug)]
 enum MutationTrace {

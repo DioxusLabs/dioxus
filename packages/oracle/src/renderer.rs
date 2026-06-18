@@ -108,9 +108,11 @@ impl EditSummary {
 }
 
 /// An event listener target that has been attached during this renderer's lifetime.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EventListenerTarget {
+    /// The event name registered on the target.
     pub name: String,
+    /// The renderer element id that received the listener.
     pub id: ElementId,
 }
 
@@ -625,11 +627,12 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
     }
 }
 
-/// A fast mock renderer that applies Dioxus mutations into an in-memory tree.
+/// A fast in-memory renderer for testing Dioxus mutations.
 ///
-/// The stack machine and `ElementId -> node` mapping live in core's
-/// [`StackState`]; this renderer supplies the real tree semantics via
-/// [`OracleArena`] and layers edit counting on top with [`EditCountingWriter`].
+/// `RendererOracle` applies the same mutation stream a renderer receives and
+/// exposes stable snapshots that tests can compare against a fresh render.
+/// It is intended for unit tests, fuzzing, and focused renderer-behavior
+/// assertions that should not require a browser or native window.
 pub struct RendererOracle {
     arena: OracleArena,
     state: StackState<NodeId>,
@@ -924,7 +927,7 @@ impl RendererOracle {
     /// Assert that this renderer's mock DOM matches the DOM described by an `rsx!` block.
     ///
     /// The expected side is built by walking the VNode tree of a throwaway `VirtualDom`
-    /// directly (via `vdom_snapshot`), without going through any `WriteMutations` path.
+    /// directly, without going through any `WriteMutations` path.
     /// The actual side is this oracle's mock DOM, which was built by applying every
     /// mutation emitted by the renderer under test. Equality therefore validates that
     /// the mutation stream produced the correct DOM.

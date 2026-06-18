@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::{
-    ElementId, MultiTargetWriter, MultiWriter, Mutation, Mutations, Portal, RenderTargetId,
-    Runtime, VirtualDom,
+    ElementId, MultiWriter, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom,
 };
 use std::{
     any::Any,
@@ -62,6 +61,7 @@ static ROOT_CLICKS: AtomicUsize = AtomicUsize::new(0);
 static PORTAL_CLICKS: AtomicUsize = AtomicUsize::new(0);
 static RETARGET_CLICKS: AtomicUsize = AtomicUsize::new(0);
 static EFFECTS: AtomicUsize = AtomicUsize::new(0);
+static WRITERLESS_EFFECTS: AtomicUsize = AtomicUsize::new(0);
 static SHOW_PORTAL: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone)]
@@ -111,7 +111,7 @@ fn noop_app(props: AppProps) -> Element {
     rsx! {
         Portal {
             target: props.target.get(),
-            EffectChild {}
+            WriterlessEffectChild {}
         }
     }
 }
@@ -284,6 +284,15 @@ fn EffectChild() -> Element {
     rsx! { "effect child" }
 }
 
+#[component]
+fn WriterlessEffectChild() -> Element {
+    use_effect(|| {
+        WRITERLESS_EFFECTS.fetch_add(1, Ordering::SeqCst);
+    });
+
+    rsx! { "effect child" }
+}
+
 fn click_event() -> Event<dyn Any> {
     Event::new(
         Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
@@ -420,7 +429,7 @@ fn portal_targets_have_isolated_element_arenas_and_logical_event_bubbling() {
 
 #[test]
 fn writerless_targets_drop_writes_but_mount_effects() {
-    EFFECTS.store(0, Ordering::SeqCst);
+    WRITERLESS_EFFECTS.store(0, Ordering::SeqCst);
 
     let target_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(noop_app, AppProps { target: target_slot.clone() });
@@ -434,7 +443,7 @@ fn writerless_targets_drop_writes_but_mount_effects() {
     dom.process_events();
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 
-    assert_eq!(EFFECTS.load(Ordering::SeqCst), 1);
+    assert_eq!(WRITERLESS_EFFECTS.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -527,20 +536,20 @@ fn detached_targets_drop_writes_but_mount_effects() {
 
     // The target's writer is attached for the rebuild, then gone for the next
     // pass. Targeted mutations are dropped, but logical mounting still runs.
-    let mut writer = MultiTargetWriter::<Mutations>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, Mutations::default());
     writer.insert(target, Mutations::default());
     dom.rebuild(&mut writer);
-    let edits = drain_targets(writer.into_targets());
+    let edits = drain_targets(writer);
     let show_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
     dom.runtime()
         .handle_event("click", click_event(), show_button);
 
-    let mut writer = MultiTargetWriter::<Mutations>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, Mutations::default());
     dom.render_immediate(&mut writer);
-    let edits = drain_targets(writer.into_targets());
+    let edits = drain_targets(writer);
 
     assert!(!edits.contains_key(&target));
     dom.process_events();

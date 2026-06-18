@@ -28,7 +28,7 @@ use super::{
     },
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(super) enum ElementEdge {
     First,
     Last,
@@ -56,14 +56,14 @@ impl ElementEdge {
 
 /// A renderer-level position where `m` DOM nodes, already on the renderer stack,
 /// should be spliced in.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(super) enum DomAnchor {
     Before(ElementId),
     After(ElementId),
 }
 
 /// A renderer-level insertion site for nodes already on the renderer stack.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(super) enum InsertionSite {
     AtAnchor(DomAnchor),
     Slot {
@@ -137,10 +137,10 @@ pub(super) fn insertion_site_for_slot(
     // exist whenever renderer placement is requested.
     let enclosing = dom
         .mounted_root_node(parent_mount, root_idx)
-        .expect("non-root dynamic slot must have a mounted enclosing root");
+        .expect("bad slot root");
     debug_assert!(
         dom.element_exists_for_mount(parent_mount, enclosing),
-        "non-root dynamic slot must be placed inside a live enclosing root"
+        "bad slot root"
     );
     if let Some(id) = adjacent_dynamic_sibling_after(parent_mount, slot, dom, context) {
         return InsertionSite::AtAnchor(DomAnchor::Before(id));
@@ -242,7 +242,9 @@ fn insertion_site_for_child_in_parent(
                 DynamicNode::Fragment(children) => {
                     let child_mounts =
                         dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
-                    let position = locate_in_fragment(&child_mounts, mount)?;
+                    let Some(position) = locate_in_fragment(&child_mounts, mount) else {
+                        continue;
+                    };
                     if let Some(id) =
                         first_live_sibling_after(children, &child_mounts, position, mount, dom)
                     {
@@ -285,8 +287,7 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     slot: DynamicNodeSlot<'_>,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let active_slot = dynamic_node_slot(parent_vnode, slot.index())
-        .expect("active dynamic slot must exist in the committed parent view");
+    let active_slot = dynamic_node_slot(parent_vnode, slot.index()).expect("bad active slot");
     first_live_slot_after(
         parent_vnode,
         parent_mount,
@@ -362,7 +363,7 @@ fn live_dynamic_slot_first_element(
                 dom.unchecked_mounted_dynamic_component_root_mount(mount, idx);
             let vnode = dom
                 .current_mounted_view(component_root_mount)
-                .expect("mounted component root must have a committed vnode");
+                .expect("component vnode");
             vnode_edge_element(
                 MountedVNode::new(&vnode, component_root_mount),
                 dom,
@@ -387,7 +388,7 @@ fn parent_views<'a>(
         mount: parent_mount,
         view: dom
             .current_mounted_view(parent_mount)
-            .expect("parent mount must exist while resolving child placement"),
+            .expect("parent mount"),
     }
 }
 

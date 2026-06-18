@@ -25,7 +25,6 @@ impl PortalProps {
 }
 
 #[must_use]
-#[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
 pub struct PortalPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
@@ -113,8 +112,10 @@ impl PortalPropsBuilder<((RenderTargetId,), (Element,))> {
 /// the same Dioxus component tree.
 ///
 /// Each render target has its own [`ElementId`] arena. Hosts create targets with
-/// [`Runtime::create_render_target`] and serve them with a [`MultiWriter`]. If the host is not
-/// currently serving the target, the target router drops renderer mutations for that target.
+/// [`Runtime::create_render_target`] and serve them with a [`MultiWriter`]. A single
+/// [`WriteMutations`] writer automatically serves the root target; hosts with several targets can
+/// pass a `BTreeMap<RenderTargetId, W>` or their own [`MultiWriter`] implementation. If the host is
+/// not currently serving the target, renderer mutations for that target are skipped.
 ///
 /// ## Example
 ///

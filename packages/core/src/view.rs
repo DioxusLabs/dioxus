@@ -1,8 +1,8 @@
-//! Typed, const-driven view builders.
+//! Typed view builders.
 //!
-//! This module mirrors the template-v2 builder model: each view type contributes
-//! const raw template structure, and the composed type is promoted to a static
-//! [`Template`] through [`ViewTemplate`].
+//! Most applications use `rsx!`, but the generated HTML constructors can also
+//! be used directly. A builder can collect attributes and children, then
+//! [`ViewExt::into_vnode`] converts it into a [`VNode`].
 
 use std::marker::PhantomData;
 #[cfg(debug_assertions)]
@@ -12,16 +12,25 @@ use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
     RenderedView, Template, VComponent, VNode,
     nodes::IntoVNode,
-    template::{
-        TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
-        TemplateRawTree, TemplateStorage,
-    },
+    template::{TemplateRawTree, TemplateStorage},
 };
+
+#[cfg(debug_assertions)]
+use crate::template::{
+    TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
+};
+
+#[cfg(not(debug_assertions))]
+const RELEASE_FALLBACK_OPS_CAP: usize = 32;
+#[cfg(not(debug_assertions))]
+const RELEASE_FALLBACK_STRING_CAP: usize = 32;
+#[cfg(not(debug_assertions))]
+const RELEASE_FALLBACK_DYNAMIC_CAP: usize = 8;
 
 /// A type that contributes static template structure.
 #[doc(hidden)]
 pub trait ViewTemplate {
-    /// The raw template-v2-style tree for this view type.
+    /// The static tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
 }
 
@@ -42,9 +51,9 @@ trait StaticViewTemplate: ViewTemplate {
 impl<T: ViewTemplate> StaticViewTemplate for T {
     #[cfg(not(debug_assertions))]
     const TEMPLATE: &'static Template = &TemplateStorage::<
-        TEMPLATE_STORAGE_OPS_CAP,
-        TEMPLATE_STORAGE_STRING_CAP,
-        TEMPLATE_STORAGE_DYNAMIC_CAP,
+        RELEASE_FALLBACK_OPS_CAP,
+        RELEASE_FALLBACK_STRING_CAP,
+        RELEASE_FALLBACK_DYNAMIC_CAP,
     >::build_from_tree(T::TEMPLATE_TREE)
     .as_template();
 
@@ -66,13 +75,32 @@ impl<T: ViewTemplate> StaticViewTemplate for T {
     }
 }
 
+#[cfg(not(debug_assertions))]
+pub(crate) trait StaticViewTemplateWithCapacity<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+>: ViewTemplate
+{
+    const TEMPLATE: &'static Template;
+}
+
+#[cfg(not(debug_assertions))]
+impl<T: ViewTemplate, const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
+    StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP> for T
+{
+    const TEMPLATE: &'static Template =
+        &TemplateStorage::<OPS_CAP, STRING_CAP, DYNAMIC_CAP>::build_from_tree(T::TEMPLATE_TREE)
+            .as_template();
+}
+
 impl ViewTemplate for () {
     const TEMPLATE_TREE: &'static TemplateRawTree = TemplateRawTree::EMPTY;
 }
 
 /// Runtime dynamic values collected while consuming a typed view.
 #[doc(hidden)]
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct DynamicViewValues {
     values: Vec<DynamicValue>,
 }
@@ -100,20 +128,14 @@ impl DynamicViewValues {
 
     /// Convert this buffer into the boxed slice expected by [`VNode`].
     #[inline]
-    pub(crate) fn into_boxed_slice_for_template(self, template: &Template) -> Box<[DynamicValue]> {
-        template
-            .reorder_dynamic_values_from_document_order(self.values)
-            .into_boxed_slice()
+    pub(crate) fn into_boxed_slice(self) -> Box<[DynamicValue]> {
+        self.values.into_boxed_slice()
     }
 
     /// Convert this buffer into the rendered view payload expected by [`VNode`].
     #[inline]
-    pub(crate) fn into_rendered_view_for_template(
-        self,
-        key: Option<String>,
-        template: &Template,
-    ) -> RenderedView {
-        RenderedView::new(key, self.into_boxed_slice_for_template(template))
+    pub(crate) fn into_rendered_view(self, key: Option<String>) -> RenderedView {
+        RenderedView::new(key, self.into_boxed_slice())
     }
 }
 
@@ -147,10 +169,7 @@ pub fn into_vnode_with_template<V: View>(
 ) -> VNode {
     let mut dynamic = DynamicViewValues::with_capacity(template.dynamic_value_count());
     view.push(&mut dynamic);
-    VNode::new_with_rendered_view(
-        *template,
-        dynamic.into_rendered_view_for_template(key, template),
-    )
+    VNode::new_with_rendered_view(*template, dynamic.into_rendered_view(key))
 }
 
 /// Convert a view into a keyed [`VNode`].
@@ -166,6 +185,25 @@ pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     {
         into_vnode_with_template(view, key, <V as StaticViewTemplate>::TEMPLATE)
     }
+}
+
+#[cfg(not(debug_assertions))]
+#[doc(hidden)]
+#[inline]
+pub(crate) fn into_vnode_with_key_and_capacity<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+    V: View + StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+>(
+    view: V,
+    key: Option<String>,
+) -> VNode {
+    into_vnode_with_template(
+        view,
+        key,
+        <V as StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>>::TEMPLATE,
+    )
 }
 
 /// Convert a view into a keyed [`VNode`] using a lazily initialized template cache.
@@ -594,7 +632,7 @@ pub trait StaticAttributeValue {
     const VALUE: &'static str;
 }
 
-/// A static attribute value that can be passed to generated attribute builder methods.
+/// A static attribute value that can be passed to typed attribute methods.
 #[doc(hidden)]
 pub struct StaticAttributeValueBuilder<V>(PhantomData<V>);
 
@@ -634,7 +672,7 @@ pub(crate) fn dynamic_attributes_builder(attrs: Box<[Attribute]>) -> DynamicAttr
     DynamicAttributesBuilder { attrs }
 }
 
-/// Create a dynamic attribute slot with a single attribute.
+#[doc(hidden)]
 #[inline]
 pub fn dynamic_attribute<T>(
     name: &'static str,
@@ -768,6 +806,7 @@ impl<T: StaticText> ViewTemplate for StaticTextBuilder<T> {
 impl<T: StaticText> View for StaticTextBuilder<T> {}
 
 /// Declare a static text marker type.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! static_text {
     ($value:literal) => {{
@@ -789,7 +828,8 @@ macro_rules! static_text {
     };
 }
 
-/// Declare a static attribute value for generated attribute builder methods.
+/// Declare a static attribute value for typed attribute methods.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! static_attribute_value {
     ($value:literal) => {{

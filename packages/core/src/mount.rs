@@ -54,9 +54,7 @@ impl PackedMountedSlot {
 
     fn from_index(index: usize) -> Self {
         Self {
-            value: index
-                .checked_add(1)
-                .expect("mounted dynamic slot index overflowed"),
+            value: index.checked_add(1).expect("slot overflow"),
         }
     }
 
@@ -96,7 +94,6 @@ impl PackedMountedSlot {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct Mount {
     render_parent: Option<MountRef>,
 
@@ -145,7 +142,7 @@ impl Mount {
         let start = self
             .dynamic_slot(idx)
             .fragment_start()
-            .expect("non-empty committed fragment must have mounted children");
+            .expect("fragment children");
         &self.fragment_child_mounts[start..start + len]
     }
 
@@ -329,7 +326,7 @@ impl VirtualDom {
         dyn_node_idx: usize,
     ) -> MountedElementId {
         self.mounted_dynamic_text_node(mount, dyn_node_idx)
-            .expect("dynamic text node slot should be mounted")
+            .expect("text slot")
     }
 
     pub(crate) fn set_mounted_dynamic_text_node(
@@ -403,11 +400,7 @@ impl VirtualDom {
         len: usize,
     ) -> Vec<MountId> {
         let children = self.mounted_fragment_children(mount, dyn_node_idx, len);
-        assert_eq!(
-            children.len(),
-            len,
-            "mounted fragment slot must contain one child mount per vnode child"
-        );
+        assert!(children.len() == len, "fragment slots");
         children
     }
 
@@ -430,7 +423,7 @@ impl VirtualDom {
         self.runtime
             .get_state(scope)
             .root_mount()
-            .expect("mounted component scope must have a root mount")
+            .expect("component root")
     }
 
     pub(crate) fn unchecked_mounted_dynamic_component_scope(
@@ -439,7 +432,7 @@ impl VirtualDom {
         dyn_node_idx: usize,
     ) -> ScopeId {
         self.mounted_dynamic_component_scope(mount, dyn_node_idx)
-            .expect("dynamic component scope slot should be mounted")
+            .expect("component slot")
     }
 
     pub(crate) fn set_mounted_dynamic_component_scope(
@@ -463,7 +456,7 @@ impl VirtualDom {
         dyn_attr_idx,
         |mount: &Mount| mount.dynamic_slot(dyn_attr_idx).mounted_element(),
         |mount: &mut Mount, idx, value| *mount.dynamic_slot_mut(idx) = value,
-        "dynamic attribute slot should be mounted"
+        "attr slot"
     );
 
     mounted_element_accessors!(
@@ -474,7 +467,7 @@ impl VirtualDom {
         root_idx,
         |mount: &Mount| mount.root_slot(root_idx).mounted_element(),
         |mount: &mut Mount, idx, value| *mount.root_slot_mut(idx) = value,
-        "root node slot should be mounted"
+        "root slot"
     );
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
@@ -528,7 +521,7 @@ impl VirtualDom {
             .borrow()
             .get(mount.0)
             .map(with_mount)
-            .expect("mounted mount record should exist")
+            .expect("mount")
     }
 
     fn with_mount_mut<R>(&self, mount: MountId, with_mount: impl FnOnce(&mut Mount) -> R) -> R {
@@ -537,7 +530,7 @@ impl VirtualDom {
             .borrow_mut()
             .get_mut(mount.0)
             .map(with_mount)
-            .expect("mounted mount record should exist")
+            .expect("mount")
     }
 }
 
@@ -560,7 +553,7 @@ fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
         let start = mount
             .dynamic_slot(idx)
             .fragment_start()
-            .expect("non-empty fragment should have mounted children");
+            .expect("fragment children");
         let range = start..start + nodes.len();
         let new_start = mount.fragment_child_mounts.len();
         mount
@@ -588,7 +581,7 @@ fn assert_committed_fragment_slots(mount: &Mount, node: &VNode) {
         let start = mount
             .dynamic_slot(idx)
             .fragment_start()
-            .expect("non-empty fragment should have mounted children after commit");
+            .expect("fragment children");
         debug_assert!(
             start + nodes.len() <= mount.fragment_child_mounts.len(),
             "committed fragment dynamic slot range must stay within mount fragment storage"
@@ -641,7 +634,7 @@ mod tests {
 /// visible. The root `VNode` is still the render output we diff, but the branch
 /// also records the root mount identity so the boundary state is explicitly tied
 /// to retained mount ownership instead of being just a parked vnode.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct SuspenseBranch {
     root: VNode,
     root_mount: MountId,

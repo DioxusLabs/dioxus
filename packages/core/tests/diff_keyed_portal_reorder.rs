@@ -1,7 +1,7 @@
-use std::cell::Cell;
+use std::{cell::Cell, collections::BTreeMap};
 
 use dioxus::prelude::*;
-use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, VirtualDom};
+use dioxus_core::{Portal, RenderTargetId, VirtualDom};
 use dioxus_renderer_oracle::RendererOracle;
 
 /// Reordering a keyed list whose entries are `Portal`s exercises the
@@ -60,14 +60,14 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
 
     let mut dom = VirtualDom::new_with_props(app, AppProps { target: inner_target });
     let _ = dom.runtime().create_render_target();
-    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(inner_target, RendererOracle::new());
     dom.rebuild(&mut writer);
 
     // Sanity: outer holds the portal placeholders, inner holds the bodies.
-    assert!(writer.get(RenderTargetId::ROOT).unwrap().is_stack_clean());
-    assert!(writer.get(inner_target).unwrap().is_stack_clean());
+    assert!(writer.get(&RenderTargetId::ROOT).unwrap().is_stack_clean());
+    assert!(writer.get(&inner_target).unwrap().is_stack_clean());
 
     ORDER.with(|o| o.set(1));
     dom.mark_dirty(dioxus_core::ScopeId::APP);
@@ -77,8 +77,8 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
     // cross-target push paths going wrong (an unbalanced push leaves the
     // mutation stack with extra entries).
     writer
-        .take(RenderTargetId::ROOT)
+        .remove(&RenderTargetId::ROOT)
         .unwrap()
         .assert_stack_clean();
-    writer.take(inner_target).unwrap().assert_stack_clean();
+    writer.remove(&inner_target).unwrap().assert_stack_clean();
 }

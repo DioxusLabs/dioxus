@@ -210,7 +210,10 @@ impl Debug for SuspenseBoundaryInner {
         f.debug_struct("SuspenseBoundaryInner")
             .field("suspended_tasks", &self.suspended_tasks)
             .field("id", &self.id)
-            .field("suspended_branch", &self.suspended_branch)
+            .field(
+                "has_suspended_branch",
+                &self.suspended_branch.borrow().is_some(),
+            )
             .field("frozen", &self.frozen)
             .finish()
     }

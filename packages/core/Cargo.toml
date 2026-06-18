@@ -39,9 +39,6 @@ subsecond = { workspace = true }
 anyhow = { workspace = true }
 xxhash-rust = { workspace = true, features = ["const_xxh64"] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-gloo-timers = { workspace = true, features = ["futures"] }
-
 [dev-dependencies]
 dioxus = { workspace = true }
 dioxus-renderer-oracle = { workspace = true }

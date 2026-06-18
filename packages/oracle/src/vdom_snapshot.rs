@@ -1,7 +1,6 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
 use dioxus_core::{Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VirtualDom};
-use std::any::Any;
 
 /// Render `app` from scratch into a stable snapshot.
 pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
@@ -13,47 +12,13 @@ pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
 }
 
 /// Snapshot the raw rendered VDOM tree without using renderer mutations.
-pub fn vdom_snapshot(vdom: &VirtualDom) -> Vec<SnapshotNode> {
+pub(crate) fn vdom_snapshot(vdom: &VirtualDom) -> Vec<SnapshotNode> {
     vnode_snapshot(vdom, vdom.base_scope().try_mounted_root_node().unwrap())
 }
 
-/// Render pending work from `vdom` into `renderer` and return the resulting snapshot.
-pub fn render_immediate_snapshot(
-    vdom: &mut VirtualDom,
-    renderer: &mut RendererOracle,
-) -> Vec<SnapshotNode> {
-    renderer.render(vdom);
-    renderer.assert_matches_vdom(vdom);
-    renderer.snapshot()
-}
-
-/// Render pending work from `vdom` into `renderer` and assert it matches a fresh rebuild of `app`.
-pub fn assert_immediate_matches_fresh(
-    vdom: &mut VirtualDom,
-    renderer: &mut RendererOracle,
-    app: fn() -> Element,
-) {
-    let incremental = render_immediate_snapshot(vdom, renderer);
-    let fresh = fresh_snapshot(app);
-    pretty_assertions::assert_eq!(
-        incremental,
-        fresh,
-        "incremental render diverged from a fresh rebuild"
-    );
-}
-
-/// Assert that rendering `app` from scratch matches `expected`.
-pub fn assert_fresh_snapshot_eq(app: fn() -> Element, expected: &[SnapshotNode]) {
-    let actual = fresh_snapshot(app);
-    pretty_assertions::assert_eq!(
-        actual,
-        expected,
-        "fresh render snapshot diverged from expected tree"
-    );
-}
-
 /// Assert that an immediate render emits no Dioxus mutations.
-pub fn assert_no_mutations(vdom: &mut VirtualDom) {
+#[cfg(test)]
+pub(crate) fn assert_no_mutations(vdom: &mut VirtualDom) {
     let mutations = vdom.render_immediate_to_vec();
     assert!(
         mutations.edits.is_empty(),
@@ -230,16 +195,5 @@ fn set_snapshot_attr(
 fn remove_snapshot_attr(attrs: &mut Vec<SnapshotAttr>, name: &str, namespace: Option<&str>) {
     if let Ok(index) = attrs.binary_search_by(|attr| attr_key(attr).cmp(&(name, namespace))) {
         attrs.remove(index);
-    }
-}
-
-/// Convert a panic payload into a readable string for fuzzer/test diagnostics.
-pub fn panic_message(payload: &Box<dyn Any + Send>) -> String {
-    if let Some(s) = payload.downcast_ref::<&'static str>() {
-        (*s).to_string()
-    } else if let Some(s) = payload.downcast_ref::<String>() {
-        s.clone()
-    } else {
-        "<non-string panic payload>".to_string()
     }
 }

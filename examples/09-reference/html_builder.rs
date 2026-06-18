@@ -1,15 +1,10 @@
-//! Build HTML with the typed `view` builder API and normal components.
+//! Build HTML with typed element constructors and normal components.
 //!
-//! This example is intentionally close to the shape `rsx!` should expand to:
-//! HTML constructors for tags, generated attribute builders with static values,
-//! static text views, generated component props builders, and dynamic slots only
-//! for runtime values.
+//! The builder API is useful when Rust control flow or helper functions are a
+//! better fit than an `rsx!` block. It supports the same elements, attributes,
+//! events, and child values you would use in regular Dioxus components.
 
-use dioxus::{
-    dioxus_core::view::{View, attr_dyn},
-    html,
-    prelude::*,
-};
+use dioxus::{dioxus_core::view::ViewExt, html, prelude::*};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Metric {
@@ -68,7 +63,7 @@ fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Elemen
         .child(
             html::footer()
                 .class("note")
-                .child("Created with html element builders and component props builders."),
+                .child("Created with typed HTML builders and component props builders."),
         )
         .into_vnode())
 }
@@ -89,7 +84,6 @@ fn Header(#[props(into)] title: String, total: usize) -> Element {
 fn MetricCard(metric: Metric) -> Element {
     Ok(html::article()
         .class("metric-card")
-        .attr(attr_dyn("data-status", metric.status, None, false))
         .child(html::span().class("metric-label").child(metric.label))
         .child(html::strong().child(metric.value))
         .child(

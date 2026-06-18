@@ -1,22 +1,10 @@
 use std::num::NonZeroU128;
 
 /// A compact path from a template root to a static node or dynamic attribute.
-///
-/// Paths use the template-v2 child/sibling bit encoding: `1` means descend to the first child and
-/// `0` means advance to the next sibling. Bits are appended by shifting left, so iteration decodes
-/// from the least-significant bit back toward the root.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[doc(hidden)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TemplatePath {
     path: u128,
-}
-
-/// A single step in a compact template path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TemplatePathStep {
-    /// Descend to the first child.
-    Child,
-    /// Advance to the next sibling.
-    Sibling,
 }
 
 impl TemplatePath {
@@ -25,7 +13,7 @@ impl TemplatePath {
         Self { path: 0 }
     }
 
-    /// Create a path from raw template-v2 bits.
+    /// Create a path from compact path bits.
     pub const fn from_bits(path: u128) -> Self {
         Self { path }
     }
@@ -41,7 +29,7 @@ impl TemplatePath {
         path
     }
 
-    /// Return the raw template-v2 bits for this path.
+    /// Return the compact path bits.
     pub const fn bits(self) -> u128 {
         self.path
     }
@@ -90,30 +78,28 @@ impl TemplatePath {
         let mut current_segment = 0usize;
         let mut current_index = 0u8;
         let mut started = false;
-        for step in self.iter() {
-            match step {
-                TemplatePathStep::Child => {
-                    if started {
-                        if current_segment == index {
-                            return current_index;
-                        }
-                        current_segment += 1;
-                        current_index = 0;
-                    } else {
-                        started = true;
+        let mut next_bit = self.bit_len();
+        while next_bit > 0 {
+            next_bit -= 1;
+            let bit = (self.path >> next_bit) & 1;
+            if bit == 1 {
+                if started {
+                    if current_segment == index {
+                        return current_index;
                     }
+                    current_segment += 1;
+                    current_index = 0;
+                } else {
+                    started = true;
                 }
-                TemplatePathStep::Sibling => {
-                    current_index = current_index
-                        .checked_add(1)
-                        .expect("template path sibling index overflow");
-                }
+            } else {
+                current_index = current_index.checked_add(1).expect("path overflow");
             }
         }
         if started && current_segment == index {
             return current_index;
         }
-        panic!("template path segment index out of bounds");
+        panic!("bad path segment");
     }
 
     /// Return true if this compact path starts with `ancestor`.
@@ -129,25 +115,19 @@ impl TemplatePath {
     pub fn bit_len(self) -> u32 {
         u128::BITS - self.path.leading_zeros()
     }
-
-    /// Iterate over child/sibling path steps from root to leaf.
-    pub fn iter(self) -> TemplatePathIter {
-        TemplatePathIter {
-            path: self.path,
-            next_bit: self.bit_len(),
-        }
-    }
 }
 
 /// A tagged dynamic node slot target.
 ///
 /// The low bit is the target kind. The remaining high bits are a [`TemplatePath`] payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[doc(hidden)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateSlotPath(NonZeroU128);
 
 /// The resolved renderer target for a dynamic node slot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[doc(hidden)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TemplateSlotTarget {
     /// Insert before a static node.
     BeforeStatic(TemplatePath),
@@ -162,14 +142,14 @@ impl TemplateSlotPath {
     const fn new(bits: u128) -> Self {
         match NonZeroU128::new(bits) {
             Some(bits) => Self(bits),
-            None => panic!("template slot path must be non-zero"),
+            None => panic!("bad slot path"),
         }
     }
 
     const fn encode_payload(path: TemplatePath) -> u128 {
         let payload = path.bits();
         if payload > Self::MAX_PAYLOAD {
-            panic!("template slot path payload exceeds packed capacity");
+            panic!("slot path overflow");
         }
         payload << 1
     }
@@ -177,7 +157,7 @@ impl TemplateSlotPath {
     /// Create a dynamic slot target before a static node.
     pub const fn before_static(path: TemplatePath) -> Self {
         if path.is_empty() {
-            panic!("before-static slot target requires a static node path");
+            panic!("bad slot target");
         }
         Self::new(Self::encode_payload(path))
     }
@@ -245,29 +225,6 @@ impl TemplateSlotPath {
     /// Return true if this slot is mounted inside `ancestor`.
     pub fn is_inside_static(self, ancestor: TemplatePath) -> bool {
         self.static_parent().starts_with(ancestor)
-    }
-}
-
-/// Iterator over compact template path steps.
-pub struct TemplatePathIter {
-    path: u128,
-    next_bit: u32,
-}
-
-impl Iterator for TemplatePathIter {
-    type Item = TemplatePathStep;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_bit == 0 {
-            return None;
-        }
-        self.next_bit -= 1;
-        let bit = (self.path >> self.next_bit) & 1;
-        Some(if bit == 1 {
-            TemplatePathStep::Child
-        } else {
-            TemplatePathStep::Sibling
-        })
     }
 }
 

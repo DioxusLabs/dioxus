@@ -90,19 +90,16 @@ impl VNode {
             new_ranges,
             new_offsets,
         } = scratch;
-        let sort_by = Self::compare_attribute_keys;
         let mut from_iter = iter_sorted_last_wins(
             attr_group.ids().map(|idx| self.dynamic_values[idx].attrs()),
             old_ranges,
             old_offsets,
-            sort_by,
         )
         .peekable();
         let mut to_iter = iter_sorted_last_wins(
             attr_group.ids().map(|idx| new.dynamic_values[idx].attrs()),
             new_ranges,
             new_offsets,
-            sort_by,
         )
         .peekable();
 
@@ -272,37 +269,25 @@ impl VNode {
 ///
 /// Duplicate keys across or within slots collapse to the last occurrence in iteration order,
 /// which matches the "later write wins" semantics of RSX source order.
-fn iter_sorted_last_wins<'items, 'scratch, T, F>(
-    slots: impl IntoIterator<Item = &'items [T]>,
-    ranges: &'scratch mut Vec<&'items [T]>,
+fn iter_sorted_last_wins<'items, 'scratch>(
+    slots: impl IntoIterator<Item = &'items [Attribute]>,
+    ranges: &'scratch mut Vec<&'items [Attribute]>,
     offsets: &'scratch mut Vec<usize>,
-    sort_by: F,
-) -> SortedRangeIter<'items, 'scratch, T, F>
-where
-    F: Fn(&T, &T) -> Ordering + Copy,
-{
+) -> SortedRangeIter<'items, 'scratch> {
     ranges.clear();
     ranges.extend(slots);
     offsets.clear();
     offsets.resize(ranges.len(), 0);
-    SortedRangeIter {
-        ranges,
-        offsets,
-        sort_by,
-    }
+    SortedRangeIter { ranges, offsets }
 }
 
-struct SortedRangeIter<'items, 'scratch, T, F> {
-    ranges: &'scratch Vec<&'items [T]>,
+struct SortedRangeIter<'items, 'scratch> {
+    ranges: &'scratch Vec<&'items [Attribute]>,
     offsets: &'scratch mut Vec<usize>,
-    sort_by: F,
 }
 
-impl<'items, T, F> Iterator for SortedRangeIter<'items, '_, T, F>
-where
-    F: Fn(&T, &T) -> Ordering + Copy,
-{
-    type Item = &'items T;
+impl<'items> Iterator for SortedRangeIter<'items, '_> {
+    type Item = &'items Attribute;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut min_value = None;
@@ -310,7 +295,7 @@ where
         // Find the smallest key currently visible across every range.
         for (range, offset) in self.ranges.iter().zip(self.offsets.iter()) {
             if let Some(item) = range.get(*offset) {
-                match min_value.map(|min_value| (self.sort_by)(item, min_value)) {
+                match min_value.map(|min_value| VNode::compare_attribute_keys(item, min_value)) {
                     None | Some(Ordering::Less) => min_value = Some(item),
                     Some(Ordering::Equal | Ordering::Greater) => {}
                 }
@@ -324,7 +309,10 @@ where
         // so the final item we see is the effective last-write-wins value.
         for (range_idx, range) in self.ranges.iter().enumerate() {
             while let Some(item) = range.get(self.offsets[range_idx]) {
-                if !matches!((self.sort_by)(item, min_value), Ordering::Equal) {
+                if !matches!(
+                    VNode::compare_attribute_keys(item, min_value),
+                    Ordering::Equal
+                ) {
                     break;
                 }
                 last = Some(item);
@@ -338,38 +326,28 @@ where
 
 #[test]
 fn test_iter_sorted_last_wins() {
-    #[derive(Debug, PartialEq)]
-    struct Item {
-        value: i32,
-        id: usize,
-    }
-    impl Item {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.value.cmp(&other.value)
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute {
+            name,
+            value: AttributeValue::Text(value.to_string()),
+            namespace: None,
+            volatile: false,
         }
     }
+
     // Two sorted slots that share keys. The slot listed second wins on duplicates.
-    let slot_a = [
-        Item { value: 1, id: 0 },
-        Item { value: 2, id: 1 },
-        Item { value: 3, id: 2 },
-    ];
-    let slot_b = [
-        Item { value: 1, id: 5 },
-        Item { value: 2, id: 3 },
-        Item { value: 4, id: 4 },
-    ];
+    let slot_a = [attr("a", "0"), attr("b", "1"), attr("c", "2")];
+    let slot_b = [attr("a", "5"), attr("b", "3"), attr("d", "4")];
     let mut ranges = Vec::new();
     let mut offsets = Vec::new();
     let mut iter = iter_sorted_last_wins(
         [slot_a.as_slice(), slot_b.as_slice()],
         &mut ranges,
         &mut offsets,
-        Item::cmp,
     );
-    assert_eq!(*iter.next().unwrap(), Item { value: 1, id: 5 });
-    assert_eq!(*iter.next().unwrap(), Item { value: 2, id: 3 });
-    assert_eq!(*iter.next().unwrap(), Item { value: 3, id: 2 });
-    assert_eq!(*iter.next().unwrap(), Item { value: 4, id: 4 });
+    assert_eq!(*iter.next().unwrap(), attr("a", "5"));
+    assert_eq!(*iter.next().unwrap(), attr("b", "3"));
+    assert_eq!(*iter.next().unwrap(), attr("c", "2"));
+    assert_eq!(*iter.next().unwrap(), attr("d", "4"));
     assert!(iter.next().is_none());
 }

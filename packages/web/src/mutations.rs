@@ -1,6 +1,7 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use dioxus_core_types::event_bubbles;
+#[cfg(feature = "mounted")]
 use wasm_bindgen::JsCast;
 
 impl WebsysDom {
@@ -32,18 +33,6 @@ impl WebsysDom {
     #[cfg(feature = "mounted")]
     pub(crate) fn send_mount_event(&mut self, id: ElementId) {
         self.queued_mounted_events.push(id);
-    }
-
-    #[inline]
-    fn skip_mutations(&self) -> bool {
-        #[cfg(feature = "hydrate")]
-        {
-            self.skip_mutations
-        }
-        #[cfg(not(feature = "hydrate"))]
-        {
-            false
-        }
     }
 }
 
@@ -124,9 +113,6 @@ impl WriteMutations for WebsysDom {
     }
 
     fn add_event_listener(&mut self, name: &str) {
-        if self.skip_mutations() {
-            return;
-        }
         // mounted events are fired immediately after the element is mounted.
         if name == "mounted" {
             #[cfg(feature = "mounted")]
@@ -141,9 +127,6 @@ impl WriteMutations for WebsysDom {
     }
 
     fn remove_event_listener(&mut self, name: &str) {
-        if self.skip_mutations() {
-            return;
-        }
         if name == "mounted" {
             return;
         }

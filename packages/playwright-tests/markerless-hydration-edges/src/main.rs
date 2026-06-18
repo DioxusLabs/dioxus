@@ -21,6 +21,28 @@ fn app() -> Element {
         RemovePlaceholder {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
+        EmptyRootHydration {}
+    }
+}
+
+// A component with no SSR-visible roots. The hydration walker still needs to
+// attach virtual root anchors so a client-only task can later materialize root
+// text and elements without marker comments.
+#[component]
+fn EmptyRootHydration() -> Element {
+    let mut text = use_signal(String::new);
+    let mut show = use_signal(|| false);
+
+    use_future(move || async move {
+        text.set("root text ready".to_string());
+        show.set(true);
+    });
+
+    rsx! {
+        "{text}"
+        if show() {
+            div { id: "late-empty-root", "late root ready" }
+        }
     }
 }
 

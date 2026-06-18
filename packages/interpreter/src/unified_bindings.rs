@@ -20,16 +20,13 @@ extern "C" {
     #[wasm_bindgen(method, js_name = "currentTopId")]
     pub fn current_top_id(this: &BaseInterpreter) -> u32;
 
+    /// Bind an ElementId to a DOM node (used by the hydration cursor).
     #[wasm_bindgen(method, js_name = "setNode")]
     pub fn set_node(this: &BaseInterpreter, id: u32, node: &Node);
 
-    #[wasm_bindgen(method, js_name = "createListener")]
-    pub fn create_listener(
-        this: &BaseInterpreter,
-        event_name: &str,
-        element: &web_sys::Element,
-        bubbles: bool,
-    );
+    /// Attach an event listener to a previously-bound node by id.
+    #[wasm_bindgen(method, js_name = "setNodeListener")]
+    pub fn set_node_listener(this: &BaseInterpreter, id: u32, name: &str, bubbles: bool);
 }
 
 // Note that this impl is for the sledgehammer interpreter to allow us to

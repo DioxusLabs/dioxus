@@ -34,13 +34,11 @@ pub(crate) mod node;
 pub(crate) mod placement;
 mod template;
 
-#[derive(Debug)]
 pub(crate) struct CreatedVNode {
     pub(crate) nodes: usize,
     pub(crate) mount: MountId,
 }
 
-#[derive(Debug)]
 pub(crate) struct CreatedNodes {
     pub(crate) nodes: usize,
     pub(crate) mounts: Vec<MountId>,

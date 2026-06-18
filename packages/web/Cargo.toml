@@ -37,7 +37,7 @@ serde = { workspace = true, optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
 
 ciborium = { workspace = true, optional = true }
-gloo-timers = { workspace = true, features = ["futures"] }
+gloo-timers = { workspace = true, optional = true, features = ["futures"] }
 send_wrapper = { workspace = true, features = ["futures"] }
 wasm-streams = "0.4.2"
 
@@ -112,6 +112,7 @@ devtools = [
   "dep:serde_json",
   "dep:serde",
   "dioxus-core/serialize",
+  "dep:gloo-timers"
 ]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 

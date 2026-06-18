@@ -1,8 +1,7 @@
-//! Define a typed custom element namespace for rsx!.
+//! Define a typed custom element for `rsx!`.
 //!
-//! The rsx! macro lowers identifier elements like `analyticsPanel {}` into a
-//! call to an in-scope `analyticsPanel()` constructor. Attribute identifiers
-//! lower into builder methods, so custom typed attributes are extension methods.
+//! Use `define_elements!` when your app needs project-specific element names or
+//! attributes that should type-check like built-in Dioxus HTML elements.
 
 use dioxus::prelude::*;
 

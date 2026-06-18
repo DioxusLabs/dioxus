@@ -59,6 +59,10 @@ impl ToTokens for TemplateBody {
         let view = node.view_builder_pieces();
         let view_definitions = view.definitions();
         let view_expr = view.view_expr();
+        let template_stats = view.template_stats();
+        let template_ops_cap = template_stats.ops;
+        let template_string_cap = template_stats.strings;
+        let template_dynamic_cap = template_stats.anchors;
         let dynamic_text = view.dynamic_text_tokens().iter();
 
         let diagnostics = &node.diagnostics;
@@ -120,7 +124,12 @@ impl ToTokens for TemplateBody {
 
                     #[cfg(not(debug_assertions))]
                     {
-                        dioxus_core::view::into_vnode_with_key(#view_expr, __key)
+                        dioxus_core::internal::into_vnode_with_key_and_capacity::<
+                            #template_ops_cap,
+                            #template_string_cap,
+                            #template_dynamic_cap,
+                            _,
+                        >(#view_expr, __key)
                     }
                 };
 
@@ -160,19 +169,25 @@ pub(crate) struct ViewBuilderPieces {
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
     hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
+    template_stats: TemplateStorageStats,
 }
 
 impl ViewBuilderPieces {
     fn from_body(body: &TemplateBody) -> Self {
         let mut builder = ViewBuilder::new();
         let view = builder.visit_roots(&body.roots);
-        builder.finish(view)
+        let template_stats =
+            builder.final_sibling_storage_stats(&body.roots, SiblingContext::Roots);
+        builder.finish(view, template_stats)
     }
 
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
         let view = builder.visit_element(element, true);
-        builder.finish(view)
+        let mut raw = Vec::new();
+        builder.push_element_raw_ops(element, &mut raw);
+        let template_stats = TemplateStorageStats::from_raw_ops(&raw);
+        builder.finish(view, template_stats)
     }
 
     pub(crate) fn definitions(&self) -> impl Iterator<Item = &TokenStream2> {
@@ -185,6 +200,10 @@ impl ViewBuilderPieces {
 
     fn dynamic_text_tokens(&self) -> &[TokenStream2] {
         &self.dynamic_text_tokens
+    }
+
+    fn template_stats(&self) -> TemplateStorageStats {
+        self.template_stats
     }
 
     fn hot_reload_template_tokens(&self, template: TokenStream2) -> TokenStream2 {
@@ -246,7 +265,7 @@ impl ViewBuilder {
         }
     }
 
-    fn finish(self, view: TokenStream2) -> ViewBuilderPieces {
+    fn finish(self, view: TokenStream2, template_stats: TemplateStorageStats) -> ViewBuilderPieces {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
@@ -256,6 +275,7 @@ impl ViewBuilder {
             hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
             hot_reload_dynamic_slots: self.hot_reload_dynamic_slots,
             hot_reload_key: self.hot_reload_key,
+            template_stats,
         }
     }
 
@@ -505,7 +525,9 @@ impl ViewBuilder {
             .map(|node| chunk_builder.visit_node(node, false))
             .map(|expr| quote! { #expr.into_vnode() })
             .collect::<Vec<_>>();
-        let chunk = chunk_builder.finish(quote! { () });
+        let template_stats =
+            chunk_builder.final_sibling_storage_stats(nodes, SiblingContext::Roots);
+        let chunk = chunk_builder.finish(quote! { () }, template_stats);
         let definitions = chunk.definitions();
         let tokens = quote! {{
             use dioxus_core::view::ViewExt as _;
@@ -549,6 +571,35 @@ impl ViewBuilder {
         let mut raw = Vec::new();
         self.push_sibling_raw_ops(nodes, &mut raw);
         TemplateStorageStats::from_raw_ops(&raw)
+    }
+
+    fn final_sibling_storage_stats(
+        &self,
+        nodes: &[BodyNode],
+        context: SiblingContext,
+    ) -> TemplateStorageStats {
+        let mut raw = Vec::new();
+        self.push_final_sibling_raw_ops(nodes, context, &mut raw);
+        TemplateStorageStats::from_raw_ops(&raw)
+    }
+
+    fn push_final_sibling_raw_ops(
+        &self,
+        nodes: &[BodyNode],
+        context: SiblingContext,
+        raw: &mut Vec<TemplateRawOp>,
+    ) {
+        if self.should_chunk_siblings(nodes, context) {
+            let chunks = if matches!(context, SiblingContext::Roots) {
+                1
+            } else {
+                self.synthetic_chunk_ranges(nodes, context).len()
+            };
+            raw.extend(std::iter::repeat_n(TemplateRawOp::DynamicNode, chunks));
+            return;
+        }
+
+        self.push_sibling_raw_ops(nodes, raw);
     }
 
     fn push_sibling_raw_ops(&self, nodes: &[BodyNode], raw: &mut Vec<TemplateRawOp>) {

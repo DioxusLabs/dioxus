@@ -181,17 +181,14 @@ impl VNode {
             idx,
             old_has_live_dom,
             |state| {
-                if state.to.is_some() {
+                if state.has_writer() {
                     let site = match live_first {
                         Some(first) => InsertionSite::AtAnchor(DomAnchor::Before(first)),
                         None => insertion_site_for_slot(mount, slot, state.dom, context),
                     };
                     let runtime = state.dom.runtime.clone();
                     let dom = &mut *state.dom;
-                    let to = state
-                        .to
-                        .as_deref_mut()
-                        .expect("writer presence checked before dynamic placement");
+                    let to = state.to.as_deref_mut().expect("writer checked");
                     at_site(site, to, runtime, |to| {
                         let mut state = DiffState::new_with_context(dom, Some(to), context);
                         self.create_dynamic_node(new, mount, idx, &mut state)
@@ -232,17 +229,17 @@ impl VNode {
                 // Empty → non-empty: visible diffs stage new content at the
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
-                let created = if state.to.is_some() {
+                let created = if state.has_writer() {
                     let site = insertion_site_for_slot(mount, slot, state.dom, state.context());
-                    let to = state
-                        .to
-                        .as_deref_mut()
-                        .expect("writer presence checked before placement");
+                    let to = state.to.as_deref_mut().expect("writer checked");
                     create_at_site(new, parent, site, state.dom, to)
                 } else {
-                    state
-                        .dom
-                        .create_children_with_parents(None, new, parent, parent)
+                    state.dom.create_children_with_parents(
+                        state.to.as_deref_mut(),
+                        new,
+                        parent,
+                        parent,
+                    )
                 };
                 state
                     .dom
@@ -311,7 +308,7 @@ impl VNode {
         debug_assert_eq!(
             self.template.dynamic_value_count(),
             dom.mounted_dyn_node_count(mount),
-            "mounted dynamic slot count must match the vnode template"
+            "slot count"
         );
 
         if (0..self.template.root_count())
@@ -387,7 +384,7 @@ impl VNode {
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
-        let nodes = if state.to.is_some() {
+        let nodes = if state.has_writer() {
             // The replacement mount is already allocated and must not anchor the
             // insertion against itself; mark it stale for this lookup only.
             state.dom.runtime.mark_placement_stale(right_mount);
@@ -400,10 +397,7 @@ impl VNode {
             state.dom.runtime.unmark_placement_stale(right_mount);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to = state
-                .to
-                .as_deref_mut()
-                .expect("writer presence checked before placement");
+            let to = state.to.as_deref_mut().expect("writer checked");
             at_site(site, to, runtime, |to| {
                 right
                     .recreate_with_mount(dom, right_mount, parent, parent, Some(to))
@@ -411,7 +405,13 @@ impl VNode {
             })
         } else {
             right
-                .recreate_with_mount(state.dom, right_mount, parent, parent, None)
+                .recreate_with_mount(
+                    state.dom,
+                    right_mount,
+                    parent,
+                    parent,
+                    state.to.as_deref_mut(),
+                )
                 .nodes
         };
 
@@ -452,22 +452,25 @@ impl VNode {
         let suppress_mutations =
             self.should_suppress_mutations(mount, state.dom, destroy_component_state);
         let context = state.context();
-        let mut to_for_create = state.to.as_deref_mut();
-        if suppress_mutations {
-            to_for_create = None;
-        }
-        let created = if let Some(to) = to_for_create {
+        let write_local_mutations = !suppress_mutations && state.has_writer();
+        let created = if write_local_mutations {
             let site = insertion_site_at(
                 ElementEdge::First,
                 MountedVNode::new(self, mount),
                 state.dom,
                 context,
             );
+            let to = state.to.as_deref_mut().expect("writer checked");
             create_at_site(right, parent, site, state.dom, to)
         } else {
+            let to = if suppress_mutations {
+                None
+            } else {
+                state.to.as_deref_mut()
+            };
             state
                 .dom
-                .create_children_with_parents(None, right, parent, parent)
+                .create_children_with_parents(to, right, parent, parent)
         };
         let to_for_remove = if suppress_mutations {
             None
@@ -830,11 +833,10 @@ impl VNode {
 
             let root_op = static_op.expect("root slot must be static or dynamic");
 
-            let writes_enabled = state.to.is_some();
             if let Some(to) = state.to.as_deref_mut() {
                 self.load_template_root(mount, root_idx, root_op, state.dom, to);
+                nodes_created += 1;
             }
-            nodes_created += usize::from(writes_enabled);
         }
 
         nodes_created
@@ -949,9 +951,9 @@ impl VNode {
         let first_node_id = anchor
             .values()
             .find(|&idx| self.dynamic_values[idx].as_node().is_some())
-            .expect("dynamic node anchor must contain at least one dynamic node");
+            .expect("node anchor");
         let slot = DynamicNodeSlot::new(&self.template, anchor, first_node_id);
-        if state.to.is_none() {
+        if !state.has_writer() {
             for dynamic_node_id in anchor
                 .values()
                 .filter(|&idx| self.dynamic_values[idx].as_node().is_some())
@@ -971,10 +973,7 @@ impl VNode {
         let site = self.template_slot_insertion_site(mount, slot, state.dom);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
-        let to = state
-            .to
-            .as_deref_mut()
-            .expect("writer presence checked before anchor loading");
+        let to = state.to.as_deref_mut().expect("writer checked");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
             anchor
@@ -1097,27 +1096,18 @@ fn create_static_prototype(template: &Template, op: usize, to: &mut dyn WriteMut
     if let Some((tag, namespace)) = template.element_meta_at_op(op) {
         to.create_element(tag, namespace);
 
-        let mut attr = template
-            .element_children_start(op)
-            .expect("element op must have a children start");
-        let first_child = template
-            .first_child_node_op(op)
-            .expect("element op must have a first child op");
+        let mut attr = template.element_children_start(op).expect("bad element");
+        let first_child = template.first_child_node_op(op).expect("bad element");
         while attr < first_child {
-            let (name, value, namespace) = template
-                .static_attr_at_op(attr)
-                .expect("static prototype attr range must contain only static attributes");
+            let (name, value, namespace) =
+                template.static_attr_at_op(attr).expect("bad static attr");
             let value = crate::AttributeValue::Text(value.to_string());
             to.set_attribute(name, namespace, &value);
-            attr += template
-                .attr_op_len(attr)
-                .expect("static attr op must have a length");
+            attr += template.attr_op_len(attr).expect("bad static attr");
         }
 
         let mut child = first_child;
-        let end = template
-            .element_end(op)
-            .expect("element op must have an end op");
+        let end = template.element_end(op).expect("bad element");
         let mut children = 0;
         while child < end {
             children += create_static_prototype(template, child, to);
@@ -1130,9 +1120,7 @@ fn create_static_prototype(template: &Template, op: usize, to: &mut dyn WriteMut
         return 1;
     }
 
-    let text = template
-        .static_text_at_op(op)
-        .expect("static prototype root must start at a static node op");
+    let text = template.static_text_at_op(op).expect("bad static root");
     to.create_text(text);
     1
 }
@@ -1154,9 +1142,9 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 /// than papered over with a silent `None`.
 fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> MountedVNode<'_> {
     dom.get_scope(scope_id)
-        .expect("component scope must be live when resolving its rendered root")
+        .expect("component scope")
         .try_mounted_root_node()
-        .expect("component scope must have a mounted root")
+        .expect("component root")
 }
 
 fn find_fragment_edge(

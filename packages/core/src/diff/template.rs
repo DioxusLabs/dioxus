@@ -7,7 +7,7 @@ use crate::{
 ///
 /// An anchor can cover several adjacent node values at the same insertion position (e.g. `{a}{b}`);
 /// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct DynamicNodeSlot<'a> {
     template: &'a Template,
     anchor: &'a TemplateAnchor,
@@ -38,13 +38,10 @@ impl<'a> DynamicNodeSlot<'a> {
                     return root_idx;
                 }
             }
-            panic!("root-level dynamic slot must appear in template root slots");
+            panic!("bad root slot");
         }
 
-        let static_root_idx = self
-            .slot_path()
-            .root_index()
-            .expect("non-root dynamic slot must target a static root");
+        let static_root_idx = self.slot_path().root_index().expect("bad slot root");
         let mut current_static_root = 0;
         for (root_idx, static_op, _) in self.template.root_slots() {
             if static_op.is_none() {
@@ -55,7 +52,7 @@ impl<'a> DynamicNodeSlot<'a> {
             }
             current_static_root += 1;
         }
-        panic!("non-root dynamic slot must belong to a static template root");
+        panic!("bad slot root");
     }
 
     pub(super) fn is_root_level(self) -> bool {
@@ -90,7 +87,7 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(super) struct SlotPlacement {
     pub(super) parent_path: TemplatePath,
     pub(super) static_insertion_index: usize,
@@ -112,7 +109,7 @@ fn split_static_path(path: TemplatePath) -> (TemplatePath, usize) {
 
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
 /// its [`TemplateAnchor`].
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(super) struct DynamicAttrGroup<'a> {
     template: &'a Template,
     dynamic_values: &'a [crate::DynamicValue],
@@ -148,10 +145,7 @@ impl<'a> DynamicAttrGroup<'a> {
 
     pub(super) fn root_index(&self) -> usize {
         let path = self.static_path();
-        debug_assert!(
-            !path.is_empty(),
-            "dynamic attribute group must target a static root"
-        );
+        debug_assert!(!path.is_empty(), "bad attr root");
         let static_root_idx = path.segment(0) as usize;
         let mut current_static_root = 0;
         for (root_idx, static_op, _) in self.template.root_slots() {
@@ -163,23 +157,18 @@ impl<'a> DynamicAttrGroup<'a> {
             }
             current_static_root += 1;
         }
-        panic!("dynamic attribute group must belong to a static template root");
+        panic!("bad attr root");
     }
 
     pub(super) fn first_id(&self) -> usize {
-        self.ids()
-            .next()
-            .expect("dynamic attribute group must contain at least one dynamic attribute")
+        self.ids().next().expect("empty attr group")
     }
 
     pub(super) fn static_attr_value_for_key(
         &self,
         key: (&'static str, Option<&'static str>),
     ) -> Option<&'static str> {
-        let element_op = self
-            .anchor
-            .element_op()
-            .expect("a dynamic attribute anchor always has an enclosing element");
+        let element_op = self.anchor.element_op().expect("bad attr anchor");
         self.template.static_attr_value_for_key(element_op, key)
     }
 }

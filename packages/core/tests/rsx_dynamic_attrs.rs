@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::VNode;
+use dioxus_core::{Mutation, Mutations, ScopeId, VNode, internal::TemplateSlotTarget};
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 
 dioxus::html::define_elements! {
@@ -79,6 +79,52 @@ fn custom_element_gated_attrs() -> Element {
     }
 }
 
+fn separated_empty_fragment_slots() -> Element {
+    let show_a = false;
+    let show_b = false;
+
+    rsx! {
+        div {
+            if show_a {
+                "A"
+            }
+            span { "S" }
+            if show_b {
+                "B"
+            }
+        }
+    }
+}
+
+static SHOW_SEPARATED_SLOT_B: GlobalSignal<bool> = Signal::global(|| false);
+static SHOW_SEPARATED_SLOT_A: GlobalSignal<bool> = Signal::global(|| false);
+
+fn separated_empty_fragment_slots_dynamic_app() -> Element {
+    rsx! {
+        SeparatedEmptyFragmentSlotsDynamicChild {}
+    }
+}
+
+#[component]
+fn SeparatedEmptyFragmentSlotsDynamicChild() -> Element {
+    let show_a = SHOW_SEPARATED_SLOT_A();
+    let show_b = SHOW_SEPARATED_SLOT_B();
+
+    rsx! {
+        div {
+            if show_a {
+                "A"
+            }
+            span { "S" }
+            if show_b {
+                "B"
+            }
+        }
+        button { "fill b" }
+        button { "fill a" }
+    }
+}
+
 #[test]
 fn typed_dynamic_attr_metadata_survives_direct_rsx_codegen() {
     let mut dom = VirtualDom::new(typed_dynamic_attrs);
@@ -153,4 +199,93 @@ fn nested_dynamic_attr_after_root_dynamic_uses_static_root_slot() {
 
     oracle.rebuild(&mut dom);
     oracle.assert_matches(root_dynamic_before_static_root_with_nested_dynamic_attr);
+}
+
+#[test]
+fn separated_empty_fragment_slots_stay_inside_static_parent() {
+    let vnode = separated_empty_fragment_slots().unwrap();
+    let div = vnode
+        .template
+        .root_slots()
+        .find_map(|(_, op, _)| op)
+        .expect("expected a static root element");
+    let anchors = vnode
+        .template
+        .element_dynamic_anchors(div)
+        .collect::<Vec<_>>();
+
+    assert_eq!(anchors.len(), 2);
+    for anchor in &anchors {
+        assert!(!anchor.is_root_level());
+    }
+
+    let before_span = anchors
+        .iter()
+        .copied()
+        .find(|anchor| anchor.value_start() == 0)
+        .expect("expected leading empty fragment anchor");
+    assert!(matches!(
+        before_span.slot_target(),
+        TemplateSlotTarget::BeforeStatic(_)
+    ));
+
+    let after_span = anchors
+        .iter()
+        .copied()
+        .find(|anchor| anchor.value_start() == 1)
+        .expect("expected trailing empty fragment anchor");
+    assert!(matches!(
+        after_span.slot_target(),
+        TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
+    ));
+}
+
+#[test]
+fn no_op_rebuild_places_separated_empty_fragment_inside_static_parent() {
+    let mut dom = VirtualDom::new(separated_empty_fragment_slots_dynamic_app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+    dom.in_scope(ScopeId::APP, || *SHOW_SEPARATED_SLOT_B.write() = true);
+
+    let mut mutations = Mutations::default();
+    dom.render_immediate(&mut mutations);
+
+    let mut stack = vec![Some(dioxus_core::ElementId::ROOT)];
+    let mut root_appends = false;
+    for mutation in &mutations.edits {
+        match mutation {
+            Mutation::PushId { id } => stack.push(Some(*id)),
+            Mutation::PopId { .. } | Mutation::Pop => {
+                stack.pop();
+            }
+            Mutation::CreateElement { .. } | Mutation::CreateText { .. } => stack.push(None),
+            Mutation::AppendChildren { m } => {
+                let parent = stack[stack.len() - *m - 1];
+                root_appends |= parent == Some(dioxus_core::ElementId::ROOT);
+                stack.truncate(stack.len() - *m);
+            }
+            Mutation::ReplaceWith { m } => {
+                let target = stack.len() - *m - 1;
+                stack.truncate(target);
+                for _ in 0..*m {
+                    stack.push(None);
+                }
+            }
+            Mutation::InsertAfter { m } | Mutation::InsertBefore { m } => {
+                stack.truncate(stack.len() - *m);
+            }
+            Mutation::Child { .. }
+            | Mutation::Clone
+            | Mutation::SetAttribute { .. }
+            | Mutation::SetText { .. }
+            | Mutation::NewEventListener { .. }
+            | Mutation::RemoveEventListener { .. }
+            | Mutation::Remove => {}
+        }
+    }
+    assert!(
+        !root_appends,
+        "empty fragment should be inserted into its static parent, not the renderer root: {:#?}",
+        mutations.edits
+    );
 }

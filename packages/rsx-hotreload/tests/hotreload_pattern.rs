@@ -7,7 +7,7 @@ use dioxus_core::{
     internal::{
         DecodedTemplateOp, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate,
-        NamedAttribute, TemplatePath,
+        NamedAttribute,
     },
 };
 use dioxus_core_types::HotReloadingContext;
@@ -163,28 +163,16 @@ fn valid_reorder() {
         decoded_ops(template),
         vec![
             DecodedTemplateOp::Enter {
-                skip: 6,
+                skip: 2,
                 namespace: false
             },
             DecodedTemplateOp::Static(0),
-            DecodedTemplateOp::Text,
-            DecodedTemplateOp::Dynamic,
-            DecodedTemplateOp::Text,
-            DecodedTemplateOp::Dynamic,
         ]
     );
     assert_eq!(template.strings().len(), 1);
     assert_eq!(template.strings()[0], "div");
-    assert_eq!(
-        template.dynamics(),
-        &[
-            TemplatePath::empty().next_child().next_child(),
-            TemplatePath::empty()
-                .next_child()
-                .next_child()
-                .next_sibling(),
-        ]
-    );
+    assert!(template.dynamic_is_node(0));
+    assert!(template.dynamic_is_node(1));
     assert_eq!(
         template.dynamic_nodes,
         &[
@@ -277,28 +265,20 @@ fn valid_new_dynamic_attribute() {
         decoded_ops(template),
         vec![
             DecodedTemplateOp::Enter {
-                skip: 3,
+                skip: 2,
                 namespace: false
             },
             DecodedTemplateOp::Static(0),
-            DecodedTemplateOp::Dynamic,
             DecodedTemplateOp::Enter {
-                skip: 3,
+                skip: 2,
                 namespace: false
             },
-            DecodedTemplateOp::Static(0),
-            DecodedTemplateOp::Dynamic,
+            DecodedTemplateOp::Static(1),
         ]
     );
-    assert_eq!(template.strings().len(), 1);
+    assert_eq!(template.strings().len(), 2);
     assert_eq!(template.strings()[0], "div");
-    assert_eq!(
-        template.dynamics(),
-        &[
-            TemplatePath::empty().next_child(),
-            TemplatePath::empty().next_child().next_sibling(),
-        ]
-    );
+    assert_eq!(template.strings()[1], "div");
     assert!(template.dynamic_is_attr(0));
     assert!(template.dynamic_is_attr(1));
 
@@ -360,11 +340,7 @@ fn valid_move_dynamic_segment_between_nodes() {
     let template = &templates[&1];
 
     // We should have a new dynamic node and no attributes
-    assert_eq!(
-        decoded_ops(template),
-        vec![DecodedTemplateOp::Text, DecodedTemplateOp::Dynamic]
-    );
-    assert_eq!(template.dynamics(), &[TemplatePath::empty().next_child()]);
+    assert_eq!(decoded_ops(template), vec![]);
     assert!(template.dynamic_is_node(0));
 
     // The new dynamic node should be created from the formatted segments pool
@@ -489,20 +465,15 @@ fn invalid_cases() {
         decoded_ops(template),
         vec![
             DecodedTemplateOp::Enter {
-                skip: 4,
+                skip: 2,
                 namespace: false
             },
             DecodedTemplateOp::Static(0),
-            DecodedTemplateOp::Text,
-            DecodedTemplateOp::Dynamic,
         ]
     );
     assert_eq!(template.strings().len(), 1);
     assert_eq!(template.strings()[0], "div");
-    assert_eq!(
-        template.dynamics(),
-        &[TemplatePath::empty().next_child().next_child()]
-    );
+    assert!(template.dynamic_is_node(0));
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 
     // Adding a new dynamic node should not be hot reloadable

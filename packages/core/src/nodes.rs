@@ -15,7 +15,6 @@ use std::{
     fmt::{Arguments, Debug},
 };
 
-#[derive(Debug)]
 /// Runtime values that hydrate a static [`Template`].
 pub struct RenderedView {
     /// Root key for this render.
@@ -23,6 +22,12 @@ pub struct RenderedView {
 
     /// Dynamic values in template order.
     pub dynamic_values: Box<[DynamicValue]>,
+}
+
+impl Debug for RenderedView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderedView").finish_non_exhaustive()
+    }
 }
 
 impl RenderedView {
@@ -36,7 +41,6 @@ impl RenderedView {
     }
 }
 
-#[derive(Debug)]
 /// A static template with the values rendered for it.
 pub struct VNodeInner {
     /// The static template.
@@ -44,6 +48,12 @@ pub struct VNodeInner {
 
     /// The rendered dynamic values.
     pub view: RenderedView,
+}
+
+impl Debug for VNodeInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VNodeInner").finish_non_exhaustive()
+    }
 }
 
 impl Deref for VNodeInner {
@@ -58,9 +68,15 @@ impl Deref for VNodeInner {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
+}
+
+impl Debug for VNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VNode").finish_non_exhaustive()
+    }
 }
 
 impl Default for VNode {
@@ -153,10 +169,9 @@ impl VNode {
     /// Create a new VNode from a static template and rendered view payload.
     #[inline]
     pub fn new_with_rendered_view(template: Template, view: RenderedView) -> Self {
-        assert_eq!(
-            view.dynamic_values.len(),
-            template.dynamic_value_count(),
-            "dynamic value count must match template"
+        assert!(
+            view.dynamic_values.len() == template.dynamic_value_count(),
+            "bad dynamic count"
         );
 
         // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
@@ -441,12 +456,11 @@ impl DynamicValue {
     }
 
     pub(crate) fn node(&self) -> &DynamicNode {
-        self.as_node().expect("dynamic slot should contain a node")
+        self.as_node().expect("node slot")
     }
 
     pub(crate) fn attrs(&self) -> &[Attribute] {
-        self.as_attrs()
-            .expect("dynamic slot should contain attributes")
+        self.as_attrs().expect("attr slot")
     }
 }
 

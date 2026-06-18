@@ -43,7 +43,11 @@ impl VirtualDom {
         })
     }
 
-    #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
+    #[tracing::instrument(
+        skip(self, to, new_nodes, parent_context),
+        level = "trace",
+        name = "VirtualDom::diff_scope"
+    )]
     pub(crate) fn diff_scope(
         &mut self,
         to: Option<&mut (dyn WriteMutations + '_)>,
@@ -152,11 +156,8 @@ impl VirtualDom {
         destroy_component_state: bool,
         scope_id: ScopeId,
     ) {
-        let mut state = DiffState::new(self, to);
-        let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(&mut state, |dom, to| {
-            driver.remove(dom, scope_id, to, destroy_component_state)
-        })
+        let driver = self.runtime.get_state(scope_id).render_driver();
+        driver.remove(self, scope_id, to, destroy_component_state)
     }
 }
 
@@ -215,23 +216,20 @@ impl VNode {
         // Free the scope slot so `create_component_node` allocates a new scope.
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
-        if state.to.is_some() {
+        if state.has_writer() {
             let site = live_first
                 .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
                 .unwrap_or_else(|| {
                     let anchor = self
                         .template
                         .anchor_for_value(idx)
-                        .expect("a dynamic component value always has an owning anchor");
+                        .expect("component anchor");
                     let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
                     insertion_site_for_slot(mount, slot, state.dom, context)
                 });
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            let to = state
-                .to
-                .as_deref_mut()
-                .expect("writer presence checked before component placement");
+            let to = state.to.as_deref_mut().expect("writer checked");
             at_site(site, to, runtime, |to| {
                 let mut state = DiffState::new_with_context(dom, Some(to), context);
                 self.create_component_node(mount, idx, new, parent, &mut state)
@@ -262,10 +260,7 @@ impl VNode {
                 let driver = state.dom.runtime.get_state(existing_scope).render_driver();
                 driver.same_component(component.driver.as_ref())
             };
-            assert!(
-                same_component,
-                "mounted component scope must match the incoming component driver"
-            );
+            assert!(same_component, "bad component driver");
         }
 
         let new = scope_id.is_none();
@@ -294,7 +289,7 @@ impl VNode {
                 .set_mounted_dynamic_component_scope(mount, idx, new_scope_id);
         }
 
-        let scope_id = scope_id.expect("component scope should be mounted");
+        let scope_id = scope_id.expect("component mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let nodes = drive(state, |dom, to| {
             driver.create(dom, scope_id, new, parent, to)
@@ -302,10 +297,10 @@ impl VNode {
         let root_mount = state
             .dom
             .get_scope(scope_id)
-            .expect("component scope must exist after driver creation")
+            .expect("component scope")
             .last_rendered_node
             .as_ref()
-            .expect("component driver creation must set last_rendered_node")
+            .expect("component root")
             .root_mount();
         state
             .dom

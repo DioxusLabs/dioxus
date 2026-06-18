@@ -54,12 +54,12 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
     for VProps<F, P, M>
 {
     fn render(&self) -> Element {
-        fn render_inner(name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
+        fn render_inner(_name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
             match res {
                 Ok(node) => node,
                 Err(err) => {
                     #[cfg(not(target_arch = "wasm32"))]
-                    tracing::error!("Panic while rendering component `{name}`: {err:?}");
+                    tracing::error!("Panic while rendering component `{_name}`: {err:?}");
                     Element::Err(CapturedPanic(err).into())
                 }
             }

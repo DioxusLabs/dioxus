@@ -1,9 +1,6 @@
-/// One unlowered operation in a template tape.
-///
-/// The RSX macro emits this raw tape directly. [`TemplateStorage::build`] lowers it into packed
-/// [`TemplateOp`]s and dynamic [`TemplatePath`]s in const context.
+/// One operation in a raw template description.
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TemplateRawOp {
     /// Open an element.
     OpenElement {
@@ -61,15 +58,9 @@ impl TemplateRawOp {
     }
 }
 
-/// A compact static tree of unlowered template structure.
-///
-/// Typed view builders use this instead of eagerly concatenating raw operation
-/// tapes at every intermediate builder type. The tree stores references to
-/// child template descriptions while the builder type graph is being assembled,
-/// then [`TemplateStorage`](crate::TemplateStorage) lowers it once at the final
-/// template boundary.
+/// A compact static tree of template structure.
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TemplateRawTree {
     Empty,
     Sequence(&'static [&'static TemplateRawTree]),

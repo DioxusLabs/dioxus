@@ -98,7 +98,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         {
             use dioxus_fullstack_core::HydrationContext;
 
-            websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -117,6 +116,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 fn get_initial_hydration_debug_types() -> Option<Vec<String>>;
                 fn get_initial_hydration_debug_locations() -> Option<Vec<String>>;
             }
+
             let hydration_data = get_initial_hydration_data().to_vec();
 
             // If we are running in debug mode, also get the debug types and locations
@@ -148,11 +148,18 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
-                virtual_dom.rebuild(&mut websys_dom);
+                // Build the vdom without emitting mutations: the SSR DOM is
+                // already in place, so hydration binds it afterward. This primes
+                // each render target's template prototype cache with prototypes
+                // that were never created in the real DOM, so `rebuild_in_place`
+                // resets that cache before hydration walks the existing nodes.
+                virtual_dom.rebuild_in_place();
             });
-            websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            let rx = match websys_dom.rehydrate(&virtual_dom) {
+                Ok(rx) => rx,
+                Err(_) => panic!("Rehydration failed."),
+            };
             hydration_receiver = Some(rx);
 
             #[cfg(feature = "mounted")]

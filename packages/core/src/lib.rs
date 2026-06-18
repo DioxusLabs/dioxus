@@ -22,15 +22,6 @@ macro_rules! dioxus_debug_assert {
     }};
 }
 
-macro_rules! dioxus_debug_assert_eq {
-    ($($arg:tt)*) => {{
-        #[cfg(all(debug_assertions, not(coverage_nightly)))]
-        {
-            debug_assert_eq!($($arg)*);
-        }
-    }};
-}
-
 mod any_props;
 mod arena;
 mod diff;
@@ -64,32 +55,26 @@ mod virtual_dom;
 mod hotreload_utils;
 
 /// Items exported from this module are used in macros and should not be used directly.
-#[doc(hidden)]
 pub mod internal {
-    #[doc(hidden)]
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadDynamicSlot, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
-    #[doc(hidden)]
     pub use crate::template::{
-        DecodedTemplateOp, TemplateAnchor, TemplateOp, TemplatePath, TemplatePathStep,
-        TemplateRawOp, TemplateSlotPath, TemplateSlotTarget,
+        DecodedTemplateOp, TemplateAnchor, TemplateOp, TemplatePath, TemplateRawOp,
+        TemplateSlotPath, TemplateSlotTarget,
     };
 
     #[cfg(fuzzing)]
-    #[doc(hidden)]
     pub fn build_template_from_raw_ops(raw: &'static [TemplateRawOp]) -> crate::Template {
         crate::Template::from_raw_ops(raw)
     }
 
-    #[doc(hidden)]
     pub type DynamicNodeBuilder<N, Marker = ()> =
         crate::view::dynamic_node::DynamicNodeBuilder<N, Marker>;
 
-    #[doc(hidden)]
     pub fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
     where
         N: crate::nodes::IntoDynNode<Marker>,
@@ -97,22 +82,36 @@ pub mod internal {
         crate::view::dynamic_node::dynamic_node_builder(node)
     }
 
-    #[doc(hidden)]
     pub fn dynamic_attributes_builder(
         attrs: Box<[crate::nodes::Attribute]>,
     ) -> crate::view::DynamicAttributesBuilder {
         crate::view::dynamic_attributes_builder(attrs)
     }
 
+    #[cfg(not(debug_assertions))]
+    #[allow(private_bounds)]
+    pub fn into_vnode_with_key_and_capacity<
+        const OPS_CAP: usize,
+        const STRING_CAP: usize,
+        const DYNAMIC_CAP: usize,
+        V: crate::view::View
+            + crate::view::StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    >(
+        view: V,
+        key: Option<String>,
+    ) -> crate::VNode {
+        crate::view::into_vnode_with_key_and_capacity::<OPS_CAP, STRING_CAP, DYNAMIC_CAP, V>(
+            view, key,
+        )
+    }
+
     #[allow(non_snake_case)]
-    #[doc(hidden)]
     pub fn Err<T, E>(e: E) -> Result<T, E> {
         std::result::Result::Err(e)
     }
 
     pub use anyhow::__anyhow;
 
-    #[doc(hidden)]
     pub use generational_box;
 }
 
@@ -163,18 +162,17 @@ pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId,
     ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiTargetWriter,
-    MultiWriter, Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps,
-    Properties, ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime,
-    RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom,
-    SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task,
-    Template, VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow,
-    consume_context, consume_context_from_scope, current_owner, current_scope_id, generation,
-    has_context, needs_update, needs_update_any, parent_scope, provide_context,
-    provide_create_error_boundary, provide_root_context, queue_effect, remove_future,
-    schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
-    throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
-    use_hook_with_cleanup, with_owner,
+    IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiWriter,
+    Mutation, Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
+    ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard,
+    ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto,
+    SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template,
+    VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
+    consume_context_from_scope, current_owner, current_scope_id, generation, has_context,
+    needs_update, needs_update_any, parent_scope, provide_context, provide_create_error_boundary,
+    provide_root_context, queue_effect, remove_future, schedule_update, schedule_update_any, spawn,
+    spawn_forever, spawn_isomorphic, suspend, throw_error, try_consume_context, use_after_render,
+    use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner,
 };
 
 pub use crate::view::{

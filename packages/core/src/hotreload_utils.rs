@@ -384,25 +384,6 @@ impl HotReloadedTemplate {
         }
     }
 
-    fn new_from_document_order(
-        key: Option<FmtedSegments>,
-        dynamic_nodes: Vec<HotReloadDynamicNode>,
-        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
-        component_values: Vec<HotReloadLiteral>,
-        template: Template,
-        dynamic_slots: Vec<HotReloadDynamicSlot>,
-    ) -> Self {
-        let dynamic_slots = template.reorder_dynamic_values_from_document_order(dynamic_slots);
-        Self::new(
-            key,
-            dynamic_nodes,
-            dynamic_attributes,
-            component_values,
-            template,
-            dynamic_slots,
-        )
-    }
-
     pub fn from_raw_ops(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
@@ -411,7 +392,7 @@ impl HotReloadedTemplate {
         raw_ops: &'static [crate::template::TemplateRawOp],
         dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
-        Self::new_from_document_order(
+        Self::new(
             key,
             dynamic_nodes,
             dynamic_attributes,
@@ -429,7 +410,7 @@ impl HotReloadedTemplate {
         template: Template,
         dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
-        Self::new_from_document_order(
+        Self::new(
             key,
             dynamic_nodes,
             dynamic_attributes,

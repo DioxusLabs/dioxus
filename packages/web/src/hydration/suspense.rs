@@ -86,8 +86,7 @@ pub(super) fn first_dynamic_root_element_id(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     fn from_vnode(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Option<ElementId> {
-        let roots: Vec<_> = vnode.vnode().template.root_slots().collect();
-        for (root_idx, _static_op, dynamic_anchor) in roots {
+        for (root_idx, _static_op, dynamic_anchor) in vnode.vnode().template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
                 for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     if let Some(id) = from_dynamic(vnode, value_idx, dom) {
@@ -106,10 +105,9 @@ pub(super) fn first_dynamic_root_element_id(
         value_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        match vnode.vnode().dynamic_values[value_idx]
-            .as_node()
-            .expect("hydration suspense node slot must point at a dynamic node")
-        {
+        let node = vnode.vnode().dynamic_values[value_idx].as_node()?;
+
+        match node {
             DynamicNode::Text(_) => vnode.mounted_dynamic_node(value_idx, dom),
             DynamicNode::Component(comp) => {
                 let child = comp.mounted_scope(value_idx, vnode, dom)?;

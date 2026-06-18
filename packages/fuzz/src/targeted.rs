@@ -4,7 +4,8 @@
 //! corpus seeds via the `write_targeted_seeds_to_corpus` test (gated on
 //! `DIOXUS_FUZZ_WRITE_SEEDS=1`).
 
-use crate::case::{FuzzCase, encode_case, run_case};
+use crate::case::{FuzzCase, encode_case};
+use crate::harness::{Harness, apply_step};
 use crate::model::{
     AttrSpec, AttrValueSpec, DynamicKind, FragmentKeyMode, SuspenseMode, TemplateAttrSpec,
     TemplateNodeKind,
@@ -14,8 +15,17 @@ use crate::ops::{EventBehaviorSpec, FragmentEdit, ListEdit, Op, TemplateEdit};
 #[test]
 fn targeted_diff_coverage_cases_replay() {
     for (name, case) in targeted_diff_coverage_cases() {
-        run_case(&case).unwrap_or_else(|failure| {
-            panic!("targeted diff coverage case {name:?} failed: {failure}")
+        replay_case_strict(name, &case);
+    }
+}
+
+fn replay_case_strict(name: &str, case: &FuzzCase) {
+    let mut state = Harness::fresh_strict();
+    for (step, op) in case.ops.iter().enumerate() {
+        apply_step(&mut state, op).unwrap_or_else(|failure| {
+            panic!(
+                "targeted diff coverage case {name:?} failed at step {step} while applying {op:?}: {failure}"
+            )
         });
     }
 }
@@ -267,6 +277,14 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             visible_fragment_child_after_text_slot(),
         ),
         case(
+            "root_dynamic_before_static_root_with_nested_dynamic_node",
+            root_dynamic_before_static_root_with_nested_dynamic_node(),
+        ),
+        case(
+            "root_dynamic_before_static_root_with_nested_dynamic_attr",
+            root_dynamic_before_static_root_with_nested_dynamic_attr(),
+        ),
+        case(
             "sibling_dynamic_listener_event",
             sibling_dynamic_listener_event(),
         ),
@@ -332,6 +350,15 @@ fn set_vnode_root_dynamic(vnode: u8, kind: DynamicKind) -> Op {
 
 fn set_vnode_node(vnode: u8, node: u8, kind: TemplateNodeKind) -> Op {
     Op::template(vnode, TemplateEdit::SetNode { node, kind })
+}
+
+fn insert_root(vnode: u8, index: u8, item: TemplateNodeKind) -> Op {
+    Op::template(
+        vnode,
+        TemplateEdit::Roots {
+            edit: ListEdit::Insert { index, item },
+        },
+    )
 }
 
 fn insert_child(vnode: u8, element: u8, index: u8, kind: TemplateNodeKind) -> Op {
@@ -1004,6 +1031,48 @@ fn visible_fragment_child_after_text_slot() -> Vec<Op> {
         set_vnode_root_dynamic(1, DynamicKind::Empty),
         Op::Rerender,
         set_vnode_root_dynamic(1, DynamicKind::Text(1)),
+        Op::Rerender,
+    ]
+}
+
+fn root_dynamic_before_static_root_with_nested_dynamic_node() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        insert_root(
+            0,
+            1,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
+        Op::Rerender,
+    ]
+}
+
+fn root_dynamic_before_static_root_with_nested_dynamic_attr() -> Vec<Op> {
+    vec![
+        set_root_dynamic(),
+        insert_root(
+            0,
+            1,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 2,
+                namespace: None,
+            },
+        ),
+        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr(0, 0, 0, AttrValueSpec::Text(1)),
         Op::Rerender,
     ]
 }

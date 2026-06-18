@@ -545,8 +545,28 @@ impl VirtualDom {
     ///
     /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
     /// handling any of its mutations.
+    ///
+    /// The discarded rebuild still primes each render target's template
+    /// prototype cache, but those prototypes were never created in any real DOM,
+    /// so [`Self::reset_renderer_cache`] clears them before the next render can
+    /// try to clone them.
     pub fn rebuild_in_place(&mut self) {
         self.rebuild(&mut NoOpMutations);
+        self.reset_renderer_cache();
+    }
+
+    /// Forget the cached template prototypes for every render target.
+    ///
+    /// A renderer caches the first-built copy of each template root and clones
+    /// it for later instances. When a rebuild's mutations are discarded (no-op
+    /// rendering, hydration), those prototypes never reach the real DOM, so the
+    /// cache must be reset before the next render or it would clone nodes that
+    /// do not exist. Mount state and element bindings are preserved, so a
+    /// hydration walk can still bind the ids this rebuild assigned.
+    pub fn reset_renderer_cache(&mut self) {
+        for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
+            target.clear_template_cache();
+        }
     }
 
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
@@ -558,6 +578,11 @@ impl VirtualDom {
 
     /// Performs a *full* rebuild of the virtual dom, writing every produced
     /// edit into `to`.
+    ///
+    /// Pass any [`MultiWriter`](crate::MultiWriter). A single [`WriteMutations`] writer serves
+    /// the root target, and hosts with multiple render targets can pass a
+    /// `BTreeMap<RenderTargetId, W>` keyed by target id or their own
+    /// [`MultiWriter`](crate::MultiWriter) implementation.
     ///
     /// Tasks will not be polled with this method, nor will any events be
     /// processed from the event queue. Instead, the root component will be run
@@ -580,6 +605,11 @@ impl VirtualDom {
     /// Render whatever the VirtualDom has ready as fast as possible without
     /// requiring an executor to progress suspended subtrees, writing edits
     /// into `to`.
+    ///
+    /// Pass any [`MultiWriter`](crate::MultiWriter). A single [`WriteMutations`] writer serves
+    /// the root target, and hosts with multiple render targets can pass a
+    /// `BTreeMap<RenderTargetId, W>` keyed by target id or their own
+    /// [`MultiWriter`](crate::MultiWriter) implementation.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl crate::MultiWriter) {
         self.process_events();
@@ -731,7 +761,6 @@ impl VirtualDom {
     }
 
     /// Wait for the scheduler to have any work that should be run during suspense.
-    #[doc(hidden)]
     pub async fn wait_for_suspense_work(&mut self) {
         // Wait for a work to be ready (IE new suspense leaves to pop up)
         loop {
@@ -889,7 +918,6 @@ fn drop_scopes_child_first(mut scopes: Vec<ScopeState>) {
 }
 
 /// Yield control back to the async scheduler. This is used to give the scheduler a chance to run other pending work. Or cancel the task if the client has disconnected.
-#[cfg(not(target_arch = "wasm32"))]
 async fn yield_now() {
     let mut yielded = false;
     std::future::poll_fn::<(), _>(move |cx| {
@@ -902,9 +930,4 @@ async fn yield_now() {
         }
     })
     .await;
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn yield_now() {
-    gloo_timers::future::TimeoutFuture::new(0).await;
 }

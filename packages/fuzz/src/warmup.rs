@@ -528,9 +528,9 @@ fn warmup_suspense_then_remove() {
 /// `use_hook`, so this branch is otherwise unreachable.
 fn warmup_portal_target_switch() {
     use dioxus::prelude::*;
-    use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
+    use std::{cell::Cell, collections::BTreeMap};
 
     thread_local! {
         static MODE: Cell<u32> = const { Cell::new(0) };
@@ -557,7 +557,7 @@ fn warmup_portal_target_switch() {
     let second = dom.runtime().create_render_target();
     FIRST_TARGET.with(|c| c.set(first));
     SECOND_TARGET.with(|c| c.set(second));
-    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(first, RendererOracle::new());
     writer.insert(second, RendererOracle::new());
@@ -571,8 +571,8 @@ fn warmup_portal_target_switch() {
     // mode 2: switch back to first target with NO oracle attached for it.
     // The target router drops mutations for the missing target while the
     // retarget arm still runs its removal and mount logic.
-    let _ = writer.take(first);
-    let _ = writer.take(second);
+    let _ = writer.remove(&first);
+    let _ = writer.remove(&second);
     MODE.with(|c| c.set(2));
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut writer);
@@ -592,7 +592,7 @@ fn warmup_portal_target_switch() {
     FIRST_TARGET.with(|c| c.set(first));
     SECOND_TARGET.with(|c| c.set(noop));
     MODE.with(|c| c.set(0));
-    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(first, RendererOracle::new());
     dom.rebuild(&mut writer);
@@ -823,9 +823,9 @@ fn warmup_attribute_value_to_listener() {
 /// from the list's target, driving the cross-target dynamic-text-root branch.
 fn warmup_portal_dynamic_text_root() {
     use dioxus::prelude::*;
-    use dioxus_core::{MultiTargetWriter, Portal, RenderTargetId, ScopeId, VirtualDom};
+    use dioxus_core::{Portal, RenderTargetId, ScopeId, VirtualDom};
     use dioxus_renderer_oracle::RendererOracle;
-    use std::cell::Cell;
+    use std::{cell::Cell, collections::BTreeMap};
 
     thread_local! {
         static TARGET: Cell<RenderTargetId> = const { Cell::new(RenderTargetId::ROOT) };
@@ -853,7 +853,7 @@ fn warmup_portal_dynamic_text_root() {
     let mut dom = VirtualDom::new(app);
     let target = dom.runtime().create_render_target();
     TARGET.with(|c| c.set(target));
-    let mut writer = MultiTargetWriter::<RendererOracle>::new();
+    let mut writer = BTreeMap::new();
     writer.insert(RenderTargetId::ROOT, RendererOracle::new());
     writer.insert(target, RendererOracle::new());
     dom.rebuild(&mut writer);

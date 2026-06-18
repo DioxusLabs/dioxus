@@ -2,14 +2,15 @@ use super::{TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 
 /// Sentinel `op` value marking a [`TemplateAnchor`] for a root-level dynamic node slot, which has no
 /// enclosing static element.
+#[doc(hidden)]
 pub const ROOT_ANCHOR_OP: u16 = u16::MAX;
 
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateAnchor {
-    pub op: u16,
     pub path: u128,
+    pub op: u16,
     pub value_start: u16,
     pub value_count: u16,
 }
@@ -18,8 +19,8 @@ impl TemplateAnchor {
     pub const fn from_raw_parts(op: u16, path: u128, values: std::ops::Range<u16>) -> Self {
         let (value_start, value_count) = Self::range_parts(values);
         Self {
-            op,
             path,
+            op,
             value_start,
             value_count,
         }
@@ -27,14 +28,14 @@ impl TemplateAnchor {
 
     const fn range_parts(values: std::ops::Range<u16>) -> (u16, u16) {
         if values.start >= values.end {
-            panic!("template anchors must cover at least one dynamic value");
+            panic!("bad anchor");
         }
         (values.start, values.end - values.start)
     }
 
     const fn single_value_range(value_start: u16) -> std::ops::Range<u16> {
         if value_start == u16::MAX {
-            panic!("template dynamic value count exceeds packed anchor capacity");
+            panic!("anchor overflow");
         }
         value_start..value_start + 1
     }

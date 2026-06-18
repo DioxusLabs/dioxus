@@ -56,7 +56,7 @@ impl MountedElementId {
 
     pub(crate) fn from_index_unchecked(index: usize) -> Self {
         debug_assert_ne!(index, ElementId::ROOT.index());
-        Self(NonZeroUsize::new(index).expect("mounted element id cannot be the root element"))
+        Self(NonZeroUsize::new(index).expect("root id"))
     }
 
     pub(crate) fn element_id(self) -> ElementId {
@@ -128,6 +128,16 @@ impl RenderTargetState {
         self.elements.insert(None);
         self.template_roots.clear();
     }
+
+    /// Drop the cached template prototypes, reclaiming the element ids they
+    /// reserved. The live element arena and its mount bindings are left intact:
+    /// only the clone-source prototypes are forgotten, so the next render
+    /// rebuilds them against the renderer's real DOM.
+    pub(crate) fn clear_template_cache(&mut self) {
+        for (_, prototype) in self.template_roots.drain() {
+            self.elements.try_remove(prototype.index());
+        }
+    }
 }
 
 /// A live mount's unique identifier.
@@ -151,9 +161,7 @@ impl VirtualDom {
 
     pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
-        let target = targets
-            .get_mut(target_id.index())
-            .expect("render target should exist while allocating an element");
+        let target = targets.get_mut(target_id.index()).expect("target");
         MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)))
     }
 
@@ -177,9 +185,7 @@ impl VirtualDom {
         root_idx: usize,
     ) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
-        let target = targets
-            .get_mut(target_id.index())
-            .expect("render target should exist while allocating a template root");
+        let target = targets.get_mut(target_id.index()).expect("target");
         let id = MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)));
         target.template_roots.insert((template, root_idx), id);
         id
@@ -194,13 +200,8 @@ impl VirtualDom {
     pub(crate) fn set_element_ref_for_mount(&self, mount: MountId, el: MountedElementId) {
         let target_id = self.mount_target_id(mount);
         let mut targets = self.runtime.render_targets.borrow_mut();
-        let target = targets
-            .get_mut(target_id.index())
-            .expect("render target should exist while assigning an element ref");
-        let element = target
-            .elements
-            .get_mut(el.index())
-            .expect("element should exist while assigning an element ref");
+        let target = targets.get_mut(target_id.index()).expect("target");
+        let element = target.elements.get_mut(el.index()).expect("element");
         *element = Some(MountRef { mount });
     }
 

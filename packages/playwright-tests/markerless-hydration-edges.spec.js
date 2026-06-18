@@ -19,6 +19,23 @@ test("ssr emits no hydration markers", async ({ page }) => {
   expect(stripped).not.toContain("<!--#-->");
 });
 
+test("scope with no SSR roots hydrates virtual root anchors", async ({
+  page,
+}) => {
+  const res = await page.request.get(URL);
+  const html = await res.text();
+  const stripped = html.replace(/<script\b[\s\S]*?<\/script>/gi, "");
+
+  expect(stripped).not.toContain("late-empty-root");
+  expect(stripped).not.toContain("root text ready");
+
+  await page.goto(URL);
+  await expect(page.locator("#late-empty-root")).toHaveText("late root ready");
+
+  const bodyText = await page.evaluate(() => document.body.textContent || "");
+  expect(bodyText).toContain("root text ready");
+});
+
 test("dangerous inner html hydrates host and updates innerHTML", async ({
   page,
 }) => {

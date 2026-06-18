@@ -132,8 +132,7 @@ pub(crate) fn with_id<R>(
 /// Push `id` and let `consume_node` consume it.
 ///
 /// Invariant: `consume_node` must consume the pushed node with a terminal stack
-/// operation such as `remove`, `replace_with`, or `pop_id`. No-op writers keep
-/// the same logical stack contract and ignore the concrete mutations.
+/// operation such as `remove`, `replace_with`, or `pop_id`.
 pub(crate) fn with_consumed_id<R>(
     to: &mut dyn WriteMutations,
     id: ElementId,
@@ -345,74 +344,14 @@ impl<W: WriteMutations> MultiWriter for W {
     }
 }
 
-/// Holds one writer per [`RenderTargetId`].
-///
-/// Each target's writes land in that target's writer. Only explicitly
-/// inserted targets have a writer and everything else has its mutations
-/// dropped by the target router.
-pub struct MultiTargetWriter<W> {
-    targets: BTreeMap<RenderTargetId, W>,
-}
-
-impl<W: WriteMutations> MultiTargetWriter<W> {
-    /// Create an empty writer map. Targets must be inserted explicitly.
-    pub fn new() -> Self {
-        Self {
-            targets: Default::default(),
-        }
-    }
-
-    /// Create a writer map from an existing set of target writers.
-    pub fn from_targets(targets: BTreeMap<RenderTargetId, W>) -> Self {
-        Self { targets }
-    }
-
-    /// Insert or replace the writer for `id`.
-    pub fn insert(&mut self, id: RenderTargetId, writer: W) {
-        self.targets.insert(id, writer);
-    }
-
-    /// Remove and return the writer for `id`, if present.
-    pub fn take(&mut self, id: RenderTargetId) -> Option<W> {
-        self.targets.remove(&id)
-    }
-
-    /// Get the writer for `id`, if present.
-    pub fn get(&self, id: RenderTargetId) -> Option<&W> {
-        self.targets.get(&id)
-    }
-
-    /// Iterate over the registered targets and writers.
-    pub fn targets(&self) -> impl Iterator<Item = (RenderTargetId, &W)> {
-        self.targets.iter().map(|(id, w)| (*id, w))
-    }
-
-    /// Return the underlying target writer map.
-    pub fn into_targets(self) -> BTreeMap<RenderTargetId, W> {
-        self.targets
-    }
-}
-
-impl<W: WriteMutations> Default for MultiTargetWriter<W> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<W: WriteMutations> MultiWriter for MultiTargetWriter<W> {
+impl<W: WriteMutations> MultiWriter for BTreeMap<RenderTargetId, W> {
     type Writer = W;
 
     fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut W> {
-        self.targets.get_mut(&id)
+        self.get_mut(&id)
     }
 }
 
-/// Routes diff writes to the host's per-target writers.
-///
-/// On every write the router resolves the active render target from the
-/// runtime (every scope carries its render target; portal scopes carry the
-/// portal's target) and forwards the write to that target's writer. Writes
-/// for targets the host has no writer for are dropped.
 pub(crate) struct TargetRouter<'a, M: MultiWriter> {
     to: &'a mut M,
     runtime: Rc<Runtime>,

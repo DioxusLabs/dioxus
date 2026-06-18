@@ -3410,7 +3410,6 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "gloo-timers",
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.9.4",

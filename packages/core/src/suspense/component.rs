@@ -303,7 +303,7 @@ impl RenderDriver for SuspenseDriver {
             let rendered = dom.scopes[scope_id.index()]
                 .last_rendered_node
                 .as_ref()
-                .expect("SuspenseBoundary to be mounted")
+                .expect("suspense")
                 .node()
                 .clone();
             dom.mark_clean(scope_id);
@@ -435,7 +435,6 @@ impl SuspenseBoundaryProps {
         scope_id: ScopeId,
         dom: &mut VirtualDom,
         to: &mut M,
-        only_write_templates: impl FnOnce(&mut M),
         push_replacements: impl FnOnce(&mut M) -> usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
@@ -466,7 +465,7 @@ impl SuspenseBoundaryProps {
             let id = currently_rendered
                 .mounted_vnode()
                 .find_first_element(dom)
-                .expect("suspense placeholders should keep a DOM anchor");
+                .expect("placeholder");
             replace_id_with(to, id, push_replacements);
             currently_rendered.as_vnode().remove_node(
                 currently_rendered.root_mount(),
@@ -474,12 +473,10 @@ impl SuspenseBoundaryProps {
                 None,
             );
 
-            // Switch to only writing templates
-            only_write_templates(to);
-
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
             let created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children.create_with_parents(dom, parent, parent, Some(to))
+                let mut no_op = crate::NoOpMutations;
+                children.create_with_parents(dom, parent, parent, Some(&mut no_op))
             });
 
             set_rendered_children(dom, scope_id, children, created.mount);
@@ -759,7 +756,7 @@ fn replace_suspense_nodes(
         prepare(dom);
         let children = dom
             .current_mounted_view(children_mount)
-            .expect("promoted suspense children must keep their mounted vnode");
+            .expect("suspense child");
         replace_placeholder_with(
             placeholder,
             MountedVNode::new(&children, children_mount),
@@ -831,7 +828,7 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
                     let rendered = dom.scopes[scope_id.index()]
                         .last_rendered_node
                         .clone()
-                        .expect("mounted component scope must have rendered output");
+                        .expect("scope output");
                     promote_suspense_mounts_to_foreground(
                         dom,
                         rendered.as_vnode(),
@@ -870,7 +867,7 @@ fn set_suspense_mounts_render_mode(
                     let rendered = dom.scopes[scope_id.index()]
                         .last_rendered_node
                         .clone()
-                        .expect("mounted component scope must have rendered output");
+                        .expect("scope output");
                     set_suspense_mounts_render_mode(
                         dom,
                         rendered.as_vnode(),

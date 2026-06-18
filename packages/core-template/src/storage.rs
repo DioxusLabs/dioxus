@@ -8,20 +8,25 @@ use super::{
 use crate::TEMPLATE_RAW_OPS_CAP;
 
 /// Maximum packed template storage capacity.
+#[doc(hidden)]
 pub const TEMPLATE_STORAGE_MAX_CAP: usize = TemplateOp::MAX_CAP;
 
 /// Default packed template operation storage capacity.
-pub const TEMPLATE_STORAGE_OPS_CAP: usize = 512;
+#[doc(hidden)]
+pub const TEMPLATE_STORAGE_OPS_CAP: usize = 128;
 
 /// Default static string storage capacity.
-pub const TEMPLATE_STORAGE_STRING_CAP: usize = 256;
+#[doc(hidden)]
+pub const TEMPLATE_STORAGE_STRING_CAP: usize = 128;
 
 /// Default dynamic anchor storage capacity.
-pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 32;
+#[doc(hidden)]
+pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 
 const TEMPLATE_PATH_STACK_CAP: usize = 32;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[doc(hidden)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct TemplateStorageStats {
     pub raw_ops: usize,
     pub ops: usize,
@@ -38,11 +43,8 @@ struct AnchorStats {
     value_count: usize,
 }
 
-/// Const storage for a lowered raw template.
-///
-/// The RSX macro emits a `static TemplateStorage<OPS, STRINGS, DYNAMICS>` from a
-/// raw operation tape, then calls [`Self::as_template`] to expose the compact [`Template`] used by
-/// the runtime.
+/// Const storage for a template.
+#[doc(hidden)]
 #[derive(Clone, Copy)]
 pub struct TemplateStorage<
     const OPS_CAP: usize = TEMPLATE_STORAGE_OPS_CAP,
@@ -327,7 +329,7 @@ impl TemplateStorageStats {
         }
 
         if anchors.iter().any(|anchor| anchor.same_anchor(op, path)) {
-            panic!("dynamic values for a template anchor must be contiguous");
+            panic!("anchor gap");
         }
 
         anchors.push(AnchorStats {
@@ -565,7 +567,7 @@ const fn lower_raw_template<
 impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
-    /// Lower a raw template tape into packed storage in const context.
+    /// Build storage from a raw template description.
     pub const fn build(raw: &[TemplateRawOp]) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
@@ -578,7 +580,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         storage
     }
 
-    /// Lower a raw template tree into packed storage in const context.
+    /// Build storage from a template tree.
     pub const fn build_from_tree(tree: &'static TemplateRawTree) -> Self {
         let mut storage = Self {
             ops: ConstVec::new_with_max_size(),
@@ -600,21 +602,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             self.strings.as_slice(),
             self.anchors.as_slice(),
         )
-    }
-
-    /// Borrow the lowered packed ops.
-    pub fn ops(&self) -> &[TemplateOp] {
-        self.ops.as_slice()
-    }
-
-    /// Borrow the lowered static string pool.
-    pub fn strings(&self) -> &[&'static str] {
-        self.strings.as_slice()
-    }
-
-    /// Borrow the lowered dynamic anchors.
-    pub fn anchors(&self) -> &[TemplateAnchor] {
-        self.anchors.as_slice()
     }
 
     #[doc(hidden)]
@@ -665,7 +652,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
         let mut i = 0;
         while i < len {
             if self.anchors.at(i).same_anchor(op, path) {
-                panic!("dynamic values for a template anchor must be contiguous");
+                panic!("anchor gap");
             }
             i += 1;
         }
@@ -709,7 +696,7 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
 }
 
 impl Template {
-    /// Lower a raw template tape into a leaked runtime template.
+    /// Build a leaked runtime template from a raw template description.
     pub fn from_raw_ops(raw: &'static [TemplateRawOp]) -> Self {
         TemplateStorage::<
             TEMPLATE_STORAGE_MAX_CAP,

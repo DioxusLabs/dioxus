@@ -29,14 +29,13 @@ impl WebsysDom {
         scope: &'a ScopeState,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
-        to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         self.collect_suspense_only(scope, dom);
 
         let mut leaves: Vec<Leaf<'a>> = Vec::new();
         let root = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
         self.collect_vnode_root_leaves(root, dom, &mut leaves)?;
-        self.emit_leaves(&leaves, cursor, dom, to_mount)
+        self.emit_leaves(&leaves, cursor, dom)
     }
 
     /// Flatten a VNode's template roots into leaves at the current DOM level.
@@ -46,8 +45,7 @@ impl WebsysDom {
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        let roots: Vec<_> = vnode.vnode().template.root_slots().collect();
-        for (root_idx, static_op, dynamic_anchor) in roots {
+        for (root_idx, static_op, dynamic_anchor) in vnode.vnode().template.root_slots() {
             if let Some(anchor) = dynamic_anchor {
                 for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
@@ -70,21 +68,20 @@ impl WebsysDom {
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        let static_children: Vec<usize> =
-            vnode.vnode().template.static_children(element_op).collect();
-        for slot in 0..=static_children.len() {
-            let anchors: Vec<_> = vnode
+        let mut static_children = vnode.vnode().template.static_children(element_op);
+        for slot in 0.. {
+            for anchor in vnode
                 .vnode()
                 .dynamic_node_anchors_for_slot(element_op, slot)
-                .collect();
-            for anchor in anchors {
+            {
                 for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
                     self.collect_dynamic_node_leaves(vnode, value_idx, dom, out)?;
                 }
             }
-            if let Some(&op) = static_children.get(slot) {
-                self.collect_template_node_leaves(vnode, op, None, out)?;
-            }
+            let Some(op) = static_children.next() else {
+                break;
+            };
+            self.collect_template_node_leaves(vnode, op, None, out)?;
         }
         Ok(())
     }
@@ -112,10 +109,11 @@ impl WebsysDom {
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        match vnode.vnode().dynamic_values[value_idx]
-            .as_node()
-            .expect("hydration node slot must point at a dynamic node")
-        {
+        let Some(node) = vnode.vnode().dynamic_values[value_idx].as_node() else {
+            return Err(HydrationMismatch);
+        };
+
+        match node {
             DynamicNode::Text(text) => {
                 let id = vnode
                     .mounted_dynamic_node(value_idx, dom)
@@ -154,25 +152,27 @@ impl WebsysDom {
         leaves: &[Leaf<'a>],
         cursor: &mut HydrationCursor,
         dom: &'a VirtualDom,
-        to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        let steps = group_steps(leaves);
-
         let mut prev_consumed: u32 = 0;
-        for (idx, step) in steps.iter().enumerate() {
+        let mut idx = 0;
+        while idx < leaves.len() {
             if prev_consumed > 0 {
                 cursor.advance(prev_consumed);
             }
-            prev_consumed = match step {
-                EmitStep::Element(leaf) => {
-                    self.emit_element(leaf, cursor, dom, to_mount)?;
-                    1
+
+            if leaves[idx].is_text() {
+                let run_start = idx;
+                idx += 1;
+                while idx < leaves.len() && leaves[idx].is_text() {
+                    idx += 1;
                 }
-                EmitStep::TextRun(run) => {
-                    let split_tail = next_consuming_is_text_run(&steps, idx);
-                    emit_text_run(run, cursor, split_tail)?
-                }
-            };
+                let split_tail = next_consuming_text_run_starts_at(leaves, idx);
+                prev_consumed = emit_text_run(&leaves[run_start..idx], cursor, split_tail)?;
+            } else {
+                self.emit_element(&leaves[idx], cursor, dom)?;
+                idx += 1;
+                prev_consumed = 1;
+            }
         }
         Ok(())
     }
@@ -182,42 +182,25 @@ impl WebsysDom {
         leaf: &Leaf<'a>,
         cursor: &mut HydrationCursor,
         dom: &'a VirtualDom,
-        to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         let &Leaf::Element { vnode, op, root_id } = leaf else {
-            unreachable!("emit_element only accepts element leaves");
+            return Err(HydrationMismatch);
         };
         let (tag, _namespace) = vnode
             .vnode()
             .template
             .element_meta_at_op(op)
-            .expect("element leaf wraps an element op");
+            .ok_or(HydrationMismatch)?;
 
         // Resolve the mounted ElementId (the dynamic attr id overrides the root
         // id when present) and collect dynamic listeners + onmounted events.
         let mut mounted_id = root_id;
-        let mut listeners: Vec<(&'static str, bool)> = Vec::new();
         for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
             for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
                 let attr_id = vnode
                     .mounted_dynamic_attribute(value_idx, dom)
                     .ok_or(VNodeNotInitialized)?;
                 mounted_id = Some(attr_id);
-                let attrs = vnode.vnode().dynamic_values[value_idx]
-                    .as_attrs()
-                    .expect("hydration attr slot must point at dynamic attributes");
-                for attribute in attrs {
-                    if matches!(attribute.value, AttributeValue::Listener(_)) {
-                        if attribute.name == "onmounted" {
-                            to_mount.push(attr_id);
-                        } else {
-                            let event_name =
-                                attribute.name.strip_prefix("on").unwrap_or(attribute.name);
-                            let bubbles = dioxus_core_types::event_bubbles(event_name);
-                            listeners.push((event_name, bubbles));
-                        }
-                    }
-                }
             }
         }
 
@@ -225,10 +208,32 @@ impl WebsysDom {
         // parser-inserted wrappers. id == 0 means the element needs no node
         // binding but still occupies a positional slot.
         let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
-        let element = cursor.map_element(tag, id_arg)?;
+        cursor.map_element(tag, id_arg)?;
 
-        for (name, bubbles) in listeners {
-            cursor.attach_listener(&element, id_arg, name, bubbles);
+        for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
+            for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
+                let Some(attrs) = vnode.vnode().dynamic_values[value_idx].as_attrs() else {
+                    return Err(HydrationMismatch);
+                };
+                for attribute in attrs {
+                    if matches!(attribute.value, AttributeValue::Listener(_)) {
+                        if attribute.name == "onmounted" {
+                            #[cfg(feature = "mounted")]
+                            {
+                                let attr_id = vnode
+                                    .mounted_dynamic_attribute(value_idx, dom)
+                                    .ok_or(VNodeNotInitialized)?;
+                                self.send_mount_event(attr_id);
+                            }
+                        } else {
+                            let event_name =
+                                attribute.name.strip_prefix("on").unwrap_or(attribute.name);
+                            let bubbles = dioxus_core_types::event_bubbles(event_name);
+                            cursor.attach_listener(id_arg, event_name, bubbles)?;
+                        }
+                    }
+                }
+            }
         }
 
         // Descend only if the subtree contains dynamic content. Pure-static
@@ -238,7 +243,7 @@ impl WebsysDom {
             cursor.begin_children();
             let mut child_leaves: Vec<Leaf<'a>> = Vec::new();
             self.collect_element_child_leaves(vnode, op, dom, &mut child_leaves)?;
-            self.emit_leaves(&child_leaves, cursor, dom, to_mount)?;
+            self.emit_leaves(&child_leaves, cursor, dom)?;
             cursor.end_children();
         }
 
@@ -253,7 +258,7 @@ fn element_has_dynamic_content(vnode: &VNode, op: usize) -> bool {
     if vnode.dynamic_node_anchors_for_element(op).next().is_some() {
         return true;
     }
-    for child_op in vnode.template.static_children(op).collect::<Vec<_>>() {
+    for child_op in vnode.template.static_children(op) {
         if vnode.template.element_meta_at_op(child_op).is_some() {
             if vnode
                 .dynamic_attr_anchors_for_element(child_op)
@@ -297,60 +302,23 @@ impl Leaf<'_> {
     }
 }
 
-/// One emit-level step. Text runs group adjacent text leaves so they can be
-/// addressed against the browser-merged DOM text node with `splitText` offsets.
-enum EmitStep<'a, 'b> {
-    Element(&'b Leaf<'a>),
-    TextRun(&'b [Leaf<'a>]),
-}
-
-impl EmitStep<'_, '_> {
-    fn consumes_dom(&self) -> bool {
-        match self {
-            EmitStep::TextRun(leaves) => leaves.iter().any(leaf_text_is_non_empty),
-            EmitStep::Element(_) => true,
-        }
-    }
-
-    fn is_text_run(&self) -> bool {
-        matches!(self, EmitStep::TextRun(_))
-    }
-}
-
-/// Group leaves into emit steps. A text leaf greedy-extends across consecutive
-/// text leaves (the browser merges all text contributions into one DOM node).
-fn group_steps<'a, 'b>(leaves: &'b [Leaf<'a>]) -> Vec<EmitStep<'a, 'b>> {
-    let mut steps = Vec::new();
-    let mut i = 0;
-    while i < leaves.len() {
-        if leaves[i].is_text() {
-            let mut end = i + 1;
-            while end < leaves.len() && leaves[end].is_text() {
-                end += 1;
-            }
-            steps.push(EmitStep::TextRun(&leaves[i..end]));
-            i = end;
-        } else {
-            steps.push(EmitStep::Element(&leaves[i]));
-            i += 1;
-        }
-    }
-    steps
-}
-
 /// True when the next *consuming* step after `idx` is a text run, meaning our
 /// last non-empty text contribution needs `split_after` so the cursor advances
 /// past it (instead of parking on it for the caller to advance 1).
-fn next_consuming_is_text_run(steps: &[EmitStep<'_, '_>], idx: usize) -> bool {
-    let mut next = idx + 1;
-    while let Some(step) = steps.get(next) {
-        if step.is_text_run() {
-            return true;
-        }
-        if step.consumes_dom() {
+fn next_consuming_text_run_starts_at(leaves: &[Leaf<'_>], mut idx: usize) -> bool {
+    while idx < leaves.len() {
+        if leaves[idx].is_text() {
+            let mut has_non_empty = false;
+            while idx < leaves.len() && leaves[idx].is_text() {
+                has_non_empty |= leaf_text_is_non_empty(&leaves[idx]);
+                idx += 1;
+            }
+            if has_non_empty {
+                return true;
+            }
+        } else {
             return false;
         }
-        next += 1;
     }
     false
 }

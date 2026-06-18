@@ -8,7 +8,7 @@ fn app() -> Element {
     let mut text = use_signal(String::new);
     let mut show = use_signal(|| false);
 
-    use_effect(move || {
+    use_future(move || async move {
         text.set("root text ready".to_string());
         show.set(true);
     });

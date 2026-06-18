@@ -1,10 +1,12 @@
 /// One operation in a flat static template tape.
+#[doc(hidden)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateOp(u16);
 
 /// Decoded static attribute namespace storage.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodedTemplateAttrNamespace {
     /// No namespace.
@@ -14,6 +16,7 @@ pub enum DecodedTemplateAttrNamespace {
 }
 
 /// Decoded representation of a packed [`TemplateOp`].
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodedTemplateOp {
     /// Enter an element. `skip` is the number of ops in this element subtree.

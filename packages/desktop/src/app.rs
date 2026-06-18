@@ -7,11 +7,11 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{MultiTargetWriter, RenderTargetId, VirtualDom};
+use dioxus_core::{RenderTargetId, VirtualDom};
 use futures_util::{FutureExt, pin_mut};
 use std::{
     cell::{Cell, RefCell},
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
     time::Duration,
 };
@@ -509,17 +509,15 @@ impl App {
     /// Build the writer for one shared-DOM render pass: every shared webview's
     /// `WryQueue` keyed by its target id, with each queue's `touched` flag
     /// cleared so we can detect which targets receive writes during the pass.
-    fn shared_dom_writer(&self) -> MultiTargetWriter<crate::edits::WryQueue> {
-        let queues = self
-            .webviews
+    fn shared_dom_writer(&self) -> BTreeMap<RenderTargetId, crate::edits::WryQueue> {
+        self.webviews
             .values()
             .filter(|webview| webview.dom.is_none())
             .map(|webview| {
                 webview.edits.wry_queue.clear_touched();
                 (webview.target_id, webview.edits.wry_queue.clone())
             })
-            .collect();
-        MultiTargetWriter::from_targets(queues)
+            .collect()
     }
 
     /// Collect every shared-DOM webview whose `WryQueue` was touched during the

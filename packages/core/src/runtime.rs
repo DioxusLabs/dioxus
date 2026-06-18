@@ -28,13 +28,13 @@ use std::{
 };
 use tracing::instrument;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 struct EventTarget {
     mount: MountId,
     path: EventTargetPath,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 enum EventTargetPath {
     Static(TemplatePath),
     Slot(TemplateSlotPath),
@@ -257,9 +257,10 @@ fn MyComponent() -> Element {{
 
     /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
     ///
-    /// Renderer mutations for the target are routed through the host's
-    /// [`MultiWriter`](crate::MultiWriter). If the host does not serve a
-    /// writer for the target, those mutations are skipped.
+    /// Hosts serve render targets through [`MultiWriter`](crate::MultiWriter)
+    /// implementations passed into [`VirtualDom::rebuild`](crate::VirtualDom::rebuild)
+    /// and [`VirtualDom::render_immediate`](crate::VirtualDom::render_immediate). If
+    /// the host does not serve a writer for the target, those mutations are skipped.
     pub fn create_render_target(&self) -> RenderTargetId {
         let mut targets = self.render_targets.borrow_mut();
         RenderTargetId::new(targets.insert(RenderTargetState::new()))
@@ -677,7 +678,7 @@ fn MyComponent() -> Element {{
     |           <-- no, broke early
     */
     #[instrument(
-        skip(self, uievent),
+        skip(self, parent, uievent),
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
@@ -748,7 +749,7 @@ fn MyComponent() -> Element {{
 
     /// Call an event listener in the simplest way possible without bubbling upwards
     #[instrument(
-        skip(self, uievent),
+        skip(self, node, uievent),
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
