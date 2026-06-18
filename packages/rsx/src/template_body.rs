@@ -471,7 +471,6 @@ impl ViewBuilder {
 
     fn element_tag(&mut self, element: &Element) -> TokenStream2 {
         match &element.name {
-            ElementName::Ident(tag) => quote_spanned! { element.name.span() => #tag() },
             ElementName::Path(path) => quote_spanned! { element.name.span() => #path() },
             ElementName::Custom(_) => {
                 let tag = self.define_tag(element);
@@ -690,7 +689,7 @@ impl Element {
     }
 
     fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
-        if matches!(self.name, ElementName::Ident(_) | ElementName::Path(_))
+        if matches!(self.name, ElementName::Path(_))
             && let AttributeName::BuiltIn(method) = &attr.name
             && !attr.name.is_likely_key()
         {

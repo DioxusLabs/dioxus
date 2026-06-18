@@ -42,14 +42,16 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
 
         Node::Element(el) => {
             let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {
-                ElementName::Ident(Ident::new(name, Span::call_site()))
+                ElementName::Path(Ident::new(name, Span::call_site()).into())
             } else {
                 // if we don't recognize it and it has a dash, we assume it's a web component
                 if el.name.contains('-') {
                     ElementName::Custom(LitStr::new(&el.name, Span::call_site()))
                 } else {
                     // otherwise, it might be an element that isn't supported yet
-                    ElementName::Ident(Ident::new(&el.name.to_case(Case::Snake), Span::call_site()))
+                    ElementName::Path(
+                        Ident::new(&el.name.to_case(Case::Snake), Span::call_site()).into(),
+                    )
                 }
             };
 

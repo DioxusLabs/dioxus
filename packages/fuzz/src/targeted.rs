@@ -19,6 +19,21 @@ fn targeted_diff_coverage_cases_replay() {
     }
 }
 
+/// Regression: two adjacent root-level dynamic nodes lower to a single
+/// append-at-root anchor (`{a}{b}`). When the first slot becomes a pending
+/// suspense and re-renders, its fallback must be placed before the live sibling
+/// value sharing that anchor — not appended to the document root, which left
+/// the two roots in swapped order versus a fresh build. Minimized libfuzzer
+/// artifact for that divergence.
+#[test]
+fn suspense_root_sibling_placement_keeps_order() {
+    let bytes: &[u8] = &[
+        5, 3, 0, 0, 1, 0, 0, 2, 0, 3, 0, 0, 0, 1, 2, 3, 5, 3, 0, 0, 0, 178, 2, 5, 1, 5,
+    ];
+    let case = crate::case::decode_case(bytes).expect("decode regression artifact");
+    replay_case_strict("suspense_root_sibling_placement", &case);
+}
+
 fn replay_case_strict(name: &str, case: &FuzzCase) {
     let mut state = Harness::fresh_strict();
     for (step, op) in case.ops.iter().enumerate() {

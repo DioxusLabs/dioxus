@@ -116,8 +116,14 @@ impl DynamicViewValues {
     }
 
     /// Push a dynamic attribute slot.
+    ///
+    /// The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`.
+    /// Spread inputs (e.g. `..props.attributes`) are written in user/source order, so
+    /// normalize here. A stable sort preserves the relative order of duplicate keys
+    /// (last-wins semantics).
     #[inline]
-    pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
+    pub(crate) fn push_attrs(&mut self, mut value: Box<[Attribute]>) {
+        value.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
         self.values.push(DynamicValue::Attrs(value));
     }
 

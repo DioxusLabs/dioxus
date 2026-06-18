@@ -376,7 +376,12 @@ fn MyComponent() -> Element {{
                 }
             }
         }
-        self.scope_states.borrow_mut()[id.index()].take();
+        // Bind the removed scope so the `borrow_mut()` temporary is released at the end of
+        // this statement, *before* the scope is dropped. Otherwise the scope's `Drop` runs
+        // while `scope_states` is still mutably borrowed and re-entrant calls into
+        // `get_state` panic with "already mutably borrowed".
+        let removed = self.scope_states.borrow_mut()[id.index()].take();
+        drop(removed);
     }
 
     /// Get the owner for the current scope.

@@ -186,6 +186,10 @@ pub mod prelude {
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    pub use dioxus_html as html;
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(inline)]
     pub use dioxus_elements::{Code, Key, Location, Modifiers};
 

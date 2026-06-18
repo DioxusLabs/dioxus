@@ -136,6 +136,17 @@ pub(super) fn insertion_site_for_slot(
     // unreachable in practice.
     if slot.is_root_level() {
         let our_root_idx = root_idx;
+        // A root-level anchor can cover several adjacent dynamic values
+        // (`{a}{b}` lowers to one append-at-root anchor). The closest following
+        // sibling is the next live value sharing this anchor, so check it before
+        // scanning later root positions or walking up to committed root siblings.
+        if let Some(id) =
+            parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+                adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
+            })
+        {
+            return InsertionSite::AtAnchor(DomAnchor::Before(id));
+        }
         if let Some(id) = root_content_after_slot(parent_mount, our_root_idx, dom) {
             return InsertionSite::AtAnchor(DomAnchor::Before(id));
         }
@@ -445,9 +456,9 @@ fn root_content_after_slot(
         .current_mounted_view(parent_mount)
         .expect("parent_root_after requires a live parent mount");
 
-    // Root-level dynamic slots are unique root positions: template lowering
-    // advances the root cursor for every root dynamic value, so adjacent root
-    // dynamics never share one anchor. Start scanning at the next root.
+    // Values sharing this slot's anchor were already considered by the caller
+    // (adjacent `{a}{b}` root dynamics lower to one anchor), so begin at the
+    // next root position and look for the first later root's live content.
     ((our_root_idx + 1)..probe.template.root_count()).find_map(|next_cursor| {
         find_root_dynamic_slot(&probe, next_cursor, ElementEdge::First, |slot| {
             live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)

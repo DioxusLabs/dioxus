@@ -627,7 +627,7 @@ mod tests {
         if let BodyNode::Element(parsed) = &children[0] {
             assert_eq!(
                 parsed.name,
-                ElementName::Ident(Ident::new("di", Span::call_site()))
+                ElementName::Path(Ident::new("di", Span::call_site()).into())
             );
         } else {
             panic!("expected element, got {:?}", children);
