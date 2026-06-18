@@ -333,6 +333,7 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
 
 // Support for FnMut -> async { unit } for the unit return type
 /// Marker for callbacks that return a future with `()` output.
+#[doc(hidden)]
 pub struct AsyncMarker;
 impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
@@ -350,6 +351,7 @@ impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> fo
 
 // Support for FnMut -> async { Result(()) } for the unit return type
 /// Marker for callbacks that return a future with [`crate::Result<()>`] output.
+#[doc(hidden)]
 pub struct AsyncResultMarker;
 
 impl<T> SpawnIfAsync<AsyncResultMarker> for T
@@ -384,6 +386,7 @@ impl SpawnIfAsync<()> for crate::Result<()> {
 
 // We can't directly forward the marker because it would overlap with a bunch of other impls, so we wrap it in another type instead
 /// Wrapper marker used to disambiguate callback conversion impls.
+#[doc(hidden)]
 pub struct MarkerWrapper<T>(PhantomData<T>);
 
 // Closure can be created from FnMut -> async { anything } or FnMut -> Ret
@@ -422,6 +425,7 @@ impl<T: 'static> SuperFrom<Callback<Event<T>>> for ListenerCallback<T> {
 }
 
 /// Marker for callbacks built from closures that take no arguments.
+#[doc(hidden)]
 pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
 // Closure can be created from FnMut -> async { () } or FnMut -> Ret

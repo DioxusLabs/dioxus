@@ -10,16 +10,6 @@ use dioxus_core_template::deserialize_string_leaky;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
-/// A named literal captured for hot reload.
-pub struct HotreloadedLiteral {
-    /// The literal name.
-    pub name: String,
-    /// The literal value.
-    pub value: HotReloadLiteral,
-}
-
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Clone)]
 /// A literal value that can be replayed during hot reload.
 pub enum HotReloadLiteral {
     /// A formatted string literal.
@@ -152,9 +142,8 @@ impl DynamicLiteralPool {
         }
     }
 
-    // TODO: This should be marked as private in the next major release
     /// Get a component property from a hot-reload literal.
-    pub fn get_component_property<'a, T>(
+    fn get_component_property<'a, T>(
         &self,
         id: usize,
         hot_reload: &'a HotReloadedTemplate,
@@ -244,7 +233,7 @@ impl DynamicLiteralPool {
     }
 
     /// Render formatted segments using the current dynamic text pool.
-    pub fn render_formatted(&self, segments: &FmtedSegments) -> String {
+    fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
 }
@@ -257,7 +246,7 @@ pub struct DynamicValuePool {
 
 impl DynamicValuePool {
     /// Create a dynamic value pool.
-    pub fn new(
+    fn new(
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attributes: Vec<Box<[Attribute]>>,
         literal_pool: DynamicLiteralPool,

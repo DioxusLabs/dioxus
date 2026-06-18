@@ -156,11 +156,7 @@ impl<V: View> ViewExt for V {
 
 /// Convert a view into a [`VNode`] using a prepared template.
 #[inline]
-pub fn into_vnode_with_template<V: View>(
-    view: V,
-    key: Option<String>,
-    template: &Template,
-) -> VNode {
+fn into_vnode_with_template<V: View>(view: V, key: Option<String>, template: &Template) -> VNode {
     let mut dynamic = DynamicViewValues::with_capacity(template.dynamic_value_count());
     view.push(&mut dynamic);
     VNode::new_with_rendered_view(*template, dynamic.into_rendered_view(key))
@@ -168,7 +164,7 @@ pub fn into_vnode_with_template<V: View>(
 
 /// Convert a view into a keyed [`VNode`].
 #[inline]
-pub fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
+fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     #[cfg(debug_assertions)]
     {
         into_vnode_with_template(view, key, &<V as StaticViewTemplate>::build_template())

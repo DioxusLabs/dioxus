@@ -64,8 +64,7 @@ pub mod internal {
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadDynamicSlot, HotReloadLiteral,
-        HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
-        TemplateGlobalKey,
+        HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute, TemplateGlobalKey,
     };
 
     pub type DynamicNodeBuilder<N, Marker = ()> =
@@ -152,16 +151,17 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender, ComponentFunction,
-    ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId, ErrorBoundary,
+    AnyValue, AnyhowContext, AsyncMarker, AsyncResultMarker, Attribute, AttributeValue, Callback,
+    CapturedError, Component, ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender,
+    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId, ErrorBoundary,
     ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
     IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiWriter, Mutation,
-    Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
-    ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard,
-    ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto,
-    SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template,
-    VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
+    Mutations, NoOpMutations, OptionArgumentsFromMarker, OptionCallbackMarker,
+    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
+    RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, UnitClosure, VComponent, VNode,
+    VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
     consume_context_from_scope, current_owner, current_scope_id, generation, has_context,
     needs_update, needs_update_any, parent_scope, provide_context, provide_create_error_boundary,
     provide_root_context, queue_effect, remove_future, schedule_update, schedule_update_any, spawn,
