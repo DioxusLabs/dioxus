@@ -133,11 +133,7 @@ impl std::fmt::Write for StringChain {
 }
 
 impl StringCache {
-    /// Create a new string cache from a template.
-    ///
-    /// The cache is keyed by template and reused across renders. Whether each dynamic slot is a node
-    /// or an attribute is structural (identical for every `VNode` of this template), so it is read
-    /// from this `VNode`'s dynamic values.
+    /// Create a new string cache from a template
     pub fn from_template(vnode: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
