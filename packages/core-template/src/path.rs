@@ -54,6 +54,26 @@ impl TemplatePath {
         }
     }
 
+    /// Split a path to a static node into its parent path and the node's index among that
+    /// parent's children.
+    pub const fn split_insertion(self) -> (TemplatePath, usize) {
+        let mut parent = self.path;
+        let mut insertion_index = 0usize;
+        while parent != 0 && parent & 1 == 0 {
+            insertion_index += 1;
+            parent >>= 1;
+        }
+        if parent != 0 {
+            parent >>= 1;
+        }
+        (TemplatePath::from_bits(parent), insertion_index)
+    }
+
+    /// Return true if this path points at a template root node (a direct child of the root).
+    pub const fn is_root(self) -> bool {
+        self.len() == 1
+    }
+
     /// Return the number of path segments.
     pub const fn len(self) -> usize {
         let mut count = 0;

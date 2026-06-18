@@ -18,8 +18,8 @@ use crate::{
     mutations::{remove_id, with_consumed_id, with_id},
     nodes::DynamicNode,
     scopes::ScopeId,
-    template::TemplateAnchor,
 };
+use dioxus_core_template::TemplateAnchor;
 
 impl MountedVNode<'_> {
     /// Diff this mounted vnode against `new`.

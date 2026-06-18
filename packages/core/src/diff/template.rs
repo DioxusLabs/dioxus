@@ -1,7 +1,5 @@
-use crate::{
-    Template, TemplatePath, VNode,
-    template::{TemplateAnchor, TemplateSlotPath, TemplateSlotTarget},
-};
+use crate::{Template, VNode};
+use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 
 /// One dynamic node value (`index`) viewed over its owning [`TemplateAnchor`].
 ///
@@ -42,19 +40,13 @@ impl<'a> DynamicNodeSlot<'a> {
         }
 
         let static_root_idx = self.slot_path().root_index().expect("bad slot root");
-        let mut current_static_root = 0;
-        for (root_idx, static_op, _) in self.template.root_slots() {
-            if static_op.is_none() {
-                continue;
-            }
-            if current_static_root == static_root_idx {
-                return root_idx;
-            }
-            current_static_root += 1;
-        }
-        panic!("bad slot root");
+        self.template
+            .materialization_root_for_static(static_root_idx)
+            .expect("bad slot root")
     }
 
+    /// Return true when this dynamic node is inserted at the vnode root level, with no enclosing
+    /// static element.
     pub(super) fn is_root_level(self) -> bool {
         self.slot_path().is_root_level()
     }
@@ -67,7 +59,7 @@ impl<'a> DynamicNodeSlot<'a> {
         let target = self.slot_path();
         match target.target() {
             TemplateSlotTarget::BeforeStatic(path) => {
-                let (parent_path, static_insertion_index) = split_static_path(path);
+                let (parent_path, static_insertion_index) = path.split_insertion();
                 SlotPlacement {
                     parent_path,
                     static_insertion_index,
@@ -92,19 +84,6 @@ pub(super) struct SlotPlacement {
     pub(super) parent_path: TemplatePath,
     pub(super) static_insertion_index: usize,
     pub(super) appends: bool,
-}
-
-fn split_static_path(path: TemplatePath) -> (TemplatePath, usize) {
-    let mut parent = path.bits();
-    let mut insertion_index = 0usize;
-    while parent != 0 && parent & 1 == 0 {
-        insertion_index += 1;
-        parent >>= 1;
-    }
-    if parent != 0 {
-        parent >>= 1;
-    }
-    (TemplatePath::from_bits(parent), insertion_index)
 }
 
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
@@ -135,25 +114,18 @@ impl<'a> DynamicAttrGroup<'a> {
         self.anchor.static_path()
     }
 
+    /// Return true when the element these attributes attach to is a template root element.
     pub(super) fn is_root_level(&self) -> bool {
-        self.anchor.static_path().len() == 1
+        self.anchor.static_path().is_root()
     }
 
     pub(super) fn root_index(&self) -> usize {
         let path = self.static_path();
         debug_assert!(!path.is_empty(), "bad attr root");
         let static_root_idx = path.segment(0) as usize;
-        let mut current_static_root = 0;
-        for (root_idx, static_op, _) in self.template.root_slots() {
-            if static_op.is_none() {
-                continue;
-            }
-            if current_static_root == static_root_idx {
-                return root_idx;
-            }
-            current_static_root += 1;
-        }
-        panic!("bad attr root");
+        self.template
+            .materialization_root_for_static(static_root_idx)
+            .expect("bad attr root")
     }
 
     pub(super) fn first_id(&self) -> usize {

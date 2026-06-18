@@ -2,8 +2,7 @@ use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
-    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, TemplatePath, VNode,
-    innerlude::MountId, template::TemplateSlotPath,
+    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, VNode, innerlude::MountId,
 };
 use crate::{CapturedError, arena::RenderTargetState};
 use crate::{
@@ -27,6 +26,8 @@ use std::{
     rc::Rc,
 };
 use tracing::instrument;
+
+use dioxus_core_template::{TemplatePath, TemplateSlotPath};
 
 #[derive(Clone, Copy)]
 struct EventTarget {

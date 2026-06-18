@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::nodes::DynamicValue;
-#[cfg(feature = "serialize")]
-use crate::template::deserialize_string_leaky;
 use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
+#[cfg(feature = "serialize")]
+use dioxus_core_template::deserialize_string_leaky;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
@@ -117,11 +117,7 @@ pub enum FmtSegment {
 //     vec![...],
 //     vec![...],
 // );
-// VNode::new(
-//     None,
-//     Template::new(ops, strings, dynamics),
-//     dynamic_values,
-// )
+// Hot reload templates carry a decoded Template plus a dynamic value mapping.
 
 // Open questions:
 // - How do we handle type coercion for different sized component property integers?
@@ -406,7 +402,7 @@ impl HotReloadedTemplate {
         self.template.root_count()
     }
 
-    pub fn ops(&self) -> &'static [crate::TemplateOp] {
+    pub fn ops(&self) -> &'static [dioxus_core_template::TemplateOp] {
         self.template.ops()
     }
 
@@ -438,38 +434,22 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
         D: serde::Deserializer<'de>,
     {
         #[derive(serde::Deserialize)]
-        struct SerializedTemplate {
-            #[serde(deserialize_with = "crate::template::deserialize_leaky")]
-            ops: &'static [crate::TemplateOp],
-            #[serde(deserialize_with = "crate::template::deserialize_strings_leaky")]
-            strings: &'static [&'static str],
-            #[serde(deserialize_with = "crate::template::deserialize_leaky")]
-            anchors: &'static [crate::template::TemplateAnchor],
-            hash: u64,
-        }
-
-        #[derive(serde::Deserialize)]
         struct SerializedHotReloadedTemplate {
             key: Option<FmtedSegments>,
             dynamic_nodes: Vec<HotReloadDynamicNode>,
             dynamic_attributes: Vec<HotReloadDynamicAttribute>,
             component_values: Vec<HotReloadLiteral>,
             dynamic_slots: Vec<HotReloadDynamicSlot>,
-            template: SerializedTemplate,
+            template: Template,
         }
 
         let serialized = SerializedHotReloadedTemplate::deserialize(deserializer)?;
-        let _serialized_hash = serialized.template.hash;
         Ok(Self::new(
             serialized.key,
             serialized.dynamic_nodes,
             serialized.dynamic_attributes,
             serialized.component_values,
-            Template::new(
-                serialized.template.ops,
-                serialized.template.strings,
-                serialized.template.anchors,
-            ),
+            serialized.template,
             serialized.dynamic_slots,
         ))
     }
@@ -506,13 +486,13 @@ pub struct NamedAttribute {
     /// The name of this attribute.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::template::deserialize_string_leaky")
+        serde(deserialize_with = "dioxus_core_template::deserialize_string_leaky")
     )]
     name: StaticStr,
     /// The namespace of this attribute. Does not exist in the HTML spec
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::template::deserialize_option_leaky")
+        serde(deserialize_with = "dioxus_core_template::deserialize_option_leaky")
     )]
     namespace: Option<StaticStr>,
 

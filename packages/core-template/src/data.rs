@@ -65,8 +65,7 @@ impl std::fmt::Debug for Template {
 
 impl Template {
     /// Create a new template.
-    #[doc(hidden)]
-    pub const fn new(
+    pub(crate) const fn new(
         ops: &'static [TemplateOp],
         strings: StaticTemplateStringArray,
         anchors: &'static [TemplateAnchor],
@@ -83,13 +82,11 @@ impl Template {
     }
 
     /// Get the flat template operations.
-    #[doc(hidden)]
     pub const fn ops(&self) -> &'static [TemplateOp] {
         self.ops
     }
 
     /// Get the template static string pool.
-    #[doc(hidden)]
     pub const fn strings(&self) -> &'static [&'static str] {
         self.strings
     }
@@ -142,12 +139,10 @@ impl Template {
     }
 
     /// Get dynamic value anchors in native fill order.
-    #[doc(hidden)]
     pub const fn anchors(&self) -> &'static [TemplateAnchor] {
         self.anchors
     }
 
-    #[doc(hidden)]
     pub fn anchors_in_document_order(
         &self,
     ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
@@ -163,7 +158,6 @@ impl Template {
         self.dynamic_value_count as usize
     }
 
-    #[doc(hidden)]
     pub fn anchor_for_value(&self, idx: usize) -> Option<&'static TemplateAnchor> {
         self.anchors.iter().find(|a| a.values().contains(&idx))
     }
@@ -174,13 +168,11 @@ impl Template {
     }
 
     /// Get a static string from this template's string pool.
-    #[doc(hidden)]
     pub fn string(&self, id: u16) -> &'static str {
         self.strings[id as usize]
     }
 
     /// Decode an element op into its subtree length and namespace presence.
-    #[doc(hidden)]
     pub fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Enter { skip, namespace }) => Some((skip as usize, namespace)),
@@ -189,7 +181,6 @@ impl Template {
     }
 
     /// Return the static string referenced by an op.
-    #[doc(hidden)]
     pub fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Static(id)) => Some(self.string(id)),
@@ -198,7 +189,6 @@ impl Template {
     }
 
     /// Return the tag and namespace for an element op.
-    #[doc(hidden)]
     pub fn element_meta_at_op(&self, op: usize) -> Option<(&'static str, Option<&'static str>)> {
         let (_, has_namespace) = self.enter_meta(op)?;
         let tag = self.static_string_at_op(op + 1)?;
@@ -209,14 +199,12 @@ impl Template {
     }
 
     /// Return the first child/attribute op inside an element.
-    #[doc(hidden)]
     pub fn element_children_start(&self, op: usize) -> Option<usize> {
         let (_, has_namespace) = self.enter_meta(op)?;
         Some(op + if has_namespace { 3 } else { 2 })
     }
 
     /// Return the name, value, and namespace for a static attr op.
-    #[doc(hidden)]
     pub fn static_attr_at_op(
         &self,
         op: usize,
@@ -235,7 +223,6 @@ impl Template {
     }
 
     /// Return the text for a static `Text, Static` node marker.
-    #[doc(hidden)]
     pub fn static_text_at_op(&self, op: usize) -> Option<&'static str> {
         (self.ops.get(op).map(|op| op.decode()) == Some(DecodedTemplateOp::Text))
             .then(|| self.static_string_at_op(op + 1))
@@ -243,7 +230,6 @@ impl Template {
     }
 
     /// Return the number of ops used by a static attr at `op`.
-    #[doc(hidden)]
     pub fn attr_op_len(&self, op: usize) -> Option<usize> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Attr {
@@ -255,7 +241,6 @@ impl Template {
     }
 
     /// Return the op immediately after an element subtree.
-    #[doc(hidden)]
     pub fn element_end(&self, op: usize) -> Option<usize> {
         let (skip, _) = self.enter_meta(op)?;
         Some(op + skip)
@@ -275,13 +260,11 @@ impl Template {
         Some((attr_start, cursor, end))
     }
 
-    #[doc(hidden)]
     pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
         Some(self.element_attr_child_ops(element_op)?.1)
     }
 
     /// Find a static attr fallback value for a key in an element.
-    #[doc(hidden)]
     pub fn static_attr_value_for_key(
         &self,
         element_op: usize,
@@ -323,7 +306,6 @@ impl Template {
     }
 
     /// Iterate template root positions in materialization order.
-    #[doc(hidden)]
     pub fn root_slots(
         &self,
     ) -> impl Iterator<Item = (usize, Option<usize>, Option<&'static TemplateAnchor>)> + '_ {
@@ -374,8 +356,25 @@ impl Template {
         })
     }
 
+    /// Map a static root index to the materialization root index that renders it.
+    ///
+    /// `static_root_idx` counts only static root nodes, while the returned index counts every
+    /// materialization root (static nodes and root-level dynamic anchors alike).
+    pub fn materialization_root_for_static(&self, static_root_idx: usize) -> Option<usize> {
+        let mut current_static_root = 0;
+        for (root_idx, static_op, _) in self.root_slots() {
+            if static_op.is_none() {
+                continue;
+            }
+            if current_static_root == static_root_idx {
+                return Some(root_idx);
+            }
+            current_static_root += 1;
+        }
+        None
+    }
+
     /// Return the flat op index immediately after the static node or op at `op`.
-    #[doc(hidden)]
     pub fn next_sibling_op(&self, op: usize) -> usize {
         match self.ops[op].decode() {
             DecodedTemplateOp::Enter { skip, .. } => op + skip as usize,
@@ -389,7 +388,6 @@ impl Template {
     }
 
     /// Return true if an op starts an element or static text node.
-    #[doc(hidden)]
     pub fn is_static_node_op(&self, op: usize) -> bool {
         match self.ops[op].decode() {
             DecodedTemplateOp::Enter { .. } => true,
@@ -402,7 +400,6 @@ impl Template {
     }
 
     /// Iterate static child node ops of an element.
-    #[doc(hidden)]
     pub fn static_children(&self, element_op: usize) -> impl Iterator<Item = usize> + '_ {
         let (mut cursor, end) = match self.element_attr_child_ops(element_op) {
             Some((_, child_start, element_end)) => (child_start, element_end),
@@ -421,7 +418,6 @@ impl Template {
     }
 
     /// Iterate dynamic anchors attached directly to an element.
-    #[doc(hidden)]
     pub fn element_dynamic_anchors(
         &self,
         element_op: usize,
@@ -432,7 +428,6 @@ impl Template {
     }
 
     /// Iterate static attributes of an element.
-    #[doc(hidden)]
     pub fn static_attrs(
         &self,
         element_op: usize,
@@ -563,6 +558,33 @@ impl Template {
         }
 
         hash
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for Template {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct SerializedTemplate {
+            #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
+            ops: &'static [TemplateOp],
+            #[serde(deserialize_with = "super::serialization::deserialize_strings_leaky")]
+            strings: StaticTemplateStringArray,
+            #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
+            anchors: &'static [TemplateAnchor],
+            hash: u64,
+        }
+
+        let serialized = SerializedTemplate::deserialize(deserializer)?;
+        let _serialized_hash = serialized.hash;
+        Ok(Self::new(
+            serialized.ops,
+            serialized.strings,
+            serialized.anchors,
+        ))
     }
 }
 

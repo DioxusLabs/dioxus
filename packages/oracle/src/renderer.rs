@@ -3,10 +3,233 @@ use crate::snapshot::{
 };
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
 use dioxus_core::{AttributeValue, Element, ElementId, VirtualDom, WriteMutations};
-use dioxus_stack::{RealDom, StackState, StackWriter};
 use std::fmt;
 
 type NodeId = usize;
+
+trait RealDom {
+    type NodeId: Copy;
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) -> Self::NodeId;
+
+    fn create_text(&mut self, value: &str) -> Self::NodeId;
+
+    fn deep_clone(&mut self, node: Self::NodeId) -> Self::NodeId;
+
+    fn nth_child(&mut self, parent: Self::NodeId, index: usize) -> Self::NodeId;
+
+    fn append_children(&mut self, parent: Self::NodeId, children: &[Self::NodeId]);
+
+    fn insert_after(&mut self, anchor: Self::NodeId, nodes: &[Self::NodeId]);
+
+    fn insert_before(&mut self, anchor: Self::NodeId, nodes: &[Self::NodeId]);
+
+    fn replace(&mut self, target: Self::NodeId, replacements: &[Self::NodeId]);
+
+    fn remove(&mut self, node: Self::NodeId);
+
+    fn set_attribute(
+        &mut self,
+        node: Self::NodeId,
+        name: &str,
+        ns: Option<&str>,
+        value: &AttributeValue,
+    );
+
+    fn set_text(&mut self, node: Self::NodeId, value: &str);
+
+    fn add_event_listener(&mut self, node: Self::NodeId, element_id: ElementId, name: &str);
+
+    fn remove_event_listener(&mut self, node: Self::NodeId, element_id: ElementId, name: &str);
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StackEntry<N> {
+    node: N,
+    element_id: Option<ElementId>,
+}
+
+#[derive(Debug)]
+struct StackState<N> {
+    stack: Vec<StackEntry<N>>,
+    element_to_node: Vec<Option<N>>,
+}
+
+impl<N: Copy> StackState<N> {
+    fn new(root: N) -> Self {
+        Self {
+            stack: vec![StackEntry {
+                node: root,
+                element_id: Some(ElementId::ROOT),
+            }],
+            element_to_node: vec![Some(root)],
+        }
+    }
+
+    fn element_to_node(&self, id: ElementId) -> Option<N> {
+        self.element_to_node.get(id.raw()).copied().flatten()
+    }
+
+    fn lookup(&self, id: ElementId) -> N {
+        self.element_to_node(id)
+            .unwrap_or_else(|| panic!("renderer asked for unknown ElementId {}", id.raw()))
+    }
+
+    fn set_mapping(&mut self, id: ElementId, node: N) {
+        let index = id.raw();
+        if self.element_to_node.len() <= index {
+            self.element_to_node.resize(index + 1, None);
+        }
+        self.element_to_node[index] = Some(node);
+    }
+
+    fn clear_mapping(&mut self, entry: StackEntry<N>) {
+        if let Some(id) = entry.element_id
+            && let Some(slot) = self.element_to_node.get_mut(id.raw())
+        {
+            *slot = None;
+        }
+    }
+
+    fn push(&mut self, node: N, element_id: Option<ElementId>) {
+        self.stack.push(StackEntry { node, element_id });
+    }
+
+    fn pop_entry(&mut self) -> StackEntry<N> {
+        self.stack.pop().expect("renderer stack unexpectedly empty")
+    }
+
+    fn top(&self) -> StackEntry<N> {
+        *self
+            .stack
+            .last()
+            .expect("renderer stack unexpectedly empty")
+    }
+
+    fn replace_top(&mut self, node: N, element_id: Option<ElementId>) {
+        *self
+            .stack
+            .last_mut()
+            .expect("renderer stack unexpectedly empty") = StackEntry { node, element_id };
+    }
+
+    fn pop_nodes(&mut self, m: usize) -> Vec<N> {
+        let split = self.stack.len() - m;
+        self.stack
+            .split_off(split)
+            .into_iter()
+            .map(|entry| entry.node)
+            .collect()
+    }
+}
+
+struct StackWriter<'a, R: RealDom> {
+    state: &'a mut StackState<R::NodeId>,
+    backend: R,
+}
+
+impl<'a, R: RealDom> StackWriter<'a, R> {
+    fn new(state: &'a mut StackState<R::NodeId>, backend: R) -> Self {
+        Self { state, backend }
+    }
+}
+
+impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
+    fn push_id(&mut self, id: ElementId) {
+        let node = self.state.lookup(id);
+        self.state.push(node, Some(id));
+    }
+
+    fn pop_id(&mut self, id: ElementId) {
+        let entry = self.state.pop_entry();
+        self.state.set_mapping(id, entry.node);
+    }
+
+    fn child(&mut self, index: usize) {
+        let parent = self.state.top().node;
+        let child = self.backend.nth_child(parent, index);
+        self.state.replace_top(child, None);
+    }
+
+    fn pop(&mut self) {
+        self.state.pop_entry();
+    }
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        let node = self.backend.create_element(tag, ns);
+        self.state.push(node, None);
+    }
+
+    fn create_text(&mut self, value: &str) {
+        let node = self.backend.create_text(value);
+        self.state.push(node, None);
+    }
+
+    fn clone(&mut self) {
+        let node = self.state.top().node;
+        let cloned = self.backend.deep_clone(node);
+        self.state.replace_top(cloned, None);
+    }
+
+    fn append_children(&mut self, m: usize) {
+        let children = self.state.pop_nodes(m);
+        let parent = self.state.top().node;
+        self.backend.append_children(parent, &children);
+    }
+
+    fn replace_with(&mut self, m: usize) {
+        let replacements = self.state.pop_nodes(m);
+        let target = self.state.pop_entry();
+        self.backend.replace(target.node, &replacements);
+        self.state.clear_mapping(target);
+    }
+
+    fn insert_after(&mut self, m: usize) {
+        let nodes = self.state.pop_nodes(m);
+        let anchor = self.state.top().node;
+        self.backend.insert_after(anchor, &nodes);
+    }
+
+    fn insert_before(&mut self, m: usize) {
+        let nodes = self.state.pop_nodes(m);
+        let anchor = self.state.top().node;
+        self.backend.insert_before(anchor, &nodes);
+    }
+
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        let node = self.state.top().node;
+        self.backend.set_attribute(node, name, ns, value);
+    }
+
+    fn set_text(&mut self, value: &str) {
+        let node = self.state.top().node;
+        self.backend.set_text(node, value);
+    }
+
+    fn add_event_listener(&mut self, name: &str) {
+        let entry = self.state.top();
+        let element_id = entry
+            .element_id
+            .expect("event listener target must be mapped to an ElementId");
+        self.backend
+            .add_event_listener(entry.node, element_id, name);
+    }
+
+    fn remove_event_listener(&mut self, name: &str) {
+        let entry = self.state.top();
+        let element_id = entry
+            .element_id
+            .expect("event listener target must be mapped to an ElementId");
+        self.backend
+            .remove_event_listener(entry.node, element_id, name);
+    }
+
+    fn remove(&mut self) {
+        let entry = self.state.pop_entry();
+        self.backend.remove(entry.node);
+        self.state.clear_mapping(entry);
+    }
+}
 
 /// The provenance of a node, used only to categorize edits (see [`EditSummary`]).
 ///
@@ -119,9 +342,8 @@ pub struct EventListenerTarget {
 /// The oracle's in-memory tree — the "real semantics" half of the renderer.
 ///
 /// This implements [`RealDom`] (via [`ArenaBackend`]) and knows nothing about
-/// the mutation stack or `ElementId`s; the stack machine lives in core's
-/// [`StackWriter`]/[`StackState`] and the edit counters live in
-/// [`EditCountingWriter`].
+/// the mutation stack or `ElementId`s; the stack machine lives in
+/// [`StackWriter`]/[`StackState`] and the edit counters live in [`EditCountingWriter`].
 struct OracleArena {
     arena: Vec<Option<Node>>,
     root: NodeId,
@@ -480,6 +702,7 @@ impl RealDom for ArenaBackend<'_> {
 struct EditCountingWriter<'a, W: WriteMutations> {
     summary: &'a mut EditSummary,
     source_stack: &'a mut Vec<StackSource>,
+    element_stack: &'a mut Vec<Option<ElementId>>,
     roles: &'a mut Vec<NodeRole>,
     inner: W,
 }
@@ -513,6 +736,25 @@ impl<W: WriteMutations> EditCountingWriter<'_, W> {
         let split = self.source_stack.len() - m;
         self.source_stack.truncate(split);
     }
+
+    fn pop_element(&mut self, op: &str) -> Option<ElementId> {
+        self.element_stack
+            .pop()
+            .unwrap_or_else(|| panic!("renderer element stack unexpectedly empty during {op}"))
+    }
+
+    fn pop_elements(&mut self, m: usize) {
+        let split = self.element_stack.len() - m;
+        self.element_stack.truncate(split);
+    }
+
+    fn replace_top_element(&mut self, id: Option<ElementId>, op: &str) {
+        *self
+            .element_stack
+            .last_mut()
+            .unwrap_or_else(|| panic!("renderer element stack unexpectedly empty during {op}")) =
+            id;
+    }
 }
 
 impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
@@ -522,11 +764,13 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
             NodeRole::PrototypeRoot => StackSource::PrototypeBuild,
         };
         self.source_stack.push(source);
+        self.element_stack.push(Some(id));
         self.inner.push_id(id);
     }
 
     fn pop_id(&mut self, id: ElementId) {
         let source = self.pop_source("pop_id");
+        self.pop_element("pop_id");
         match source {
             StackSource::NewText => self.summary.create_texts += 1,
             StackSource::PrototypeClone => self.summary.loads += 1,
@@ -546,21 +790,25 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
     fn child(&mut self, index: usize) {
         // The selected child keeps the current top's source, so the shadow stack
         // is unchanged.
+        self.replace_top_element(None, "child");
         self.inner.child(index);
     }
 
     fn pop(&mut self) {
         self.pop_source("pop");
+        self.pop_element("pop");
         self.inner.pop();
     }
 
     fn create_element(&mut self, tag: &str, ns: Option<&str>) {
         self.source_stack.push(StackSource::PrototypeBuild);
+        self.element_stack.push(None);
         self.inner.create_element(tag, ns);
     }
 
     fn create_text(&mut self, value: &str) {
         self.source_stack.push(StackSource::NewText);
+        self.element_stack.push(None);
         self.inner.create_text(value);
     }
 
@@ -570,6 +818,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
             .last_mut()
             .expect("renderer source stack unexpectedly empty during clone") =
             StackSource::PrototypeClone;
+        self.replace_top_element(None, "clone");
         WriteMutations::clone(&mut self.inner);
     }
 
@@ -578,6 +827,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
             self.summary.inserts += 1;
         }
         self.pop_sources(m);
+        self.pop_elements(m);
         self.inner.append_children(m);
     }
 
@@ -585,18 +835,22 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
         self.summary.replaces += 1;
         self.pop_sources(m);
         self.pop_source("replace_with");
+        self.pop_elements(m);
+        self.pop_element("replace_with");
         self.inner.replace_with(m);
     }
 
     fn insert_after(&mut self, m: usize) {
         self.summary.inserts += 1;
         self.pop_sources(m);
+        self.pop_elements(m);
         self.inner.insert_after(m);
     }
 
     fn insert_before(&mut self, m: usize) {
         self.summary.inserts += 1;
         self.pop_sources(m);
+        self.pop_elements(m);
         self.inner.insert_before(m);
     }
 
@@ -623,6 +877,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
     fn remove(&mut self) {
         self.summary.removes += 1;
         self.pop_source("remove");
+        self.pop_element("remove");
         self.inner.remove();
     }
 }
@@ -641,6 +896,10 @@ pub struct RendererOracle {
     /// counting. Naturally back to `[Live]` (just the root) between balanced
     /// renders.
     source_stack: Vec<StackSource>,
+    /// Shadow of the renderer stack's current ElementId tags, used by the fuzz
+    /// harness to dispatch events at listener targets without exposing stack
+    /// internals from the stack machine.
+    element_stack: Vec<Option<ElementId>>,
     /// Per-`ElementId` provenance of the mapped node, used to classify pushes.
     roles: Vec<NodeRole>,
 }
@@ -661,16 +920,18 @@ impl RendererOracle {
             state: StackState::new(root),
             edit_counters: EditSummary::default(),
             source_stack: vec![StackSource::Live],
+            element_stack: vec![Some(ElementId::ROOT)],
             roles: Vec::new(),
         }
     }
 
     /// Build a writer that applies dioxus mutations into the arena, driving the
-    /// core-owned stack machine and counting edits.
+    /// local stack machine and counting edits.
     fn writer(&mut self) -> EditCountingWriter<'_, StackWriter<'_, ArenaBackend<'_>>> {
         EditCountingWriter {
             summary: &mut self.edit_counters,
             source_stack: &mut self.source_stack,
+            element_stack: &mut self.element_stack,
             roles: &mut self.roles,
             inner: StackWriter::new(
                 &mut self.state,
@@ -694,7 +955,7 @@ impl RendererOracle {
 
     /// Return the live [`ElementId`] mapped to the current stack node.
     pub fn current_stack_element_id(&self) -> Option<ElementId> {
-        self.state.current_top_element_id()
+        self.element_stack.last().copied().flatten()
     }
 
     /// Remove all nodes and reset the renderer to an empty document.
@@ -709,12 +970,12 @@ impl RendererOracle {
 
     /// Return the number of non-document nodes currently left on the mutation stack.
     pub fn pending_stack_nodes(&self) -> usize {
-        self.state.stack_depth().saturating_sub(1)
+        self.element_stack.len().saturating_sub(1)
     }
 
     /// Return true when no mutation-created nodes are left on the stack.
     pub fn is_stack_clean(&self) -> bool {
-        self.state.stack_depth() == 1
+        self.element_stack.len() == 1
     }
 
     /// Assert that the mutation stack only contains the document root.

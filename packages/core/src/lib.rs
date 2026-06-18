@@ -53,13 +53,13 @@ mod scope_context;
 mod scopes;
 mod suspense;
 mod tasks;
-mod template;
 pub mod view;
 mod virtual_dom;
 
 mod hotreload_utils;
 
 /// Items exported from this module are used in macros and should not be used directly.
+#[allow(missing_docs)]
 pub mod internal {
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
@@ -67,7 +67,7 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
-    pub use crate::template::{
+    pub use dioxus_core_template::{
         DecodedTemplateOp, RuntimeTemplateBuilder, TemplateAnchor, TemplateOp, TemplatePath,
         TemplateSlotPath, TemplateSlotTarget,
     };
@@ -135,11 +135,11 @@ pub(crate) mod innerlude {
     pub use crate::scopes::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
-    pub use crate::template::*;
     pub use crate::virtual_dom::*;
 
     pub use anyhow::Context as AnyhowContext;
     pub use anyhow::anyhow;
+    pub use dioxus_core_template::Template;
     // pub use anyhow::Error as AnyhowError;
     // pub type Error = CapturedError;
 
@@ -158,15 +158,13 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender, ComponentFunction,
-    ComponentFunctionExt, DecodedTemplateAttrNamespace, DecodedTemplateOp, DynamicNode,
-    DynamicValue, Element, ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment,
-    HasAttributes, IntoAttributeValue, IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback,
-    MarkerWrapper, MountedVNode, MultiWriter, Mutation, Mutations, NoOpMutations,
-    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
-    RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
-    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAnchor, TemplateOp,
-    TemplatePath, TemplateRawTree, TemplateSlotPath, TemplateSlotTarget, TemplateStorageStats,
+    ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId, ErrorBoundary,
+    ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
+    IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiWriter, Mutation,
+    Mutations, NoOpMutations, OptionStringFromMarker, Portal, PortalProps, Properties,
+    ReactiveContext, RenderError, RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard,
+    ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto,
+    SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template,
     VComponent, VNode, VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
     consume_context_from_scope, current_owner, current_scope_id, generation, has_context,
     needs_update, needs_update_any, parent_scope, provide_context, provide_create_error_boundary,

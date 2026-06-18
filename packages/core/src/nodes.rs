@@ -4,8 +4,8 @@ use crate::{
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
-    template::{TemplateAnchor, TemplatePath, TemplateSlotPath},
 };
+use dioxus_core_template::{TemplateAnchor, TemplateRawTree, TemplateSlotTarget, TemplateStorage};
 use dioxus_core_types::DioxusFormattable;
 
 use std::ops::Deref;
@@ -112,15 +112,10 @@ impl VNode {
         thread_local! {
             static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static EMPTY_TEMPLATE: Template = Template::new(
-            &[],
-            &[],
-            &[TemplateAnchor::new(
-                None,
-                TemplateSlotPath::append_children(TemplatePath::empty()),
-                0..1,
-            )],
-        );
+        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
+        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
+        static EMPTY_TEMPLATE: Template = STORAGE.as_template();
+
         let vnode = EMPTY_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -144,15 +139,10 @@ impl VNode {
         thread_local! {
             static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
         }
-        static ERROR_ANCHOR_TEMPLATE: Template = Template::new(
-            &[],
-            &[],
-            &[TemplateAnchor::new(
-                None,
-                TemplateSlotPath::append_children(TemplatePath::empty()),
-                0..1,
-            )],
-        );
+        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
+        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
+        static ERROR_ANCHOR_TEMPLATE: Template = STORAGE.as_template();
+
         let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
@@ -238,7 +228,7 @@ impl VNode {
             .is_some()
     }
 
-    #[doc(hidden)]
+    /// Iterate dynamic node value indices covered by `anchor`.
     pub fn dynamic_node_indices_for_anchor<'a>(
         &'a self,
         anchor: &'a TemplateAnchor,
@@ -248,7 +238,7 @@ impl VNode {
             .filter(move |&idx| self.dynamic_values[idx].as_node().is_some())
     }
 
-    #[doc(hidden)]
+    /// Iterate dynamic attribute value indices covered by `anchor`.
     pub fn dynamic_attr_indices_for_anchor<'a>(
         &'a self,
         anchor: &'a TemplateAnchor,
@@ -282,7 +272,7 @@ impl VNode {
             })
     }
 
-    #[doc(hidden)]
+    /// Iterate dynamic node anchors attached directly to the static element op.
     pub fn dynamic_node_anchors_for_element(
         &self,
         element_op: usize,
@@ -291,7 +281,7 @@ impl VNode {
             .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
     }
 
-    #[doc(hidden)]
+    /// Iterate dynamic node anchors for one child slot of a static element op.
     pub fn dynamic_node_anchors_for_slot(
         &self,
         element_op: usize,
@@ -300,20 +290,12 @@ impl VNode {
         let trailing_slot = self.template.static_children(element_op).count();
         self.dynamic_node_anchors_for_element(element_op)
             .filter(move |anchor| match anchor.slot_target() {
-                crate::template::TemplateSlotTarget::BeforeStatic(path) => {
-                    let mut parent = path.bits();
-                    let mut insertion_index = 0usize;
-                    while parent != 0 && parent & 1 == 0 {
-                        insertion_index += 1;
-                        parent >>= 1;
-                    }
-                    insertion_index == slot
-                }
-                crate::template::TemplateSlotTarget::AppendChildren(_) => slot == trailing_slot,
+                TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 == slot,
+                TemplateSlotTarget::AppendChildren(_) => slot == trailing_slot,
             })
     }
 
-    #[doc(hidden)]
+    /// Iterate dynamic attribute anchors attached directly to the static element op.
     pub fn dynamic_attr_anchors_for_element(
         &self,
         element_op: usize,

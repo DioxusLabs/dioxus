@@ -10,13 +10,12 @@ use std::sync::OnceLock;
 
 use crate::{
     Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
-    RenderedView, Template, VComponent, VNode,
-    nodes::IntoVNode,
-    template::{TemplateRawTree, TemplateStorage},
+    RenderedView, Template, VComponent, VNode, nodes::IntoVNode,
 };
+use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 
 #[cfg(debug_assertions)]
-use crate::template::{
+use dioxus_core_template::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
 };
 
@@ -573,7 +572,8 @@ pub struct ViewChildMarker;
 pub(crate) mod dynamic_node {
     use std::marker::PhantomData;
 
-    use crate::{IntoDynNode, template::TemplateRawTree};
+    use crate::IntoDynNode;
+    use dioxus_core_template::TemplateRawTree;
 
     use super::{DynamicViewValues, View, ViewTemplate};
 

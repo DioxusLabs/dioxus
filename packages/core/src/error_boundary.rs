@@ -1,9 +1,9 @@
 use crate::{
-    DynamicValue, Element, IntoDynNode, ReactiveContext, Subscribers, Template, TemplateOp, VNode,
+    DynamicValue, Element, IntoDynNode, ReactiveContext, Subscribers, Template, VNode,
     innerlude::{CapturedError, provide_context},
-    template::{TemplateAnchor, TemplatePath, TemplateSlotPath},
     try_consume_context, use_hook,
 };
+use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 use std::{
     any::Any,
     cell::RefCell,
@@ -11,11 +11,7 @@ use std::{
     rc::Rc,
 };
 
-const DYNAMIC_CHILD_ANCHOR: &[TemplateAnchor] = &[TemplateAnchor::new(
-    Some(0),
-    TemplateSlotPath::append_children(TemplatePath::root(0)),
-    0..1,
-)];
+static ERROR_DYNAMIC_TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
 
 /// Return early with an error.
 #[macro_export]
@@ -160,18 +156,20 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 }
 
 fn default_handler(errors: ErrorContext) -> Element {
-    static TEMPLATE: Template = Template::new(
-        &[
-            TemplateOp::enter(6, false),
-            TemplateOp::static_text(0),
-            TemplateOp::attr(true),
-            TemplateOp::static_text(1),
-            TemplateOp::static_text(2),
-            TemplateOp::static_text(3),
-        ],
-        &["div", "color", "red", "style"],
-        DYNAMIC_CHILD_ANCHOR,
-    );
+    static ATTRS: TemplateRawTree = TemplateRawTree::StaticAttr {
+        name: "color",
+        value: "red",
+        namespace: Some("style"),
+    };
+    static TREE: TemplateRawTree = TemplateRawTree::Element {
+        tag: "div",
+        namespace: None,
+        attrs: &ATTRS,
+        children: &ERROR_DYNAMIC_TREE,
+    };
+    static STORAGE: TemplateStorage<8, 4, 1> = TemplateStorage::build_from_tree(&TREE);
+    static TEMPLATE: Template = STORAGE.as_template();
+
     std::result::Result::Ok(VNode::new(
         None,
         TEMPLATE,
@@ -180,11 +178,16 @@ fn default_handler(errors: ErrorContext) -> Element {
                 .error()
                 .iter()
                 .map(|e| {
-                    static INNER_TEMPLATE: Template = Template::new(
-                        &[TemplateOp::enter(2, false), TemplateOp::static_text(0)],
-                        &["pre"],
-                        DYNAMIC_CHILD_ANCHOR,
-                    );
+                    static TREE: TemplateRawTree = TemplateRawTree::Element {
+                        tag: "pre",
+                        namespace: None,
+                        attrs: &TemplateRawTree::Empty,
+                        children: &ERROR_DYNAMIC_TREE,
+                    };
+                    static STORAGE: TemplateStorage<4, 1, 1> =
+                        TemplateStorage::build_from_tree(&TREE);
+                    static INNER_TEMPLATE: Template = STORAGE.as_template();
+
                     VNode::new(
                         None,
                         INNER_TEMPLATE,
@@ -330,15 +333,10 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template = Template::new(
-                &[],
-                &[],
-                &[TemplateAnchor::new(
-                    None,
-                    TemplateSlotPath::append_children(TemplatePath::empty()),
-                    0..1,
-                )],
-            );
+            static STORAGE: TemplateStorage<1, 1, 1> =
+                TemplateStorage::build_from_tree(&ERROR_DYNAMIC_TREE);
+            static TEMPLATE: Template = STORAGE.as_template();
+
             VNode::new(
                 None,
                 TEMPLATE,
