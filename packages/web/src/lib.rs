@@ -149,17 +149,11 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     document::init_fullstack_document();
                 });
                 // Build the vdom without emitting mutations: the SSR DOM is
-                // already in place, so hydration binds it afterward. This primes
-                // each render target's template prototype cache with prototypes
-                // that were never created in the real DOM, so `rebuild_in_place`
-                // resets that cache before hydration walks the existing nodes.
+                // already in place, so hydration binds it afterward.
                 virtual_dom.rebuild_in_place();
             });
 
-            let rx = match websys_dom.rehydrate(&virtual_dom) {
-                Ok(rx) => rx,
-                Err(_) => panic!("Rehydration failed."),
-            };
+            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
             hydration_receiver = Some(rx);
 
             #[cfg(feature = "mounted")]
@@ -174,6 +168,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
     } else {
         virtual_dom.rebuild(&mut websys_dom);
+
         websys_dom.flush_edits();
     }
 
@@ -181,7 +176,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         #[cfg(all(feature = "devtools", debug_assertions))]
-        let hotreload;
+        let template;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
 
@@ -200,13 +195,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 let mut devtools_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
-                        hotreload = None;
+                        template = None;
                     },
-                    new_hotreload = devtools_next => {
-                        hotreload = Some(new_hotreload);
+                    new_template = devtools_next => {
+                        template = Some(new_template);
                     },
                     hydration_data = rx_hydration => {
-                        hotreload = None;
+                        template = None;
                         #[cfg(feature = "hydrate")]
                         {
                             hydration_work = Some(hydration_data);
@@ -231,8 +226,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         #[cfg(all(feature = "devtools", debug_assertions))]
-        if let Some(hr_msg) = hotreload {
-            // Apply hot-reload metadata to the VirtualDom.
+        if let Some(hr_msg) = template {
+            // Replace all templates
             dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
@@ -255,7 +250,23 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
+        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
+        // Jank free rendering
+        //
+        // 1. wait for the browser to give us "idle" time
+        // 2. During idle time, diff the dom
+        // 3. Stop diffing if the deadline is exceeded
+        // 4. Wait for the animation frame to patch the dom
+
+        // wait for the mainthread to schedule us in
+        // let deadline = work_loop.wait_for_idle_time().await;
+
+        // run the virtualdom work phase until the frame deadline is reached
         virtual_dom.render_immediate(&mut websys_dom);
+
+        // wait for the animation frame to fire so we can apply our changes
+        // work_loop.wait_for_raf().await;
+
         websys_dom.flush_edits();
     }
 }
