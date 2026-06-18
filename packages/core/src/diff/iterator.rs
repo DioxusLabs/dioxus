@@ -71,29 +71,35 @@ impl DiffState<'_, '_, '_, '_> {
         dioxus_debug_assert!(!new.is_empty());
         dioxus_debug_assert!(!old.is_empty());
 
-        let tail_mounts = if old.len() < new.len() {
-            self.create_and_insert(
-                ElementEdge::Last,
-                &new[old.len()..],
-                old.last().unwrap(),
-                old_mounts[old.len() - 1],
-                parent,
-            )
-            .mounts
-        } else {
-            Vec::new()
-        };
-
+        let paired = old.len().min(new.len());
         let mut new_mounts = Vec::with_capacity(new.len());
-        for idx in 0..old.len().min(new.len()) {
+        for idx in 0..paired {
             let mount = DiffFrame::new(old_mounts[idx], &old[idx], &new[idx]).diff_into(self);
             new_mounts.push(mount);
         }
-        new_mounts.extend(tail_mounts);
-        if old.len() > new.len() {
-            // Keep removed tail children mounted until paired replacements
-            // have selected placement anchors. The committed parent fragment
-            // mount list is not replaced until this fragment diff returns.
+
+        if old.len() < new.len() {
+            // Insert the new tail after the last paired child. Anchor on the
+            // freshly diffed *new* child, not the old one: an old child with no
+            // live DOM (e.g. an empty fragment) offers no insertion edge, so
+            // anchoring on it would lose the tail to the document root. The
+            // already-diffed new child exposes its current content's edge, and
+            // diffing the pairs first means an empty leading child's own content
+            // is placed before the tail rather than after it.
+            let anchor_idx = paired - 1;
+            let tail = self.create_and_insert(
+                ElementEdge::Last,
+                &new[old.len()..],
+                &new[anchor_idx],
+                new_mounts[anchor_idx],
+                parent,
+            );
+            new_mounts.extend(tail.mounts);
+        } else if old.len() > new.len() {
+            // Removed tail children stayed mounted through the pair diffs above
+            // so paired replacements could anchor against them; remove them now.
+            // The committed parent fragment mount list is not replaced until this
+            // fragment diff returns.
             self.dom.remove_nodes(
                 self.to.as_deref_mut(),
                 &old[new.len()..],

@@ -411,14 +411,11 @@ impl VirtualDom {
     /// Mark a task as dirty
     fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
-            tracing::info!("[SCHED] mark_task_dirty {task:?} EARLY: no task_scope");
             return;
         };
         let Some(scope) = self.runtime.try_get_state(scope) else {
-            tracing::info!("[SCHED] mark_task_dirty {task:?} EARLY: no state for {scope:?}");
             return;
         };
-        tracing::info!("[SCHED] mark_task_dirty {task:?} queued (scope {:?})", scope.id);
 
         tracing::event!(
             tracing::Level::TRACE,
@@ -519,24 +516,20 @@ impl VirtualDom {
 
         while !self.has_dirty_scopes() {
             let Some(work) = self.pop_work() else {
-                tracing::info!("[SCHED] poll_tasks: no work, breaking");
                 break;
             };
 
             match work {
                 Work::PollTask(task) => {
-                    tracing::info!("[SCHED] poll_tasks: running {task:?}");
                     _ = self.runtime.handle_task_wakeup(task);
                 }
                 Work::RerunScope(_) => {
-                    tracing::info!("[SCHED] poll_tasks: hit RerunScope, returning");
                     return;
                 }
             }
 
             self.queue_events();
             if self.has_dirty_scopes() {
-                tracing::info!("[SCHED] poll_tasks: scope dirtied, returning to render");
                 return;
             }
         }
@@ -544,7 +537,6 @@ impl VirtualDom {
         // Effects that were dirtied by task wakeups (e.g. a subscribed signal
         // written from a future) need to fire now — no render pass is coming
         // to flush them.
-        tracing::info!("[SCHED] poll_tasks: draining remaining effects");
         self.drain_remaining_effects();
     }
 

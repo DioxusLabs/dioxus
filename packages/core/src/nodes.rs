@@ -32,8 +32,21 @@ impl Debug for DynamicValues {
 
 impl DynamicValues {
     /// Create a dynamic values payload.
+    ///
+    /// The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`.
+    /// Named attributes occupy length-1 slots (trivially sorted), but spread attributes
+    /// (e.g. `..props.attributes`) arrive in user/source order. Every render path funnels
+    /// through this constructor, so normalize spread slots here. A stable sort preserves
+    /// the relative order of duplicate keys (last-wins semantics).
     #[inline]
-    pub fn new(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
+    pub fn new(key: Option<String>, mut dynamic_values: Box<[DynamicValue]>) -> Self {
+        for value in dynamic_values.iter_mut() {
+            if let DynamicValue::Attrs(slot) = value {
+                if slot.len() > 1 {
+                    slot.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
+                }
+            }
+        }
         Self {
             key,
             dynamic_values,
@@ -180,28 +193,8 @@ impl VNode {
             "bad dynamic count"
         );
 
-        // The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`. Named
-        // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
-        // and the only realistic source of violations.
-        #[cfg(debug_assertions)]
-        for value in &values.dynamic_values {
-            if let DynamicValue::Attrs(slot) = value {
-                for pair in slot.windows(2) {
-                    let left = (pair[0].name, pair[0].namespace);
-                    let right = (pair[1].name, pair[1].namespace);
-                    if left > right {
-                        tracing::warn!(
-                            "spread attributes in `rsx!` must be sorted by (name, namespace); \
-                             found {:?} before {:?}. The diff assumes sorted input and may produce \
-                             incorrect updates otherwise.",
-                            left,
-                            right,
-                        );
-                        break;
-                    }
-                }
-            }
-        }
+        // Dynamic attribute slots are required to be sorted by `(name, namespace)` for the diff.
+        // That invariant is established centrally in `DynamicValues::new`, so it always holds here.
 
         Self {
             vnode: Rc::new(VNodeInner {

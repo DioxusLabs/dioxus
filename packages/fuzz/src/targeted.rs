@@ -34,6 +34,23 @@ fn suspense_root_sibling_placement_keeps_order() {
     replay_case_strict("suspense_root_sibling_placement", &case);
 }
 
+/// Regression: an unkeyed fragment grows from one child to several, and the
+/// pre-existing first child has no live DOM (its sole root is an empty
+/// fragment). The new tail children must be ordered after that child's own
+/// content, not appended to the document root: anchoring the tail on the empty
+/// old child found no insertion edge and appended, then the child's replacement
+/// content landed last, swapping the roots versus a fresh build. Minimized
+/// libfuzzer artifact for that divergence.
+#[test]
+fn unkeyed_tail_insert_past_empty_leading_child_keeps_order() {
+    let bytes: &[u8] = &[
+        7, 3, 0, 0, 0, 0, 2, 0, 3, 0, 0, 4, 0, 1, 0, 0, 0, 3, 0, 1, 0, 0, 2, 0, 0, 3, 0, 1, 1, 0,
+        0, 2, 1, 120, 3, 0, 0, 0, 0, 2, 2, 3, 0, 0,
+    ];
+    let case = crate::case::decode_case(bytes).expect("decode regression artifact");
+    replay_case_strict("unkeyed_tail_insert_past_empty_leading_child", &case);
+}
+
 fn replay_case_strict(name: &str, case: &FuzzCase) {
     let mut state = Harness::fresh_strict();
     for (step, op) in case.ops.iter().enumerate() {

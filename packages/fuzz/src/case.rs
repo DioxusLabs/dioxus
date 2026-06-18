@@ -97,12 +97,6 @@ pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
         })?;
 
     for (step, op) in case.ops.iter().enumerate() {
-        if std::env::var_os("FUZZ_DBG").is_some() {
-            eprintln!("[STEP {step}] {op:?}");
-            if step == 6 {
-                state.dump_model();
-            }
-        }
         let applied = panic::catch_unwind(AssertUnwindSafe(|| apply_step(&mut state, op)))
             .map_err(|payload| FuzzFailure {
                 step,

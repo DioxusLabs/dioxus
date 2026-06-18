@@ -4,7 +4,7 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
+use dioxus_core::{ErrorContext, ScopeId, ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
@@ -22,6 +22,18 @@ fn node_array(node: &web_sys::Node) -> js_sys::Array {
     let array = js_sys::Array::new();
     array.push(node.unchecked_ref());
     array
+}
+
+fn nearest_error_boundary(dom: &VirtualDom, id: ScopeId) -> Option<ScopeId> {
+    let runtime = dom.runtime();
+    let mut current = Some(id);
+    while let Some(scope) = current {
+        if runtime.has_context::<ErrorContext>(scope).is_some() {
+            return Some(scope);
+        }
+        current = runtime.parent_scope(scope);
+    }
+    None
 }
 
 #[derive(Debug)]
@@ -99,7 +111,12 @@ impl WebsysDom {
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
+            tracing::error!("streamed error for suspense {id:?}: {error:?}");
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
+            if let Some(boundary) = nearest_error_boundary(dom, id) {
+                tracing::error!("marking nearest error boundary {boundary:?} dirty");
+                dom.mark_dirty(boundary);
+            }
         }
         server_data.in_context(|| {
             // rerun the scope with the new data
@@ -221,14 +238,15 @@ impl WebsysDom {
             });
         };
         let closure = wasm_bindgen::closure::Closure::new(closure);
-        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
-        closure.forget();
 
         // EnterRoot(i) parks the cursor on under[i], so pass the mount
         // children. The JS cursor filters dx-injected hydration scripts before
         // exposing the root list.
         let roots = children_array(&self.root);
         self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true)?;
+
+        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
+        closure.forget();
 
         Ok(rx)
     }
