@@ -170,7 +170,15 @@ impl VNode {
         }
 
         let live_first = if old_has_live_dom {
-            self.dynamic_node_first_element(mount, idx, old, state.dom)
+            let target_id = state.dom.current_render_target_id();
+            self.dynamic_node_edge_element(
+                mount,
+                idx,
+                old,
+                state.dom,
+                target_id,
+                ElementEdge::First,
+            )
         } else {
             None
         };
@@ -311,9 +319,10 @@ impl VNode {
             "slot count"
         );
 
-        if (0..self.template.root_count())
-            .any(|root_idx| self.root_has_live_dom(root_idx, mount, dom))
-        {
+        if (0..self.template.root_count()).any(|root_idx| {
+            dom.mounted_root_node(mount, root_idx)
+                .is_some_and(|id| dom.element_exists_for_mount(mount, id))
+        }) {
             return true;
         }
 
@@ -325,11 +334,6 @@ impl VNode {
             let idx = slot.index();
             self.dynamic_node_has_live_dom(mount, idx, self.dynamic_values[idx].node(), dom)
         })
-    }
-
-    fn root_has_live_dom(&self, root_idx: usize, mount: MountId, dom: &VirtualDom) -> bool {
-        dom.mounted_root_node(mount, root_idx)
-            .is_some_and(|id| dom.element_exists_for_mount(mount, id))
     }
 
     fn find_element_in_roots(
@@ -672,17 +676,6 @@ impl VNode {
         }
     }
 
-    fn dynamic_node_first_element(
-        &self,
-        mount: MountId,
-        idx: usize,
-        node: &DynamicNode,
-        dom: &VirtualDom,
-    ) -> Option<ElementId> {
-        let target_id = dom.current_render_target_id();
-        self.dynamic_node_edge_element(mount, idx, node, dom, target_id, ElementEdge::First)
-    }
-
     fn dynamic_node_edge_element(
         &self,
         mount: MountId,
@@ -705,7 +698,9 @@ impl VNode {
             Text(_) => None,
             Fragment(nodes) => {
                 let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
-                find_fragment_edge(nodes, &mounts, dom, target_id, edge)
+                edge.find_map(nodes.len(), |idx| {
+                    nodes[idx].find_element_in_roots(mounts[idx], dom, target_id, edge)
+                })
             }
         }
     }
@@ -1141,24 +1136,12 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 ///
 /// The diff only resolves a component's rendered root once it has established
 /// the component is live and rendered — placement resolution walks mounted
-/// siblings, and `dynamic_node_first_element` runs under a `has_live_dom`
-/// check — so a missing scope or unbuilt root is a bug, asserted here rather
-/// than papered over with a silent `None`.
+/// siblings, and dynamic replacement only asks for a component edge after a
+/// live-DOM check — so a missing scope or unbuilt root is a bug, asserted here
+/// rather than papered over with a silent `None`.
 fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> MountedVNode<'_> {
     dom.get_scope(scope_id)
         .expect("component scope")
         .try_mounted_root_node()
         .expect("component root")
-}
-
-fn find_fragment_edge(
-    children: &[VNode],
-    mounts: &[MountId],
-    dom: &VirtualDom,
-    target_id: crate::RenderTargetId,
-    edge: ElementEdge,
-) -> Option<ElementId> {
-    edge.find_map(children.len(), |idx| {
-        children[idx].find_element_in_roots(mounts[idx], dom, target_id, edge)
-    })
 }

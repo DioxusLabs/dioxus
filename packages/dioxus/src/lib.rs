@@ -258,8 +258,8 @@ pub mod prelude {
         AnyhowContext, Attribute, Callback, Component, ComponentFunctionExt, Element,
         ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoDynNode,
         Portal, PortalProps, RenderError, RenderTargetId, Result, ScopeId, SuspenseBoundary,
-        SuspenseContext, VNode, ViewExt, VirtualDom, consume_context, provide_context, spawn,
-        suspend, try_consume_context, use_drop, use_hook,
+        SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
+        try_consume_context, use_drop, use_hook,
     };
 
     #[cfg(feature = "logger")]

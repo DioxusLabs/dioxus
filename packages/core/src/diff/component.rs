@@ -11,19 +11,6 @@ use crate::{
     virtual_dom::VirtualDom,
 };
 
-/// Invoke a scope's render driver with the writer erased to
-/// `dyn WriteMutations`, checking that the driver leaves the runtime scope
-/// stack balanced.
-fn drive<R>(
-    state: &mut DiffState<'_, '_, '_, '_>,
-    f: impl FnOnce(&mut VirtualDom, Option<&mut (dyn WriteMutations + '_)>) -> R,
-) -> R {
-    let dom = &mut *state.dom;
-    let to = state.to.as_deref_mut();
-    let result = f(&mut *dom, to);
-    result
-}
-
 impl VirtualDom {
     /// Run a queued scope diff with an explicit parent diff context.
     ///
@@ -38,9 +25,8 @@ impl VirtualDom {
         let mut state = DiffState::new_with_context(self, to, parent_context);
         let context = state.context();
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        drive(&mut state, |dom, to| {
-            driver.diff(dom, scope_id, context, to)
-        })
+        let to = state.to.as_deref_mut();
+        driver.diff(&mut *state.dom, scope_id, context, to)
     }
 
     #[tracing::instrument(
@@ -291,9 +277,8 @@ impl VNode {
 
         let scope_id = scope_id.expect("component mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
-        let nodes = drive(state, |dom, to| {
-            driver.create(dom, scope_id, new, parent, to)
-        });
+        let to = state.to.as_deref_mut();
+        let nodes = driver.create(&mut *state.dom, scope_id, new, parent, to);
         let root_mount = state
             .dom
             .get_scope(scope_id)

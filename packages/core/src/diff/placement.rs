@@ -16,7 +16,7 @@ use crate::{
     MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{MountId, MountRef},
-    mutations::{TargetedLazyScope, append_children_to, insert_after_id, insert_before_id},
+    mutations::{TargetedLazyScope, append_children_to},
     nodes::DynamicNode,
 };
 
@@ -81,11 +81,21 @@ impl InsertionSite {
         create: impl FnOnce(&mut dyn WriteMutations) -> usize,
     ) -> usize {
         match self {
-            InsertionSite::AtAnchor(DomAnchor::Before(id)) => {
-                insert_before_id(to, *id, runtime, create)
-            }
-            InsertionSite::AtAnchor(DomAnchor::After(id)) => {
-                insert_after_id(to, *id, runtime, create)
+            InsertionSite::AtAnchor(anchor) => {
+                let (id, before) = match anchor {
+                    DomAnchor::Before(id) => (*id, true),
+                    DomAnchor::After(id) => (*id, false),
+                };
+                let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
+                let count = create(&mut to);
+                if count > 0 {
+                    if before {
+                        to.insert_before(count);
+                    } else {
+                        to.insert_after(count);
+                    }
+                }
+                count
             }
             InsertionSite::AppendTo(id) => append_children_to(to, *id, runtime, create),
             InsertionSite::Slot { parent, placement } => {
@@ -142,7 +152,9 @@ pub(super) fn insertion_site_for_slot(
         dom.element_exists_for_mount(parent_mount, enclosing),
         "bad slot root"
     );
-    if let Some(id) = adjacent_dynamic_sibling_after(parent_mount, slot, dom, context) {
+    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
+    }) {
         return InsertionSite::AtAnchor(DomAnchor::Before(id));
     }
     InsertionSite::Slot {
@@ -242,7 +254,8 @@ fn insertion_site_for_child_in_parent(
                 DynamicNode::Fragment(children) => {
                     let child_mounts =
                         dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
-                    let Some(position) = locate_in_fragment(&child_mounts, mount) else {
+                    let Some(position) = child_mounts.iter().position(|child| *child == mount)
+                    else {
                         continue;
                     };
                     if let Some(id) =
@@ -263,17 +276,6 @@ fn insertion_site_for_child_in_parent(
             }
         }
         None
-    })
-}
-
-fn adjacent_dynamic_sibling_after(
-    parent_mount: MountId,
-    slot: DynamicNodeSlot<'_>,
-    dom: &VirtualDom,
-    context: Option<DiffContext<'_>>,
-) -> Option<ElementId> {
-    parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
-        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     })
 }
 
@@ -406,10 +408,6 @@ impl<'a> ParentViews<'a> {
     }
 }
 
-fn locate_in_fragment(child_mounts: &[MountId], mount: MountId) -> Option<usize> {
-    child_mounts.iter().position(|child| *child == mount)
-}
-
 fn first_live_sibling_after(
     children: &[VNode],
     child_mounts: &[MountId],
@@ -451,19 +449,10 @@ fn root_content_after_slot(
     // advances the root cursor for every root dynamic value, so adjacent root
     // dynamics never share one anchor. Start scanning at the next root.
     ((our_root_idx + 1)..probe.template.root_count()).find_map(|next_cursor| {
-        first_root_dynamic_at_cursor(&probe, parent_mount, next_cursor, dom)
-            .or_else(|| static_root_element(&probe, parent_mount, next_cursor, dom))
-    })
-}
-
-pub(super) fn first_root_dynamic_at_cursor(
-    vnode: &VNode,
-    mount: MountId,
-    cursor_idx: usize,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    find_root_dynamic_slot(vnode, cursor_idx, ElementEdge::First, |slot| {
-        live_dynamic_slot_first_element(vnode, mount, slot.index(), dom)
+        find_root_dynamic_slot(&probe, next_cursor, ElementEdge::First, |slot| {
+            live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)
+        })
+        .or_else(|| static_root_element(&probe, parent_mount, next_cursor, dom))
     })
 }
 

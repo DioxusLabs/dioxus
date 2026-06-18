@@ -8,8 +8,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, DynamicValue, Portal, Runtime, Task, Template,
-    VComponent, VNode, VText,
+    Attribute, AttributeValue, DynamicNode, DynamicValue, DynamicValues, Portal, Runtime, Task,
+    Template, VComponent, VNode, VText,
 };
 #[cfg(test)]
 use dioxus_core_template::DecodedTemplateOp;
@@ -18,7 +18,7 @@ use std::future::pending;
 
 pub(crate) fn App(context: HarnessContext) -> Element {
     let model = context.read_model();
-    Ok(build_vnode(&context, &model.root))
+    Ok(build_vnode_with_suspense(&context, &model.root, &[]))
 }
 
 #[derive(Clone, PartialEq, Props)]
@@ -372,9 +372,11 @@ fn build_suspense_child_vnode(
     });
 
     VNode::new(
-        None,
         template,
-        Box::new([DynamicValue::Node(DynamicNode::Fragment(vec![child]))]),
+        DynamicValues::new(
+            None,
+            Box::new([DynamicValue::Node(DynamicNode::Fragment(vec![child]))]),
+        ),
     )
 }
 
@@ -400,10 +402,6 @@ fn template_node_contains_suspense(spec: &TemplateNodeSpec) -> bool {
         TemplateNodeSpec::Dynamic(DynamicSpec::Portal(child)) => vnode_contains_suspense(child),
         TemplateNodeSpec::Text(_) | TemplateNodeSpec::Dynamic(_) => false,
     }
-}
-
-fn build_vnode(context: &HarnessContext, spec: &VNodeSpec) -> VNode {
-    build_vnode_with_suspense(context, spec, &[])
 }
 
 fn build_vnode_with_suspense(
@@ -442,9 +440,11 @@ fn build_vnode_with_suspense(
         .collect();
 
     VNode::new(
-        spec.key.map(|key| format!("k{key}")),
         template,
-        dynamic_values.into_boxed_slice(),
+        DynamicValues::new(
+            spec.key.map(|key| format!("k{key}")),
+            dynamic_values.into_boxed_slice(),
+        ),
     )
 }
 
@@ -662,7 +662,9 @@ impl FuzzTemplateBuilder {
                 attrs,
                 children,
             } => self.push_element(*tag, *namespace, attrs, children),
-            TemplateNodeShape::Text(value) => self.template.static_text(text_value(*value)),
+            TemplateNodeShape::Text(value) => self
+                .template
+                .static_text(leak_str(format!("static-text-{value}"))),
             TemplateNodeShape::Dynamic => self.template.dynamic_node(following_static_at_parent),
         }
     }
@@ -758,10 +760,6 @@ fn attr_static_value(value: u8) -> &'static str {
     }
 
     leak_str(format!("static{value}"))
-}
-
-fn text_value(value: u8) -> &'static str {
-    leak_str(format!("static-text-{value}"))
 }
 
 #[cfg(test)]

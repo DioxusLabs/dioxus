@@ -105,7 +105,7 @@ pub(super) fn first_dynamic_root_element_id(
         value_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let node = vnode.vnode().dynamic_values[value_idx].as_node()?;
+        let node = vnode.vnode().dynamic_values()[value_idx].as_node()?;
 
         match node {
             DynamicNode::Text(_) => vnode.mounted_dynamic_node(value_idx, dom),
@@ -146,7 +146,7 @@ impl WebsysDom {
     }
 
     fn collect_suspense_in_vnode(&mut self, vnode: MountedVNode<'_>, dom: &VirtualDom) {
-        for (idx, value) in vnode.vnode().dynamic_values.iter().enumerate() {
+        for (idx, value) in vnode.vnode().dynamic_values().iter().enumerate() {
             let Some(node) = value.as_node() else {
                 continue;
             };

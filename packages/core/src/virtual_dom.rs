@@ -507,9 +507,8 @@ impl VirtualDom {
         self.poll_tasks()
     }
 
-    /// Poll any queued tasks, then drain any effects whose owning scopes don't
-    /// belong to a registered render target. Effects bound to a registered
-    /// target wait until that target's next commit.
+    /// Poll any queued tasks, then drain effects if task wakeups did not make
+    /// any scope dirty. In that case no render pass is coming to flush them.
     #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     fn poll_tasks(&mut self) {
         // Make sure we set the runtime since we're running user code
@@ -599,7 +598,7 @@ impl VirtualDom {
         // hosts ignore the same mutation stream as every other renderer.
         let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
         self.rebuild_with_writer(&mut router);
-        self.drain_remaining_effects();
+        self.runtime.finish_render();
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without
@@ -621,7 +620,6 @@ impl VirtualDom {
                 let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
                 self.render_immediate_with_writer(&mut router);
             }
-            self.drain_remaining_effects();
         }
         self.runtime.finish_render();
     }

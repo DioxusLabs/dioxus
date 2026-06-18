@@ -234,67 +234,18 @@ impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for TargetedLazyScope<'_,
     write_mutation_methods!(forward_lazy_scope_write_mutations,);
 }
 
-fn create_and_place_at_id(
-    to: &mut dyn WriteMutations,
-    id: ElementId,
-    runtime: Rc<Runtime>,
-    create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
-    placement: PlacementOp,
-) -> usize {
-    let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
-    let count = create_nodes(&mut to);
-    place_created_nodes(&mut to, count, placement);
-    count
-}
-
-#[derive(Clone, Copy)]
-enum PlacementOp {
-    AppendChildren,
-    InsertBefore,
-    InsertAfter,
-}
-
-fn place_created_nodes(to: &mut dyn WriteMutations, count: usize, placement: PlacementOp) {
-    if count > 0 {
-        match placement {
-            PlacementOp::AppendChildren => to.append_children(count),
-            PlacementOp::InsertBefore => to.insert_before(count),
-            PlacementOp::InsertAfter => to.insert_after(count),
-        }
-    }
-}
-
 pub(crate) fn append_children_to(
     to: &mut dyn WriteMutations,
     id: ElementId,
     runtime: Rc<Runtime>,
     create_children: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
-    create_and_place_at_id(
-        to,
-        id,
-        runtime,
-        create_children,
-        PlacementOp::AppendChildren,
-    )
-}
-
-pub(crate) fn insert_before_id(
-    to: &mut dyn WriteMutations,
-    id: ElementId,
-    runtime: Rc<Runtime>,
-    create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
-) -> usize {
-    create_and_place_at_id(to, id, runtime, create_nodes, PlacementOp::InsertBefore)
-}
-
-pub(crate) fn insert_after_id(
-    to: &mut dyn WriteMutations,
-    id: ElementId,
-    runtime: Rc<Runtime>,
-    create_nodes: impl FnOnce(&mut dyn WriteMutations) -> usize,
-) -> usize {
-    create_and_place_at_id(to, id, runtime, create_nodes, PlacementOp::InsertAfter)
+    let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
+    let count = create_children(&mut to);
+    if count > 0 {
+        to.append_children(count);
+    }
+    count
 }
 
 pub(crate) fn replace_id_with<M: WriteMutations>(

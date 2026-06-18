@@ -186,18 +186,9 @@ impl HydrationCursor {
         Ok(())
     }
 
-    /// Synthesize an empty text node before the current cursor.
-    pub(super) fn synth_text(&mut self, id: u32) -> Result<(), RehydrationError> {
-        self.synth(id, false)
-    }
-
-    /// Synthesize an empty text node after the current cursor (and park on it).
-    pub(super) fn synth_text_after(&mut self, id: u32) -> Result<(), RehydrationError> {
-        self.synth(id, true)
-    }
-
-    fn synth(&mut self, id: u32, after: bool) -> Result<(), RehydrationError> {
-        let before = if after {
+    /// Synthesize an empty text node around the current cursor.
+    pub(super) fn synth(&mut self, id: u32, after_cursor: bool) -> Result<(), RehydrationError> {
+        let before = if after_cursor {
             self.cursor.as_ref().and_then(|c| c.next_sibling())
         } else {
             self.cursor.clone()
@@ -207,7 +198,7 @@ impl HydrationCursor {
             .insert_before(&node, before.as_ref())
             .map_err(|_| HydrationMismatch)?;
         self.base().set_node(id, &node);
-        if after {
+        if after_cursor {
             self.cursor = Some(node);
         }
         Ok(())

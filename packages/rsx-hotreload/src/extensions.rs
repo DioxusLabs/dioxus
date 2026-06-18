@@ -20,6 +20,7 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
     let element_name = attr.el_name.as_ref().unwrap();
     let rust_name = match element_name {
         ElementName::Ident(i) => i.to_string(),
+        ElementName::Path(p) => p.segments.last().unwrap().ident.to_string(),
         // If this is a web component, just use the name of the elements instead of mapping the attribute
         // through the hot reloading context
         ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),

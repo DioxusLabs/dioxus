@@ -9,8 +9,8 @@ use std::marker::PhantomData;
 use std::sync::OnceLock;
 
 use crate::{
-    Attribute, DynamicNode, DynamicValue, HasAttributes, IntoAttributeValue, IntoDynNode,
-    RenderedView, Template, VComponent, VNode, nodes::IntoVNode,
+    Attribute, DynamicNode, DynamicValue, DynamicValues, HasAttributes, IntoAttributeValue,
+    IntoDynNode, Template, VComponent, VNode, nodes::IntoVNode,
 };
 use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 
@@ -127,10 +127,10 @@ impl DynamicViewValues {
         self.values.into_boxed_slice()
     }
 
-    /// Convert this buffer into the rendered view payload expected by [`VNode`].
+    /// Convert this buffer into the dynamic values payload expected by [`VNode`].
     #[inline]
-    pub(crate) fn into_rendered_view(self, key: Option<String>) -> RenderedView {
-        RenderedView::new(key, self.into_boxed_slice())
+    pub(crate) fn into_dynamic_values(self, key: Option<String>) -> DynamicValues {
+        DynamicValues::new(key, self.into_boxed_slice())
     }
 }
 
@@ -159,7 +159,7 @@ impl<V: View> ViewExt for V {
 fn into_vnode_with_template<V: View>(view: V, key: Option<String>, template: &Template) -> VNode {
     let mut dynamic = DynamicViewValues::with_capacity(template.dynamic_value_count());
     view.push(&mut dynamic);
-    VNode::new_with_rendered_view(*template, dynamic.into_rendered_view(key))
+    VNode::new(*template, dynamic.into_dynamic_values(key))
 }
 
 /// Convert a view into a keyed [`VNode`].
@@ -904,3 +904,5 @@ macro_rules! static_attribute_value {
         $crate::view::static_attribute_value::<StaticAttributeValueMarker>()
     }};
 }
+
+pub use crate::{static_attribute_value, static_text};

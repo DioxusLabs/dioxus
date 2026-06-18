@@ -16,28 +16,40 @@ use std::{
 };
 
 /// Runtime values that hydrate a static [`Template`].
-pub struct RenderedView {
+pub struct DynamicValues {
     /// Root key for this render.
-    pub key: Option<String>,
+    pub(crate) key: Option<String>,
 
     /// Dynamic values in template order.
-    pub dynamic_values: Box<[DynamicValue]>,
+    pub(crate) dynamic_values: Box<[DynamicValue]>,
 }
 
-impl Debug for RenderedView {
+impl Debug for DynamicValues {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RenderedView").finish_non_exhaustive()
+        f.debug_struct("DynamicValues").finish_non_exhaustive()
     }
 }
 
-impl RenderedView {
-    /// Create a rendered view payload.
+impl DynamicValues {
+    /// Create a dynamic values payload.
     #[inline]
     pub fn new(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
         Self {
             key,
             dynamic_values,
         }
+    }
+
+    /// The root key for this render.
+    #[inline]
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+
+    /// The dynamic values in template order.
+    #[inline]
+    pub fn dynamic_values(&self) -> &[DynamicValue] {
+        &self.dynamic_values
     }
 }
 
@@ -47,7 +59,7 @@ pub struct VNodeInner {
     pub template: Template,
 
     /// The rendered dynamic values.
-    pub view: RenderedView,
+    pub view: DynamicValues,
 }
 
 impl Debug for VNodeInner {
@@ -57,7 +69,7 @@ impl Debug for VNodeInner {
 }
 
 impl Deref for VNodeInner {
-    type Target = RenderedView;
+    type Target = DynamicValues;
 
     fn deref(&self) -> &Self::Target {
         &self.view
@@ -120,7 +132,7 @@ impl VNode {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     template: EMPTY_TEMPLATE,
-                    view: RenderedView::new(
+                    view: DynamicValues::new(
                         None,
                         Box::new([DynamicValue::Node(DynamicNode::Fragment(Vec::new()))]),
                     ),
@@ -147,7 +159,7 @@ impl VNode {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     template: ERROR_ANCHOR_TEMPLATE,
-                    view: RenderedView::new(
+                    view: DynamicValues::new(
                         None,
                         Box::new([DynamicValue::Node(DynamicNode::Text(VText {
                             value: String::new(),
@@ -160,21 +172,11 @@ impl VNode {
         Self { vnode }
     }
 
-    /// Create a new VNode
+    /// Create a new VNode from a static template and dynamic values payload.
     #[inline]
-    pub fn new(
-        key: Option<String>,
-        template: Template,
-        dynamic_values: Box<[DynamicValue]>,
-    ) -> Self {
-        Self::new_with_rendered_view(template, RenderedView::new(key, dynamic_values))
-    }
-
-    /// Create a new VNode from a static template and rendered view payload.
-    #[inline]
-    pub fn new_with_rendered_view(template: Template, view: RenderedView) -> Self {
+    pub fn new(template: Template, values: DynamicValues) -> Self {
         assert!(
-            view.dynamic_values.len() == template.dynamic_value_count(),
+            values.dynamic_values.len() == template.dynamic_value_count(),
             "bad dynamic count"
         );
 
@@ -182,7 +184,7 @@ impl VNode {
         // attributes are trivially sorted (one entry per slot); spread attributes are user-provided
         // and the only realistic source of violations.
         #[cfg(debug_assertions)]
-        for value in &view.dynamic_values {
+        for value in &values.dynamic_values {
             if let DynamicValue::Attrs(slot) = value {
                 for pair in slot.windows(2) {
                     let left = (pair[0].name, pair[0].namespace);
@@ -202,7 +204,10 @@ impl VNode {
         }
 
         Self {
-            vnode: Rc::new(VNodeInner { template, view }),
+            vnode: Rc::new(VNodeInner {
+                template,
+                view: values,
+            }),
         }
     }
 

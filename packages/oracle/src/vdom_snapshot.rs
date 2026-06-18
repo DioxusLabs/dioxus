@@ -84,7 +84,7 @@ fn template_node_snapshot(
 
         for anchor in vnode.dynamic_attr_anchors_for_element(op) {
             for id in vnode.dynamic_attr_indices_for_anchor(anchor) {
-                let attrs = vnode.dynamic_values[id]
+                let attrs = vnode.dynamic_values()[id]
                     .as_attrs()
                     .expect("snapshot attr slot must point at attributes");
                 for attr in attrs {
@@ -114,7 +114,7 @@ fn dynamic_node_snapshot(
     owner: MountedVNode<'_>,
     id: usize,
 ) -> Vec<SnapshotNode> {
-    match owner.dynamic_values[id]
+    match owner.dynamic_values()[id]
         .as_node()
         .expect("snapshot node slot must point at a dynamic node")
     {

@@ -259,12 +259,12 @@ pub struct VNode {
 
 pub struct VNodeInner {
     pub template: Template,
-    pub view: RenderedView,
+    pub view: DynamicValues,
 }
 
-pub struct RenderedView {
-    pub key: Option<String>,
-    pub dynamic_values: Box<[DynamicValue]>,
+pub struct DynamicValues {
+    pub(crate) key: Option<String>,
+    pub(crate) dynamic_values: Box<[DynamicValue]>,
 }
 ```
 

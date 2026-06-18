@@ -121,7 +121,7 @@ impl Renderer {
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
-                    let attrs = template.dynamic_values[*idx]
+                    let attrs = template.dynamic_values()[*idx]
                         .as_attrs()
                         .expect("SSR attr segment must point at dynamic attributes");
                     for attr in attrs {
@@ -140,7 +140,7 @@ impl Renderer {
                 }
                 Segment::Node { index, escape_text } => {
                     let escaped = escape_text.should_escape(parent_escaped);
-                    match template.dynamic_values[*index]
+                    match template.dynamic_values()[*index]
                         .as_node()
                         .expect("SSR node segment must point at a dynamic node")
                     {

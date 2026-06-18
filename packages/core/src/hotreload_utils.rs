@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::nodes::DynamicValue;
-use crate::{Attribute, AttributeValue, DynamicNode, Template, VNode, VText};
+use crate::{Attribute, AttributeValue, DynamicNode, DynamicValues, Template, VNode, VText};
 #[cfg(feature = "serialize")]
 use dioxus_core_template::deserialize_string_leaky;
 
@@ -297,7 +297,7 @@ impl DynamicValuePool {
             })
             .collect();
 
-        VNode::new(key, hot_reload.template, dynamic_values)
+        VNode::new(hot_reload.template, DynamicValues::new(key, dynamic_values))
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {

@@ -1,9 +1,10 @@
 use crate::{
     Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
 };
+use dioxus_core::view::ViewExt;
 use dioxus_core::{
     ComponentBuilder, Element, EventHandler, Portal, PortalProps, Properties, RenderTargetId,
-    Runtime, SuperInto, VNode, ViewExt, provide_context, schedule_update, spawn, use_hook,
+    Runtime, SuperInto, VNode, provide_context, schedule_update, spawn, use_hook,
     use_hook_with_cleanup,
 };
 use dioxus_document::Document;

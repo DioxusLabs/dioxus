@@ -575,7 +575,7 @@ impl SsrRendererPool {
                     .values()
                     .next()
                     .expect("hydration data anchor must contain a dynamic value");
-                let dynamic_node = vnode.dynamic_values[node_index]
+                let dynamic_node = vnode.dynamic_values()[node_index]
                     .as_node()
                     .expect("hydration data node slot must point at a dynamic node");
                 Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
@@ -589,7 +589,7 @@ impl SsrRendererPool {
                     Self::node_anchor_inside_static_root(vnode.vnode(), **anchor, root_path)
                 }) {
                     for dynamic_node_id in anchor.values() {
-                        let dynamic_node = vnode.dynamic_values[dynamic_node_id]
+                        let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
                             .as_node()
                             .expect("hydration data node slot must point at a dynamic node");
                         Self::take_from_dynamic_node(
@@ -613,7 +613,7 @@ impl SsrRendererPool {
         anchor
             .values()
             .next()
-            .is_some_and(|idx| vnode.dynamic_values[idx].as_node().is_some())
+            .is_some_and(|idx| vnode.dynamic_values()[idx].as_node().is_some())
             && anchor.parent_element_op_index().is_some()
             && match anchor.slot_target() {
                 TemplateSlotTarget::BeforeStatic(path) => {

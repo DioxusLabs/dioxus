@@ -278,15 +278,7 @@ impl ViewBuilder {
     }
 
     fn visit_roots(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
-        self.visit_roots_with_implicit_key(nodes, true)
-    }
-
-    fn visit_roots_with_implicit_key(
-        &mut self,
-        nodes: &[BodyNode],
-        allow_implicit_key: bool,
-    ) -> TokenStream2 {
-        let roots = self.visit_sibling_nodes(nodes, allow_implicit_key, SiblingContext::Roots);
+        let roots = self.visit_sibling_nodes(nodes, true, SiblingContext::Roots);
 
         quote! { (#(#roots),*) }
     }
@@ -477,19 +469,10 @@ impl ViewBuilder {
         quote! { .attribute(#attr) }
     }
 
-    fn static_builder_attr(
-        &mut self,
-        span: proc_macro2::Span,
-        value: TokenStream2,
-        method: Ident,
-    ) -> TokenStream2 {
-        let value = quote_spanned! { span => dioxus_core::static_attribute_value!(#value) };
-        quote! { .#method(#value) }
-    }
-
     fn element_tag(&mut self, element: &Element) -> TokenStream2 {
         match &element.name {
             ElementName::Ident(tag) => quote_spanned! { element.name.span() => #tag() },
+            ElementName::Path(path) => quote_spanned! { element.name.span() => #path() },
             ElementName::Custom(_) => {
                 let tag = self.define_tag(element);
                 quote! { dioxus_core::view::element_builder::<#tag>() }
@@ -707,7 +690,7 @@ impl Element {
     }
 
     fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
-        if matches!(self.name, ElementName::Ident(_))
+        if matches!(self.name, ElementName::Ident(_) | ElementName::Path(_))
             && let AttributeName::BuiltIn(method) = &attr.name
             && !attr.name.is_likely_key()
         {
@@ -717,7 +700,10 @@ impl Element {
 
             if let Some((_, value)) = attr.as_static_str_literal() {
                 let value = value.to_static().unwrap();
-                return builder.static_builder_attr(attr.span(), quote! { #value }, method.clone());
+                let value = quote_spanned! {
+                    attr.span() => dioxus_core::static_attribute_value!(#value)
+                };
+                return quote! { .#method(#value) };
             }
 
             return builder.dynamic_builder_attr(attr, method.clone());
@@ -728,9 +714,14 @@ impl Element {
         };
 
         let namespace = self.builder_attribute_namespace_tokens(name);
-        let name = self.builder_attribute_name_tokens(name);
+        let resolved_name = name.resolved(&self.name).name;
         let value = value.to_static().unwrap();
-        builder.static_attr(attr.span(), name, quote! { #value }, namespace)
+        builder.static_attr(
+            attr.span(),
+            quote! { #resolved_name },
+            quote! { #value },
+            namespace,
+        )
     }
 
     fn builder_attribute_namespace_tokens(&self, name: &AttributeName) -> TokenStream2 {
@@ -738,11 +729,6 @@ impl Element {
             Some(namespace) => quote! { Some(#namespace) },
             None => quote!(None::<&'static str>),
         }
-    }
-
-    fn builder_attribute_name_tokens(&self, name: &AttributeName) -> TokenStream2 {
-        let name = name.resolved(&self.name).name;
-        quote! { #name }
     }
 }
 

@@ -153,12 +153,12 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, AsyncMarker, AsyncResultMarker, Attribute, AttributeValue, Callback,
     CapturedError, Component, ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender,
-    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, Element, ElementId, ErrorBoundary,
-    ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
-    IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode, MultiWriter, Mutation,
-    Mutations, NoOpMutations, OptionArgumentsFromMarker, OptionCallbackMarker,
-    OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext, RenderError,
-    RenderTargetId, RenderedView, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, DynamicValues, Element,
+    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
+    IntoAttributeValue, IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper,
+    MountedVNode, MultiWriter, Mutation, Mutations, NoOpMutations, OptionArgumentsFromMarker,
+    OptionCallbackMarker, OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext,
+    RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
     SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
     SuspenseBoundaryProps, SuspenseContext, Task, Template, UnitClosure, VComponent, VNode,
     VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
@@ -167,14 +167,6 @@ pub use crate::innerlude::{
     provide_root_context, queue_effect, remove_future, schedule_update, schedule_update_any, spawn,
     spawn_forever, spawn_isomorphic, suspend, throw_error, try_consume_context, use_after_render,
     use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner,
-};
-
-pub use crate::view::{
-    AttributeBuilderTarget, AttributeDescriptor, DynamicAttributesBuilder, DynamicViewValues,
-    ElementBuilder, ElementTag, IntoAttributeBuilderValue, IntoViewChild, StaticAttributeBuilder,
-    StaticAttributeValue, StaticAttributeValueBuilder, StaticAttributeValueBuilderMarker,
-    StaticText, StaticTextBuilder, View, ViewChildMarker, ViewExt, ViewTemplate, dynamic_attribute,
-    element_builder, static_attribute, static_attribute_value, static_text,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

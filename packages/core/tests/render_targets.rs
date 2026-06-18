@@ -675,8 +675,10 @@ fn removing_render_target_frees_and_recycles_the_slot() {
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
     let target_slot = TargetSlot::new();
-    let mut dom =
-        VirtualDom::new_with_props(removable_target_app, AppProps { target: target_slot.clone() });
+    let mut dom = VirtualDom::new_with_props(
+        removable_target_app,
+        AppProps { target: target_slot.clone() },
+    );
     let target = dom.runtime().create_render_target();
     target_slot.set(target);
 

@@ -38,10 +38,6 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: WeakDesktopContext) {
-        _ = self.desktop_context.set(context);
-    }
-
     pub fn handle_event(
         &self,
         request: wry::http::Request<Vec<u8>>,
@@ -524,7 +520,7 @@ impl WebviewInstance {
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(Rc::downgrade(&desktop_context));
+        _ = edits.desktop_context.set(Rc::downgrade(&desktop_context));
         if provide_root_context {
             let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
             let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());

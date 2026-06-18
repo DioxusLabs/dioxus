@@ -109,7 +109,7 @@ impl WebsysDom {
         dom: &'a VirtualDom,
         out: &mut Vec<Leaf<'a>>,
     ) -> Result<(), RehydrationError> {
-        let Some(node) = vnode.vnode().dynamic_values[value_idx].as_node() else {
+        let Some(node) = vnode.vnode().dynamic_values()[value_idx].as_node() else {
             return Err(HydrationMismatch);
         };
 
@@ -212,7 +212,7 @@ impl WebsysDom {
 
         for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
             for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
-                let Some(attrs) = vnode.vnode().dynamic_values[value_idx].as_attrs() else {
+                let Some(attrs) = vnode.vnode().dynamic_values()[value_idx].as_attrs() else {
                     return Err(HydrationMismatch);
                 };
                 for attribute in attrs {
@@ -371,19 +371,9 @@ fn emit_text_leaf(
 ) -> Result<(), RehydrationError> {
     if len == 0 {
         let Some(id) = id else { return Ok(()) };
-        // All-empty runs park every sentinel before the cursor (which is on
-        // whatever follows the run). Otherwise position relative to the last
-        // non-empty contribution: before goes _before_ the cursor, after goes
-        // _after_ it.
-        let before_cursor = match last_nonempty {
-            None => true,
-            Some(last) => i < last,
-        };
-        if before_cursor {
-            cursor.synth_text(id.raw() as u32)?;
-        } else {
-            cursor.synth_text_after(id.raw() as u32)?;
-        }
+        // All-empty runs insert before the cursor. Otherwise, empty sentinels
+        // after the last real text contribution are inserted after it.
+        cursor.synth(id.raw() as u32, last_nonempty.is_some_and(|last| i >= last))?;
     } else {
         let id_arg = id.map(|i| i.raw() as u32).unwrap_or(0);
         let split_after = matches!(last_nonempty, Some(last) if i < last)
