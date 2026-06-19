@@ -58,12 +58,14 @@ impl<T: ViewTemplate> StaticViewTemplate for T {
     #[cfg(debug_assertions)]
     #[inline]
     fn build_template() -> Template {
-        TemplateStorage::<
+        // Always use the const-evaluated template. In debug we only cache it lazily in a
+        // per-call-site `OnceLock` (see `template_from_cell`) instead of re-lowering the tree at
+        // runtime, so debug and release build the identical template from one const path.
+        *<T as StaticViewTemplateWithCapacity<
             TEMPLATE_STORAGE_OPS_CAP,
             TEMPLATE_STORAGE_STRING_CAP,
             TEMPLATE_STORAGE_DYNAMIC_CAP,
-        >::build_from_tree(T::TEMPLATE_TREE)
-        .into_leaked_template()
+        >>::TEMPLATE
     }
 
     #[cfg(debug_assertions)]

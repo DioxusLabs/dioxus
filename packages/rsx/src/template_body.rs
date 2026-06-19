@@ -64,7 +64,7 @@ impl ToTokens for TemplateBody {
         let view_expr = &pieces.view;
         let dynamic_text = pieces.dynamic_text_tokens.iter();
 
-        let template_stats = node.template_stats();
+        let template_stats = pieces.template_stats;
         let template_ops_cap = template_stats.ops;
         let template_string_cap = template_stats.strings;
         let template_dynamic_cap = template_stats.anchors;
@@ -160,6 +160,7 @@ impl ToTokens for TemplateBody {
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
+    template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
@@ -171,17 +172,22 @@ pub(crate) struct ViewBuilderPieces {
 impl ViewBuilderPieces {
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
+        let mut stats = TemplateStatsBuilder::new();
+        builder.push_element_stats(element, &mut stats);
+        let template_stats = stats.finish();
         let view = builder.visit_element(element, true);
-        builder.finish(view)
+        builder.finish(view, template_stats)
     }
 
     /// Walk all roots of a body into a single tuple `View` expression, carrying out the
     /// hot-reload tables and dynamic text pool gathered along the way.
     fn from_body(body: &TemplateBody) -> Self {
         let mut builder = ViewBuilder::new();
+        let template_stats =
+            builder.lowered_sibling_storage_stats(&body.roots, SiblingContext::Roots);
         let views = builder.visit_sibling_nodes(&body.roots, true, SiblingContext::Roots);
         let view = quote! { (#(#views,)*) };
-        builder.finish(view)
+        builder.finish(view, template_stats)
     }
 
     pub(crate) fn definitions(&self) -> impl Iterator<Item = &TokenStream2> {
@@ -255,10 +261,11 @@ impl ViewBuilder {
         }
     }
 
-    fn finish(self, view: TokenStream2) -> ViewBuilderPieces {
+    fn finish(self, view: TokenStream2, template_stats: TemplateStorageStats) -> ViewBuilderPieces {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
+            template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
             hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
@@ -529,6 +536,31 @@ impl ViewBuilder {
         stats.finish()
     }
 
+    fn lowered_sibling_storage_stats(
+        &self,
+        nodes: &[BodyNode],
+        context: SiblingContext,
+    ) -> TemplateStorageStats {
+        let mut stats = TemplateStatsBuilder::new();
+        self.push_lowered_sibling_stats(nodes, context, &mut stats);
+        stats.finish()
+    }
+
+    fn push_lowered_sibling_stats(
+        &self,
+        nodes: &[BodyNode],
+        context: SiblingContext,
+        stats: &mut TemplateStatsBuilder,
+    ) {
+        if self.should_chunk_siblings(nodes, context) {
+            for _ in self.synthetic_chunk_ranges(nodes, context) {
+                stats.dynamic_node(false);
+            }
+        } else {
+            self.push_sibling_stats(nodes, stats);
+        }
+    }
+
     fn push_sibling_stats(&self, nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
         for (index, node) in nodes.iter().enumerate() {
             self.push_node_stats(
@@ -564,15 +596,7 @@ impl ViewBuilder {
             self.push_attribute_stats(attr, stats);
         }
 
-        if self.should_chunk_siblings(&element.children, SiblingContext::ElementChildren) {
-            for _ in self.synthetic_chunk_ranges(&element.children, SiblingContext::ElementChildren)
-            {
-                stats.dynamic_node(false);
-            }
-        } else {
-            self.push_sibling_stats(&element.children, stats);
-        }
-
+        self.push_lowered_sibling_stats(&element.children, SiblingContext::ElementChildren, stats);
         stats.close_element();
     }
 
@@ -740,10 +764,6 @@ impl TemplateBody {
             || stats.strings > TEMPLATE_STORAGE_MAX_CAP
             || stats.dynamic_values > u16::MAX as usize
             || matches!(context, SiblingContext::Roots) && nodes.len() > u16::MAX as usize
-    }
-
-    fn template_stats(&self) -> TemplateStorageStats {
-        Self::sibling_storage_stats(&self.roots)
     }
 
     fn sibling_storage_stats(nodes: &[BodyNode]) -> TemplateStorageStats {
