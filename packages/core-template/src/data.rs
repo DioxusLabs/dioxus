@@ -2,9 +2,6 @@ use super::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, Tem
 use crate::TemplateSlotTarget;
 use crate::op::TemplateOp;
 
-type StaticTemplateOpArray = &'static [TemplateOp];
-type StaticTemplateStringArray = &'static [&'static str];
-
 /// A static layout of a UI tree.
 ///
 /// Templates describe the stable parts of a view while runtime values provide
@@ -17,14 +14,14 @@ pub struct Template {
         feature = "serialize",
         serde(deserialize_with = "super::serialization::deserialize_leaky")
     )]
-    ops: StaticTemplateOpArray,
+    ops: &'static [TemplateOp],
 
     /// Static strings referenced by static string operations.
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "super::serialization::deserialize_strings_leaky")
     )]
-    strings: StaticTemplateStringArray,
+    strings: &'static [&'static str],
 
     /// Dynamic value groups in reverse breadth-first fill order, each anchored to a static element.
     #[cfg_attr(
@@ -74,7 +71,7 @@ impl Template {
     /// diffing" without storing the kinds anywhere on the template.
     pub(crate) const fn new(
         ops: &'static [TemplateOp],
-        strings: StaticTemplateStringArray,
+        strings: &'static [&'static str],
         anchors: &'static [TemplateAnchor],
         value_kind_hash: u64,
     ) -> Self {
@@ -104,12 +101,12 @@ impl Template {
         let mut has_start = anchors.is_empty();
         while index < anchors.len() {
             let anchor = anchors[index];
-            if anchor.value_count == 0 {
+            let values = anchor.values();
+            if values.start >= values.end {
                 panic!("bad anchor");
             }
 
-            let start = anchor.value_start;
-            let end = Self::anchor_value_end(anchor);
+            let start = values.start;
             if start == 0 {
                 has_start = true;
             }
@@ -117,9 +114,8 @@ impl Template {
             let mut other_index = 0;
             while other_index < anchors.len() {
                 if index != other_index {
-                    let other = anchors[other_index];
-                    let other_end = Self::anchor_value_end(other);
-                    if start < other_end && other.value_start < end {
+                    let other = anchors[other_index].values();
+                    if start < other.end && other.start < values.end {
                         panic!("anchor overlap");
                     }
                 }
@@ -130,7 +126,7 @@ impl Template {
                 let mut has_predecessor = false;
                 let mut predecessor_index = 0;
                 while predecessor_index < anchors.len() && !has_predecessor {
-                    has_predecessor = Self::anchor_value_end(anchors[predecessor_index]) == start;
+                    has_predecessor = anchors[predecessor_index].values().end == start;
                     predecessor_index += 1;
                 }
                 if !has_predecessor {
@@ -157,7 +153,7 @@ impl Template {
         (0..self.dynamic_value_count()).filter_map(move |idx| {
             self.anchors
                 .iter()
-                .find(|anchor| anchor.value_start as usize == idx)
+                .find(|anchor| anchor.values().start == idx)
         })
     }
 
@@ -445,8 +441,7 @@ impl Template {
         let mut max = 0u16;
         let mut i = 0;
         while i < anchors.len() {
-            let anchor = anchors[i];
-            let end = Self::anchor_value_end(anchor);
+            let end = anchors[i].values().end as u16;
             if end > max {
                 max = end;
             }
@@ -498,19 +493,11 @@ impl Template {
         }
     }
 
-    const fn anchor_value_end(anchor: TemplateAnchor) -> u16 {
-        let end = anchor.value_start as u32 + anchor.value_count as u32;
-        if end > u16::MAX as u32 {
-            panic!("anchor overflow");
-        }
-        end as u16
-    }
-
     /// Compute a content-based hash of template structure.
     /// This is const so it can be used both at compile time and runtime.
     const fn compute_hash(
         ops: &[TemplateOp],
-        strings: StaticTemplateStringArray,
+        strings: &'static [&'static str],
         anchors: &[TemplateAnchor],
         value_kind_hash: u64,
     ) -> u64 {
@@ -547,7 +534,7 @@ impl Template {
             hash = xxh64(&anchor.parent_op_index.to_le_bytes(), hash);
             hash = xxh64(&anchor.path.to_le_bytes(), hash);
             hash = xxh64(&anchor.value_start.to_le_bytes(), hash);
-            hash = xxh64(&anchor.value_count.to_le_bytes(), hash);
+            hash = xxh64(&anchor.value_end.to_le_bytes(), hash);
             i += 1;
         }
 
@@ -571,7 +558,7 @@ impl<'de> serde::Deserialize<'de> for Template {
             #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
             ops: &'static [TemplateOp],
             #[serde(deserialize_with = "super::serialization::deserialize_strings_leaky")]
-            strings: StaticTemplateStringArray,
+            strings: &'static [&'static str],
             #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
             anchors: &'static [TemplateAnchor],
             hash: u64,

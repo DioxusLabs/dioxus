@@ -47,7 +47,6 @@ pub struct TemplateStorageStats {
 struct AnchorStats {
     parent_op_index: u16,
     path: u128,
-    value_count: usize,
 }
 
 /// Const storage for a template.
@@ -335,7 +334,6 @@ impl TemplateStorageStats {
 
         if let Some(last) = anchors.last_mut() {
             if last.same_anchor(parent_op_index, path) {
-                last.value_count += 1;
                 return;
             }
         }
@@ -350,7 +348,6 @@ impl TemplateStorageStats {
         anchors.push(AnchorStats {
             parent_op_index,
             path,
-            value_count: 1,
         });
     }
 
@@ -524,10 +521,13 @@ macro_rules! template_storage_methods {
             if len > 0 {
                 let last = self.anchors.at(len - 1);
                 if last.same_anchor(parent_op_index, path) {
+                    if last.value_end == u16::MAX {
+                        panic!("anchor overflow");
+                    }
                     self.anchors.set(
                         len - 1,
                         TemplateAnchor {
-                            value_count: last.value_count + 1,
+                            value_end: last.value_end + 1,
                             ..last
                         },
                     );
@@ -547,13 +547,16 @@ macro_rules! template_storage_methods {
                 0
             } else {
                 let last = self.anchors.at(len - 1);
-                last.value_start + last.value_count
+                last.value_end
             };
+            if value_start == u16::MAX {
+                panic!("anchor overflow");
+            }
             self.anchors.push(TemplateAnchor {
                 parent_op_index,
                 path,
                 value_start,
-                value_count: 1,
+                value_end: value_start + 1,
             });
         }
 
@@ -859,7 +862,7 @@ mod tests {
                     anchor.parent_op_index,
                     anchor.path,
                     anchor.value_start,
-                    anchor.value_count,
+                    anchor.value_end,
                 )
             })
             .collect()

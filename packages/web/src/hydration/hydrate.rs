@@ -4,7 +4,7 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use dioxus_core::{ScopeId, ScopeState, SuspenseBoundaryProps, VirtualDom};
+use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
@@ -78,28 +78,33 @@ impl WebsysDom {
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
-        // Snapshot the new nodes. `resolve_suspense` pushes them after it
-        // pushes the placeholder target so replacement stays stack-only.
-        let children = children_array(resolved_suspense_element.unchecked_ref());
-        let children_len = children.length();
-
-        // Empty errored chunks use a real empty text node as the
-        // `replace_with(loading_id, 1)` item; the replacement positions it at
-        // the loading slot. Hydration later binds the new scope's placeholder
-        // ElementId to that same node.
-        let empty_bootstrap = children_len == 0;
-        let mut empty_bootstrap_node = None;
-
         #[cfg(not(debug_assertions))]
         let debug_types = None;
         #[cfg(not(debug_assertions))]
         let debug_locations = None;
 
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
-        // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
+        // If the server serialized an error into this boundary, there is no
+        // resolved subtree to hydrate. Leave the client fallback in place and let
+        // the nearest ErrorBoundary replace it on the next render.
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
+            resolved_suspense_element.remove();
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
+            return Ok(());
         }
+
+        // Snapshot the new nodes. `resolve_suspense` pushes them after it
+        // pushes the placeholder target so replacement stays stack-only.
+        let children = children_array(resolved_suspense_element.unchecked_ref());
+        let children_len = children.length();
+
+        // Empty non-error chunks use a real empty text node as the
+        // `replace_with(loading_id, 1)` item; the replacement positions it at
+        // the loading slot. Hydration later binds the new scope's placeholder
+        // ElementId to that same node.
+        let empty_bootstrap = children_len == 0;
+        let mut empty_bootstrap_node = None;
+
         server_data.in_context(|| {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(id, dom, self, |to| {

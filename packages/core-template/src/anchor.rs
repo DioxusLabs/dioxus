@@ -14,8 +14,8 @@ pub struct TemplateAnchor {
     pub(crate) parent_op_index: u16,
     /// First dynamic value index owned by this anchor.
     pub(crate) value_start: u16,
-    /// Number of dynamic values owned by this anchor.
-    pub(crate) value_count: u16,
+    /// One past the last dynamic value index owned by this anchor.
+    pub(crate) value_end: u16,
 }
 
 impl TemplateAnchor {
@@ -35,8 +35,8 @@ impl TemplateAnchor {
         self.slot_path().static_parent()
     }
 
-    pub fn values(self) -> std::ops::Range<usize> {
-        self.value_start as usize..(self.value_start as usize + self.value_count as usize)
+    pub const fn values(self) -> std::ops::Range<usize> {
+        self.value_start as usize..self.value_end as usize
     }
 
     pub(crate) const fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
