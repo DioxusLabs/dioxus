@@ -87,28 +87,20 @@ impl WriteMutations for WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
-        match value {
-            AttributeValue::Text(txt) => {
-                self.interpreter
-                    .set_current_attribute(name, txt, ns.unwrap_or_default())
-            }
-            AttributeValue::Float(f) => {
-                self.interpreter
-                    .set_current_attribute(name, &f.to_string(), ns.unwrap_or_default())
-            }
-            AttributeValue::Int(n) => {
-                self.interpreter
-                    .set_current_attribute(name, &n.to_string(), ns.unwrap_or_default())
-            }
-            AttributeValue::Bool(b) => self.interpreter.set_current_attribute(
-                name,
-                if *b { "true" } else { "false" },
-                ns.unwrap_or_default(),
-            ),
-            AttributeValue::None => self
-                .interpreter
-                .remove_current_attribute(name, ns.unwrap_or_default()),
+        let text_value = match value {
+            AttributeValue::Text(txt) => Some(txt),
+            AttributeValue::Float(f) => Some(&f.to_string()),
+            AttributeValue::Int(n) => Some(&n.to_string()),
+            AttributeValue::Bool(b) => Some(if *b { "true" } else { "false" }),
+            AttributeValue::None => None,
             _ => unreachable!(),
+        };
+        if let Some(text_value) = text_value {
+            self.interpreter
+                .set_current_attribute(name, &text_value, ns.unwrap_or_default())
+        } else {
+            self.interpreter
+                .remove_current_attribute(name, ns.unwrap_or_default())
         }
     }
 
