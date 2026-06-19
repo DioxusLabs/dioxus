@@ -78,21 +78,6 @@ impl WebsysDom {
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
-        #[cfg(not(debug_assertions))]
-        let debug_types = None;
-        #[cfg(not(debug_assertions))]
-        let debug_locations = None;
-
-        let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
-        // If the server serialized an error into this boundary, there is no
-        // resolved subtree to hydrate. Leave the client fallback in place and let
-        // the nearest ErrorBoundary replace it on the next render.
-        if let Some(error) = server_data.error_entry().get().ok().flatten() {
-            resolved_suspense_element.remove();
-            dom.in_runtime(|| dom.runtime().throw_error(id, error));
-            return Ok(());
-        }
-
         // Snapshot the new nodes. `resolve_suspense` pushes them after it
         // pushes the placeholder target so replacement stays stack-only.
         let children = children_array(resolved_suspense_element.unchecked_ref());
@@ -105,9 +90,26 @@ impl WebsysDom {
         let empty_bootstrap = children_len == 0;
         let mut empty_bootstrap_node = None;
 
+        #[cfg(not(debug_assertions))]
+        let debug_types = None;
+        #[cfg(not(debug_assertions))]
+        let debug_locations = None;
+
+        let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
+        // If the server serialized an error into the suspense boundary, throw
+        // it on the client so that it bubbles up to the nearest error boundary.
+        if let Some(error) = server_data.error_entry().get().ok().flatten() {
+            dom.in_runtime(|| dom.runtime().throw_error(id, error));
+        }
+
         server_data.in_context(|| {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(id, dom, self, |to| {
+                // `resolve_suspense` queues a `push_id` for the node being
+                // replaced. The streamed nodes below are pushed directly onto
+                // the JS interpreter stack, so flush first to keep the target
+                // below the replacement nodes for `replace_with`.
+                to.flush_edits();
                 if empty_bootstrap {
                     let node: web_sys::Node = document.create_text_node("").unchecked_into();
                     to.interpreter.base().push_root(node.clone());
