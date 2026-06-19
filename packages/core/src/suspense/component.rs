@@ -510,54 +510,6 @@ impl SuspenseBoundaryProps {
     ///
     /// This should only be called by renderers while hydrating existing DOM.
     pub fn hydrate_suspended_primary_branches(scope_id: ScopeId, dom: &mut VirtualDom) {
-        fn vnode_has_dom_root(vnode: MountedVNode<'_>, dom: &VirtualDom) -> bool {
-            for (_root_idx, static_op, dynamic_anchor) in vnode.vnode().template.root_slots() {
-                if static_op.is_some() {
-                    return true;
-                }
-
-                let Some(anchor) = dynamic_anchor else {
-                    continue;
-                };
-
-                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
-                    if dynamic_node_has_dom_root(vnode, value_idx, dom) {
-                        return true;
-                    }
-                }
-            }
-
-            false
-        }
-
-        fn dynamic_node_has_dom_root(
-            vnode: MountedVNode<'_>,
-            value_idx: usize,
-            dom: &VirtualDom,
-        ) -> bool {
-            let Some(node) = vnode.vnode().dynamic_values()[value_idx].as_node() else {
-                return false;
-            };
-
-            match node {
-                DynamicNode::Text(_) => true,
-                DynamicNode::Component(comp) => comp
-                    .mounted_scope(value_idx, vnode, dom)
-                    .and_then(|child| child.try_mounted_root_node())
-                    .is_some_and(|child| vnode_has_dom_root(child, dom)),
-                DynamicNode::Fragment(fragment) => {
-                    let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
-                    if mounted_children.len() != fragment.len() {
-                        return false;
-                    }
-
-                    mounted_children
-                        .into_iter()
-                        .any(|child| vnode_has_dom_root(child, dom))
-                }
-            }
-        }
-
         fn promote_suspended_branch(scope_id: ScopeId, dom: &mut VirtualDom) -> bool {
             let Some(suspense_context) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
@@ -575,7 +527,7 @@ impl SuspenseBoundaryProps {
 
             if scope
                 .try_mounted_root_node()
-                .is_some_and(|root| vnode_has_dom_root(root, dom))
+                .is_some_and(|root| root.vnode().has_live_dom(root.mount(), dom))
             {
                 return false;
             }

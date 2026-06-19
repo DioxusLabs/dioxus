@@ -275,7 +275,7 @@ impl VNode {
         )
     }
 
-    fn has_live_dom(&self, mount: MountId, dom: &VirtualDom) -> bool {
+    pub(crate) fn has_live_dom(&self, mount: MountId, dom: &VirtualDom) -> bool {
         debug_assert_eq!(
             self.template.root_slots().count(),
             dom.mounted_root_count(mount),
