@@ -35,6 +35,28 @@ pub struct LinkProps {
 }
 
 impl LinkProps {
+    /// Create link props for a stylesheet.
+    pub fn stylesheet(href: impl Into<String>) -> Self {
+        Self {
+            rel: Some("stylesheet".to_string()),
+            media: None,
+            title: None,
+            disabled: None,
+            r#as: None,
+            sizes: None,
+            href: Some(href.into()),
+            crossorigin: None,
+            referrerpolicy: None,
+            fetchpriority: None,
+            hreflang: None,
+            integrity: None,
+            r#type: None,
+            blocking: None,
+            additional_attributes: Vec::new(),
+            onload: None,
+        }
+    }
+
     /// Get all the attributes for the link tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
