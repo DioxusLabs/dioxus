@@ -4,8 +4,8 @@ use crate::{
 use dioxus_core::view::ViewExt;
 use dioxus_core::{
     ComponentBuilder, ComponentBuilderOutput, ComponentFunction, Element, EventHandler, Portal,
-    PortalProps, Properties, RenderTargetId, Runtime, SuperInto, VComponent, VNode, provide_context,
-    schedule_update, spawn, use_hook, use_hook_with_cleanup,
+    PortalProps, Properties, RenderTargetId, Runtime, SuperInto, VComponent, VNode,
+    provide_context, schedule_update, spawn, use_hook, use_hook_with_cleanup,
 };
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};

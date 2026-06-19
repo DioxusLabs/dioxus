@@ -114,8 +114,7 @@ pub(super) fn insertion_site_at(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let at_edge =
-        vnode_edge_element(vnode, dom, edge).map(|id| InsertionSite::AtAnchor(edge.anchor(id)));
+    let at_edge = vnode_edge_site(edge, vnode, dom);
     at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), dom, context))
 }
 
@@ -516,4 +515,14 @@ fn vnode_edge_element(
         ElementEdge::First => vnode.find_first_element(dom),
         ElementEdge::Last => vnode.find_last_element(dom),
     }
+}
+
+/// The insertion site at one edge of a mounted vnode: anchored before its first live element
+/// (`First`) or after its last (`Last`). `None` when the vnode contributes no live element.
+pub(super) fn vnode_edge_site(
+    edge: ElementEdge,
+    vnode: MountedVNode<'_>,
+    dom: &VirtualDom,
+) -> Option<InsertionSite> {
+    vnode_edge_element(vnode, dom, edge).map(|id| InsertionSite::AtAnchor(edge.anchor(id)))
 }

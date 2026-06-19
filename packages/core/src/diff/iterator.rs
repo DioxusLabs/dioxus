@@ -17,6 +17,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{
             DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
+            vnode_edge_site,
         },
     },
     innerlude::{MountId, MountRef, WriteMutations},
@@ -519,7 +520,7 @@ impl DiffState<'_, '_, '_, '_> {
         // fragment) do we walk the new sibling order, then the committed view;
         // both consult the runtime's stale set so they never anchor mid-move.
         let site = self.has_writer().then(|| {
-            direct_edge_site(edge, &new[sibling_idx], sibling_mount, self.dom)
+            vnode_edge_site(edge, crate::MountedVNode::new(&new[sibling_idx], sibling_mount), self.dom)
                 .or_else(|| {
                     insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom)
                 })
@@ -663,29 +664,6 @@ impl DiffState<'_, '_, '_, '_> {
 struct MountedSibling {
     index: usize,
     mount: MountId,
-}
-
-/// Anchor a splice directly on its LIS-boundary sibling.
-///
-/// The sibling is stable (part of the longest-increasing subsequence, so it
-/// never moves), and the splice range sits immediately next to it, so its live
-/// DOM edge is the exact insertion anchor. Returns `None` only when the sibling
-/// has no live element (e.g. an empty fragment), leaving the caller to fall back
-/// to the new-order scan.
-fn direct_edge_site(
-    edge: ElementEdge,
-    sibling: &VNode,
-    mount: MountId,
-    dom: &VirtualDom,
-) -> Option<InsertionSite> {
-    let id = match edge {
-        ElementEdge::First => sibling.find_first_element(mount, dom),
-        ElementEdge::Last => sibling.find_last_element(mount, dom),
-    }?;
-    Some(InsertionSite::AtAnchor(match edge {
-        ElementEdge::First => DomAnchor::Before(id),
-        ElementEdge::Last => DomAnchor::After(id),
-    }))
 }
 
 /// Prefer anchors already materialized in the new sibling order.

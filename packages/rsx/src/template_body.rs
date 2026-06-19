@@ -49,19 +49,22 @@ impl ToTokens for TemplateBody {
         // First normalize the template body for rendering
         let node = self.normalized();
 
-        // If we have an implicit key, then we need to write its tokens
-        let key_tokens = match node.implicit_key() {
-            Some(tok) => quote! { Some( #tok.to_string() ) },
-            None => quote! { None },
-        };
-
         let key_warnings = self.check_for_duplicate_keys();
 
         // Build the typed view once: the release tree, the capacities, and (in debug) the
         // hot-reload tables all come from this one traversal.
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
-        let view_expr = &pieces.view;
+        let raw_view_expr = &pieces.view;
+        let view_expr = match node.implicit_key() {
+            Some(key) => quote! {{
+                use dioxus_core::view::ViewKeyExt as _;
+                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
+                let __key = Some(#key.to_string());
+                #raw_view_expr.key(__key)
+            }},
+            None => quote! { #raw_view_expr },
+        };
         let dynamic_text = pieces.dynamic_text_tokens.iter();
 
         let template_stats = pieces.template_stats;
@@ -72,8 +75,8 @@ impl ToTokens for TemplateBody {
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
         // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block, so
-        // release expansions contain zero hot-reload tokens. The base template comes from the
-        // per-call-site cell that `into_vnode_with_key_and_template_cell` fills in.
+        // release expansions contain zero hot-reload tokens. The base template is the const
+        // `&'static Template` built by `into_vnode_with_capacity`.
         let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { __vnode.template });
 
         tokens.append_all(quote! {
@@ -84,18 +87,14 @@ impl ToTokens for TemplateBody {
 
                 #(#view_definitions)*
 
-                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
-                let __key = #key_tokens;
-
                 #[cfg(not(debug_assertions))]
-                #[allow(clippy::let_and_return)]
                 {
-                    dioxus_core::view::into_vnode_with_key_and_capacity::<
+                    dioxus_core::view::into_vnode_with_capacity::<
                         #template_ops_cap,
                         #template_string_cap,
                         #template_dynamic_cap,
                         _,
-                    >(#view_expr, __key)
+                    >(#view_expr)
                 }
 
                 #[cfg(debug_assertions)]
@@ -107,10 +106,6 @@ impl ToTokens for TemplateBody {
                         const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
                         dioxus_core::const_format::str_replace!(PATH, '\\', "/")
                     };
-
-                    // Per-call-site cache so hot reload can recreate the template while keeping a
-                    // stable `&'static Template` for the built `VNode`.
-                    static __TEMPLATE_CELL: ::std::sync::OnceLock<dioxus_core::Template> = ::std::sync::OnceLock::new();
 
                     let __hot_reload_template_read = {
                         use dioxus_signals::ReadableExt;
@@ -133,9 +128,14 @@ impl ToTokens for TemplateBody {
                         vec![ #( #dynamic_text.to_string() ),* ],
                     );
 
-                    // Build the release tree once through the typed view, using the per-call-site
-                    // template cell so the template is stable across hot reloads.
-                    let __vnode = dioxus_core::view::into_vnode_with_key_and_template_cell(#view_expr, __key, &__TEMPLATE_CELL);
+                    // Build the template through the typed view. The template is a const
+                    // `&'static Template`, so it is already stable across hot reloads without a cache.
+                    let __vnode = dioxus_core::view::into_vnode_with_capacity::<
+                        #template_ops_cap,
+                        #template_string_cap,
+                        #template_dynamic_cap,
+                        _,
+                    >(#view_expr);
 
                     let __original_template = #hot_reload_mapping;
                     // If the template has not been hot reloaded, we always use the original template
@@ -353,13 +353,13 @@ impl ViewBuilder {
             .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
         // The `IntoDynNode` marker must be inferred: plain values resolve to the `()` marker, but
         // control-flow bodies (`for`/`if`) produce iterators that resolve to `FromNodeIterator`.
-        quote! { dioxus_core::internal::dynamic_node_builder(#tokens) }
+        quote! { dioxus_core::view::dynamic_node::dynamic_node_builder(#tokens) }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
-        quote! { .attribute(dioxus_core::internal::dynamic_attributes_builder(#attrs)) }
+        quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) }
     }
 
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {

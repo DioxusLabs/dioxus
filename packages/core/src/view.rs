@@ -5,74 +5,20 @@
 //! [`ViewExt::into_vnode`] converts it into a [`VNode`].
 
 use std::marker::PhantomData;
-#[cfg(debug_assertions)]
-use std::sync::OnceLock;
 
 use crate::{
-    Attribute, DynamicNode, DynamicValue, DynamicValues, HasAttributes, IntoAttributeValue,
-    IntoDynNode, Template, VComponent, VNode, nodes::IntoVNode,
+    Attribute, DynamicNode, DynamicValues, HasAttributes, IntoAttributeValue, IntoDynNode,
+    Template, VComponent, VNode, nodes::IntoVNode,
 };
-use dioxus_core_template::{TemplateRawTree, TemplateStorage};
-
-#[cfg(debug_assertions)]
 use dioxus_core_template::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
+    TemplateRawTree, TemplateStorage,
 };
-
-#[cfg(not(debug_assertions))]
-const RELEASE_FALLBACK_OPS_CAP: usize = 32;
-#[cfg(not(debug_assertions))]
-const RELEASE_FALLBACK_STRING_CAP: usize = 32;
-#[cfg(not(debug_assertions))]
-const RELEASE_FALLBACK_DYNAMIC_CAP: usize = 8;
 
 /// A type that contributes static template structure.
 pub trait ViewTemplate {
     /// The static tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
-}
-
-trait StaticViewTemplate: ViewTemplate {
-    /// The static template for this view type.
-    #[cfg(not(debug_assertions))]
-    const TEMPLATE: &'static Template;
-
-    /// Build the static template for this view type.
-    #[cfg(debug_assertions)]
-    fn build_template() -> Template;
-
-    /// Return the template for this view type from a call-site cache.
-    #[cfg(debug_assertions)]
-    fn template_from_cell(cell: &'static OnceLock<Template>) -> &'static Template;
-}
-
-impl<T: ViewTemplate> StaticViewTemplate for T {
-    #[cfg(not(debug_assertions))]
-    const TEMPLATE: &'static Template = &TemplateStorage::<
-        RELEASE_FALLBACK_OPS_CAP,
-        RELEASE_FALLBACK_STRING_CAP,
-        RELEASE_FALLBACK_DYNAMIC_CAP,
-    >::build_from_tree(T::TEMPLATE_TREE)
-    .as_template();
-
-    #[cfg(debug_assertions)]
-    #[inline]
-    fn build_template() -> Template {
-        // Always use the const-evaluated template. In debug we only cache it lazily in a
-        // per-call-site `OnceLock` (see `template_from_cell`) instead of re-lowering the tree at
-        // runtime, so debug and release build the identical template from one const path.
-        *<T as StaticViewTemplateWithCapacity<
-            TEMPLATE_STORAGE_OPS_CAP,
-            TEMPLATE_STORAGE_STRING_CAP,
-            TEMPLATE_STORAGE_DYNAMIC_CAP,
-        >>::TEMPLATE
-    }
-
-    #[cfg(debug_assertions)]
-    #[inline]
-    fn template_from_cell(cell: &'static OnceLock<Template>) -> &'static Template {
-        cell.get_or_init(Self::build_template)
-    }
 }
 
 /// Builds the static [`Template`] for a view using template storage capacities resolved at the
@@ -99,56 +45,42 @@ impl ViewTemplate for () {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Empty;
 }
 
-/// Runtime dynamic values collected while consuming a typed view.
-#[derive(Default)]
-pub struct DynamicViewValues {
-    values: Vec<DynamicValue>,
-}
-
-impl DynamicViewValues {
-    /// Create a dynamic-value buffer with known capacity.
-    #[inline]
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: Vec::with_capacity(capacity),
-        }
-    }
-
-    /// Push a dynamic node slot.
-    #[inline]
-    pub(crate) fn push_node(&mut self, value: DynamicNode) {
-        self.values.push(DynamicValue::Node(value));
-    }
-
-    /// Push a dynamic attribute slot.
-    ///
-    /// Dynamic attribute slots must be sorted by `(name, namespace)` for the diff. Spread
-    /// inputs (e.g. `..props.attributes`) are written in user/source order, but they are
-    /// normalized centrally in [`DynamicValues::new`] — which this buffer funnels through via
-    /// [`DynamicViewValues::into_dynamic_values`] — so no sort is needed here.
-    #[inline]
-    pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
-        self.values.push(DynamicValue::Attrs(value));
-    }
-
-    /// Convert this buffer into the boxed slice expected by [`VNode`].
-    #[inline]
-    pub(crate) fn into_boxed_slice(self) -> Box<[DynamicValue]> {
-        self.values.into_boxed_slice()
-    }
-
-    /// Convert this buffer into the dynamic values payload expected by [`VNode`].
-    #[inline]
-    pub(crate) fn into_dynamic_values(self, key: Option<String>) -> DynamicValues {
-        DynamicValues::new(key, self.into_boxed_slice())
-    }
-}
-
 /// A typed view that can collect runtime dynamic values.
 pub trait View: ViewTemplate + Sized {
     /// Push runtime dynamic values in template order.
     #[inline]
-    fn push(self, _dynamic: &mut DynamicViewValues) {}
+    fn push(self, _dynamic: &mut DynamicValues) {}
+}
+
+/// A typed view with a root key.
+pub struct KeyedView<V> {
+    key: Option<String>,
+    view: V,
+}
+
+impl<V: ViewTemplate> ViewTemplate for KeyedView<V> {
+    const TEMPLATE_TREE: &'static TemplateRawTree = V::TEMPLATE_TREE;
+}
+
+impl<V: View> View for KeyedView<V> {
+    #[inline]
+    fn push(self, dynamic: &mut DynamicValues) {
+        dynamic.set_key(self.key);
+        self.view.push(dynamic);
+    }
+}
+
+/// Extension methods for assigning a root key to typed views.
+pub trait ViewKeyExt: View {
+    /// Assign a root key to this view.
+    fn key(self, key: Option<String>) -> KeyedView<Self>;
+}
+
+impl<V: View> ViewKeyExt for V {
+    #[inline]
+    fn key(self, key: Option<String>) -> KeyedView<Self> {
+        KeyedView { key, view: self }
+    }
 }
 
 /// Extension methods for typed views.
@@ -160,62 +92,38 @@ pub trait ViewExt: View {
 impl<V: View> ViewExt for V {
     #[inline]
     fn into_vnode(self) -> VNode {
-        into_vnode_with_key(self, None)
+        into_vnode_with_template(
+            self,
+            <V as StaticViewTemplateWithCapacity<
+                TEMPLATE_STORAGE_OPS_CAP,
+                TEMPLATE_STORAGE_STRING_CAP,
+                TEMPLATE_STORAGE_DYNAMIC_CAP,
+            >>::TEMPLATE,
+        )
     }
 }
 
 /// Convert a view into a [`VNode`] using a prepared template.
 #[inline]
-fn into_vnode_with_template<V: View>(view: V, key: Option<String>, template: &Template) -> VNode {
-    let mut dynamic = DynamicViewValues::with_capacity(template.dynamic_value_count());
+fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
+    let mut dynamic = DynamicValues::with_capacity(template.dynamic_value_count());
     view.push(&mut dynamic);
-    VNode::new(*template, dynamic.into_dynamic_values(key))
+    VNode::new(*template, dynamic)
 }
 
-/// Convert a view into a keyed [`VNode`].
+/// Convert a view into a [`VNode`] using template capacities resolved at the call site.
 #[inline]
-fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
-    #[cfg(debug_assertions)]
-    {
-        into_vnode_with_template(view, key, &<V as StaticViewTemplate>::build_template())
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        into_vnode_with_template(view, key, <V as StaticViewTemplate>::TEMPLATE)
-    }
-}
-
-/// Convert a view into a keyed [`VNode`] using template capacities resolved at the call site.
-#[inline]
-pub fn into_vnode_with_key_and_capacity<
+pub fn into_vnode_with_capacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
     V: View + StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
 >(
     view: V,
-    key: Option<String>,
 ) -> VNode {
     into_vnode_with_template(
         view,
-        key,
         <V as StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>>::TEMPLATE,
-    )
-}
-
-/// Convert a view into a keyed [`VNode`] using a lazily initialized template cache.
-#[cfg(debug_assertions)]
-#[inline]
-pub fn into_vnode_with_key_and_template_cell<V: View>(
-    view: V,
-    key: Option<String>,
-    template_cell: &'static OnceLock<Template>,
-) -> VNode {
-    into_vnode_with_template(
-        view,
-        key,
-        <V as StaticViewTemplate>::template_from_cell(template_cell),
     )
 }
 
@@ -227,7 +135,7 @@ impl ViewTemplate for VComponent {
 
 impl View for VComponent {
     #[inline]
-    fn push(self, dynamic: &mut DynamicViewValues) {
+    fn push(self, dynamic: &mut DynamicValues) {
         dynamic.push_node(DynamicNode::Component(self));
     }
 }
@@ -254,7 +162,7 @@ macro_rules! impl_tuple_views {
 
         impl<$first_name: View> View for ($first_name,) {
             #[inline]
-            fn push(self, dynamic: &mut DynamicViewValues) {
+            fn push(self, dynamic: &mut DynamicValues) {
                 let ($first_value,) = self;
                 $first_value.push(dynamic);
             }
@@ -269,7 +177,7 @@ macro_rules! impl_tuple_views {
 
         impl<$first_name: View, $($name: View),*> View for ($first_name, $($name,)*) {
             #[inline]
-            fn push(self, dynamic: &mut DynamicViewValues) {
+            fn push(self, dynamic: &mut DynamicValues) {
                 let ($first_value, $($value,)*) = self;
                 $first_value.push(dynamic);
                 $($value.push(dynamic);)*
@@ -572,13 +480,14 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
 #[doc(hidden)]
 pub struct ViewChildMarker;
 
-pub(crate) mod dynamic_node {
+#[doc(hidden)]
+pub mod dynamic_node {
     use std::marker::PhantomData;
 
     use crate::IntoDynNode;
     use dioxus_core_template::TemplateRawTree;
 
-    use super::{DynamicViewValues, View, ViewTemplate};
+    use super::{DynamicValues, View, ViewTemplate};
 
     /// Marker for child values that should become dynamic node slots.
     pub struct DynamicViewChildMarker<Marker>(PhantomData<Marker>);
@@ -591,7 +500,7 @@ pub(crate) mod dynamic_node {
 
     /// Create a dynamic node slot from any [`IntoDynNode`] value.
     #[inline]
-    pub(crate) fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
+    pub fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
     where
         N: IntoDynNode<Marker>,
     {
@@ -610,7 +519,7 @@ pub(crate) mod dynamic_node {
         N: IntoDynNode<Marker>,
     {
         #[inline]
-        fn push(self, dynamic: &mut DynamicViewValues) {
+        fn push(self, dynamic: &mut DynamicValues) {
             dynamic.push_node(self.node.into_dyn_node());
         }
     }
@@ -661,7 +570,7 @@ impl<Tag: ElementTag, Attributes: View, Children: View> View
     for ElementBuilder<Tag, Attributes, Children>
 {
     #[inline]
-    fn push(self, dynamic: &mut DynamicViewValues) {
+    fn push(self, dynamic: &mut DynamicValues) {
         self.children.push(dynamic);
         self.attrs.push(dynamic);
     }
@@ -747,7 +656,8 @@ pub struct DynamicAttributesBuilder {
 
 /// Create a dynamic attribute slot from an already boxed attribute list.
 #[inline]
-pub(crate) fn dynamic_attributes_builder(attrs: Box<[Attribute]>) -> DynamicAttributesBuilder {
+#[doc(hidden)]
+pub fn dynamic_attributes_builder(attrs: Box<[Attribute]>) -> DynamicAttributesBuilder {
     DynamicAttributesBuilder { attrs }
 }
 
@@ -770,7 +680,7 @@ impl ViewTemplate for DynamicAttributesBuilder {
 
 impl View for DynamicAttributesBuilder {
     #[inline]
-    fn push(self, dynamic: &mut DynamicViewValues) {
+    fn push(self, dynamic: &mut DynamicValues) {
         dynamic.push_attrs(self.attrs);
     }
 }

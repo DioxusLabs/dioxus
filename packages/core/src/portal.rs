@@ -232,13 +232,16 @@ fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRen
     (props.target, props.children.clone())
 }
 
-/// Create `children` inside `target_id`, record them as the scope's
-/// rendered output, and fire mount lifecycle when writes are enabled.
-/// Shared by initial creation and the retarget arm of `diff`.
-fn mount_children(
+/// Create or re-create `children` inside `target_id`, record them as the scope's rendered
+/// output, and fire mount lifecycle when writes are enabled.
+///
+/// `existing_root_mount` is `Some` when re-creating a live scope onto its previously committed
+/// mount, and `None` when creating fresh (initial creation or the retarget arm of `diff`).
+fn place_children(
     scope_id: ScopeId,
     target_id: RenderTargetId,
     children: LastRenderedNode,
+    existing_root_mount: Option<MountId>,
     parent: Option<MountRef>,
     dom: &mut VirtualDom,
     to: Option<&mut (dyn WriteMutations + '_)>,
@@ -246,30 +249,17 @@ fn mount_children(
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
         target_id,
-        "portal mount runs inside the portal scope, whose target_id routes its writes"
+        "portal (re)mount runs inside the portal scope, whose target_id routes its writes"
     );
     let mut render_to = to;
     let should_mount = render_to.is_some();
-    let mut root_mount = None;
+    let mut root_mount = existing_root_mount;
     if let Some(to) = render_to.as_deref_mut() {
         append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
-            let created = dom.create_children_with_parents(
-                Some(to),
-                std::slice::from_ref(children.as_vnode()),
-                None,
-                parent,
-            );
-            root_mount = created.mounts.first().copied();
-            created.nodes
+            place_children_inner(dom, &children, &mut root_mount, parent, Some(to))
         });
     } else {
-        let created = dom.create_children_with_parents(
-            None,
-            std::slice::from_ref(children.as_vnode()),
-            None,
-            parent,
-        );
-        root_mount = created.mounts.first().copied();
+        place_children_inner(dom, &children, &mut root_mount, parent, None);
     }
     dom.scopes[scope_id.index()].last_rendered_node = Some(MountedOutput::new(
         children,
@@ -280,38 +270,33 @@ fn mount_children(
     }
 }
 
-fn remount_children(
-    scope_id: ScopeId,
-    target_id: RenderTargetId,
-    children: LastRenderedNode,
-    root_mount: MountId,
-    parent: Option<MountRef>,
+/// Build the portal children, returning the node count. When `root_mount` already holds a mount
+/// the children are re-created onto it; otherwise they are created fresh and `root_mount` is filled
+/// with the new root mount.
+fn place_children_inner(
     dom: &mut VirtualDom,
+    children: &LastRenderedNode,
+    root_mount: &mut Option<MountId>,
+    parent: Option<MountRef>,
     to: Option<&mut (dyn WriteMutations + '_)>,
-) {
-    debug_assert_eq!(
-        dom.runtime.current_render_target_id(),
-        target_id,
-        "portal remount runs inside the portal scope, whose target_id routes its writes"
-    );
-    let mut render_to = to;
-    let should_mount = render_to.is_some();
-    if let Some(to) = render_to.as_deref_mut() {
-        append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
+) -> usize {
+    match *root_mount {
+        Some(existing) => {
             children
                 .as_vnode()
-                .recreate_with_mount(dom, root_mount, None, parent, Some(to))
+                .recreate_with_mount(dom, existing, None, parent, to)
                 .nodes
-        });
-    } else {
-        children
-            .as_vnode()
-            .recreate_with_mount(dom, root_mount, None, parent, None);
-    }
-    dom.scopes[scope_id.index()].last_rendered_node =
-        Some(MountedOutput::new(children, root_mount));
-    if should_mount {
-        dom.runtime.get_state(scope_id).mount(&dom.runtime);
+        }
+        None => {
+            let created = dom.create_children_with_parents(
+                to,
+                std::slice::from_ref(children.as_vnode()),
+                None,
+                parent,
+            );
+            *root_mount = created.mounts.first().copied();
+            created.nodes
+        }
     }
 }
 
@@ -337,7 +322,7 @@ impl RenderDriver for PortalDriver {
             dom.runtime.set_scope_target_id(scope_id, target_id);
 
             dom.runtime.clone().with_scope_on_stack(scope_id, || {
-                mount_children(scope_id, target_id, children, parent, dom, to);
+                place_children(scope_id, target_id, children, None, parent, dom, to);
                 0
             })
         } else {
@@ -354,7 +339,15 @@ impl RenderDriver for PortalDriver {
             let children = old_output.node().clone();
 
             dom.runtime.clone().with_scope_on_stack(scope_id, || {
-                remount_children(scope_id, target_id, children, root_mount, parent, dom, to);
+                place_children(
+                    scope_id,
+                    target_id,
+                    children,
+                    Some(root_mount),
+                    parent,
+                    dom,
+                    to,
+                );
                 0
             })
         }
@@ -390,10 +383,11 @@ impl RenderDriver for PortalDriver {
                 // against the new one.
                 dom.runtime.set_scope_target_id(scope_id, target_id);
 
-                mount_children(
+                place_children(
                     scope_id,
                     target_id,
                     new_children,
+                    None,
                     logical_parent,
                     dom,
                     to.as_deref_mut(),

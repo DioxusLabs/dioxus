@@ -24,7 +24,7 @@ use crate::{
     Attribute, AttributeValue, VNode, VirtualDom, WriteMutations,
     arena::MountedElementId,
     diff::template::{DynamicAttrGroup, for_each_dynamic_attr_group},
-    mutations::{LazyScope, with_id},
+    mutations::{TargetedLazyScope, with_id},
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -104,7 +104,10 @@ impl VNode {
         .peekable();
 
         let element_id = id.element_id();
-        let mut to = LazyScope::new(to, move |to| to.push_id(element_id));
+        // The attribute diff never changes the active render target, so the targeted gate is
+        // always satisfied here — equivalent to an unconditional lazy push.
+        let mut to =
+            TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
             self.diff_dynamic_attribute(attr_group, key, id, mount, old, new, dom, &mut to);
         }

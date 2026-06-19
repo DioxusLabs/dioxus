@@ -67,43 +67,6 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute, TemplateGlobalKey,
     };
 
-    pub type DynamicNodeBuilder<N, Marker = ()> =
-        crate::view::dynamic_node::DynamicNodeBuilder<N, Marker>;
-
-    pub fn dynamic_node_builder<N, Marker>(node: N) -> DynamicNodeBuilder<N, Marker>
-    where
-        N: crate::nodes::IntoDynNode<Marker>,
-    {
-        crate::view::dynamic_node::dynamic_node_builder(node)
-    }
-
-    pub fn dynamic_attributes_builder(
-        attrs: Box<[crate::nodes::Attribute]>,
-    ) -> crate::view::DynamicAttributesBuilder {
-        crate::view::dynamic_attributes_builder(attrs)
-    }
-
-    #[allow(private_bounds)]
-    pub fn into_vnode_with_key_and_capacity<
-        const OPS_CAP: usize,
-        const STRING_CAP: usize,
-        const DYNAMIC_CAP: usize,
-        V: crate::view::View
-            + crate::view::StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
-    >(
-        view: V,
-        key: Option<String>,
-    ) -> crate::VNode {
-        crate::view::into_vnode_with_key_and_capacity::<OPS_CAP, STRING_CAP, DYNAMIC_CAP, V>(
-            view, key,
-        )
-    }
-
-    #[allow(non_snake_case)]
-    pub fn Err<T, E>(e: E) -> Result<T, E> {
-        std::result::Result::Err(e)
-    }
-
     pub use anyhow::__anyhow;
 
     pub use dioxus_core_template::{TemplateRawTree, TemplateStorage};

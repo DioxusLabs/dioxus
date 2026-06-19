@@ -39,9 +39,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub fn deserialize_option_leaky<'de, D>(
-    deserializer: D,
-) -> Result<Option<&'static str>, D::Error>
+pub fn deserialize_option_leaky<'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

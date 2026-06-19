@@ -18,13 +18,13 @@ static ERROR_DYNAMIC_TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
 #[macro_export]
 macro_rules! bail {
     ($msg:literal $(,)?) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($msg).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($msg).into())
     };
     ($err:expr $(,)?) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($err).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($err).into())
     };
     ($fmt:expr, $($arg:tt)*) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($fmt, $($arg)*).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($fmt, $($arg)*).into())
     };
 }
 

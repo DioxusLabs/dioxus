@@ -21,7 +21,7 @@ pub struct DynamicValues {
     pub(crate) key: Option<String>,
 
     /// Dynamic values in template order.
-    pub(crate) dynamic_values: Box<[DynamicValue]>,
+    pub(crate) dynamic_values: Vec<DynamicValue>,
 }
 
 impl Debug for DynamicValues {
@@ -37,17 +37,54 @@ impl DynamicValues {
     /// `(name, namespace)`. Duplicate keys keep their relative input order, giving
     /// last-wins semantics for spread attributes like `..props.attributes`.
     #[inline]
-    pub fn new(key: Option<String>, mut dynamic_values: Box<[DynamicValue]>) -> Self {
-        for value in dynamic_values.iter_mut() {
+    pub fn new(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
+        let mut values = Self {
+            key,
+            dynamic_values: dynamic_values.into_vec(),
+        };
+        values.normalize();
+        values
+    }
+
+    /// Create an empty dynamic values payload with known capacity.
+    #[inline]
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            key: None,
+            dynamic_values: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Set the root key for this render.
+    #[inline]
+    pub(crate) fn set_key(&mut self, key: Option<String>) {
+        self.key = key;
+    }
+
+    /// Push a dynamic node slot.
+    #[inline]
+    pub(crate) fn push_node(&mut self, value: DynamicNode) {
+        self.dynamic_values.push(DynamicValue::Node(value));
+    }
+
+    /// Push a dynamic attribute slot.
+    ///
+    /// Dynamic attribute slots are normalized by [`Self::normalize`] before the values are stored
+    /// on a [`VNode`].
+    #[inline]
+    pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
+        self.dynamic_values.push(DynamicValue::Attrs(value));
+    }
+
+    /// Normalize dynamic attribute slots for diffing.
+    #[inline]
+    pub(crate) fn normalize(&mut self) {
+        for value in self.dynamic_values.iter_mut() {
             if let DynamicValue::Attrs(slot) = value {
                 if slot.len() > 1 {
                     slot.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
                 }
             }
-        }
-        Self {
-            key,
-            dynamic_values,
         }
     }
 
@@ -185,14 +222,16 @@ impl VNode {
 
     /// Create a new VNode from a static template and dynamic values payload.
     #[inline]
-    pub fn new(template: Template, values: DynamicValues) -> Self {
+    pub fn new(template: Template, mut values: DynamicValues) -> Self {
+        values.normalize();
+
         assert!(
             values.dynamic_values.len() == template.dynamic_value_count(),
             "bad dynamic count"
         );
 
         // Dynamic attribute slots are required to be sorted by `(name, namespace)` for the diff.
-        // That invariant is established centrally in `DynamicValues::new`, so it always holds here.
+        // That invariant is established centrally by `DynamicValues::normalize`.
 
         Self {
             vnode: Rc::new(VNodeInner {

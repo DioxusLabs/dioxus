@@ -146,30 +146,6 @@ pub(crate) fn remove_id(to: &mut dyn WriteMutations, id: ElementId) {
     with_consumed_id(to, id, |to| to.remove());
 }
 
-pub(crate) struct LazyScope<'a, P: FnMut(&mut dyn WriteMutations)> {
-    to: &'a mut dyn WriteMutations,
-    push: P,
-    pushed: bool,
-}
-
-impl<'a, P: FnMut(&mut dyn WriteMutations)> LazyScope<'a, P> {
-    pub(crate) fn new(to: &'a mut dyn WriteMutations, push: P) -> Self {
-        Self {
-            to,
-            push,
-            pushed: false,
-        }
-    }
-
-    #[inline]
-    fn ensure_pushed(&mut self) {
-        if !self.pushed {
-            (self.push)(self.to);
-            self.pushed = true;
-        }
-    }
-}
-
 pub(crate) struct TargetedLazyScope<'a, P: FnMut(&mut dyn WriteMutations)> {
     to: &'a mut dyn WriteMutations,
     push: P,
@@ -199,14 +175,6 @@ impl<'a, P: FnMut(&mut dyn WriteMutations)> TargetedLazyScope<'a, P> {
     }
 }
 
-impl<P: FnMut(&mut dyn WriteMutations)> Drop for LazyScope<'_, P> {
-    fn drop(&mut self) {
-        if self.pushed {
-            self.to.pop();
-        }
-    }
-}
-
 impl<P: FnMut(&mut dyn WriteMutations)> Drop for TargetedLazyScope<'_, P> {
     fn drop(&mut self) {
         if self.pushed {
@@ -224,10 +192,6 @@ macro_rules! forward_lazy_scope_write_mutations {
             }
         )*
     };
-}
-
-impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for LazyScope<'_, P> {
-    write_mutation_methods!(forward_lazy_scope_write_mutations,);
 }
 
 impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for TargetedLazyScope<'_, P> {

@@ -13,7 +13,7 @@ fn component_vnode(component: VComponent) -> VNode {
 
 #[cfg(not(debug_assertions))]
 fn component_vnode(component: VComponent) -> VNode {
-    crate::view::into_vnode_with_key_and_capacity::<0, 0, 1, _>(component, None)
+    crate::view::into_vnode_with_capacity::<0, 0, 1, _>(component)
 }
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary

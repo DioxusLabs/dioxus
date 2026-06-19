@@ -324,11 +324,7 @@ impl VirtualDom {
             RootProps(root),
             "RootWrapper",
         ));
-        dom.new_scope(
-            "app",
-            Rc::new(crate::render_driver::BodyDriver),
-            root_props,
-        );
+        dom.new_scope("app", Rc::new(crate::render_driver::BodyDriver), root_props);
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();
