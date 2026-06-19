@@ -57,16 +57,15 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         self.to.is_some()
     }
 
-    /// Create replacement content in an empty dynamic slot, then optionally
-    /// restore the old slot while removing the previous live node.
+    /// Create replacement content in an empty dynamic slot, restore the old
+    /// slot while removing the previous live node, then commit the new slot.
     ///
     /// Invariant: the slot is empty only during `create_new`. After the method returns, the slot is
-    /// restored to the new value even if old-node removal needed the old slot temporarily visible.
-    pub(crate) fn with_mounted_dynamic_node_slot_replaced<R>(
+    /// restored to the new value after old-node removal observes the old slot.
+    pub(crate) fn replace_live_mounted_dynamic_node_slot<R>(
         &mut self,
         mount: MountId,
         dyn_node_idx: usize,
-        restore_old_slot_for_removal: bool,
         create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_, 'mutation>) -> R,
         remove_old: impl FnOnce(&mut DiffState<'_, 'ctx, '_, 'mutation>),
     ) -> R {
@@ -81,11 +80,30 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
             .dom
             .mounted_dynamic_node_slot_snapshot(mount, dyn_node_idx);
 
-        if restore_old_slot_for_removal {
-            self.dom
-                .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, old_slot);
-            remove_old(self);
-        }
+        self.dom
+            .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, old_slot);
+        remove_old(self);
+
+        self.dom
+            .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, new_slot);
+        result
+    }
+
+    /// Create replacement content after the previous dynamic node has already
+    /// been removed without needing the old slot visible again.
+    pub(crate) fn replace_cleaned_mounted_dynamic_node_slot<R>(
+        &mut self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        create_new: impl FnOnce(&mut DiffState<'_, 'ctx, '_, 'mutation>) -> R,
+    ) -> R {
+        self.dom
+            .clear_mounted_dynamic_node_slot(mount, dyn_node_idx);
+
+        let result = create_new(self);
+        let new_slot = self
+            .dom
+            .mounted_dynamic_node_slot_snapshot(mount, dyn_node_idx);
 
         self.dom
             .restore_mounted_dynamic_node_slot(mount, dyn_node_idx, new_slot);
