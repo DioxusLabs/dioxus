@@ -312,4 +312,33 @@ mod tests {
         assert_eq!(parent.bits(), TemplatePath::root(1).bits());
         assert_eq!(index, 2);
     }
+
+    #[test]
+    fn static_parent_resolves_enclosing_element_for_before_static_anchor() {
+        // Shape: `div { span  {slot}  span }`. The slot is anchored before the
+        // *second* child of `div`, i.e. a non-first static sibling.
+        let div = TemplatePath::root(0); // 0b1
+        let first_child = div.next_child(); // 0b11   (div's child 0)
+        let second_child = first_child.next_sibling(); // 0b110 (div's child 1)
+
+        // `split_insertion` agrees the enclosing element is `div` for both
+        // anchor positions; `static_parent` must match it.
+        assert_eq!(first_child.split_insertion().0.bits(), div.bits());
+        assert_eq!(second_child.split_insertion().0.bits(), div.bits());
+
+        // First-child anchor already resolves to `div`.
+        let before_first = TemplateSlotPath::before_static(first_child);
+        assert_eq!(before_first.static_parent().bits(), div.bits());
+
+        // Non-first-child anchor must ALSO resolve to the enclosing element
+        // `div`, not to the preceding sibling. The buggy `path.parent()` arm
+        // returned `second_child.parent() == first_child` (the preceding span).
+        let before_second = TemplateSlotPath::before_static(second_child);
+        assert_eq!(
+            before_second.static_parent().bits(),
+            div.bits(),
+            "static_parent of a BeforeStatic anchor before a non-first child must \
+             be the enclosing element, not the preceding sibling"
+        );
+    }
 }

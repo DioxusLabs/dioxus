@@ -1001,24 +1001,9 @@ fn replace_placeholder_with(
     dom: &mut VirtualDom,
     to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
-    // Invariant: `placeholder` is the currently visible branch and `children` is an already
-    // materialized retained branch. Replacement may be a no-op when both branches already share the
-    // same root id after streaming/promote bookkeeping.
+    // Invariant: `placeholder` is the currently visible fallback and `children` is the already
+    // materialized retained branch.
     let parent = dom.mounted_render_parent(placeholder.root_mount());
-    if to.is_some() {
-        if let Some(id) = placeholder.mounted_vnode().mounted_root(0, dom) {
-            let child_owns_placeholder_id =
-                (0..dom.mounted_root_count(children.mount())).any(|root_idx| {
-                    children
-                        .mounted_root(root_idx, dom)
-                        .is_some_and(|root_id| root_id == id)
-                });
-
-            if child_owns_placeholder_id {
-                return;
-            }
-        }
-    }
 
     placeholder.as_vnode().replace_with_existing_mount(
         placeholder.root_mount(),

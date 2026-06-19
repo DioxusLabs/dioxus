@@ -358,7 +358,6 @@ fn suspense_tracks_resolved() {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2783
 // TODO: restore the intermediate fallback-to-content transition.
 #[test]
-#[ignore = "intermediate fallback-to-content transition differs"]
 fn toggle_suspense() {
     fn app() -> Element {
         rsx! {

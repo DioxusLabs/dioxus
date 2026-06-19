@@ -309,6 +309,10 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             visible_fragment_child_after_text_slot(),
         ),
         case(
+            "dynamic_before_non_first_static_with_live_sibling",
+            dynamic_before_non_first_static_with_live_sibling(),
+        ),
+        case(
             "root_dynamic_before_static_root_with_nested_dynamic_node",
             root_dynamic_before_static_root_with_nested_dynamic_node(),
         ),
@@ -1072,6 +1076,60 @@ fn visible_fragment_child_after_text_slot() -> Vec<Op> {
         set_vnode_root_dynamic(1, DynamicKind::Empty),
         Op::Rerender,
         set_vnode_root_dynamic(1, DynamicKind::Text(1)),
+        Op::Rerender,
+    ]
+}
+
+/// Regression: a dynamic node placed before a *non-first* static sibling must
+/// land at the correct live position when an earlier dynamic sibling is already
+/// materialized in the DOM.
+///
+/// Builds `div { span {a} span {b=Empty} span }`. The first render leaves `{b}`
+/// empty, so `{a}` is the only live dynamic node. Toggling `{b}` to text then
+/// anchors the insertion on a *static* child index (counting only static
+/// children), but the live DOM child index is shifted by the already-live `{a}`,
+/// so `{b}` was inserted before the wrong `span`. Mirrors the core test
+/// `dynamic_node_before_non_first_static_sibling_keeps_order`; kept here so the
+/// coverage-measured fuzz binary carries the shape as a seed.
+fn dynamic_before_non_first_static_with_live_sibling() -> Vec<Op> {
+    vec![
+        // span (static, node 1)
+        insert_child(
+            0,
+            0,
+            0,
+            TemplateNodeKind::Element {
+                tag: 1,
+                namespace: None,
+            },
+        ),
+        // {a} (dynamic text, node 2) — stays live across both renders
+        insert_child(0, 0, 1, TemplateNodeKind::Dynamic(DynamicKind::Text(0))),
+        // span (static, node 3)
+        insert_child(
+            0,
+            0,
+            2,
+            TemplateNodeKind::Element {
+                tag: 2,
+                namespace: None,
+            },
+        ),
+        // {b} (dynamic, node 4) — starts empty, before a non-first static span
+        insert_child(0, 0, 3, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
+        // span (static, node 5)
+        insert_child(
+            0,
+            0,
+            4,
+            TemplateNodeKind::Element {
+                tag: 3,
+                namespace: None,
+            },
+        ),
+        Op::Rerender,
+        // Toggle {b} from Empty -> Text while {a} is already live.
+        set_vnode_node(0, 4, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
         Op::Rerender,
     ]
 }

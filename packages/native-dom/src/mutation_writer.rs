@@ -318,7 +318,7 @@ impl RealDom for BlitzBackend<'_> {
 
     fn nth_child(&mut self, parent: NodeId, index: usize) -> NodeId {
         trace!("nth_child parent:{parent} index:{index}");
-        self.docm.node_at_path(parent, &[index as u8])
+        self.docm.child_ids(parent)[index]
     }
 
     fn append_children(&mut self, parent: NodeId, children: &[NodeId]) {
