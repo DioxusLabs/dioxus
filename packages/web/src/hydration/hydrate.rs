@@ -4,15 +4,15 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use dioxus_core::{ErrorContext, ScopeId, ScopeState, SuspenseBoundaryProps, VirtualDom};
+use dioxus_core::{ScopeId, ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use wasm_bindgen::JsCast;
 
 use super::cursor::HydrationCursor;
 
-use super::SuspenseMessage;
 use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
+use super::SuspenseMessage;
 
 fn children_array(parent: &web_sys::Node) -> js_sys::Array {
     js_sys::Array::from(parent.child_nodes().unchecked_ref())
@@ -22,18 +22,6 @@ fn node_array(node: &web_sys::Node) -> js_sys::Array {
     let array = js_sys::Array::new();
     array.push(node.unchecked_ref());
     array
-}
-
-fn nearest_error_boundary(dom: &VirtualDom, id: ScopeId) -> Option<ScopeId> {
-    let runtime = dom.runtime();
-    let mut current = Some(id);
-    while let Some(scope) = current {
-        if runtime.has_context::<ErrorContext>(scope).is_some() {
-            return Some(scope);
-        }
-        current = runtime.parent_scope(scope);
-    }
-    None
 }
 
 #[derive(Debug)]
@@ -111,11 +99,6 @@ impl WebsysDom {
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
-            if let Some(boundary) = nearest_error_boundary(dom, id) {
-                dom.mark_dirty(boundary);
-            }
-            resolved_suspense_element.remove();
-            return Ok(());
         }
         server_data.in_context(|| {
             // rerun the scope with the new data
