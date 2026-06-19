@@ -366,42 +366,12 @@ impl TemplateStorageStats {
             self.push_anchor(anchors, frame.enter_index as u16, path);
         }
     }
-
-    pub const fn exceeds_storage_limits(self) -> bool {
-        self.path_overflow
-            || self.ops > TEMPLATE_STORAGE_OPS_CAP
-            || self.strings > TEMPLATE_STORAGE_STRING_CAP
-            || self.anchors > TEMPLATE_STORAGE_DYNAMIC_CAP
-            || self.ops > TEMPLATE_STORAGE_MAX_CAP
-            || self.strings > TEMPLATE_STORAGE_MAX_CAP
-            || self.dynamic_values > u16::MAX as usize
-    }
-
-    pub fn max_required_chunks(self) -> usize {
-        let chunks = required_chunks(self.ops, TEMPLATE_STORAGE_OPS_CAP);
-        let chunks = chunks.max(required_chunks(self.strings, TEMPLATE_STORAGE_STRING_CAP));
-        let chunks = chunks.max(required_chunks(self.anchors, TEMPLATE_STORAGE_DYNAMIC_CAP));
-        let chunks = chunks.max(required_chunks(
-            self.ops.max(self.strings).max(self.dynamic_values),
-            TEMPLATE_STORAGE_MAX_CAP,
-        ));
-        let chunks = chunks.max(required_chunks(self.dynamic_values, u16::MAX as usize));
-        if self.path_overflow {
-            chunks.max(2)
-        } else {
-            chunks
-        }
-    }
 }
 
 impl AnchorStats {
     fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
         self.parent_op_index == parent_op_index && self.path == path
     }
-}
-
-const fn required_chunks(value: usize, limit: usize) -> usize {
-    if value == 0 { 1 } else { value.div_ceil(limit) }
 }
 
 const fn tree_has_static_root_node(tree: &'static TemplateRawTree) -> bool {
