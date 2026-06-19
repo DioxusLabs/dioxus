@@ -198,21 +198,15 @@ impl App {
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        let Some(close_behaviour) = self
-            .webviews
-            .get(&id)
-            .map(|window| window.desktop_context.close_behaviour.get())
-        else {
+        let Some(window) = self.webviews.get(&id) else {
             // If the window is not found, we can just return
             return;
         };
 
-        match close_behaviour {
+        match window.desktop_context.close_behaviour.get() {
             // If the window is just set to hide when closed, we can just hide it
             WindowCloseBehaviour::WindowHides => {
-                if let Some(window) = self.webviews.get(&id) {
-                    window.desktop_context.window.set_visible(false);
-                }
+                window.desktop_context.window.set_visible(false);
             }
 
             // If the window is set to close, we can remove it from the list of webviews
