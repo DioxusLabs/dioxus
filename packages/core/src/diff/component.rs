@@ -12,17 +12,16 @@ use crate::{
 };
 
 impl VirtualDom {
-    /// Run a queued scope diff with an explicit parent diff context.
+    /// Run a queued scope diff.
     ///
     /// Invariant: the scope id is live and its render driver owns the scope's current props and
     /// rendered output.
-    pub(crate) fn run_and_diff_scope_with_context(
+    pub(crate) fn run_and_diff_scope(
         &mut self,
         to: Option<&mut (dyn WriteMutations + '_)>,
         scope_id: ScopeId,
-        parent_context: Option<DiffContext<'_>>,
     ) {
-        let mut state = DiffState::new_with_context(self, to, parent_context);
+        let mut state = DiffState::new(self, to);
         let context = state.context();
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let to = state.to.as_deref_mut();

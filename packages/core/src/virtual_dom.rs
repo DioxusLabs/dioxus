@@ -530,9 +530,10 @@ impl VirtualDom {
             }
         }
 
-        // Effects that were dirtied by task wakeups (e.g. a subscribed signal
-        // written from a future) need to fire now — no render pass is coming
-        // to flush them.
+        // Effects are normally run after a render pass wakes the scheduler. If
+        // task polling queued effects without dirtying any scope, wait_for_work
+        // will not return for a render pass, so drain them before going back to
+        // sleep.
         self.drain_remaining_effects();
     }
 
@@ -688,11 +689,7 @@ impl VirtualDom {
                 Work::PollTask(task) => deferred_tasks.push(task),
                 Work::RerunScope(scope) => {
                     self.runtime.clone().while_rendering(|| {
-                        self.run_and_diff_scope_with_context(
-                            Some(to as &mut dyn WriteMutations),
-                            scope.id,
-                            None,
-                        );
+                        self.run_and_diff_scope(Some(to as &mut dyn WriteMutations), scope.id);
                     });
                 }
             }
@@ -821,7 +818,7 @@ impl VirtualDom {
                     if run_scope {
                         // Run the scope and diff it without writing mutations.
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope_with_context(None, scope_id, None);
+                            self.run_and_diff_scope(None, scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);

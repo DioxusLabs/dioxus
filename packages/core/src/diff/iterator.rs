@@ -122,7 +122,13 @@ impl DiffState<'_, '_, '_, '_> {
         old_suffix_start: usize,
         new_suffix_start: usize,
     ) {
-        self.diff_child_pairs(&old[..prefix], &old_mounts[..prefix], &new[..prefix], new_mounts, 0);
+        self.diff_child_pairs(
+            &old[..prefix],
+            &old_mounts[..prefix],
+            &new[..prefix],
+            new_mounts,
+            0,
+        );
         self.diff_child_pairs(
             &old[old_suffix_start..],
             &old_mounts[old_suffix_start..],

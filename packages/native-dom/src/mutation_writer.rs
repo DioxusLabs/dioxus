@@ -104,11 +104,14 @@ impl<N: Copy> StackState<N> {
             .expect("renderer stack unexpectedly empty")
     }
 
-    fn replace_top(&mut self, node: N, element_id: Option<ElementId>) {
+    fn replace_top(&mut self, node: N) {
         *self
             .stack
             .last_mut()
-            .expect("renderer stack unexpectedly empty") = StackEntry { node, element_id };
+            .expect("renderer stack unexpectedly empty") = StackEntry {
+            node,
+            element_id: None,
+        };
     }
 
     fn pop_nodes(&mut self, m: usize) -> Vec<N> {
@@ -146,7 +149,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
     fn child(&mut self, index: usize) {
         let parent = self.state.top().node;
         let child = self.backend.nth_child(parent, index);
-        self.state.replace_top(child, None);
+        self.state.replace_top(child);
     }
 
     fn pop(&mut self) {
@@ -166,7 +169,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
     fn clone(&mut self) {
         let node = self.state.top().node;
         let cloned = self.backend.deep_clone(node);
-        self.state.replace_top(cloned, None);
+        self.state.replace_top(cloned);
     }
 
     fn append_children(&mut self, m: usize) {

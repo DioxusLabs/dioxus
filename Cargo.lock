@@ -3927,15 +3927,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-playwright-empty-root-hydration-test"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "dioxus-playwright-fullstack-error-codes-test"
 version = "0.1.0"
 dependencies = [

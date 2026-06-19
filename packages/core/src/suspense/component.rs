@@ -720,7 +720,7 @@ impl SuspenseBoundaryProps {
             currently_rendered.as_vnode().remove_node(
                 currently_rendered.root_mount(),
                 &mut *dom,
-                None,
+                Some(to),
             );
 
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
@@ -931,7 +931,7 @@ fn flush_retained_branch_scopes(dom: &mut VirtualDom, scope_id: ScopeId) {
             .is_some();
         if run_scope {
             dom.runtime.clone().while_rendering(|| {
-                dom.run_and_diff_scope_with_context(None, dirty_scope, None);
+                dom.run_and_diff_scope(None, dirty_scope);
             });
         }
     }
@@ -1072,7 +1072,7 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     if dom.mark_clean(scope_id) {
-                        dom.run_and_diff_scope_with_context(None, scope_id, None);
+                        dom.run_and_diff_scope(None, scope_id);
                     }
 
                     let rendered = dom.scopes[scope_id.index()]

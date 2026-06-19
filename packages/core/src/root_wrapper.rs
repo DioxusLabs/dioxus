@@ -24,10 +24,10 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
         <SuspenseBoundaryProps as Properties>::builder()
             .fallback(|_| Element::Ok(VNode::placeholder()))
             .children(Element::Ok(component_vnode(
-                <ErrorBoundaryProps as Properties>::builder()
+                <ErrorBoundaryProps as Properties>::component_builder(ErrorBoundary)
                     .children(Element::Ok(component_vnode(props.0)))
                     .build()
-                    .into_vcomponent(ErrorBoundary),
+                    .into_vcomponent(),
             )))
             .build()
             .into_vcomponent(SuspenseBoundary),

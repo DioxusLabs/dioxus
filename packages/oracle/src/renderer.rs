@@ -106,11 +106,14 @@ impl<N: Copy> StackState<N> {
             .expect("renderer stack unexpectedly empty")
     }
 
-    fn replace_top(&mut self, node: N, element_id: Option<ElementId>) {
+    fn replace_top(&mut self, node: N) {
         *self
             .stack
             .last_mut()
-            .expect("renderer stack unexpectedly empty") = StackEntry { node, element_id };
+            .expect("renderer stack unexpectedly empty") = StackEntry {
+            node,
+            element_id: None,
+        };
     }
 
     fn pop_nodes(&mut self, m: usize) -> Vec<N> {
@@ -148,7 +151,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
     fn child(&mut self, index: usize) {
         let parent = self.state.top().node;
         let child = self.backend.nth_child(parent, index);
-        self.state.replace_top(child, None);
+        self.state.replace_top(child);
     }
 
     fn pop(&mut self) {
@@ -168,7 +171,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
     fn clone(&mut self) {
         let node = self.state.top().node;
         let cloned = self.backend.deep_clone(node);
-        self.state.replace_top(cloned, None);
+        self.state.replace_top(cloned);
     }
 
     fn append_children(&mut self, m: usize) {
@@ -748,12 +751,12 @@ impl<W: WriteMutations> EditCountingWriter<'_, W> {
         self.element_stack.truncate(split);
     }
 
-    fn replace_top_element(&mut self, id: Option<ElementId>, op: &str) {
+    fn replace_top_element(&mut self, op: &str) {
         *self
             .element_stack
             .last_mut()
             .unwrap_or_else(|| panic!("renderer element stack unexpectedly empty during {op}")) =
-            id;
+            None;
     }
 }
 
@@ -790,7 +793,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
     fn child(&mut self, index: usize) {
         // The selected child keeps the current top's source, so the shadow stack
         // is unchanged.
-        self.replace_top_element(None, "child");
+        self.replace_top_element("child");
         self.inner.child(index);
     }
 
@@ -818,7 +821,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
             .last_mut()
             .expect("renderer source stack unexpectedly empty during clone") =
             StackSource::PrototypeClone;
-        self.replace_top_element(None, "clone");
+        self.replace_top_element("clone");
         WriteMutations::clone(&mut self.inner);
     }
 

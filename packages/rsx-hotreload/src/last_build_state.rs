@@ -176,10 +176,10 @@ impl TemplateBodyPools {
         pools
     }
 
-    fn push_dynamic_node(&mut self, node: BodyNode, component_literal_indexes: Option<Vec<usize>>) {
+    fn push_dynamic_node(&mut self, node: BodyNode) {
         self.dynamic_nodes.push(node);
         self.component_literal_indexes_by_dynamic_node
-            .push(component_literal_indexes);
+            .push(None);
     }
 
     fn push_formatted(&mut self, segments: &HotReloadFormattedSegment) {
@@ -192,7 +192,7 @@ impl TemplateBodyPools {
 
     fn push_component(&mut self, component: &Component) {
         let mut literal_indexes = Vec::new();
-        self.push_dynamic_node(BodyNode::Component(component.clone()), None);
+        self.push_dynamic_node(BodyNode::Component(component.clone()));
         let dynamic_node_index = self.component_literal_indexes_by_dynamic_node.len() - 1;
 
         for property in &component.fields {
@@ -237,7 +237,7 @@ impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
     ) -> Option<()> {
         match node {
             BodyNode::Text(text) => {
-                self.push_dynamic_node(node.clone(), None);
+                self.push_dynamic_node(node.clone());
                 self.push_formatted(&text.input);
             }
             BodyNode::Component(component) => {
@@ -247,7 +247,7 @@ impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
             | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
             | BodyNode::SyntheticBoundary(_) => {
-                self.push_dynamic_node(node.clone(), None);
+                self.push_dynamic_node(node.clone());
             }
             BodyNode::Element(_) => {
                 unreachable!("elements are not dynamic nodes in the fill-order traversal")
