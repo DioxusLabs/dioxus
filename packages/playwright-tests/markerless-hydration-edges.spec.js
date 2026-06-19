@@ -248,3 +248,31 @@ test("textarea dynamic body hydrates without markers and updates", async ({
   await page.locator("#textarea-hydration-update").click();
   await expect(textarea).toHaveValue("updated textarea body");
 });
+
+// `textarea`/`pre`/`listing` are raw-text elements: the HTML parser strips one
+// newline immediately after the start tag, but SSR emits the dynamic body
+// verbatim. Markerless hydration reconstructs text positions by UTF-16 length,
+// so a leading `\n` must not desync that contract — the dynamic body has to stay
+// bound to the right text node and updates must land on it (not appended to a
+// mis-bound trailing node, and without a hydration mismatch). Assertions are
+// kept independent of whether the fix preserves or strips the leading newline.
+test("raw-text elements with a leading newline hydrate and update correctly", async ({
+  page,
+}) => {
+  await page.goto(URL);
+  await page.waitForTimeout(2000);
+
+  const textarea = page.locator("#textarea-leading-newline");
+  await expect(textarea).toHaveValue(/BODY/);
+  await page.locator("#textarea-leading-newline-update").click();
+  // The update must replace the body on the correct text node. A mis-bound
+  // dynamic would leave the original body behind or append to the wrong node.
+  await expect(textarea).toHaveValue(/NEW/);
+  await expect(textarea).not.toHaveValue(/BODY/);
+
+  const pre = page.locator("#pre-leading-newline");
+  await expect(pre).toContainText("CODE");
+  await page.locator("#pre-leading-newline-update").click();
+  await expect(pre).toContainText("CHANGED");
+  await expect(pre).not.toContainText("CODE");
+});

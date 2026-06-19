@@ -23,6 +23,50 @@ fn app() -> Element {
         SvgHydratedListener {}
         EmptyRootHydration {}
         TextareaHydration {}
+        TextareaLeadingNewline {}
+        PreLeadingNewline {}
+    }
+}
+
+// `textarea`, `pre`, and `listing` are raw-text elements: the HTML parser strips
+// one newline immediately after the start tag. When the first text contribution
+// starts with `\n`, the markerless walk — which reconstructs text-node positions
+// by UTF-16 length — must keep the dynamic body bound to the correct text node
+// so later updates land on it, rather than splitting against a length the parser
+// already shortened (which mis-binds the body or raises a hydration mismatch).
+// Regression for the leading-newline case of
+// https://github.com/DioxusLabs/dioxus/issues/5548.
+#[component]
+fn TextareaLeadingNewline() -> Element {
+    let mut value = use_signal(|| "BODY".to_string());
+
+    rsx! {
+        textarea { id: "textarea-leading-newline",
+            "\n"
+            "{value}"
+        }
+        button {
+            id: "textarea-leading-newline-update",
+            onclick: move |_| value.set("NEW".to_string()),
+            "update textarea newline"
+        }
+    }
+}
+
+#[component]
+fn PreLeadingNewline() -> Element {
+    let mut value = use_signal(|| "CODE".to_string());
+
+    rsx! {
+        pre { id: "pre-leading-newline",
+            "\n"
+            "{value}"
+        }
+        button {
+            id: "pre-leading-newline-update",
+            onclick: move |_| value.set("CHANGED".to_string()),
+            "update pre newline"
+        }
     }
 }
 
