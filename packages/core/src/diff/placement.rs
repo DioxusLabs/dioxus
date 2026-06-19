@@ -449,11 +449,11 @@ fn root_content_after_slot(
     // Values sharing this slot's anchor were already considered by the caller
     // (adjacent `{a}{b}` root dynamics lower to one anchor), so begin at the
     // next root position and look for the first later root's live content.
-    ((our_root_idx + 1)..probe.template.root_count()).find_map(|next_cursor| {
+    ((our_root_idx + 1)..dom.mounted_root_count(parent_mount)).find_map(|next_cursor| {
         find_root_dynamic_slot(&probe, next_cursor, ElementEdge::First, |slot| {
             live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)
         })
-        .or_else(|| static_root_element(&probe, parent_mount, next_cursor, dom))
+        .or_else(|| static_root_element(parent_mount, next_cursor, dom))
     })
 }
 
@@ -478,13 +478,12 @@ pub(super) fn find_root_dynamic_slot<T>(
 }
 
 pub(super) fn static_root_element(
-    vnode: &VNode,
     mount: MountId,
     root_idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     debug_assert!(
-        root_idx < vnode.template.root_count(),
+        root_idx < dom.mounted_root_count(mount),
         "root lookup must stay within the vnode template"
     );
     dom.mounted_root_node(mount, root_idx)

@@ -30,14 +30,6 @@ pub struct Template {
     )]
     anchors: &'static [TemplateAnchor],
 
-    /// Total number of runtime dynamic values this template expects.
-    #[cfg_attr(feature = "serialize", serde(skip))]
-    dynamic_value_count: u16,
-
-    /// Total number of root positions in this template.
-    #[cfg_attr(feature = "serialize", serde(skip))]
-    root_count: u16,
-
     /// Compile-time hash of template content for reliable cross-crate comparison.
     /// This ensures identical templates compare equal regardless of optimization levels.
     ///
@@ -80,8 +72,6 @@ impl Template {
             ops,
             strings,
             anchors,
-            dynamic_value_count: Self::compute_dynamic_value_count(anchors),
-            root_count: Self::compute_root_count(ops, anchors),
             hash: Self::compute_hash(ops, strings, anchors, value_kind_hash),
         }
     }
@@ -150,25 +140,16 @@ impl Template {
     pub fn anchors_in_document_order(
         &self,
     ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
-        (0..self.dynamic_value_count()).filter_map(move |idx| {
+        let value_count = Self::compute_dynamic_value_count(self.anchors) as usize;
+        (0..value_count).filter_map(move |idx| {
             self.anchors
                 .iter()
                 .find(|anchor| anchor.values().start == idx)
         })
     }
 
-    /// Return the total number of dynamic values.
-    pub fn dynamic_value_count(&self) -> usize {
-        self.dynamic_value_count as usize
-    }
-
     pub fn anchor_for_value(&self, idx: usize) -> Option<&'static TemplateAnchor> {
         self.anchors.iter().find(|a| a.values().contains(&idx))
-    }
-
-    /// Get the number of root positions in this template.
-    pub fn root_count(&self) -> usize {
-        self.root_count as usize
     }
 
     /// Get a static string from this template's string pool.
@@ -450,27 +431,6 @@ impl Template {
         max
     }
 
-    const fn compute_root_count(ops: &[TemplateOp], anchors: &[TemplateAnchor]) -> u16 {
-        let mut count = 0u16;
-        let mut op = 0usize;
-        while op < ops.len() {
-            if Self::is_static_node_op_in(ops, op) {
-                count += 1;
-            }
-            op = Self::next_sibling_op_in(ops, op);
-        }
-
-        let mut i = 0usize;
-        while i < anchors.len() {
-            if anchors[i].parent_op_index == super::anchor::ROOT_PARENT_OP_INDEX {
-                count += 1;
-            }
-            i += 1;
-        }
-
-        count
-    }
-
     const fn is_static_node_op_in(ops: &[TemplateOp], op: usize) -> bool {
         match ops[op].decode() {
             DecodedTemplateOp::Enter { .. } => true,
@@ -573,8 +533,6 @@ impl<'de> serde::Deserialize<'de> for Template {
             ops: serialized.ops,
             strings: serialized.strings,
             anchors: serialized.anchors,
-            dynamic_value_count: Self::compute_dynamic_value_count(serialized.anchors),
-            root_count: Self::compute_root_count(serialized.ops, serialized.anchors),
             hash: serialized.hash,
         })
     }

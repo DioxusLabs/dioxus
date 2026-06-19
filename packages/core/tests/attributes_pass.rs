@@ -18,7 +18,7 @@ fn attributes_pass_properly() {
     let template = &o.template;
 
     // The three numeric attributes (cx, cy, r) are dynamic; there are no dynamic nodes.
-    assert_eq!(template.dynamic_value_count(), 3);
+    assert_eq!(o.dynamic_values().len(), 3);
 
     let circle = template
         .root_slots()

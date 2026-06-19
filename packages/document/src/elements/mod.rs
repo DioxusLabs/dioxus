@@ -85,7 +85,7 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    match (static_root, dynamic_root, template.dynamic_value_count()) {
+    match (static_root, dynamic_root, vnode.dynamic_values().len()) {
         // rsx! { "static text" }
         (Some(root), None, 0) => template
             .static_text_at_op(root)
@@ -114,7 +114,7 @@ mod tests {
         static STORAGE: TemplateStorage<2, 1, 0> = TemplateStorage::build_from_tree(&TREE);
         let children = Ok(VNode::new(
             STORAGE.as_template(),
-            DynamicValues::new(None, Box::new([])),
+            DynamicValues::from_parts(None, Box::new([])),
         ));
 
         assert_eq!(
@@ -129,7 +129,7 @@ mod tests {
         static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
         let children = Ok(VNode::new(
             STORAGE.as_template(),
-            DynamicValues::new(
+            DynamicValues::from_parts(
                 None,
                 Box::new([DynamicValue::Node(DynamicNode::Text(VText::new(
                     "title: dynamic text",

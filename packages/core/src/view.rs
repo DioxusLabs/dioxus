@@ -106,7 +106,7 @@ impl<V: View> ViewExt for V {
 /// Convert a view into a [`VNode`] using a prepared template.
 #[inline]
 fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
-    let mut dynamic = DynamicValues::with_capacity(template.dynamic_value_count());
+    let mut dynamic = DynamicValues::new();
     view.push(&mut dynamic);
     VNode::new(*template, dynamic)
 }

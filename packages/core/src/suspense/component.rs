@@ -1007,11 +1007,12 @@ fn replace_placeholder_with(
     let parent = dom.mounted_render_parent(placeholder.root_mount());
     if to.is_some() {
         if let Some(id) = placeholder.mounted_vnode().mounted_root(0, dom) {
-            let child_owns_placeholder_id = (0..children.template.root_count()).any(|root_idx| {
-                children
-                    .mounted_root(root_idx, dom)
-                    .is_some_and(|root_id| root_id == id)
-            });
+            let child_owns_placeholder_id =
+                (0..dom.mounted_root_count(children.mount())).any(|root_idx| {
+                    children
+                        .mounted_root(root_idx, dom)
+                        .is_some_and(|root_id| root_id == id)
+                });
 
             if child_owns_placeholder_id {
                 return;

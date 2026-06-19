@@ -1,4 +1,5 @@
 use crate::PendingDesktopWindow;
+use crate::WeakDesktopContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
@@ -6,7 +7,6 @@ use crate::{
     edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
     waker::tao_waker,
 };
-use crate::WeakDesktopContext;
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
@@ -594,18 +594,16 @@ impl PendingWebview {
 
     pub(crate) fn create_window(
         self,
-        shared_dom: &mut VirtualDom,
+        dom: &mut VirtualDom,
         shared: &Rc<SharedContext>,
-    ) -> (RenderTargetId, WebviewInstance) {
-        let window = WebviewInstance::new(
-            self.cfg,
-            self.target_id,
-            shared_dom,
-            shared.clone(),
-        );
+    ) -> crate::app::AppWebview {
+        let window = WebviewInstance::new(self.cfg, self.target_id, dom, shared.clone());
 
         _ = self.sender.send(window.desktop_context.clone());
 
-        (self.target_id, window)
+        crate::app::AppWebview {
+            target_id: self.target_id,
+            webview: window,
+        }
     }
 }

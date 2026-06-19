@@ -373,7 +373,7 @@ fn build_suspense_child_vnode(
 
     VNode::new(
         template,
-        DynamicValues::new(
+        DynamicValues::from_parts(
             None,
             Box::new([DynamicValue::Node(DynamicNode::Fragment(vec![child]))]),
         ),
@@ -441,7 +441,7 @@ fn build_vnode_with_suspense(
 
     VNode::new(
         template,
-        DynamicValues::new(
+        DynamicValues::from_parts(
             spec.key.map(|key| format!("k{key}")),
             dynamic_values.into_boxed_slice(),
         ),
@@ -841,8 +841,8 @@ mod tests {
             ]
         );
         assert_eq!(template.strings()[0], "tag1");
-        assert_eq!(template.root_count(), 1);
-        assert_eq!(template.dynamic_value_count(), 1);
+        assert_eq!(template.root_slots().count(), 1);
+        assert_eq!(dynamic_value_count(template), 1);
     }
 
     #[test]
@@ -879,6 +879,16 @@ mod tests {
             template.static_attr_at_op(5),
             Some(("attr2", "static3", None))
         );
-        assert_eq!(template.dynamic_value_count(), 2);
+        assert_eq!(dynamic_value_count(template), 2);
+    }
+
+    /// The number of dynamic values a template declares, derived structurally from its anchors.
+    fn dynamic_value_count(template: Template) -> usize {
+        template
+            .anchors()
+            .iter()
+            .map(|anchor| anchor.values().end)
+            .max()
+            .unwrap_or(0)
     }
 }

@@ -172,7 +172,7 @@ fn default_handler(errors: ErrorContext) -> Element {
 
     std::result::Result::Ok(VNode::new(
         TEMPLATE,
-        DynamicValues::new(
+        DynamicValues::from_parts(
             None,
             Box::new([DynamicValue::Node(
                 errors
@@ -191,7 +191,7 @@ fn default_handler(errors: ErrorContext) -> Element {
 
                         VNode::new(
                             INNER_TEMPLATE,
-                            DynamicValues::new(
+                            DynamicValues::from_parts(
                                 None,
                                 Box::new([DynamicValue::Node(e.to_string().into_dyn_node())]),
                             ),
@@ -343,7 +343,7 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
 
             VNode::new(
                 TEMPLATE,
-                DynamicValues::new(
+                DynamicValues::from_parts(
                     None,
                     Box::new([DynamicValue::Node((props.children).into_dyn_node())]),
                 ),

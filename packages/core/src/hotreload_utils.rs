@@ -297,7 +297,10 @@ impl DynamicValuePool {
             })
             .collect();
 
-        VNode::new(hot_reload.template, DynamicValues::new(key, dynamic_values))
+        VNode::new(
+            hot_reload.template,
+            DynamicValues::from_parts(key, dynamic_values),
+        )
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
@@ -409,7 +412,7 @@ impl HotReloadedTemplate {
 
     /// Return the number of root positions in the template.
     pub fn root_count(&self) -> usize {
-        self.template.root_count()
+        self.template.root_slots().count()
     }
 
     /// Return decoded template operations for inspection.

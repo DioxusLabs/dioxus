@@ -105,9 +105,9 @@ pub(crate) struct Mount {
 
     mode: RenderMode,
 
-    root_count: usize,
+    root_slots: Box<[PackedMountedSlot]>,
 
-    mounted_slots: Box<[PackedMountedSlot]>,
+    dynamic_slots: Box<[PackedMountedSlot]>,
 
     fragment_child_mounts: Vec<MountId>,
 }
@@ -119,16 +119,18 @@ impl Mount {
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
     ) -> Self {
-        let root_count = node.template.root_count();
-        let dynamic_count = node.template.dynamic_value_count();
+        // Root and dynamic-value slot counts are structural: the root array length is the number
+        // of template root positions, and the dynamic array length is the number of runtime values.
+        let root_count = node.template.root_slots().count();
+        let dynamic_count = node.dynamic_values().len();
         Self {
             render_parent,
             logical_parent,
             target_id,
             node,
             mode: RenderMode::Foreground,
-            root_count,
-            mounted_slots: vec![PackedMountedSlot::empty(); root_count + dynamic_count].into(),
+            root_slots: vec![PackedMountedSlot::empty(); root_count].into(),
+            dynamic_slots: vec![PackedMountedSlot::empty(); dynamic_count].into(),
             fragment_child_mounts: Vec::new(),
         }
     }
@@ -159,19 +161,19 @@ impl Mount {
     }
 
     fn dynamic_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.mounted_slots[self.root_count + idx]
+        self.dynamic_slots[idx]
     }
 
     fn dynamic_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.mounted_slots[self.root_count + idx]
+        &mut self.dynamic_slots[idx]
     }
 
     fn root_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.mounted_slots[idx]
+        self.root_slots[idx]
     }
 
     fn root_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.mounted_slots[idx]
+        &mut self.root_slots[idx]
     }
 }
 
@@ -252,11 +254,11 @@ impl VirtualDom {
     }
 
     pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.root_count)
+        self.with_mount(mount, |mount| mount.root_slots.len())
     }
 
     pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.mounted_slots.len() - mount.root_count)
+        self.with_mount(mount, |mount| mount.dynamic_slots.len())
     }
 
     pub(crate) fn mounted_dynamic_node_slot_snapshot(

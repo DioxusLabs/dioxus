@@ -277,17 +277,17 @@ impl VNode {
 
     fn has_live_dom(&self, mount: MountId, dom: &VirtualDom) -> bool {
         debug_assert_eq!(
-            self.template.root_count(),
+            self.template.root_slots().count(),
             dom.mounted_root_count(mount),
             "mounted root count must match the vnode template"
         );
         debug_assert_eq!(
-            self.template.dynamic_value_count(),
+            self.dynamic_values.len(),
             dom.mounted_dyn_node_count(mount),
             "slot count"
         );
 
-        if (0..self.template.root_count()).any(|root_idx| {
+        if (0..dom.mounted_root_count(mount)).any(|root_idx| {
             dom.mounted_root_node(mount, root_idx)
                 .is_some_and(|id| dom.element_exists_for_mount(mount, id))
         }) {
@@ -311,7 +311,7 @@ impl VNode {
         target_id: crate::RenderTargetId,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        edge.find_map(self.template.root_count(), |root_idx| {
+        edge.find_map(dom.mounted_root_count(mount), |root_idx| {
             let dynamic =
                 || self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge);
             let static_root =
@@ -539,7 +539,7 @@ impl VNode {
             }
         }
 
-        for idx in 0..self.template.root_count() {
+        for idx in 0..dom.mounted_root_count(mount) {
             let Some(id) = dom.mounted_root_node(mount, idx) else {
                 // Already reclaimed during a previous `move_node_to_background`.
                 continue;

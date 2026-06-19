@@ -120,17 +120,19 @@ impl DesktopService {
     ///
     /// ```rust, no_run
     /// use dioxus::prelude::*;
-    /// fn popup() -> Element {
-    ///     rsx! {
-    ///         div { "This is a popup window!" }
-    ///     }
-    /// }
     ///
     /// # async fn app() {
-    /// // Create and wait for the window
-    /// let window = dioxus::desktop::window().new_window(Default::default()).await;
-    /// // Fullscreen the new window
+    /// // Create the window and keep its render target.
+    /// let pending_window = dioxus::desktop::window().new_window(Default::default());
+    /// let target = pending_window.target_id();
+    ///
+    /// // Wait for the desktop context to be created.
+    /// let window = pending_window.await;
     /// window.set_fullscreen(true);
+    ///
+    /// // Render into `target` from the app's existing VDOM, for example with
+    /// // the `Window` component or a `Portal`.
+    /// let _ = target;
     /// # }
     /// ```
     // Note: This method is asynchronous because webview2 does not support creating a new window from
@@ -357,7 +359,7 @@ fn is_main_thread() -> bool {
 /// // Now control the window
 /// window.set_fullscreen(true);
 ///
-/// // Render into `target` with `Portal { target, ... }`.
+/// // Render into `target` from the app's existing VDOM.
 /// # }
 /// ```
 pub struct PendingDesktopWindow {

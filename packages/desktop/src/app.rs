@@ -32,7 +32,7 @@ pub(crate) struct App {
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
     pub(crate) cfg: Cell<Option<Config>>,
     pub(crate) dom: VirtualDom,
-    pub(crate) dom_rebuilt: bool,
+    pub(crate) initial_dom_rebuild_done: bool,
 
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
@@ -82,7 +82,7 @@ impl App {
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             dom: virtual_dom,
-            dom_rebuilt: false,
+            initial_dom_rebuild_done: false,
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
@@ -200,15 +200,9 @@ impl App {
 
     pub fn handle_new_window(&mut self) {
         for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let (target_id, window) = pending_webview.create_window(&mut self.dom, &self.shared);
-            let id = window.desktop_context.window.id();
-            self.webviews.insert(
-                id,
-                AppWebview {
-                    target_id,
-                    webview: window,
-                },
-            );
+            let app_webview = pending_webview.create_window(&mut self.dom, &self.shared);
+            let id = app_webview.webview.desktop_context.window.id();
+            self.webviews.insert(id, app_webview);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
@@ -241,8 +235,8 @@ impl App {
     }
 
     /// Tear down one webview: fire close callbacks, drop the webview (and
-    /// with it the target's writer), re-render the shared DOM, and exit if it
-    /// was the last window (or the root target of a shared DOM).
+    /// with it the target's writer), re-render the DOM, and exit if it was
+    /// the last window or the root target.
     fn close_window(&mut self, id: WindowId) {
         let Some(target_id) = self.webviews.get(&id).map(|window| window.target_id) else {
             return;
@@ -255,11 +249,11 @@ impl App {
 
         self.shared.window_close_handlers.notify(id);
 
-        // Dropping the webview drops its WryQueue with it; the next
-        // shared-DOM render pass simply won't include the target.
+        // Dropping the webview drops its WryQueue with it; the next render
+        // pass simply won't include the target.
         self.webviews.remove(&id);
 
-        self.render_shared_dom_after_webview_removed();
+        self.render_after_webview_removed();
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
@@ -353,8 +347,8 @@ impl App {
             return;
         };
 
-        if !self.dom_rebuilt {
-            let touched = self.rebuild_shared_dom();
+        if !self.initial_dom_rebuild_done {
+            let touched = self.rebuild_dom();
             self.send_edits_to_targets(&touched);
         }
 
@@ -487,73 +481,6 @@ impl App {
     ///
     /// All IO is done on the tokio runtime we started earlier
     pub fn poll_vdom(&mut self, id: WindowId) {
-        self.poll_shared_vdom(id);
-    }
-
-    /// Build the writer for one shared-DOM render pass: every shared webview's
-    /// `WryQueue` keyed by its target id, with each queue's `touched` flag
-    /// cleared so we can detect which targets receive writes during the pass.
-    fn shared_dom_writer(&self) -> BTreeMap<RenderTargetId, crate::edits::WryQueue> {
-        self.webviews
-            .values()
-            .map(|app_webview| {
-                app_webview.webview.edits.wry_queue.clear_touched();
-                (
-                    app_webview.target_id,
-                    app_webview.webview.edits.wry_queue.clone(),
-                )
-            })
-            .collect()
-    }
-
-    /// Collect every shared-DOM webview whose `WryQueue` was touched during the
-    /// preceding render pass. The diff writes directly into each registered
-    /// queue (the `WriteMutations` impl on `WryQueue`), so a touched queue
-    /// means "this webview has new edits to flush".
-    fn collect_touched(&self) -> BTreeSet<RenderTargetId> {
-        self.webviews
-            .values()
-            .filter(|app_webview| app_webview.webview.edits.wry_queue.is_touched())
-            .map(|app_webview| app_webview.target_id)
-            .collect()
-    }
-
-    fn rebuild_shared_dom(&mut self) -> BTreeSet<RenderTargetId> {
-        let mut writer = self.shared_dom_writer();
-        self.dom.rebuild(&mut writer);
-        self.dom_rebuilt = true;
-        self.collect_touched()
-    }
-
-    fn render_shared_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
-        let mut writer = self.shared_dom_writer();
-        self.dom.render_immediate(&mut writer);
-        self.collect_touched()
-    }
-
-    fn render_shared_dom_after_webview_removed(&mut self) {
-        let touched = self.render_shared_dom_immediate();
-        self.send_edits_to_targets(&touched);
-        self.poll_next_shared_webview();
-    }
-
-    fn send_edits_to_targets(&self, targets: &BTreeSet<RenderTargetId>) {
-        for app_webview in self.webviews.values() {
-            if targets.contains(&app_webview.target_id) {
-                app_webview.webview.edits.wry_queue.send_edits();
-            }
-        }
-    }
-
-    fn poll_next_shared_webview(&mut self) {
-        let next_shared_webview = self.webviews.keys().next().copied();
-
-        if let Some(id) = next_shared_webview {
-            self.poll_shared_vdom(id);
-        }
-    }
-
-    fn poll_shared_vdom(&mut self, id: WindowId) {
         let Some(waker) = self
             .webviews
             .get(&id)
@@ -564,7 +491,7 @@ impl App {
         let mut cx = std::task::Context::from_waker(&waker);
 
         loop {
-            if self.poll_shared_webview_queues(&mut cx) {
+            if self.poll_webview_queues(&mut cx) {
                 return;
             }
 
@@ -585,12 +512,75 @@ impl App {
             #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
-            let touched = self.render_shared_dom_immediate();
+            let touched = self.render_dom_immediate();
             self.send_edits_to_targets(&touched);
         }
     }
 
-    fn poll_shared_webview_queues(&self, cx: &mut std::task::Context<'_>) -> bool {
+    /// Build the writer for one render pass: every webview's `WryQueue` keyed
+    /// by its target id, with each queue's `touched` flag cleared so we can
+    /// detect which targets receive writes during the pass.
+    fn dom_writer(&self) -> BTreeMap<RenderTargetId, crate::edits::WryQueue> {
+        self.webviews
+            .values()
+            .map(|app_webview| {
+                app_webview.webview.edits.wry_queue.clear_touched();
+                (
+                    app_webview.target_id,
+                    app_webview.webview.edits.wry_queue.clone(),
+                )
+            })
+            .collect()
+    }
+
+    /// Collect every webview whose `WryQueue` was touched during the preceding
+    /// render pass. The diff writes directly into each registered queue (the
+    /// `WriteMutations` impl on `WryQueue`), so a touched queue means "this
+    /// webview has new edits to flush".
+    fn collect_touched(&self) -> BTreeSet<RenderTargetId> {
+        self.webviews
+            .values()
+            .filter(|app_webview| app_webview.webview.edits.wry_queue.is_touched())
+            .map(|app_webview| app_webview.target_id)
+            .collect()
+    }
+
+    fn rebuild_dom(&mut self) -> BTreeSet<RenderTargetId> {
+        let mut writer = self.dom_writer();
+        self.dom.rebuild(&mut writer);
+        self.initial_dom_rebuild_done = true;
+        self.collect_touched()
+    }
+
+    fn render_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
+        let mut writer = self.dom_writer();
+        self.dom.render_immediate(&mut writer);
+        self.collect_touched()
+    }
+
+    fn render_after_webview_removed(&mut self) {
+        let touched = self.render_dom_immediate();
+        self.send_edits_to_targets(&touched);
+        self.poll_next_webview();
+    }
+
+    fn send_edits_to_targets(&self, targets: &BTreeSet<RenderTargetId>) {
+        for app_webview in self.webviews.values() {
+            if targets.contains(&app_webview.target_id) {
+                app_webview.webview.edits.wry_queue.send_edits();
+            }
+        }
+    }
+
+    fn poll_next_webview(&mut self) {
+        let next_webview = self.webviews.keys().next().copied();
+
+        if let Some(id) = next_webview {
+            self.poll_vdom(id);
+        }
+    }
+
+    fn poll_webview_queues(&self, cx: &mut std::task::Context<'_>) -> bool {
         let mut has_pending_edits = false;
 
         for app_webview in self.webviews.values() {

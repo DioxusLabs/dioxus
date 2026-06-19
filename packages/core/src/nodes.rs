@@ -37,7 +37,7 @@ impl DynamicValues {
     /// `(name, namespace)`. Duplicate keys keep their relative input order, giving
     /// last-wins semantics for spread attributes like `..props.attributes`.
     #[inline]
-    pub fn new(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
+    pub fn from_parts(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
         let mut values = Self {
             key,
             dynamic_values: dynamic_values.into_vec(),
@@ -46,11 +46,11 @@ impl DynamicValues {
         values
     }
 
-    /// Create an empty dynamic values payload with known capacity.
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    /// Create an empty dynamic values payload.
+    pub(crate) fn new() -> Self {
         Self {
             key: None,
-            dynamic_values: Vec::with_capacity(capacity),
+            dynamic_values: Vec::new(),
         }
     }
 
@@ -176,7 +176,7 @@ impl VNode {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     template: EMPTY_TEMPLATE,
-                    view: DynamicValues::new(
+                    view: DynamicValues::from_parts(
                         None,
                         Box::new([DynamicValue::Node(DynamicNode::Fragment(Vec::new()))]),
                     ),
@@ -203,7 +203,7 @@ impl VNode {
             cell.get_or_init(move || {
                 Rc::new(VNodeInner {
                     template: ERROR_ANCHOR_TEMPLATE,
-                    view: DynamicValues::new(
+                    view: DynamicValues::from_parts(
                         None,
                         Box::new([DynamicValue::Node(DynamicNode::Text(VText {
                             value: String::new(),
@@ -220,8 +220,14 @@ impl VNode {
     pub fn new(template: Template, mut values: DynamicValues) -> Self {
         values.normalize();
 
-        assert!(
-            values.dynamic_values.len() == template.dynamic_value_count(),
+        debug_assert!(
+            values.dynamic_values.len()
+                == template
+                    .anchors()
+                    .iter()
+                    .map(|anchor| anchor.values().end)
+                    .max()
+                    .unwrap_or(0),
             "bad dynamic count"
         );
 

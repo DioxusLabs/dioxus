@@ -939,6 +939,12 @@ mod tests {
         assert!(stats.ops >= template.decoded_ops().len());
         assert!(stats.strings >= template.strings().len());
         assert_eq!(stats.anchors, template.anchors().len());
-        assert_eq!(stats.dynamic_values, template.dynamic_value_count());
+        let dynamic_value_count = template
+            .anchors()
+            .iter()
+            .map(|anchor| anchor.values().end)
+            .max()
+            .unwrap_or(0);
+        assert_eq!(stats.dynamic_values, dynamic_value_count);
     }
 }
