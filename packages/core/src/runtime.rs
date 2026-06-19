@@ -599,15 +599,12 @@ fn MyComponent() -> Element {{
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
 
-        for anchor in node.dynamic_attr_anchors() {
+        for (anchor_idx, anchor) in node.dynamic_attr_anchor_indices() {
             let mut indices = node.dynamic_attr_indices_for_anchor(anchor).peekable();
             if indices.peek().is_none() {
                 continue;
             }
             let path = anchor.static_path();
-            let Some(anchor_idx) = node.anchor_index(anchor) else {
-                continue;
-            };
             let Some(id) = mount.mounted_anchor_node(anchor_idx) else {
                 continue;
             };

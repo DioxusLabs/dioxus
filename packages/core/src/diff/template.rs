@@ -7,16 +7,23 @@ use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
 /// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct DynamicNodeSlot<'a> {
-    template: &'a Template,
     anchor: &'a TemplateAnchor,
+    anchor_index: usize,
+    root_index: usize,
     index: usize,
 }
 
 impl<'a> DynamicNodeSlot<'a> {
-    pub(super) fn new(template: &'a Template, anchor: &'a TemplateAnchor, index: usize) -> Self {
+    fn new(
+        anchor: &'a TemplateAnchor,
+        anchor_index: usize,
+        root_index: usize,
+        index: usize,
+    ) -> Self {
         Self {
-            template,
             anchor,
+            anchor_index,
+            root_index,
             index,
         }
     }
@@ -25,25 +32,12 @@ impl<'a> DynamicNodeSlot<'a> {
         self.anchor.slot_target()
     }
 
-    fn static_root_index(self) -> Option<usize> {
-        match self.slot_target() {
-            TemplateSlotTarget::BeforeStatic(path) => Some(path.segment(0) as usize),
-            TemplateSlotTarget::AppendChildren(path) => {
-                (!path.is_empty()).then(|| path.segment(0) as usize)
-            }
-        }
-    }
-
     pub(super) fn index(self) -> usize {
         self.index
     }
 
     pub(super) fn anchor_index(self) -> usize {
-        self.template
-            .anchors()
-            .iter()
-            .position(|candidate| *candidate == *self.anchor)
-            .expect("dynamic node anchor belongs to template")
+        self.anchor_index
     }
 
     pub(super) fn appends(self) -> bool {
@@ -51,19 +45,7 @@ impl<'a> DynamicNodeSlot<'a> {
     }
 
     pub(super) fn root_index(self) -> usize {
-        if self.is_root_level() {
-            for (root_idx, _, dynamic_anchor) in self.template.root_slots() {
-                if dynamic_anchor.is_some_and(|anchor| *anchor == *self.anchor) {
-                    return root_idx;
-                }
-            }
-            panic!("bad root slot");
-        }
-
-        let static_root_idx = self.static_root_index().expect("bad slot root");
-        self.template
-            .materialization_root_for_static(static_root_idx)
-            .expect("bad slot root")
+        self.root_index
     }
 
     /// Return true when this dynamic node is inserted at the vnode root level, with no enclosing
@@ -129,13 +111,16 @@ impl<'a> DynamicAttrGroup<'a> {
 pub(super) fn dynamic_node_slots(
     vnode: &VNode,
 ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
-    dynamic_node_slots_for_anchors(vnode, vnode.template.anchors().iter())
+    dynamic_node_slots_for_anchors(vnode, vnode.template.anchors().iter().enumerate())
 }
 
 pub(super) fn dynamic_node_slots_in_document_order(
     vnode: &VNode,
 ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
-    dynamic_node_slots_for_anchors(vnode, vnode.template.anchors_in_document_order())
+    dynamic_node_slots_for_anchors(
+        vnode,
+        anchors_with_indices_in_document_order(&vnode.template),
+    )
 }
 
 fn dynamic_node_slots_for_anchors<'a, I>(
@@ -143,14 +128,15 @@ fn dynamic_node_slots_for_anchors<'a, I>(
     anchors: I,
 ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'a>> + 'a
 where
-    I: DoubleEndedIterator<Item = &'static TemplateAnchor> + 'a,
+    I: DoubleEndedIterator<Item = (usize, &'static TemplateAnchor)> + 'a,
 {
     let template = &vnode.template;
-    anchors.flat_map(move |anchor| {
+    anchors.flat_map(move |(anchor_index, anchor)| {
+        let root_index = anchor_root_index(template, anchor);
         anchor
             .values()
             .filter(|&index| vnode.dynamic_values[index].as_node().is_some())
-            .map(move |index| DynamicNodeSlot::new(template, anchor, index))
+            .map(move |index| DynamicNodeSlot::new(anchor, anchor_index, root_index, index))
     })
 }
 
@@ -169,5 +155,54 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
         if group.ids().next().is_some() {
             visit(group);
         }
+    }
+}
+
+fn anchors_with_indices_in_document_order(
+    template: &Template,
+) -> impl DoubleEndedIterator<Item = (usize, &'static TemplateAnchor)> + '_ {
+    let value_count = template
+        .anchors()
+        .iter()
+        .map(|anchor| anchor.values().end)
+        .max()
+        .unwrap_or(0);
+
+    (0..value_count).filter_map(move |idx| {
+        template
+            .anchors()
+            .iter()
+            .enumerate()
+            .find(|(_, anchor)| anchor.values().start == idx)
+    })
+}
+
+fn anchor_root_index(template: &Template, anchor: &TemplateAnchor) -> usize {
+    if anchor_is_root_level(anchor) {
+        for (root_idx, _, dynamic_anchor) in template.root_slots() {
+            if dynamic_anchor.is_some_and(|candidate| *candidate == *anchor) {
+                return root_idx;
+            }
+        }
+        panic!("bad root slot");
+    }
+
+    let static_root_idx = match anchor.slot_target() {
+        TemplateSlotTarget::BeforeStatic(path) => Some(path.segment(0) as usize),
+        TemplateSlotTarget::AppendChildren(path) => {
+            (!path.is_empty()).then(|| path.segment(0) as usize)
+        }
+    }
+    .expect("bad slot root");
+
+    template
+        .materialization_root_for_static(static_root_idx)
+        .expect("bad slot root")
+}
+
+fn anchor_is_root_level(anchor: &TemplateAnchor) -> bool {
+    match anchor.slot_target() {
+        TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
+        TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
     }
 }

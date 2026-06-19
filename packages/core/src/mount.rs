@@ -265,10 +265,6 @@ impl VirtualDom {
         self.with_mount(mount, |mount| mount.root_slots.len())
     }
 
-    pub(crate) fn mounted_dyn_node_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.dynamic_slots.len())
-    }
-
     pub(crate) fn mounted_anchor_node(
         &self,
         mount: MountId,

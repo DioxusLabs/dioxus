@@ -527,7 +527,8 @@ impl SuspenseBoundaryProps {
 
             if scope
                 .try_mounted_root_node()
-                .is_some_and(|root| root.vnode().has_live_dom(root.mount(), dom))
+                .and_then(|root| root.find_first_element(dom))
+                .is_some()
             {
                 return false;
             }

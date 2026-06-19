@@ -6,8 +6,8 @@ use crate::{
         CreatedVNode,
         context::{DiffFrame, DiffState},
         placement::{
-            DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, find_root_dynamic_slot,
-            insertion_site_at, insertion_site_for_slot,
+            ElementEdge, InsertionSite, at_site, create_at_site, find_root_dynamic_slot,
+            insertion_site_at, insertion_site_for_mounted_anchor, insertion_site_for_slot,
         },
         template::{
             DynamicAttrGroup, DynamicNodeSlot, dynamic_node_slots,
@@ -145,7 +145,12 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let idx = slot.index();
-        let old_has_live_dom = self.dynamic_node_has_live_dom(mount, idx, state.dom);
+        // The old slot's first live element (if any) is both the "is there live
+        // DOM to remove" signal and the anchor the replacement inserts before.
+        let target_id = state.dom.current_render_target_id();
+        let live_first =
+            self.dynamic_node_edge_element(mount, idx, state.dom, target_id, ElementEdge::First);
+        let old_has_live_dom = live_first.is_some();
         if !old_has_live_dom {
             // The old slot has no renderer-owned nodes. Removal still needs to
             // clean mount records and component state, but it must not emit DOM
@@ -153,18 +158,12 @@ impl VNode {
             self.remove_dynamic_node(mount, state.dom, None, true, idx);
         }
 
-        let live_first = if old_has_live_dom {
-            let target_id = state.dom.current_render_target_id();
-            self.dynamic_node_edge_element(mount, idx, state.dom, target_id, ElementEdge::First)
-        } else {
-            None
-        };
         let context = state.context();
 
         let create_new = |state: &mut DiffState<'_, '_, '_, '_>| {
             if state.has_writer() {
                 let site = match live_first {
-                    Some(first) => InsertionSite::AtAnchor(DomAnchor::Before(first)),
+                    Some(first) => InsertionSite::Before(first),
                     None => insertion_site_for_slot(mount, slot, state.dom, context),
                 };
                 let runtime = state.dom.runtime.clone();
@@ -272,33 +271,6 @@ impl VNode {
             dom.current_render_target_id(),
             ElementEdge::Last,
         )
-    }
-
-    pub(crate) fn has_live_dom(&self, mount: MountId, dom: &VirtualDom) -> bool {
-        debug_assert_eq!(
-            self.template.root_slots().count(),
-            dom.mounted_root_count(mount),
-            "mounted root count must match the vnode template"
-        );
-        debug_assert_eq!(
-            self.dynamic_values.len(),
-            dom.mounted_dyn_node_count(mount),
-            "slot count"
-        );
-
-        if (0..dom.mounted_root_count(mount)).any(|root_idx| dom.mounted_root_node(mount, root_idx).is_some())
-        {
-            return true;
-        }
-
-        dynamic_node_slots(self).any(|slot| {
-            if !slot.is_root_level() {
-                return false;
-            }
-
-            let idx = slot.index();
-            self.dynamic_node_has_live_dom(mount, idx, dom)
-        })
     }
 
     fn find_element_in_roots(
@@ -455,7 +427,7 @@ impl VNode {
         if !destroy_component_state {
             return false;
         }
-        if self.has_live_dom(mount, dom) {
+        if self.find_first_element(mount, dom).is_some() {
             return false;
         }
         current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root()
@@ -611,25 +583,6 @@ impl VNode {
         };
     }
 
-    fn dynamic_node_has_live_dom(&self, mount: MountId, idx: usize, dom: &VirtualDom) -> bool {
-        let node = self.dynamic_values[idx].node();
-        match node {
-            Component(_) => {
-                let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
-                dom.get_scope(scope_id)
-                    .and_then(|scope| scope.try_mounted_root_node())
-                    .is_some_and(|node| node.vnode().has_live_dom(node.mount(), dom))
-            }
-            Text(_) => dom.mounted_dynamic_text_node(mount, idx).is_some(),
-            Fragment(nodes) => {
-                let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
-                nodes
-                    .iter()
-                    .zip(mounts)
-                    .any(|(node, mount)| node.has_live_dom(mount, dom))
-            }
-        }
-    }
 
     fn dynamic_node_edge_element(
         &self,
@@ -786,7 +739,7 @@ impl VNode {
                 .values()
                 .any(|idx| self.dynamic_values[idx].as_node().is_some());
             if has_dynamic_nodes && anchor.parent_element_op_index().is_some() {
-                self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
+                self.load_dynamic_anchor(mount, anchor_index, anchor, state, reuse_existing_mounts);
             }
         }
     }
@@ -869,15 +822,11 @@ impl VNode {
     fn load_dynamic_anchor(
         &self,
         mount: MountId,
+        anchor_index: usize,
         anchor: &TemplateAnchor,
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
-        let first_node_id = anchor
-            .values()
-            .find(|&idx| self.dynamic_values[idx].as_node().is_some())
-            .expect("node anchor");
-        let slot = DynamicNodeSlot::new(&self.template, anchor, first_node_id);
         if !state.has_writer() {
             for dynamic_node_id in anchor
                 .values()
@@ -894,7 +843,12 @@ impl VNode {
         }
 
         let context = state.context();
-        let site = self.template_slot_insertion_site(mount, slot, state.dom);
+        let site = insertion_site_for_mounted_anchor(
+            mount,
+            anchor_index,
+            matches!(anchor.slot_target(), TemplateSlotTarget::AppendChildren(_)),
+            state.dom,
+        );
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
         let to = state.to.as_deref_mut().expect("writer checked");
@@ -913,26 +867,6 @@ impl VNode {
                 })
                 .sum()
         });
-    }
-
-    fn template_slot_insertion_site(
-        &self,
-        mount: MountId,
-        slot: DynamicNodeSlot<'_>,
-        dom: &VirtualDom,
-    ) -> InsertionSite {
-        debug_assert!(
-            !slot.is_root_level(),
-            "non-root dynamic anchors must have an enclosing template root"
-        );
-        let anchor_id = dom
-            .unchecked_mounted_anchor_node(mount, slot.anchor_index())
-            .element_id();
-        if slot.appends() {
-            InsertionSite::AppendTo(anchor_id)
-        } else {
-            InsertionSite::AtAnchor(DomAnchor::Before(anchor_id))
-        }
     }
 
     fn write_attr_group(
@@ -997,7 +931,11 @@ impl VNode {
                 continue;
             };
             let static_root_idx = path.segment(0) as usize;
-            if self.template.materialization_root_for_static(static_root_idx) != Some(root_idx) {
+            if self
+                .template
+                .materialization_root_for_static(static_root_idx)
+                != Some(root_idx)
+            {
                 continue;
             }
 

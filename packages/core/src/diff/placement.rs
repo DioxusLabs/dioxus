@@ -33,10 +33,10 @@ pub(super) enum ElementEdge {
 }
 
 impl ElementEdge {
-    fn anchor(self, id: ElementId) -> DomAnchor {
+    fn site(self, id: ElementId) -> InsertionSite {
         match self {
-            ElementEdge::First => DomAnchor::Before(id),
-            ElementEdge::Last => DomAnchor::After(id),
+            ElementEdge::First => InsertionSite::Before(id),
+            ElementEdge::Last => InsertionSite::After(id),
         }
     }
 
@@ -54,16 +54,11 @@ impl ElementEdge {
 
 /// A renderer-level position where `m` DOM nodes, already on the renderer stack,
 /// should be spliced in.
-#[derive(Clone)]
-pub(super) enum DomAnchor {
-    Before(ElementId),
-    After(ElementId),
-}
-
 /// A renderer-level insertion site for nodes already on the renderer stack.
 #[derive(Clone)]
 pub(super) enum InsertionSite {
-    AtAnchor(DomAnchor),
+    Before(ElementId),
+    After(ElementId),
     AppendTo(ElementId),
 }
 
@@ -75,11 +70,9 @@ impl InsertionSite {
         create: impl FnOnce(&mut dyn WriteMutations) -> usize,
     ) -> usize {
         match self {
-            InsertionSite::AtAnchor(anchor) => {
-                let (id, before) = match anchor {
-                    DomAnchor::Before(id) => (*id, true),
-                    DomAnchor::After(id) => (*id, false),
-                };
+            InsertionSite::Before(id) | InsertionSite::After(id) => {
+                let id = *id;
+                let before = matches!(self, InsertionSite::Before(_));
                 let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
                 let count = create(&mut to);
                 if count > 0 {
@@ -129,24 +122,33 @@ pub(super) fn insertion_site_for_slot(
     if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
-        return InsertionSite::AtAnchor(DomAnchor::Before(id));
+        return InsertionSite::Before(id);
     }
 
     if slot.is_root_level() {
         // No adjacent sibling: scan later root positions, then walk up to committed root siblings.
         if let Some(id) = root_content_after_slot(parent_mount, root_idx, dom) {
-            return InsertionSite::AtAnchor(DomAnchor::Before(id));
+            return InsertionSite::Before(id);
         }
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
+    insertion_site_for_mounted_anchor(parent_mount, slot.anchor_index(), slot.appends(), dom)
+}
+
+pub(super) fn insertion_site_for_mounted_anchor(
+    parent_mount: MountId,
+    anchor_index: usize,
+    append: bool,
+    dom: &VirtualDom,
+) -> InsertionSite {
     let anchor_id = dom
-        .unchecked_mounted_anchor_node(parent_mount, slot.anchor_index())
+        .unchecked_mounted_anchor_node(parent_mount, anchor_index)
         .element_id();
-    if slot.appends() {
+    if append {
         InsertionSite::AppendTo(anchor_id)
     } else {
-        InsertionSite::AtAnchor(DomAnchor::Before(anchor_id))
+        InsertionSite::Before(anchor_id)
     }
 }
 
@@ -221,7 +223,7 @@ fn insertion_site_for_child_in_parent(
                     if let Some(id) =
                         first_live_sibling_after(children, &child_mounts, position, mount, dom)
                     {
-                        return Some(InsertionSite::AtAnchor(DomAnchor::Before(id)));
+                        return Some(InsertionSite::Before(id));
                     }
                     return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                 }
@@ -465,5 +467,5 @@ pub(super) fn vnode_edge_site(
     vnode: MountedVNode<'_>,
     dom: &VirtualDom,
 ) -> Option<InsertionSite> {
-    vnode_edge_element(vnode, dom, edge).map(|id| InsertionSite::AtAnchor(edge.anchor(id)))
+    vnode_edge_element(vnode, dom, edge).map(|id| edge.site(id))
 }

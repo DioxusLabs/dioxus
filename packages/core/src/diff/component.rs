@@ -2,8 +2,8 @@ use crate::{
     Element,
     diff::{
         context::{DiffContext, DiffFrame, DiffState},
-        placement::{DomAnchor, InsertionSite, at_site, insertion_site_for_slot},
-        template::DynamicNodeSlot,
+        placement::{InsertionSite, at_site, insertion_site_for_slot},
+        template::dynamic_node_slot,
     },
     innerlude::{MountId, MountRef, VComponent, WriteMutations},
     nodes::VNode,
@@ -200,16 +200,10 @@ impl VNode {
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
         if state.has_writer() {
-            let site = live_first
-                .map(|id| InsertionSite::AtAnchor(DomAnchor::Before(id)))
-                .unwrap_or_else(|| {
-                    let anchor = self
-                        .template
-                        .anchor_for_value(idx)
-                        .expect("component anchor");
-                    let slot = DynamicNodeSlot::new(&self.template, anchor, idx);
-                    insertion_site_for_slot(mount, slot, state.dom, context)
-                });
+            let site = live_first.map(InsertionSite::Before).unwrap_or_else(|| {
+                let slot = dynamic_node_slot(self, idx).expect("component anchor");
+                insertion_site_for_slot(mount, slot, state.dom, context)
+            });
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state.to.as_deref_mut().expect("writer checked");

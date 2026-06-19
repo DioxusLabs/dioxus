@@ -16,8 +16,7 @@ use crate::{
     diff::{
         context::{DiffFrame, DiffState},
         placement::{
-            DomAnchor, ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
-            vnode_edge_site,
+            ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at, vnode_edge_site,
         },
     },
     innerlude::{MountId, MountRef, WriteMutations},
@@ -693,7 +692,7 @@ fn insertion_site_in_new_order(
                     .map(|id| (sibling.index, id))
             })
             .min_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::AtAnchor(DomAnchor::Before(id))),
+            .map(|(_, id)| InsertionSite::Before(id)),
         ElementEdge::Last => mounted_new
             .iter()
             .filter(|sibling| sibling.index <= sibling_idx)
@@ -703,7 +702,7 @@ fn insertion_site_in_new_order(
                     .map(|id| (sibling.index, id))
             })
             .max_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::AtAnchor(DomAnchor::After(id))),
+            .map(|(_, id)| InsertionSite::After(id)),
     }
 }
 

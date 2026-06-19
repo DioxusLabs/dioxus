@@ -252,13 +252,6 @@ impl VNode {
             .and_then(|_| self.dynamic_values[idx].as_node())
     }
 
-    pub(crate) fn anchor_index(&self, anchor: &TemplateAnchor) -> Option<usize> {
-        self.template
-            .anchors()
-            .iter()
-            .position(|candidate| *candidate == *anchor)
-    }
-
     fn anchor_has_node(&self, anchor: &TemplateAnchor) -> bool {
         self.dynamic_node_indices_for_anchor(anchor)
             .next()
@@ -291,36 +284,50 @@ impl VNode {
             .filter(move |&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
-    pub(crate) fn dynamic_attr_anchors(
+    pub(crate) fn dynamic_attr_anchor_indices(
         &self,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
         self.template
             .anchors()
             .iter()
-            .filter(move |anchor| self.anchor_has_attrs(anchor))
+            .enumerate()
+            .filter(move |(_, anchor)| self.anchor_has_attrs(anchor))
     }
 
     pub(crate) fn dynamic_attr_anchors_in_document_order(
         &self,
     ) -> impl Iterator<Item = &'static TemplateAnchor> {
-        let mut anchors = self.dynamic_attr_anchors().collect::<Vec<_>>();
-        anchors.sort_by_key(|anchor| (anchor.static_path(), anchor.values().start));
+        self.dynamic_attr_anchor_indices_in_document_order()
+            .map(|(_, anchor)| anchor)
+    }
+
+    pub(crate) fn dynamic_attr_anchor_indices_in_document_order(
+        &self,
+    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> {
+        let mut anchors = self.dynamic_attr_anchor_indices().collect::<Vec<_>>();
+        anchors.sort_by_key(|(_, anchor)| (anchor.static_path(), anchor.values().start));
         anchors.into_iter()
     }
 
     fn dynamic_anchors_in_document_order(
         &self,
         nodes: bool,
-    ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
-        self.template
-            .anchors_in_document_order()
-            .filter(move |anchor| {
+    ) -> impl DoubleEndedIterator<Item = (usize, &'static TemplateAnchor)> + '_ {
+        let mut anchors = self
+            .template
+            .anchors()
+            .iter()
+            .enumerate()
+            .filter(move |(_, anchor)| {
                 if nodes {
                     self.anchor_has_node(anchor)
                 } else {
                     self.anchor_has_attrs(anchor)
                 }
             })
+            .collect::<Vec<_>>();
+        anchors.sort_by_key(|(_, anchor)| anchor.values().start);
+        anchors.into_iter()
     }
 
     /// Iterate dynamic node anchors attached directly to the static element op.
@@ -328,8 +335,16 @@ impl VNode {
         &self,
         element_op: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_node_anchor_indices_for_element(element_op)
+            .map(|(_, anchor)| anchor)
+    }
+
+    pub(crate) fn dynamic_node_anchor_indices_for_element(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
         self.dynamic_anchors_in_document_order(true)
-            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
+            .filter(move |(_, anchor)| anchor.parent_element_op_index() == Some(element_op))
     }
 
     /// Iterate dynamic node anchors for one child slot of a static element op.
@@ -338,9 +353,18 @@ impl VNode {
         element_op: usize,
         slot: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_node_anchor_indices_for_slot(element_op, slot)
+            .map(|(_, anchor)| anchor)
+    }
+
+    pub(crate) fn dynamic_node_anchor_indices_for_slot(
+        &self,
+        element_op: usize,
+        slot: usize,
+    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
         let trailing_slot = self.template.static_children(element_op).count();
-        self.dynamic_node_anchors_for_element(element_op)
-            .filter(move |anchor| match anchor.slot_target() {
+        self.dynamic_node_anchor_indices_for_element(element_op)
+            .filter(move |(_, anchor)| match anchor.slot_target() {
                 TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 == slot,
                 TemplateSlotTarget::AppendChildren(_) => slot == trailing_slot,
             })
@@ -351,8 +375,17 @@ impl VNode {
         &self,
         element_op: usize,
     ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
+        self.dynamic_attr_anchor_indices_for_element(element_op)
+            .map(|(_, anchor)| anchor)
+    }
+
+    /// Iterate dynamic attribute anchors and their template anchor indexes for one static element.
+    pub fn dynamic_attr_anchor_indices_for_element(
+        &self,
+        element_op: usize,
+    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
         self.dynamic_anchors_in_document_order(false)
-            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
+            .filter(move |(_, anchor)| anchor.parent_element_op_index() == Some(element_op))
     }
 }
 
@@ -407,7 +440,21 @@ impl<'a> MountedVNode<'a> {
         anchor: &TemplateAnchor,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let anchor_idx = self.vnode.anchor_index(anchor)?;
+        let anchor_idx = self
+            .vnode
+            .template
+            .anchors()
+            .iter()
+            .position(|candidate| *candidate == *anchor)?;
+        self.mounted_anchor_node_by_index(anchor_idx, dom)
+    }
+
+    /// Get the mounted id for the static template node addressed by an indexed dynamic anchor.
+    pub fn mounted_anchor_node_by_index(
+        self,
+        anchor_idx: usize,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
         dom.mounted_anchor_node(self.mount, anchor_idx)
             .map(|id| id.element_id())
     }
@@ -422,11 +469,15 @@ impl<'a> MountedVNode<'a> {
             .dynamic_values
             .get(dynamic_attribute_idx)?
             .as_attrs()?;
-        let anchor = self
+        let anchor_idx = self
             .vnode
             .template
-            .anchor_for_value(dynamic_attribute_idx)?;
-        self.mounted_anchor_node(anchor, dom)
+            .anchors()
+            .iter()
+            .enumerate()
+            .find(|(_, anchor)| anchor.values().contains(&dynamic_attribute_idx))
+            .map(|(idx, _)| idx)?;
+        self.mounted_anchor_node_by_index(anchor_idx, dom)
     }
 
     /// Get mounted children for a dynamic fragment.

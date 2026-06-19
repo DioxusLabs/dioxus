@@ -167,9 +167,9 @@ impl WebsysDom {
         // Resolve the mounted ElementId (an anchor id overrides the root id when present) and
         // collect dynamic listeners + onmounted events.
         let mut mounted_id = root_id;
-        for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
+        for (anchor_idx, _anchor) in vnode.vnode().dynamic_attr_anchor_indices_for_element(op) {
             let anchor_id = vnode
-                .mounted_anchor_node(anchor, dom)
+                .mounted_anchor_node_by_index(anchor_idx, dom)
                 .ok_or(VNodeNotInitialized)?;
             mounted_id = Some(anchor_id);
         }
@@ -180,7 +180,7 @@ impl WebsysDom {
         let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
         cursor.map_element(tag, id_arg)?;
 
-        for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
+        for (anchor_idx, anchor) in vnode.vnode().dynamic_attr_anchor_indices_for_element(op) {
             for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
                 let Some(attrs) = vnode.vnode().dynamic_values()[value_idx].as_attrs() else {
                     return Err(HydrationMismatch);
@@ -191,7 +191,7 @@ impl WebsysDom {
                             #[cfg(feature = "mounted")]
                             {
                                 let anchor_id = vnode
-                                    .mounted_anchor_node(anchor, dom)
+                                    .mounted_anchor_node_by_index(anchor_idx, dom)
                                     .ok_or(VNodeNotInitialized)?;
                                 self.send_mount_event(anchor_id);
                             }
