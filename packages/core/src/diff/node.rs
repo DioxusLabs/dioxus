@@ -138,15 +138,7 @@ impl VNode {
                 let scope_id = state
                     .dom
                     .unchecked_mounted_dynamic_component_scope(mount, idx);
-                self.diff_vcomponent(
-                    mount,
-                    idx,
-                    new,
-                    old,
-                    scope_id,
-                    Some(MountRef { mount }),
-                    state,
-                )
+                self.diff_vcomponent(mount, idx, new, old, scope_id, state)
             }
             (old, new) => self.replace_dynamic_node_at_slot(mount, slot, old, new, state),
         };
@@ -872,7 +864,7 @@ impl VNode {
         use DynamicNode::*;
         let parent = Some(MountRef { mount });
         match node {
-            Component(c) => self.create_component_node(mount, idx, c, parent, state),
+            Component(c) => self.create_component_node(mount, idx, c, state),
             Fragment(frag) => {
                 if reuse_existing_mounts {
                     let mounts = state

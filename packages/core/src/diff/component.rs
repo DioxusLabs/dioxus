@@ -158,12 +158,11 @@ impl VNode {
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
-        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         // Replace components whose render function or specialized lifecycle driver changed.
         if old.render_fn != new.render_fn || !old.driver.same_component(&*new.driver) {
-            return self.replace_vcomponent(mount, idx, new, parent, state);
+            return self.replace_vcomponent(mount, idx, new, state);
         }
 
         // If the props are static, then we try to memoize by setting the new with the old. The
@@ -182,7 +181,6 @@ impl VNode {
         mount: MountId,
         idx: usize,
         new: &VComponent,
-        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let scope = state
@@ -217,10 +215,10 @@ impl VNode {
             let to = state.to.as_deref_mut().expect("writer checked");
             at_site(site, to, runtime, |to| {
                 let mut state = DiffState::new_with_context(dom, Some(to), context);
-                self.create_component_node(mount, idx, new, parent, &mut state)
+                self.create_component_node(mount, idx, new, &mut state)
             });
         } else {
-            self.create_component_node(mount, idx, new, parent, state);
+            self.create_component_node(mount, idx, new, state);
         }
         state
             .dom
@@ -236,7 +234,6 @@ impl VNode {
         mount: MountId,
         idx: usize,
         component: &VComponent,
-        parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
@@ -277,6 +274,7 @@ impl VNode {
         let scope_id = scope_id.expect("component mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let to = state.to.as_deref_mut();
+        let parent = Some(MountRef { mount });
         let nodes = driver.create(&mut *state.dom, scope_id, new, parent, to);
         let root_mount = state
             .dom
