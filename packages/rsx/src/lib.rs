@@ -41,8 +41,8 @@ pub use attribute::{Attribute, AttributeName, AttributeValue, IfAttributeValue, 
 pub use component::Component;
 pub use diagnostics::Diagnostics;
 pub use element::{Element, ElementName};
-pub use fill_order::{FillOrderVisitor, visit_roots};
 pub use expr_node::ExprNode;
+pub use fill_order::{FillOrderVisitor, visit_roots};
 pub use forloop::ForLoop;
 pub use ifchain::IfChain;
 pub use ifmt::{FormattedSegment, IfmtInput, Segment};

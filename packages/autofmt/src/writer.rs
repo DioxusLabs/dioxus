@@ -38,17 +38,17 @@ impl<'a> Writer<'a> {
     }
 
     pub fn write_rsx_call(&mut self, body: &CallBody) -> Result {
-        if body.body.roots.is_empty() {
+        if body.body().roots.is_empty() {
             return Ok(());
         }
 
-        if Self::is_short_rsx_call(&body.body.roots) {
+        if Self::is_short_rsx_call(&body.body().roots) {
             write!(self.out, " ")?;
-            self.write_ident(&body.body.roots[0])?;
+            self.write_ident(&body.body().roots[0])?;
             write!(self.out, " ")?;
         } else {
             self.out.new_line()?;
-            self.write_body_indented(&body.body.roots)?;
+            self.write_body_indented(&body.body().roots)?;
             self.write_trailing_body_comments(body)?;
         }
 
@@ -56,7 +56,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
-        if let Some(span) = body.span {
+        if let Some(span) = body.span() {
             self.out.indent_level += 1;
             let comments = self.accumulate_full_line_comments(span.span().end());
             let has_real_comment = comments
@@ -82,7 +82,9 @@ impl<'a> Writer<'a> {
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
             BodyNode::SyntheticBoundary(_) => {
-                unreachable!("synthetic boundaries exist only in expanded output, never in parsed source the formatter sees")
+                unreachable!(
+                    "synthetic boundaries exist only in expanded output, never in parsed source the formatter sees"
+                )
             }
         }?;
 
@@ -1339,7 +1341,9 @@ impl<'a> Writer<'a> {
                 None => i.then_brace.span.span(),
             },
             BodyNode::SyntheticBoundary(_) => {
-                unreachable!("synthetic boundaries exist only in expanded output, never in parsed source the formatter sees")
+                unreachable!(
+                    "synthetic boundaries exist only in expanded output, never in parsed source the formatter sees"
+                )
             }
         }
     }

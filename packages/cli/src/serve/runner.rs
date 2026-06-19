@@ -517,8 +517,8 @@ impl AppServer {
 
                     // Returns a list of templates that are hotreloadable
                     let results = HotReloadResult::new::<HtmlCtx>(
-                        &old_call_body.body,
-                        &new_call_body.body,
+                        old_call_body.body(),
+                        new_call_body.body(),
                         file_name.clone(),
                     );
 

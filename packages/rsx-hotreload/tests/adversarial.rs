@@ -43,7 +43,7 @@ fn hot_reload_from_tokens(
 ) -> Option<HashMap<usize, HotReloadedTemplate>> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
-    let results = HotReloadResult::new::<Mock>(&old.body, &new.body, Default::default())?;
+    let results = HotReloadResult::new::<Mock>(old.body(), new.body(), Default::default())?;
     Some(results.templates)
 }
 

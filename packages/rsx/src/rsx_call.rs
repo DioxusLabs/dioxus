@@ -24,9 +24,9 @@ use crate::{BodyNode, TemplateBody};
 /// Ideally we don't need the metadata here and can bake the idx-es into the templates themselves but I haven't figured out how to do that yet.
 #[derive(Debug, Clone)]
 pub struct CallBody {
-    pub body: TemplateBody,
-    pub template_idx: Cell<usize>,
-    pub span: Option<Span>,
+    body: TemplateBody,
+    template_idx: Cell<usize>,
+    span: Option<Span>,
 }
 
 impl Parse for CallBody {
@@ -62,6 +62,21 @@ impl CallBody {
         body.cascade_hotreload_info(&body.body.roots);
 
         body
+    }
+
+    /// The parsed and normalized RSX body.
+    pub fn body(&self) -> &TemplateBody {
+        &self.body
+    }
+
+    /// Mutably access the parsed and normalized RSX body.
+    pub fn body_mut(&mut self) -> &mut TemplateBody {
+        &mut self.body
+    }
+
+    /// The span of the `rsx!` call body, if this call body came from parsing.
+    pub fn span(&self) -> Option<Span> {
+        self.span
     }
 
     /// Parse a stream into a CallBody. Return all error immediately instead of trying to partially expand the macro

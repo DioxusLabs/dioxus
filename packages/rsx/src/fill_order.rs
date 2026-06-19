@@ -95,10 +95,7 @@ fn visit_node<'a, V: FillOrderVisitor<'a>>(
     }
 }
 
-fn visit_element<'a, V: FillOrderVisitor<'a>>(
-    visitor: &mut V,
-    element: &'a Element,
-) -> Option<()> {
+fn visit_element<'a, V: FillOrderVisitor<'a>>(visitor: &mut V, element: &'a Element) -> Option<()> {
     visitor.open_element(element)?;
 
     // Static attributes are lowered immediately, into the op slots that precede an element's
