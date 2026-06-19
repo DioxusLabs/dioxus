@@ -192,7 +192,7 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             // the cross-target `else` arm of the Text case.
             vec![
                 set_root_dynamic(),
-                fragment_with_children(3, Some(40)),
+                keyed_fragment_with_children(3, 40),
                 set_vnode_root_dynamic(1, DynamicKind::Portal),
                 set_vnode_root_dynamic(2, DynamicKind::Text(7)),
                 set_vnode_root_dynamic(3, DynamicKind::Portal),
@@ -212,7 +212,7 @@ fn targeted_diff_coverage_cases() -> Vec<(&'static str, FuzzCase)> {
             // the active renderer target.
             vec![
                 set_root_dynamic(),
-                fragment_with_children(3, Some(50)),
+                keyed_fragment_with_children(3, 50),
                 set_vnode_root_dynamic(1, DynamicKind::Portal),
                 set_vnode_root_dynamic(3, DynamicKind::Portal),
                 set_vnode_root_dynamic(5, DynamicKind::Portal),
@@ -365,13 +365,13 @@ fn key_fragment(base: u8) -> Op {
     Op::fragment(0, 0, FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base }))
 }
 
-fn fragment_with_children(count: u8, key_base: Option<u8>) -> Op {
+fn keyed_fragment_with_children(count: u8, key_base: u8) -> Op {
     Op::dynamic(
         0,
         0,
         DynamicKind::Fragment {
             children: count,
-            key_base,
+            key_base: Some(key_base),
         },
     )
 }
@@ -530,7 +530,7 @@ fn non_keyed_append_remove_equal() -> Vec<Op> {
 fn keyed_append() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        fragment_with_children(2, Some(0)),
+        keyed_fragment_with_children(2, 0),
         Op::Rerender,
         insert_fragment_child(2, Some(2)),
         Op::Rerender,
@@ -540,7 +540,7 @@ fn keyed_append() -> Vec<Op> {
 fn keyed_prepend() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        fragment_with_children(2, Some(1)),
+        keyed_fragment_with_children(2, 1),
         Op::Rerender,
         insert_fragment_child(0, Some(0)),
         Op::Rerender,
@@ -550,7 +550,7 @@ fn keyed_prepend() -> Vec<Op> {
 fn keyed_remove_and_add_middle() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        fragment_with_children(3, Some(0)),
+        keyed_fragment_with_children(3, 0),
         Op::Rerender,
         remove_fragment_child(1),
         Op::Rerender,
@@ -562,7 +562,7 @@ fn keyed_remove_and_add_middle() -> Vec<Op> {
 fn keyed_replace_all_keys() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        fragment_with_children(2, Some(0)),
+        keyed_fragment_with_children(2, 0),
         Op::Rerender,
         key_fragment(2),
         Op::Rerender,
@@ -572,7 +572,7 @@ fn keyed_replace_all_keys() -> Vec<Op> {
 fn keyed_reorder_insert_remove() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        fragment_with_children(5, Some(0)),
+        keyed_fragment_with_children(5, 0),
         Op::Rerender,
         move_fragment_child(3, 1),
         insert_fragment_child(2, Some(5)),
@@ -582,7 +582,7 @@ fn keyed_reorder_insert_remove() -> Vec<Op> {
 }
 
 fn move_root_node_with_kind(kind: Option<DynamicKind>) -> Vec<Op> {
-    let mut ops = vec![set_root_dynamic(), fragment_with_children(4, Some(0))];
+    let mut ops = vec![set_root_dynamic(), keyed_fragment_with_children(4, 0)];
 
     if let Some(kind) = kind {
         // The child vnode selected here must materialize its nested content

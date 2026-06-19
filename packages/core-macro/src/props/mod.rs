@@ -575,7 +575,6 @@ mod struct_info {
 
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
-        pub component_builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
         #[allow(unused)]
         pub core: syn::Ident,
@@ -598,8 +597,6 @@ mod struct_info {
         ) -> Result<StructInfo<'a>, Error> {
             let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
             let builder_name = strip_raw_ident_prefix(format!("{}Builder", ast.ident));
-            let component_builder_name =
-                strip_raw_ident_prefix(format!("{}ComponentBuilder", builder_name));
             Ok(StructInfo {
                 vis: &ast.vis,
                 name: &ast.ident,
@@ -610,7 +607,6 @@ mod struct_info {
                     .collect::<Result<_, _>>()?,
                 builder_attr,
                 builder_name: syn::Ident::new(&builder_name, ast.ident.span()),
-                component_builder_name: syn::Ident::new(&component_builder_name, ast.ident.span()),
                 conversion_helper_trait_name: syn::Ident::new(
                     &format!("{builder_name}_Optional"),
                     ast.ident.span(),
@@ -626,19 +622,49 @@ mod struct_info {
         }
 
         fn with_component_builder_params(&self, mut generics: syn::Generics) -> syn::Generics {
-            let index_after_lifetime_in_generics = generics
+            Self::insert_component_builder_params(&mut generics);
+            generics
+        }
+
+        fn insert_component_builder_params(generics: &mut syn::Generics) -> usize {
+            let index = generics
                 .params
                 .iter()
                 .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
                 .count();
+            generics.params.insert(index, parse_quote!(__RenderFn));
             generics
                 .params
-                .insert(index_after_lifetime_in_generics, parse_quote!(__RenderFn));
-            generics.params.insert(
-                index_after_lifetime_in_generics + 1,
-                parse_quote!(__ComponentMarker),
-            );
-            generics
+                .insert(index + 1, parse_quote!(__ComponentMarker));
+            index + 2
+        }
+
+        fn insert_component_builder_type_args(
+            args: &mut Punctuated<syn::GenericArgument, syn::token::Comma>,
+            fields: syn::GenericArgument,
+            render_fn: syn::GenericArgument,
+            marker: syn::GenericArgument,
+        ) {
+            let index = args
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
+                .count();
+            args.insert(index, fields);
+            args.insert(index, marker);
+            args.insert(index, render_fn);
+        }
+
+        fn insert_component_builder_vec_args(
+            args: &mut Vec<syn::GenericArgument>,
+            fields: syn::GenericArgument,
+        ) {
+            let index = args
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
+                .count();
+            args.insert(index, fields);
+            args.insert(index, parse_quote!(__ComponentMarker));
+            args.insert(index, parse_quote!(__RenderFn));
         }
 
         fn component_builder_render_generics(&self, props_ty: TokenStream) -> syn::Generics {
@@ -805,34 +831,28 @@ mod struct_info {
                 ref vis,
                 ref name,
                 ref builder_name,
-                ref component_builder_name,
                 ..
             } = *self;
 
             let generics = self.generics.clone();
-            let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+            let (impl_generics, ty_generics, _where_clause) = generics.split_for_impl();
             let (_, b_initial_generics, _) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
             );
             let b_generics = self.modify_generics(|g| {
-                g.params.insert(0, all_fields_param.clone());
+                let field_param_index = Self::insert_component_builder_params(g);
+                g.params.insert(field_param_index, all_fields_param.clone());
             });
-            let component_b_generics = {
-                let mut generics = b_generics.clone();
-                generics.params.insert(0, parse_quote!(RenderFn));
-                generics.params.insert(1, parse_quote!(ComponentMarker));
-                generics
-            };
             let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
-            let generics_with_empty = modify_types_generics_hack(&b_initial_generics, |args| {
-                args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
-            });
             let component_generics_with_empty =
                 modify_types_generics_hack(&b_initial_generics, |args| {
-                    args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
-                    args.insert(0, parse_quote!(Marker));
-                    args.insert(0, parse_quote!(RenderFn));
+                    Self::insert_component_builder_type_args(
+                        args,
+                        syn::GenericArgument::Type(empties_tuple.clone().into()),
+                        parse_quote!(RenderFn),
+                        parse_quote!(Marker),
+                    );
                 });
             let phantom_generics = self.generics.params.iter().filter_map(|param| match param {
                 syn::GenericParam::Lifetime(lifetime) => {
@@ -845,53 +865,17 @@ mod struct_info {
                 }
                 syn::GenericParam::Const(_cnst) => None,
             });
-            let builder_method_doc = match self.builder_attr.builder_method_doc {
-                Some(ref doc) => quote!(#doc),
-                None => {
-                    let doc = format!(
-                        "
-Create a builder for building `{name}`.
-On the builder, call {setters} to set the values of the fields.
-Finally, call `.build()` to create the instance of `{name}`.
-                    ",
-                        name = self.name,
-                        setters = {
-                            let mut result = String::new();
-                            let mut is_first = true;
-                            for field in self.included_fields() {
-                                use std::fmt::Write;
-                                if is_first {
-                                    is_first = false;
-                                } else {
-                                    write!(&mut result, ", ").unwrap();
-                                }
-                                write!(&mut result, "`.{}(...)`", field.name).unwrap();
-                                if field.builder_attr.default.is_some() {
-                                    write!(&mut result, "(optional)").unwrap();
-                                }
-                            }
-                            result
-                        }
-                    );
-                    quote!(#doc)
-                }
-            };
             let builder_type_doc = if self.builder_attr.doc {
                 match self.builder_attr.builder_type_doc {
                     Some(ref doc) => quote!(#[doc = #doc]),
                     None => {
-                        let doc = format!(
-                            "Builder for [`{name}`] instances.\n\nSee [`{name}::builder()`] for more info.",
-                        );
+                        let doc = format!("Builder for [`{name}`] component props.");
                         quote!(#[doc = #doc])
                     }
                 }
             } else {
                 quote!(#[doc(hidden)])
             };
-            let (_, b_ty_generics, _) = b_generics.split_for_impl();
-            let (_, _component_b_ty_generics, component_b_where_clause) =
-                component_b_generics.split_for_impl();
 
             let (_, _, b_generics_where_extras_predicates) = b_generics.split_for_impl();
             let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
@@ -924,60 +908,44 @@ Finally, call `.build()` to create the instance of `{name}`.
                 })
                 .chain(self.has_child_owned_fields().then(
                     || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
-                ));
+                ))
+                .collect::<Vec<_>>();
             let component_builder_render_generics =
                 self.component_builder_render_generics(quote!(#name #ty_generics));
             let (component_builder_render_impl_generics, _, component_builder_render_where) =
                 component_builder_render_generics.split_for_impl();
 
             Ok(quote! {
-                impl #impl_generics #name #ty_generics #where_clause {
-                    #[doc = #builder_method_doc]
-                    #[allow(dead_code, clippy::type_complexity)]
-                    #vis fn builder() -> #builder_name #generics_with_empty {
-                        #builder_name {
-                            #(#global_fields_value,)*
-                            fields: #empties_tuple,
-                            _phantom: ::core::default::Default::default(),
-                        }
-                    }
-                }
-
                 #[must_use]
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
+                    render_fn: __RenderFn,
                     #(#global_fields,)*
                     fields: #all_fields_param,
+                    _marker: ::core::marker::PhantomData<fn() -> __ComponentMarker>,
                     _phantom: (#( #phantom_generics ),*),
-                }
-
-                #[must_use]
-                #builder_type_doc
-                #[allow(dead_code, non_camel_case_types, non_snake_case)]
-                #vis struct #component_builder_name #component_b_generics #component_b_where_clause {
-                    render_fn: RenderFn,
-                    builder: #builder_name #b_ty_generics,
-                    _marker: ::core::marker::PhantomData<ComponentMarker>,
                 }
 
                 impl #impl_generics dioxus_core::Properties for #name #ty_generics
                 #b_generics_where
                 {
-                    type Builder = #builder_name #generics_with_empty;
-                    type ComponentBuilder<RenderFn, Marker> = #component_builder_name #component_generics_with_empty;
+                    type Builder = ();
+                    type ComponentBuilder<RenderFn, Marker> = #builder_name #component_generics_with_empty;
 
                     fn builder() -> Self::Builder {
-                        #name::builder()
+                        unreachable!()
                     }
 
                     fn component_builder<RenderFn, Marker>(
                         render_fn: RenderFn,
                     ) -> Self::ComponentBuilder<RenderFn, Marker> {
-                        #component_builder_name {
+                        #builder_name {
                             render_fn,
-                            builder: #name::builder(),
+                            #(#global_fields_value,)*
+                            fields: #empties_tuple,
                             _marker: ::core::marker::PhantomData,
+                            _phantom: ::core::default::Default::default(),
                         }
                     }
 
@@ -1023,9 +991,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn extends_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref builder_name,
-                ref component_builder_name,
-                ..
+                ref builder_name, ..
             } = *self;
 
             let field_name = field.extends_vec_ident().unwrap();
@@ -1057,15 +1023,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             let mut target_generics_tuple = empty_type_tuple();
             let mut ty_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
-                let index_after_lifetime_in_generics = g
-                    .params
-                    .iter()
-                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
-                    .count();
+                let field_param_index = Self::insert_component_builder_params(g);
                 for f in self.included_fields() {
                     if f.ordinal == field.ordinal {
                         g.params.insert(
-                            index_after_lifetime_in_generics,
+                            field_param_index,
                             syn::GenericParam::Type(self.generic_builder_param(f)),
                         );
                         let generic_argument: syn::Type = f.type_ident();
@@ -1074,8 +1036,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             .elems
                             .push_value(f.tuplized_type_ty_param());
                     } else {
-                        g.params
-                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        g.params.insert(field_param_index, f.generic_ty_param());
                         let generic_argument: syn::Type = f.type_ident();
                         ty_generics_tuple.elems.push_value(generic_argument.clone());
                         target_generics_tuple.elems.push_value(generic_argument);
@@ -1085,26 +1046,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
             });
             let mut target_generics = ty_generics.clone();
-            let index_after_lifetime_in_generics = target_generics
-                .iter()
-                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
-                .count();
-            target_generics.insert(
-                index_after_lifetime_in_generics,
+            Self::insert_component_builder_vec_args(
+                &mut target_generics,
                 syn::GenericArgument::Type(target_generics_tuple.into()),
             );
-            ty_generics.insert(
-                index_after_lifetime_in_generics,
+            Self::insert_component_builder_vec_args(
+                &mut ty_generics,
                 syn::GenericArgument::Type(ty_generics_tuple.into()),
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-
-            // The component-aware builder wraps the inner builder, so it needs its
-            // own `HasAttributes` and extension-trait impls to accept spreads and
-            // attribute extension methods (e.g. `.id(..)`) directly in `rsx!`.
-            let component_builder_generics = self.with_component_builder_params(generics.clone());
-            let (component_builder_impl_generics, _, component_builder_where_clause) =
-                component_builder_generics.split_for_impl();
 
             let forward_extended_fields = self.extend_fields().map(|f| {
                 let name = f.extends_vec_ident();
@@ -1129,8 +1079,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     impl #impl_generics dioxus_elements::extensions::#spread_marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
-                    #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #component_builder_impl_generics dioxus_elements::extensions::#spread_marker_name for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {}
                 }
             });
 
@@ -1154,33 +1102,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                             )
                         );
                         #builder_name {
+                            render_fn: self.render_fn,
                             #(#forward_extended_fields,)*
                             #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
-                            _phantom: self._phantom,
-                        }
-                    }
-                }
-
-                #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #component_builder_impl_generics dioxus_core::HasAttributes for #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {
-                    fn push_attribute<L>(
-                        self,
-                        ____name: &'static str,
-                        ____ns: Option<&'static str>,
-                        ____attr: impl dioxus_core::IntoAttributeValue<L>,
-                        ____volatile: bool
-                    ) -> Self {
-                        #component_builder_name {
-                            render_fn: self.render_fn,
-                            builder: dioxus_core::HasAttributes::push_attribute(
-                                self.builder,
-                                ____name,
-                                ____ns,
-                                ____attr,
-                                ____volatile,
-                            ),
                             _marker: self._marker,
+                            _phantom: self._phantom,
                         }
                     }
                 }
@@ -1200,9 +1127,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ));
             }
             let StructInfo {
-                ref builder_name,
-                ref component_builder_name,
-                ..
+                ref builder_name, ..
             } = *self;
 
             let destructuring = self.included_fields().map(|f| {
@@ -1241,11 +1166,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let mut target_generics_tuple = empty_type_tuple();
             let mut ty_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
-                let index_after_lifetime_in_generics = g
-                    .params
-                    .iter()
-                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
-                    .count();
+                let field_param_index = Self::insert_component_builder_params(g);
                 for f in self.included_fields() {
                     if f.ordinal == field.ordinal {
                         ty_generics_tuple.elems.push_value(empty_type());
@@ -1253,8 +1174,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             .elems
                             .push_value(f.tuplized_type_ty_param());
                     } else {
-                        g.params
-                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        g.params.insert(field_param_index, f.generic_ty_param());
                         let generic_argument: syn::Type = f.type_ident();
                         ty_generics_tuple.elems.push_value(generic_argument.clone());
                         target_generics_tuple.elems.push_value(generic_argument);
@@ -1264,16 +1184,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
             });
             let mut target_generics = ty_generics.clone();
-            let index_after_lifetime_in_generics = target_generics
-                .iter()
-                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
-                .count();
-            target_generics.insert(
-                index_after_lifetime_in_generics,
+            Self::insert_component_builder_vec_args(
+                &mut target_generics,
                 syn::GenericArgument::Type(target_generics_tuple.into()),
             );
-            ty_generics.insert(
-                index_after_lifetime_in_generics,
+            Self::insert_component_builder_vec_args(
+                &mut ty_generics,
                 syn::GenericArgument::Type(ty_generics_tuple.into()),
             );
 
@@ -1316,14 +1232,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 builder_name.span(),
             );
             let repeated_fields_error_message = format!("Repeated field {field_name}");
-            let component_builder_generics = self.with_component_builder_params(generics.clone());
-            let (component_builder_impl_generics, _, component_builder_where_clause) =
-                component_builder_generics.split_for_impl();
-            let component_builder_call = if let Some(marker) = marker.as_ref() {
-                quote!(builder.#field_name::<#marker>(#field_name))
-            } else {
-                quote!(builder.#field_name(#field_name))
-            };
 
             let forward_fields = self
                 .extend_fields()
@@ -1345,22 +1253,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let #field_name = (#arg_expr,);
                         let ( #(#destructuring,)* ) = self.fields;
                         #builder_name {
+                            render_fn: self.render_fn,
                             #(#forward_fields,)*
                             fields: ( #(#reconstructing,)* ),
-                            _phantom: self._phantom,
-                        }
-                    }
-                }
-                #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #component_builder_impl_generics #component_builder_name < __RenderFn, __ComponentMarker, #( #ty_generics ),* > #component_builder_where_clause {
-                    #( #docs )*
-                    #[allow(clippy::type_complexity)]
-                    pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #component_builder_name < __RenderFn, __ComponentMarker, #( #target_generics ),* > {
-                        let builder = self.builder;
-                        #component_builder_name {
-                            render_fn: self.render_fn,
-                            builder: #component_builder_call,
                             _marker: self._marker,
+                            _phantom: self._phantom,
                         }
                     }
                 }
@@ -1409,11 +1306,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 .collect();
             let mut builder_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
-                let index_after_lifetime_in_generics = g
-                    .params
-                    .iter()
-                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
-                    .count();
+                let field_param_index = Self::insert_component_builder_params(g);
                 for f in self.included_fields() {
                     if f.builder_attr.default.is_some() {
                         // `f` is not mandatory - it does not have it's own fake `build` method, so `field` will need
@@ -1423,8 +1316,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             "`required_field_impl` called for optional field {}",
                             field.name
                         );
-                        g.params
-                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        g.params.insert(field_param_index, f.generic_ty_param());
                         builder_generics_tuple.elems.push_value(f.type_ident());
                     } else if f.ordinal < field.ordinal {
                         // Only add a `build` method that warns about missing `field` if `f` is set. If `f` is not set,
@@ -1438,8 +1330,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         // `f` appears later in the argument list after `field`, so if they are both missing we will
                         // show a warning for `field` and not for `f` - which means this warning should appear whether
                         // or not `f` is set.
-                        g.params
-                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        g.params.insert(field_param_index, f.generic_ty_param());
                         builder_generics_tuple.elems.push_value(f.type_ident());
                     }
 
@@ -1447,12 +1338,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
             });
 
-            let index_after_lifetime_in_generics = builder_generics
-                .iter()
-                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
-                .count();
-            builder_generics.insert(
-                index_after_lifetime_in_generics,
+            Self::insert_component_builder_vec_args(
+                &mut builder_generics,
                 syn::GenericArgument::Type(builder_generics_tuple.into()),
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
@@ -1478,7 +1365,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[deprecated(
                         note = #early_build_error_message
                     )]
-                    pub fn build(self, _: #early_build_error_type_name) -> #name #ty_generics {
+                    pub fn build(
+                        self,
+                        _: #early_build_error_type_name,
+                    ) -> dioxus_core::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
                         panic!()
                     }
                 }
@@ -1514,7 +1404,6 @@ Finally, call `.build()` to create the instance of `{name}`.
             let StructInfo {
                 ref name,
                 ref builder_name,
-                ref component_builder_name,
                 ..
             } = *self;
 
@@ -1532,29 +1421,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
             });
-            let (impl_generics, _, _) = generics.split_for_impl();
+            let (original_impl_generics, ty_generics, _) = self.generics.split_for_impl();
 
-            let (original_impl_generics, ty_generics, where_clause) =
-                self.generics.split_for_impl();
-
-            let modified_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
-                args.insert(
-                    0,
-                    syn::GenericArgument::Type(
-                        type_tuple(self.included_fields().map(|field| {
-                            if field.builder_attr.default.is_some() {
-                                field.type_ident()
-                            } else {
-                                field.tuplized_type_ty_param()
-                            }
-                        }))
-                        .into(),
-                    ),
-                );
-            });
             let modified_component_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
-                args.insert(
-                    0,
+                Self::insert_component_builder_type_args(
+                    args,
                     syn::GenericArgument::Type(
                         type_tuple(self.included_fields().map(|field| {
                             if field.builder_attr.default.is_some() {
@@ -1565,15 +1436,28 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }))
                         .into(),
                     ),
+                    parse_quote!(__RenderFn),
+                    parse_quote!(__ComponentMarker),
                 );
-                args.insert(0, parse_quote!(__ComponentMarker));
-                args.insert(0, parse_quote!(__RenderFn));
             });
-            let component_builder_generics = self.with_component_builder_params(generics.clone());
-            let (component_builder_impl_generics, _, component_builder_where_clause) =
-                component_builder_generics.split_for_impl();
 
-            let destructuring = self.included_fields().map(|f| f.name);
+            let destructuring = self
+                .included_fields()
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect::<Vec<_>>();
+            let global_field_names = self
+                .extend_fields()
+                .filter_map(|f| f.extends_vec_ident())
+                .map(|name| quote!(#name))
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner))
+                        .into_iter(),
+                )
+                .collect::<Vec<_>>();
 
             let helper_trait_name = &self.conversion_helper_trait_name;
             // The default of a field can refer to earlier-defined fields, which we handle by
@@ -1581,12 +1465,15 @@ Finally, call `.build()` to create the instance of `{name}`.
             // This means that field ordering may actually be significant, which isn’t ideal. We could
             // relax that restriction by calculating a DAG of field default dependencies and
             // reordering based on that, but for now this much simpler thing is a reasonable approach.
-            let assignments = self.fields.iter().map(|field| {
+            let assignments = self
+                .fields
+                .iter()
+                .map(|field| {
                 let name = &field.name;
                 if let Some(extends_vec) = field.extends_vec_ident() {
                     quote!{
                         let mut #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());
-                        #name.extend(self.#extends_vec);
+                        #name.extend(#extends_vec);
                     }
                 } else if let Some(ref default) = field.builder_attr.default {
                     // If field has `into`, apply it to the default value.
@@ -1613,15 +1500,23 @@ Finally, call `.build()` to create the instance of `{name}`.
                     if field.builder_attr.skip {
                         quote!(let #name = #body;)
                     } else if is_child_owned_type {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_owner(self.owner.clone(), move || #body));)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_owner(owner.clone(), move || #body));)
                     } else {
                         quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
                     }
                 } else {
                     quote!(let #name = #name.0;)
                 }
-            });
-            let field_names = self.fields.iter().map(|field| field.name);
+            })
+                .collect::<Vec<_>>();
+            let field_names = self
+                .fields
+                .iter()
+                .map(|field| {
+                    let name = field.name;
+                    quote!(#name)
+                })
+                .collect::<Vec<_>>();
             let doc = if self.builder_attr.doc {
                 match self.builder_attr.build_method_doc {
                     Some(ref doc) => quote!(#[doc = #doc]),
@@ -1647,6 +1542,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                     self.component_builder_render_generics(quote!(#original_name #ty_generics));
                 let (component_builder_render_impl_generics, _, component_builder_render_where) =
                     component_builder_render_generics.split_for_impl();
+                let component_builder_build_generics =
+                    self.with_component_builder_params(generics.clone());
+                let (component_builder_build_impl_generics, _, component_builder_build_where) =
+                    component_builder_build_generics.split_for_impl();
 
                 quote! {
                     #[doc(hidden)]
@@ -1711,47 +1610,53 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
 
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                        #doc
-                        pub fn build(self) -> #name #ty_generics {
-                            let ( #(#destructuring,)* ) = self.fields;
-                            #( #assignments )*
-                            #name {
-                                inner: #original_name {
-                                    #( #field_names ),*
-                                },
-                                owner: self.owner,
-                            }
-                        }
-                    }
-
-                    #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #component_builder_impl_generics #component_builder_name #modified_component_ty_generics #component_builder_where_clause {
+                    impl #component_builder_build_impl_generics #builder_name #modified_component_ty_generics #component_builder_build_where {
                         #doc
                         pub fn build(self) -> dioxus_core::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
-                            dioxus_core::ComponentBuilderOutput::new(self.render_fn, self.builder.build())
+                            let #builder_name {
+                                render_fn,
+                                #(#global_field_names,)*
+                                fields,
+                                _marker: _,
+                                _phantom: _,
+                            } = self;
+                            let ( #(#destructuring,)* ) = fields;
+                            #( #assignments )*
+                            let props =
+                                #name {
+                                    inner: #original_name {
+                                        #( #field_names ),*
+                                    },
+                                    owner,
+                                };
+                            dioxus_core::ComponentBuilderOutput::new(render_fn, props)
                         }
                     }
                 }
             } else {
+                let component_builder_build_generics =
+                    self.with_component_builder_params(generics.clone());
+                let (component_builder_build_impl_generics, _, component_builder_build_where) =
+                    component_builder_build_generics.split_for_impl();
                 quote!(
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                        #doc
-                        pub fn build(self) -> #name #ty_generics {
-                            let ( #(#destructuring,)* ) = self.fields;
-                            #( #assignments )*
-                            #name {
-                                #( #field_names ),*
-                            }
-                        }
-                    }
-
-                    #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #component_builder_impl_generics #component_builder_name #modified_component_ty_generics #component_builder_where_clause {
+                    impl #component_builder_build_impl_generics #builder_name #modified_component_ty_generics #component_builder_build_where {
                         #doc
                         pub fn build(self) -> dioxus_core::ComponentBuilderOutput<__RenderFn, #name #ty_generics, __ComponentMarker> {
-                            dioxus_core::ComponentBuilderOutput::new(self.render_fn, self.builder.build())
+                            let #builder_name {
+                                render_fn,
+                                #(#global_field_names,)*
+                                fields,
+                                _marker: _,
+                                _phantom: _,
+                            } = self;
+                            let ( #(#destructuring,)* ) = fields;
+                            #( #assignments )*
+                            let props =
+                                #name {
+                                    #( #field_names ),*
+                                };
+                            dioxus_core::ComponentBuilderOutput::new(render_fn, props)
                         }
                     }
                 )
