@@ -264,14 +264,12 @@ pub fn Window(props: WindowProps) -> Element {
     let state = {
         let config = props.config.clone();
         use_hook(move || {
-            let runtime = Runtime::current();
-            let target_id = runtime.create_render_target();
             let providers = Rc::new(RefCell::new(None));
             let closed = Rc::new(Cell::new(false));
             let onclose = Rc::new(RefCell::new(None::<EventHandler<()>>));
             let close_handler = Rc::new(RefCell::new(None));
-            let pending = window()
-                .new_window_for_target(target_id, config.borrow_mut().take().unwrap_or_default());
+            let pending = window().new_window(config.borrow_mut().take().unwrap_or_default());
+            let target_id = pending.target_id();
             let providers_for_task = providers.clone();
             let closed_for_task = closed.clone();
             let onclose_for_task = onclose.clone();

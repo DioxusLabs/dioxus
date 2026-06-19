@@ -8,7 +8,7 @@ use crate::{
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
 };
-use dioxus_core::{Callback, RenderTargetId, VirtualDom};
+use dioxus_core::{Callback, RenderTargetId, Runtime};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -127,10 +127,8 @@ impl DesktopService {
     /// }
     ///
     /// # async fn app() {
-    /// // Create a new window with a component that will be rendered in the new window.
-    /// let dom = VirtualDom::new(popup);
     /// // Create and wait for the window
-    /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
+    /// let window = dioxus::desktop::window().new_window(Default::default()).await;
     /// // Fullscreen the new window
     /// window.set_fullscreen(true);
     /// # }
@@ -142,25 +140,9 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
-        let (window, context) = PendingWebview::new(dom, cfg);
-
-        self.shared
-            .proxy
-            .send_event(UserWindowEvent::NewWindow)
-            .unwrap();
-
-        self.shared.pending_webviews.borrow_mut().push(window);
-
-        context
-    }
-
-    pub(crate) fn new_window_for_target(
-        &self,
-        target_id: RenderTargetId,
-        cfg: Config,
-    ) -> PendingDesktopContext {
-        let (window, context) = PendingWebview::new_shared(target_id, cfg);
+    pub fn new_window(&self, cfg: Config) -> PendingDesktopWindow {
+        let target_id = Runtime::current().create_render_target();
+        let (window, context) = PendingWebview::new(target_id, cfg);
 
         self.shared
             .proxy
@@ -359,30 +341,36 @@ fn is_main_thread() -> bool {
     objc2_foundation::NSThread::isMainThread_class()
 }
 
-/// A [`DesktopContext`] that is pending creation.
+/// A desktop window that is pending creation.
 ///
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # async fn app() {
-/// // Create a new window with a component that will be rendered in the new window.
-/// let dom = VirtualDom::new(|| rsx!{ "popup!" });
-///
 /// // Create a new window asynchronously
-/// let pending_context = dioxus::desktop::window().new_window(dom, Default::default());
+/// let pending_window = dioxus::desktop::window().new_window(Default::default());
+/// let target = pending_window.target_id();
 ///
 /// // Wait for the context to be created
-/// let window = pending_context.await;
+/// let window = pending_window.await;
 ///
 /// // Now control the window
 /// window.set_fullscreen(true);
+///
+/// // Render into `target` with `Portal { target, ... }`.
 /// # }
 /// ```
-pub struct PendingDesktopContext {
+pub struct PendingDesktopWindow {
+    pub(crate) target_id: RenderTargetId,
     pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
 }
 
-impl PendingDesktopContext {
+impl PendingDesktopWindow {
+    /// The render target associated with the pending window.
+    pub fn target_id(&self) -> RenderTargetId {
+        self.target_id
+    }
+
     /// Resolve the pending context into a [`DesktopContext`].
     pub async fn resolve(self) -> DesktopContext {
         self.try_resolve()
@@ -396,7 +384,7 @@ impl PendingDesktopContext {
     }
 }
 
-impl IntoFuture for PendingDesktopContext {
+impl IntoFuture for PendingDesktopWindow {
     type Output = DesktopContext;
 
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;

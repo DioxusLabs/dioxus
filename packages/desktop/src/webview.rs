@@ -1,4 +1,4 @@
-use crate::PendingDesktopContext;
+use crate::PendingDesktopWindow;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
@@ -6,15 +6,12 @@ use crate::{
     edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
     waker::tao_waker,
 };
-use crate::{WeakDesktopContext, document::DesktopDocument};
+use crate::WeakDesktopContext;
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{RenderTargetId, Runtime, ScopeId, VirtualDom, provide_context};
-use dioxus_document::Document;
-use dioxus_history::{History, MemoryHistory};
+use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{FutureExt, pin_mut};
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
@@ -195,8 +192,6 @@ impl WebviewEdits {
 }
 
 pub(crate) struct WebviewInstance {
-    pub dom: Option<VirtualDom>,
-    pub target_id: RenderTargetId,
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -214,22 +209,11 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub(crate) fn new_owned(
-        cfg: Config,
-        mut dom: VirtualDom,
-        shared: Rc<SharedContext>,
-    ) -> WebviewInstance {
-        let mut instance = Self::new_shared(cfg, RenderTargetId::ROOT, &mut dom, shared, true);
-        instance.dom = Some(dom);
-        instance
-    }
-
-    pub(crate) fn new_shared(
+    pub(crate) fn new(
         mut cfg: Config,
         target_id: RenderTargetId,
         dom: &mut VirtualDom,
         shared: Rc<SharedContext>,
-        provide_root_context: bool,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
@@ -519,87 +503,18 @@ impl WebviewInstance {
             cfg.window_close_behavior,
         ));
 
-        // Provide the desktop context to the virtual dom and edit handler
+        // Provide the desktop context to the edit handler.
         _ = edits.desktop_context.set(Rc::downgrade(&desktop_context));
-        if provide_root_context {
-            let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-            let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-            dom.in_scope(ScopeId::ROOT, || {
-                provide_context(desktop_context.clone());
-                provide_context(provider);
-                provide_context(history_provider);
-            });
-        }
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
         WebviewInstance {
-            dom: None,
-            target_id,
             edits,
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             _menu: menu,
             _web_context: web_context,
-        }
-    }
-
-    pub fn poll_vdom(&mut self) {
-        let Some(dom) = self.dom.as_mut() else {
-            return;
-        };
-        let mut cx = std::task::Context::from_waker(&self.waker);
-
-        // Continuously poll the virtualdom until it's pending
-        // Wait for work will return Ready when it has edits to be sent to the webview
-        // It will return Pending when it needs to be polled again - nothing is ready
-        loop {
-            // Check if there is a new edit channel we need to send. On IOS,
-            // the websocket will be killed when the device is put into sleep. If we
-            // find the socket has been closed, we create a new socket and send it to
-            // the webview to continue on
-            // https://github.com/DioxusLabs/dioxus/issues/4374
-            if self
-                .edits
-                .wry_queue
-                .poll_new_edits_location(&mut cx)
-                .is_ready()
-            {
-                _ = self.desktop_context.webview.evaluate_script(&format!(
-                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                    edits_path = self.edits.wry_queue.edits_path(),
-                    expected_key = self.edits.wry_queue.required_server_key()
-                ));
-            }
-
-            // If we're waiting for a render, wait for it to finish before we continue
-            let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
-            if edits_flushed_poll.is_pending() {
-                return;
-            }
-
-            {
-                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
-                #[cfg(target_os = "android")]
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-                let fut = dom.wait_for_work();
-                pin_mut!(fut);
-
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
-            }
-
-            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
-            #[cfg(target_os = "android")]
-            let _lock = crate::android_sync_lock::android_runtime_lock();
-
-            self.edits.wry_queue.with_mutation_state_mut(|f| {
-                dom.render_immediate(f);
-            });
-            self.edits.wry_queue.send_edits();
         }
     }
 
@@ -657,39 +572,23 @@ impl SynchronousEventResponse {
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
 /// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
 pub(crate) struct PendingWebview {
-    kind: PendingWebviewKind,
+    target_id: RenderTargetId,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
-pub(crate) enum PendingWebviewKind {
-    Owned(VirtualDom),
-    Shared(RenderTargetId),
-}
-
 impl PendingWebview {
-    pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
+    pub(crate) fn new(target_id: RenderTargetId, cfg: Config) -> (Self, PendingDesktopWindow) {
         let (sender, receiver) = futures_channel::oneshot::channel();
         let webview = Self {
-            kind: PendingWebviewKind::Owned(dom),
+            target_id,
             cfg,
             sender,
         };
-        let pending = PendingDesktopContext { receiver };
-        (webview, pending)
-    }
-
-    pub(crate) fn new_shared(
-        target_id: RenderTargetId,
-        cfg: Config,
-    ) -> (Self, PendingDesktopContext) {
-        let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self {
-            kind: PendingWebviewKind::Shared(target_id),
-            cfg,
-            sender,
+        let pending = PendingDesktopWindow {
+            target_id,
+            receiver,
         };
-        let pending = PendingDesktopContext { receiver };
         (webview, pending)
     }
 
@@ -697,18 +596,16 @@ impl PendingWebview {
         self,
         shared_dom: &mut VirtualDom,
         shared: &Rc<SharedContext>,
-    ) -> WebviewInstance {
-        let window = match self.kind {
-            PendingWebviewKind::Owned(dom) => {
-                WebviewInstance::new_owned(self.cfg, dom, shared.clone())
-            }
-            PendingWebviewKind::Shared(target_id) => {
-                WebviewInstance::new_shared(self.cfg, target_id, shared_dom, shared.clone(), false)
-            }
-        };
+    ) -> (RenderTargetId, WebviewInstance) {
+        let window = WebviewInstance::new(
+            self.cfg,
+            self.target_id,
+            shared_dom,
+            shared.clone(),
+        );
 
         _ = self.sender.send(window.desktop_context.clone());
 
-        window
+        (self.target_id, window)
     }
 }

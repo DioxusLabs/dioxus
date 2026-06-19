@@ -1,8 +1,7 @@
 //! Multiwindow example
 //!
 //! This example shows how to implement a simple multiwindow application using dioxus.
-//! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
-//! own context, root elements, etc.
+//! This works by rendering a `Window` component when the user clicks a button.
 
 use dioxus::prelude::*;
 
@@ -11,16 +10,29 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut windows = use_signal(Vec::<usize>::new);
+    let mut next_id = use_signal(|| 0usize);
+
     let onclick = move |_| {
-        dioxus::desktop::window().new_window(VirtualDom::new(popup), Default::default());
+        let id = next_id();
+        next_id.set(id + 1);
+        windows.write().push(id);
     };
 
     rsx! {
         button { onclick, "New Window" }
+        for id in windows() {
+            Window {
+                key: "{id}",
+                onclose: move |_| windows.write().retain(|window_id| *window_id != id),
+                Popup {}
+            }
+        }
     }
 }
 
-fn popup() -> Element {
+#[component]
+fn Popup() -> Element {
     let mut count = use_signal(|| 0);
     rsx! {
         div {

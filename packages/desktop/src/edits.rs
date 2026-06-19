@@ -99,14 +99,6 @@ impl WriteMutations for WryQueue {
 }
 
 impl WryQueue {
-    pub(crate) fn with_mutation_state_mut<O: 'static>(
-        &self,
-        callback: impl FnOnce(&mut MutationState) -> O,
-    ) -> O {
-        let mut inner = self.inner.borrow_mut();
-        callback(&mut inner.mutation_state)
-    }
-
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.borrow_mut();

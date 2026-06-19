@@ -1,8 +1,6 @@
 //! This example shows how to create a popup window and send data back to the parent window.
-//! Currently Dioxus doesn't support nested renderers, hence the need to create popups as separate windows.
 
 use dioxus::prelude::*;
-use std::rc::Rc;
 
 fn main() {
     dioxus::LaunchBuilder::desktop().launch(app);
@@ -10,6 +8,8 @@ fn main() {
 
 fn app() -> Element {
     let mut emails_sent = use_signal(|| Vec::new() as Vec<String>);
+    let mut compose_windows = use_signal(Vec::<usize>::new);
+    let mut next_window_id = use_signal(|| 0usize);
 
     // Wait for responses to the compose channel, and then push them to the emails_sent signal.
     let handle = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
@@ -20,16 +20,25 @@ fn app() -> Element {
     });
 
     let open_compose_window = move |_evt: MouseEvent| {
-        let tx = handle.tx();
-        dioxus::desktop::window().new_window(
-            VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
-            Default::default(),
-        );
+        let id = next_window_id();
+        next_window_id.set(id + 1);
+        compose_windows.write().push(id);
     };
 
     rsx! {
         h1 { "This is your email" }
         button { onclick: open_compose_window, "Click to compose a new email" }
+        for id in compose_windows() {
+            Window {
+                key: "{id}",
+                onclose: move |_| compose_windows.write().retain(|window_id| *window_id != id),
+                Popup {
+                    send: move |message| {
+                        handle.tx().unbounded_send(message).unwrap();
+                    }
+                }
+            }
+        }
         ul {
             for message in emails_sent.read().iter() {
                 li {
@@ -41,7 +50,8 @@ fn app() -> Element {
     }
 }
 
-fn popup(send: Rc<dyn Fn(String)>) -> Element {
+#[component]
+fn Popup(send: EventHandler<String>) -> Element {
     let mut user_input = use_signal(String::new);
     let window = dioxus::desktop::use_window();
 
@@ -59,7 +69,7 @@ fn popup(send: Rc<dyn Fn(String)>) -> Element {
             }
             button {
                 onclick: move |_| {
-                    send(user_input.cloned());
+                    send.call(user_input.cloned());
                     dioxus::desktop::window().close();
                 },
                 "Send"

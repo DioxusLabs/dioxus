@@ -58,26 +58,32 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
 
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        _ = webview
+                    if let Some(app_webview) = app.webviews.get(&id) {
+                        _ = app_webview
+                            .webview
                             .desktop_context
                             .webview
                             .evaluate_script("window.interpreter.handleWindowsDragDrop();");
                     }
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        _ = webview
+                    if let Some(app_webview) = app.webviews.get(&id) {
+                        _ = app_webview
+                            .webview
                             .desktop_context
                             .webview
                             .evaluate_script("window.interpreter.handleWindowsDragLeave();");
                     }
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        _ = webview.desktop_context.webview.evaluate_script(&format!(
-                            "window.interpreter.handleWindowsDragOver({x_pos}, {y_pos});"
-                        ));
+                    if let Some(app_webview) = app.webviews.get(&id) {
+                        _ = app_webview
+                            .webview
+                            .desktop_context
+                            .webview
+                            .evaluate_script(&format!(
+                                "window.interpreter.handleWindowsDragOver({x_pos}, {y_pos});"
+                            ));
                     }
                 }
 

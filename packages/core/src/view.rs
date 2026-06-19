@@ -112,7 +112,6 @@ fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
 }
 
 /// Convert a view into a [`VNode`] using template capacities resolved at the call site.
-#[inline]
 pub fn into_vnode_with_capacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
@@ -134,7 +133,6 @@ impl ViewTemplate for VComponent {
 }
 
 impl View for VComponent {
-    #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
         dynamic.push_node(DynamicNode::Component(self));
     }
@@ -518,7 +516,6 @@ pub mod dynamic_node {
     where
         N: IntoDynNode<Marker>,
     {
-        #[inline]
         fn push(self, dynamic: &mut DynamicValues) {
             dynamic.push_node(self.node.into_dyn_node());
         }
@@ -731,7 +728,6 @@ impl ViewTemplate for DynamicAttributesBuilder {
 }
 
 impl View for DynamicAttributesBuilder {
-    #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
         dynamic.push_attrs(self.attrs);
     }

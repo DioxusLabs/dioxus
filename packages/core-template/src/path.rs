@@ -19,13 +19,13 @@ impl TemplatePath {
 
     /// Return the path for a root position.
     pub const fn root(index: usize) -> Self {
-        let mut path = Self::empty().next_child();
-        let mut sibling = 0;
-        while sibling < index {
-            path = path.next_sibling();
-            sibling += 1;
+        if index >= u128::BITS as usize {
+            return Self::empty();
         }
-        path
+
+        Self {
+            path: 1u128 << index,
+        }
     }
 
     /// Return the compact path bits.
@@ -57,15 +57,12 @@ impl TemplatePath {
     /// Split a path to a static node into its parent path and the node's index among that
     /// parent's children.
     pub const fn split_insertion(self) -> (TemplatePath, usize) {
-        let mut parent = self.path;
-        let mut insertion_index = 0usize;
-        while parent != 0 && parent & 1 == 0 {
-            insertion_index += 1;
-            parent >>= 1;
+        if self.path == 0 {
+            return (TemplatePath::from_bits(0), 0);
         }
-        if parent != 0 {
-            parent >>= 1;
-        }
+
+        let insertion_index = self.path.trailing_zeros() as usize;
+        let parent = (self.path >> insertion_index) >> 1;
         (TemplatePath::from_bits(parent), insertion_index)
     }
 
@@ -76,15 +73,7 @@ impl TemplatePath {
 
     /// Return the number of path segments.
     pub const fn len(self) -> usize {
-        let mut count = 0;
-        let mut path = self.path;
-        while path != 0 {
-            if path & 1 == 1 {
-                count += 1;
-            }
-            path >>= 1;
-        }
-        count
+        self.path.count_ones() as usize
     }
 
     /// Return true if this path has no segments.
@@ -94,31 +83,29 @@ impl TemplatePath {
 
     /// Return the path segment at `index`.
     pub fn segment(self, index: usize) -> u8 {
-        let mut current_segment = 0usize;
-        let mut current_index = 0u8;
-        let mut started = false;
-        let mut next_bit = self.bit_len();
-        while next_bit > 0 {
-            next_bit -= 1;
-            let bit = (self.path >> next_bit) & 1;
-            if bit == 1 {
-                if started {
-                    if current_segment == index {
-                        return current_index;
-                    }
-                    current_segment += 1;
-                    current_index = 0;
-                } else {
-                    started = true;
-                }
-            } else {
-                current_index = current_index.checked_add(1).expect("path overflow");
+        let mut path = self.path;
+        let mut remaining_segments = index;
+
+        loop {
+            let bit_len = u128::BITS - path.leading_zeros();
+            if bit_len == 0 {
+                panic!("bad path segment");
             }
+
+            let marker = 1u128 << (bit_len - 1);
+            let remaining_path = path ^ marker;
+            if remaining_segments == 0 {
+                let next_marker_bit_len = u128::BITS - remaining_path.leading_zeros();
+                return if next_marker_bit_len == 0 {
+                    (bit_len - 1) as u8
+                } else {
+                    (bit_len - next_marker_bit_len - 1) as u8
+                };
+            }
+
+            path = remaining_path;
+            remaining_segments -= 1;
         }
-        if started && current_segment == index {
-            return current_index;
-        }
-        panic!("bad path segment");
     }
 
     /// Return true if this compact path starts with `ancestor`.
@@ -132,13 +119,14 @@ impl TemplatePath {
             return false;
         }
 
-        for index in 0..ancestor_len {
-            if self.segment(index) != ancestor.segment(index) {
-                return false;
-            }
+        if ancestor_len == self.len() {
+            return self.path == ancestor.path;
         }
 
-        true
+        let suffix_bits = self.bit_len() - ancestor.bit_len();
+        suffix_bits > 0
+            && (self.path >> suffix_bits) == ancestor.path
+            && ((self.path >> (suffix_bits - 1)) & 1) == 1
     }
 
     /// Return the number of raw child/sibling bits in this path.
@@ -243,5 +231,85 @@ impl<'de> serde::Deserialize<'de> for TemplatePath {
     {
         let path = <u128 as serde::Deserialize>::deserialize(deserializer)?;
         Ok(Self { path })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_paths_are_single_marker_bits() {
+        assert_eq!(TemplatePath::root(0).bits(), 0b1);
+        assert_eq!(TemplatePath::root(1).bits(), 0b10);
+        assert_eq!(TemplatePath::root(3).bits(), 0b1000);
+        assert_eq!(TemplatePath::root(127).bits(), 1u128 << 127);
+        assert_eq!(TemplatePath::root(128).bits(), 0);
+    }
+
+    #[test]
+    fn len_counts_path_segments() {
+        assert_eq!(TemplatePath::empty().len(), 0);
+        assert_eq!(TemplatePath::from_bits(0b1).len(), 1);
+        assert_eq!(TemplatePath::from_bits(0b100101).len(), 3);
+    }
+
+    #[test]
+    fn segment_reads_sibling_indexes() {
+        let path = TemplatePath::root(2)
+            .next_child()
+            .next_sibling()
+            .next_child();
+
+        assert_eq!(path.bits(), 0b100101);
+        assert_eq!(path.segment(0), 2);
+        assert_eq!(path.segment(1), 1);
+        assert_eq!(path.segment(2), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "bad path segment")]
+    fn segment_panics_for_missing_index() {
+        let _ = TemplatePath::root(0).segment(1);
+    }
+
+    #[test]
+    fn starts_with_matches_segment_prefixes() {
+        let root_zero = TemplatePath::root(0);
+        let root_one = TemplatePath::root(1);
+        let root_zero_child_one = root_zero.next_child().next_sibling();
+        let root_one_child_zero = root_one.next_child();
+
+        assert!(root_zero.starts_with(TemplatePath::empty()));
+        assert!(root_zero.starts_with(root_zero));
+        assert!(root_zero_child_one.starts_with(root_zero));
+        assert!(root_one_child_zero.starts_with(root_one));
+
+        assert!(!root_one.starts_with(root_zero));
+        assert!(!root_one_child_zero.starts_with(root_zero));
+        assert!(!root_zero.starts_with(root_zero_child_one));
+    }
+
+    #[test]
+    fn starts_with_rejects_raw_bit_prefixes_across_segment_boundaries() {
+        assert!(!TemplatePath::from_bits(0b10).starts_with(TemplatePath::from_bits(0b1)));
+        assert!(!TemplatePath::from_bits(0b101).starts_with(TemplatePath::from_bits(0b1)));
+        assert!(!TemplatePath::from_bits(0b1001).starts_with(TemplatePath::from_bits(0b10)));
+
+        assert!(TemplatePath::from_bits(0b110).starts_with(TemplatePath::from_bits(0b1)));
+        assert!(TemplatePath::from_bits(0b101).starts_with(TemplatePath::from_bits(0b10)));
+    }
+
+    #[test]
+    fn split_insertion_returns_parent_and_sibling_index() {
+        let path = TemplatePath::root(1)
+            .next_child()
+            .next_sibling()
+            .next_sibling();
+        let (parent, index) = path.split_insertion();
+
+        assert_eq!(path.bits(), 0b10100);
+        assert_eq!(parent.bits(), TemplatePath::root(1).bits());
+        assert_eq!(index, 2);
     }
 }
