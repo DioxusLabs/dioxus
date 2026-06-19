@@ -663,7 +663,7 @@ impl VNode {
         let mut next_id = None;
         for_each_dynamic_attr_group(self, |group| {
             // We clean up the roots in the next step, so don't worry about them here
-            if group.static_path().len() == 1 {
+            if group.static_path().depth() == 1 {
                 return;
             }
 
@@ -984,7 +984,7 @@ impl VNode {
 
         let root_id = dom.unchecked_mounted_root_node(mount, root_idx);
         with_consumed_id(to, root_id.element_id(), |to| {
-            for depth in 1..cursor.len() {
+            for depth in 1..cursor.depth() {
                 to.child(cursor.segment(depth) as usize);
             }
             to.pop_id(id.element_id());

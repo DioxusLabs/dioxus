@@ -68,11 +68,11 @@ impl TemplatePath {
 
     /// Return true if this path points at a template root node (a direct child of the root).
     pub const fn is_root(self) -> bool {
-        self.len() == 1
+        self.depth() == 1
     }
 
-    /// Return the number of path segments.
-    pub const fn len(self) -> usize {
+    /// Return the number of path segments from the template root to this path.
+    pub const fn depth(self) -> usize {
         self.path.count_ones() as usize
     }
 
@@ -110,16 +110,16 @@ impl TemplatePath {
 
     /// Return true if this compact path starts with `ancestor`.
     pub fn starts_with(self, ancestor: TemplatePath) -> bool {
-        let ancestor_len = ancestor.len();
-        if ancestor_len == 0 {
+        let ancestor_depth = ancestor.depth();
+        if ancestor_depth == 0 {
             return true;
         }
 
-        if ancestor_len > self.len() {
+        if ancestor_depth > self.depth() {
             return false;
         }
 
-        if ancestor_len == self.len() {
+        if ancestor_depth == self.depth() {
             return self.path == ancestor.path;
         }
 
@@ -207,8 +207,8 @@ impl TemplateSlotPath {
 
     pub(crate) const fn fill_depth(self) -> usize {
         match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.len(),
-            TemplateSlotTarget::AppendChildren(path) => path.len() + 1,
+            TemplateSlotTarget::BeforeStatic(path) => path.depth(),
+            TemplateSlotTarget::AppendChildren(path) => path.depth() + 1,
         }
     }
 }
@@ -248,10 +248,10 @@ mod tests {
     }
 
     #[test]
-    fn len_counts_path_segments() {
-        assert_eq!(TemplatePath::empty().len(), 0);
-        assert_eq!(TemplatePath::from_bits(0b1).len(), 1);
-        assert_eq!(TemplatePath::from_bits(0b100101).len(), 3);
+    fn depth_counts_path_segments() {
+        assert_eq!(TemplatePath::empty().depth(), 0);
+        assert_eq!(TemplatePath::from_bits(0b1).depth(), 1);
+        assert_eq!(TemplatePath::from_bits(0b100101).depth(), 3);
     }
 
     #[test]

@@ -198,7 +198,7 @@ fn insert_at_slot(
 ) -> usize {
     let mut to = TargetedLazyScope::new(to, runtime, move |to| {
         to.push_id(root_id);
-        for depth in 1..placement.parent_path.len() {
+        for depth in 1..placement.parent_path.depth() {
             to.child(placement.parent_path.segment(depth) as usize);
         }
         if !placement.appends {
