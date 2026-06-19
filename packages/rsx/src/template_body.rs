@@ -74,9 +74,8 @@ impl ToTokens for TemplateBody {
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
-        // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block, so
-        // release expansions contain zero hot-reload tokens. The base template is the const
-        // `&'static Template` built by `into_vnode_with_capacity`.
+        // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block. The
+        // base template is the const `&'static Template` built by the shared typed view expansion.
         let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { __vnode.template });
 
         tokens.append_all(quote! {
@@ -87,19 +86,8 @@ impl ToTokens for TemplateBody {
 
                 #(#view_definitions)*
 
-                #[cfg(not(debug_assertions))]
-                {
-                    dioxus_core::view::into_vnode_with_capacity::<
-                        #template_ops_cap,
-                        #template_string_cap,
-                        #template_dynamic_cap,
-                        _,
-                    >(#view_expr)
-                }
-
                 #[cfg(debug_assertions)]
-                #[allow(clippy::let_and_return)]
-                {
+                let __hot_reload_template_read = {
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
                     static __NORMALIZED_FILE: &'static str = {
@@ -107,36 +95,44 @@ impl ToTokens for TemplateBody {
                         dioxus_core::const_format::str_replace!(PATH, '\\', "/")
                     };
 
-                    let __hot_reload_template_read = {
-                        use dioxus_signals::ReadableExt;
+                    use dioxus_signals::ReadableExt;
 
-                        static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                            || None::<dioxus_core::internal::HotReloadedTemplate>,
-                            __NORMALIZED_FILE,
-                            line!(),
-                            column!(),
-                            #index
-                        );
-
-                        dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
-                    };
-
-                    // The literal pool and hot-reload read must be in scope before the view is
-                    // built: component literal props pull their hot-reloaded value from the pool
-                    // while the view expression evaluates.
-                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                        vec![ #( #dynamic_text.to_string() ),* ],
+                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
+                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                        __NORMALIZED_FILE,
+                        line!(),
+                        column!(),
+                        #index
                     );
 
-                    // Build the template through the typed view. The template is a const
-                    // `&'static Template`, so it is already stable across hot reloads without a cache.
-                    let __vnode = dioxus_core::view::into_vnode_with_capacity::<
-                        #template_ops_cap,
-                        #template_string_cap,
-                        #template_dynamic_cap,
-                        _,
-                    >(#view_expr);
+                    dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
+                };
 
+                // The literal pool and hot-reload read must be in scope before the view is built:
+                // component literal props pull their hot-reloaded value from the pool while the view
+                // expression evaluates.
+                #[cfg(debug_assertions)]
+                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                    vec![ #( #dynamic_text.to_string() ),* ],
+                );
+
+                // Build the template through the typed view. The template is a const
+                // `&'static Template`, so it is already stable across hot reloads without a cache.
+                let __vnode = dioxus_core::view::into_vnode_with_capacity::<
+                    #template_ops_cap,
+                    #template_string_cap,
+                    #template_dynamic_cap,
+                    _,
+                >(#view_expr);
+
+                #[cfg(not(debug_assertions))]
+                {
+                    __vnode
+                }
+
+                #[cfg(debug_assertions)]
+                #[allow(clippy::let_and_return)]
+                {
                     let __original_template = #hot_reload_mapping;
                     // If the template has not been hot reloaded, we always use the original template
                     // Templates nested within macros may be merged because they have the same file-line-column-index

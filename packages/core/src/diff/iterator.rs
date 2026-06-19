@@ -195,48 +195,24 @@ impl DiffState<'_, '_, '_, '_> {
             // Children remain only between the shared ends on the new side: insert.
             (true, false) => {
                 let inserted = &new[prefix..new_suffix_start];
-                let created = if suffix > 0 {
-                    if pure_insert_anchor_keeps_template {
-                        let anchor = new_mounts[new_suffix_start].expect("suffix");
-                        self.create_and_insert(
-                            ElementEdge::First,
-                            inserted,
-                            &new[new_suffix_start],
-                            anchor,
-                            parent,
-                        )
-                    } else {
-                        // Insert the new run before the first node of the shared
-                        // suffix while its committed mount is still visible.
-                        self.create_and_insert(
-                            ElementEdge::First,
-                            inserted,
-                            &old[old_suffix_start],
-                            old_mounts[old_suffix_start],
-                            parent,
-                        )
-                    }
+                // Anchor the inserted run against the shared end beside it: `First`/before the
+                // suffix when there is one, otherwise `Last`/after the prefix.
+                let edge = if suffix > 0 {
+                    ElementEdge::First
                 } else {
-                    if pure_insert_anchor_keeps_template {
-                        let anchor = new_mounts[prefix - 1].expect("prefix");
-                        self.create_and_insert(
-                            ElementEdge::Last,
-                            inserted,
-                            &new[prefix - 1],
-                            anchor,
-                            parent,
-                        )
-                    } else {
-                        // No suffix: append the new run after the last node of
-                        // the prefix while its committed mount is still visible.
-                        self.create_and_insert(
-                            ElementEdge::Last,
-                            inserted,
-                            &old[prefix - 1],
-                            old_mounts[prefix - 1],
-                            parent,
-                        )
-                    }
+                    ElementEdge::Last
+                };
+                // When the boundary's template is unchanged its NEW mount is already committed, so
+                // anchor on the new side; otherwise the boundary still shows its OLD committed mount
+                // (not yet diffed), so anchor there before it moves. The new- and old-side boundary
+                // indices differ when `suffix > 0`, so each branch resolves its own.
+                let created = if pure_insert_anchor_keeps_template {
+                    let boundary = if suffix > 0 { new_suffix_start } else { prefix - 1 };
+                    let anchor = new_mounts[boundary].expect("shared boundary mount");
+                    self.create_and_insert(edge, inserted, &new[boundary], anchor, parent)
+                } else {
+                    let boundary = if suffix > 0 { old_suffix_start } else { prefix - 1 };
+                    self.create_and_insert(edge, inserted, &old[boundary], old_mounts[boundary], parent)
                 };
                 for (slot, mount) in new_mounts[prefix..new_suffix_start]
                     .iter_mut()
@@ -304,7 +280,7 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         parent: Option<MountRef>,
-        mut new_mounts: &mut [Option<MountId>],
+        new_mounts: &mut [Option<MountId>],
     ) {
         let old_key_to_old_index = old
             .iter()
@@ -331,20 +307,13 @@ impl DiffState<'_, '_, '_, '_> {
             .collect::<Box<[_]>>();
 
         if shared_count == 0 {
-            let first_old = old.first().unwrap();
-            let created = if self.has_writer() {
-                let site = insertion_site_at(
-                    ElementEdge::First,
-                    crate::MountedVNode::new(first_old, old_mounts[0]),
-                    self.dom,
-                    self.context(),
-                );
-                let to = self.to.as_deref_mut().expect("writer checked");
-                create_at_site(new, parent, site, self.dom, to)
-            } else {
-                self.dom
-                    .create_children_with_parents(self.to.as_deref_mut(), new, parent, parent)
-            };
+            let created = self.create_and_insert(
+                ElementEdge::First,
+                new,
+                old.first().unwrap(),
+                old_mounts[0],
+                parent,
+            );
             self.dom
                 .remove_nodes(self.to.as_deref_mut(), old, old_mounts);
             for (slot, mount) in new_mounts.iter_mut().zip(created.mounts) {
@@ -434,7 +403,7 @@ impl DiffState<'_, '_, '_, '_> {
                     parent,
                     &new_index_to_old_index,
                     (next + 1)..last,
-                    &mut new_mounts,
+                    new_mounts,
                     &mut mounted_new,
                 );
             }
@@ -520,18 +489,20 @@ impl DiffState<'_, '_, '_, '_> {
         // fragment) do we walk the new sibling order, then the committed view;
         // both consult the runtime's stale set so they never anchor mid-move.
         let site = self.has_writer().then(|| {
-            vnode_edge_site(edge, crate::MountedVNode::new(&new[sibling_idx], sibling_mount), self.dom)
-                .or_else(|| {
-                    insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom)
-                })
-                .unwrap_or_else(|| {
-                    insertion_site_at(
-                        edge,
-                        crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
-                        self.dom,
-                        context,
-                    )
-                })
+            vnode_edge_site(
+                edge,
+                crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
+                self.dom,
+            )
+            .or_else(|| insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom))
+            .unwrap_or_else(|| {
+                insertion_site_at(
+                    edge,
+                    crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
+                    self.dom,
+                    context,
+                )
+            })
         });
         let runtime = self.dom.runtime.clone();
         let dom = &mut *self.dom;

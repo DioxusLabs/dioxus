@@ -81,8 +81,8 @@ impl Parse for DefineElements {
         let mut explicit_gated_attribute_groups = false;
         if !input.is_empty() {
             let fork = input.fork();
-            if let Ok(marker) = fork.call(Ident::parse_any) {
-                if marker == "gated_attributes" {
+            if let Ok(marker) = fork.call(Ident::parse_any)
+                && marker == "gated_attributes" {
                     explicit_gated_attribute_groups = true;
                     let _marker: Ident = input.call(Ident::parse_any)?;
                     let content;
@@ -92,7 +92,6 @@ impl Parse for DefineElements {
                         let _ = content.parse::<Token![,]>();
                     }
                 }
-            }
         }
 
         let mut elements = Vec::new();

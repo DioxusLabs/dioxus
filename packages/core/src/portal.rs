@@ -251,10 +251,10 @@ fn place_children(
         target_id,
         "portal (re)mount runs inside the portal scope, whose target_id routes its writes"
     );
-    let mut render_to = to;
+    let render_to = to;
     let should_mount = render_to.is_some();
     let mut root_mount = existing_root_mount;
-    if let Some(to) = render_to.as_deref_mut() {
+    if let Some(to) = render_to {
         append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
             place_children_inner(dom, &children, &mut root_mount, parent, Some(to))
         });
@@ -417,7 +417,7 @@ impl RenderDriver for PortalDriver {
         destroy_component_state: bool,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let mut render_to = to;
+            let render_to = to;
             // `PortalDriver::create` always sets `last_rendered_node` before
             // returning, and removal only fires after a scope has gone
             // through `create`, so the clone is always `Some`.
@@ -429,7 +429,7 @@ impl RenderDriver for PortalDriver {
             node.as_vnode().remove_node_inner(
                 node.root_mount(),
                 dom,
-                render_to.as_deref_mut(),
+                render_to,
                 destroy_component_state,
             );
         });
