@@ -117,21 +117,19 @@ fn Forecast(weather: WeatherResponse) -> Element {
 
 #[component]
 fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
-    let mut input = use_signal(|| "".to_string());
-    let locations = use_loader(move || get_locations(input()));
+    let mut search = use_signal(|| "".to_string());
+    let locations = use_loader(move || get_locations(search()));
 
     rsx! {
         div {
             div { class: "inline-flex flex-col justify-center relative text-gray-500",
                 div { class: "relative",
-                    // `html::` qualified so the `input` element is not shadowed by the
-                    // local `input` signal below.
-                    html::input {
+                    input {
                         class: "p-2 pl-8 rounded-lg border border-gray-200 bg-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent",
                         placeholder: "Country name",
                         "type": "text",
                         autofocus: true,
-                        oninput: move |e: FormEvent| input.set(e.value())
+                        oninput: move |e: FormEvent| search.set(e.value())
                     }
                     svg {
                         class: "w-4 h-4 absolute left-2.5 top-3.5",
