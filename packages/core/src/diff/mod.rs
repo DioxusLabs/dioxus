@@ -77,10 +77,6 @@ impl VirtualDom {
     /// Invariant: this only affects allocation capacity; it does not allocate mount ids or mutate
     /// the committed mount graph.
     fn reserve_fragment_children(&mut self, nodes: &[VNode]) {
-        if nodes.is_empty() {
-            return;
-        }
-
         self.runtime.mounts.borrow_mut().reserve(nodes.len());
 
         let root_components = nodes.iter().map(root_component_count).sum::<usize>();
