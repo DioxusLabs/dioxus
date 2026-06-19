@@ -82,16 +82,17 @@ impl Parse for DefineElements {
         if !input.is_empty() {
             let fork = input.fork();
             if let Ok(marker) = fork.call(Ident::parse_any)
-                && marker == "gated_attributes" {
-                    explicit_gated_attribute_groups = true;
-                    let _marker: Ident = input.call(Ident::parse_any)?;
-                    let content;
-                    braced!(content in input);
-                    while !content.is_empty() {
-                        gated_attribute_groups.push(content.parse()?);
-                        let _ = content.parse::<Token![,]>();
-                    }
+                && marker == "gated_attributes"
+            {
+                explicit_gated_attribute_groups = true;
+                let _marker: Ident = input.call(Ident::parse_any)?;
+                let content;
+                braced!(content in input);
+                while !content.is_empty() {
+                    gated_attribute_groups.push(content.parse()?);
+                    let _ = content.parse::<Token![,]>();
                 }
+            }
         }
 
         let mut elements = Vec::new();
@@ -182,6 +183,11 @@ impl ToTokens for DefineElements {
             .elements
             .iter()
             .map(|element| element.to_tokens_with_paths(core, html, gated_attribute_groups));
+        let completion_variants = self
+            .elements
+            .iter()
+            .map(ElementDef::completion_variant_tokens);
+        let completion_reexports = self.elements.iter().map(|element| &element.name);
         let context = self.context.then(|| self.context_tokens(html));
         let detected_duplicate_macros = (!self.explicit_gated_attribute_groups)
             .then(|| self.detected_duplicate_macro_tokens(gated_attribute_groups));
@@ -192,6 +198,18 @@ impl ToTokens for DefineElements {
             #detected_duplicate_macros
             #marker_traits
             #(#elements)*
+            #[doc(hidden)]
+            mod element_completions {
+                #[doc(hidden)]
+                #[allow(non_camel_case_types)]
+                /// This enum is generated to help autocomplete braces after an element name.
+                pub enum Element {
+                    #(#completion_variants),*
+                }
+            }
+
+            #[allow(unused_imports)]
+            pub use element_completions::Element::{#(#completion_reexports),*};
             #context
         });
     }
@@ -557,6 +575,19 @@ impl ElementDef {
             .strip_prefix("r#")
             .map(ToString::to_string)
             .unwrap_or_else(|| self.rust_name())
+    }
+
+    fn completion_variant_tokens(&self) -> TokenStream2 {
+        let name = &self.name;
+        let attrs = self
+            .attrs
+            .iter()
+            .filter(|attr| !attr.path().is_ident("element"));
+
+        quote! {
+            #(#attrs)*
+            #name {}
+        }
     }
 
     fn tag_name_value(&self) -> String {
