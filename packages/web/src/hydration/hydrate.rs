@@ -11,8 +11,8 @@ use wasm_bindgen::JsCast;
 
 use super::cursor::HydrationCursor;
 
-use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
 use super::SuspenseMessage;
+use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
 
 fn children_array(parent: &web_sys::Node) -> js_sys::Array {
     js_sys::Array::from(parent.child_nodes().unchecked_ref())
