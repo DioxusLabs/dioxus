@@ -87,21 +87,30 @@ impl WriteMutations for WebsysDom {
     }
 
     fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        let ns = ns.unwrap_or_default();
+        let owned;
         let text_value = match value {
-            AttributeValue::Text(txt) => Some(txt),
-            AttributeValue::Float(f) => Some(&f.to_string()),
-            AttributeValue::Int(n) => Some(&n.to_string()),
-            AttributeValue::Bool(b) => Some(if *b { "true" } else { "false" }),
-            AttributeValue::None => None,
+            AttributeValue::Text(txt) => txt.as_str(),
+            AttributeValue::Float(f) => {
+                owned = f.to_string();
+                owned.as_str()
+            }
+            AttributeValue::Int(n) => {
+                owned = n.to_string();
+                owned.as_str()
+            }
+            AttributeValue::Bool(b) => {
+                if *b {
+                    "true"
+                } else {
+                    "false"
+                }
+            }
+            AttributeValue::None => return self.interpreter.remove_current_attribute(name, ns),
             _ => unreachable!(),
         };
-        if let Some(text_value) = text_value {
-            self.interpreter
-                .set_current_attribute(name, &text_value, ns.unwrap_or_default())
-        } else {
-            self.interpreter
-                .remove_current_attribute(name, ns.unwrap_or_default())
-        }
+
+        self.interpreter.set_current_attribute(name, text_value, ns)
     }
 
     fn set_text(&mut self, value: &str) {
