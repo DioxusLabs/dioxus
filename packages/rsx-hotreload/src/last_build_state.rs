@@ -170,72 +170,10 @@ struct TemplateBodyPools {
 impl TemplateBodyPools {
     fn collect(body: &TemplateBody) -> Self {
         let mut pools = Self::default();
-        for node in &body.roots {
-            pools.visit_node(node);
-        }
+        // Walk in canonical fill order (children, then dynamic attributes, then key) so the pool
+        // indices line up with the order the typed view builder fills dynamic slots.
+        visit_roots(&mut pools, &body.roots);
         pools
-    }
-
-    fn visit_node(&mut self, node: &BodyNode) {
-        match node {
-            BodyNode::Element(element) => {
-                for attr in &element.merged_attributes {
-                    if !attr.is_static_str_literal() {
-                        self.dynamic_attributes.push(attr.clone());
-                        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
-                            self.push_formatted(lit);
-                        }
-                    }
-                }
-
-                if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element
-                    .raw_attributes
-                    .iter()
-                    .find(|attr| attr.name.is_likely_key())
-                    .map(|attr| &attr.value)
-                {
-                    self.push_formatted(key);
-                }
-
-                for child in &element.children {
-                    self.visit_node(child);
-                }
-            }
-            BodyNode::Text(text) if text.is_static() => {}
-            BodyNode::Text(text) => {
-                self.push_dynamic_node(node.clone(), None);
-                self.push_formatted(&text.input);
-            }
-            BodyNode::Component(component) => {
-                let mut literal_indexes = Vec::new();
-                self.push_dynamic_node(node.clone(), Some(Vec::new()));
-                let dynamic_node_index = self.component_literal_indexes_by_dynamic_node.len() - 1;
-
-                for property in &component.fields {
-                    let AttributeValue::AttrLiteral(literal) = &property.value else {
-                        continue;
-                    };
-
-                    if let HotLiteral::Fmted(segments) = literal {
-                        self.push_formatted(segments);
-                    }
-
-                    if !property.name.is_likely_key() {
-                        literal_indexes.push(self.component_properties.len());
-                        self.component_properties.push(literal.clone());
-                    }
-                }
-
-                self.component_literal_indexes_by_dynamic_node[dynamic_node_index] =
-                    Some(literal_indexes);
-            }
-            BodyNode::RawExpr(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::SyntheticBoundary(_) => {
-                self.push_dynamic_node(node.clone(), None);
-            }
-        }
     }
 
     fn push_dynamic_node(&mut self, node: BodyNode, component_literal_indexes: Option<Vec<usize>>) {
@@ -250,5 +188,84 @@ impl TemplateBodyPools {
                 self.dynamic_text_segments.push(segment.clone());
             }
         }
+    }
+
+    fn push_component(&mut self, component: &Component) {
+        let mut literal_indexes = Vec::new();
+        self.push_dynamic_node(BodyNode::Component(component.clone()), Some(Vec::new()));
+        let dynamic_node_index = self.component_literal_indexes_by_dynamic_node.len() - 1;
+
+        for property in &component.fields {
+            let AttributeValue::AttrLiteral(literal) = &property.value else {
+                continue;
+            };
+
+            if let HotLiteral::Fmted(segments) = literal {
+                self.push_formatted(segments);
+            }
+
+            if !property.name.is_likely_key() {
+                literal_indexes.push(self.component_properties.len());
+                self.component_properties.push(literal.clone());
+            }
+        }
+
+        self.component_literal_indexes_by_dynamic_node[dynamic_node_index] = Some(literal_indexes);
+    }
+}
+
+impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
+    fn open_element(&mut self, _element: &'a Element) -> Option<()> {
+        Some(())
+    }
+
+    fn close_element(&mut self, _element: &'a Element) -> Option<()> {
+        Some(())
+    }
+
+    fn static_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
+        // The pools only track dynamic values; static attributes contribute none.
+        Some(())
+    }
+
+    fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
+        self.dynamic_attributes.push(attr.clone());
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
+            self.push_formatted(lit);
+        }
+        Some(())
+    }
+
+    fn key(&mut self, _element: &'a Element, key: &'a AttributeValue) -> Option<()> {
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(key)) = key {
+            self.push_formatted(key);
+        }
+        Some(())
+    }
+
+    fn static_text(&mut self, _text: &'a TextNode) -> Option<()> {
+        Some(())
+    }
+
+    fn dynamic_node(&mut self, node: &'a BodyNode, _following_static_at_parent: bool) -> Option<()> {
+        match node {
+            BodyNode::Text(text) => {
+                self.push_dynamic_node(node.clone(), None);
+                self.push_formatted(&text.input);
+            }
+            BodyNode::Component(component) => {
+                self.push_component(component);
+            }
+            BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
+                self.push_dynamic_node(node.clone(), None);
+            }
+            BodyNode::Element(_) => {
+                unreachable!("elements are not dynamic nodes in the fill-order traversal")
+            }
+        }
+        Some(())
     }
 }

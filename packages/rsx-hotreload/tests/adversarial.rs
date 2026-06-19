@@ -14,6 +14,7 @@ use dioxus_core::{
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
 };
+use dioxus_core_template::DecodedTemplateOp;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::HotReloadResult;
@@ -449,4 +450,99 @@ fn reordered_props_within_single_component() {
     assert_eq!(template.component_values[0], HotReloadLiteral::Int(10));
     assert_eq!(template.component_values[1], HotReloadLiteral::Float(5.0));
     assert_eq!(template.component_values[2], HotReloadLiteral::Bool(false));
+}
+
+/// Fill-order regression: an element with both a dynamic attribute and a dynamic child must fill
+/// its dynamic slots child-first, then attribute (the canonical op-tape order the typed view
+/// builder uses). If the hot-reload differ visited attributes before children, the slots would be
+/// transposed to `[Attribute, Node]` and the runtime would feed the child value into the attribute
+/// slot (and vice versa).
+///
+/// The new template writes the attribute and child in the opposite source order; a correct differ
+/// still emits canonical `[Node, Attribute]` slots, so the child/attribute are not transposed.
+#[test]
+fn dynamic_attr_and_child_fill_child_before_attr() {
+    let old = quote! {
+        div {
+            class: "{x}",
+            {child}
+        }
+    };
+
+    let new = quote! {
+        div {
+            {child}
+            class: "{x}"
+        }
+    };
+
+    let templates = hot_reload_from_tokens(old, new).expect("should hotreload");
+    let template = templates.get(&0).unwrap();
+
+    // The child node fills slot 0, the dynamic attribute fills slot 1.
+    assert!(
+        template.dynamic_is_node(0),
+        "slot 0 should be the dynamic child node"
+    );
+    assert!(
+        template.dynamic_is_attr(1),
+        "slot 1 should be the dynamic attribute"
+    );
+    assert!(
+        !template.dynamic_is_attr(0),
+        "slot 0 must not be classified as an attribute"
+    );
+    assert!(
+        !template.dynamic_is_node(1),
+        "slot 1 must not be classified as a node"
+    );
+}
+
+/// Regression for the `bad static root` diff panic. Hot-reloading the readme counter to wrap
+/// its roots in `div { background_color: "red", ... }` adds a static-attribute element root.
+/// Static attributes lower into the op slots that precede an element's children, so the
+/// hot-reload template builder must emit the static-attr op BEFORE the child element ops;
+/// otherwise the diff's static-prototype walk steps onto the misplaced attr op and panics.
+#[test]
+fn static_attr_emitted_before_children_on_hot_reload() {
+    let before = quote! {
+        h1 { "High-Five counter: {count}" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
+    };
+    let after = quote! {
+        div {
+            background_color: "red",
+            h1 { "High-Five counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
+        }
+    };
+
+    let templates = hot_reload_from_tokens(before, after).expect("should hot reload");
+    let template = templates.get(&0).expect("template 0");
+    let ops = template.decoded_ops();
+
+    let first_attr = ops
+        .iter()
+        .position(|op| matches!(op, DecodedTemplateOp::Attr { .. }))
+        .expect("the wrapping div has a static attribute op");
+    let enters: Vec<usize> = ops
+        .iter()
+        .enumerate()
+        .filter(|(_, op)| matches!(op, DecodedTemplateOp::Enter { .. }))
+        .map(|(i, _)| i)
+        .collect();
+
+    // enters[0] is the div root; enters[1] is its first child element (h1). The static
+    // attribute must sit between them, not after the children.
+    assert!(
+        enters.len() >= 2,
+        "expected the div root and child elements: {ops:?}"
+    );
+    assert!(
+        first_attr < enters[1],
+        "static attr op (at {first_attr}) must precede the first child element Enter (at {}); ops: {ops:?}",
+        enters[1]
+    );
 }

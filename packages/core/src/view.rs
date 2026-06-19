@@ -73,12 +73,15 @@ impl<T: ViewTemplate> StaticViewTemplate for T {
     }
 }
 
-pub(crate) trait StaticViewTemplateWithCapacity<
+/// Builds the static [`Template`] for a view using template storage capacities resolved at the
+/// call site.
+pub trait StaticViewTemplateWithCapacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
 >: ViewTemplate
 {
+    /// The static template for this view type with the given storage capacities.
     const TEMPLATE: &'static Template;
 }
 
@@ -181,8 +184,9 @@ fn into_vnode_with_key<V: View>(view: V, key: Option<String>) -> VNode {
     }
 }
 
+/// Convert a view into a keyed [`VNode`] using template capacities resolved at the call site.
 #[inline]
-pub(crate) fn into_vnode_with_key_and_capacity<
+pub fn into_vnode_with_key_and_capacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
