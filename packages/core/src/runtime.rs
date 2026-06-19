@@ -605,13 +605,14 @@ fn MyComponent() -> Element {{
                 continue;
             }
             let path = anchor.static_path();
-            for idx in indices {
-                let Some(id) = mount.mounted_attribute(idx) else {
-                    continue;
-                };
-                if id.element_id() == element {
-                    return Some(EventTargetPath::Static(path));
-                }
+            let Some(anchor_idx) = node.anchor_index(anchor) else {
+                continue;
+            };
+            let Some(id) = mount.mounted_anchor_node(anchor_idx) else {
+                continue;
+            };
+            if id.element_id() == element {
+                return Some(EventTargetPath::Static(path));
             }
         }
 

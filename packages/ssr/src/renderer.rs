@@ -167,7 +167,7 @@ impl Renderer {
                                 write!(buf, "{}", text.value)?;
                             }
                         }
-                        DynamicNode::Fragment(nodes) => {
+                        DynamicNode::Fragment(_) => {
                             let mounted_children = template.mounted_fragment_children(*index, dom);
 
                             for child in mounted_children {

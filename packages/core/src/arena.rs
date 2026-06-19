@@ -214,22 +214,6 @@ impl VirtualDom {
         target.elements.try_remove(el.index());
     }
 
-    pub(crate) fn element_exists_for_mount(&self, mount: MountId, el: MountedElementId) -> bool {
-        self.element_exists_in_target(self.mount_target_id(mount), el)
-    }
-
-    pub(crate) fn element_exists_in_target(
-        &self,
-        target_id: RenderTargetId,
-        el: MountedElementId,
-    ) -> bool {
-        self.runtime
-            .render_targets
-            .borrow()
-            .get(target_id.index())
-            .is_some_and(|target| target.elements.get(el.index()).is_some())
-    }
-
     // Drop a scope without dropping its children
     //
     // Note: This will not remove any ids from the arena

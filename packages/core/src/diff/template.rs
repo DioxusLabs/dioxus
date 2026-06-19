@@ -38,6 +38,18 @@ impl<'a> DynamicNodeSlot<'a> {
         self.index
     }
 
+    pub(super) fn anchor_index(self) -> usize {
+        self.template
+            .anchors()
+            .iter()
+            .position(|candidate| *candidate == *self.anchor)
+            .expect("dynamic node anchor belongs to template")
+    }
+
+    pub(super) fn appends(self) -> bool {
+        matches!(self.slot_target(), TemplateSlotTarget::AppendChildren(_))
+    }
+
     pub(super) fn root_index(self) -> usize {
         if self.is_root_level() {
             for (root_idx, _, dynamic_anchor) in self.template.root_slots() {
@@ -67,34 +79,9 @@ impl<'a> DynamicNodeSlot<'a> {
         self.anchor.static_path()
     }
 
-    pub(super) fn placement(self) -> SlotPlacement {
-        match self.slot_target() {
-            TemplateSlotTarget::BeforeStatic(path) => {
-                let (parent_path, static_insertion_index) = path.split_insertion();
-                SlotPlacement {
-                    parent_path,
-                    static_insertion_index,
-                    appends: false,
-                }
-            }
-            TemplateSlotTarget::AppendChildren(parent_path) => SlotPlacement {
-                parent_path,
-                static_insertion_index: 0,
-                appends: true,
-            },
-        }
-    }
-
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
         self.slot_target() == other.slot_target()
     }
-}
-
-#[derive(Clone)]
-pub(super) struct SlotPlacement {
-    pub(super) parent_path: TemplatePath,
-    pub(super) static_insertion_index: usize,
-    pub(super) appends: bool,
 }
 
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
@@ -104,14 +91,16 @@ pub(super) struct DynamicAttrGroup<'a> {
     template: &'a Template,
     dynamic_values: &'a [crate::DynamicValue],
     anchor: &'a TemplateAnchor,
+    anchor_index: usize,
 }
 
 impl<'a> DynamicAttrGroup<'a> {
-    pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor) -> Self {
+    pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor, anchor_index: usize) -> Self {
         Self {
             template: &vnode.template,
             dynamic_values: &vnode.dynamic_values,
             anchor,
+            anchor_index,
         }
     }
 
@@ -121,26 +110,8 @@ impl<'a> DynamicAttrGroup<'a> {
             .filter(|&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
-    pub(super) fn static_path(&self) -> TemplatePath {
-        self.anchor.static_path()
-    }
-
-    /// Return true when the element these attributes attach to is a template root element.
-    pub(super) fn is_root_level(&self) -> bool {
-        self.anchor.static_path().is_root()
-    }
-
-    pub(super) fn root_index(&self) -> usize {
-        let path = self.static_path();
-        debug_assert!(!path.is_empty(), "bad attr root");
-        let static_root_idx = path.segment(0) as usize;
-        self.template
-            .materialization_root_for_static(static_root_idx)
-            .expect("bad attr root")
-    }
-
-    pub(super) fn first_id(&self) -> usize {
-        self.ids().next().expect("empty attr group")
+    pub(super) fn anchor_index(&self) -> usize {
+        self.anchor_index
     }
 
     pub(super) fn static_attr_value_for_key(
@@ -191,8 +162,8 @@ pub(super) fn for_each_dynamic_attr_group<'a>(
     vnode: &'a VNode,
     mut visit: impl FnMut(DynamicAttrGroup<'a>),
 ) {
-    for anchor in vnode.template.anchors() {
-        let group = DynamicAttrGroup::new(vnode, anchor);
+    for (anchor_index, anchor) in vnode.template.anchors().iter().enumerate() {
+        let group = DynamicAttrGroup::new(vnode, anchor, anchor_index);
         // Anchors that carry only dynamic nodes (e.g. a root-level node slot)
         // decorate no static element, so they are not attribute groups.
         if group.ids().next().is_some() {

@@ -11,7 +11,7 @@ use crate::{
         },
         template::{
             DynamicAttrGroup, DynamicNodeSlot, dynamic_node_slots,
-            dynamic_node_slots_in_document_order, for_each_dynamic_attr_group,
+            dynamic_node_slots_in_document_order,
         },
     },
     innerlude::{MountId, MountRef},
@@ -19,7 +19,7 @@ use crate::{
     nodes::DynamicNode,
     scopes::ScopeId,
 };
-use dioxus_core_template::TemplateAnchor;
+use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
 
 impl MountedVNode<'_> {
     /// Diff this mounted vnode against `new`.
@@ -262,7 +262,6 @@ impl VNode {
             "mounted root count must match the vnode template"
         );
         dom.mounted_root_node(mount, root_idx)
-            .filter(|id| dom.element_exists_in_target(target_id, *id))
             .map(MountedElementId::element_id)
     }
 
@@ -287,10 +286,8 @@ impl VNode {
             "slot count"
         );
 
-        if (0..dom.mounted_root_count(mount)).any(|root_idx| {
-            dom.mounted_root_node(mount, root_idx)
-                .is_some_and(|id| dom.element_exists_for_mount(mount, id))
-        }) {
+        if (0..dom.mounted_root_count(mount)).any(|root_idx| dom.mounted_root_node(mount, root_idx).is_some())
+        {
             return true;
         }
 
@@ -495,9 +492,9 @@ impl VNode {
         to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
-        // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
+        // Clean up any anchors that have claimed a static node for mount/unmounts
         // Will not generate mutations!
-        self.reclaim_attributes(mount, dom);
+        self.reclaim_anchor_nodes(mount, dom);
 
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
@@ -549,6 +546,12 @@ impl VNode {
             }
             dom.reclaim_for_mount(mount, id);
             dom.clear_mounted_root_node(mount, idx);
+        }
+
+        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
+            if anchor_static_target(anchor).is_some_and(TemplatePath::is_root) {
+                dom.clear_mounted_anchor_node(mount, anchor_idx);
+            }
         }
     }
 
@@ -617,9 +620,7 @@ impl VNode {
                     .and_then(|scope| scope.try_mounted_root_node())
                     .is_some_and(|node| node.vnode().has_live_dom(node.mount(), dom))
             }
-            Text(_) => dom
-                .mounted_dynamic_text_node(mount, idx)
-                .is_some_and(|id| dom.element_exists_for_mount(mount, id)),
+            Text(_) => dom.mounted_dynamic_text_node(mount, idx).is_some(),
             Fragment(nodes) => {
                 let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
                 nodes
@@ -647,7 +648,6 @@ impl VNode {
             }
             Text(_) if dom.mount_target_id(mount) == target_id => dom
                 .mounted_dynamic_text_node(mount, idx)
-                .filter(|id| dom.element_exists_in_target(target_id, *id))
                 .map(MountedElementId::element_id),
             Text(_) => None,
             Fragment(nodes) => {
@@ -659,26 +659,25 @@ impl VNode {
         }
     }
 
-    pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
-        let mut next_id = None;
-        for_each_dynamic_attr_group(self, |group| {
-            // We clean up the roots in the next step, so don't worry about them here
-            if group.static_path().depth() == 1 {
-                return;
+    pub(super) fn reclaim_anchor_nodes(&self, mount: MountId, dom: &mut VirtualDom) {
+        let mut reclaimed = Vec::new();
+        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
+            let Some(path) = anchor_static_target(anchor) else {
+                continue;
+            };
+            // We clean up the roots in the next step, so don't worry about them here.
+            if path.is_root() {
+                continue;
             }
 
-            // only reclaim the new element if it's different from the previous one
-            for idx in group.ids() {
-                let new_id = dom.mounted_dyn_attr(mount, idx);
-                if let Some(new_id) = new_id
-                    && Some(new_id) != next_id
-                {
-                    dom.reclaim_for_mount(mount, new_id);
-                    next_id = Some(new_id);
+            if let Some(id) = dom.mounted_anchor_node(mount, anchor_idx) {
+                if !reclaimed.contains(&id) {
+                    dom.reclaim_for_mount(mount, id);
+                    reclaimed.push(id);
                 }
-                dom.clear_mounted_dyn_attr(mount, idx);
+                dom.clear_mounted_anchor_node(mount, anchor_idx);
             }
-        });
+        }
     }
 
     /// Create this vnode under explicit render/logical parents.
@@ -777,8 +776,8 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
-        for anchor in self.template.anchors() {
-            let group = DynamicAttrGroup::new(self, anchor);
+        for (anchor_index, anchor) in self.template.anchors().iter().enumerate() {
+            let group = DynamicAttrGroup::new(self, anchor, anchor_index);
             if let Some(to) = state.to.as_deref_mut() {
                 self.write_attr_group(mount, &group, state.dom, to);
             }
@@ -926,10 +925,13 @@ impl VNode {
             !slot.is_root_level(),
             "non-root dynamic anchors must have an enclosing template root"
         );
-        let root_id = dom.unchecked_mounted_root_node(mount, slot.root_index());
-        InsertionSite::Slot {
-            parent: root_id.element_id(),
-            placement: slot.placement(),
+        let anchor_id = dom
+            .unchecked_mounted_anchor_node(mount, slot.anchor_index())
+            .element_id();
+        if slot.appends() {
+            InsertionSite::AppendTo(anchor_id)
+        } else {
+            InsertionSite::AtAnchor(DomAnchor::Before(anchor_id))
         }
     }
 
@@ -940,57 +942,15 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        // A pure dynamic-node anchor (e.g. a root-level node slot) decorates no
-        // static element, so it has no attributes to write and no static path to
-        // resolve. Skip it before `assign_static_node_as_dynamic` tries to.
         if group.ids().next().is_none() {
             return;
         }
-        let id = self.assign_static_node_as_dynamic(mount, group, dom, to);
+        let id = dom.unchecked_mounted_anchor_node(mount, group.anchor_index());
         for attribute_idx in group.ids() {
             for attr in self.dynamic_values[attribute_idx].attrs() {
                 Self::write_attribute(attr, id, mount, dom, to);
             }
-            // Store this even for empty dynamic attribute groups so fullstack
-            // can later find where attributes may be inserted.
-            dom.set_mounted_dyn_attr(mount, attribute_idx, id);
         }
-    }
-
-    /// We have some dynamic attributes attached to a some node
-    ///
-    /// That node needs to be loaded at runtime, so we need to give it an ID
-    ///
-    /// If the node in question is the root node, we just return the ID
-    ///
-    /// If the node is not on the stack, we create a new ID for it and assign it
-    fn assign_static_node_as_dynamic(
-        &self,
-        mount: MountId,
-        group: &DynamicAttrGroup<'_>,
-        dom: &mut VirtualDom,
-        to: &mut dyn WriteMutations,
-    ) -> MountedElementId {
-        let cursor = group.static_path();
-        let root_idx = group.root_index();
-        // This is just the root node. We already know it's id
-        if group.is_root_level() {
-            return dom.unchecked_mounted_root_node(mount, root_idx);
-        }
-
-        // The node is deeper in the template and we should create a new id for it
-        let target_id = dom.current_render_target_id();
-        let id = dom.next_element_in_target(target_id);
-
-        let root_id = dom.unchecked_mounted_root_node(mount, root_idx);
-        with_consumed_id(to, root_id.element_id(), |to| {
-            for depth in 1..cursor.depth() {
-                to.child(cursor.segment(depth) as usize);
-            }
-            to.pop_id(id.element_id());
-        });
-
-        id
     }
 
     fn load_template_root(
@@ -1017,8 +977,63 @@ impl VNode {
         to.push_id(template_id.element_id());
         WriteMutations::clone(to);
         to.pop_id(id.element_id());
+        self.assign_template_anchor_ids(mount, root_idx, id, dom, to);
         to.push_id(id.element_id());
         id
+    }
+
+    fn assign_template_anchor_ids(
+        &self,
+        mount: MountId,
+        root_idx: usize,
+        root_id: MountedElementId,
+        dom: &mut VirtualDom,
+        to: &mut dyn WriteMutations,
+    ) {
+        let mut assigned_paths = Vec::new();
+
+        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
+            let Some(path) = anchor_static_target(anchor) else {
+                continue;
+            };
+            let static_root_idx = path.segment(0) as usize;
+            if self.template.materialization_root_for_static(static_root_idx) != Some(root_idx) {
+                continue;
+            }
+
+            if let Some((_, id)) = assigned_paths
+                .iter()
+                .find(|(assigned_path, _)| *assigned_path == path)
+            {
+                dom.set_mounted_anchor_node(mount, anchor_idx, *id);
+                continue;
+            }
+
+            let id = if path.is_root() {
+                root_id
+            } else {
+                let target_id = dom.current_render_target_id();
+                let id = dom.next_element_in_target(target_id);
+                with_consumed_id(to, root_id.element_id(), |to| {
+                    for depth in 1..path.depth() {
+                        to.child(path.segment(depth) as usize);
+                    }
+                    to.pop_id(id.element_id());
+                });
+                id
+            };
+
+            assigned_paths.push((path, id));
+            dom.set_mounted_anchor_node(mount, anchor_idx, id);
+        }
+    }
+}
+
+fn anchor_static_target(anchor: &TemplateAnchor) -> Option<TemplatePath> {
+    match anchor.slot_target() {
+        TemplateSlotTarget::BeforeStatic(path) => Some(path),
+        TemplateSlotTarget::AppendChildren(path) if !path.is_empty() => Some(path),
+        TemplateSlotTarget::AppendChildren(_) => None,
     }
 }
 

@@ -23,9 +23,7 @@ use crate::{
 use super::{
     CreatedNodes,
     context::DiffContext,
-    template::{
-        DynamicNodeSlot, SlotPlacement, dynamic_node_slot, dynamic_node_slots_in_document_order,
-    },
+    template::{DynamicNodeSlot, dynamic_node_slot, dynamic_node_slots_in_document_order},
 };
 
 #[derive(Clone, Copy)]
@@ -66,10 +64,6 @@ pub(super) enum DomAnchor {
 #[derive(Clone)]
 pub(super) enum InsertionSite {
     AtAnchor(DomAnchor),
-    Slot {
-        parent: ElementId,
-        placement: SlotPlacement,
-    },
     AppendTo(ElementId),
 }
 
@@ -98,9 +92,6 @@ impl InsertionSite {
                 count
             }
             InsertionSite::AppendTo(id) => append_children_to(to, *id, runtime, create),
-            InsertionSite::Slot { parent, placement } => {
-                insert_at_slot(to, *parent, placement.clone(), runtime, create)
-            }
         }
     }
 }
@@ -149,18 +140,13 @@ pub(super) fn insertion_site_for_slot(
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
-    // Nested slot: place inside its enclosing static root, which is part of the same mounted
-    // template and must exist whenever renderer placement is requested.
-    let enclosing = dom
-        .mounted_root_node(parent_mount, root_idx)
-        .expect("bad slot root");
-    debug_assert!(
-        dom.element_exists_for_mount(parent_mount, enclosing),
-        "bad slot root"
-    );
-    InsertionSite::Slot {
-        parent: enclosing.element_id(),
-        placement: slot.placement(),
+    let anchor_id = dom
+        .unchecked_mounted_anchor_node(parent_mount, slot.anchor_index())
+        .element_id();
+    if slot.appends() {
+        InsertionSite::AppendTo(anchor_id)
+    } else {
+        InsertionSite::AtAnchor(DomAnchor::Before(anchor_id))
     }
 }
 
@@ -187,33 +173,6 @@ pub(super) fn at_site(
     create: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
     site.create_and_place(to, runtime, create)
-}
-
-fn insert_at_slot(
-    to: &mut dyn WriteMutations,
-    root_id: ElementId,
-    placement: SlotPlacement,
-    runtime: Rc<Runtime>,
-    create: impl FnOnce(&mut dyn WriteMutations) -> usize,
-) -> usize {
-    let mut to = TargetedLazyScope::new(to, runtime, move |to| {
-        to.push_id(root_id);
-        for depth in 1..placement.parent_path.depth() {
-            to.child(placement.parent_path.segment(depth) as usize);
-        }
-        if !placement.appends {
-            to.child(placement.static_insertion_index);
-        }
-    });
-    let count = create(&mut to);
-    if count > 0 {
-        if placement.appends {
-            to.append_children(count);
-        } else {
-            to.insert_before(count);
-        }
-    }
-    count
 }
 
 fn insertion_site_for_mounted_child(
@@ -346,11 +305,9 @@ fn live_dynamic_slot_first_element(
     idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let target_id = dom.current_render_target_id();
     match vnode.dynamic_values[idx].node() {
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
-            .filter(|id| dom.element_exists_in_target(target_id, *id))
             .map(|id| id.element_id()),
         DynamicNode::Fragment(children) => {
             let child_mounts = dom.mounted_fragment_children_exact(mount, idx, children.len());
@@ -487,7 +444,6 @@ pub(super) fn static_root_element(
         "root lookup must stay within the vnode template"
     );
     dom.mounted_root_node(mount, root_idx)
-        .filter(|id| dom.element_exists_for_mount(mount, *id))
         .map(|id| id.element_id())
 }
 

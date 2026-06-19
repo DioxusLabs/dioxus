@@ -252,6 +252,13 @@ impl VNode {
             .and_then(|_| self.dynamic_values[idx].as_node())
     }
 
+    pub(crate) fn anchor_index(&self, anchor: &TemplateAnchor) -> Option<usize> {
+        self.template
+            .anchors()
+            .iter()
+            .position(|candidate| *candidate == *anchor)
+    }
+
     fn anchor_has_node(&self, anchor: &TemplateAnchor) -> bool {
         self.dynamic_node_indices_for_anchor(anchor)
             .next()
@@ -394,14 +401,32 @@ impl<'a> MountedVNode<'a> {
             .map(|id| id.element_id())
     }
 
-    /// Get the mounted id for a dynamic attribute.
+    /// Get the mounted id for the static template node addressed by a dynamic anchor.
+    pub fn mounted_anchor_node(
+        self,
+        anchor: &TemplateAnchor,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
+        let anchor_idx = self.vnode.anchor_index(anchor)?;
+        dom.mounted_anchor_node(self.mount, anchor_idx)
+            .map(|id| id.element_id())
+    }
+
+    /// Get the mounted id for the anchor that owns a dynamic attribute.
     pub fn mounted_dynamic_attribute(
         self,
         dynamic_attribute_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        dom.mounted_dyn_attr(self.mount, dynamic_attribute_idx)
-            .map(|id| id.element_id())
+        self.vnode
+            .dynamic_values
+            .get(dynamic_attribute_idx)?
+            .as_attrs()?;
+        let anchor = self
+            .vnode
+            .template
+            .anchor_for_value(dynamic_attribute_idx)?;
+        self.mounted_anchor_node(anchor, dom)
     }
 
     /// Get mounted children for a dynamic fragment.

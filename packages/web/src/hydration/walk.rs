@@ -164,16 +164,14 @@ impl WebsysDom {
             .element_meta_at_op(op)
             .ok_or(HydrationMismatch)?;
 
-        // Resolve the mounted ElementId (the dynamic attr id overrides the root
-        // id when present) and collect dynamic listeners + onmounted events.
+        // Resolve the mounted ElementId (an anchor id overrides the root id when present) and
+        // collect dynamic listeners + onmounted events.
         let mut mounted_id = root_id;
         for anchor in vnode.vnode().dynamic_attr_anchors_for_element(op) {
-            for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
-                let attr_id = vnode
-                    .mounted_dynamic_attribute(value_idx, dom)
-                    .ok_or(VNodeNotInitialized)?;
-                mounted_id = Some(attr_id);
-            }
+            let anchor_id = vnode
+                .mounted_anchor_node(anchor, dom)
+                .ok_or(VNodeNotInitialized)?;
+            mounted_id = Some(anchor_id);
         }
 
         // Always map the element so the cursor can verify the tag and step past
@@ -192,10 +190,10 @@ impl WebsysDom {
                         if attribute.name == "onmounted" {
                             #[cfg(feature = "mounted")]
                             {
-                                let attr_id = vnode
-                                    .mounted_dynamic_attribute(value_idx, dom)
+                                let anchor_id = vnode
+                                    .mounted_anchor_node(anchor, dom)
                                     .ok_or(VNodeNotInitialized)?;
-                                self.send_mount_event(attr_id);
+                                self.send_mount_event(anchor_id);
                             }
                         } else {
                             let event_name =
