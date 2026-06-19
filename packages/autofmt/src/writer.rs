@@ -157,9 +157,16 @@ impl<'a> Writer<'a> {
     }
 
     fn write_synthetic_boundary(&mut self, body: &TemplateBody) -> Result {
-        let node = BodyNode::SyntheticBoundary(Box::new(body.clone()));
-        let expr = syn::parse2(node.to_token_stream()).map_err(|_| std::fmt::Error)?;
-        self.write_partial_expr(Ok(expr), Span::call_site())
+        let mut roots = body.roots.iter();
+        if let Some(first) = roots.next() {
+            self.write_ident(first)?;
+            for node in roots {
+                self.out.new_line()?;
+                self.out.tab()?;
+                self.write_ident(node)?;
+            }
+        }
+        Ok(())
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {

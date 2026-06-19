@@ -315,8 +315,9 @@ impl Runtime {
             // Remove the task from suspense
             if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
-                if let SuspenseLocation::UnderSuspense { boundary, .. } = boundary {
-                    boundary.remove_suspended_task(id);
+
+                if let Some(context) = boundary.suspense_context() {
+                    context.remove_suspended_task(id);
                 }
             }
 
