@@ -14,7 +14,9 @@ mod config;
 mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
+#[cfg(feature = "winit-event-handler")]
 mod event_handlers;
+#[cfg(feature = "winit-event-handler")]
 mod hooks;
 mod link_handler;
 
@@ -57,7 +59,9 @@ pub use {
 
 pub use blitz_dom::{FontContext, Widget, build_single_font_ctx};
 pub use config::Config;
+#[cfg(feature = "winit-event-handler")]
 pub use event_handlers::WinitEventHandler;
+#[cfg(feature = "winit-event-handler")]
 pub use hooks::use_winit_event_handler;
 pub use winit;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
