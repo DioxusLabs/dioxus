@@ -90,16 +90,13 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // rsx! { "title: {dynamic_text}" }
     if template.root_count() == 1
         && template.dynamic_value_count() == 1
-        && vnode.dynamic_values()[0].as_node().is_some()
+        && let Some(node) = vnode.dynamic_values()[0].as_node()
         && let Some(anchor) = template.anchor_for_value(0)
         && matches!(
             anchor.slot_target(),
             TemplateSlotTarget::AppendChildren(path) if path.is_empty()
         )
     {
-        let node = vnode.dynamic_values()[0]
-            .as_node()
-            .expect("title dynamic slot must be a node");
         return match node {
             DynamicNode::Text(text) => Ok(text.value.clone()),
             _ => Err(ExtractSingleTextNodeError::NonTextNode),

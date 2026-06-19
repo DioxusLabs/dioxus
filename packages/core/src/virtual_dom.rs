@@ -293,7 +293,7 @@ impl VirtualDom {
         Self::new_with_component(VComponent::new_with_driver(
             "root",
             render_fn,
-            Rc::new(crate::render_driver::BodyDriver::new()),
+            Rc::new(crate::render_driver::BodyDriver),
             props,
         ))
     }
@@ -326,7 +326,7 @@ impl VirtualDom {
         ));
         dom.new_scope(
             "app",
-            Rc::new(crate::render_driver::BodyDriver::new()),
+            Rc::new(crate::render_driver::BodyDriver),
             root_props,
         );
 

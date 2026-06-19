@@ -128,7 +128,7 @@ impl VirtualDom {
     }
 
     /// Queue a task to be polled
-    pub fn queue_task(&mut self, task: Task, order: ScopeOrder) {
+    pub(crate) fn queue_task(&mut self, task: Task, order: ScopeOrder) {
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
         match dirty_tasks.get(&order) {
             Some(scope) => scope.queue_task(task),

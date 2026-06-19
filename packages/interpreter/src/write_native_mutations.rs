@@ -10,10 +10,6 @@ pub struct MutationState {
 }
 
 impl MutationState {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn export_memory(&mut self) -> Vec<u8> {
         let bytes: Vec<_> = self.channel.export_memory().collect();
         self.channel.reset();
@@ -23,14 +19,6 @@ impl MutationState {
     pub fn write_memory_into(&mut self, buffer: &mut Vec<u8>) {
         buffer.extend(self.channel.export_memory());
         self.channel.reset();
-    }
-
-    pub fn channel(&mut self) -> &mut Channel {
-        &mut self.channel
-    }
-
-    pub fn channel_mut(&mut self) -> &mut Channel {
-        &mut self.channel
     }
 }
 

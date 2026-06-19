@@ -384,27 +384,12 @@ impl Template {
 
     /// Return the flat op index immediately after the static node or op at `op`.
     pub fn next_sibling_op(&self, op: usize) -> usize {
-        match self.ops[op].decode() {
-            DecodedTemplateOp::Enter { skip, .. } => op + skip as usize,
-            DecodedTemplateOp::Text => op + 2,
-            DecodedTemplateOp::Attr {
-                namespace: DecodedTemplateAttrNamespace::Custom,
-            } => op + 4,
-            DecodedTemplateOp::Attr { .. } => op + 3,
-            _ => op + 1,
-        }
+        Self::next_sibling_op_in(self.ops, op)
     }
 
     /// Return true if an op starts an element or static text node.
     pub fn is_static_node_op(&self, op: usize) -> bool {
-        match self.ops[op].decode() {
-            DecodedTemplateOp::Enter { .. } => true,
-            DecodedTemplateOp::Text => matches!(
-                self.ops.get(op + 1).map(|op| op.decode()),
-                Some(DecodedTemplateOp::Static(_))
-            ),
-            _ => false,
-        }
+        Self::is_static_node_op_in(self.ops, op)
     }
 
     /// Iterate static child node ops of an element.

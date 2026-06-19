@@ -123,14 +123,8 @@ impl HydrationCursor {
     }
 
     /// Attach a listener to the element most recently mapped under `id`.
-    pub(super) fn attach_listener(
-        &self,
-        id: u32,
-        name: &str,
-        bubbles: bool,
-    ) -> Result<(), RehydrationError> {
+    pub(super) fn attach_listener(&self, id: u32, name: &str, bubbles: bool) {
         self.base().set_node_listener(id, name, bubbles);
-        Ok(())
     }
 
     /// Descend into the current cursor's children.

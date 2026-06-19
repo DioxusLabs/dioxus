@@ -561,7 +561,7 @@ impl ViewBuilder {
         stats.open_element(None);
 
         for attr in &element.merged_attributes {
-            self.push_attribute_stats(element, attr, stats);
+            self.push_attribute_stats(attr, stats);
         }
 
         if self.should_chunk_siblings(&element.children, SiblingContext::ElementChildren) {
@@ -576,15 +576,9 @@ impl ViewBuilder {
         stats.close_element();
     }
 
-    fn push_attribute_stats(
-        &self,
-        element: &Element,
-        attr: &Attribute,
-        stats: &mut TemplateStatsBuilder,
-    ) {
+    fn push_attribute_stats(&self, attr: &Attribute, stats: &mut TemplateStatsBuilder) {
         if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
-            let namespace = attr.name.resolved(&element.name).namespace.map(|_| true);
-            stats.static_attr(namespace);
+            stats.static_attr(None);
         } else {
             stats.dynamic_attr();
         }
@@ -636,8 +630,8 @@ impl Element {
             return builder.dynamic_attr(attr);
         };
 
-        let namespace = self.builder_attribute_namespace_tokens(name);
-        let resolved_name = name.resolved(&self.name).name;
+        let namespace = quote!(None::<&'static str>);
+        let resolved_name = name.resolved(&self.name);
         let value = value.to_static().unwrap();
         builder.static_attr(
             attr.span(),
@@ -645,13 +639,6 @@ impl Element {
             quote! { #value },
             namespace,
         )
-    }
-
-    fn builder_attribute_namespace_tokens(&self, name: &AttributeName) -> TokenStream2 {
-        match name.resolved(&self.name).namespace {
-            Some(namespace) => quote! { Some(#namespace) },
-            None => quote!(None::<&'static str>),
-        }
     }
 }
 
@@ -798,8 +785,7 @@ impl TemplateBody {
 
         for attr in &element.merged_attributes {
             if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
-                let namespace = attr.name.resolved(&element.name).namespace.map(|_| true);
-                stats.static_attr(namespace);
+                stats.static_attr(None);
             } else {
                 stats.dynamic_attr();
             }

@@ -15,7 +15,6 @@ use crate::common::{ExtensionAttribute, GatedAttributeGroup, ident_to_upper_came
 pub(crate) struct ImplExtensionAttributes {
     name: Ident,
     attrs: Punctuated<ExtensionAttribute, Token![,]>,
-    for_el: bool,
     gated_attribute_groups: Vec<GatedAttributeGroup>,
 }
 
@@ -27,13 +26,10 @@ impl Parse for ImplExtensionAttributes {
         braced!(content in input);
         let attrs = content.parse_terminated(ExtensionAttribute::parse, Token![,])?;
 
-        let mut for_el = false;
         let mut gated_attribute_groups = Vec::new();
         while !input.is_empty() {
             let marker: Ident = input.call(Ident::parse_any)?;
-            if marker == "for_el" {
-                for_el = true;
-            } else if marker == "gated_attributes" {
+            if marker == "gated_attributes" {
                 let content;
                 braced!(content in input);
                 while !content.is_empty() {
@@ -43,7 +39,7 @@ impl Parse for ImplExtensionAttributes {
             } else {
                 return Err(syn::Error::new(
                     marker.span(),
-                    "expected `for_el` or `gated_attributes` after extension attribute list",
+                    "expected `gated_attributes` after extension attribute list",
                 ));
             }
         }
@@ -51,7 +47,6 @@ impl Parse for ImplExtensionAttributes {
         Ok(ImplExtensionAttributes {
             name,
             attrs,
-            for_el,
             gated_attribute_groups,
         })
     }
@@ -86,10 +81,7 @@ impl ToTokens for ImplExtensionAttributes {
         let descriptors = self.attrs.iter().map(|attr| {
             let ident = &attr.name;
             let ident_string = ident.to_string();
-            let attr_camel_name = ident_string
-                .strip_prefix("r#")
-                .unwrap_or(&ident_string)
-                .to_case(Case::UpperCamel);
+            let attr_camel_name = ident_to_upper_camel(ident);
             let descriptor = Ident::new(
                 format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                 ident.span(),
@@ -128,11 +120,7 @@ impl ToTokens for ImplExtensionAttributes {
             .filter(|attr| !attr.is_gated_by(&gated_attributes))
             .map(|attr| {
                 let ident = &attr.name;
-                let ident_string = ident.to_string();
-                let attr_camel_name = ident_string
-                    .strip_prefix("r#")
-                    .unwrap_or(&ident_string)
-                    .to_case(Case::UpperCamel);
+                let attr_camel_name = ident_to_upper_camel(ident);
                 let descriptor = Ident::new(
                     format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                     ident.span(),
@@ -225,13 +213,6 @@ impl ToTokens for ImplExtensionAttributes {
                 }
             }
         });
-        let element_impl = self.for_el.then(|| {
-            quote! {
-                impl<__DioxusAttributes, __DioxusChildren> #extension_name
-                    for ::dioxus_core::view::ElementBuilder<#name::Tag, __DioxusAttributes, __DioxusChildren>
-                {}
-            }
-        });
         tokens.append_all(quote! {
             #(#descriptors)*
 
@@ -244,8 +225,6 @@ impl ToTokens for ImplExtensionAttributes {
             pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
                 #(#impls)*
             }
-
-            #element_impl
 
             // Spread targets accept every attribute in the group, so route the (non-gated)
             // umbrella extension through the marker as well.

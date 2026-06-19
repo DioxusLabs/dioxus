@@ -195,12 +195,16 @@ impl HotReloadResult {
 
         // Quickly run through dynamic attributes first attempting to invalidate them
         // Move over old IDs onto the new template
-        self.hotreload_attributes::<Ctx>(&parts.dynamic_attributes)?;
+        for &new_attr in &parts.dynamic_attributes {
+            self.hotreload_attribute::<Ctx>(new_attr)?;
+        }
         let new_dynamic_attributes = std::mem::take(&mut self.dynamic_attributes);
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         // Move over old IDs onto the new template
-        self.hotreload_dynamic_nodes::<Ctx>(&parts.dynamic_nodes)?;
+        for &new_node in &parts.dynamic_nodes {
+            self.hot_reload_node::<Ctx>(new_node)?;
+        }
         let new_dynamic_nodes = std::mem::take(&mut self.dynamic_nodes);
 
         // Collapse the OLD-pool-indexed literal vector into the dense runtime vec the core
@@ -256,17 +260,6 @@ impl HotReloadResult {
             None => Some(None),
             _ => None,
         }
-    }
-
-    fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
-        &mut self,
-        new: &[&BodyNode],
-    ) -> Option<()> {
-        for &new_node in new {
-            self.hot_reload_node::<Ctx>(new_node)?
-        }
-
-        Some(())
     }
 
     fn hot_reload_node<Ctx: HotReloadingContext>(&mut self, node: &BodyNode) -> Option<()> {
@@ -607,7 +600,7 @@ impl HotReloadResult {
         Some(chain_templates)
     }
 
-    /// Take a new template body and return the attributes that can be hot reloaded from the last build
+    /// Try to hot reload an attribute and return the new HotReloadAttribute.
     ///
     /// IE if we shuffle attributes, remove attributes or add new attributes with the same dynamic segments, around we should be able to hot reload them.
     ///
@@ -620,18 +613,6 @@ impl HotReloadResult {
     ///     div { width, class: "{class}", id: "{id} and {class}", "Hi" }
     /// }
     /// ```
-    fn hotreload_attributes<Ctx: HotReloadingContext>(&mut self, new: &[&Attribute]) -> Option<()> {
-        // Walk through each attribute and create a new HotReloadAttribute for each one
-        for &new_attr in new {
-            // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
-            // hotreload the literal
-            self.hotreload_attribute::<Ctx>(new_attr)?;
-        }
-
-        Some(())
-    }
-
-    /// Try to hot reload an attribute and return the new HotReloadAttribute
     fn hotreload_attribute<Ctx: HotReloadingContext>(
         &mut self,
         attribute: &Attribute,

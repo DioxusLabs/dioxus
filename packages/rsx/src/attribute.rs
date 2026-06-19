@@ -146,25 +146,15 @@ impl Attribute {
 
         let attribute = |name: &AttributeName| match name {
             AttributeName::BuiltIn(_) | AttributeName::Custom(_) => {
-                let resolved = name.resolved(el_name);
-                let name = resolved.name;
+                let name = name.resolved(el_name);
                 quote! { #name }
             }
             AttributeName::Spread(_) => unreachable!("Spread attributes are handled elsewhere"),
         };
 
-        let ns = |name: &AttributeName| {
-            let namespace = name.resolved(el_name).namespace;
-            match namespace {
-                Some(namespace) => quote! { Some(#namespace) },
-                None => quote! { None },
-            }
-        };
+        let ns = |_name: &AttributeName| quote! { None };
 
-        let volatile = |name: &AttributeName| {
-            let volatile = name.resolved(el_name).volatile;
-            quote! { #volatile }
-        };
+        let volatile = |_name: &AttributeName| quote! { false };
 
         let attributes = {
             let value = &self.value;
@@ -305,22 +295,13 @@ pub enum AttributeName {
 }
 
 impl AttributeName {
-    pub(crate) fn resolved(&self, _element: &ElementName) -> ResolvedAttribute {
+    pub(crate) fn resolved(&self, _element: &ElementName) -> String {
         match self {
             Self::BuiltIn(ident) => {
                 let raw_name = ident.to_string();
-                let name = raw_name.strip_prefix("r#").unwrap_or(&raw_name).to_string();
-                ResolvedAttribute {
-                    name,
-                    namespace: None,
-                    volatile: false,
-                }
+                raw_name.strip_prefix("r#").unwrap_or(&raw_name).to_string()
             }
-            Self::Custom(lit) => ResolvedAttribute {
-                name: lit.value(),
-                namespace: None,
-                volatile: false,
-            },
+            Self::Custom(lit) => lit.value(),
             Self::Spread(_) => unreachable!("spread attributes do not have static metadata"),
         }
     }
@@ -340,12 +321,6 @@ impl AttributeName {
             Self::Spread(dots) => dots.span(),
         }
     }
-}
-
-pub(crate) struct ResolvedAttribute {
-    pub(crate) name: String,
-    pub(crate) namespace: Option<&'static str>,
-    pub(crate) volatile: bool,
 }
 
 impl Display for AttributeName {

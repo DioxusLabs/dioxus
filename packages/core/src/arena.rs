@@ -207,19 +207,11 @@ impl VirtualDom {
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {
         let target_id = self.mount_target_id(mount);
-        self.try_reclaim_in_target(target_id, el);
-    }
-
-    pub(crate) fn try_reclaim_in_target(
-        &mut self,
-        target_id: RenderTargetId,
-        el: MountedElementId,
-    ) -> bool {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets
             .get_mut(target_id.index())
             .expect("reclaim target must still be registered");
-        target.elements.try_remove(el.index()).is_some()
+        target.elements.try_remove(el.index());
     }
 
     pub(crate) fn element_exists_for_mount(&self, mount: MountId, el: MountedElementId) -> bool {

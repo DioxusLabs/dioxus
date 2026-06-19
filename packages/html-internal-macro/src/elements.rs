@@ -436,10 +436,7 @@ impl ElementDef {
         let descriptors = self.attributes.iter().map(|attr| {
             let ident = &attr.name;
             let ident_string = ident.to_string();
-            let attr_camel_name = ident_string
-                .strip_prefix("r#")
-                .unwrap_or(&ident_string)
-                .to_case(Case::UpperCamel);
+            let attr_camel_name = ident_to_upper_camel(ident);
             let descriptor = Ident::new(
                 format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                 ident.span(),
@@ -474,11 +471,7 @@ impl ElementDef {
         });
         let methods = self.attributes.iter().map(|attr| {
             let ident = &attr.name;
-            let ident_string = ident.to_string();
-            let attr_camel_name = ident_string
-                .strip_prefix("r#")
-                .unwrap_or(&ident_string)
-                .to_case(Case::UpperCamel);
+            let attr_camel_name = ident_to_upper_camel(ident);
             let descriptor = Ident::new(
                 format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                 ident.span(),

@@ -37,7 +37,6 @@ fn nearest_error_boundary(dom: &VirtualDom, id: ScopeId) -> Option<ScopeId> {
 }
 
 #[derive(Debug)]
-#[non_exhaustive]
 pub(crate) enum RehydrationError {
     /// The client tried to rehydrate a vnode before the dom was built
     VNodeNotInitialized,

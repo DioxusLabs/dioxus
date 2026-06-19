@@ -388,7 +388,8 @@ pub struct HotReloadedTemplate {
 }
 
 impl HotReloadedTemplate {
-    fn new(
+    /// Create hot-reload data from a template and dynamic value mappings.
+    pub fn from_template(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -404,25 +405,6 @@ impl HotReloadedTemplate {
             dynamic_slots,
             template,
         }
-    }
-
-    /// Create hot-reload data from a template and dynamic value mappings.
-    pub fn from_template(
-        key: Option<FmtedSegments>,
-        dynamic_nodes: Vec<HotReloadDynamicNode>,
-        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
-        component_values: Vec<HotReloadLiteral>,
-        template: Template,
-        dynamic_slots: Vec<HotReloadDynamicSlot>,
-    ) -> Self {
-        Self::new(
-            key,
-            dynamic_nodes,
-            dynamic_attributes,
-            component_values,
-            template,
-            dynamic_slots,
-        )
     }
 
     /// Return the number of root positions in the template.
@@ -474,7 +456,7 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
         }
 
         let serialized = SerializedHotReloadedTemplate::deserialize(deserializer)?;
-        Ok(Self::new(
+        Ok(Self::from_template(
             serialized.key,
             serialized.dynamic_nodes,
             serialized.dynamic_attributes,

@@ -24,11 +24,15 @@ use crate::innerlude::*;
 /// consumers may retain the node/attribute references they are handed.
 pub trait FillOrderVisitor<'a> {
     /// Called when an element is opened, before any of its attributes or children.
-    fn open_element(&mut self, element: &'a Element) -> Option<()>;
+    fn open_element(&mut self, _element: &'a Element) -> Option<()> {
+        Some(())
+    }
 
     /// Called for each static-literal attribute, *before* the element's children, matching the
     /// op tape where static attributes precede child nodes.
-    fn static_attribute(&mut self, element: &'a Element, attr: &'a Attribute) -> Option<()>;
+    fn static_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
+        Some(())
+    }
 
     /// Called for each non-static (dynamic) attribute, *after* the element's children, matching
     /// the deferred-flush order the renderer indexes dynamic values by.
@@ -40,10 +44,14 @@ pub trait FillOrderVisitor<'a> {
     }
 
     /// Called when an element is closed, after its children, attributes, and key.
-    fn close_element(&mut self, element: &'a Element) -> Option<()>;
+    fn close_element(&mut self, _element: &'a Element) -> Option<()> {
+        Some(())
+    }
 
     /// Called for a static text node.
-    fn static_text(&mut self, text: &'a TextNode) -> Option<()>;
+    fn static_text(&mut self, _text: &'a TextNode) -> Option<()> {
+        Some(())
+    }
 
     /// Called for a dynamic node (dynamic text, raw expr, component, control flow, boundary).
     ///

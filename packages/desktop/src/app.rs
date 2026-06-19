@@ -198,14 +198,10 @@ impl App {
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        let Some((close_behaviour, is_shared_dom, target_id)) =
-            self.webviews.get(&id).map(|window| {
-                (
-                    window.desktop_context.close_behaviour.get(),
-                    window.dom.is_none(),
-                    window.target_id,
-                )
-            })
+        let Some(close_behaviour) = self
+            .webviews
+            .get(&id)
+            .map(|window| window.desktop_context.close_behaviour.get())
         else {
             // If the window is not found, we can just return
             return;
@@ -225,12 +221,19 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.close_window(id, is_shared_dom, target_id);
+                self.close_window(id);
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
+        self.close_window(id);
+    }
+
+    /// Tear down one webview: fire close callbacks, drop the webview (and
+    /// with it the target's writer), re-render the shared DOM, and exit if it
+    /// was the last window (or the root target of a shared DOM).
+    fn close_window(&mut self, id: WindowId) {
         let Some((is_shared_dom, target_id)) = self
             .webviews
             .get(&id)
@@ -239,13 +242,6 @@ impl App {
             return;
         };
 
-        self.close_window(id, is_shared_dom, target_id);
-    }
-
-    /// Tear down one webview: fire close callbacks, drop the webview (and
-    /// with it the target's writer), re-render the shared DOM, and exit if it
-    /// was the last window (or the root target of a shared DOM).
-    fn close_window(&mut self, id: WindowId, is_shared_dom: bool, target_id: RenderTargetId) {
         if self.exit_on_last_window_close && is_shared_dom && target_id == RenderTargetId::ROOT {
             self.control_flow = ControlFlow::Exit;
             return;

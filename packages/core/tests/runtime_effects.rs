@@ -104,75 +104,41 @@ fn EffectChild() -> Element {
 struct BufferedRenderer;
 
 impl BufferedRenderer {
-    fn record(&mut self) {}
-
     fn flush(&mut self) {
         RENDERER_FLUSHED.store(true, Ordering::Relaxed);
     }
 }
 
 impl WriteMutations for BufferedRenderer {
-    fn push_id(&mut self, _id: ElementId) {
-        self.record();
-    }
+    fn push_id(&mut self, _id: ElementId) {}
 
-    fn pop_id(&mut self, _id: ElementId) {
-        self.record();
-    }
+    fn pop_id(&mut self, _id: ElementId) {}
 
-    fn child(&mut self, _index: usize) {
-        self.record();
-    }
+    fn child(&mut self, _index: usize) {}
 
-    fn pop(&mut self) {
-        self.record();
-    }
+    fn pop(&mut self) {}
 
-    fn create_element(&mut self, _tag: &str, _ns: Option<&str>) {
-        self.record();
-    }
+    fn create_element(&mut self, _tag: &str, _ns: Option<&str>) {}
 
-    fn create_text(&mut self, _value: &str) {
-        self.record();
-    }
+    fn create_text(&mut self, _value: &str) {}
 
-    fn clone(&mut self) {
-        self.record();
-    }
+    fn clone(&mut self) {}
 
-    fn append_children(&mut self, _m: usize) {
-        self.record();
-    }
+    fn append_children(&mut self, _m: usize) {}
 
-    fn replace_with(&mut self, _m: usize) {
-        self.record();
-    }
+    fn replace_with(&mut self, _m: usize) {}
 
-    fn insert_after(&mut self, _m: usize) {
-        self.record();
-    }
+    fn insert_after(&mut self, _m: usize) {}
 
-    fn insert_before(&mut self, _m: usize) {
-        self.record();
-    }
+    fn insert_before(&mut self, _m: usize) {}
 
-    fn set_attribute(&mut self, _name: &str, _ns: Option<&str>, _value: &AttributeValue) {
-        self.record();
-    }
+    fn set_attribute(&mut self, _name: &str, _ns: Option<&str>, _value: &AttributeValue) {}
 
-    fn set_text(&mut self, _value: &str) {
-        self.record();
-    }
+    fn set_text(&mut self, _value: &str) {}
 
-    fn add_event_listener(&mut self, _name: &str) {
-        self.record();
-    }
+    fn add_event_listener(&mut self, _name: &str) {}
 
-    fn remove_event_listener(&mut self, _name: &str) {
-        self.record();
-    }
+    fn remove_event_listener(&mut self, _name: &str) {}
 
-    fn remove(&mut self) {
-        self.record();
-    }
+    fn remove(&mut self) {}
 }

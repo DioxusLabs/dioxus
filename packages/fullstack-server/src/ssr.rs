@@ -666,11 +666,8 @@ impl SsrRendererPool {
     ) -> Result<(), IncrementalRendererError> {
         to.write_str(&cfg.index.close_head)?;
 
-        // // #[cfg(feature = "document")]
-        // {
         use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
         write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
-        // }
 
         Ok(())
     }

@@ -85,12 +85,6 @@ pub(crate) fn remove_rendered_output(
 /// The rendering lifecycle of a plain component.
 pub(crate) struct BodyDriver;
 
-impl BodyDriver {
-    pub(crate) fn new() -> Self {
-        Self
-    }
-}
-
 impl RenderDriver for BodyDriver {
     fn as_any(&self) -> &dyn Any {
         self

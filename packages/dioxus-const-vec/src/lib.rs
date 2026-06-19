@@ -134,21 +134,6 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         }
     }
 
-    /// Shrink the allocation to a new maximum size.
-    pub const fn reallocate<const NEW_MAX_SIZE: usize>(&self) -> ConstVec<T, NEW_MAX_SIZE>
-    where
-        T: Copy,
-    {
-        let mut result = ConstVec::new_with_max_size();
-        let mut index = 0;
-        while index < self.len as usize {
-            let value = unsafe { self.memory[index].assume_init() };
-            result.push(value);
-            index += 1;
-        }
-        result
-    }
-
     /// Push a value onto the end of the [`ConstVec`].
     ///
     /// # Example

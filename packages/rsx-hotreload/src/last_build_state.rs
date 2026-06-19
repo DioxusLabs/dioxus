@@ -192,7 +192,7 @@ impl TemplateBodyPools {
 
     fn push_component(&mut self, component: &Component) {
         let mut literal_indexes = Vec::new();
-        self.push_dynamic_node(BodyNode::Component(component.clone()), Some(Vec::new()));
+        self.push_dynamic_node(BodyNode::Component(component.clone()), None);
         let dynamic_node_index = self.component_literal_indexes_by_dynamic_node.len() - 1;
 
         for property in &component.fields {
@@ -215,19 +215,6 @@ impl TemplateBodyPools {
 }
 
 impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
-    fn open_element(&mut self, _element: &'a Element) -> Option<()> {
-        Some(())
-    }
-
-    fn close_element(&mut self, _element: &'a Element) -> Option<()> {
-        Some(())
-    }
-
-    fn static_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
-        // The pools only track dynamic values; static attributes contribute none.
-        Some(())
-    }
-
     fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
         self.dynamic_attributes.push(attr.clone());
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
@@ -240,10 +227,6 @@ impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(key)) = key {
             self.push_formatted(key);
         }
-        Some(())
-    }
-
-    fn static_text(&mut self, _text: &'a TextNode) -> Option<()> {
         Some(())
     }
 

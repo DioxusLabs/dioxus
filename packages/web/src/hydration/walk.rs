@@ -229,7 +229,7 @@ impl WebsysDom {
                             let event_name =
                                 attribute.name.strip_prefix("on").unwrap_or(attribute.name);
                             let bubbles = dioxus_core_types::event_bubbles(event_name);
-                            cursor.attach_listener(id_arg, event_name, bubbles)?;
+                            cursor.attach_listener(id_arg, event_name, bubbles);
                         }
                     }
                 }

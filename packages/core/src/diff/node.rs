@@ -44,10 +44,6 @@ impl MountedVNode<'_> {
     pub(crate) fn find_last_element(self, dom: &VirtualDom) -> Option<ElementId> {
         self.vnode().find_last_element(self.mount(), dom)
     }
-
-    pub(crate) fn has_live_dom(self, dom: &VirtualDom) -> bool {
-        self.vnode().has_live_dom(self.mount(), dom)
-    }
 }
 
 impl<'a> DiffFrame<'a> {
@@ -665,7 +661,7 @@ impl VNode {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                 dom.get_scope(scope_id)
                     .and_then(|scope| scope.try_mounted_root_node())
-                    .is_some_and(|node| node.has_live_dom(dom))
+                    .is_some_and(|node| node.vnode().has_live_dom(node.mount(), dom))
             }
             Text(_) => dom
                 .mounted_dynamic_text_node(mount, idx)

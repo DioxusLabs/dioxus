@@ -512,7 +512,7 @@ impl VComponent {
         Self::new_with_driver(
             fn_name,
             render_fn,
-            Rc::new(crate::render_driver::BodyDriver::new()),
+            Rc::new(crate::render_driver::BodyDriver),
             props,
         )
     }

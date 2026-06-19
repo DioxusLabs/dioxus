@@ -522,30 +522,6 @@ pub const fn element_builder<Tag>() -> ElementBuilder<Tag, (), ()> {
     }
 }
 
-/// Return the static tag name for an element builder.
-#[doc(hidden)]
-#[inline]
-pub const fn element_builder_tag_name<Tag, Attributes, Children>(
-    _: &ElementBuilder<Tag, Attributes, Children>,
-) -> &'static str
-where
-    Tag: ElementTag,
-{
-    Tag::NAME
-}
-
-/// Return the static namespace for an element builder.
-#[doc(hidden)]
-#[inline]
-pub const fn element_builder_namespace<Tag, Attributes, Children>(
-    _: &ElementBuilder<Tag, Attributes, Children>,
-) -> Option<&'static str>
-where
-    Tag: ElementTag,
-{
-    Tag::NAMESPACE
-}
-
 impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
     /// Append one attribute view.
     #[inline]
@@ -913,15 +889,6 @@ macro_rules! static_text {
 
         $crate::view::static_text::<StaticTextMarker>()
     }};
-    ($name:ident, $value:literal) => {
-        $crate::static_text!(pub struct $name, $value);
-    };
-    ($vis:vis struct $name:ident, $value:expr) => {
-        $vis struct $name;
-        impl $crate::view::StaticText for $name {
-            const TEXT: &'static str = $value;
-        }
-    };
 }
 
 /// Declare a static attribute value for typed attribute methods.

@@ -493,10 +493,6 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     let edits = rebuild_to_targeted_vec(&mut dom);
     let move_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
     let first_portal_button = first_click_listener(edits.get(&first).unwrap());
-    assert!(has_click_listener(
-        edits.get(&first).unwrap(),
-        first_portal_button
-    ));
 
     dom.runtime()
         .handle_event("click", click_event(), move_button);
@@ -509,7 +505,6 @@ fn retargeting_portal_drops_and_recreates_target_subtree() {
     assert!(removes_id(first_edits, first_portal_button));
     let second_edits = edits.get(&second).unwrap();
     let second_portal_button = first_click_listener(second_edits);
-    assert!(has_click_listener(second_edits, second_portal_button));
 
     dom.runtime()
         .handle_event_for_target(second, "click", click_event(), second_portal_button);
