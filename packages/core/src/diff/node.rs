@@ -237,18 +237,9 @@ impl VNode {
                 // Empty → non-empty: visible diffs stage new content at the
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
-                let created = if state.has_writer() {
-                    let site = insertion_site_for_slot(mount, slot, state.dom, state.context());
-                    let to = state.to.as_deref_mut().expect("writer checked");
-                    create_at_site(new, parent, site, state.dom, to)
-                } else {
-                    state.dom.create_children_with_parents(
-                        state.to.as_deref_mut(),
-                        new,
-                        parent,
-                        parent,
-                    )
-                };
+                let created = state.create_children_at_site(new, parent, |state| {
+                    insertion_site_for_slot(mount, slot, state.dom, state.context())
+                });
                 state
                     .dom
                     .set_mounted_fragment_children_vec(mount, slot.index(), created.mounts);

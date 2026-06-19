@@ -130,36 +130,27 @@ pub(super) fn insertion_site_for_slot(
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     let root_idx = slot.root_index();
-    // Every node cursor entry the diff hands us starts with the root index
-    // (see `compile_template` and rsx codegen), so the empty cursor is
-    // unreachable in practice.
+
+    // A node cursor always starts with its root index (see `compile_template` and rsx codegen), so
+    // an empty cursor is unreachable. An anchor can cover several adjacent dynamic values (`{a}{b}`
+    // lower to one anchor), so first prefer the closest following sibling that shares it — this
+    // applies to both root-level and nested slots — anchoring before its first live element.
+    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
+    }) {
+        return InsertionSite::AtAnchor(DomAnchor::Before(id));
+    }
+
     if slot.is_root_level() {
-        let our_root_idx = root_idx;
-        // A root-level anchor can cover several adjacent dynamic values
-        // (`{a}{b}` lowers to one append-at-root anchor). The closest following
-        // sibling is the next live value sharing this anchor, so check it before
-        // scanning later root positions or walking up to committed root siblings.
-        if let Some(id) =
-            parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
-                adjacent_dynamic_sibling_after_in_vnode(
-                    parent_vnode.vnode(),
-                    parent_mount,
-                    slot,
-                    dom,
-                )
-            })
-        {
-            return InsertionSite::AtAnchor(DomAnchor::Before(id));
-        }
-        if let Some(id) = root_content_after_slot(parent_mount, our_root_idx, dom) {
+        // No adjacent sibling: scan later root positions, then walk up to committed root siblings.
+        if let Some(id) = root_content_after_slot(parent_mount, root_idx, dom) {
             return InsertionSite::AtAnchor(DomAnchor::Before(id));
         }
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
-    // `cursor.len() > 1` means we're walking inside a template element. The
-    // enclosing root is therefore part of the same mounted template and must
-    // exist whenever renderer placement is requested.
+    // Nested slot: place inside its enclosing static root, which is part of the same mounted
+    // template and must exist whenever renderer placement is requested.
     let enclosing = dom
         .mounted_root_node(parent_mount, root_idx)
         .expect("bad slot root");
@@ -167,11 +158,6 @@ pub(super) fn insertion_site_for_slot(
         dom.element_exists_for_mount(parent_mount, enclosing),
         "bad slot root"
     );
-    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
-        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
-    }) {
-        return InsertionSite::AtAnchor(DomAnchor::Before(id));
-    }
     InsertionSite::Slot {
         parent: enclosing.element_id(),
         placement: slot.placement(),

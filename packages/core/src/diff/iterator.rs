@@ -110,6 +110,28 @@ impl DiffState<'_, '_, '_, '_> {
         new_mounts
     }
 
+    /// Diff the shared prefix and suffix pairs in place, before any removals, so a pair whose
+    /// template changed can still anchor against its live neighbours.
+    fn diff_shared_ends(
+        &mut self,
+        old: &[VNode],
+        old_mounts: &[MountId],
+        new: &[VNode],
+        new_mounts: &mut [Option<MountId>],
+        prefix: usize,
+        old_suffix_start: usize,
+        new_suffix_start: usize,
+    ) {
+        self.diff_child_pairs(&old[..prefix], &old_mounts[..prefix], &new[..prefix], new_mounts, 0);
+        self.diff_child_pairs(
+            &old[old_suffix_start..],
+            &old_mounts[old_suffix_start..],
+            &new[new_suffix_start..],
+            new_mounts,
+            new_suffix_start,
+        );
+    }
+
     /// Diff keyed children.
     ///
     /// Invariant: keys are unique within each sibling list. Shared keyed children keep their old
@@ -173,20 +195,13 @@ impl DiffState<'_, '_, '_, '_> {
             };
 
         if !pure_insert || pure_insert_anchor_keeps_template {
-            // Diff the shared ends in place. Nothing is removed yet, so a pair whose
-            // template changed can still anchor against its live neighbours.
-            self.diff_child_pairs(
-                &old[..prefix],
-                &old_mounts[..prefix],
-                &new[..prefix],
+            self.diff_shared_ends(
+                old,
+                old_mounts,
+                new,
                 &mut new_mounts,
-                0,
-            );
-            self.diff_child_pairs(
-                &old[old_suffix_start..],
-                &old_mounts[old_suffix_start..],
-                &new[new_suffix_start..],
-                &mut new_mounts,
+                prefix,
+                old_suffix_start,
                 new_suffix_start,
             );
         }
@@ -196,24 +211,27 @@ impl DiffState<'_, '_, '_, '_> {
             (true, false) => {
                 let inserted = &new[prefix..new_suffix_start];
                 // Anchor the inserted run against the shared end beside it: `First`/before the
-                // suffix when there is one, otherwise `Last`/after the prefix.
-                let edge = if suffix > 0 {
-                    ElementEdge::First
+                // suffix's first node when there is a suffix, otherwise `Last`/after the prefix's
+                // last node. The prefix is shared (same index on both sides); the suffix starts at
+                // different indices in old vs new.
+                let (edge, new_boundary, old_boundary) = if suffix > 0 {
+                    (ElementEdge::First, new_suffix_start, old_suffix_start)
                 } else {
-                    ElementEdge::Last
+                    (ElementEdge::Last, prefix - 1, prefix - 1)
                 };
-                // When the boundary's template is unchanged its NEW mount is already committed, so
-                // anchor on the new side; otherwise the boundary still shows its OLD committed mount
-                // (not yet diffed), so anchor there before it moves. The new- and old-side boundary
-                // indices differ when `suffix > 0`, so each branch resolves its own.
-                let created = if pure_insert_anchor_keeps_template {
-                    let boundary = if suffix > 0 { new_suffix_start } else { prefix - 1 };
-                    let anchor = new_mounts[boundary].expect("shared boundary mount");
-                    self.create_and_insert(edge, inserted, &new[boundary], anchor, parent)
+                // A kept-template boundary's NEW mount is already committed, so anchor on the new
+                // side; otherwise the boundary still shows its OLD committed mount (not yet diffed),
+                // so anchor there before it moves.
+                let (anchor_node, anchor_mount) = if pure_insert_anchor_keeps_template {
+                    (
+                        &new[new_boundary],
+                        new_mounts[new_boundary].expect("shared boundary mount"),
+                    )
                 } else {
-                    let boundary = if suffix > 0 { old_suffix_start } else { prefix - 1 };
-                    self.create_and_insert(edge, inserted, &old[boundary], old_mounts[boundary], parent)
+                    (&old[old_boundary], old_mounts[old_boundary])
                 };
+                let created =
+                    self.create_and_insert(edge, inserted, anchor_node, anchor_mount, parent);
                 for (slot, mount) in new_mounts[prefix..new_suffix_start]
                     .iter_mut()
                     .zip(created.mounts)
@@ -221,18 +239,15 @@ impl DiffState<'_, '_, '_, '_> {
                     *slot = Some(mount);
                 }
                 if !pure_insert_anchor_keeps_template {
-                    self.diff_child_pairs(
-                        &old[..prefix],
-                        &old_mounts[..prefix],
-                        &new[..prefix],
+                    // The insert anchored against the old mounts above, so the shared ends are
+                    // diffed only now that the new run is placed.
+                    self.diff_shared_ends(
+                        old,
+                        old_mounts,
+                        new,
                         &mut new_mounts,
-                        0,
-                    );
-                    self.diff_child_pairs(
-                        &old[old_suffix_start..],
-                        &old_mounts[old_suffix_start..],
-                        &new[new_suffix_start..],
-                        &mut new_mounts,
+                        prefix,
+                        old_suffix_start,
                         new_suffix_start,
                     );
                 }
@@ -615,13 +630,27 @@ impl DiffState<'_, '_, '_, '_> {
         sibling_mount: MountId,
         parent: Option<MountRef>,
     ) -> crate::diff::CreatedNodes {
-        if self.has_writer() {
-            let site = insertion_site_at(
+        self.create_children_at_site(new, parent, |state| {
+            insertion_site_at(
                 edge,
                 crate::MountedVNode::new(sibling, sibling_mount),
-                self.dom,
-                self.context(),
-            );
+                state.dom,
+                state.context(),
+            )
+        })
+    }
+
+    /// Create `new` under `parent`. When a writer is active the children are placed at `site`
+    /// (computed lazily — no-writer diffs only materialize mount state and resolve no placement);
+    /// otherwise only their mount state is created.
+    pub(super) fn create_children_at_site(
+        &mut self,
+        new: &[VNode],
+        parent: Option<MountRef>,
+        site: impl FnOnce(&mut Self) -> InsertionSite,
+    ) -> crate::diff::CreatedNodes {
+        if self.has_writer() {
+            let site = site(self);
             let to = self.to.as_deref_mut().expect("writer checked");
             create_at_site(new, parent, site, self.dom, to)
         } else {
