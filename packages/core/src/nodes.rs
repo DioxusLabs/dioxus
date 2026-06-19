@@ -305,7 +305,7 @@ impl VNode {
         &self,
     ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> {
         let mut anchors = self.dynamic_attr_anchor_indices().collect::<Vec<_>>();
-        anchors.sort_by_key(|(_, anchor)| (anchor.static_path(), anchor.values().start));
+        anchors.sort_by_key(|(_, anchor)| anchor.values().start);
         anchors.into_iter()
     }
 

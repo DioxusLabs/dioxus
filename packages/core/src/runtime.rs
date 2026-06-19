@@ -747,7 +747,7 @@ fn MyComponent() -> Element {{
                     EventTargetPath::is_under_attr,
                     |value, attr_path| {
                         if let AttributeValue::Listener(listener) = value {
-                            listeners.push(listener.clone());
+                            listeners.push((attr_path, listener.clone()));
                         }
 
                         // Break if this is the exact target element.
@@ -765,7 +765,8 @@ fn MyComponent() -> Element {{
                 "Calling {} listeners",
                 listeners.len()
             );
-            for listener in listeners.into_iter().rev() {
+            listeners.sort_by_key(|(path, _)| std::cmp::Reverse(path.depth()));
+            for (_, listener) in listeners {
                 listener.call(uievent.clone());
                 let metadata = uievent.metadata.borrow();
 

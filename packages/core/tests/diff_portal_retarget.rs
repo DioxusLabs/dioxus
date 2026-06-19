@@ -47,9 +47,7 @@ fn portal_retarget_keeps_clean_stacks_with_shared_sibling() {
 
     // Reserve the inner target id on a throwaway vdom so it is known before the
     // real App reads its props, then recreate it on the live vdom.
-    let bootstrap = VirtualDom::new_with_props(app, AppProps {
-        inner: RenderTargetId::ROOT,
-    });
+    let bootstrap = VirtualDom::new_with_props(app, AppProps { inner: RenderTargetId::ROOT });
     let inner = bootstrap.runtime().create_render_target();
     drop(bootstrap);
 

@@ -583,7 +583,6 @@ impl VNode {
         };
     }
 
-
     fn dynamic_node_edge_element(
         &self,
         mount: MountId,
