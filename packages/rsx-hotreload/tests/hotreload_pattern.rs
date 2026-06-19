@@ -90,10 +90,6 @@ fn base() -> CallBody {
     syn::parse2(base_stream()).unwrap()
 }
 
-fn decoded_ops(template: &HotReloadedTemplate) -> Vec<DecodedTemplateOp> {
-    template.decoded_ops()
-}
-
 #[test]
 fn simple_for_loop() {
     let old = quote! {
@@ -160,7 +156,7 @@ fn valid_reorder() {
 
     // It's an inversion, so we should get them in reverse
     assert_eq!(
-        decoded_ops(template),
+        template.decoded_ops(),
         vec![
             DecodedTemplateOp::Enter {
                 skip: 2,
@@ -262,7 +258,7 @@ fn valid_new_dynamic_attribute() {
 
     // We should have a new dynamic attribute
     assert_eq!(
-        decoded_ops(template),
+        template.decoded_ops(),
         vec![
             DecodedTemplateOp::Enter {
                 skip: 2,
@@ -340,7 +336,7 @@ fn valid_move_dynamic_segment_between_nodes() {
     let template = &templates[&1];
 
     // We should have a new dynamic node and no attributes
-    assert_eq!(decoded_ops(template), vec![]);
+    assert_eq!(template.decoded_ops(), vec![]);
     assert!(template.dynamic_is_node(0));
 
     // The new dynamic node should be created from the formatted segments pool
@@ -462,7 +458,7 @@ fn invalid_cases() {
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
     assert_eq!(
-        decoded_ops(template),
+        template.decoded_ops(),
         vec![
             DecodedTemplateOp::Enter {
                 skip: 2,
