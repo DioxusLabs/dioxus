@@ -5,7 +5,7 @@ use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 /// Invariant: one `DiffState` owns the active mutable access to the `VirtualDom` and the optional
 /// renderer writer. `context` describes the vnode frame currently being diffed. Mounts whose
 /// committed position is stale (moved or replaced by the active diff) are tracked on the
-/// `Runtime`, not here, so placement scans can consult them in O(1) without threading a list.
+/// `Runtime`, so placement scans can consult them in O(1).
 pub(crate) struct DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) dom: &'dom mut VirtualDom,
     pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,

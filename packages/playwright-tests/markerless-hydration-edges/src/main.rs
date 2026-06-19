@@ -211,7 +211,7 @@ fn ChildText(value: String) -> Element {
 }
 
 // SSR renders no bytes for an `Option::None` child. With markerless hydration
-// the walker now records a *virtual* placeholder for that ElementId — no
+// the walker records a *virtual* placeholder for that ElementId — no
 // comment node is inserted. Toggling to `Some(_)` issues `replace_with` on the
 // placeholder ID, which must operate via `parent.insertBefore(real, after)`
 // against the virtual entry. Toggling back to `None` reinstates a virtual
@@ -344,7 +344,7 @@ fn RootTrailingPlaceholder() -> Element {
 }
 
 // SVG nodes implement `Element`/`EventTarget`, not `HTMLElement`. Hydrated
-// listeners should bind to them the same way marker-based hydration did.
+// listeners must bind to them.
 #[component]
 fn SvgHydratedListener() -> Element {
     let mut clicks = use_signal(|| 0);

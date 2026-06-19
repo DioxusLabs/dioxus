@@ -36,7 +36,7 @@ mod partial_closure;
 mod util;
 
 // Public API used by the proc macro and workspace tooling. Keep parser-internal
-// helpers in `innerlude` instead of glob-reexporting the whole crate.
+// helpers in `innerlude`.
 pub use attribute::{Attribute, AttributeName, AttributeValue, IfAttributeValue, Spread};
 pub use component::Component;
 pub use diagnostics::Diagnostics;

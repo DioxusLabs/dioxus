@@ -17,7 +17,7 @@ extern "C" {
     #[wasm_bindgen(method, js_name = "pushRoot")]
     pub fn push_root(this: &BaseInterpreter, node: Node);
 
-    /// Bind an ElementId to a DOM node (used by the hydration cursor).
+    /// Bind an ElementId to a DOM node.
     #[wasm_bindgen(method, js_name = "setNode")]
     pub fn set_node(this: &BaseInterpreter, id: u32, node: &Node);
 

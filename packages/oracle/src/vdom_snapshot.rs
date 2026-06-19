@@ -11,7 +11,7 @@ pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
     renderer.snapshot()
 }
 
-/// Snapshot the raw rendered VDOM tree without using renderer mutations.
+/// Snapshot the rendered VDOM tree directly.
 pub(crate) fn vdom_snapshot(vdom: &VirtualDom) -> Vec<SnapshotNode> {
     vnode_snapshot(vdom, vdom.base_scope().try_mounted_root_node().unwrap())
 }

@@ -727,7 +727,6 @@ impl VNode {
         });
     }
 
-    /// Create this rsx block with separate renderer and logical parents.
     /// Create this vnode under explicit render/logical parents.
     ///
     /// Invariant: when `to` is `Some`, the new mount is foreground-renderable and every static
@@ -1134,11 +1133,10 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 /// Look up the rendered root VNode for a component scope, for walking with
 /// `find_element_in_roots` during placement.
 ///
-/// The diff only resolves a component's rendered root once it has established
-/// the component is live and rendered — placement resolution walks mounted
-/// siblings, and dynamic replacement only asks for a component edge after a
-/// live-DOM check — so a missing scope or unbuilt root is a bug, asserted here
-/// rather than papered over with a silent `None`.
+/// Callers resolve a component's rendered root only after establishing the
+/// component is live and rendered (placement resolution walks mounted siblings,
+/// and dynamic replacement asks for a component edge only after a live-DOM
+/// check), so this panics if the scope or its root is missing.
 fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> MountedVNode<'_> {
     dom.get_scope(scope_id)
         .expect("component scope")

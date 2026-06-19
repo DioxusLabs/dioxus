@@ -9,7 +9,7 @@ pub enum SnapshotNode {
         tag: String,
         /// The element namespace, if any.
         namespace: Option<String>,
-        /// The element attributes after renderer-side updates.
+        /// The element attributes.
         attrs: Vec<SnapshotAttr>,
         /// Event listener names attached to the element.
         listeners: Vec<String>,

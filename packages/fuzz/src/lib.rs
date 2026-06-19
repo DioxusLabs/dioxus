@@ -17,8 +17,7 @@
 //! The crate compiles in ordinary builds so CI type-checks it and runs the
 //! [`targeted`] regression recipes under `cargo test`. The libFuzzer binary
 //! (`packages/fuzz/fuzz`) sets `--cfg fuzzing`, which only flips runtime
-//! behavior via `cfg!(fuzzing)` (e.g. strict-by-default oracle options); it is
-//! no longer required to compile this crate at all.
+//! behavior via `cfg!(fuzzing)` (e.g. strict-by-default oracle options).
 #![deny(unsafe_code)]
 
 mod cache;

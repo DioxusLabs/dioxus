@@ -422,7 +422,7 @@ impl HotReloadedTemplate {
         self.template.strings()
     }
 
-    /// Classify a dynamic value index using the transmitted slot table.
+    /// Return whether the dynamic value at the given index is a node.
     pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
         matches!(
             self.dynamic_slots.get(dynamic_idx),
@@ -430,7 +430,7 @@ impl HotReloadedTemplate {
         )
     }
 
-    /// Classify a dynamic value index using the transmitted slot table.
+    /// Return whether the dynamic value at the given index is an attribute.
     pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
         matches!(
             self.dynamic_slots.get(dynamic_idx),

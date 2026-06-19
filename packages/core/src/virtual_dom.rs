@@ -545,23 +545,18 @@ impl VirtualDom {
     /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
     /// handling any of its mutations.
     ///
-    /// The discarded rebuild still primes each render target's template
-    /// prototype cache, but those prototypes were never created in any real DOM,
-    /// so [`Self::reset_renderer_cache`] clears them before the next render can
-    /// try to clone them.
+    /// The rebuild's edits are not applied to any real DOM, so the renderer
+    /// cache is reset afterwards to keep the next render correct.
     pub fn rebuild_in_place(&mut self) {
         self.rebuild(&mut NoOpMutations);
         self.reset_renderer_cache();
     }
 
-    /// Forget the cached template prototypes for every render target.
+    /// Discard the renderer's cached template state for every render target.
     ///
-    /// A renderer caches the first-built copy of each template root and clones
-    /// it for later instances. When a rebuild's mutations are discarded (no-op
-    /// rendering, hydration), those prototypes never reach the real DOM, so the
-    /// cache must be reset before the next render or it would clone nodes that
-    /// do not exist. Mount state and element bindings are preserved, so a
-    /// hydration walk can still bind the ids this rebuild assigned.
+    /// Call this after a rebuild whose edits were not applied to the real DOM
+    /// (no-op rendering, hydration) so the next render does not assume those
+    /// edits happened. Mount state and element bindings are preserved.
     pub fn reset_renderer_cache(&mut self) {
         for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
             target.clear_template_cache();

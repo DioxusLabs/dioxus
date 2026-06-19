@@ -534,8 +534,8 @@ impl ElementDef {
             }
 
             /// Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
-            /// builders) that accept this element's attributes. A spread builder implements only
-            /// this marker; the blanket below grants it the element's attribute methods.
+            /// builders) that accept this element's attributes. Implementing it grants the
+            /// element's attribute methods.
             pub trait #spread_marker {}
 
             impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget

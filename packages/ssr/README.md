@@ -64,7 +64,7 @@ This crate is particularly useful in pre-generating pages server-side and then s
 
 This crate supports hydration out of the box. However, both the client and server must generate the _exact_ same VirtualDOMs - the client picks up its VirtualDOM assuming that the pre-rendered page output is the same. To do this, you need to make sure that your VirtualDOM implementation is deterministic! This could involve either serializing our app state and sending it to the client, hydrating only parts of the page, or building tests to ensure what's rendered on the server is the same as the client.
 
-The rendered HTML carries no hydration markers — the web hydrator walks the rebuilt VDOM in lockstep with the existing DOM. There is no flag to flip: any SSR output is hydratable.
+Any SSR output is hydratable, with no extra configuration required.
 
 ```rust, no_run
 # use dioxus::prelude::*;

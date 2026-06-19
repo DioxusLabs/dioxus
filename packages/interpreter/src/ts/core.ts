@@ -6,7 +6,7 @@ import { setAttributeInner } from "./set_attribute";
 export type NodeId = number;
 
 // Element decorated with the listener bookkeeping properties that the
-// interpreter attaches at runtime. Saves an `@ts-ignore` per assignment.
+// interpreter attaches at runtime.
 interface ListenerElement extends Element {
   listening?: number;
 }

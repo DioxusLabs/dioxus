@@ -6,14 +6,12 @@
 //!   1. running the app component (formatting `N` keys — common-mode cost), and
 //!   2. the keyed children diff in `diff/iterator.rs`.
 //!
-//! Both costs are paid identically regardless of the diff algorithm, so the
-//! delta between two implementations of the keyed diff shows up cleanly here.
-//! `NoOpMutations` is used so we never measure the apply phase.
+//! Both costs are constant across runs, so the keyed diff itself shows up
+//! cleanly here. `NoOpMutations` is used so we never measure the apply phase.
 //!
-//! The patterns map to the cases the prefix/suffix fast path used to special
-//! case (append, prepend, remove from an end, single insert/remove, no-op
-//! re-render) plus the LIS-heavy cases (swap, reverse, shuffle) and the
-//! disjoint-key path (replace all).
+//! The patterns cover the end-anchored cases (append, prepend, remove from an
+//! end, single insert/remove, no-op re-render), the LIS-heavy cases (swap,
+//! reverse, shuffle), and the disjoint-key path (replace all).
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use dioxus::prelude::*;
@@ -35,7 +33,7 @@ fn keyed_diff(c: &mut Criterion) {
     let initial: Vec<u64> = (0..N).collect();
     let mut group = c.benchmark_group("keyed diff (1,000 rows)");
 
-    // Cases the old prefix/suffix fast path optimized.
+    // End-anchored cases (append, prepend, remove from an end, single edits).
     bench(&mut group, "append 100 at tail", &initial, append_tail);
     bench(&mut group, "prepend 100 at head", &initial, prepend_head);
     bench(&mut group, "remove 100 from tail", &initial, remove_tail);
@@ -54,10 +52,9 @@ fn keyed_diff(c: &mut Criterion) {
     bench(&mut group, "reverse", &initial, reverse);
     bench(&mut group, "shuffle", &initial, shuffle);
 
-    // Localized reorder inside a large stable list: main peels the shared
-    // prefix/suffix and only runs the LIS over the 20-wide window, while a
-    // full-list LIS pays O(n) for the whole thing. This is where main's
-    // reduced-middle is "smarter".
+    // Localized reorder inside a large stable list: the diff peels the shared
+    // prefix/suffix and runs the LIS only over the 20-wide window, leaving the
+    // ~490 stable rows on each side untouched.
     bench(&mut group, "reverse 20 mid-list", &initial, reverse_window);
     bench(&mut group, "shuffle 20 mid-list", &initial, shuffle_window);
 

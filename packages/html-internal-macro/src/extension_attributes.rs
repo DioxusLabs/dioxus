@@ -217,9 +217,8 @@ impl ToTokens for ImplExtensionAttributes {
             #(#descriptors)*
 
             /// Marker for catch-all attribute targets that accept every attribute in this
-            /// group. A `#[props(extends = ...)]` spread builder implements only this marker;
-            /// the blanket impls below grant it the group's full (non-gated and gated)
-            /// attribute extension methods.
+            /// group, including gated ones. A `#[props(extends = ...)]` spread builder
+            /// implements this marker to receive the group's full attribute extension methods.
             pub trait #spread_marker {}
 
             pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {

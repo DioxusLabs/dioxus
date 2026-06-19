@@ -176,11 +176,11 @@ impl VNode {
         // Clear the old slot when the upcoming write won't naturally overwrite it: listeners
         // are torn down explicitly, and installing a listener doesn't clear a prior attribute.
         match (old_listener, new_listener, old) {
-            // This used to be a listener but no longer is, so remove the old listener.
+            // The old attribute was a listener and the new one is not, so remove the old listener.
             (true, _, Some(old)) => {
                 to.remove_event_listener(&old.name[2..]);
             }
-            // This used to be a value but is now a listener, so clear the old value that won't be overwritten by the new listener.
+            // The old attribute was a value and the new one is a listener, so clear the old value that the new listener won't overwrite.
             (false, true, Some(_)) => {
                 let (name, namespace) = key;
                 to.set_attribute(name, namespace, &AttributeValue::None);

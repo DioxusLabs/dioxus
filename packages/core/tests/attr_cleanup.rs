@@ -36,9 +36,7 @@ fn attrs_cycle() {
     let mut oracle = RendererOracle::new();
     oracle.rebuild(&mut dom);
 
-    // Anchor diff: instead of `replaces=1` (placeholder swap), we get
-    // `loads=1` + `removes=1` for each empty<->populated cycle. Total
-    // mutations match: 2 in both models.
+    // Each empty<->populated cycle loads the new node and removes the old one.
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_1);

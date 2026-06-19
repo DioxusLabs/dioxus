@@ -38,7 +38,7 @@ struct ExpectedStep(Rc<StepSource>);
 /// ```
 ///
 /// The source app dispatches on `dioxus_core::generation()` to pick the current
-/// step (cloned from a root context — no globals, no unsafe). Between steps
+/// step, cloned from a root context. Between steps
 /// `Sequence` marks `ScopeId::APP` dirty and renders. The expected DOM is built
 /// by walking the VNode tree of the same step in a throwaway `VirtualDom` —
 /// independent of the renderer's mutation path.
@@ -65,7 +65,7 @@ impl StepSource {
 }
 
 /// One entry in a [`Sequence`]'s timeline. Steps and interludes interleave in
-/// authoring order — there's no parallel-indexed second list.
+/// authoring order.
 enum SequenceItem {
     /// An expected DOM state. Doubles as the source content for that generation.
     Step(StepSource),
@@ -73,8 +73,7 @@ enum SequenceItem {
     /// events, reading context, or making side-channel assertions on the
     /// `VirtualDom` between renders. Receives the live oracle so that event
     /// targets can be resolved semantically (`oracle.element_id_by_tag(...)`,
-    /// `oracle.element_id_by_attr(...)`) instead of by raw `ElementId(N)`
-    /// literal.
+    /// `oracle.element_id_by_attr(...)`).
     Interlude(Box<dyn FnMut(&mut VirtualDom, &RendererOracle)>),
 }
 

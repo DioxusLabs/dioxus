@@ -92,8 +92,7 @@ fn text_nodes() {
     dom.rebuild_in_place();
 
     // Adjacent dynamic texts merge into a single DOM text node — hydration splits
-    // them apart at known offsets via `SplitText` rather than relying on parser
-    // boundary markers.
+    // them apart at known offsets via `SplitText`.
     assert_eq!(dioxus_ssr::render(&dom), r#"<div>1231234</div>"#);
 }
 
@@ -165,8 +164,7 @@ fn textarea_children_render_without_markers() {
     // Regression test for https://github.com/DioxusLabs/dioxus/issues/5548.
     // `textarea` interprets its children as raw text, so the SSR output must
     // contain no hydration markers around the dynamic text — the markerless walk
-    // reconstructs the dynamic-text position on the client. With the old
-    // comment-marker hydration this rendered stray markers inside the textarea.
+    // reconstructs the dynamic-text position on the client.
     fn app() -> Element {
         let value = "hello world";
         rsx! {

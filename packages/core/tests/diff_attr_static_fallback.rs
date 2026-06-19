@@ -1,12 +1,6 @@
-//! Exercise `remove_attribute_or_write_fallback` (attributes.rs:240-292)
-//! specifically the branch where the disappearing dynamic attribute was
-//! shadowing a static template attribute at the same `(name, namespace)`
-//! key. After the dynamic disappears, the diff must restore the static
-//! value.
-//!
-//! The fuzz mutator can reach this scenario via its alias-then-remove
-//! primitive, but only stochastically. This test pins it down so the
-//! coverage of lines 248-292 doesn't depend on fuzz luck.
+//! Exercise the case where a disappearing dynamic attribute was shadowing a
+//! static template attribute at the same `(name, namespace)` key. After the
+//! dynamic attribute disappears, the diff must restore the static value.
 
 use dioxus::prelude::*;
 use dioxus_core::{Attribute, ScopeId, generation};

@@ -457,8 +457,8 @@ enum FuzzDynamicSlot {
 /// Compute the node/attribute classification of each dynamic value in template fill order: an
 /// element's children are filled before its own dynamic attributes, because attribute anchors are
 /// lowered at `close_element` (after the children). This mirrors the typed view builder, which
-/// pushes children then attributes, and is the fuzz-side source of truth for slot kinds; the
-/// lowered template no longer records it.
+/// pushes children then attributes, and is the fuzz-side source of truth for slot kinds, which
+/// the lowered template does not record.
 fn dynamic_slots_for_template(spec: &TemplateSpec, _template: &Template) -> Vec<FuzzDynamicSlot> {
     let shapes = spec
         .roots
@@ -828,7 +828,7 @@ mod tests {
             roots: vec![spec],
         });
 
-        // The dynamic child no longer appears in the op tape; only the static element remains.
+        // The dynamic child is absent from the op tape; only the static element remains.
         let decoded_ops = template.decoded_ops().collect::<Vec<_>>();
         assert_eq!(
             decoded_ops,

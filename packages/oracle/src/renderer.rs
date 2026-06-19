@@ -244,7 +244,7 @@ enum NodeRole {
 }
 
 /// The provenance of a node currently on the mutation stack, used only by the
-/// edit counters. Mirrors what the renderer stack used to track per entry.
+/// edit counters. Mirrors what the renderer stack tracks per entry.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum StackSource {
     Live,
@@ -696,9 +696,9 @@ impl RealDom for ArenaBackend<'_> {
 ///
 /// It needs no tree access: a node's provenance is a pure function of the stack
 /// ops, tracked here as a shadow source stack plus a per-`ElementId` role map
-/// (the role of whatever node is mapped to an id, updated at `pop_id`). This is
-/// the same information the renderer stack used to carry, kept out of the tree
-/// backend so [`RealDom`] stays pure tree operations.
+/// (the role of whatever node is mapped to an id, updated at `pop_id`). Keeping
+/// this information here, out of the tree backend, lets [`RealDom`] stay pure
+/// tree operations.
 struct EditCountingWriter<'a, W: WriteMutations> {
     summary: &'a mut EditSummary,
     source_stack: &'a mut Vec<StackSource>,

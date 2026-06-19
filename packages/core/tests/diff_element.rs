@@ -53,7 +53,7 @@ fn element_swap() {
     }
 
     // Anchor diff: swapping the root element to a different tag emits
-    // `load_template` + `remove_node` for the old root (no `replace_node_with`).
+    // `load_template` + `remove_node` for the old root.
     let (mut dom, mut oracle, _) = rebuild(app, expected_h1);
     for expected in [expected_h2, expected_h1, expected_h2, expected_h1] {
         let summary = rerender(&mut dom, &mut oracle, expected);

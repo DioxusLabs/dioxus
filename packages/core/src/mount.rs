@@ -631,9 +631,9 @@ mod tests {
 /// A retained suspense branch.
 ///
 /// Suspense keeps the hidden primary branch alive while the fallback branch is
-/// visible. The root `VNode` is still the render output we diff, but the branch
-/// also records the root mount identity so the boundary state is explicitly tied
-/// to retained mount ownership instead of being just a parked vnode.
+/// visible. The root `VNode` is the render output we diff, and the branch also
+/// records the root mount identity so the boundary state is tied to retained
+/// mount ownership.
 #[derive(Clone)]
 pub(crate) struct SuspenseBranch {
     root: VNode,

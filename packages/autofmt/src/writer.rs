@@ -81,11 +81,7 @@ impl<'a> Writer<'a> {
             BodyNode::RawExpr(expr) => self.write_expr_node(expr),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
-            BodyNode::SyntheticBoundary(_) => {
-                unreachable!(
-                    "synthetic boundaries exist only in expanded output, never in parsed source the formatter sees"
-                )
-            }
+            BodyNode::SyntheticBoundary(body) => self.write_synthetic_boundary(body),
         }?;
 
         let span = Self::final_span_of_node(node);
@@ -158,6 +154,12 @@ impl<'a> Writer<'a> {
 
     fn write_expr_node(&mut self, expr: &ExprNode) -> Result {
         self.write_partial_expr(expr.expr.as_expr(), expr.span())
+    }
+
+    fn write_synthetic_boundary(&mut self, body: &TemplateBody) -> Result {
+        let node = BodyNode::SyntheticBoundary(Box::new(body.clone()));
+        let expr = syn::parse2(node.to_token_stream()).map_err(|_| std::fmt::Error)?;
+        self.write_partial_expr(Ok(expr), Span::call_site())
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
@@ -1340,11 +1342,7 @@ impl<'a> Writer<'a> {
                 Some(b) => b.span.span(),
                 None => i.then_brace.span.span(),
             },
-            BodyNode::SyntheticBoundary(_) => {
-                unreachable!(
-                    "synthetic boundaries exist only in expanded output, never in parsed source the formatter sees"
-                )
-            }
+            BodyNode::SyntheticBoundary(_) => node.span(),
         }
     }
 

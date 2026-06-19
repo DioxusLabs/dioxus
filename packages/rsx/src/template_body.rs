@@ -57,8 +57,8 @@ impl ToTokens for TemplateBody {
 
         let key_warnings = self.check_for_duplicate_keys();
 
-        // Build the typed view once. This is the single live path: the release tree, the
-        // capacities, and (in debug) the hot-reload tables all come from this one traversal.
+        // Build the typed view once: the release tree, the capacities, and (in debug) the
+        // hot-reload tables all come from this one traversal.
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
         let view_expr = &pieces.view;
@@ -658,8 +658,7 @@ impl TemplateBody {
             diagnostics: Diagnostics::new(),
         };
 
-        // Save the roots without mutating the parsed tree; template lowering derives dynamic
-        // positions from the raw op tape.
+        // Save the roots; template lowering derives dynamic positions from the raw op tape.
         body.roots = nodes;
 
         // Finally, validate the key

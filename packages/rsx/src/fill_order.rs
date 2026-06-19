@@ -2,18 +2,13 @@
 //!
 //! Two orderings have to be enforced together when walking an element, and they differ:
 //!
-//! - **Structural op tape:** a static attribute is lowered immediately, into the op slots that
-//!   sit *before* an element's children (`create_static_prototype` reads attrs in
-//!   `[children_start, first_child)` and children in `[first_child, end)`). So static attributes
-//!   must be emitted *before* children.
-//! - **Dynamic-value indices:** dynamic attributes are *deferred* and flushed at `close_element`,
-//!   after every child anchor, so the renderer indexes them after the children's dynamic nodes.
-//!   So dynamic attributes must be visited *after* children, or their node/attribute slots get
-//!   transposed.
+//! - Static attributes must be emitted *before* an element's children.
+//! - Dynamic attributes must be visited *after* an element's children, so the renderer indexes
+//!   their dynamic values after the children's dynamic nodes.
 //!
 //! This module centralizes that single authoritative order — open, static attributes, children,
-//! dynamic attributes, key, close — so every consumer (hot-reload template builders, dynamic
-//! pools) stays in lockstep with the typed [`crate::TemplateBody`] view builder.
+//! dynamic attributes, key, close — so every consumer stays in lockstep with the typed
+//! [`crate::TemplateBody`] view builder.
 
 use crate::innerlude::*;
 
@@ -28,14 +23,13 @@ pub trait FillOrderVisitor<'a> {
         Some(())
     }
 
-    /// Called for each static-literal attribute, *before* the element's children, matching the
-    /// op tape where static attributes precede child nodes.
+    /// Called for each static-literal attribute, *before* the element's children.
     fn static_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
         Some(())
     }
 
-    /// Called for each non-static (dynamic) attribute, *after* the element's children, matching
-    /// the deferred-flush order the renderer indexes dynamic values by.
+    /// Called for each non-static (dynamic) attribute, *after* the element's children, so the
+    /// renderer indexes their dynamic values after the children's dynamic nodes.
     fn dynamic_attribute(&mut self, element: &'a Element, attr: &'a Attribute) -> Option<()>;
 
     /// Called once per element after its attributes, with the element's key value if it has one.

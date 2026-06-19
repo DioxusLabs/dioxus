@@ -33,11 +33,9 @@ impl Debug for DynamicValues {
 impl DynamicValues {
     /// Create a dynamic values payload.
     ///
-    /// The diff assumes every dynamic attribute slot is sorted by `(name, namespace)`.
-    /// Named attributes occupy length-1 slots (trivially sorted), but spread attributes
-    /// (e.g. `..props.attributes`) arrive in user/source order. Every render path funnels
-    /// through this constructor, so normalize spread slots here. A stable sort preserves
-    /// the relative order of duplicate keys (last-wins semantics).
+    /// Each dynamic attribute slot is normalized so its attributes are sorted by
+    /// `(name, namespace)`. Duplicate keys keep their relative input order, giving
+    /// last-wins semantics for spread attributes like `..props.attributes`.
     #[inline]
     pub fn new(key: Option<String>, mut dynamic_values: Box<[DynamicValue]>) -> Self {
         for value in dynamic_values.iter_mut() {

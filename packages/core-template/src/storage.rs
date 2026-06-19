@@ -24,8 +24,8 @@ pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 /// shifts left by one). So a chunk that reaches the splitter's lowering can nest
 /// no deeper than that bit limit. This cap is kept comfortably above it (and at
 /// the `u128` path width) so the bit-width splitter is always the binding
-/// constraint — depths between the old cap and the bit limit lower directly
-/// instead of hitting an opaque "stack capacity exceeded" panic.
+/// constraint and depths up to the bit limit lower directly instead of hitting
+/// a "stack capacity exceeded" panic.
 const TEMPLATE_PATH_STACK_CAP: usize = 128;
 
 /// Storage requirements for lowering a template.
