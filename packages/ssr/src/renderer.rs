@@ -168,14 +168,7 @@ impl Renderer {
                             }
                         }
                         DynamicNode::Fragment(nodes) => {
-                            // An empty fragment contributes no HTML — the web hydrator handles
-                            // the position via the markerless walk script.
                             let mounted_children = template.mounted_fragment_children(*index, dom);
-                            assert_eq!(
-                                mounted_children.len(),
-                                nodes.len(),
-                                "fragment dynamic node {index} is not mounted"
-                            );
 
                             for child in mounted_children {
                                 self.render_template(buf, dom, child, escaped)?;

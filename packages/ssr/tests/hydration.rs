@@ -35,8 +35,6 @@ fn dynamic_attributes() {
 
 #[test]
 fn listeners() {
-    // Listeners are attached on the client by the walk script — they leave no
-    // trace in the SSR HTML.
     fn app() -> Element {
         rsx! {
             div { width: "100px", div { onclick: |_| {} } }
@@ -91,8 +89,6 @@ fn text_nodes() {
     let mut dom = VirtualDom::new(app2);
     dom.rebuild_in_place();
 
-    // Adjacent dynamic texts merge into a single DOM text node — hydration splits
-    // them apart at known offsets via `SplitText`.
     assert_eq!(dioxus_ssr::render(&dom), r#"<div>1231234</div>"#);
 }
 
@@ -163,7 +159,7 @@ fn components_hydrate() {
 fn textarea_children_render_without_markers() {
     // Regression test for https://github.com/DioxusLabs/dioxus/issues/5548.
     // `textarea` interprets its children as raw text, so the SSR output must
-    // contain no hydration markers around the dynamic text — the markerless walk
+    // contain no hydration markers around the dynamic text. The markerless walk
     // reconstructs the dynamic-text position on the client.
     fn app() -> Element {
         let value = "hello world";

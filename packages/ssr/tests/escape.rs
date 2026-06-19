@@ -123,8 +123,6 @@ fn don_t_escape_static_scripts() {
 #[test]
 fn don_t_escape_dynamic_scripts() {
     fn app() -> Element {
-        // Named to avoid shadowing the `script` element: a value-namespace local
-        // matching an element name would be picked up inside the const template.
         let script_text = "console.log('hello world');";
         rsx! {
             script {
@@ -164,7 +162,6 @@ fn don_t_escape_static_styles() {
 #[test]
 fn don_t_escape_dynamic_styles() {
     fn app() -> Element {
-        // Named to avoid shadowing the `style` element (see `don_t_escape_dynamic_scripts`).
         let style_text = "body { font-family: \"sans-serif\"; }";
         rsx! {
             style {
