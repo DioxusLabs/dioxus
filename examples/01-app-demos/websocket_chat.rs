@@ -55,7 +55,6 @@ fn app() -> Element {
     rsx! {
         h1 { "WebSocket Chat" }
         p { "Connection status: {socket.status():?} as {user_name}" }
-        // `html::` qualified so the `input` element is not shadowed by the local `input` signal.
         html::input {
             placeholder: "Type a message",
             value: "{input}",
