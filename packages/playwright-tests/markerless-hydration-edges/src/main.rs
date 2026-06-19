@@ -22,6 +22,25 @@ fn app() -> Element {
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
         EmptyRootHydration {}
+        TextareaHydration {}
+    }
+}
+
+// `textarea` interprets its children as raw text, so it cannot carry hydration
+// comment markers. Markerless hydration must bind the SSR-rendered text content
+// and let later updates patch it. Regression for
+// https://github.com/DioxusLabs/dioxus/issues/5548.
+#[component]
+fn TextareaHydration() -> Element {
+    let mut value = use_signal(|| "initial textarea body".to_string());
+
+    rsx! {
+        textarea { id: "textarea-hydration", "{value}" }
+        button {
+            id: "textarea-hydration-update",
+            onclick: move |_| value.set("updated textarea body".to_string()),
+            "update textarea"
+        }
     }
 }
 

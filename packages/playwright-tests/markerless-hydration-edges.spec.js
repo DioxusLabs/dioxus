@@ -224,3 +224,27 @@ test("svg elements can receive hydrated listeners", async ({ page }) => {
     /\d+/
   );
 });
+
+// Regression for https://github.com/DioxusLabs/dioxus/issues/5548: `textarea`
+// content is raw text, so SSR cannot wrap it in hydration markers. The body must
+// hydrate from the server-rendered text and stay patchable afterwards.
+test("textarea dynamic body hydrates without markers and updates", async ({
+  page,
+}) => {
+  const res = await page.request.get(URL);
+  const html = await res.text();
+  // The server renders the dynamic body directly as textarea text, with no
+  // marker comments that would otherwise show up as literal characters.
+  expect(html).toContain(
+    `<textarea id="textarea-hydration">initial textarea body</textarea>`
+  );
+
+  await page.goto(URL);
+  await page.waitForTimeout(2000);
+
+  const textarea = page.locator("#textarea-hydration");
+  await expect(textarea).toHaveValue("initial textarea body");
+
+  await page.locator("#textarea-hydration-update").click();
+  await expect(textarea).toHaveValue("updated textarea body");
+});

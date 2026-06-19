@@ -190,3 +190,42 @@ fn large_static_child_block_renders_through_dynamic_chunks() {
         SnapshotNode::Element { tag, .. } if tag == "div"
     )));
 }
+
+/// Regression test for deeply nested elements. Nesting deeper than the old
+/// 32-level template path-stack cap (but within the splitter's bit-width limit)
+/// used to abort macro expansion with an opaque "template path stack capacity
+/// exceeded" panic. These 40 levels must now lower and render normally.
+#[test]
+fn deeply_nested_elements_lower_without_panicking() {
+    fn app() -> Element {
+        rsx! {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+                "deep nesting marker"
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+        }
+    }
+
+    let snapshot = render_app(app);
+    let mut node = snapshot.first().expect("one root div");
+    for _ in 0..40 {
+        let SnapshotNode::Element { tag, children, .. } = node else {
+            panic!("expected a nested div at every level");
+        };
+        assert_eq!(tag, "div");
+        node = children.first().expect("each div has a single child");
+    }
+}

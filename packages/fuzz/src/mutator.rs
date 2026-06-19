@@ -720,7 +720,7 @@ fn biased_template_attr(value: u8) -> TemplateAttrSpec {
 }
 
 fn biased_dynamic_kind(value: u8) -> DynamicKind {
-    match value % 6 {
+    match value % 7 {
         0 => biased_leaf_dynamic_kind(value),
         1 => biased_fragment_dynamic_kind(value),
         2 => DynamicKind::ComponentA,
@@ -728,6 +728,7 @@ fn biased_dynamic_kind(value: u8) -> DynamicKind {
         4 => DynamicKind::Suspense {
             mode: biased_suspense_mode(value),
         },
+        5 => DynamicKind::Portal,
         _ => DynamicKind::Placeholder,
     }
 }

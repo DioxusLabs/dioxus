@@ -564,11 +564,14 @@ fn build_dynamic(
             "GeneratedSuspenseBoundary",
         )),
         DynamicSpec::Portal(child) => {
-            // All generated portals share the ROOT render target so the harness'
-            // single oracle observes mutations from both the outer tree and the
-            // portal bodies. The portal scope still flows through the portal
-            // driver's create/diff/remove regardless of whether the target
-            // ultimately differs.
+            // `GeneratedPortal` renders its child into a freshly created render
+            // target. The harness oracle is a single writer, which only serves
+            // `RenderTargetId::ROOT`, so mutations for the portal body's target
+            // are currently skipped: the fuzzer exercises the portal driver's
+            // create/diff/remove lifecycle in the outer tree, but the portal
+            // body's rendered content is not yet differentially validated.
+            // Validating it needs a per-target `MultiWriter` oracle keyed by
+            // `RenderTargetId`.
             DynamicNode::Component(VComponent::new(
                 GeneratedPortal,
                 GeneratedPortalProps {

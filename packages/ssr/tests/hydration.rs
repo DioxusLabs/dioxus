@@ -161,6 +161,46 @@ fn components_hydrate() {
 }
 
 #[test]
+fn textarea_children_render_without_markers() {
+    // Regression test for https://github.com/DioxusLabs/dioxus/issues/5548.
+    // `textarea` interprets its children as raw text, so the SSR output must
+    // contain no hydration markers around the dynamic text — the markerless walk
+    // reconstructs the dynamic-text position on the client. With the old
+    // comment-marker hydration this rendered stray markers inside the textarea.
+    fn app() -> Element {
+        let value = "hello world";
+        rsx! {
+            textarea { "{value}" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild_in_place();
+
+    assert_eq!(
+        dioxus_ssr::render(&dom),
+        r#"<textarea>hello world</textarea>"#
+    );
+
+    // A static prefix immediately followed by dynamic text still emits no marker
+    // between the two contributions.
+    fn app2() -> Element {
+        let value = "world";
+        rsx! {
+            textarea { "hello " "{value}" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app2);
+    dom.rebuild_in_place();
+
+    assert_eq!(
+        dioxus_ssr::render(&dom),
+        r#"<textarea>hello world</textarea>"#
+    );
+}
+
+#[test]
 fn hello_world_hydrates() {
     use dioxus::hooks::use_signal;
 

@@ -16,7 +16,17 @@ pub const TEMPLATE_STORAGE_STRING_CAP: usize = 128;
 /// Default dynamic anchor storage capacity.
 pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 
-const TEMPLATE_PATH_STACK_CAP: usize = 32;
+/// Maximum element nesting depth handled by a single template chunk.
+///
+/// The rsx splitter wraps subtrees in synthetic boundaries once a path exceeds
+/// its bit-width limit (`TEMPLATE_PATH_BITS_SPLIT_LIMIT`, currently 96), and a
+/// path consumes at least one bit per nesting level (`TemplatePath::next_child`
+/// shifts left by one). So a chunk that reaches the splitter's lowering can nest
+/// no deeper than that bit limit. This cap is kept comfortably above it (and at
+/// the `u128` path width) so the bit-width splitter is always the binding
+/// constraint — depths between the old cap and the bit limit lower directly
+/// instead of hitting an opaque "stack capacity exceeded" panic.
+const TEMPLATE_PATH_STACK_CAP: usize = 128;
 
 /// Storage requirements for lowering a template.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

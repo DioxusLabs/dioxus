@@ -81,6 +81,9 @@ impl<'a> Writer<'a> {
             BodyNode::RawExpr(expr) => self.write_expr_node(expr),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
+            BodyNode::SyntheticBoundary(_) => {
+                unreachable!("synthetic boundaries exist only in expanded output, never in parsed source the formatter sees")
+            }
         }?;
 
         let span = Self::final_span_of_node(node);
@@ -1335,6 +1338,9 @@ impl<'a> Writer<'a> {
                 Some(b) => b.span.span(),
                 None => i.then_brace.span.span(),
             },
+            BodyNode::SyntheticBoundary(_) => {
+                unreachable!("synthetic boundaries exist only in expanded output, never in parsed source the formatter sees")
+            }
         }
     }
 
