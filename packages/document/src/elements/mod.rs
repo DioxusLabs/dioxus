@@ -4,8 +4,6 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId};
 use dioxus_core_macro::*;
-use dioxus_core_template::TemplateSlotTarget;
-
 mod link;
 pub use link::*;
 mod stylesheet;
@@ -78,32 +76,29 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
     let template = vnode.template;
+    let mut root_slots = template.root_slots();
+    let Some((_, static_root, dynamic_root)) = root_slots.next() else {
+        return Err(ExtractSingleTextNodeError::NonTemplate);
+    };
 
-    // rsx! { "static text" }
-    if template.root_count() == 1
-        && template.dynamic_value_count() == 0
-        && let Some((_, Some(root), None)) = template.root_slots().next()
-        && let Some(text) = template.static_text_at_op(root)
-    {
-        return Ok(text.to_string());
-    }
-    // rsx! { "title: {dynamic_text}" }
-    if template.root_count() == 1
-        && template.dynamic_value_count() == 1
-        && let Some(node) = vnode.dynamic_values()[0].as_node()
-        && let Some(anchor) = template.anchor_for_value(0)
-        && matches!(
-            anchor.slot_target(),
-            TemplateSlotTarget::AppendChildren(path) if path.is_empty()
-        )
-    {
-        return match node {
-            DynamicNode::Text(text) => Ok(text.value.clone()),
-            _ => Err(ExtractSingleTextNodeError::NonTextNode),
-        };
+    if root_slots.next().is_some() {
+        return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    Err(ExtractSingleTextNodeError::NonTemplate)
+    match (static_root, dynamic_root, template.dynamic_value_count()) {
+        // rsx! { "static text" }
+        (Some(root), None, 0) => template
+            .static_text_at_op(root)
+            .map(|text| text.to_string())
+            .ok_or(ExtractSingleTextNodeError::NonTemplate),
+        // rsx! { "title: {dynamic_text}" }
+        (None, Some(_), 1) => match vnode.dynamic_values()[0].as_node() {
+            Some(DynamicNode::Text(text)) => Ok(text.value.clone()),
+            Some(_) => Err(ExtractSingleTextNodeError::NonTextNode),
+            None => Err(ExtractSingleTextNodeError::NonTemplate),
+        },
+        _ => Err(ExtractSingleTextNodeError::NonTemplate),
+    }
 }
 
 #[cfg(test)]
