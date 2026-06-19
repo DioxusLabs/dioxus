@@ -576,8 +576,6 @@ mod struct_info {
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
-        #[allow(unused)]
-        pub core: syn::Ident,
     }
 
     impl<'a> StructInfo<'a> {
@@ -611,7 +609,6 @@ mod struct_info {
                     &format!("{builder_name}_Optional"),
                     ast.ident.span(),
                 ),
-                core: syn::Ident::new(&format!("{builder_name}_core"), ast.ident.span()),
             })
         }
 
@@ -930,12 +927,7 @@ mod struct_info {
                 impl #impl_generics dioxus_core::Properties for #name #ty_generics
                 #b_generics_where
                 {
-                    type Builder = ();
                     type ComponentBuilder<RenderFn, Marker> = #builder_name #component_generics_with_empty;
-
-                    fn builder() -> Self::Builder {
-                        unreachable!()
-                    }
 
                     fn component_builder<RenderFn, Marker>(
                         render_fn: RenderFn,
@@ -1591,12 +1583,7 @@ mod struct_info {
                     }
 
                     impl #original_impl_generics dioxus_core::Properties for #name #ty_generics #where_clause {
-                        type Builder = ();
                         type ComponentBuilder<RenderFn, Marker> = ();
-
-                        fn builder() -> Self::Builder {
-                            unreachable!()
-                        }
 
                         fn component_builder<RenderFn, Marker>(
                             _render_fn: RenderFn,
@@ -1669,9 +1656,6 @@ mod struct_info {
         /// Whether to show docs for the `TypeBuilder` type (rather than hiding them).
         pub doc: bool,
 
-        /// Docs on the `Type::builder()` method.
-        pub builder_method_doc: Option<syn::Expr>,
-
         /// Docs on the `TypeBuilder` type. Specifying this implies `doc`, but you can just specify
         /// `doc` instead and a default value will be filled in here.
         pub builder_type_doc: Option<syn::Expr>,
@@ -1720,10 +1704,6 @@ mod struct_info {
                     let name = expr_to_single_string(&assign.left)
                         .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
                     match name.as_str() {
-                        "builder_method_doc" => {
-                            self.builder_method_doc = Some(*assign.right);
-                            Ok(())
-                        }
                         "builder_type_doc" => {
                             self.builder_type_doc = Some(*assign.right);
                             self.doc = true;

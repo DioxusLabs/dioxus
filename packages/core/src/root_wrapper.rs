@@ -21,7 +21,7 @@ fn component_vnode(component: VComponent) -> VNode {
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
     Element::Ok(component_vnode(
-        <SuspenseBoundaryProps as Properties>::builder()
+        <SuspenseBoundaryProps as Properties>::component_builder(SuspenseBoundary)
             .fallback(|_| Element::Ok(VNode::placeholder()))
             .children(Element::Ok(component_vnode(
                 <ErrorBoundaryProps as Properties>::component_builder(ErrorBoundary)
@@ -30,6 +30,6 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                     .into_vcomponent(),
             )))
             .build()
-            .into_vcomponent(SuspenseBoundary),
+            .into_vcomponent(),
     ))
 }

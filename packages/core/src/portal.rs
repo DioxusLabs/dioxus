@@ -14,16 +14,6 @@ pub struct PortalProps {
     children: LastRenderedNode,
 }
 
-impl PortalProps {
-    #[allow(dead_code, clippy::type_complexity)]
-    fn builder() -> PortalPropsBuilder<((), ())> {
-        PortalPropsBuilder {
-            fields: ((), ()),
-            _phantom: (),
-        }
-    }
-}
-
 #[must_use]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
 pub struct PortalPropsBuilder<TypedBuilderFields> {
@@ -32,19 +22,17 @@ pub struct PortalPropsBuilder<TypedBuilderFields> {
 }
 
 impl Properties for PortalProps {
-    type Builder = PortalPropsBuilder<((), ())>;
     type ComponentBuilder<RenderFn, Marker> = PortalComponentBuilder<RenderFn, Marker, ((), ())>;
-
-    fn builder() -> Self::Builder {
-        PortalProps::builder()
-    }
 
     fn component_builder<RenderFn, Marker>(
         render_fn: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
         PortalComponentBuilder {
             render_fn,
-            builder: Self::builder(),
+            builder: PortalPropsBuilder {
+                fields: ((), ()),
+                _phantom: (),
+            },
             _marker: PhantomData,
         }
     }

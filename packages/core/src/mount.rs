@@ -118,9 +118,9 @@ impl Mount {
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
-        root_count: usize,
-        dynamic_count: usize,
     ) -> Self {
+        let root_count = node.template.root_count();
+        let dynamic_count = node.template.dynamic_value_count();
         Self {
             render_parent,
             logical_parent,
@@ -207,8 +207,6 @@ impl VirtualDom {
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
-        root_count: usize,
-        dynamic_count: usize,
     ) -> MountId {
         let mut mounts = self.runtime.mounts.borrow_mut();
         let entry = mounts.vacant_entry();
@@ -218,8 +216,6 @@ impl VirtualDom {
             render_parent,
             logical_parent,
             target_id,
-            root_count,
-            dynamic_count,
         ));
 
         mount

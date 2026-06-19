@@ -27,21 +27,6 @@ impl Clone for SuspenseBoundaryProps {
     }
 }
 
-impl SuspenseBoundaryProps {
-    /**
-    Create a builder for building `SuspenseBoundaryProps`.
-    On the builder, call `.fallback(...)`, `.children(...)`(optional) to set the values of the fields.
-    Finally, call `.build()` to create the instance of `SuspenseBoundaryProps`.
-                        */
-    #[allow(dead_code, clippy::type_complexity)]
-    fn builder() -> SuspenseBoundaryPropsBuilder<((), ())> {
-        SuspenseBoundaryPropsBuilder {
-            owner: Owner::default(),
-            fields: ((), ()),
-            _phantom: ::core::default::Default::default(),
-        }
-    }
-}
 #[must_use]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
 /// Builder for [`SuspenseBoundaryProps`].
@@ -64,20 +49,19 @@ impl Properties for SuspenseBoundaryProps
 where
     Self: Clone,
 {
-    type Builder = SuspenseBoundaryPropsBuilder<((), ())>;
     type ComponentBuilder<RenderFn, Marker> =
         SuspenseBoundaryComponentBuilder<RenderFn, Marker, ((), ())>;
-
-    fn builder() -> Self::Builder {
-        SuspenseBoundaryProps::builder()
-    }
 
     fn component_builder<RenderFn, Marker>(
         render_fn: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
         SuspenseBoundaryComponentBuilder {
             render_fn,
-            builder: Self::builder(),
+            builder: SuspenseBoundaryPropsBuilder {
+                owner: Owner::default(),
+                fields: ((), ()),
+                _phantom: ::core::default::Default::default(),
+            },
             _marker: std::marker::PhantomData,
         }
     }
@@ -273,12 +257,7 @@ where
 }
 
 impl Properties for SuspenseBoundaryPropsWithOwner {
-    type Builder = ();
     type ComponentBuilder<RenderFn, Marker> = ();
-
-    fn builder() -> Self::Builder {
-        unreachable!()
-    }
 
     fn component_builder<RenderFn, Marker>(
         _render_fn: RenderFn,

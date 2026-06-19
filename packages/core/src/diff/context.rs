@@ -28,14 +28,15 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         Self { dom, to, context }
     }
 
-    /// Reborrow this state while optionally disabling renderer writes.
+    /// Reborrow this state for a mount, disabling renderer writes if the mount is hidden.
     ///
     /// Invariant: disabling writes suppresses renderer mutations only; mount and component state
     /// still diff normally so hidden suspense branches remain current.
-    pub(crate) fn reborrow_with_writes(
+    pub(crate) fn reborrow_for_mount(
         &mut self,
-        write: bool,
+        mount: MountId,
     ) -> DiffState<'_, 'ctx, '_, 'mutation> {
+        let write = self.dom.mount_should_render(mount) && self.to.is_some();
         DiffState {
             dom: &mut *self.dom,
             to: if write { self.to.as_deref_mut() } else { None },

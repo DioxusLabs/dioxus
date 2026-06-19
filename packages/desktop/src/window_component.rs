@@ -3,9 +3,9 @@ use crate::{
 };
 use dioxus_core::view::ViewExt;
 use dioxus_core::{
-    ComponentBuilder, ComponentBuilderOutput, ComponentFunction, Element, EventHandler, Portal,
-    PortalProps, Properties, RenderTargetId, Runtime, SuperInto, VComponent, VNode,
-    provide_context, schedule_update, spawn, use_hook, use_hook_with_cleanup,
+    ComponentBuilderOutput, ComponentFunction, Element, EventHandler, Portal, PortalProps,
+    Properties, RenderTargetId, Runtime, SuperInto, VComponent, VNode, provide_context,
+    schedule_update, spawn, use_hook, use_hook_with_cleanup,
 };
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -28,23 +28,18 @@ pub struct WindowProps {
 }
 
 impl Properties for WindowProps {
-    type Builder = WindowPropsBuilder<()>;
     type ComponentBuilder<RenderFn, Marker> = WindowComponentBuilder<RenderFn, Marker, ()>;
-
-    fn builder() -> Self::Builder {
-        WindowPropsBuilder {
-            config: None,
-            onclose: None,
-            children: (),
-        }
-    }
 
     fn component_builder<RenderFn, Marker>(
         render_fn: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
         WindowComponentBuilder {
             render_fn,
-            builder: Self::builder(),
+            builder: WindowPropsBuilder {
+                config: None,
+                onclose: None,
+                children: (),
+            },
             _marker: PhantomData,
         }
     }
@@ -173,11 +168,6 @@ impl WindowPropsBuilder<()> {
 
 #[allow(missing_docs)]
 impl WindowPropsBuilder<Element> {
-    pub fn children(mut self, children: Element) -> Self {
-        self.children = children;
-        self
-    }
-
     pub fn build(self) -> WindowProps {
         WindowProps {
             config: Rc::new(RefCell::new(self.config)),
@@ -358,21 +348,20 @@ struct WindowContextProviderProps {
 }
 
 impl Properties for WindowContextProviderProps {
-    type Builder = WindowContextProviderPropsBuilder<((), ())>;
     type ComponentBuilder<RenderFn, Marker> =
-        ComponentBuilder<RenderFn, Self::Builder, Self, Marker>;
-
-    fn builder() -> Self::Builder {
-        WindowContextProviderPropsBuilder {
-            fields: ((), ()),
-            _phantom: (),
-        }
-    }
+        WindowContextProviderComponentBuilder<RenderFn, Marker, ((), ())>;
 
     fn component_builder<RenderFn, Marker>(
         render_fn: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
-        ComponentBuilder::new(render_fn, Self::builder())
+        WindowContextProviderComponentBuilder {
+            render_fn,
+            builder: WindowContextProviderPropsBuilder {
+                fields: ((), ()),
+                _phantom: (),
+            },
+            _marker: PhantomData,
+        }
     }
 
     fn memoize(&mut self, new: &Self) -> bool {
@@ -382,10 +371,77 @@ impl Properties for WindowContextProviderProps {
     }
 }
 
+impl<RenderFn, Marker> dioxus_core::ComponentBuilderRender<RenderFn, Marker>
+    for WindowContextProviderProps
+where
+    RenderFn: ComponentFunction<WindowContextProviderProps, Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        <Self as Properties>::into_vcomponent(self, render_fn)
+    }
+}
+
 #[doc(hidden)]
 struct WindowContextProviderPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
+}
+
+#[doc(hidden)]
+struct WindowContextProviderComponentBuilder<RenderFn, ComponentMarker, TypedBuilderFields> {
+    render_fn: RenderFn,
+    builder: WindowContextProviderPropsBuilder<TypedBuilderFields>,
+    _marker: PhantomData<ComponentMarker>,
+}
+
+impl<RenderFn, ComponentMarker, Children>
+    WindowContextProviderComponentBuilder<RenderFn, ComponentMarker, ((), Children)>
+{
+    fn providers(
+        self,
+        providers: WindowProviders,
+    ) -> WindowContextProviderComponentBuilder<
+        RenderFn,
+        ComponentMarker,
+        ((WindowProviders,), Children),
+    > {
+        WindowContextProviderComponentBuilder {
+            render_fn: self.render_fn,
+            builder: self.builder.providers(providers),
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<RenderFn, ComponentMarker, Providers>
+    WindowContextProviderComponentBuilder<RenderFn, ComponentMarker, (Providers, ())>
+{
+    fn children(
+        self,
+        children: Element,
+    ) -> WindowContextProviderComponentBuilder<RenderFn, ComponentMarker, (Providers, (Element,))>
+    {
+        WindowContextProviderComponentBuilder {
+            render_fn: self.render_fn,
+            builder: self.builder.children(children),
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<RenderFn, ComponentMarker>
+    WindowContextProviderComponentBuilder<
+        RenderFn,
+        ComponentMarker,
+        ((WindowProviders,), (Element,)),
+    >
+{
+    fn build(
+        self,
+    ) -> ComponentBuilderOutput<RenderFn, WindowContextProviderProps, ComponentMarker> {
+        ComponentBuilderOutput::new(self.render_fn, self.builder.build())
+    }
 }
 
 impl<Children> WindowContextProviderPropsBuilder<((), Children)> {
@@ -434,22 +490,22 @@ fn WindowContextProvider(props: WindowContextProviderProps) -> Element {
 
 fn context_provider_element(providers: WindowProviders, children: Element) -> Element {
     Element::Ok(
-        <WindowContextProviderProps as Properties>::builder()
+        <WindowContextProviderProps as Properties>::component_builder(WindowContextProvider)
             .providers(providers)
             .children(children)
             .build()
-            .into_vcomponent(WindowContextProvider)
+            .into_vcomponent()
             .into_vnode(),
     )
 }
 
 fn portal_element(target: RenderTargetId, children: Element) -> Element {
     Element::Ok(
-        <PortalProps as Properties>::builder()
+        <PortalProps as Properties>::component_builder(Portal)
             .target(target)
             .children(children)
             .build()
-            .into_vcomponent(Portal)
+            .into_vcomponent()
             .into_vnode(),
     )
 }

@@ -8,9 +8,30 @@ use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
 use syn::parse_quote;
 
-const ROOT_TUPLE_VIEW_LIMIT: usize = 64;
-const MAX_SYNTHETIC_CHUNKS_PER_PARENT: usize = 24;
+/// `View`/`ViewTemplate` are only implemented for tuples up to this arity, so sibling lists wider
+/// than this are emitted as several tuples joined structurally (see `group_sibling_views`).
+const MAX_TUPLE_VIEW_ARITY: usize = 64;
 const TEMPLATE_PATH_BITS_SPLIT_LIMIT: usize = 96;
+
+/// Group per-sibling typed views into `<= MAX_TUPLE_VIEW_ARITY`-wide tuples.
+///
+/// A sibling list wider than [`MAX_TUPLE_VIEW_ARITY`] cannot be a single tuple, so it is split into
+/// several. The split is transparent to the lowered template: each tuple lowers to a `Sequence`,
+/// and nested sequences flatten to exactly the same ops and dynamic-slot order as one flat list.
+/// The caller joins multiple groups with `.child(..)` on an element or `fragment()`. Always returns
+/// at least one group; an empty list yields a single empty `()` group.
+fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
+    if views.len() <= MAX_TUPLE_VIEW_ARITY {
+        return vec![quote! { (#(#views,)*) }];
+    }
+    views
+        .chunks(MAX_TUPLE_VIEW_ARITY)
+        .map(|chunk| {
+            let chunk = chunk.iter();
+            quote! { (#(#chunk,)*) }
+        })
+        .collect()
+}
 
 /// A set of nodes in a template position
 ///
@@ -179,10 +200,17 @@ impl ViewBuilderPieces {
     /// hot-reload tables and dynamic text pool gathered along the way.
     fn from_body(body: &TemplateBody) -> Self {
         let mut builder = ViewBuilder::new();
-        let template_stats =
-            builder.lowered_sibling_storage_stats(&body.roots, SiblingContext::Roots);
-        let views = builder.visit_sibling_nodes(&body.roots, true, SiblingContext::Roots);
-        let view = quote! { (#(#views,)*) };
+        let template_stats = builder.sibling_storage_stats(&body.roots);
+        let views = builder.visit_sibling_nodes(&body.roots, true);
+        // Roots have no enclosing element, so they group through a `fragment()` rather than an
+        // element builder's `.child(..)`. A single group is just the tuple itself.
+        let groups = group_sibling_views(views);
+        let view = if groups.len() == 1 {
+            groups.into_iter().next().unwrap()
+        } else {
+            let groups = groups.iter();
+            quote! { dioxus_core::view::fragment() #(.child(#groups))* }
+        };
         builder.finish(view, template_stats)
     }
 
@@ -271,23 +299,14 @@ impl ViewBuilder {
         }
     }
 
+    /// Lower each sibling into its own typed view. Siblings stay one-to-one with template slots;
+    /// grouping a wide list to satisfy the tuple-arity limit happens at the emit site via
+    /// `group_sibling_views`, which is transparent to the lowered template.
     fn visit_sibling_nodes(
         &mut self,
         nodes: &[BodyNode],
         allow_implicit_key: bool,
-        context: SiblingContext,
     ) -> Vec<TokenStream2> {
-        if self.should_chunk_siblings(nodes, context) {
-            // Split the siblings into smaller chunks, each wrapped in a synthetic dynamic node.
-            // `synthetic_chunk_ranges` always produces at least two ranges, so each chunk is
-            // strictly smaller than the input and the per-chunk `TemplateBody` lowering terminates.
-            return self
-                .synthetic_chunk_ranges(nodes, context)
-                .into_iter()
-                .map(|range| self.synthetic_dynamic_chunk(&nodes[range]))
-                .collect();
-        }
-
         nodes
             .iter()
             .enumerate()
@@ -316,9 +335,12 @@ impl ViewBuilder {
 
     fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TokenStream2 {
         let tag = self.element_tag(element);
-        let children =
-            self.visit_sibling_nodes(&element.children, false, SiblingContext::ElementChildren);
-        let children = quote! { (#(#children,)*) };
+        let children = self.visit_sibling_nodes(&element.children, false);
+        // The first group seeds the element's children; any further groups (only when there are
+        // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
+        let groups = group_sibling_views(children);
+        let (first, rest) = groups.split_first().expect("at least one group");
+        let rest = rest.iter();
 
         let mut attrs = TokenStream2::new();
         for attr in &element.merged_attributes {
@@ -332,7 +354,7 @@ impl ViewBuilder {
             }
         }
 
-        quote! { #tag #attrs.with_children(#children) }
+        quote! { #tag #attrs.with_children(#first) #(.child(#rest))* }
     }
 
     fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
@@ -488,73 +510,10 @@ impl ViewBuilder {
         format_ident!("{prefix}{index}")
     }
 
-    fn synthetic_dynamic_chunk(&mut self, nodes: &[BodyNode]) -> TokenStream2 {
-        let chunk = TemplateBody::new(nodes.to_vec());
-        let tokens = quote! {{
-            dioxus_core::IntoDynNode::into_dyn_node({ #chunk })
-        }};
-        self.dynamic_node(tokens)
-    }
-
-    fn should_chunk_siblings(&self, nodes: &[BodyNode], context: SiblingContext) -> bool {
-        if nodes.len() <= 1 {
-            return false;
-        }
-
-        matches!(context, SiblingContext::Roots) && nodes.len() > ROOT_TUPLE_VIEW_LIMIT
-            || self.sibling_storage_stats(nodes).exceeds_storage_limits()
-    }
-
-    fn synthetic_chunk_ranges(
-        &self,
-        nodes: &[BodyNode],
-        context: SiblingContext,
-    ) -> Vec<std::ops::Range<usize>> {
-        let stats = self.sibling_storage_stats(nodes);
-        let mut chunks = stats.max_required_chunks();
-
-        if matches!(context, SiblingContext::Roots) {
-            chunks = chunks.max(nodes.len().div_ceil(ROOT_TUPLE_VIEW_LIMIT));
-        }
-
-        chunks = chunks.clamp(2, MAX_SYNTHETIC_CHUNKS_PER_PARENT.min(nodes.len()));
-        let chunk_len = nodes.len().div_ceil(chunks);
-
-        (0..nodes.len())
-            .step_by(chunk_len)
-            .map(|start| start..(start + chunk_len).min(nodes.len()))
-            .collect()
-    }
-
     fn sibling_storage_stats(&self, nodes: &[BodyNode]) -> TemplateStorageStats {
         let mut stats = TemplateStatsBuilder::new();
         self.push_sibling_stats(nodes, &mut stats);
         stats.finish()
-    }
-
-    fn lowered_sibling_storage_stats(
-        &self,
-        nodes: &[BodyNode],
-        context: SiblingContext,
-    ) -> TemplateStorageStats {
-        let mut stats = TemplateStatsBuilder::new();
-        self.push_lowered_sibling_stats(nodes, context, &mut stats);
-        stats.finish()
-    }
-
-    fn push_lowered_sibling_stats(
-        &self,
-        nodes: &[BodyNode],
-        context: SiblingContext,
-        stats: &mut TemplateStatsBuilder,
-    ) {
-        if self.should_chunk_siblings(nodes, context) {
-            for _ in self.synthetic_chunk_ranges(nodes, context) {
-                stats.dynamic_node(false);
-            }
-        } else {
-            self.push_sibling_stats(nodes, stats);
-        }
     }
 
     fn push_sibling_stats(&self, nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
@@ -592,7 +551,7 @@ impl ViewBuilder {
             self.push_attribute_stats(attr, stats);
         }
 
-        self.push_lowered_sibling_stats(&element.children, SiblingContext::ElementChildren, stats);
+        self.push_sibling_stats(&element.children, stats);
         stats.close_element();
     }
 

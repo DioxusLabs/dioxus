@@ -56,8 +56,7 @@ impl<'a> DiffFrame<'a> {
         let new = self.new;
 
         let current_mount = self.mount;
-        let writes_enabled = state.dom.mount_should_render(current_mount) && state.to.is_some();
-        let mut state = state.reborrow_with_writes(writes_enabled);
+        let mut state = state.reborrow_for_mount(current_mount);
 
         // If the templates are different, we need to replace the entire template.
         // `Template` equality includes the per-slot kind layout (see
@@ -748,8 +747,6 @@ impl VNode {
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
-        // Get the most up to date template
-        let template = self.template;
         let target_id = state.dom.current_render_target_id();
 
         let mount = if let Some(mount) = existing_mount {
@@ -758,14 +755,9 @@ impl VNode {
                 .reuse_mount(mount, render_parent, logical_parent, target_id);
             mount
         } else {
-            state.dom.create_mount(
-                self,
-                render_parent,
-                logical_parent,
-                target_id,
-                template.root_count(),
-                template.dynamic_value_count(),
-            )
+            state
+                .dom
+                .create_mount(self, render_parent, logical_parent, target_id)
         };
         debug_assert!(
             state.to.is_none() || state.dom.mount_should_render(mount),

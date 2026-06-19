@@ -46,15 +46,8 @@ use crate::innerlude::*;
     )
 )]
 pub trait Properties: Clone + Sized + 'static {
-    /// The type of the builder for this component.
-    /// Used to create "in-progress" versions of the props.
-    type Builder;
-
     /// The type of the builder for this component when starting from a component function.
     type ComponentBuilder<RenderFn, Marker>;
-
-    /// Create a builder for this component.
-    fn builder() -> Self::Builder;
 
     /// Create a builder that remembers the component function it came from.
     fn component_builder<RenderFn, Marker>(
@@ -72,17 +65,12 @@ pub trait Properties: Clone + Sized + 'static {
 }
 
 impl Properties for () {
-    type Builder = EmptyBuilder;
     type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, EmptyBuilder, (), Marker>;
-
-    fn builder() -> Self::Builder {
-        EmptyBuilder {}
-    }
 
     fn component_builder<RenderFn, Marker>(
         render_fn: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
-        ComponentBuilder::new(render_fn, Self::builder())
+        ComponentBuilder::new(render_fn, EmptyBuilder {})
     }
 
     fn memoize(&mut self, _other: &Self) -> bool {
@@ -106,12 +94,7 @@ impl<P> Properties for RootProps<P>
 where
     P: Clone + 'static,
 {
-    type Builder = P;
     type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, P, Self, Marker>;
-
-    fn builder() -> Self::Builder {
-        unreachable!("Root props technically are never built")
-    }
 
     fn component_builder<RenderFn, Marker>(
         _render_fn: RenderFn,

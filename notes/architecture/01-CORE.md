@@ -50,8 +50,8 @@ VirtualDom
 
 ### Props System
 - `Properties` trait for all props:
-  - `type Builder` - For DSL prop construction
-  - `builder()` - Create props builder
+  - `type ComponentBuilder` - For render-aware DSL prop construction
+  - `component_builder(render_fn)` - Create a props builder tied to a component render function
   - `memoize(&mut self, other: &Self) -> bool` - Check if props changed
   - `into_vcomponent()` - Convert to VComponent
 

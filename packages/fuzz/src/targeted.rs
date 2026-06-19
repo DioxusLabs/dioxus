@@ -361,10 +361,6 @@ fn move_fragment_child(from: u8, to: u8) -> Op {
     Op::fragment(0, 0, FragmentEdit::Children(ListEdit::Move { from, to }))
 }
 
-fn key_fragment(base: u8) -> Op {
-    Op::fragment(0, 0, FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base }))
-}
-
 fn keyed_fragment_with_children(count: u8, key_base: u8) -> Op {
     Op::dynamic(
         0,
@@ -384,11 +380,17 @@ fn set_vnode_node(vnode: u8, node: u8, kind: TemplateNodeKind) -> Op {
     Op::template(vnode, TemplateEdit::SetNode { node, kind })
 }
 
-fn insert_root(vnode: u8, index: u8, item: TemplateNodeKind) -> Op {
+fn insert_element_root(vnode: u8, index: u8, tag: u8) -> Op {
     Op::template(
         vnode,
         TemplateEdit::Roots {
-            edit: ListEdit::Insert { index, item },
+            edit: ListEdit::Insert {
+                index,
+                item: TemplateNodeKind::Element {
+                    tag,
+                    namespace: None,
+                },
+            },
         },
     )
 }
@@ -403,12 +405,15 @@ fn insert_child(vnode: u8, element: u8, index: u8, kind: TemplateNodeKind) -> Op
     )
 }
 
-fn insert_attr(vnode: u8, element: u8, index: u8, item: TemplateAttrSpec) -> Op {
+fn insert_dynamic_attr_slot(vnode: u8, element: u8, index: u8) -> Op {
     Op::template(
         vnode,
         TemplateEdit::Attrs {
             element,
-            edit: ListEdit::Insert { index, item },
+            edit: ListEdit::Insert {
+                index,
+                item: TemplateAttrSpec::Dynamic(Vec::new()),
+            },
         },
     )
 }
@@ -564,7 +569,11 @@ fn keyed_replace_all_keys() -> Vec<Op> {
         set_root_dynamic(),
         keyed_fragment_with_children(2, 0),
         Op::Rerender,
-        key_fragment(2),
+        Op::fragment(
+            0,
+            0,
+            FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: 2 }),
+        ),
         Op::Rerender,
     ]
 }
@@ -844,8 +853,8 @@ fn nested_dynamic_attr_values() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
-        insert_attr(0, 0, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr_slot(0, 1, 0),
+        insert_dynamic_attr_slot(0, 0, 0),
         insert_dynamic_attr(0, 0, 0, AttrValueSpec::Float(7)),
         insert_dynamic_attr(0, 1, 0, AttrValueSpec::Listener),
         Op::Rerender,
@@ -945,8 +954,8 @@ fn non_root_dynamic_attr_reclaim_on_template_replace() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
-        insert_attr(0, 1, 1, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr_slot(0, 1, 0),
+        insert_dynamic_attr_slot(0, 1, 1),
         insert_dynamic_attr(0, 0, 0, AttrValueSpec::Text(4)),
         insert_dynamic_attr(0, 1, 0, AttrValueSpec::Text(5)),
         Op::Rerender,
@@ -1070,14 +1079,7 @@ fn visible_fragment_child_after_text_slot() -> Vec<Op> {
 fn root_dynamic_before_static_root_with_nested_dynamic_node() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        insert_root(
-            0,
-            1,
-            TemplateNodeKind::Element {
-                tag: 1,
-                namespace: None,
-            },
-        ),
+        insert_element_root(0, 1, 1),
         insert_child(0, 0, 0, TemplateNodeKind::Dynamic(DynamicKind::Text(1))),
         Op::Rerender,
     ]
@@ -1086,14 +1088,7 @@ fn root_dynamic_before_static_root_with_nested_dynamic_node() -> Vec<Op> {
 fn root_dynamic_before_static_root_with_nested_dynamic_attr() -> Vec<Op> {
     vec![
         set_root_dynamic(),
-        insert_root(
-            0,
-            1,
-            TemplateNodeKind::Element {
-                tag: 1,
-                namespace: None,
-            },
-        ),
+        insert_element_root(0, 1, 1),
         insert_child(
             0,
             0,
@@ -1103,7 +1098,7 @@ fn root_dynamic_before_static_root_with_nested_dynamic_attr() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr_slot(0, 1, 0),
         insert_dynamic_attr(0, 0, 0, AttrValueSpec::Text(1)),
         Op::Rerender,
     ]
@@ -1120,7 +1115,7 @@ fn sibling_dynamic_listener_event() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        insert_attr(0, 1, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr_slot(0, 1, 0),
         insert_child(
             0,
             0,
@@ -1130,7 +1125,7 @@ fn sibling_dynamic_listener_event() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        insert_attr(0, 2, 0, TemplateAttrSpec::Dynamic(Vec::new())),
+        insert_dynamic_attr_slot(0, 2, 0),
         insert_dynamic_attr(0, 0, 0, AttrValueSpec::Listener),
         insert_dynamic_attr(0, 1, 0, AttrValueSpec::Listener),
         Op::Rerender,
