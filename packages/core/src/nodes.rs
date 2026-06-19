@@ -47,7 +47,6 @@ impl DynamicValues {
     }
 
     /// Create an empty dynamic values payload with known capacity.
-    #[inline]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             key: None,
@@ -56,13 +55,11 @@ impl DynamicValues {
     }
 
     /// Set the root key for this render.
-    #[inline]
     pub(crate) fn set_key(&mut self, key: Option<String>) {
         self.key = key;
     }
 
     /// Push a dynamic node slot.
-    #[inline]
     pub(crate) fn push_node(&mut self, value: DynamicNode) {
         self.dynamic_values.push(DynamicValue::Node(value));
     }
@@ -71,7 +68,6 @@ impl DynamicValues {
     ///
     /// Dynamic attribute slots are normalized by [`Self::normalize`] before the values are stored
     /// on a [`VNode`].
-    #[inline]
     pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
         self.dynamic_values.push(DynamicValue::Attrs(value));
     }
@@ -221,7 +217,6 @@ impl VNode {
     }
 
     /// Create a new VNode from a static template and dynamic values payload.
-    #[inline]
     pub fn new(template: Template, mut values: DynamicValues) -> Self {
         values.normalize();
 
