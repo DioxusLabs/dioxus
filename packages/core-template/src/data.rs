@@ -1,6 +1,6 @@
 use super::{DecodedTemplateOp, TemplateAnchor};
-use crate::TemplateSlotTarget;
 use crate::op::TemplateOp;
+use crate::TemplateSlotTarget;
 
 /// A static layout of a UI tree.
 ///
@@ -250,7 +250,6 @@ impl Template {
         anchors: &'static [TemplateAnchor],
         value_kind_hash: u64,
     ) -> Self {
-        Self::validate_anchors(anchors);
         Self {
             ops,
             strings,
@@ -267,52 +266,6 @@ impl Template {
     /// Iterate decoded template operations.
     pub fn decoded_ops(&self) -> impl ExactSizeIterator<Item = DecodedTemplateOp> + '_ {
         self.ops.iter().map(|op| op.decode())
-    }
-
-    const fn validate_anchors(anchors: &[TemplateAnchor]) {
-        let mut index = 0;
-        let mut has_start = anchors.is_empty();
-        while index < anchors.len() {
-            let anchor = anchors[index];
-            let values = anchor.values();
-            if values.start >= values.end {
-                panic!("bad anchor");
-            }
-
-            let start = values.start;
-            if start == 0 {
-                has_start = true;
-            }
-
-            let mut other_index = 0;
-            while other_index < anchors.len() {
-                if index != other_index {
-                    let other = anchors[other_index].values();
-                    if start < other.end && other.start < values.end {
-                        panic!("anchor overlap");
-                    }
-                }
-                other_index += 1;
-            }
-
-            if start != 0 {
-                let mut has_predecessor = false;
-                let mut predecessor_index = 0;
-                while predecessor_index < anchors.len() && !has_predecessor {
-                    has_predecessor = anchors[predecessor_index].values().end == start;
-                    predecessor_index += 1;
-                }
-                if !has_predecessor {
-                    panic!("anchor gap");
-                }
-            }
-
-            index += 1;
-        }
-
-        if !has_start {
-            panic!("anchor start");
-        }
     }
 
     /// Get dynamic value anchors in document/value order.
@@ -618,7 +571,6 @@ impl<'de> serde::Deserialize<'de> for Template {
         // The hash folds in the per-value kind layout, which is not recoverable
         // from the op tape and anchors alone, so trust the serialized hash that
         // the original builder computed rather than recomputing it here.
-        Self::validate_anchors(serialized.anchors);
         Ok(Self {
             ops: serialized.ops,
             strings: serialized.strings,
