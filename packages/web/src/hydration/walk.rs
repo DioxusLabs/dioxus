@@ -9,12 +9,13 @@
 //! level.
 //!
 //! The template structure comes from the flat op-tape [`dioxus_core::Template`]
-//! (`root_slots` / `static_children` / dynamic anchors, the same document-order
+//! (`VNode::children` / element children / dynamic anchors, the same document-order
 //! walk SSR uses in `dioxus_ssr`); mounted `ElementId`s come from the rendered
 //! `MountedVNode`. No DOM reads happen here — the cursor performs them.
 
 use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, VNode, VirtualDom,
+    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, StaticElement, VNodeChild,
+    VirtualDom,
 };
 
 use crate::dom::WebsysDom;
@@ -47,16 +48,8 @@ impl WebsysDom {
         cursor: &mut HydrationCursor,
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
-        for (root_idx, static_op, dynamic_anchor) in vnode.vnode().template.root_slots() {
-            if let Some(anchor) = dynamic_anchor {
-                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
-                    self.emit_dynamic_node_at_level(vnode, value_idx, dom, cursor, state)?;
-                }
-            } else {
-                let op = static_op.expect("template root slot is static or dynamic");
-                let root_id = vnode.mounted_root(root_idx, dom);
-                self.emit_template_node_at_level(vnode, op, root_id, dom, cursor, state)?;
-            }
+        for child in vnode.vnode().children() {
+            self.emit_child_at_level(vnode, child, dom, cursor, state)?;
         }
         Ok(())
     }
@@ -66,46 +59,46 @@ impl WebsysDom {
     fn emit_element_children_at_level<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        element_op: usize,
+        element: StaticElement<'a>,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
-        let mut static_children = vnode.vnode().template.static_children(element_op);
-        for slot in 0.. {
-            for anchor in vnode
-                .vnode()
-                .dynamic_node_anchors_for_slot(element_op, slot)
-            {
-                for value_idx in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
-                    self.emit_dynamic_node_at_level(vnode, value_idx, dom, cursor, state)?;
-                }
-            }
-            let Some(op) = static_children.next() else {
-                break;
-            };
-            self.emit_template_node_at_level(vnode, op, None, dom, cursor, state)?;
+        for child in element.children() {
+            self.emit_child_at_level(vnode, child, dom, cursor, state)?;
         }
         Ok(())
     }
 
-    fn emit_template_node_at_level<'a>(
+    fn emit_child_at_level<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        op: usize,
-        root_id: Option<ElementId>,
+        child: VNodeChild<'a>,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
-        let template = vnode.vnode().template;
-        if template.element_meta_at_op(op).is_some() {
-            state.flush_text(cursor)?;
-            state.advance(cursor);
-            self.emit_element(vnode, op, root_id, cursor, dom)?;
-            state.prev_consumed = 1;
-        } else if let Some(text) = template.static_text_at_op(op) {
-            state.push_text(utf16_len(text), root_id);
+        match child {
+            VNodeChild::Dynamic(group) => {
+                for value_idx in group.ids() {
+                    self.emit_dynamic_node_at_level(vnode, value_idx, dom, cursor, state)?;
+                }
+            }
+            VNodeChild::Element(element) => {
+                let root_id = element
+                    .root_position()
+                    .and_then(|root_position| vnode.mounted_root(root_position, dom));
+                state.flush_text(cursor)?;
+                state.advance(cursor);
+                self.emit_element(vnode, element, root_id, cursor, dom)?;
+                state.prev_consumed = 1;
+            }
+            VNodeChild::Text(text) => {
+                let root_id = text
+                    .root_position()
+                    .and_then(|root_position| vnode.mounted_root(root_position, dom));
+                state.push_text(utf16_len(text.text()), root_id);
+            }
         }
         Ok(())
     }
@@ -153,26 +146,28 @@ impl WebsysDom {
     fn emit_element<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        op: usize,
+        element: StaticElement<'a>,
         root_id: Option<ElementId>,
         cursor: &mut HydrationCursor,
         dom: &'a VirtualDom,
     ) -> Result<(), RehydrationError> {
-        let (tag, _namespace) = vnode
-            .vnode()
-            .template
-            .element_meta_at_op(op)
-            .ok_or(HydrationMismatch)?;
+        let tag = element.tag();
 
         // Resolve the mounted ElementId (an anchor id overrides the root id when present) and
         // collect dynamic listeners + onmounted events.
         let mut mounted_id = root_id;
-        for (anchor_idx, _anchor) in vnode.vnode().dynamic_attr_anchor_indices_for_element(op) {
-            let anchor_id = vnode
-                .mounted_anchor_node_by_index(anchor_idx, dom)
-                .ok_or(VNodeNotInitialized)?;
-            mounted_id = Some(anchor_id);
-        }
+        let mut listeners = Vec::new();
+        #[cfg(feature = "mounted")]
+        let mut mounted_events = Vec::new();
+        self.collect_dynamic_attrs_for_element(
+            vnode,
+            element,
+            dom,
+            &mut mounted_id,
+            &mut listeners,
+            #[cfg(feature = "mounted")]
+            &mut mounted_events,
+        )?;
 
         // Always map the element so the cursor can verify the tag and step past
         // parser-inserted wrappers. id == 0 means the element needs no node
@@ -180,8 +175,41 @@ impl WebsysDom {
         let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
         cursor.map_element(tag, id_arg)?;
 
-        for (anchor_idx, anchor) in vnode.vnode().dynamic_attr_anchor_indices_for_element(op) {
-            for value_idx in vnode.vnode().dynamic_attr_indices_for_anchor(anchor) {
+        #[cfg(feature = "mounted")]
+        for anchor_id in mounted_events {
+            self.send_mount_event(anchor_id);
+        }
+        for (event_name, bubbles) in listeners {
+            cursor.attach_listener(id_arg, event_name, bubbles);
+        }
+
+        if element.has_children() {
+            cursor.begin_children();
+            let mut state = LevelState::default();
+            self.emit_element_children_at_level(vnode, element, dom, cursor, &mut state)?;
+            state.finish(cursor)?;
+            cursor.end_children();
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn collect_dynamic_attrs_for_element<'a>(
+        &mut self,
+        vnode: MountedVNode<'a>,
+        element: StaticElement<'a>,
+        dom: &'a VirtualDom,
+        mounted_id: &mut Option<ElementId>,
+        listeners: &mut Vec<(&'static str, bool)>,
+        #[cfg(feature = "mounted")] mounted_events: &mut Vec<ElementId>,
+    ) -> Result<(), RehydrationError> {
+        for group in element.dynamic_attributes() {
+            let anchor_id = vnode
+                .mounted_anchor_node_by_index(group.anchor_index(), dom)
+                .ok_or(VNodeNotInitialized)?;
+            *mounted_id = Some(anchor_id);
+            for value_idx in group.ids() {
                 let Some(attrs) = vnode.vnode().dynamic_values()[value_idx].as_attrs() else {
                     return Err(HydrationMismatch);
                 };
@@ -189,60 +217,19 @@ impl WebsysDom {
                     if matches!(attribute.value, AttributeValue::Listener(_)) {
                         if attribute.name == "onmounted" {
                             #[cfg(feature = "mounted")]
-                            {
-                                let anchor_id = vnode
-                                    .mounted_anchor_node_by_index(anchor_idx, dom)
-                                    .ok_or(VNodeNotInitialized)?;
-                                self.send_mount_event(anchor_id);
-                            }
+                            mounted_events.push(anchor_id);
                         } else {
                             let event_name =
                                 attribute.name.strip_prefix("on").unwrap_or(attribute.name);
                             let bubbles = dioxus_core_types::event_bubbles(event_name);
-                            cursor.attach_listener(id_arg, event_name, bubbles);
+                            listeners.push((event_name, bubbles));
                         }
                     }
                 }
             }
         }
-
-        // Descend only if the subtree contains dynamic content. Pure-static
-        // subtrees match the server output by construction and need no walk —
-        // `advance(1)` past the mapped element steps over them.
-        if element_has_dynamic_content(vnode.vnode(), op) {
-            cursor.begin_children();
-            let mut state = LevelState::default();
-            self.emit_element_children_at_level(vnode, op, dom, cursor, &mut state)?;
-            state.finish(cursor)?;
-            cursor.end_children();
-        }
-
         Ok(())
     }
-}
-
-/// True if `op`'s element subtree contains any dynamic node child or a nested
-/// element with dynamic attributes / dynamic content. Used to skip the walk
-/// (and DOM reads) for purely static subtrees. Uses only public template API.
-fn element_has_dynamic_content(vnode: &VNode, op: usize) -> bool {
-    if vnode.dynamic_node_anchors_for_element(op).next().is_some() {
-        return true;
-    }
-    for child_op in vnode.template.static_children(op) {
-        if vnode.template.element_meta_at_op(child_op).is_some() {
-            if vnode
-                .dynamic_attr_anchors_for_element(child_op)
-                .next()
-                .is_some()
-            {
-                return true;
-            }
-            if element_has_dynamic_content(vnode, child_op) {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 #[derive(Clone, Copy)]

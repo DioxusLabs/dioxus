@@ -581,28 +581,26 @@ impl SuspenseBoundaryProps {
         }
 
         fn collect_child_scopes(vnode: MountedVNode<'_>, dom: &VirtualDom, out: &mut Vec<ScopeId>) {
-            for (idx, value) in vnode.vnode().dynamic_values().iter().enumerate() {
-                let Some(node) = value.as_node() else {
-                    continue;
-                };
+            for group in vnode.vnode().dynamic_nodes() {
+                for idx in group.ids() {
+                    match vnode.vnode().dynamic_values()[idx].node() {
+                        DynamicNode::Component(comp) => {
+                            if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
+                                out.push(child_scope.id());
+                            }
+                        }
+                        DynamicNode::Fragment(fragment) => {
+                            let mounted_children = vnode.mounted_fragment_children(idx, dom);
+                            if mounted_children.len() != fragment.len() {
+                                continue;
+                            }
 
-                match node {
-                    DynamicNode::Component(comp) => {
-                        if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
-                            out.push(child_scope.id());
+                            for sub in mounted_children {
+                                collect_child_scopes(sub, dom, out);
+                            }
                         }
+                        DynamicNode::Text(_) => {}
                     }
-                    DynamicNode::Fragment(fragment) => {
-                        let mounted_children = vnode.mounted_fragment_children(idx, dom);
-                        if mounted_children.len() != fragment.len() {
-                            continue;
-                        }
-
-                        for sub in mounted_children {
-                            collect_child_scopes(sub, dom, out);
-                        }
-                    }
-                    DynamicNode::Text(_) => {}
                 }
             }
         }
@@ -984,8 +982,8 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
     // must visit every mounted descendant before renderer-visible writes resume.
     set_suspense_mounts_render_mode(dom, vnode, mount, RenderMode::Foreground);
 
-    for anchor in vnode.template.anchors() {
-        for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
+    for group in vnode.dynamic_nodes() {
+        for idx in group.ids() {
             match vnode.dynamic_values[idx].node() {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
@@ -1027,8 +1025,8 @@ fn set_suspense_mounts_render_mode(
     // branch root before placement can run again.
     dom.set_mount_mode(mount, mode);
 
-    for anchor in vnode.template.anchors() {
-        for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
+    for group in vnode.dynamic_nodes() {
+        for idx in group.ids() {
             match vnode.dynamic_values[idx].node() {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);

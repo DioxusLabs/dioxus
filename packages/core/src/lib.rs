@@ -133,6 +133,12 @@ pub use crate::innerlude::{
     spawn_forever, spawn_isomorphic, suspend, throw_error, try_consume_context, use_after_render,
     use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner,
 };
+pub use diff::template::{
+    DynamicAttrGroup, DynamicNodeGroup, EffectiveAttribute, EffectiveAttributeSource,
+    EffectiveAttributeValue, ElementAttributes, StaticElement, StaticText, VNodeChild,
+    VNodeChildren,
+};
+pub use dioxus_core_template::{StaticRoot, TemplatePath, TemplateSlotTarget};
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
 ///

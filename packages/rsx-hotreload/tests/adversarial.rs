@@ -453,15 +453,15 @@ fn reordered_props_within_single_component() {
 }
 
 /// Fill-order regression: an element with both a dynamic attribute and a dynamic child must fill
-/// its dynamic slots child-first, then attribute (the canonical op-tape order the typed view
-/// builder uses). If the hot-reload differ visited attributes before children, the slots would be
-/// transposed to `[Attribute, Node]` and the runtime would feed the child value into the attribute
+/// its dynamic slots attribute-first, then child (the canonical value order the typed view builder
+/// uses). If the hot-reload differ visited children before attributes, the slots would be
+/// transposed to `[Node, Attribute]` and the runtime would feed the child value into the attribute
 /// slot (and vice versa).
 ///
 /// The new template writes the attribute and child in the opposite source order; a correct differ
-/// still emits canonical `[Node, Attribute]` slots, so the child/attribute are not transposed.
+/// still emits canonical `[Attribute, Node]` slots, so the child/attribute are not transposed.
 #[test]
-fn dynamic_attr_and_child_fill_child_before_attr() {
+fn dynamic_attr_and_child_fill_attr_before_child() {
     let old = quote! {
         div {
             class: "{x}",
@@ -479,22 +479,22 @@ fn dynamic_attr_and_child_fill_child_before_attr() {
     let templates = hot_reload_from_tokens(old, new).expect("should hotreload");
     let template = templates.get(&0).unwrap();
 
-    // The child node fills slot 0, the dynamic attribute fills slot 1.
+    // The dynamic attribute fills slot 0, the child node fills slot 1.
     assert!(
-        template.dynamic_is_node(0),
-        "slot 0 should be the dynamic child node"
+        template.dynamic_is_attr(0),
+        "slot 0 should be the dynamic attribute"
     );
     assert!(
-        template.dynamic_is_attr(1),
-        "slot 1 should be the dynamic attribute"
+        template.dynamic_is_node(1),
+        "slot 1 should be the dynamic child node"
     );
     assert!(
-        !template.dynamic_is_attr(0),
-        "slot 0 must not be classified as an attribute"
+        !template.dynamic_is_node(0),
+        "slot 0 must not be classified as a node"
     );
     assert!(
-        !template.dynamic_is_node(1),
-        "slot 1 must not be classified as a node"
+        !template.dynamic_is_attr(1),
+        "slot 1 must not be classified as an attribute"
     );
 }
 

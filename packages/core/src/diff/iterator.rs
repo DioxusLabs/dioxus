@@ -12,7 +12,7 @@
 //!   remaining gap is a bulk insert or remove. Only genuine middle reorders pay for the key map.
 
 use crate::{
-    DynamicNode, ElementId, VirtualDom,
+    DynamicNode, ElementId, VNodeChild, VirtualDom,
     diff::{
         context::{DiffFrame, DiffState},
         placement::{
@@ -717,19 +717,29 @@ impl crate::MountedVNode<'_> {
         let target_id = dom.current_render_target_id();
 
         let mut count = 0;
-        for (root_idx, static_op, dynamic_anchor) in self.template.root_slots() {
-            if let Some(anchor) = dynamic_anchor {
-                for index in self.dynamic_node_indices_for_anchor(anchor) {
-                    count += self.push_dynamic_root_node(index, mount, target_id, dom, to);
+        for child in self.vnode().children() {
+            match child {
+                VNodeChild::Dynamic(group) => {
+                    for index in group.ids() {
+                        count += self.push_dynamic_root_node(index, mount, target_id, dom, to);
+                    }
                 }
-                continue;
-            }
-
-            debug_assert!(static_op.is_some());
-            if dom.mount_target_id(mount) == target_id
-                && let Some(id) = dom.mounted_root_node(mount, root_idx)
-            {
-                count += push_live_root(to, id.element_id());
+                VNodeChild::Element(element) => {
+                    if dom.mount_target_id(mount) == target_id
+                        && let Some(root_position) = element.root_position()
+                        && let Some(id) = dom.mounted_root_node(mount, root_position)
+                    {
+                        count += push_live_root(to, id.element_id());
+                    }
+                }
+                VNodeChild::Text(text) => {
+                    if dom.mount_target_id(mount) == target_id
+                        && let Some(root_position) = text.root_position()
+                        && let Some(id) = dom.mounted_root_node(mount, root_position)
+                    {
+                        count += push_live_root(to, id.element_id());
+                    }
+                }
             }
         }
 

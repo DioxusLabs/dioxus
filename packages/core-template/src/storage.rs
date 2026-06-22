@@ -59,7 +59,7 @@ pub struct TemplateStorage<
     ops: ConstVec<TemplateOp, OPS_CAP>,
     strings: ConstVec<&'static str, STRING_CAP>,
     anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
-    /// Running hash of each dynamic value's kind (attribute vs node) in fill
+    /// Running hash of each dynamic value's kind (attribute vs node) in dynamic-value
     /// order. Folded into the template hash so kind-incompatible templates that
     /// share an op tape compare unequal; never stored on the template itself.
     value_kind_hash: u64,
@@ -70,7 +70,6 @@ struct TemplateElementFrame {
     enter_index: usize,
     namespace: bool,
     path: TemplatePath,
-    dynamic_attrs: usize,
 }
 
 struct TemplateLoweringCursor {
@@ -88,7 +87,6 @@ impl TemplateLoweringCursor {
                 enter_index: 0,
                 namespace: false,
                 path: TemplatePath::empty(),
-                dynamic_attrs: 0,
             }; TEMPLATE_PATH_STACK_CAP],
             next_paths,
             stack_pointer: 0,
@@ -105,7 +103,6 @@ impl TemplateLoweringCursor {
             enter_index,
             namespace,
             path,
-            dynamic_attrs: 0,
         };
         self.next_paths[self.stack_pointer + 1] = path.next_child();
         self.stack_pointer += 1;
@@ -117,18 +114,6 @@ impl TemplateLoweringCursor {
         }
         self.stack_pointer -= 1;
         self.enter_stack[self.stack_pointer]
-    }
-
-    const fn defer_dynamic_attr(&mut self) {
-        if self.stack_pointer == 0 {
-            panic!("dynamic attr raw op without an open element");
-        }
-        let index = self.stack_pointer - 1;
-        let frame = self.enter_stack[index];
-        self.enter_stack[index] = TemplateElementFrame {
-            dynamic_attrs: frame.dynamic_attrs + 1,
-            ..frame
-        };
     }
 
     const fn current_element_path(&self) -> TemplatePath {
@@ -251,8 +236,6 @@ impl TemplateStatsBuilder {
 
     /// Count the end of the current element.
     pub fn close_element(&mut self) {
-        self.stats
-            .flush_dynamic_attrs(&mut self.anchors, &self.cursor);
         let _ = self.cursor.close_element();
     }
 
@@ -272,7 +255,13 @@ impl TemplateStatsBuilder {
 
     /// Count a dynamic attribute slot on the current element.
     pub fn dynamic_attr(&mut self) {
-        self.cursor.defer_dynamic_attr();
+        let frame = self.cursor.current_element_frame();
+        if frame.path.is_empty() {
+            self.stats.path_overflow = true;
+        }
+        let path = TemplateSlotPath::append_children(frame.path).bits();
+        self.stats
+            .push_anchor(&mut self.anchors, frame.enter_index as u16, path);
     }
 
     /// Count a static text node.
@@ -338,33 +327,10 @@ impl TemplateStorageStats {
             }
         }
 
-        if anchors
-            .iter()
-            .any(|anchor| anchor.same_anchor(parent_op_index, path))
-        {
-            panic!("anchor gap");
-        }
-
         anchors.push(AnchorStats {
             parent_op_index,
             path,
         });
-    }
-
-    fn flush_dynamic_attrs(
-        &mut self,
-        anchors: &mut Vec<AnchorStats>,
-        cursor: &TemplateLoweringCursor,
-    ) {
-        let frame = cursor.current_element_frame();
-        let path = frame.path;
-        if path.is_empty() {
-            self.path_overflow = true;
-        }
-        let path = TemplateSlotPath::append_children(path).bits();
-        for _ in 0..frame.dynamic_attrs {
-            self.push_anchor(anchors, frame.enter_index as u16, path);
-        }
     }
 }
 
@@ -414,7 +380,6 @@ macro_rules! template_lowering {
         }
     }};
     (close_element($storage:expr, $cursor:expr)) => {{
-        template_lowering!(dynamic_attrs($storage, $cursor));
         let frame = ($cursor).close_element();
         let enter_index = frame.enter_index;
         let namespace = frame.namespace;
@@ -423,15 +388,6 @@ macro_rules! template_lowering {
             panic!("template op skip exceeds packed op capacity");
         }
         ($storage).set_op(enter_index, TemplateOp::enter(skip as u16, namespace));
-    }};
-    (dynamic_attrs($storage:expr, $cursor:expr)) => {{
-        let frame = ($cursor).current_element_frame();
-        let path = TemplateSlotPath::append_children(frame.path).bits();
-        let mut index = 0;
-        while index < frame.dynamic_attrs {
-            ($storage).push_anchor(frame.enter_index as u16, path, true);
-            index += 1;
-        }
     }};
     (static_attr($storage:expr, $name:expr, $value:expr, $namespace:expr)) => {{
         let namespace = $namespace;
@@ -480,7 +436,7 @@ macro_rules! template_storage_methods {
         }
 
         $($constness)? fn push_anchor(&mut self, parent_op_index: u16, path: u128, is_attr: bool) {
-            // Fold this value's kind into the running signature in fill order
+            // Fold this value's kind into the running signature in dynamic-value order
             // (one value per call, including merges into the previous anchor).
             // The template hash mixes this in so an attribute slot and a node
             // slot at the same anchor never produce equal templates.
@@ -505,14 +461,6 @@ macro_rules! template_storage_methods {
                 }
             }
 
-            let mut i = 0;
-            while i < len {
-                if self.anchors.at(i).same_anchor(parent_op_index, path) {
-                    panic!("anchor gap");
-                }
-                i += 1;
-            }
-
             let value_start = if len == 0 {
                 0
             } else {
@@ -530,28 +478,6 @@ macro_rules! template_storage_methods {
             });
         }
 
-        $($constness)? fn sort_anchors_in_fill_order(&mut self) {
-            let len = self.anchors.len();
-            let mut index = 0;
-            while index < len {
-                let mut best = index;
-                let mut candidate = index + 1;
-                while candidate < len {
-                    if self
-                        .anchors
-                        .at(candidate)
-                        .should_fill_before(self.anchors.at(best))
-                    {
-                        best = candidate;
-                    }
-                    candidate += 1;
-                }
-                if best != index {
-                    self.anchors.swap(index, best);
-                }
-                index += 1;
-            }
-        }
     };
 }
 
@@ -632,7 +558,9 @@ const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYN
             push_static_attr(storage, name, value, *namespace);
         }
         TemplateRawTree::DynamicAttr => {
-            cursor.defer_dynamic_attr();
+            let frame = cursor.current_element_frame();
+            let path = TemplateSlotPath::append_children(frame.path).bits();
+            storage.push_anchor(frame.enter_index as u16, path, true);
         }
         TemplateRawTree::StaticText(value) => {
             template_lowering!(static_text(storage, cursor, value));
@@ -658,7 +586,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
 
         lower_raw_tree(tree, &mut storage, &mut cursor, false);
         cursor.finish();
-        storage.sort_anchors_in_fill_order();
         storage
     }
 
@@ -696,7 +623,7 @@ struct RuntimeTemplateStorage {
     ops: RuntimeTemplateVec<TemplateOp>,
     strings: RuntimeTemplateVec<&'static str>,
     anchors: RuntimeTemplateVec<TemplateAnchor>,
-    /// Running hash of each dynamic value's kind (attribute vs node) in fill
+    /// Running hash of each dynamic value's kind (attribute vs node) in dynamic-value
     /// order. See [`TemplateStorage::value_kind_hash`].
     value_kind_hash: u64,
 }
@@ -724,10 +651,6 @@ impl<T: Copy> RuntimeTemplateVec<T> {
 
     fn at(&self, index: usize) -> T {
         self.0[index]
-    }
-
-    fn swap(&mut self, a: usize, b: usize) {
-        self.0.swap(a, b);
     }
 
     fn into_boxed_slice(self) -> Box<[T]> {
@@ -777,7 +700,10 @@ impl RuntimeTemplateBuilder {
 
     /// Emit a dynamic attribute slot on the current element.
     pub fn dynamic_attr(&mut self) {
-        self.cursor.defer_dynamic_attr();
+        let frame = self.cursor.current_element_frame();
+        let path = TemplateSlotPath::append_children(frame.path).bits();
+        self.storage
+            .push_anchor(frame.enter_index as u16, path, true);
     }
 
     /// Emit a static text node.
@@ -795,9 +721,8 @@ impl RuntimeTemplateBuilder {
     }
 
     /// Finish this builder and return a leaked template.
-    pub fn finish(mut self) -> Template {
+    pub fn finish(self) -> Template {
         self.cursor.finish();
-        self.storage.sort_anchors_in_fill_order();
         self.storage.into_leaked_template()
     }
 }
@@ -944,7 +869,7 @@ mod tests {
             .iter()
             .map(|anchor| anchor.values().end)
             .max()
-            .unwrap_or(0);
+            .unwrap_or_default();
         assert_eq!(stats.dynamic_values, dynamic_value_count);
     }
 }

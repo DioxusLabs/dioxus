@@ -105,7 +105,7 @@ pub(crate) struct Mount {
 
     mode: RenderMode,
 
-    root_slots: Box<[PackedMountedSlot]>,
+    mounted_root_nodes_by_position: Box<[PackedMountedSlot]>,
 
     anchor_slots: Box<[PackedMountedSlot]>,
 
@@ -124,7 +124,7 @@ impl Mount {
         // Root and dynamic-value slot counts are structural: the root array length is the number
         // of template root positions, the anchor array length is the number of dynamic anchors, and
         // the dynamic array length is the number of runtime values.
-        let root_count = node.template.root_slots().count();
+        let root_count = node.root_child_count();
         let anchor_count = node.template.anchors().len();
         let dynamic_count = node.dynamic_values().len();
         Self {
@@ -133,7 +133,7 @@ impl Mount {
             target_id,
             node,
             mode: RenderMode::Foreground,
-            root_slots: vec![PackedMountedSlot::empty(); root_count].into(),
+            mounted_root_nodes_by_position: vec![PackedMountedSlot::empty(); root_count].into(),
             anchor_slots: vec![PackedMountedSlot::empty(); anchor_count].into(),
             dynamic_slots: vec![PackedMountedSlot::empty(); dynamic_count].into(),
             fragment_child_mounts: Vec::new(),
@@ -182,11 +182,11 @@ impl Mount {
     }
 
     fn root_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.root_slots[idx]
+        self.mounted_root_nodes_by_position[idx]
     }
 
     fn root_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.root_slots[idx]
+        &mut self.mounted_root_nodes_by_position[idx]
     }
 }
 
@@ -262,7 +262,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.root_slots.len())
+        self.with_mount(mount, |mount| mount.mounted_root_nodes_by_position.len())
     }
 
     pub(crate) fn mounted_anchor_node(
@@ -521,8 +521,6 @@ impl VirtualDom {
         let mount_state = &mut mounts[mount.0];
         mount_state.node = node.clone();
         compact_fragment_child_mounts(mount_state, node);
-        #[cfg(all(debug_assertions, not(coverage_nightly)))]
-        assert_committed_fragment_slots(mount_state, node);
     }
 
     pub(crate) fn replace_mounted_component_root_mount(
@@ -566,52 +564,29 @@ fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
     }
 
     let old_children = std::mem::take(&mut mount.fragment_child_mounts);
-    for (idx, value) in node.dynamic_values.iter().enumerate() {
-        let Some(DynamicNode::Fragment(nodes)) = value.as_node() else {
-            continue;
-        };
+    for group in node.dynamic_nodes() {
+        for idx in group.ids() {
+            let DynamicNode::Fragment(nodes) = node.dynamic_values[idx].node() else {
+                continue;
+            };
 
-        if nodes.is_empty() {
-            *mount.dynamic_slot_mut(idx) = PackedMountedSlot::empty();
-            continue;
+            if nodes.is_empty() {
+                *mount.dynamic_slot_mut(idx) = PackedMountedSlot::empty();
+                continue;
+            }
+
+            let start = mount
+                .dynamic_slot(idx)
+                .fragment_start()
+                .expect("fragment children");
+            let range = start..start + nodes.len();
+            let new_start = mount.fragment_child_mounts.len();
+            mount
+                .fragment_child_mounts
+                .extend_from_slice(&old_children[range]);
+            *mount.dynamic_slot_mut(idx) =
+                PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(new_start));
         }
-
-        let start = mount
-            .dynamic_slot(idx)
-            .fragment_start()
-            .expect("fragment children");
-        let range = start..start + nodes.len();
-        let new_start = mount.fragment_child_mounts.len();
-        mount
-            .fragment_child_mounts
-            .extend_from_slice(&old_children[range]);
-        *mount.dynamic_slot_mut(idx) =
-            PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(new_start));
-    }
-}
-
-#[cfg(all(debug_assertions, not(coverage_nightly)))]
-fn assert_committed_fragment_slots(mount: &Mount, node: &VNode) {
-    for (idx, value) in node.dynamic_values.iter().enumerate() {
-        let Some(DynamicNode::Fragment(nodes)) = value.as_node() else {
-            continue;
-        };
-        if nodes.is_empty() {
-            debug_assert!(
-                mount.dynamic_slot(idx).fragment_start().is_none(),
-                "empty fragment dynamic slots must be empty after commit"
-            );
-            continue;
-        }
-
-        let start = mount
-            .dynamic_slot(idx)
-            .fragment_start()
-            .expect("fragment children");
-        debug_assert!(
-            start + nodes.len() <= mount.fragment_child_mounts.len(),
-            "committed fragment dynamic slot range must stay within mount fragment storage"
-        );
     }
 }
 

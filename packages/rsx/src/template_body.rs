@@ -33,6 +33,64 @@ fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
         .collect()
 }
 
+/// Drives a [`TemplateStatsBuilder`] from a canonical fill-order walk so the predicted op/string/
+/// anchor capacities match the ops the typed view builder emits. The single authoritative
+/// traversal lives in [`crate::visit_roots`]; this is its stats consumer.
+#[derive(Default)]
+struct StatsCollector {
+    stats: TemplateStatsBuilder,
+}
+
+impl<'a> FillOrderVisitor<'a> for StatsCollector {
+    fn open_element(&mut self, _element: &'a Element) -> Option<()> {
+        self.stats.open_element(None);
+        Some(())
+    }
+
+    fn close_element(&mut self, _element: &'a Element) -> Option<()> {
+        self.stats.close_element();
+        Some(())
+    }
+
+    fn static_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
+        self.stats.static_attr(None);
+        Some(())
+    }
+
+    fn dynamic_attribute(&mut self, _element: &'a Element, _attr: &'a Attribute) -> Option<()> {
+        self.stats.dynamic_attr();
+        Some(())
+    }
+
+    fn static_text(&mut self, _text: &'a TextNode) -> Option<()> {
+        self.stats.static_text();
+        Some(())
+    }
+
+    fn dynamic_node(
+        &mut self,
+        _node: &'a BodyNode,
+        following_static_at_parent: bool,
+    ) -> Option<()> {
+        self.stats.dynamic_node(following_static_at_parent);
+        Some(())
+    }
+}
+
+/// Predicted storage stats for a sibling list, derived from the canonical fill-order walk.
+fn sibling_storage_stats(nodes: &[BodyNode]) -> TemplateStorageStats {
+    let mut collector = StatsCollector::default();
+    visit_roots(&mut collector, nodes);
+    collector.stats.finish()
+}
+
+/// Predicted storage stats for a single element subtree.
+fn element_storage_stats(element: &Element) -> TemplateStorageStats {
+    let mut collector = StatsCollector::default();
+    visit_element(&mut collector, element);
+    collector.stats.finish()
+}
+
 /// A set of nodes in a template position
 ///
 /// this could be:
@@ -189,9 +247,7 @@ pub(crate) struct ViewBuilderPieces {
 impl ViewBuilderPieces {
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
-        let mut stats = TemplateStatsBuilder::new();
-        builder.push_element_stats(element, &mut stats);
-        let template_stats = stats.finish();
+        let template_stats = element_storage_stats(element);
         let view = builder.visit_element(element, true);
         builder.finish(view, template_stats)
     }
@@ -200,7 +256,7 @@ impl ViewBuilderPieces {
     /// hot-reload tables and dynamic text pool gathered along the way.
     fn from_body(body: &TemplateBody) -> Self {
         let mut builder = ViewBuilder::new();
-        let template_stats = builder.sibling_storage_stats(&body.roots);
+        let template_stats = sibling_storage_stats(&body.roots);
         let views = builder.visit_sibling_nodes(&body.roots, true);
         // Roots have no enclosing element, so they group through a `fragment()` rather than an
         // element builder's `.child(..)`. A single group is just the tuple itself.
@@ -335,17 +391,18 @@ impl ViewBuilder {
 
     fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TokenStream2 {
         let tag = self.element_tag(element);
+
+        let mut attrs = TokenStream2::new();
+        for attr in &element.merged_attributes {
+            attrs.extend(element.typed_builder_attribute(attr, self));
+        }
+
         let children = self.visit_sibling_nodes(&element.children, false);
         // The first group seeds the element's children; any further groups (only when there are
         // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
         let groups = group_sibling_views(children);
         let (first, rest) = groups.split_first().expect("at least one group");
         let rest = rest.iter();
-
-        let mut attrs = TokenStream2::new();
-        for attr in &element.merged_attributes {
-            attrs.extend(element.typed_builder_attribute(attr, self));
-        }
 
         if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element.key() {
             let key = self.allocate_formatted(key);
@@ -509,75 +566,6 @@ impl ViewBuilder {
         self.next_marker += 1;
         format_ident!("{prefix}{index}")
     }
-
-    fn sibling_storage_stats(&self, nodes: &[BodyNode]) -> TemplateStorageStats {
-        let mut stats = TemplateStatsBuilder::new();
-        self.push_sibling_stats(nodes, &mut stats);
-        stats.finish()
-    }
-
-    fn push_sibling_stats(&self, nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
-        for (index, node) in nodes.iter().enumerate() {
-            self.push_node_stats(
-                node,
-                Self::siblings_have_static_node(nodes, index + 1),
-                stats,
-            );
-        }
-    }
-
-    fn push_node_stats(
-        &self,
-        node: &BodyNode,
-        following_static_at_parent: bool,
-        stats: &mut TemplateStatsBuilder,
-    ) {
-        match node {
-            BodyNode::Element(element) => self.push_element_stats(element, stats),
-            BodyNode::Text(text) if text.is_static() => stats.static_text(),
-            BodyNode::Text(_)
-            | BodyNode::RawExpr(_)
-            | BodyNode::Component(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::SyntheticBoundary(_) => stats.dynamic_node(following_static_at_parent),
-        }
-    }
-
-    fn push_element_stats(&self, element: &Element, stats: &mut TemplateStatsBuilder) {
-        stats.open_element(None);
-
-        for attr in &element.merged_attributes {
-            self.push_attribute_stats(attr, stats);
-        }
-
-        self.push_sibling_stats(&element.children, stats);
-        stats.close_element();
-    }
-
-    fn push_attribute_stats(&self, attr: &Attribute, stats: &mut TemplateStatsBuilder) {
-        if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
-            stats.static_attr(None);
-        } else {
-            stats.dynamic_attr();
-        }
-    }
-
-    fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
-        nodes[start..].iter().any(Self::node_has_static_root)
-    }
-
-    fn node_has_static_root(node: &BodyNode) -> bool {
-        match node {
-            BodyNode::Element(_) => true,
-            BodyNode::Text(text) => text.is_static(),
-            BodyNode::RawExpr(_)
-            | BodyNode::Component(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::SyntheticBoundary(_) => false,
-        }
-    }
 }
 
 impl Element {
@@ -713,76 +701,12 @@ impl TemplateBody {
             return true;
         }
 
-        let stats = Self::sibling_storage_stats(nodes);
+        let stats = sibling_storage_stats(nodes);
         stats.path_overflow
             || stats.ops > TEMPLATE_STORAGE_MAX_CAP
             || stats.strings > TEMPLATE_STORAGE_MAX_CAP
             || stats.dynamic_values > u16::MAX as usize
             || matches!(context, SiblingContext::Roots) && nodes.len() > u16::MAX as usize
-    }
-
-    fn sibling_storage_stats(nodes: &[BodyNode]) -> TemplateStorageStats {
-        let mut stats = TemplateStatsBuilder::new();
-        Self::push_sibling_stats(nodes, &mut stats);
-        stats.finish()
-    }
-
-    fn push_sibling_stats(nodes: &[BodyNode], stats: &mut TemplateStatsBuilder) {
-        for (index, node) in nodes.iter().enumerate() {
-            Self::push_node_stats(
-                node,
-                Self::siblings_have_static_node(nodes, index + 1),
-                stats,
-            );
-        }
-    }
-
-    fn push_node_stats(
-        node: &BodyNode,
-        following_static_at_parent: bool,
-        stats: &mut TemplateStatsBuilder,
-    ) {
-        match node {
-            BodyNode::Element(element) => Self::push_element_stats(element, stats),
-            BodyNode::Text(text) if text.is_static() => stats.static_text(),
-            BodyNode::Text(_)
-            | BodyNode::RawExpr(_)
-            | BodyNode::Component(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::SyntheticBoundary(_) => stats.dynamic_node(following_static_at_parent),
-        }
-    }
-
-    fn push_element_stats(element: &Element, stats: &mut TemplateStatsBuilder) {
-        stats.open_element(None);
-
-        for attr in &element.merged_attributes {
-            if attr.as_static_str_literal().is_some() && !attr.name.is_likely_event() {
-                stats.static_attr(None);
-            } else {
-                stats.dynamic_attr();
-            }
-        }
-
-        Self::push_sibling_stats(&element.children, stats);
-        stats.close_element();
-    }
-
-    fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
-        nodes[start..].iter().any(Self::node_has_static_root)
-    }
-
-    fn node_has_static_root(node: &BodyNode) -> bool {
-        match node {
-            BodyNode::Element(_) => true,
-            BodyNode::Text(text) => text.is_static(),
-            BodyNode::RawExpr(_)
-            | BodyNode::Component(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::SyntheticBoundary(_) => false,
-        }
     }
 
     fn path_bits_exceed_limit(nodes: &[BodyNode]) -> bool {

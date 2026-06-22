@@ -568,8 +568,8 @@ impl<Tag: ElementTag, Attributes: View, Children: View> View
 {
     #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
-        self.children.push(dynamic);
         self.attrs.push(dynamic);
+        self.children.push(dynamic);
     }
 }
 

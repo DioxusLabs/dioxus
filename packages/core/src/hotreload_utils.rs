@@ -266,7 +266,7 @@ impl DynamicValuePool {
         let mut dynamic_nodes = Vec::new();
         let mut dynamic_attributes = Vec::new();
 
-        for anchor in vnode.template.anchors_in_document_order() {
+        for anchor in vnode.template.anchors() {
             for idx in anchor.values() {
                 match &vnode.dynamic_values[idx] {
                     DynamicValue::Node(node) => dynamic_nodes.push(node.clone()),
@@ -412,7 +412,7 @@ impl HotReloadedTemplate {
 
     /// Return the number of root positions in the template.
     pub fn root_count(&self) -> usize {
-        self.template.root_slots().count()
+        self.template.root_position_count()
     }
 
     /// Return decoded template operations for inspection.

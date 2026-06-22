@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, VNodeChild};
 use dioxus_core_macro::*;
 mod link;
 pub use link::*;
@@ -75,27 +75,26 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // The title's children must be in one of two forms:
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
-    let template = vnode.template;
-    let mut root_slots = template.root_slots();
-    let Some((_, static_root, dynamic_root)) = root_slots.next() else {
+    let mut children = vnode.children();
+    let Some(child) = children.next() else {
         return Err(ExtractSingleTextNodeError::NonTemplate);
     };
 
-    if root_slots.next().is_some() {
+    if children.next().is_some() {
         return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    match (static_root, dynamic_root, vnode.dynamic_values().len()) {
+    match (child, vnode.dynamic_values().len()) {
         // rsx! { "static text" }
-        (Some(root), None, 0) => template
-            .static_text_at_op(root)
-            .map(|text| text.to_string())
-            .ok_or(ExtractSingleTextNodeError::NonTemplate),
+        (VNodeChild::Text(text), 0) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }
-        (None, Some(_), 1) => match vnode.dynamic_values()[0].as_node() {
-            Some(DynamicNode::Text(text)) => Ok(text.value.clone()),
-            Some(_) => Err(ExtractSingleTextNodeError::NonTextNode),
-            None => Err(ExtractSingleTextNodeError::NonTemplate),
+        (VNodeChild::Dynamic(group), 1) => match group.ids().next() {
+            Some(0) => match vnode.dynamic_values()[0].as_node() {
+                Some(DynamicNode::Text(text)) => Ok(text.value.clone()),
+                Some(_) => Err(ExtractSingleTextNodeError::NonTextNode),
+                None => Err(ExtractSingleTextNodeError::NonTemplate),
+            },
+            _ => Err(ExtractSingleTextNodeError::NonTemplate),
         },
         _ => Err(ExtractSingleTextNodeError::NonTemplate),
     }

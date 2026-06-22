@@ -42,14 +42,4 @@ impl TemplateAnchor {
     pub(crate) const fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
         self.parent_op_index == parent_op_index && self.path == path
     }
-
-    pub(crate) const fn should_fill_before(self, other: Self) -> bool {
-        let self_depth = self.slot_path().fill_depth();
-        let other_depth = other.slot_path().fill_depth();
-        if self_depth != other_depth {
-            return self_depth > other_depth;
-        }
-
-        self.value_start > other.value_start
-    }
 }

@@ -32,7 +32,7 @@ pub(crate) mod context;
 mod iterator;
 pub(crate) mod node;
 pub(crate) mod placement;
-mod template;
+pub(crate) mod template;
 
 pub(crate) struct CreatedVNode {
     pub(crate) nodes: usize,
@@ -112,12 +112,11 @@ impl VirtualDom {
 /// Invariant: this is only a capacity hint. Non-root component scopes are allocated lazily when
 /// their owning template root is materialized.
 fn root_component_count(node: &VNode) -> usize {
-    node.template
-        .root_slots()
-        .filter_map(|(_, _, anchor)| anchor)
-        .map(|anchor| {
-            anchor
-                .values()
+    node.dynamic_nodes()
+        .filter(|group| group.is_root_level())
+        .map(|group| {
+            group
+                .ids()
                 .filter(|idx| {
                     matches!(
                         node.dynamic_values[*idx].as_node(),

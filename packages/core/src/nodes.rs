@@ -5,7 +5,7 @@ use crate::{
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
 };
-use dioxus_core_template::{TemplateAnchor, TemplateRawTree, TemplateSlotTarget, TemplateStorage};
+use dioxus_core_template::{TemplateAnchor, TemplateRawTree, TemplateStorage};
 use dioxus_core_types::DioxusFormattable;
 
 use std::ops::Deref;
@@ -227,7 +227,7 @@ impl VNode {
                     .iter()
                     .map(|anchor| anchor.values().end)
                     .max()
-                    .unwrap_or(0),
+                    .unwrap_or_default(),
             "bad dynamic count"
         );
 
@@ -240,152 +240,6 @@ impl VNode {
                 view: values,
             }),
         }
-    }
-
-    /// Load a root-level dynamic node slot at the given dynamic node index
-    ///
-    /// Returns [`None`] if the dynamic node is mounted under a static template node.
-    pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template
-            .anchor_for_value(idx)
-            .filter(|anchor| anchor.parent_element_op_index().is_none())
-            .and_then(|_| self.dynamic_values[idx].as_node())
-    }
-
-    fn anchor_has_node(&self, anchor: &TemplateAnchor) -> bool {
-        self.dynamic_node_indices_for_anchor(anchor)
-            .next()
-            .is_some()
-    }
-
-    fn anchor_has_attrs(&self, anchor: &TemplateAnchor) -> bool {
-        self.dynamic_attr_indices_for_anchor(anchor)
-            .next()
-            .is_some()
-    }
-
-    /// Iterate dynamic node value indices covered by `anchor`.
-    pub fn dynamic_node_indices_for_anchor<'a>(
-        &'a self,
-        anchor: &'a TemplateAnchor,
-    ) -> impl Iterator<Item = usize> + 'a {
-        anchor
-            .values()
-            .filter(move |&idx| self.dynamic_values[idx].as_node().is_some())
-    }
-
-    /// Iterate dynamic attribute value indices covered by `anchor`.
-    pub fn dynamic_attr_indices_for_anchor<'a>(
-        &'a self,
-        anchor: &'a TemplateAnchor,
-    ) -> impl Iterator<Item = usize> + 'a {
-        anchor
-            .values()
-            .filter(move |&idx| self.dynamic_values[idx].as_attrs().is_some())
-    }
-
-    pub(crate) fn dynamic_attr_anchor_indices(
-        &self,
-    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
-        self.template
-            .anchors()
-            .iter()
-            .enumerate()
-            .filter(move |(_, anchor)| self.anchor_has_attrs(anchor))
-    }
-
-    pub(crate) fn dynamic_attr_anchors_in_document_order(
-        &self,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> {
-        self.dynamic_attr_anchor_indices_in_document_order()
-            .map(|(_, anchor)| anchor)
-    }
-
-    pub(crate) fn dynamic_attr_anchor_indices_in_document_order(
-        &self,
-    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> {
-        let mut anchors = self.dynamic_attr_anchor_indices().collect::<Vec<_>>();
-        anchors.sort_by_key(|(_, anchor)| anchor.values().start);
-        anchors.into_iter()
-    }
-
-    fn dynamic_anchors_in_document_order(
-        &self,
-        nodes: bool,
-    ) -> impl DoubleEndedIterator<Item = (usize, &'static TemplateAnchor)> + '_ {
-        let mut anchors = self
-            .template
-            .anchors()
-            .iter()
-            .enumerate()
-            .filter(move |(_, anchor)| {
-                if nodes {
-                    self.anchor_has_node(anchor)
-                } else {
-                    self.anchor_has_attrs(anchor)
-                }
-            })
-            .collect::<Vec<_>>();
-        anchors.sort_by_key(|(_, anchor)| anchor.values().start);
-        anchors.into_iter()
-    }
-
-    /// Iterate dynamic node anchors attached directly to the static element op.
-    pub fn dynamic_node_anchors_for_element(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
-        self.dynamic_node_anchor_indices_for_element(element_op)
-            .map(|(_, anchor)| anchor)
-    }
-
-    pub(crate) fn dynamic_node_anchor_indices_for_element(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
-        self.dynamic_anchors_in_document_order(true)
-            .filter(move |(_, anchor)| anchor.parent_element_op_index() == Some(element_op))
-    }
-
-    /// Iterate dynamic node anchors for one child slot of a static element op.
-    pub fn dynamic_node_anchors_for_slot(
-        &self,
-        element_op: usize,
-        slot: usize,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
-        self.dynamic_node_anchor_indices_for_slot(element_op, slot)
-            .map(|(_, anchor)| anchor)
-    }
-
-    pub(crate) fn dynamic_node_anchor_indices_for_slot(
-        &self,
-        element_op: usize,
-        slot: usize,
-    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
-        let trailing_slot = self.template.static_children(element_op).count();
-        self.dynamic_node_anchor_indices_for_element(element_op)
-            .filter(move |(_, anchor)| match anchor.slot_target() {
-                TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 == slot,
-                TemplateSlotTarget::AppendChildren(_) => slot == trailing_slot,
-            })
-    }
-
-    /// Iterate dynamic attribute anchors attached directly to the static element op.
-    pub fn dynamic_attr_anchors_for_element(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
-        self.dynamic_attr_anchor_indices_for_element(element_op)
-            .map(|(_, anchor)| anchor)
-    }
-
-    /// Iterate dynamic attribute anchors and their template anchor indexes for one static element.
-    pub fn dynamic_attr_anchor_indices_for_element(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = (usize, &'static TemplateAnchor)> + '_ {
-        self.dynamic_anchors_in_document_order(false)
-            .filter(move |(_, anchor)| anchor.parent_element_op_index() == Some(element_op))
     }
 }
 

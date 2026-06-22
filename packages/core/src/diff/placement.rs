@@ -20,11 +20,7 @@ use crate::{
     nodes::DynamicNode,
 };
 
-use super::{
-    CreatedNodes,
-    context::DiffContext,
-    template::{DynamicNodeSlot, dynamic_node_slot, dynamic_node_slots_in_document_order},
-};
+use super::{CreatedNodes, context::DiffContext, template::DynamicNodeSlot};
 
 #[derive(Clone, Copy)]
 pub(super) enum ElementEdge {
@@ -113,7 +109,7 @@ pub(super) fn insertion_site_for_slot(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let root_idx = slot.root_index();
+    let root_idx = slot.root_position();
 
     // A node cursor always starts with its root index (see `compile_template` and rsx codegen), so
     // an empty cursor is unreachable. An anchor can cover several adjacent dynamic values (`{a}{b}`
@@ -210,7 +206,7 @@ fn insertion_site_for_child_in_parent(
     // fragment child mount list is not replaced until that parent diff
     // commits.
     parent_views.find_committed_map(|parent_vnode| {
-        for slot in dynamic_node_slots_in_document_order(parent_vnode.vnode()) {
+        for slot in parent_vnode.vnode().dynamic_node_slots() {
             let idx = slot.index();
             match parent_vnode.dynamic_values[idx].node() {
                 DynamicNode::Fragment(children) => {
@@ -251,7 +247,9 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     slot: DynamicNodeSlot<'_>,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    let active_slot = dynamic_node_slot(parent_vnode, slot.index()).expect("bad active slot");
+    let active_slot = parent_vnode
+        .dynamic_node_slot(slot.index())
+        .expect("bad active slot");
     first_live_slot_after(
         parent_vnode,
         parent_mount,
@@ -276,7 +274,7 @@ fn first_live_slot_after(
     mut scan: impl FnMut(DynamicNodeSlot<'_>) -> Option<bool>,
 ) -> Option<ElementId> {
     let mut after_active_slot = false;
-    for slot in dynamic_node_slots_in_document_order(vnode) {
+    for slot in vnode.dynamic_node_slots() {
         if !after_active_slot {
             if slot.index() == after_idx {
                 after_active_slot = true;
@@ -422,8 +420,9 @@ pub(super) fn find_root_dynamic_slot<T>(
     edge: ElementEdge,
     mut find: impl FnMut(DynamicNodeSlot<'_>) -> Option<T>,
 ) -> Option<T> {
-    let mut slots = dynamic_node_slots_in_document_order(vnode)
-        .filter(|slot| slot.is_root_level() && slot.root_index() == cursor_idx);
+    let mut slots = vnode
+        .dynamic_node_slots()
+        .filter(|slot| slot.is_root_level() && slot.root_position() == cursor_idx);
     match edge {
         ElementEdge::First => slots.find_map(&mut find),
         ElementEdge::Last => {

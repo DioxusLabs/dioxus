@@ -23,7 +23,7 @@ use crate::innerlude::MountId;
 use crate::{
     Attribute, AttributeValue, VNode, VirtualDom, WriteMutations,
     arena::MountedElementId,
-    diff::template::{DynamicAttrGroup, for_each_dynamic_attr_group},
+    diff::template::DynamicAttrGroup,
     mutations::{TargetedLazyScope, with_id},
 };
 
@@ -34,7 +34,7 @@ type AttributeKey = (&'static str, Option<&'static str>);
 /// Reusable scratch for the two k-way merges in `diff_attribute_list`. Allocated once per
 /// `diff_attributes` call and cleared on every merge.
 #[derive(Default)]
-struct AttributeDiffScratch<'a> {
+pub(crate) struct AttributeDiffScratch<'a> {
     old_ranges: Vec<&'a [Attribute]>,
     old_offsets: Vec<usize>,
     new_ranges: Vec<&'a [Attribute]>,
@@ -42,37 +42,13 @@ struct AttributeDiffScratch<'a> {
 }
 
 impl VNode {
-    pub(crate) fn diff_attributes(
-        &self,
-        mount_id: crate::innerlude::MountId,
-        new: &VNode,
-        dom: &mut VirtualDom,
-        to: &mut dyn WriteMutations,
-    ) {
-        let mut scratch = AttributeDiffScratch::default();
-
-        for_each_dynamic_attr_group(self, |attr_group| {
-            let attribute_id =
-                dom.unchecked_mounted_anchor_node(mount_id, attr_group.anchor_index());
-            self.diff_attribute_list(
-                new,
-                &attr_group,
-                attribute_id,
-                mount_id,
-                &mut scratch,
-                dom,
-                to,
-            );
-        });
-    }
-
     /// Diff all dynamic attributes that can affect one mounted element.
     ///
     /// `from` and `to_attrs` are the flattened dynamic slots for the same template cursor. They may
     /// contain duplicate keys from multiple spreads or from a spread overriding a named attribute.
     /// Before we compare sides, each side is reduced to its effective, last-written attribute per
     /// key.
-    fn diff_attribute_list<'a>(
+    pub(super) fn diff_attribute_list<'a>(
         &'a self,
         new: &'a VNode,
         attr_group: &DynamicAttrGroup<'_>,

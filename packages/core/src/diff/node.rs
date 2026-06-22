@@ -1,18 +1,16 @@
 use crate::{
     DynamicNode::*,
-    MountedVNode, Template, VNode, VirtualDom, WriteMutations,
+    MountedVNode, Template, VNode, VNodeChild, VirtualDom, WriteMutations,
     arena::{ElementId, MountedElementId},
     diff::{
         CreatedVNode,
+        attributes::AttributeDiffScratch,
         context::{DiffFrame, DiffState},
         placement::{
             ElementEdge, InsertionSite, at_site, create_at_site, find_root_dynamic_slot,
             insertion_site_at, insertion_site_for_mounted_anchor, insertion_site_for_slot,
         },
-        template::{
-            DynamicAttrGroup, DynamicNodeSlot, dynamic_node_slots,
-            dynamic_node_slots_in_document_order,
-        },
+        template::{DynamicAttrGroup, DynamicChunk, DynamicNodeGroup, DynamicNodeSlot},
     },
     innerlude::{MountId, MountRef},
     mutations::{remove_id, with_consumed_id, with_id},
@@ -84,14 +82,33 @@ impl<'a> DiffFrame<'a> {
         }
 
         // If the templates are the same, we can diff the attributes and children
-        // Start with the attributes
-        // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
-        if let Some(to) = state.to.as_deref_mut() {
-            old.diff_attributes(current_mount, new, state.dom, to);
-        }
-
-        for slot in dynamic_node_slots_in_document_order(old) {
-            old.diff_dynamic_node(current_mount, slot, new, &mut state);
+        let mut scratch = AttributeDiffScratch::default();
+        for group in old.dynamic_groups() {
+            match group {
+                DynamicChunk::Nodes(node_group) => {
+                    for slot in node_group.slots() {
+                        old.diff_dynamic_node(current_mount, slot, new, &mut state);
+                    }
+                }
+                DynamicChunk::Attributes(attr_group) => {
+                    // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
+                    let Some(to) = state.to.as_deref_mut() else {
+                        continue;
+                    };
+                    let attribute_id = state
+                        .dom
+                        .unchecked_mounted_anchor_node(current_mount, attr_group.anchor_index());
+                    old.diff_attribute_list(
+                        new,
+                        &attr_group,
+                        attribute_id,
+                        current_mount,
+                        &mut scratch,
+                        state.dom,
+                        to,
+                    );
+                }
+            }
         }
         state.dom.commit_mount(current_mount, new);
         current_mount
@@ -152,10 +169,15 @@ impl VNode {
             self.dynamic_node_edge_element(mount, idx, state.dom, target_id, ElementEdge::First);
         let old_has_live_dom = live_first.is_some();
         if !old_has_live_dom {
-            // The old slot has no renderer-owned nodes. Removal still needs to
-            // clean mount records and component state, but it must not emit DOM
-            // mutations.
-            self.remove_dynamic_node(mount, state.dom, None, true, idx);
+            // The old slot has no nodes in the current target. It may still own component nodes
+            // routed to another target (for example a portal), so let those removals write through
+            // the target router while replacement placement stays anchored by the empty slot.
+            let to = if self.dynamic_component_targets_other_render_target(mount, idx, state.dom) {
+                state.to.as_deref_mut()
+            } else {
+                None
+            };
+            self.remove_dynamic_node(mount, state.dom, to, true, idx);
         }
 
         let context = state.context();
@@ -406,11 +428,7 @@ impl VNode {
                 .dom
                 .create_children_with_parents(to, right, parent, parent)
         };
-        let to_for_remove = if suppress_mutations {
-            None
-        } else {
-            state.to.as_deref_mut()
-        };
+        let to_for_remove = state.to.as_deref_mut().filter(|_| !suppress_mutations);
         self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
         created
     }
@@ -434,11 +452,20 @@ impl VNode {
     }
 
     fn has_reclaimable_root(&self) -> bool {
-        dynamic_node_slots(self).any(|slot| {
-            let id = slot.index();
-            slot.is_root_level()
-                && matches!(self.dynamic_values[id].node(), Text(text) if text.value.is_empty())
-        })
+        self.root_dynamic_node_ids()
+            .any(|id| matches!(self.dynamic_values[id].node(), Text(text) if text.value.is_empty()))
+    }
+
+    fn root_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
+        self.dynamic_nodes()
+            .filter(|group| group.is_root_level())
+            .flat_map(|group| group.ids())
+    }
+
+    fn nested_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
+        self.dynamic_nodes()
+            .filter(|group| !group.is_root_level())
+            .flat_map(|group| group.ids())
     }
 
     /// Remove a node from the DOM and destroy component state.
@@ -489,23 +516,14 @@ impl VNode {
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
-        for slot in dynamic_node_slots(self) {
-            let id = slot.index();
-            if slot.is_root_level() {
-                let dynamic_node = self.dynamic_values[id].node();
-                // Empty Fragments contribute no DOM and have nothing to reclaim
-                // via the renderer — skip them entirely.
-                if matches!(dynamic_node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
-                    continue;
-                }
-                self.remove_dynamic_node(
-                    mount,
-                    dom,
-                    to.as_deref_mut(),
-                    destroy_component_state,
-                    id,
-                );
+        for id in self.root_dynamic_node_ids() {
+            let dynamic_node = self.dynamic_values[id].node();
+            // Empty Fragments contribute no DOM and have nothing to reclaim
+            // via the renderer — skip them entirely.
+            if matches!(dynamic_node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
+                continue;
             }
+            self.remove_dynamic_node(mount, dom, to.as_deref_mut(), destroy_component_state, id);
         }
 
         for idx in 0..dom.mounted_root_count(mount) {
@@ -533,12 +551,8 @@ impl VNode {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
-        for slot in dynamic_node_slots(self) {
-            let idx = slot.index();
-            // Roots are cleaned up automatically above; non-root nested dynamic nodes get cleaned here.
-            if !slot.is_root_level() {
-                self.remove_dynamic_node(mount, dom, None, destroy_component_state, idx)
-            }
+        for idx in self.nested_dynamic_node_ids() {
+            self.remove_dynamic_node(mount, dom, None, destroy_component_state, idx);
         }
     }
 
@@ -609,6 +623,20 @@ impl VNode {
                 })
             }
         }
+    }
+
+    fn dynamic_component_targets_other_render_target(
+        &self,
+        mount: MountId,
+        idx: usize,
+        dom: &VirtualDom,
+    ) -> bool {
+        if !matches!(self.dynamic_values[idx].node(), Component(_)) {
+            return false;
+        }
+
+        let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
+        dom.runtime.get_state(scope_id).target_id() != dom.current_render_target_id()
     }
 
     pub(super) fn reclaim_anchor_nodes(&self, mount: MountId, dom: &mut VirtualDom) {
@@ -702,43 +730,65 @@ impl VNode {
     ) -> usize {
         let mut nodes_created = 0;
 
-        for (root_idx, static_op, dynamic_anchor) in self.template.root_slots() {
-            if let Some(anchor) = dynamic_anchor {
-                for index in self.dynamic_node_indices_for_anchor(anchor) {
-                    nodes_created +=
-                        self.create_dynamic_node_inner(mount, index, state, reuse_existing_mounts);
+        for child in self.children() {
+            match child {
+                VNodeChild::Dynamic(group) => {
+                    for index in group.ids() {
+                        nodes_created += self.create_dynamic_node_inner(
+                            mount,
+                            index,
+                            state,
+                            reuse_existing_mounts,
+                        );
+                    }
                 }
-                continue;
-            }
-
-            let root_op = static_op.expect("root slot must be static or dynamic");
-
-            if let Some(to) = state.to.as_deref_mut() {
-                self.load_template_root(mount, root_idx, root_op, state.dom, to);
-                nodes_created += 1;
+                VNodeChild::Element(element) => {
+                    if let Some(to) = state.to.as_deref_mut() {
+                        self.load_template_root(
+                            mount,
+                            element.root_position().expect("root element"),
+                            element.op(),
+                            state.dom,
+                            to,
+                        );
+                        nodes_created += 1;
+                    }
+                }
+                VNodeChild::Text(text) => {
+                    if let Some(to) = state.to.as_deref_mut() {
+                        self.load_template_root(
+                            mount,
+                            text.root_position().expect("root text"),
+                            text.op(),
+                            state.dom,
+                            to,
+                        );
+                        nodes_created += 1;
+                    }
+                }
             }
         }
 
         nodes_created
     }
-
     fn fill_dynamic_values(
         &self,
         mount: MountId,
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
-        for (anchor_index, anchor) in self.template.anchors().iter().enumerate() {
-            let group = DynamicAttrGroup::new(self, anchor, anchor_index);
-            if let Some(to) = state.to.as_deref_mut() {
-                self.write_attr_group(mount, &group, state.dom, to);
-            }
-
-            let has_dynamic_nodes = anchor
-                .values()
-                .any(|idx| self.dynamic_values[idx].as_node().is_some());
-            if has_dynamic_nodes && anchor.parent_element_op_index().is_some() {
-                self.load_dynamic_anchor(mount, anchor_index, anchor, state, reuse_existing_mounts);
+        for group in self.dynamic_groups() {
+            match group {
+                DynamicChunk::Attributes(group) => {
+                    if let Some(to) = state.to.as_deref_mut() {
+                        self.write_attr_group(mount, &group, state.dom, to);
+                    }
+                }
+                DynamicChunk::Nodes(group) => {
+                    if group.parent_element_op_index().is_some() {
+                        self.load_dynamic_anchor(mount, group, state, reuse_existing_mounts);
+                    }
+                }
             }
         }
     }
@@ -821,16 +871,12 @@ impl VNode {
     fn load_dynamic_anchor(
         &self,
         mount: MountId,
-        anchor_index: usize,
-        anchor: &TemplateAnchor,
+        group: DynamicNodeGroup<'_>,
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
         if !state.has_writer() {
-            for dynamic_node_id in anchor
-                .values()
-                .filter(|&idx| self.dynamic_values[idx].as_node().is_some())
-            {
+            for dynamic_node_id in group.ids() {
                 self.create_dynamic_node_inner(
                     mount,
                     dynamic_node_id,
@@ -844,8 +890,8 @@ impl VNode {
         let context = state.context();
         let site = insertion_site_for_mounted_anchor(
             mount,
-            anchor_index,
-            matches!(anchor.slot_target(), TemplateSlotTarget::AppendChildren(_)),
+            group.anchor_index(),
+            group.appends(),
             state.dom,
         );
         let runtime = state.dom.runtime.clone();
@@ -853,9 +899,8 @@ impl VNode {
         let to = state.to.as_deref_mut().expect("writer checked");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
-            anchor
-                .values()
-                .filter(|&idx| self.dynamic_values[idx].as_node().is_some())
+            group
+                .ids()
                 .map(|dynamic_node_id| {
                     self.create_dynamic_node_inner(
                         mount,
@@ -875,9 +920,6 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        if group.ids().next().is_none() {
-            return;
-        }
         let id = dom.unchecked_mounted_anchor_node(mount, group.anchor_index());
         for attribute_idx in group.ids() {
             for attr in self.dynamic_values[attribute_idx].attrs() {
@@ -930,11 +972,7 @@ impl VNode {
                 continue;
             };
             let static_root_idx = path.segment(0) as usize;
-            if self
-                .template
-                .materialization_root_for_static(static_root_idx)
-                != Some(root_idx)
-            {
+            if self.template.root_position_for_static_root(static_root_idx) != Some(root_idx) {
                 continue;
             }
 

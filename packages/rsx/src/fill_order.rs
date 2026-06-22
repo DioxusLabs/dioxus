@@ -1,13 +1,10 @@
 //! Shared template fill-order traversal.
 //!
-//! Two orderings have to be enforced together when walking an element, and they differ:
+//! Static and dynamic attributes are visited before an element's children, matching runtime
+//! `DynamicValues` order and the template anchor order.
 //!
-//! - Static attributes must be emitted *before* an element's children.
-//! - Dynamic attributes must be visited *after* an element's children, so the renderer indexes
-//!   their dynamic values after the children's dynamic nodes.
-//!
-//! This module centralizes that single authoritative order — open, static attributes, children,
-//! dynamic attributes, key, close — so every consumer stays in lockstep with the typed
+//! This module centralizes that single authoritative order — open, attributes, key, children,
+//! close — so every consumer stays in lockstep with the typed
 //! [`crate::TemplateBody`] view builder.
 
 use crate::innerlude::*;
@@ -28,8 +25,7 @@ pub trait FillOrderVisitor<'a> {
         Some(())
     }
 
-    /// Called for each non-static (dynamic) attribute, *after* the element's children, so the
-    /// renderer indexes their dynamic values after the children's dynamic nodes.
+    /// Called for each non-static (dynamic) attribute before the element's children.
     fn dynamic_attribute(&mut self, element: &'a Element, attr: &'a Attribute) -> Option<()>;
 
     /// Called once per element after its attributes, with the element's key value if it has one.
@@ -37,7 +33,7 @@ pub trait FillOrderVisitor<'a> {
         Some(())
     }
 
-    /// Called when an element is closed, after its children, attributes, and key.
+    /// Called when an element is closed, after its attributes, key, and children.
     fn close_element(&mut self, _element: &'a Element) -> Option<()> {
         Some(())
     }
@@ -89,7 +85,11 @@ fn visit_node<'a, V: FillOrderVisitor<'a>>(
     }
 }
 
-fn visit_element<'a, V: FillOrderVisitor<'a>>(visitor: &mut V, element: &'a Element) -> Option<()> {
+/// Walk a single element subtree in canonical fill order, driving `visitor`.
+pub fn visit_element<'a, V: FillOrderVisitor<'a>>(
+    visitor: &mut V,
+    element: &'a Element,
+) -> Option<()> {
     visitor.open_element(element)?;
 
     // Static attributes are lowered immediately, into the op slots that precede an element's
@@ -100,11 +100,6 @@ fn visit_element<'a, V: FillOrderVisitor<'a>>(visitor: &mut V, element: &'a Elem
         }
     }
 
-    // Children fill their dynamic slots before this element's own (deferred) dynamic attributes.
-    visit_siblings(visitor, &element.children)?;
-
-    // Dynamic attributes are deferred to `close_element` in the op tape, so their dynamic-value
-    // indices come after every child anchor.
     for attr in &element.merged_attributes {
         if !is_static_attribute(attr) {
             visitor.dynamic_attribute(element, attr)?;
@@ -115,10 +110,12 @@ fn visit_element<'a, V: FillOrderVisitor<'a>>(visitor: &mut V, element: &'a Elem
         visitor.key(element, key)?;
     }
 
+    visit_siblings(visitor, &element.children)?;
+
     visitor.close_element(element)
 }
 
-/// Whether an attribute is lowered as a static op (vs. a deferred dynamic slot). Mirrors the
+/// Whether an attribute is lowered as a static op (vs. a dynamic slot). Mirrors the
 /// classification the hot-reload consumers use so static/dynamic callbacks partition cleanly.
 fn is_static_attribute(attr: &Attribute) -> bool {
     attr.is_static_str_literal()

@@ -1,6 +1,17 @@
-use super::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor, TemplatePath};
+use super::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor};
 use crate::TemplateSlotTarget;
 use crate::op::TemplateOp;
+
+/// A static template root node and the materialized root position that owns it.
+#[derive(Clone, Copy)]
+pub struct StaticRoot {
+    /// Index among all materialized root positions, including root-level dynamic anchors.
+    pub root_position: usize,
+    /// Index among static root nodes only.
+    pub static_root_index: usize,
+    /// Flat template op index for the static root node.
+    pub op: usize,
+}
 
 /// A static layout of a UI tree.
 ///
@@ -23,7 +34,7 @@ pub struct Template {
     )]
     strings: &'static [&'static str],
 
-    /// Dynamic value groups in reverse breadth-first fill order, each anchored to a static element.
+    /// Dynamic value groups in document/value order, each anchored to a static element.
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "super::serialization::deserialize_leaky")
@@ -55,7 +66,7 @@ impl Template {
     /// Create a new template.
     ///
     /// `value_kind_hash` folds in the per-dynamic-value kind (attribute vs node)
-    /// in fill order. Attributes and nodes share kind-agnostic anchors — the
+    /// in dynamic-value order. Attributes and nodes share kind-agnostic anchors — the
     /// runtime value decides which a slot is — so two templates with the same op
     /// tape and anchors but a different kind layout (`{attr}` where the other has
     /// `{node}`) must not compare equal. Folding the kind layout into the hash
@@ -132,24 +143,9 @@ impl Template {
         }
     }
 
-    /// Get dynamic value anchors in native fill order.
+    /// Get dynamic value anchors in document/value order.
     pub const fn anchors(&self) -> &'static [TemplateAnchor] {
         self.anchors
-    }
-
-    pub fn anchors_in_document_order(
-        &self,
-    ) -> impl DoubleEndedIterator<Item = &'static TemplateAnchor> + '_ {
-        let value_count = Self::compute_dynamic_value_count(self.anchors) as usize;
-        (0..value_count).filter_map(move |idx| {
-            self.anchors
-                .iter()
-                .find(|anchor| anchor.values().start == idx)
-        })
-    }
-
-    pub fn anchor_for_value(&self, idx: usize) -> Option<&'static TemplateAnchor> {
-        self.anchors.iter().find(|a| a.values().contains(&idx))
     }
 
     /// Get a static string from this template's string pool.
@@ -270,93 +266,112 @@ impl Template {
         found
     }
 
-    fn root_dynamic_anchor_before(&self, path: TemplatePath) -> Option<&'static TemplateAnchor> {
-        self.anchors.iter().find(|anchor| {
-            anchor.parent_element_op_index().is_none()
-                && matches!(
-                    anchor.slot_target(),
-                    TemplateSlotTarget::BeforeStatic(target) if target == path
-                )
-        })
-    }
-
-    fn trailing_root_dynamic_anchor(&self) -> Option<&'static TemplateAnchor> {
-        self.anchors.iter().find(|anchor| {
-            anchor.parent_element_op_index().is_none()
-                && matches!(
-                    anchor.slot_target(),
-                    TemplateSlotTarget::AppendChildren(path) if path.is_empty()
-                )
-        })
-    }
-
-    /// Iterate template root positions in materialization order.
-    pub fn root_slots(
-        &self,
-    ) -> impl Iterator<Item = (usize, Option<usize>, Option<&'static TemplateAnchor>)> + '_ {
+    /// Iterate static template root nodes with their materialized root positions.
+    pub fn static_root_nodes(&self) -> impl Iterator<Item = StaticRoot> + '_ {
         let mut op = 0usize;
-        let mut static_root_idx = 0usize;
-        let mut root_idx = 0usize;
-        let mut pending_static = None;
-        let mut emitted_trailing_dynamic = false;
+        let mut static_root_index = 0usize;
         std::iter::from_fn(move || {
-            if let Some(static_op) = pending_static.take() {
-                let current_root = root_idx;
-                root_idx += 1;
-                return Some((current_root, Some(static_op), None));
-            }
-
             while op < self.ops.len() && !self.is_static_node_op(op) {
                 op = self.next_sibling_op(op);
             }
 
-            if op < self.ops.len() {
-                let static_op = op;
-                op = self.next_sibling_op(op);
-                let static_path = TemplatePath::root(static_root_idx);
-                static_root_idx += 1;
-
-                if let Some(anchor) = self.root_dynamic_anchor_before(static_path) {
-                    let current_root = root_idx;
-                    root_idx += 1;
-                    pending_static = Some(static_op);
-                    return Some((current_root, None, Some(anchor)));
-                }
-
-                let current_root = root_idx;
-                root_idx += 1;
-                return Some((current_root, Some(static_op), None));
+            if op >= self.ops.len() {
+                return None;
             }
 
-            if !emitted_trailing_dynamic {
-                emitted_trailing_dynamic = true;
-                if let Some(anchor) = self.trailing_root_dynamic_anchor() {
-                    let current_root = root_idx;
-                    root_idx += 1;
-                    return Some((current_root, None, Some(anchor)));
-                }
-            }
+            let current_op = op;
+            op = self.next_sibling_op(op);
+            let current_static_root_index = static_root_index;
+            static_root_index += 1;
 
-            None
+            Some(StaticRoot {
+                root_position: self
+                    .root_position_for_static_root(current_static_root_index)
+                    .expect("static root position"),
+                static_root_index: current_static_root_index,
+                op: current_op,
+            })
         })
     }
 
-    /// Map a static root index to the materialization root index that renders it.
-    ///
-    /// `static_root_idx` counts only static root nodes, while the returned index counts every
-    /// materialization root (static nodes and root-level dynamic anchors alike).
-    pub fn materialization_root_for_static(&self, static_root_idx: usize) -> Option<usize> {
-        let mut current_static_root = 0;
-        for (root_idx, static_op, _) in self.root_slots() {
-            if static_op.is_none() {
-                continue;
+    /// Return the number of materialized root positions.
+    pub fn root_position_count(&self) -> usize {
+        self.static_root_count() + self.root_level_dynamic_anchor_count()
+    }
+
+    /// Map a static root index to the materialized root position that renders it.
+    pub fn root_position_for_static_root(&self, static_root_idx: usize) -> Option<usize> {
+        (static_root_idx < self.static_root_count())
+            .then(|| static_root_idx + self.root_dynamic_before_static_count(static_root_idx, true))
+    }
+
+    /// Return the materialized root position that owns an anchor.
+    pub fn root_position_for_anchor(&self, anchor_idx: usize) -> Option<usize> {
+        let anchor = self.anchors.get(anchor_idx)?;
+        match anchor.slot_target() {
+            TemplateSlotTarget::BeforeStatic(path) if path.is_root() => {
+                let static_root_idx = path.segment(0) as usize;
+                Some(
+                    static_root_idx + self.root_dynamic_before_static_count(static_root_idx, false),
+                )
             }
-            if current_static_root == static_root_idx {
-                return Some(root_idx);
+            TemplateSlotTarget::AppendChildren(path) if path.is_empty() => Some(
+                self.static_root_count() + self.root_dynamic_before_static_count(usize::MAX, true),
+            ),
+            TemplateSlotTarget::BeforeStatic(path) => {
+                self.root_position_for_static_root(path.segment(0) as usize)
             }
-            current_static_root += 1;
+            TemplateSlotTarget::AppendChildren(path) => (!path.is_empty())
+                .then(|| path.segment(0) as usize)
+                .and_then(|static_root_idx| self.root_position_for_static_root(static_root_idx)),
         }
-        None
+    }
+
+    fn static_root_count(&self) -> usize {
+        let mut op = 0usize;
+        let mut count = 0usize;
+        while op < self.ops.len() {
+            if self.is_static_node_op(op) {
+                count += 1;
+            }
+            op = self.next_sibling_op(op);
+        }
+        count
+    }
+
+    fn root_level_dynamic_anchor_count(&self) -> usize {
+        self.anchors
+            .iter()
+            .filter(|anchor| anchor.parent_element_op_index().is_none())
+            .filter(|anchor| match anchor.slot_target() {
+                TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
+                TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
+            })
+            .count()
+    }
+
+    fn root_dynamic_before_static_count(
+        &self,
+        static_root_idx: usize,
+        include_current: bool,
+    ) -> usize {
+        self.anchors
+            .iter()
+            .filter(|anchor| anchor.parent_element_op_index().is_none())
+            .filter_map(|anchor| match anchor.slot_target() {
+                TemplateSlotTarget::BeforeStatic(path) if path.is_root() => {
+                    Some(path.segment(0) as usize)
+                }
+                _ => None,
+            })
+            .filter(|&idx| {
+                if include_current {
+                    idx <= static_root_idx
+                } else {
+                    idx < static_root_idx
+                }
+            })
+            .count()
     }
 
     /// Return the flat op index immediately after the static node or op at `op`.
@@ -387,16 +402,6 @@ impl Template {
         })
     }
 
-    /// Iterate dynamic anchors attached directly to an element.
-    pub fn element_dynamic_anchors(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = &'static TemplateAnchor> + '_ {
-        self.anchors
-            .iter()
-            .filter(move |anchor| anchor.parent_element_op_index() == Some(element_op))
-    }
-
     /// Iterate static attributes of an element.
     pub fn static_attrs(
         &self,
@@ -416,19 +421,6 @@ impl Template {
             }
             None
         })
-    }
-
-    const fn compute_dynamic_value_count(anchors: &[TemplateAnchor]) -> u16 {
-        let mut max = 0u16;
-        let mut i = 0;
-        while i < anchors.len() {
-            let end = anchors[i].values().end as u16;
-            if end > max {
-                max = end;
-            }
-            i += 1;
-        }
-        max
     }
 
     const fn is_static_node_op_in(ops: &[TemplateOp], op: usize) -> bool {

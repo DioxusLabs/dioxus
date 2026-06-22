@@ -47,8 +47,8 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
         dynamic_attributes: Vec::new(),
         _ctx: PhantomData,
     };
-    // Walk in canonical fill order (children, then dynamic attributes, then key) so the dynamic
-    // slots line up with the runtime VNode built by the typed view builder.
+    // Walk in canonical fill order so the dynamic slots line up with the runtime VNode built by
+    // the typed view builder.
     visit_roots(&mut builder, &body.roots)?;
 
     let NativeTemplateBuilder {
@@ -100,8 +100,7 @@ impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilde
     }
 
     fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
-        // Emitted after children: `dynamic_attr` is deferred to `close_element` in the op tape,
-        // and its slot index must follow the children's dynamic nodes.
+        // Emitted before children, matching runtime `DynamicValues` order.
         let id = self.dynamic_attributes.len();
         self.template.dynamic_attr();
         self.dynamic_slots.push(HotReloadDynamicSlot::Attribute(id));

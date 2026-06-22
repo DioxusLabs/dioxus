@@ -170,16 +170,15 @@ struct TemplateBodyPools {
 impl TemplateBodyPools {
     fn collect(body: &TemplateBody) -> Self {
         let mut pools = Self::default();
-        // Walk in canonical fill order (children, then dynamic attributes, then key) so the pool
-        // indices line up with the order the typed view builder fills dynamic slots.
+        // Walk in canonical fill order so the pool indices line up with the order the typed view
+        // builder fills dynamic slots.
         visit_roots(&mut pools, &body.roots);
         pools
     }
 
     fn push_dynamic_node(&mut self, node: BodyNode) {
         self.dynamic_nodes.push(node);
-        self.component_literal_indexes_by_dynamic_node
-            .push(None);
+        self.component_literal_indexes_by_dynamic_node.push(None);
     }
 
     fn push_formatted(&mut self, segments: &HotReloadFormattedSegment) {

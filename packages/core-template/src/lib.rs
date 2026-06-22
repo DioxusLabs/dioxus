@@ -94,10 +94,7 @@
 //! the example, `{badge}` and `"{count}"` are both before `span`, so they are
 //! represented by the single `2..4` range.
 //!
-//! The stored anchor slice is sorted for native fill order rather than source
-//! order: deeper anchors are filled first, and ties are filled from later
-//! dynamic values to earlier dynamic values. Code that needs source/value order
-//! can use [`Template::anchors_in_document_order`].
+//! The stored anchor slice is in source/dynamic-value order.
 //!
 mod anchor;
 mod data;
@@ -109,7 +106,7 @@ mod serialization;
 mod storage;
 
 pub use anchor::TemplateAnchor;
-pub use data::Template;
+pub use data::{StaticRoot, Template};
 pub use op::{DecodedTemplateAttrNamespace, DecodedTemplateOp};
 pub(crate) use path::TemplateSlotPath;
 pub use path::{TemplatePath, TemplateSlotTarget};

@@ -169,7 +169,7 @@ fn warmup_suspense_hidden_paths() {
                 SuspenseBoundary {
                     fallback: |context: SuspenseContext| {
                         let _ = context
-                            .with_suspended_mounted_root(|root| root.vnode().template.root_slots().count());
+                            .with_suspended_mounted_root(|root| root.vnode().root_child_count());
                         rsx! { "loading" }
                     },
                     for i in 0..20u32 {
@@ -200,7 +200,7 @@ fn warmup_suspense_hidden_paths() {
                 SuspenseBoundary {
                     fallback: |context: SuspenseContext| {
                         let _ = context
-                            .with_suspended_mounted_root(|root| root.vnode().template.root_slots().count());
+                            .with_suspended_mounted_root(|root| root.vnode().root_child_count());
                         rsx! { "loading" }
                     },
                     for key in keys.iter().copied() {

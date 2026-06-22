@@ -1,6 +1,9 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
-use dioxus_core::{Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VirtualDom};
+use dioxus_core::{
+    AttributeValue, DynamicNode, EffectiveAttribute, EffectiveAttributeValue, Element,
+    MountedVNode, VNodeChild, VirtualDom,
+};
 
 /// Render `app` from scratch into a stable snapshot.
 pub fn fresh_snapshot(app: fn() -> Element) -> Vec<SnapshotNode> {
@@ -29,83 +32,46 @@ pub(crate) fn assert_no_mutations(vdom: &mut VirtualDom) {
 }
 
 fn vnode_snapshot(vdom: &VirtualDom, vnode: MountedVNode<'_>) -> Vec<SnapshotNode> {
-    let mut out = Vec::new();
-    for (_, static_op, dynamic_anchor) in vnode.template.root_slots() {
-        if let Some(anchor) = dynamic_anchor {
-            for index in vnode.dynamic_node_indices_for_anchor(anchor) {
-                out.extend(dynamic_node_snapshot(vdom, vnode, index));
-            }
-            continue;
-        }
-
-        let op = static_op.expect("root slot must be static or dynamic");
-        out.extend(template_node_snapshot(vdom, vnode, op));
-    }
-    out
+    vnode
+        .vnode()
+        .children()
+        .flat_map(|child| child_snapshot(vdom, vnode, child))
+        .collect()
 }
 
-fn element_children_snapshot(
+fn child_snapshot<'a>(
     vdom: &VirtualDom,
-    vnode: MountedVNode<'_>,
-    op: usize,
+    vnode: MountedVNode<'a>,
+    child: VNodeChild<'a>,
 ) -> Vec<SnapshotNode> {
-    let mut out = Vec::new();
-    let static_children = vnode.template.static_children(op).collect::<Vec<_>>();
-    for slot in 0..=static_children.len() {
-        for anchor in vnode.dynamic_node_anchors_for_slot(op, slot) {
-            for idx in vnode.dynamic_node_indices_for_anchor(anchor) {
+    match child {
+        VNodeChild::Element(element) => {
+            let mut element_attrs = Vec::new();
+            let mut listeners = Vec::new();
+            for attr in element.attributes() {
+                apply_effective_attr(&mut element_attrs, &mut listeners, attr);
+            }
+            let rendered_children = element
+                .children()
+                .flat_map(|child| child_snapshot(vdom, vnode, child))
+                .collect();
+
+            vec![SnapshotNode::Element {
+                tag: element.tag().to_string(),
+                namespace: element.namespace().map(ToString::to_string),
+                attrs: element_attrs,
+                listeners,
+                children: rendered_children,
+            }]
+        }
+        VNodeChild::Text(text) => vec![SnapshotNode::Text(text.text().to_string())],
+        VNodeChild::Dynamic(group) => {
+            let mut out = Vec::new();
+            for idx in group.ids() {
                 out.extend(dynamic_node_snapshot(vdom, vnode, idx));
             }
+            out
         }
-        if let Some(&child_op) = static_children.get(slot) {
-            out.extend(template_node_snapshot(vdom, vnode, child_op));
-        }
-    }
-    out
-}
-
-fn template_node_snapshot(
-    vdom: &VirtualDom,
-    vnode: MountedVNode<'_>,
-    op: usize,
-) -> Vec<SnapshotNode> {
-    if let Some((tag, namespace)) = vnode.template.element_meta_at_op(op) {
-        let mut element_attrs = Vec::new();
-        let mut listeners = Vec::new();
-
-        for (name, value, namespace) in vnode.template.static_attrs(op) {
-            set_snapshot_attr(
-                &mut element_attrs,
-                name.to_string(),
-                namespace.map(ToString::to_string),
-                value.to_string(),
-            );
-        }
-
-        for anchor in vnode.dynamic_attr_anchors_for_element(op) {
-            for id in vnode.dynamic_attr_indices_for_anchor(anchor) {
-                let attrs = vnode.dynamic_values()[id]
-                    .as_attrs()
-                    .expect("snapshot attr slot must point at attributes");
-                for attr in attrs {
-                    apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
-                }
-            }
-        }
-
-        let rendered_children = element_children_snapshot(vdom, vnode, op);
-
-        vec![SnapshotNode::Element {
-            tag: tag.to_string(),
-            namespace: namespace.map(ToString::to_string),
-            attrs: element_attrs,
-            listeners,
-            children: rendered_children,
-        }]
-    } else if let Some(text) = vnode.template.static_text_at_op(op) {
-        vec![SnapshotNode::Text(text.to_string())]
-    } else {
-        unreachable!("snapshot static node must start at a static node op")
     }
 }
 
@@ -143,13 +109,13 @@ fn dynamic_node_snapshot(
     }
 }
 
-fn apply_dynamic_attr(
+fn apply_effective_attr(
     attrs: &mut Vec<SnapshotAttr>,
     listeners: &mut Vec<String>,
-    attr: &Attribute,
+    attr: EffectiveAttribute<'_>,
 ) {
-    match &attr.value {
-        AttributeValue::Listener(_) => {
+    match attr.value {
+        EffectiveAttributeValue::Dynamic(AttributeValue::Listener(_)) => {
             let name = attr
                 .name
                 .strip_prefix("on")
@@ -160,7 +126,13 @@ fn apply_dynamic_attr(
                 Err(index) => listeners.insert(index, name),
             }
         }
-        value => match attr_to_string(value) {
+        EffectiveAttributeValue::Static(value) => set_snapshot_attr(
+            attrs,
+            attr.name.to_string(),
+            attr.namespace.map(ToString::to_string),
+            value.to_string(),
+        ),
+        EffectiveAttributeValue::Dynamic(value) => match attr_to_string(value) {
             Some(value) => set_snapshot_attr(
                 attrs,
                 attr.name.to_string(),

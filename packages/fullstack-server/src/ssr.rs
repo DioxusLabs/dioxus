@@ -566,28 +566,8 @@ impl SsrRendererPool {
     }
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
-        let template = vnode.template;
-
-        // Match core's creation order exactly:
-        // 1. root-level dynamic slots are created while materializing roots;
-        // 2. nested dynamic slots are created later in native anchor fill order.
-        for (_root_idx, _static_op, dynamic_anchor) in template.root_slots() {
-            if let Some(anchor) = dynamic_anchor {
-                for node_index in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
-                    let dynamic_node = vnode.dynamic_values()[node_index]
-                        .as_node()
-                        .expect("hydration data node slot must point at a dynamic node");
-                    Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, node_index);
-                }
-            }
-        }
-
-        for anchor in template.anchors() {
-            if anchor.parent_element_op_index().is_none() {
-                continue;
-            }
-
-            for dynamic_node_id in vnode.vnode().dynamic_node_indices_for_anchor(anchor) {
+        for group in vnode.vnode().dynamic_nodes() {
+            for dynamic_node_id in group.ids() {
                 let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
                     .as_node()
                     .expect("hydration data node slot must point at a dynamic node");
@@ -595,7 +575,6 @@ impl SsrRendererPool {
             }
         }
     }
-
     fn take_from_dynamic_node(
         context: &HydrationContext,
         vdom: &VirtualDom,

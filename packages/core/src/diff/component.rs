@@ -3,7 +3,6 @@ use crate::{
     diff::{
         context::{DiffContext, DiffFrame, DiffState},
         placement::{InsertionSite, at_site, insertion_site_for_slot},
-        template::dynamic_node_slot,
     },
     innerlude::{MountId, MountRef, VComponent, WriteMutations},
     nodes::VNode,
@@ -201,7 +200,7 @@ impl VNode {
 
         if state.has_writer() {
             let site = live_first.map(InsertionSite::Before).unwrap_or_else(|| {
-                let slot = dynamic_node_slot(self, idx).expect("component anchor");
+                let slot = self.dynamic_node_slot(idx).expect("component anchor");
                 insertion_site_for_slot(mount, slot, state.dom, context)
             });
             let runtime = state.dom.runtime.clone();

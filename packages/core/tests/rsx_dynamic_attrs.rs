@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{Mutation, Mutations, ScopeId, VNode};
+use dioxus_core::{Mutation, Mutations, ScopeId, VNode, VNodeChild};
 use dioxus_core_template::TemplateSlotTarget;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 
@@ -122,6 +122,16 @@ fn separated_empty_fragment_slots() -> Element {
     }
 }
 
+fn root_element(vnode: &VNode) -> dioxus_core::StaticElement<'_> {
+    vnode
+        .children()
+        .find_map(|child| match child {
+            VNodeChild::Element(element) => Some(element),
+            _ => None,
+        })
+        .expect("expected a static root element")
+}
+
 static SHOW_SEPARATED_SLOT_B: GlobalSignal<bool> = Signal::global(|| false);
 static SHOW_SEPARATED_SLOT_A: GlobalSignal<bool> = Signal::global(|| false);
 
@@ -197,20 +207,18 @@ fn custom_elements_get_gated_global_attrs_unless_they_define_the_attr() {
 #[test]
 fn dynamic_attr_and_child_share_one_anchor() {
     let vnode = mixed_dynamic_attr_and_child().unwrap();
-    let div = vnode
-        .template
-        .root_slots()
-        .find_map(|(_, op, _)| op)
-        .expect("expected a static root element");
-    let anchors = vnode
-        .template
-        .element_dynamic_anchors(div)
+    let div = root_element(&vnode);
+    let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
+    let node_groups = vnode
+        .dynamic_nodes()
+        .filter(|group| group.parent_element_op_index() == Some(div.op()))
         .collect::<Vec<_>>();
 
-    assert_eq!(anchors.len(), 1);
-    assert_eq!(anchors[0].values(), 0..2);
-    assert_eq!(vnode.dynamic_attr_indices_for_anchor(anchors[0]).count(), 1);
-    assert_eq!(vnode.dynamic_node_indices_for_anchor(anchors[0]).count(), 1);
+    assert_eq!(attr_groups.len(), 1);
+    assert_eq!(node_groups.len(), 1);
+    assert_eq!(attr_groups[0].anchor_index(), node_groups[0].anchor_index());
+    assert_eq!(attr_groups[0].ids().count(), 1);
+    assert_eq!(node_groups[0].ids().count(), 1);
 
     let mut dom = VirtualDom::new(mixed_dynamic_attr_and_child);
     let mut oracle = RendererOracle::new();
@@ -219,40 +227,33 @@ fn dynamic_attr_and_child_share_one_anchor() {
 }
 
 #[test]
-fn dynamic_attr_and_trailing_dynamic_child_share_append_anchor() {
+fn dynamic_attr_and_trailing_dynamic_child_follow_value_order() {
     let vnode = dynamic_attr_and_trailing_dynamic_child().unwrap();
-    let div = vnode
-        .template
-        .root_slots()
-        .find_map(|(_, op, _)| op)
-        .expect("expected a static root element");
-    let anchors = vnode
-        .template
-        .element_dynamic_anchors(div)
-        .collect::<Vec<_>>();
+    let div = root_element(&vnode);
+    let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
+    let children = div.children().collect::<Vec<_>>();
 
-    assert_eq!(anchors.len(), 2);
+    assert_eq!(attr_groups.len(), 1);
+    assert_eq!(children.len(), 3);
+    let attr_group = attr_groups[0];
+    let VNodeChild::Dynamic(before_button_group) = children[0] else {
+        panic!("expected leading dynamic child first");
+    };
+    let VNodeChild::Dynamic(append_group) = children[2] else {
+        panic!("expected trailing dynamic child third");
+    };
 
-    let append_anchor = anchors
-        .iter()
-        .copied()
-        .find(|anchor| {
-            matches!(
-                anchor.slot_target(),
-                TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
-            )
-        })
-        .expect("expected parent append anchor");
-
-    assert_eq!(append_anchor.values(), 1..3);
-    assert_eq!(
-        vnode.dynamic_attr_indices_for_anchor(append_anchor).count(),
-        1
-    );
-    assert_eq!(
-        vnode.dynamic_node_indices_for_anchor(append_anchor).count(),
-        1
-    );
+    assert!(attr_group.ids().eq([0]));
+    assert!(before_button_group.ids().eq([1]));
+    assert!(append_group.ids().eq([2]));
+    assert!(matches!(
+        before_button_group.slot_target(),
+        TemplateSlotTarget::BeforeStatic(_)
+    ));
+    assert!(matches!(
+        append_group.slot_target(),
+        TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
+    ));
 
     let mut dom = VirtualDom::new(dynamic_attr_and_trailing_dynamic_child);
     let mut oracle = RendererOracle::new();
@@ -272,35 +273,31 @@ fn nested_dynamic_attr_after_root_dynamic_uses_static_root_slot() {
 #[test]
 fn separated_empty_fragment_slots_stay_inside_static_parent() {
     let vnode = separated_empty_fragment_slots().unwrap();
-    let div = vnode
-        .template
-        .root_slots()
-        .find_map(|(_, op, _)| op)
-        .expect("expected a static root element");
-    let anchors = vnode
-        .template
-        .element_dynamic_anchors(div)
+    let div = root_element(&vnode);
+    let groups = vnode
+        .dynamic_nodes()
+        .filter(|group| group.parent_element_op_index() == Some(div.op()))
         .collect::<Vec<_>>();
 
-    assert_eq!(anchors.len(), 2);
-    for anchor in &anchors {
-        assert!(anchor.parent_element_op_index().is_some());
+    assert_eq!(groups.len(), 2);
+    for group in &groups {
+        assert!(group.parent_element_op_index().is_some());
     }
 
-    let before_span = anchors
+    let before_span = groups
         .iter()
         .copied()
-        .find(|anchor| anchor.values() == (0..1))
+        .find(|group| group.ids().eq([0]))
         .expect("expected leading empty fragment anchor");
     assert!(matches!(
         before_span.slot_target(),
         TemplateSlotTarget::BeforeStatic(_)
     ));
 
-    let after_span = anchors
+    let after_span = groups
         .iter()
         .copied()
-        .find(|anchor| anchor.values() == (1..2))
+        .find(|group| group.ids().eq([1]))
         .expect("expected trailing empty fragment anchor");
     assert!(matches!(
         after_span.slot_target(),

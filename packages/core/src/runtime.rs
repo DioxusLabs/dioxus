@@ -599,13 +599,9 @@ fn MyComponent() -> Element {{
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
 
-        for (anchor_idx, anchor) in node.dynamic_attr_anchor_indices() {
-            let mut indices = node.dynamic_attr_indices_for_anchor(anchor).peekable();
-            if indices.peek().is_none() {
-                continue;
-            }
-            let path = anchor.static_path();
-            let Some(id) = mount.mounted_anchor_node(anchor_idx) else {
+        for group in node.dynamic_attributes() {
+            let path = group.static_path();
+            let Some(id) = mount.mounted_anchor_node(group.anchor_index()) else {
                 continue;
             };
             if id.element_id() == element {
@@ -625,15 +621,9 @@ fn MyComponent() -> Element {{
         let parent = mounts.get(parent_mount.0)?;
         let parent_node = parent.node();
 
-        for anchor in parent_node.template.anchors() {
-            let mut indices = parent_node
-                .dynamic_node_indices_for_anchor(anchor)
-                .peekable();
-            if indices.peek().is_none() {
-                continue;
-            }
-            let target = anchor.slot_target();
-            for idx in indices {
+        for group in parent_node.dynamic_nodes() {
+            let target = group.slot_target();
+            for idx in group.ids() {
                 match parent_node.dynamic_values[idx].node() {
                     DynamicNode::Fragment(children) => {
                         if children.is_empty() {
@@ -675,13 +665,13 @@ fn MyComponent() -> Element {{
         path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
         mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
     ) {
-        for anchor in node.dynamic_attr_anchors_in_document_order() {
-            let attr_path = anchor.static_path();
+        for group in node.dynamic_attributes() {
+            let attr_path = group.static_path();
             if !path_matches(target_path, attr_path) {
                 continue;
             }
 
-            for idx in node.dynamic_attr_indices_for_anchor(anchor) {
+            for idx in group.ids() {
                 let attrs = node.dynamic_values[idx].attrs();
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one

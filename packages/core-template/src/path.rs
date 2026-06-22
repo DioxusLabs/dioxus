@@ -47,13 +47,6 @@ impl TemplatePath {
         }
     }
 
-    /// Return the parent path.
-    pub(crate) const fn parent(self) -> Self {
-        Self {
-            path: self.path >> 1,
-        }
-    }
-
     /// Split a path to a static node into its parent path and the node's index among that
     /// parent's children.
     pub const fn split_insertion(self) -> (TemplatePath, usize) {
@@ -200,15 +193,8 @@ impl TemplateSlotPath {
 
     pub(crate) const fn static_parent(self) -> TemplatePath {
         match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.parent(),
+            TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().0,
             TemplateSlotTarget::AppendChildren(path) => path,
-        }
-    }
-
-    pub(crate) const fn fill_depth(self) -> usize {
-        match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.depth(),
-            TemplateSlotTarget::AppendChildren(path) => path.depth() + 1,
         }
     }
 }
@@ -331,8 +317,8 @@ mod tests {
         assert_eq!(before_first.static_parent().bits(), div.bits());
 
         // Non-first-child anchor must ALSO resolve to the enclosing element
-        // `div`, not to the preceding sibling. The buggy `path.parent()` arm
-        // returned `second_child.parent() == first_child` (the preceding span).
+        // `div`, not to the preceding sibling. A raw bit shift parent would
+        // return `first_child` (the preceding span).
         let before_second = TemplateSlotPath::before_static(second_child);
         assert_eq!(
             before_second.static_parent().bits(),
