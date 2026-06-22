@@ -3,8 +3,8 @@ use std::{any::Any, rc::Rc};
 use crate::{
     DynamicNode,
     diff::context::DiffContext,
-    innerlude::*,
     diff::placement::{StreamPlacement, splice_streamed_nodes},
+    innerlude::*,
     mount::{RenderMode, SuspenseBranch},
     render_driver::{RenderDriver, remove_rendered_output},
     scope_context::SuspenseLocation,
@@ -646,7 +646,9 @@ impl SuspenseBoundaryProps {
             // nodes are inserted at the boundary's position instead.
             let placement = match currently_rendered.mounted_vnode().find_first_element(dom) {
                 Some(id) => StreamPlacement::Replace(id),
-                None => StreamPlacement::for_empty_fallback(currently_rendered.mounted_vnode(), dom),
+                None => {
+                    StreamPlacement::for_empty_fallback(currently_rendered.mounted_vnode(), dom)
+                }
             };
             splice_streamed_nodes(to, placement, push_replacements);
             currently_rendered.as_vnode().remove_node(

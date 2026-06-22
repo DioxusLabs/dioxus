@@ -940,20 +940,22 @@ impl VNode {
         let id = dom.next_element_in_target(target_id);
         dom.set_mounted_root_node(mount, root_idx, id);
 
-        let template_id = match dom.cached_template_root(target_id, self.template, root_idx) {
-            Some(id) => id,
-            None => {
-                let id = dom.allocate_template_root(target_id, self.template, root_idx);
-                create_static_prototype(
-                    self.template.static_node(root_op).expect("bad static root"),
-                    to,
-                );
-                to.pop_id(id.element_id());
-                id
-            }
-        };
-        to.push_id(template_id.element_id());
-        WriteMutations::clone(to);
+        let static_root = self.template.static_node(root_op).expect("bad static root");
+        if to.can_cache_template_roots() {
+            let template_id = match dom.cached_template_root(target_id, self.template, root_idx) {
+                Some(id) => id,
+                None => {
+                    let id = dom.allocate_template_root(target_id, self.template, root_idx);
+                    create_static_prototype(static_root, to);
+                    to.pop_id(id.element_id());
+                    id
+                }
+            };
+            to.push_id(template_id.element_id());
+            WriteMutations::clone(to);
+        } else {
+            create_static_prototype(static_root, to);
+        }
         to.pop_id(id.element_id());
         self.assign_template_anchor_ids(mount, root_idx, id, dom, to);
         to.push_id(id.element_id());

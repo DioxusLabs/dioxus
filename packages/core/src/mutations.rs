@@ -10,6 +10,16 @@ use std::{collections::BTreeMap, rc::Rc};
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub trait WriteMutations {
+    /// Whether this writer applies and retains renderer-local template
+    /// prototype nodes across mutation flushes.
+    ///
+    /// Writers that only collect or ignore mutations must return `false` so
+    /// VirtualDom-side template cache entries are not created for renderer
+    /// nodes that do not actually exist.
+    fn can_cache_template_roots(&mut self) -> bool {
+        true
+    }
+
     /// Push the node registered to `id` onto the stack.
     fn push_id(&mut self, id: ElementId);
 
@@ -110,6 +120,10 @@ macro_rules! forward_mut_write_mutations {
 /// Forward through a mutable reference so writer-generic code can be
 /// instantiated at `&mut dyn WriteMutations`.
 impl<W: WriteMutations + ?Sized> WriteMutations for &mut W {
+    fn can_cache_template_roots(&mut self) -> bool {
+        WriteMutations::can_cache_template_roots(&mut **self)
+    }
+
     write_mutation_methods!(forward_mut_write_mutations,);
 }
 
@@ -195,6 +209,10 @@ macro_rules! forward_lazy_scope_write_mutations {
 }
 
 impl<P: FnMut(&mut dyn WriteMutations)> WriteMutations for TargetedLazyScope<'_, P> {
+    fn can_cache_template_roots(&mut self) -> bool {
+        self.to.can_cache_template_roots()
+    }
+
     write_mutation_methods!(forward_lazy_scope_write_mutations,);
 }
 
@@ -282,6 +300,11 @@ macro_rules! route_write_mutations {
 }
 
 impl<M: MultiWriter> WriteMutations for TargetRouter<'_, M> {
+    fn can_cache_template_roots(&mut self) -> bool {
+        self.current()
+            .is_some_and(WriteMutations::can_cache_template_roots)
+    }
+
     write_mutation_methods!(route_write_mutations,);
 }
 
@@ -481,5 +504,9 @@ macro_rules! noop_write_mutations {
 }
 
 impl WriteMutations for NoOpMutations {
+    fn can_cache_template_roots(&mut self) -> bool {
+        false
+    }
+
     write_mutation_methods!(noop_write_mutations,);
 }

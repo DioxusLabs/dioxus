@@ -1,7 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::{
-    ScopeId, SuspenseBoundaryProps, WriteMutations, current_scope_id, generation,
-};
+use dioxus_core::{ScopeId, SuspenseBoundaryProps, WriteMutations, current_scope_id, generation};
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use pretty_assertions::assert_eq;
 use std::cell::Cell;
