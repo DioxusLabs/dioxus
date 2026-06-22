@@ -6,8 +6,8 @@ use std::num::NonZeroUsize;
 /// An Element's unique identifier.
 ///
 /// `ElementId` is a `usize` that is unique within one render target - but not
-/// unique across targets or time. If a component is unmounted, then the
-/// `ElementId` may be reused for a new component in that target.
+/// unique across targets or time. If an element is removed, then the `ElementId`
+/// may be reused for a new element in that target.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElementId(usize);

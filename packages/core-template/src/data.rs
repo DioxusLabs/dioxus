@@ -1,6 +1,6 @@
 use super::{DecodedTemplateOp, TemplateAnchor};
-use crate::op::TemplateOp;
 use crate::TemplateSlotTarget;
+use crate::op::TemplateOp;
 
 /// A static layout of a UI tree.
 ///
