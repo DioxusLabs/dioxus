@@ -20,6 +20,73 @@ pub struct StaticElement<'a> {
     root_position: Option<usize>,
 }
 
+impl<'a> StaticElement<'a> {
+    pub(crate) fn new(vnode: &'a VNode, op: usize, root_position: Option<usize>) -> Self {
+        Self {
+            vnode,
+            op,
+            root_position,
+        }
+    }
+
+    /// The flat template op for this element.
+    pub fn op(self) -> usize {
+        self.op
+    }
+
+    /// The element tag.
+    pub fn tag(self) -> &'static str {
+        self.vnode
+            .template
+            .element_meta_at_op(self.op)
+            .expect("static element")
+            .0
+    }
+
+    /// The element namespace.
+    pub fn namespace(self) -> Option<&'static str> {
+        self.vnode
+            .template
+            .element_meta_at_op(self.op)
+            .expect("static element")
+            .1
+    }
+
+    /// The root position when this element is a vnode root.
+    pub fn root_position(self) -> Option<usize> {
+        self.root_position
+    }
+
+    /// Iterate effective attributes for this element.
+    pub fn attributes(self) -> ElementAttributes<'a> {
+        ElementAttributes::new(self)
+    }
+
+    /// Iterate static template attributes for this element.
+    pub fn static_attributes(
+        self,
+    ) -> impl Iterator<Item = (&'static str, &'static str, Option<&'static str>)> + 'a {
+        self.vnode.template.static_attrs(self.op)
+    }
+
+    /// Iterate rendered children for this element.
+    pub fn children(self) -> VNodeChildren<'a> {
+        VNodeChildren::element(self)
+    }
+
+    /// Return true if this element has any rendered child.
+    pub fn has_children(self) -> bool {
+        self.children().next().is_some()
+    }
+
+    /// Iterate dynamic attribute groups that target this element.
+    pub fn dynamic_attributes(self) -> impl Iterator<Item = DynamicAttrGroup<'a>> + 'a {
+        self.vnode
+            .dynamic_attributes()
+            .filter(move |group| group.parent_element_op_index() == self.op)
+    }
+}
+
 /// A static template text node viewed through a specific rendered [`VNode`].
 #[derive(Clone, Copy)]
 pub struct StaticText<'a> {
@@ -28,129 +95,37 @@ pub struct StaticText<'a> {
     root_position: Option<usize>,
 }
 
+impl<'a> StaticText<'a> {
+    pub(crate) fn new(vnode: &'a VNode, op: usize, root_position: Option<usize>) -> Self {
+        Self {
+            vnode,
+            op,
+            root_position,
+        }
+    }
+
+    /// The flat template op for this text node.
+    pub fn op(self) -> usize {
+        self.op
+    }
+
+    /// The static text value.
+    pub fn text(self) -> &'static str {
+        self.vnode
+            .template
+            .static_text_at_op(self.op)
+            .expect("static text")
+    }
+
+    /// The root position when this text node is a vnode root.
+    pub fn root_position(self) -> Option<usize> {
+        self.root_position
+    }
+}
+
 /// Iterator over rendered children.
 pub struct VNodeChildren<'a> {
     inner: std::vec::IntoIter<VNodeChild<'a>>,
-}
-
-struct PositionedChild<'a> {
-    position: usize,
-    order: usize,
-    child: VNodeChild<'a>,
-}
-
-/// Effective final attribute value for an element.
-#[derive(Clone, Copy)]
-pub struct EffectiveAttribute<'a> {
-    /// The attribute name.
-    pub name: &'static str,
-    /// The attribute namespace.
-    pub namespace: Option<&'static str>,
-    /// The final effective value.
-    pub value: EffectiveAttributeValue<'a>,
-    /// Whether renderers should always write this attribute.
-    pub volatile: bool,
-    /// The value source.
-    pub source: EffectiveAttributeSource,
-}
-
-/// Where an effective attribute value came from.
-#[derive(Clone, Copy)]
-pub enum EffectiveAttributeValue<'a> {
-    /// A static template attribute value.
-    Static(&'static str),
-    /// A dynamic runtime attribute value.
-    Dynamic(&'a AttributeValue),
-}
-
-/// The template/runtime source for an effective attribute.
-#[derive(Clone, Copy)]
-pub enum EffectiveAttributeSource {
-    /// A static template attribute.
-    Static,
-    /// A dynamic runtime attribute.
-    Dynamic {
-        /// The dynamic value index.
-        value_index: usize,
-        /// The template anchor index.
-        anchor_index: usize,
-    },
-}
-
-/// Iterator over the final effective attributes for an element.
-pub struct ElementAttributes<'a> {
-    inner: std::vec::IntoIter<EffectiveAttribute<'a>>,
-}
-
-/// A chunk of dynamic values attached to one template anchor.
-#[derive(Clone, Copy)]
-pub(crate) enum DynamicChunk<'a> {
-    /// Dynamic node values inserted at one template position.
-    Nodes(DynamicNodeGroup<'a>),
-    /// Dynamic attribute values applied to one static element.
-    Attributes(DynamicAttrGroup<'a>),
-}
-
-impl<'a> DynamicChunk<'a> {
-    fn is_empty(&self) -> bool {
-        match self {
-            DynamicChunk::Nodes(group) => group.is_empty(),
-            DynamicChunk::Attributes(group) => group.is_empty(),
-        }
-    }
-}
-
-impl VNode {
-    /// Iterate rendered root children in document order.
-    pub fn children(&self) -> VNodeChildren<'_> {
-        VNodeChildren::roots(self)
-    }
-
-    /// Return the number of root child positions.
-    pub fn root_child_count(&self) -> usize {
-        self.template.root_position_count()
-    }
-
-    /// Iterate dynamic value groups in template document order.
-    pub(crate) fn dynamic_groups(&self) -> impl DoubleEndedIterator<Item = DynamicChunk<'_>> + '_ {
-        self.template
-            .anchors()
-            .iter()
-            .enumerate()
-            .flat_map(|(anchor_index, anchor)| {
-                [
-                    DynamicChunk::Attributes(DynamicAttrGroup::new(self, anchor, anchor_index)),
-                    DynamicChunk::Nodes(DynamicNodeGroup::new(self, anchor, anchor_index)),
-                ]
-            })
-            .filter(|chunk| !chunk.is_empty())
-    }
-
-    /// Iterate dynamic node groups in template document order.
-    pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = DynamicNodeGroup<'_>> + '_ {
-        self.dynamic_groups().filter_map(|chunk| match chunk {
-            DynamicChunk::Nodes(nodes) => Some(nodes),
-            DynamicChunk::Attributes(_) => None,
-        })
-    }
-
-    /// Iterate dynamic attribute groups in template document order.
-    pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = DynamicAttrGroup<'_>> + '_ {
-        self.dynamic_groups().filter_map(|chunk| match chunk {
-            DynamicChunk::Attributes(attrs) => Some(attrs),
-            DynamicChunk::Nodes(_) => None,
-        })
-    }
-
-    pub(super) fn dynamic_node_slots(
-        &self,
-    ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
-        self.dynamic_nodes().flat_map(|group| group.slots())
-    }
-
-    pub(super) fn dynamic_node_slot(&self, index: usize) -> Option<DynamicNodeSlot<'_>> {
-        self.dynamic_node_slots().find(|slot| slot.index() == index)
-    }
 }
 
 impl<'a> VNodeChildren<'a> {
@@ -239,99 +214,53 @@ impl<'a> Iterator for VNodeChildren<'a> {
 
 impl ExactSizeIterator for VNodeChildren<'_> {}
 
-impl<'a> StaticElement<'a> {
-    pub(crate) fn new(vnode: &'a VNode, op: usize, root_position: Option<usize>) -> Self {
-        Self {
-            vnode,
-            op,
-            root_position,
-        }
-    }
-
-    /// The flat template op for this element.
-    pub fn op(self) -> usize {
-        self.op
-    }
-
-    /// The element tag.
-    pub fn tag(self) -> &'static str {
-        self.vnode
-            .template
-            .element_meta_at_op(self.op)
-            .expect("static element")
-            .0
-    }
-
-    /// The element namespace.
-    pub fn namespace(self) -> Option<&'static str> {
-        self.vnode
-            .template
-            .element_meta_at_op(self.op)
-            .expect("static element")
-            .1
-    }
-
-    /// The root position when this element is a vnode root.
-    pub fn root_position(self) -> Option<usize> {
-        self.root_position
-    }
-
-    /// Iterate effective attributes for this element.
-    pub fn attributes(self) -> ElementAttributes<'a> {
-        ElementAttributes::new(self)
-    }
-
-    /// Iterate static template attributes for this element.
-    pub fn static_attributes(
-        self,
-    ) -> impl Iterator<Item = (&'static str, &'static str, Option<&'static str>)> + 'a {
-        self.vnode.template.static_attrs(self.op)
-    }
-
-    /// Iterate rendered children for this element.
-    pub fn children(self) -> VNodeChildren<'a> {
-        VNodeChildren::element(self)
-    }
-
-    /// Return true if this element has any rendered child.
-    pub fn has_children(self) -> bool {
-        self.children().next().is_some()
-    }
-
-    /// Iterate dynamic attribute groups that target this element.
-    pub fn dynamic_attributes(self) -> impl Iterator<Item = DynamicAttrGroup<'a>> + 'a {
-        self.vnode
-            .dynamic_attributes()
-            .filter(move |group| group.parent_element_op_index() == self.op)
-    }
+struct PositionedChild<'a> {
+    position: usize,
+    order: usize,
+    child: VNodeChild<'a>,
 }
 
-impl<'a> StaticText<'a> {
-    pub(crate) fn new(vnode: &'a VNode, op: usize, root_position: Option<usize>) -> Self {
-        Self {
-            vnode,
-            op,
-            root_position,
-        }
-    }
+/// Effective final attribute value for an element.
+#[derive(Clone, Copy)]
+pub struct EffectiveAttribute<'a> {
+    /// The attribute name.
+    pub name: &'static str,
+    /// The attribute namespace.
+    pub namespace: Option<&'static str>,
+    /// The final effective value.
+    pub value: EffectiveAttributeValue<'a>,
+    /// Whether renderers should always write this attribute.
+    pub volatile: bool,
+    /// The value source.
+    pub source: EffectiveAttributeSource,
+}
 
-    /// The flat template op for this text node.
-    pub fn op(self) -> usize {
-        self.op
-    }
+/// Where an effective attribute value came from.
+#[derive(Clone, Copy)]
+pub enum EffectiveAttributeValue<'a> {
+    /// A static template attribute value.
+    Static(&'static str),
+    /// A dynamic runtime attribute value.
+    Dynamic(&'a AttributeValue),
+}
 
-    /// The static text value.
-    pub fn text(self) -> &'static str {
-        self.vnode
-            .template
-            .static_text_at_op(self.op)
-            .expect("static text")
-    }
+/// The template/runtime source for an effective attribute.
+#[derive(Clone, Copy)]
+pub enum EffectiveAttributeSource {
+    /// A static template attribute.
+    Static,
+    /// A dynamic runtime attribute.
+    Dynamic {
+        /// The dynamic value index.
+        value_index: usize,
+        /// The template anchor index.
+        anchor_index: usize,
+    },
+}
 
-    /// The root position when this text node is a vnode root.
-    pub fn root_position(self) -> Option<usize> {
-        self.root_position
-    }
+/// Iterator over the final effective attributes for an element.
+pub struct ElementAttributes<'a> {
+    inner: std::vec::IntoIter<EffectiveAttribute<'a>>,
 }
 
 impl<'a> ElementAttributes<'a> {
@@ -396,6 +325,77 @@ impl<'a> Iterator for ElementAttributes<'a> {
 }
 
 impl ExactSizeIterator for ElementAttributes<'_> {}
+
+/// A chunk of dynamic values attached to one template anchor.
+#[derive(Clone, Copy)]
+pub(crate) enum DynamicChunk<'a> {
+    /// Dynamic node values inserted at one template position.
+    Nodes(DynamicNodeGroup<'a>),
+    /// Dynamic attribute values applied to one static element.
+    Attributes(DynamicAttrGroup<'a>),
+}
+
+impl<'a> DynamicChunk<'a> {
+    fn is_empty(&self) -> bool {
+        match self {
+            DynamicChunk::Nodes(group) => group.is_empty(),
+            DynamicChunk::Attributes(group) => group.is_empty(),
+        }
+    }
+}
+
+impl VNode {
+    /// Iterate rendered root children in document order.
+    pub fn children(&self) -> VNodeChildren<'_> {
+        VNodeChildren::roots(self)
+    }
+
+    /// Return the number of root child positions.
+    pub fn root_child_count(&self) -> usize {
+        self.template.root_position_count()
+    }
+
+    /// Iterate dynamic value groups in template document order.
+    pub(crate) fn dynamic_groups(&self) -> impl DoubleEndedIterator<Item = DynamicChunk<'_>> + '_ {
+        self.template
+            .anchors()
+            .iter()
+            .enumerate()
+            .flat_map(|(anchor_index, anchor)| {
+                [
+                    DynamicChunk::Attributes(DynamicAttrGroup::new(self, anchor, anchor_index)),
+                    DynamicChunk::Nodes(DynamicNodeGroup::new(self, anchor, anchor_index)),
+                ]
+            })
+            .filter(|chunk| !chunk.is_empty())
+    }
+
+    /// Iterate dynamic node groups in template document order.
+    pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = DynamicNodeGroup<'_>> + '_ {
+        self.dynamic_groups().filter_map(|chunk| match chunk {
+            DynamicChunk::Nodes(nodes) => Some(nodes),
+            DynamicChunk::Attributes(_) => None,
+        })
+    }
+
+    /// Iterate dynamic attribute groups in template document order.
+    pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = DynamicAttrGroup<'_>> + '_ {
+        self.dynamic_groups().filter_map(|chunk| match chunk {
+            DynamicChunk::Attributes(attrs) => Some(attrs),
+            DynamicChunk::Nodes(_) => None,
+        })
+    }
+
+    pub(super) fn dynamic_node_slots(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
+        self.dynamic_nodes().flat_map(|group| group.slots())
+    }
+
+    pub(super) fn dynamic_node_slot(&self, index: usize) -> Option<DynamicNodeSlot<'_>> {
+        self.dynamic_node_slots().find(|slot| slot.index() == index)
+    }
+}
 
 /// A group of dynamic node values that share one insertion anchor.
 #[derive(Clone, Copy)]

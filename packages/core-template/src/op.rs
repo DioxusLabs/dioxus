@@ -4,36 +4,6 @@
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct TemplateOp(u16);
 
-/// Decoded static attribute namespace storage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DecodedTemplateAttrNamespace {
-    /// No namespace.
-    None,
-    /// A custom namespace string follows the static attr name/value.
-    Custom,
-}
-
-/// Decoded representation of a packed template operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DecodedTemplateOp {
-    /// Enter an element. `skip` is the number of ops in this element subtree.
-    Enter {
-        /// Number of ops to skip to move past this element and its children.
-        skip: u16,
-        /// Whether the reserved namespace string slot contains a namespace.
-        namespace: bool,
-    },
-    /// A static attribute on the current element.
-    Attr {
-        /// Namespace storage for this attr.
-        namespace: DecodedTemplateAttrNamespace,
-    },
-    /// A text node marker. The next op is a [`Self::Static`] string reference.
-    Text,
-    /// A static string pool reference.
-    Static(u16),
-}
-
 impl TemplateOp {
     const ENTER_MAX_CODE: u16 = 0x7fff;
     const ATTR_CODE: u16 = 0x8000;
@@ -80,13 +50,9 @@ impl TemplateOp {
                 namespace: self.0 & 1 == 1,
             }
         } else if self.0 == Self::ATTR_CODE {
-            DecodedTemplateOp::Attr {
-                namespace: DecodedTemplateAttrNamespace::None,
-            }
+            DecodedTemplateOp::Attr { namespace: false }
         } else if self.0 == Self::ATTR_CUSTOM_NS_CODE {
-            DecodedTemplateOp::Attr {
-                namespace: DecodedTemplateAttrNamespace::Custom,
-            }
+            DecodedTemplateOp::Attr { namespace: true }
         } else if self.0 == Self::TEXT_CODE {
             DecodedTemplateOp::Text
         } else {
@@ -99,4 +65,25 @@ impl std::fmt::Debug for TemplateOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.decode().fmt(f)
     }
+}
+
+/// Decoded representation of a packed template operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecodedTemplateOp {
+    /// Enter an element. `skip` is the number of ops in this element subtree.
+    Enter {
+        /// Number of ops to skip to move past this element and its children.
+        skip: u16,
+        /// Whether the reserved namespace string slot contains a namespace.
+        namespace: bool,
+    },
+    /// A static attribute on the current element.
+    Attr {
+        /// Whether a custom namespace string follows the static attr name/value.
+        namespace: bool,
+    },
+    /// A text node marker. The next op is a [`Self::Static`] string reference.
+    Text,
+    /// A static string pool reference.
+    Static(u16),
 }

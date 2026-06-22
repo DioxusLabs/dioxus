@@ -73,7 +73,7 @@ impl Properties for () {
         ComponentBuilder::new(render_fn, EmptyBuilder {})
     }
 
-    fn memoize(&mut self, _other: &Self) -> bool {
+    fn memoize(&mut self, _: &Self) -> bool {
         true
     }
 }
@@ -97,12 +97,12 @@ where
     type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, P, Self, Marker>;
 
     fn component_builder<RenderFn, Marker>(
-        _render_fn: RenderFn,
+        _: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
         unreachable!("Root props technically are never built")
     }
 
-    fn memoize(&mut self, _other: &Self) -> bool {
+    fn memoize(&mut self, _: &Self) -> bool {
         true
     }
 }
@@ -112,25 +112,6 @@ where
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     pub fn build(self) {}
-}
-
-impl<RenderFn, Marker> ComponentBuilder<RenderFn, EmptyBuilder, (), Marker> {
-    /// Build an empty-props component.
-    pub fn build(self) -> ComponentBuilderOutput<RenderFn, (), Marker> {
-        let (render_fn, builder) = self.into_parts();
-        builder.build();
-        ComponentBuilderOutput::new(render_fn, ())
-    }
-}
-
-impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for ()
-where
-    RenderFn: ComponentFunction<(), Marker>,
-    Marker: 'static,
-{
-    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
-        <Self as Properties>::into_vcomponent(self, render_fn)
-    }
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
@@ -226,6 +207,15 @@ impl<RenderFn, Builder, Props, Marker> ComponentBuilder<RenderFn, Builder, Props
     }
 }
 
+impl<RenderFn, Marker> ComponentBuilder<RenderFn, EmptyBuilder, (), Marker> {
+    /// Build an empty-props component.
+    pub fn build(self) -> ComponentBuilderOutput<RenderFn, (), Marker> {
+        let (render_fn, builder) = self.into_parts();
+        builder.build();
+        ComponentBuilderOutput::new(render_fn, ())
+    }
+}
+
 impl<RenderFn, Builder, Props, Marker> HasAttributes
     for ComponentBuilder<RenderFn, Builder, Props, Marker>
 where
@@ -299,6 +289,16 @@ where
 pub trait ComponentBuilderRender<RenderFn, Marker>: Sized {
     /// Create a [`VComponent`] from these props and the render function.
     fn into_vcomponent(self, render_fn: RenderFn) -> VComponent;
+}
+
+impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for ()
+where
+    RenderFn: ComponentFunction<(), Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        <Self as Properties>::into_vcomponent(self, render_fn)
+    }
 }
 
 /// Accept any callbacks that take props

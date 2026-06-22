@@ -49,7 +49,7 @@ impl ViewTemplate for () {
 pub trait View: ViewTemplate + Sized {
     /// Push runtime dynamic values in template order.
     #[inline]
-    fn push(self, _dynamic: &mut DynamicValues) {}
+    fn push(self, _: &mut DynamicValues) {}
 }
 
 /// A typed view with a root key.
@@ -474,6 +474,27 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
     }
 }
 
+impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
+    for ElementBuilder<Tag, Attributes, Children>
+{
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Element {
+        tag: Tag::NAME,
+        namespace: Tag::NAMESPACE,
+        attrs: Attributes::TEMPLATE_TREE,
+        children: Children::TEMPLATE_TREE,
+    };
+}
+
+impl<Tag: ElementTag, Attributes: View, Children: View> View
+    for ElementBuilder<Tag, Attributes, Children>
+{
+    #[inline]
+    fn push(self, dynamic: &mut DynamicValues) {
+        self.attrs.push(dynamic);
+        self.children.push(dynamic);
+    }
+}
+
 /// Marker for child values that are already typed views.
 #[doc(hidden)]
 pub struct ViewChildMarker;
@@ -549,27 +570,6 @@ where
     #[inline]
     fn into_child(self) -> Self::Output {
         dynamic_node::dynamic_node_builder(self)
-    }
-}
-
-impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
-    for ElementBuilder<Tag, Attributes, Children>
-{
-    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Element {
-        tag: Tag::NAME,
-        namespace: Tag::NAMESPACE,
-        attrs: Attributes::TEMPLATE_TREE,
-        children: Children::TEMPLATE_TREE,
-    };
-}
-
-impl<Tag: ElementTag, Attributes: View, Children: View> View
-    for ElementBuilder<Tag, Attributes, Children>
-{
-    #[inline]
-    fn push(self, dynamic: &mut DynamicValues) {
-        self.attrs.push(dynamic);
-        self.children.push(dynamic);
     }
 }
 

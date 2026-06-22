@@ -1,4 +1,4 @@
-use super::{DecodedTemplateAttrNamespace, DecodedTemplateOp, TemplateAnchor};
+use super::{DecodedTemplateOp, TemplateAnchor};
 use crate::TemplateSlotTarget;
 use crate::op::TemplateOp;
 
@@ -149,12 +149,12 @@ impl Template {
     }
 
     /// Get a static string from this template's string pool.
-    pub fn string(&self, id: u16) -> &'static str {
+    fn string(&self, id: u16) -> &'static str {
         self.strings[id as usize]
     }
 
     /// Decode an element op into its subtree length and namespace presence.
-    pub fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
+    fn enter_meta(&self, op: usize) -> Option<(usize, bool)> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Enter { skip, namespace }) => Some((skip as usize, namespace)),
             _ => None,
@@ -162,7 +162,7 @@ impl Template {
     }
 
     /// Return the static string referenced by an op.
-    pub fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
+    fn static_string_at_op(&self, op: usize) -> Option<&'static str> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Static(id)) => Some(self.string(id)),
             _ => None,
@@ -196,10 +196,9 @@ impl Template {
         };
         let name = self.static_string_at_op(op + 1)?;
         let value = self.static_string_at_op(op + 2)?;
-        let namespace = match namespace {
-            DecodedTemplateAttrNamespace::None => None,
-            DecodedTemplateAttrNamespace::Custom => self.static_string_at_op(op + 3),
-        };
+        let namespace = namespace
+            .then(|| self.static_string_at_op(op + 3))
+            .flatten();
         Some((name, value, namespace))
     }
 
@@ -213,9 +212,7 @@ impl Template {
     /// Return the number of ops used by a static attr at `op`.
     pub fn attr_op_len(&self, op: usize) -> Option<usize> {
         match self.ops.get(op).map(|op| op.decode()) {
-            Some(DecodedTemplateOp::Attr {
-                namespace: DecodedTemplateAttrNamespace::Custom,
-            }) => Some(4),
+            Some(DecodedTemplateOp::Attr { namespace: true }) => Some(4),
             Some(DecodedTemplateOp::Attr { .. }) => Some(3),
             _ => None,
         }
@@ -380,7 +377,7 @@ impl Template {
     }
 
     /// Return true if an op starts an element or static text node.
-    pub fn is_static_node_op(&self, op: usize) -> bool {
+    fn is_static_node_op(&self, op: usize) -> bool {
         Self::is_static_node_op_in(self.ops, op)
     }
 
@@ -437,9 +434,7 @@ impl Template {
         match ops[op].decode() {
             DecodedTemplateOp::Enter { skip, .. } => op + skip as usize,
             DecodedTemplateOp::Text => op + 2,
-            DecodedTemplateOp::Attr {
-                namespace: DecodedTemplateAttrNamespace::Custom,
-            } => op + 4,
+            DecodedTemplateOp::Attr { namespace: true } => op + 4,
             DecodedTemplateOp::Attr { .. } => op + 3,
             _ => op + 1,
         }
@@ -484,7 +479,7 @@ impl Template {
         while i < anchors.len() {
             let anchor = anchors[i];
             hash = xxh64(&anchor.parent_op_index.to_le_bytes(), hash);
-            hash = xxh64(&anchor.path.to_le_bytes(), hash);
+            hash = xxh64(&anchor.slot_path().bits().to_le_bytes(), hash);
             hash = xxh64(&anchor.value_start.to_le_bytes(), hash);
             hash = xxh64(&anchor.value_end.to_le_bytes(), hash);
             i += 1;

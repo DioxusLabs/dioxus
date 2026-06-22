@@ -260,7 +260,7 @@ impl Properties for SuspenseBoundaryPropsWithOwner {
     type ComponentBuilder<RenderFn, Marker> = ();
 
     fn component_builder<RenderFn, Marker>(
-        _render_fn: RenderFn,
+        _: RenderFn,
     ) -> Self::ComponentBuilder<RenderFn, Marker> {
         unreachable!()
     }
@@ -329,37 +329,12 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 /// ```
 #[allow(non_snake_case)]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub fn SuspenseBoundary(__props: SuspenseBoundaryProps) -> Element {
+pub fn SuspenseBoundary(_: SuspenseBoundaryProps) -> Element {
     unreachable!("SuspenseBoundary should not be called directly")
 }
 
 /// The rendering lifecycle of a suspense boundary scope.
 struct SuspenseDriver;
-
-fn suspense_props(dom: &VirtualDom, scope_id: ScopeId) -> &SuspenseBoundaryPropsWithOwner {
-    dom.scopes[scope_id.index()]
-        .props
-        .props()
-        .downcast_ref::<SuspenseBoundaryPropsWithOwner>()
-        .expect("suspense boundary scope carries SuspenseBoundaryPropsWithOwner")
-}
-
-fn suspense_children(dom: &VirtualDom, scope_id: ScopeId) -> LastRenderedNode {
-    suspense_props(dom, scope_id).inner.children.clone()
-}
-
-fn suspense_fallback(dom: &VirtualDom, scope_id: ScopeId) -> Callback<SuspenseContext, Element> {
-    suspense_props(dom, scope_id).inner.fallback
-}
-
-fn store_suspense_children(dom: &mut VirtualDom, scope_id: ScopeId, children: &LastRenderedNode) {
-    let props = dom.scopes[scope_id.index()]
-        .props
-        .props_mut()
-        .downcast_mut::<SuspenseBoundaryPropsWithOwner>()
-        .expect("suspense boundary scope carries SuspenseBoundaryPropsWithOwner");
-    props.inner.children.clone_from(children);
-}
 
 impl RenderDriver for SuspenseDriver {
     fn as_any(&self) -> &dyn Any {
@@ -400,7 +375,7 @@ impl RenderDriver for SuspenseDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        _parent_context: Option<DiffContext<'_>>,
+        _: Option<DiffContext<'_>>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         let render_to = to.filter(|_| dom.scope_should_write_now(scope_id));
@@ -428,6 +403,31 @@ impl RenderDriver for SuspenseDriver {
         // same way a plain component's output is.
         remove_rendered_output(dom, scope_id, to, destroy_component_state);
     }
+}
+
+fn suspense_props(dom: &VirtualDom, scope_id: ScopeId) -> &SuspenseBoundaryPropsWithOwner {
+    dom.scopes[scope_id.index()]
+        .props
+        .props()
+        .downcast_ref::<SuspenseBoundaryPropsWithOwner>()
+        .expect("suspense boundary scope carries SuspenseBoundaryPropsWithOwner")
+}
+
+fn suspense_children(dom: &VirtualDom, scope_id: ScopeId) -> LastRenderedNode {
+    suspense_props(dom, scope_id).inner.children.clone()
+}
+
+fn suspense_fallback(dom: &VirtualDom, scope_id: ScopeId) -> Callback<SuspenseContext, Element> {
+    suspense_props(dom, scope_id).inner.fallback
+}
+
+fn store_suspense_children(dom: &mut VirtualDom, scope_id: ScopeId, children: &LastRenderedNode) {
+    let props = dom.scopes[scope_id.index()]
+        .props
+        .props_mut()
+        .downcast_mut::<SuspenseBoundaryPropsWithOwner>()
+        .expect("suspense boundary scope carries SuspenseBoundaryPropsWithOwner");
+    props.inner.children.clone_from(children);
 }
 #[allow(non_snake_case)]
 mod SuspenseBoundary_completions {

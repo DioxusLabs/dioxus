@@ -126,6 +126,12 @@ pub(crate) struct DiffFrame<'a> {
     pub(crate) new: &'a VNode,
 }
 
+impl<'a> DiffFrame<'a> {
+    pub(crate) fn new(mount: MountId, old: &'a VNode, new: &'a VNode) -> Self {
+        Self { mount, old, new }
+    }
+}
+
 /// Diff-local view of the active vnode and its parent while children are being
 /// reconciled.
 ///
@@ -159,11 +165,5 @@ impl<'a> DiffContext<'a> {
         } else {
             self.parent.filter(|frame| frame.mount == mount)
         }
-    }
-}
-
-impl<'a> DiffFrame<'a> {
-    pub(crate) fn new(mount: MountId, old: &'a VNode, new: &'a VNode) -> Self {
-        Self { mount, old, new }
     }
 }

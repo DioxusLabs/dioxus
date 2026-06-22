@@ -59,16 +59,10 @@ impl AttributeMetadata {
                     Meta::Path(path) if path.is_ident("gated") => {
                         metadata.gated = true;
                     }
-                    Meta::NameValue(name_value)
-                        if name_value.path.is_ident("name")
-                            || name_value.path.is_ident("rename") =>
-                    {
+                    Meta::NameValue(name_value) if name_value.path.is_ident("name") => {
                         metadata.name = Some(lit_str_from_expr(&name_value.value)?);
                     }
-                    Meta::NameValue(name_value)
-                        if name_value.path.is_ident("namespace")
-                            || name_value.path.is_ident("ns") =>
-                    {
+                    Meta::NameValue(name_value) if name_value.path.is_ident("namespace") => {
                         metadata.namespace = Some(lit_str_from_expr(&name_value.value)?);
                     }
                     other => {
@@ -182,4 +176,25 @@ pub(crate) fn ident_to_upper_camel(ident: &Ident) -> String {
         .strip_prefix("r#")
         .unwrap_or(&ident_string)
         .to_case(Case::UpperCamel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn attr_metadata_rejects_name_aliases() {
+        let rename = syn::parse2::<ExtensionAttribute>(quote! {
+            #[attr(rename = "data-test")]
+            data_test
+        });
+        assert!(rename.is_err());
+
+        let ns = syn::parse2::<ExtensionAttribute>(quote! {
+            #[attr(ns = "test")]
+            data_test
+        });
+        assert!(ns.is_err());
+    }
 }

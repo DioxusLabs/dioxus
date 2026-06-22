@@ -8,17 +8,17 @@ pub struct TemplatePath {
 
 impl TemplatePath {
     /// Create an empty path.
-    pub const fn empty() -> Self {
+    pub(crate) const fn empty() -> Self {
         Self { path: 0 }
     }
 
     /// Create a path from compact path bits.
-    pub const fn from_bits(path: u128) -> Self {
+    pub(crate) const fn from_bits(path: u128) -> Self {
         Self { path }
     }
 
     /// Return the path for a root position.
-    pub const fn root(index: usize) -> Self {
+    pub(crate) const fn root(index: usize) -> Self {
         if index >= u128::BITS as usize {
             return Self::empty();
         }
@@ -29,7 +29,7 @@ impl TemplatePath {
     }
 
     /// Return the compact path bits.
-    pub const fn bits(self) -> u128 {
+    pub(crate) const fn bits(self) -> u128 {
         self.path
     }
 
@@ -128,6 +128,27 @@ impl TemplatePath {
     }
 }
 
+#[cfg(feature = "serialize")]
+impl serde::Serialize for TemplatePath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde::Serialize::serialize(&self.path, serializer)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for TemplatePath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let path = <u128 as serde::Deserialize>::deserialize(deserializer)?;
+        Ok(Self { path })
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct TemplateSlotPath(NonZeroU128);
@@ -171,11 +192,6 @@ impl TemplateSlotPath {
         Self::new(Self::encode_payload(path) | Self::TARGET_APPEND_CHILDREN)
     }
 
-    /// Create a slot path from raw bits.
-    pub(crate) const fn from_bits(bits: u128) -> Self {
-        Self::new(bits)
-    }
-
     /// Return the raw tagged bits.
     pub(crate) const fn bits(self) -> u128 {
         self.0.get()
@@ -196,27 +212,6 @@ impl TemplateSlotPath {
             TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().0,
             TemplateSlotTarget::AppendChildren(path) => path,
         }
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for TemplatePath {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serde::Serialize::serialize(&self.path, serializer)
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for TemplatePath {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let path = <u128 as serde::Deserialize>::deserialize(deserializer)?;
-        Ok(Self { path })
     }
 }
 

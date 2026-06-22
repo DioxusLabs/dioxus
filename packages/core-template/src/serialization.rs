@@ -10,7 +10,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub fn deserialize_leaky<'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
+pub(crate) fn deserialize_leaky<'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -22,7 +22,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub fn deserialize_strings_leaky<'de, D>(
+pub(crate) fn deserialize_strings_leaky<'de, D>(
     deserializer: D,
 ) -> Result<&'static [&'static str], D::Error>
 where

@@ -386,6 +386,42 @@ struct WindowContextProviderPropsBuilder<TypedBuilderFields> {
     _phantom: (),
 }
 
+impl<Children> WindowContextProviderPropsBuilder<((), Children)> {
+    fn providers(
+        self,
+        providers: WindowProviders,
+    ) -> WindowContextProviderPropsBuilder<((WindowProviders,), Children)> {
+        let (_, children) = self.fields;
+        WindowContextProviderPropsBuilder {
+            fields: ((providers,), children),
+            _phantom: self._phantom,
+        }
+    }
+}
+
+impl<Providers> WindowContextProviderPropsBuilder<(Providers, ())> {
+    fn children(
+        self,
+        children: Element,
+    ) -> WindowContextProviderPropsBuilder<(Providers, (Element,))> {
+        let (providers, _) = self.fields;
+        WindowContextProviderPropsBuilder {
+            fields: (providers, (children,)),
+            _phantom: self._phantom,
+        }
+    }
+}
+
+impl WindowContextProviderPropsBuilder<((WindowProviders,), (Element,))> {
+    fn build(self) -> WindowContextProviderProps {
+        let (providers, children) = self.fields;
+        WindowContextProviderProps {
+            providers: providers.0,
+            children: children.0,
+        }
+    }
+}
+
 #[doc(hidden)]
 struct WindowContextProviderComponentBuilder<RenderFn, ComponentMarker, TypedBuilderFields> {
     render_fn: RenderFn,
@@ -439,42 +475,6 @@ impl<RenderFn, ComponentMarker>
         self,
     ) -> ComponentBuilderOutput<RenderFn, WindowContextProviderProps, ComponentMarker> {
         ComponentBuilderOutput::new(self.render_fn, self.builder.build())
-    }
-}
-
-impl<Children> WindowContextProviderPropsBuilder<((), Children)> {
-    fn providers(
-        self,
-        providers: WindowProviders,
-    ) -> WindowContextProviderPropsBuilder<((WindowProviders,), Children)> {
-        let (_, children) = self.fields;
-        WindowContextProviderPropsBuilder {
-            fields: ((providers,), children),
-            _phantom: self._phantom,
-        }
-    }
-}
-
-impl<Providers> WindowContextProviderPropsBuilder<(Providers, ())> {
-    fn children(
-        self,
-        children: Element,
-    ) -> WindowContextProviderPropsBuilder<(Providers, (Element,))> {
-        let (providers, _) = self.fields;
-        WindowContextProviderPropsBuilder {
-            fields: (providers, (children,)),
-            _phantom: self._phantom,
-        }
-    }
-}
-
-impl WindowContextProviderPropsBuilder<((WindowProviders,), (Element,))> {
-    fn build(self) -> WindowContextProviderProps {
-        let (providers, children) = self.fields;
-        WindowContextProviderProps {
-            providers: providers.0,
-            children: children.0,
-        }
     }
 }
 

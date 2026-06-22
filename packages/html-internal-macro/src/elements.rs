@@ -142,16 +142,10 @@ impl ElementMetadata {
             let args = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
             for meta in args {
                 match meta {
-                    Meta::NameValue(name_value)
-                        if name_value.path.is_ident("name")
-                            || name_value.path.is_ident("rename") =>
-                    {
+                    Meta::NameValue(name_value) if name_value.path.is_ident("name") => {
                         metadata.name = Some(lit_str_from_expr(&name_value.value)?);
                     }
-                    Meta::NameValue(name_value)
-                        if name_value.path.is_ident("namespace")
-                            || name_value.path.is_ident("ns") =>
-                    {
+                    Meta::NameValue(name_value) if name_value.path.is_ident("namespace") => {
                         metadata.namespace = Some(lit_str_from_expr(&name_value.value)?);
                     }
                     other => {
@@ -698,5 +692,26 @@ impl ElementDef {
             pub use super::#extension;
             pub use super::#spread_marker;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    #[test]
+    fn element_metadata_rejects_name_aliases() {
+        let rename = syn::parse2::<ElementDef>(quote! {
+            #[element(rename = "custom-element")]
+            customElement {}
+        });
+        assert!(rename.is_err());
+
+        let ns = syn::parse2::<ElementDef>(quote! {
+            #[element(ns = "test")]
+            customElement {}
+        });
+        assert!(ns.is_err());
     }
 }

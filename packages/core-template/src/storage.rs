@@ -43,10 +43,47 @@ pub struct TemplateStorageStats {
     pub path_overflow: bool,
 }
 
+impl TemplateStorageStats {
+    fn push_op(&mut self) {
+        self.ops += 1;
+    }
+
+    fn push_static(&mut self) {
+        self.strings += 1;
+        self.ops += 1;
+    }
+
+    fn push_anchor(
+        &mut self,
+        anchors: &mut Vec<AnchorStats>,
+        parent_op_index: u16,
+        path: TemplateSlotPath,
+    ) {
+        self.dynamic_values += 1;
+
+        if let Some(last) = anchors.last_mut() {
+            if last.same_anchor(parent_op_index, path) {
+                return;
+            }
+        }
+
+        anchors.push(AnchorStats {
+            parent_op_index,
+            path,
+        });
+    }
+}
+
 #[derive(Clone, Copy)]
 struct AnchorStats {
     parent_op_index: u16,
-    path: u128,
+    path: TemplateSlotPath,
+}
+
+impl AnchorStats {
+    fn same_anchor(self, parent_op_index: u16, path: TemplateSlotPath) -> bool {
+        self.parent_op_index == parent_op_index && self.path == path
+    }
 }
 
 /// Const storage for a template.
@@ -63,6 +100,46 @@ pub struct TemplateStorage<
     /// order. Folded into the template hash so kind-incompatible templates that
     /// share an op tape compare unequal; never stored on the template itself.
     value_kind_hash: u64,
+}
+
+impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
+    TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
+{
+    /// Build storage from a template tree.
+    pub const fn build_from_tree(tree: &'static TemplateRawTree) -> Self {
+        let mut storage = Self {
+            ops: ConstVec::new_with_max_size(),
+            strings: ConstVec::new_with_max_size(),
+            anchors: ConstVec::new_with_max_size(),
+            value_kind_hash: 0,
+        };
+        let mut cursor = TemplateLoweringCursor::new();
+
+        lower_raw_tree(tree, &mut storage, &mut cursor, false);
+        cursor.finish();
+        storage
+    }
+
+    /// Return this storage as a compact template.
+    pub const fn as_template(&'static self) -> Template {
+        Template::new(
+            self.ops.as_slice(),
+            self.strings.as_slice(),
+            self.anchors.as_slice(),
+            self.value_kind_hash,
+        )
+    }
+
+    /// Leak this storage into a compact runtime template.
+    #[cfg(test)]
+    pub(crate) fn into_leaked_template(self) -> Template {
+        Template::new(
+            Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
+            Box::leak(self.strings.as_slice().to_vec().into_boxed_slice()),
+            Box::leak(self.anchors.as_slice().to_vec().into_boxed_slice()),
+            self.value_kind_hash,
+        )
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -209,7 +286,7 @@ impl Default for TemplateStatsBuilder {
 
 impl TemplateStatsBuilder {
     /// Create a new stats builder.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             stats: TemplateStorageStats::default(),
             cursor: TemplateLoweringCursor::new(),
@@ -259,7 +336,7 @@ impl TemplateStatsBuilder {
         if frame.path.is_empty() {
             self.stats.path_overflow = true;
         }
-        let path = TemplateSlotPath::append_children(frame.path).bits();
+        let path = TemplateSlotPath::append_children(frame.path);
         self.stats
             .push_anchor(&mut self.anchors, frame.enter_index as u16, path);
     }
@@ -281,7 +358,7 @@ impl TemplateStatsBuilder {
                 self.stats.push_anchor(
                     &mut self.anchors,
                     self.cursor.node_anchor_parent_op_index(),
-                    path.bits(),
+                    path,
                 );
             }
             Err(()) => {
@@ -289,7 +366,7 @@ impl TemplateStatsBuilder {
                 self.stats.push_anchor(
                     &mut self.anchors,
                     self.cursor.node_anchor_parent_op_index(),
-                    0,
+                    TemplateSlotPath::append_children(TemplatePath::empty()),
                 );
             }
         }
@@ -305,38 +382,6 @@ impl TemplateStatsBuilder {
         self.stats.strings += self.namespace_slack;
 
         self.stats
-    }
-}
-
-impl TemplateStorageStats {
-    fn push_op(&mut self) {
-        self.ops += 1;
-    }
-
-    fn push_static(&mut self) {
-        self.strings += 1;
-        self.ops += 1;
-    }
-
-    fn push_anchor(&mut self, anchors: &mut Vec<AnchorStats>, parent_op_index: u16, path: u128) {
-        self.dynamic_values += 1;
-
-        if let Some(last) = anchors.last_mut() {
-            if last.same_anchor(parent_op_index, path) {
-                return;
-            }
-        }
-
-        anchors.push(AnchorStats {
-            parent_op_index,
-            path,
-        });
-    }
-}
-
-impl AnchorStats {
-    fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
-        self.parent_op_index == parent_op_index && self.path == path
     }
 }
 
@@ -405,7 +450,7 @@ macro_rules! template_lowering {
     }};
     (dynamic_node($storage:expr, $cursor:expr, $following_static_at_parent:expr)) => {{
         let path = ($cursor).next_slot_path_after_dynamic_node($following_static_at_parent);
-        ($storage).push_anchor(($cursor).node_anchor_parent_op_index(), path.bits(), false);
+        ($storage).push_anchor(($cursor).node_anchor_parent_op_index(), path, false);
     }};
 }
 
@@ -435,7 +480,12 @@ macro_rules! template_storage_methods {
             self.ops.set(index, op);
         }
 
-        $($constness)? fn push_anchor(&mut self, parent_op_index: u16, path: u128, is_attr: bool) {
+        $($constness)? fn push_anchor(
+            &mut self,
+            parent_op_index: u16,
+            path: TemplateSlotPath,
+            is_attr: bool,
+        ) {
             // Fold this value's kind into the running signature in dynamic-value order
             // (one value per call, including merges into the previous anchor).
             // The template hash mixes this in so an attribute slot and a node
@@ -479,6 +529,12 @@ macro_rules! template_storage_methods {
         }
 
     };
+}
+
+impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
+    TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
+{
+    template_storage_methods!(const);
 }
 
 const fn push_element_start<
@@ -559,7 +615,7 @@ const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYN
         }
         TemplateRawTree::DynamicAttr => {
             let frame = cursor.current_element_frame();
-            let path = TemplateSlotPath::append_children(frame.path).bits();
+            let path = TemplateSlotPath::append_children(frame.path);
             storage.push_anchor(frame.enter_index as u16, path, true);
         }
         TemplateRawTree::StaticText(value) => {
@@ -569,47 +625,6 @@ const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYN
             template_lowering!(dynamic_node(storage, cursor, following_static_at_parent));
         }
     }
-}
-
-impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
-    TemplateStorage<OPS_CAP, STRING_CAP, DYNAMIC_CAP>
-{
-    /// Build storage from a template tree.
-    pub const fn build_from_tree(tree: &'static TemplateRawTree) -> Self {
-        let mut storage = Self {
-            ops: ConstVec::new_with_max_size(),
-            strings: ConstVec::new_with_max_size(),
-            anchors: ConstVec::new_with_max_size(),
-            value_kind_hash: 0,
-        };
-        let mut cursor = TemplateLoweringCursor::new();
-
-        lower_raw_tree(tree, &mut storage, &mut cursor, false);
-        cursor.finish();
-        storage
-    }
-
-    /// Return this storage as a compact template.
-    pub const fn as_template(&'static self) -> Template {
-        Template::new(
-            self.ops.as_slice(),
-            self.strings.as_slice(),
-            self.anchors.as_slice(),
-            self.value_kind_hash,
-        )
-    }
-
-    /// Leak this storage into a compact runtime template.
-    pub fn into_leaked_template(self) -> Template {
-        Template::new(
-            Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
-            Box::leak(self.strings.as_slice().to_vec().into_boxed_slice()),
-            Box::leak(self.anchors.as_slice().to_vec().into_boxed_slice()),
-            self.value_kind_hash,
-        )
-    }
-
-    template_storage_methods!(const);
 }
 
 /// Builds a leaked runtime template directly from semantic template events.
@@ -666,7 +681,7 @@ impl Default for RuntimeTemplateBuilder {
 
 impl RuntimeTemplateBuilder {
     /// Create a new runtime template builder.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             storage: RuntimeTemplateStorage::default(),
             cursor: TemplateLoweringCursor::new(),
@@ -701,7 +716,7 @@ impl RuntimeTemplateBuilder {
     /// Emit a dynamic attribute slot on the current element.
     pub fn dynamic_attr(&mut self) {
         let frame = self.cursor.current_element_frame();
-        let path = TemplateSlotPath::append_children(frame.path).bits();
+        let path = TemplateSlotPath::append_children(frame.path);
         self.storage
             .push_anchor(frame.enter_index as u16, path, true);
     }
@@ -755,7 +770,7 @@ mod tests {
             .map(|anchor| {
                 (
                     anchor.parent_op_index,
-                    anchor.path,
+                    anchor.path.bits(),
                     anchor.value_start,
                     anchor.value_end,
                 )

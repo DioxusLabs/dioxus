@@ -107,15 +107,12 @@ mod storage;
 
 pub use anchor::TemplateAnchor;
 pub use data::{StaticRoot, Template};
-pub use op::{DecodedTemplateAttrNamespace, DecodedTemplateOp};
+pub use op::DecodedTemplateOp;
 pub(crate) use path::TemplateSlotPath;
 pub use path::{TemplatePath, TemplateSlotTarget};
 pub use raw::TemplateRawTree;
 #[cfg(feature = "serialize")]
-pub use serialization::{
-    deserialize_leaky, deserialize_option_leaky, deserialize_string_leaky,
-    deserialize_strings_leaky,
-};
+pub use serialization::{deserialize_option_leaky, deserialize_string_leaky};
 pub use storage::TemplateStorageStats;
 pub use storage::{
     RuntimeTemplateBuilder, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_MAX_CAP,

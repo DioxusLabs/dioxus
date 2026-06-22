@@ -14,13 +14,6 @@ pub struct PortalProps {
     children: LastRenderedNode,
 }
 
-#[must_use]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub struct PortalPropsBuilder<TypedBuilderFields> {
-    fields: TypedBuilderFields,
-    _phantom: (),
-}
-
 impl Properties for PortalProps {
     type ComponentBuilder<RenderFn, Marker> = PortalComponentBuilder<RenderFn, Marker, ((), ())>;
 
@@ -61,6 +54,23 @@ impl Properties for PortalProps {
         self.children = new.children.clone();
         equal
     }
+}
+
+impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for PortalProps
+where
+    RenderFn: ComponentFunction<PortalProps, Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        <Self as Properties>::into_vcomponent(self, render_fn)
+    }
+}
+
+#[must_use]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub struct PortalPropsBuilder<TypedBuilderFields> {
+    fields: TypedBuilderFields,
+    _phantom: (),
 }
 
 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -155,16 +165,6 @@ impl<RenderFn, ComponentMarker>
     }
 }
 
-impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for PortalProps
-where
-    RenderFn: ComponentFunction<PortalProps, Marker>,
-    Marker: 'static,
-{
-    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
-        <Self as Properties>::into_vcomponent(self, render_fn)
-    }
-}
-
 /// Render children into another renderer target while keeping their logical parent.
 ///
 /// ## Details
@@ -203,7 +203,7 @@ where
 /// target, render children directly instead.
 #[allow(non_snake_case)]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub fn Portal(__props: PortalProps) -> Element {
+pub fn Portal(_: PortalProps) -> Element {
     unreachable!("Portal should not be called directly")
 }
 
@@ -345,7 +345,7 @@ impl RenderDriver for PortalDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        _parent_context: Option<DiffContext<'_>>,
+        _: Option<DiffContext<'_>>,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         let (target_id, new_children) = portal_props(dom, scope_id);

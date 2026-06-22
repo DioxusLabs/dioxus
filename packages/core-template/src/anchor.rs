@@ -8,8 +8,8 @@ pub(crate) const ROOT_PARENT_OP_INDEX: u16 = u16::MAX;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateAnchor {
-    /// Encoded dynamic slot path.
-    pub(crate) path: u128,
+    /// Dynamic slot path.
+    pub(crate) path: TemplateSlotPath,
     /// Static template operation index for the anchor's parent element.
     pub(crate) parent_op_index: u16,
     /// First dynamic value index owned by this anchor.
@@ -24,7 +24,7 @@ impl TemplateAnchor {
     }
 
     pub(crate) const fn slot_path(self) -> TemplateSlotPath {
-        TemplateSlotPath::from_bits(self.path)
+        self.path
     }
 
     pub const fn slot_target(self) -> TemplateSlotTarget {
@@ -39,7 +39,7 @@ impl TemplateAnchor {
         self.value_start as usize..self.value_end as usize
     }
 
-    pub(crate) const fn same_anchor(self, parent_op_index: u16, path: u128) -> bool {
-        self.parent_op_index == parent_op_index && self.path == path
+    pub(crate) const fn same_anchor(self, parent_op_index: u16, path: TemplateSlotPath) -> bool {
+        self.parent_op_index == parent_op_index && self.path.bits() == path.bits()
     }
 }
