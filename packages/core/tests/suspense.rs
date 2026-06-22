@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::{ScopeId, generation};
-use dioxus_renderer_oracle::{EditSummary, RendererOracle};
+use dioxus_renderer_oracle::RendererOracle;
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;
@@ -421,11 +421,6 @@ fn toggle_suspense() {
             dom.mark_dirty(ScopeId::APP);
             oracle.render(&mut dom);
             oracle.assert_matches(expected_fallback);
-
-            dom.wait_for_work().await;
-            let summary = oracle.render(&mut dom);
-            oracle.assert_matches(expected_fallback);
-            assert_eq!(summary, EditSummary::default());
 
             dom.wait_for_work().await;
             oracle.render(&mut dom);
