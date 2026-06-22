@@ -40,7 +40,7 @@ jobs:
       rust_stable: ${{ steps.toolchains.outputs.rust_stable }}
       rust_nightly: ${{ steps.toolchains.outputs.rust_nightly }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -67,7 +67,7 @@ jobs:
     name: "Lint | Typos"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Check for typos
         uses: crate-ci/typos@master
 
@@ -76,7 +76,7 @@ jobs:
     name: "Lint | Links"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Restore lychee cache
         uses: actions/cache@v5
         with:
@@ -98,7 +98,7 @@ jobs:
     name: "Lint | Clippy, fmt, schema, msrv"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -140,7 +140,7 @@ jobs:
     name: "Docs | Build"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -167,7 +167,7 @@ jobs:
     name: "Docs | Test"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -193,7 +193,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Free Disk Space
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -238,7 +238,7 @@ jobs:
     runs-on: warp-macos-latest-arm64-6x
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.rust.outputs.rust_stable }}
@@ -274,7 +274,7 @@ jobs:
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Setup Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Repo to Dev Drive
@@ -333,7 +333,7 @@ jobs:
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Setup Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Repo to Dev Drive
@@ -389,7 +389,7 @@ jobs:
           - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Free Disk Space
         if: runner.os == 'Linux'
         uses: ./.github/actions/free-disk-space
@@ -442,7 +442,7 @@ jobs:
     name: "Test | Linux"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Free Disk Space
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -468,7 +468,7 @@ jobs:
     name: "Test | Linux (Release)"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Free Disk Space
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -536,7 +536,7 @@ jobs:
             }
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Free Disk Space
         if: runner.os == 'Linux'
         uses: ./.github/actions/free-disk-space
@@ -599,7 +599,7 @@ jobs:
     name: "Check | Minimum dependency versions"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -631,7 +631,7 @@ jobs:
           - { os: warp-ubuntu-latest-x64-8x, name: Linux }
           - { os: warp-macos-latest-arm64-6x, name: macOS }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@master
       - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
         with:
