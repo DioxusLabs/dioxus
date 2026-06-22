@@ -1444,11 +1444,7 @@ mod struct_info {
                 .extend_fields()
                 .filter_map(|f| f.extends_vec_ident())
                 .map(|name| quote!(#name))
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner))
-                        .into_iter(),
-                )
+                .chain(self.has_child_owned_fields().then(|| quote!(owner)))
                 .collect::<Vec<_>>();
 
             let helper_trait_name = &self.conversion_helper_trait_name;
