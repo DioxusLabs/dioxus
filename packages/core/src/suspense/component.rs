@@ -4,8 +4,8 @@ use crate::{
     DynamicNode,
     diff::context::DiffContext,
     innerlude::*,
+    diff::placement::{StreamPlacement, splice_streamed_nodes},
     mount::{RenderMode, SuspenseBranch},
-    mutations::replace_id_with,
     render_driver::{RenderDriver, remove_rendered_output},
     scope_context::SuspenseLocation,
 };
@@ -644,15 +644,11 @@ impl SuspenseBoundaryProps {
             // stack-only. The fallback usually has a DOM node to swap; an empty (or all-suspense)
             // fallback renders to nothing, so there is no element to `replace_with` and the streamed
             // nodes are inserted at the boundary's position instead.
-            match currently_rendered.mounted_vnode().find_first_element(dom) {
-                Some(id) => replace_id_with(to, id, push_replacements),
-                None => crate::diff::placement::splice_on_stack_at_vnode_start(
-                    currently_rendered.mounted_vnode(),
-                    dom,
-                    to,
-                    push_replacements,
-                ),
+            let placement = match currently_rendered.mounted_vnode().find_first_element(dom) {
+                Some(id) => StreamPlacement::Replace(id),
+                None => StreamPlacement::for_empty_fallback(currently_rendered.mounted_vnode(), dom),
             };
+            splice_streamed_nodes(to, placement, push_replacements);
             currently_rendered.as_vnode().remove_node(
                 currently_rendered.root_mount(),
                 &mut *dom,

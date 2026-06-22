@@ -63,7 +63,7 @@ pub(super) enum InsertionEdge {
 /// which side of it to splice onto. For `Before`/`After` the anchor is a sibling; for `Append` it
 /// is the parent the nodes become the last children of.
 #[derive(Clone, Copy)]
-pub(super) struct InsertionSite {
+pub(crate) struct InsertionSite {
     anchor: ElementId,
     edge: InsertionEdge,
 }
@@ -204,37 +204,63 @@ pub(super) fn at_site(
     site.create_and_place(to, runtime, create)
 }
 
-/// Splice DOM nodes that are already on the renderer stack into the position where `vnode` is
-/// mounted, anchoring before its first live element — or, when `vnode` has no live DOM, at the
-/// first live insertion point found by walking up its mounted parents.
+/// How streamed nodes attach to the renderer relative to an on-screen anchor element.
+pub(crate) enum StreamPlacement {
+    /// Replace the anchor element with the streamed nodes (or remove it when there are none).
+    Replace(ElementId),
+    /// Splice the streamed nodes in at the anchor's mounted insertion site.
+    Insert(InsertionSite),
+}
+
+impl StreamPlacement {
+    /// The placement to use when a resolved boundary's fallback has no DOM element to replace:
+    /// anchor before `vnode`'s first live element, walking up to a live parent slot if it is empty.
+    pub(crate) fn for_empty_fallback(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Self {
+        Self::Insert(insertion_site_at(ElementEdge::First, vnode, dom, None))
+    }
+}
+
+/// Splice streamed nodes onto the renderer stack relative to an on-screen anchor, driving the
+/// renderer through a *concrete* writer.
 ///
-/// `push_nodes` pushes the nodes and returns their count. This is the no-element analogue of
-/// [`crate::mutations::replace_id_with`]: streaming suspense resume uses it when a resolved
-/// boundary's fallback rendered to zero DOM nodes, so there is no element to `replace_with` and the
-/// streamed nodes are inserted at the boundary's position instead. It is generic over the writer so
-/// the caller's `push_nodes` keeps concrete access to its renderer (e.g. dioxus-web pushing
-/// server-streamed nodes directly onto the interpreter stack).
-pub(crate) fn splice_on_stack_at_vnode_start<M: WriteMutations>(
-    vnode: MountedVNode<'_>,
-    dom: &VirtualDom,
+/// This is the concrete-writer counterpart to the diff's [`at_site`]: streaming suspense resume
+/// can't reuse `at_site` because that wraps the writer in the `dyn`, portal-target-gated
+/// [`TargetedLazyScope`], whereas the resume closure needs the concrete renderer to push
+/// server-streamed DOM nodes that don't have an [`ElementId`] yet. `push_nodes` stacks those nodes
+/// above the anchor and returns their count.
+pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
     to: &mut M,
+    placement: StreamPlacement,
     push_nodes: impl FnOnce(&mut M) -> usize,
 ) -> usize {
-    // Push the anchor, let `push_nodes` stack the replacement nodes above it, then splice. Unlike
-    // `replace_with` (which consumes its target), `insert_before`/`insert_after`/`append_children`
-    // leave the anchor on the stack, so pop it afterwards to keep the renderer stack balanced — the
-    // same discipline `TargetedLazyScope` applies on drop in the diff create path.
-    let site = insertion_site_at(ElementEdge::First, vnode, dom, None);
-    to.push_id(site.anchor);
+    let anchor = match placement {
+        StreamPlacement::Replace(id) => id,
+        StreamPlacement::Insert(site) => site.anchor,
+    };
+    to.push_id(anchor);
     let count = push_nodes(to);
-    if count > 0 {
-        match site.edge {
-            InsertionEdge::Before => to.insert_before(count),
-            InsertionEdge::After => to.insert_after(count),
-            InsertionEdge::Append => to.append_children(count),
+    match placement {
+        // `replace_with` consumes the anchor it replaces (and `remove` consumes it directly).
+        StreamPlacement::Replace(_) => {
+            if count > 0 {
+                to.replace_with(count);
+            } else {
+                to.remove();
+            }
+        }
+        // `insert_before`/`insert_after`/`append_children` leave the anchor on the stack, so pop it
+        // to keep the renderer stack balanced — the discipline `TargetedLazyScope` applies on drop.
+        StreamPlacement::Insert(site) => {
+            if count > 0 {
+                match site.edge {
+                    InsertionEdge::Before => to.insert_before(count),
+                    InsertionEdge::After => to.insert_after(count),
+                    InsertionEdge::Append => to.append_children(count),
+                }
+            }
+            to.pop();
         }
     }
-    to.pop();
     count
 }
 

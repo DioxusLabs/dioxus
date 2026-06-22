@@ -212,25 +212,6 @@ pub(crate) fn append_children_to(
     count
 }
 
-pub(crate) fn replace_id_with<M: WriteMutations>(
-    to: &mut M,
-    id: ElementId,
-    create_replacements: impl FnOnce(&mut M) -> usize,
-) -> usize {
-    to.push_id(id);
-    let count = create_replacements(to);
-    finish_replacement(to, count);
-    count
-}
-
-fn finish_replacement(to: &mut dyn WriteMutations, count: usize) {
-    if count > 0 {
-        to.replace_with(count);
-    } else {
-        to.remove();
-    }
-}
-
 /// A host's collection of render-target writers.
 ///
 /// The diff routes each write to the writer for the render target it lands
