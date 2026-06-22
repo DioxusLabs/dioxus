@@ -13,9 +13,11 @@ pub trait WriteMutations {
     /// Whether this writer applies and retains renderer-local template
     /// prototype nodes across mutation flushes.
     ///
-    /// Writers that only collect or ignore mutations must return `false` so
-    /// VirtualDom-side template cache entries are not created for renderer
-    /// nodes that do not actually exist.
+    /// Writers that ignore mutations, or otherwise do not apply emitted
+    /// template prototype mutations to a retained renderer-local node map,
+    /// must return `false` so VirtualDom-side template cache entries are not
+    /// created for renderer nodes that do not actually exist.
+    #[doc(hidden)]
     fn can_cache_template_roots(&mut self) -> bool {
         true
     }
