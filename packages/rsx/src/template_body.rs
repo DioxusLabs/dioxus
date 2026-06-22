@@ -435,19 +435,23 @@ impl ViewBuilder {
             attrs.extend(element.typed_builder_attribute(attr, self));
         }
 
-        let children = self.visit_sibling_nodes(&element.children, false);
-        // The first group seeds the element's children; any further groups (only when there are
-        // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
-        let groups = group_sibling_views(children);
-        let (first, rest) = groups.split_first().expect("at least one group");
-        let rest = rest.iter();
-
+        // Allocate the key's formatted segments before the children's. The canonical fill order
+        // (and the hot-reload `LastBuildState` pool) is attributes, key, then children, so the
+        // runtime dynamic-text pool must place the key's segments ahead of the children's to keep
+        // both pools in lockstep.
         if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) = element.key() {
             let key = self.allocate_formatted(key);
             if implicit_key {
                 self.hot_reload_key = Some(key);
             }
         }
+
+        let children = self.visit_sibling_nodes(&element.children, false);
+        // The first group seeds the element's children; any further groups (only when there are
+        // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
+        let groups = group_sibling_views(children);
+        let (first, rest) = groups.split_first().expect("at least one group");
+        let rest = rest.iter();
 
         quote! { #tag #attrs.with_children(#first) #(.child(#rest))* }
     }

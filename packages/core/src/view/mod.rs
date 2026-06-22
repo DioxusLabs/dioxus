@@ -2,7 +2,7 @@
 //!
 //! Most applications use `rsx!`, but the generated HTML constructors can also
 //! be used directly. A builder can collect attributes and children, then
-//! [`ViewExt::into_vnode`] converts it into a [`VNode`].
+//! [`ViewExt::into_vnode`] converts it into a VNode.
 
 mod attribute;
 mod child;

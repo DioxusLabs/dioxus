@@ -2,17 +2,6 @@ use super::{DecodedTemplateOp, TemplateAnchor};
 use crate::TemplateSlotTarget;
 use crate::op::TemplateOp;
 
-/// A static template root node and the materialized root position that owns it.
-#[derive(Clone, Copy)]
-pub struct StaticRoot {
-    /// Index among all materialized root positions, including root-level dynamic anchors.
-    pub root_position: usize,
-    /// Index among static root nodes only.
-    pub static_root_index: usize,
-    /// Flat template op index for the static root node.
-    pub op: usize,
-}
-
 /// A static layout of a UI tree.
 ///
 /// Templates describe the stable parts of a view while runtime values provide
@@ -54,6 +43,189 @@ pub struct Template {
     ///
     /// For any realistic application, collision probability is negligible.
     hash: u64,
+}
+
+/// A static element or text node inside a [`Template`].
+#[derive(Clone, Copy)]
+pub enum StaticTemplateNode<'a> {
+    /// A static template element.
+    Element(StaticTemplateElement<'a>),
+    /// A static template text node.
+    Text(StaticTemplateText<'a>),
+}
+
+impl<'a> StaticTemplateNode<'a> {
+    /// Return the flat template op that starts this node.
+    pub fn op(self) -> usize {
+        match self {
+            Self::Element(element) => element.op(),
+            Self::Text(text) => text.op(),
+        }
+    }
+
+    /// Return this node as an element, if it is one.
+    pub fn as_element(self) -> Option<StaticTemplateElement<'a>> {
+        match self {
+            Self::Element(element) => Some(element),
+            Self::Text(_) => None,
+        }
+    }
+
+    /// Return this node as text, if it is one.
+    pub fn as_text(self) -> Option<StaticTemplateText<'a>> {
+        match self {
+            Self::Element(_) => None,
+            Self::Text(text) => Some(text),
+        }
+    }
+}
+
+/// A static element inside a [`Template`].
+#[derive(Clone, Copy)]
+pub struct StaticTemplateElement<'a> {
+    template: &'a Template,
+    op: usize,
+}
+
+impl<'a> StaticTemplateElement<'a> {
+    /// Return the flat template op that starts this element.
+    pub fn op(self) -> usize {
+        self.op
+    }
+
+    /// Return the element tag.
+    pub fn tag(self) -> &'static str {
+        self.template
+            .element_meta_at_op(self.op)
+            .expect("static element")
+            .0
+    }
+
+    /// Return the element namespace.
+    pub fn namespace(self) -> Option<&'static str> {
+        self.template
+            .element_meta_at_op(self.op)
+            .expect("static element")
+            .1
+    }
+
+    /// Iterate static attributes on this element.
+    pub fn attributes(self) -> StaticTemplateAttributeIter<'a> {
+        let (cursor, end, _) = self
+            .template
+            .element_attr_child_ops(self.op)
+            .expect("static element");
+        StaticTemplateAttributeIter {
+            template: self.template,
+            cursor,
+            end,
+        }
+    }
+
+    /// Iterate static child nodes of this element.
+    pub fn children(self) -> StaticTemplateNodeIter<'a> {
+        let (_, cursor, end) = self
+            .template
+            .element_attr_child_ops(self.op)
+            .expect("static element");
+        StaticTemplateNodeIter {
+            template: self.template,
+            cursor,
+            end,
+        }
+    }
+
+    /// Find a static attr fallback value for a key in this element.
+    pub fn attribute_value(
+        self,
+        key: (&'static str, Option<&'static str>),
+    ) -> Option<&'static str> {
+        self.attributes()
+            .find(|attr| (attr.name, attr.namespace) == key)
+            .map(|attr| attr.value)
+    }
+}
+
+/// A static text node inside a [`Template`].
+#[derive(Clone, Copy)]
+pub struct StaticTemplateText<'a> {
+    template: &'a Template,
+    op: usize,
+}
+
+impl StaticTemplateText<'_> {
+    /// Return the flat template op that starts this text node.
+    pub fn op(self) -> usize {
+        self.op
+    }
+
+    /// Return the text value.
+    pub fn text(self) -> &'static str {
+        self.template
+            .static_text_at_op(self.op)
+            .expect("static text")
+    }
+}
+
+/// A static attribute on a template element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StaticTemplateAttribute {
+    /// Attribute name.
+    pub name: &'static str,
+    /// Attribute value.
+    pub value: &'static str,
+    /// Attribute namespace.
+    pub namespace: Option<&'static str>,
+}
+
+/// Iterator over static template nodes.
+#[derive(Clone, Copy)]
+pub struct StaticTemplateNodeIter<'a> {
+    template: &'a Template,
+    cursor: usize,
+    end: usize,
+}
+
+impl<'a> Iterator for StaticTemplateNodeIter<'a> {
+    type Item = StaticTemplateNode<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.cursor < self.end {
+            let op = self.cursor;
+            self.cursor = self.template.next_sibling_op(op);
+            if let Some(node) = self.template.static_node(op) {
+                return Some(node);
+            }
+        }
+        None
+    }
+}
+
+/// Iterator over static template attributes.
+#[derive(Clone, Copy)]
+pub struct StaticTemplateAttributeIter<'a> {
+    template: &'a Template,
+    cursor: usize,
+    end: usize,
+}
+
+impl Iterator for StaticTemplateAttributeIter<'_> {
+    type Item = StaticTemplateAttribute;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.cursor < self.end {
+            let op = self.cursor;
+            self.cursor += self.template.attr_op_len(op).unwrap_or(1);
+            if let Some((name, value, namespace)) = self.template.static_attr_at_op(op) {
+                return Some(StaticTemplateAttribute {
+                    name,
+                    value,
+                    namespace,
+                });
+            }
+        }
+        None
+    }
 }
 
 impl std::fmt::Debug for Template {
@@ -148,6 +320,36 @@ impl Template {
         self.anchors
     }
 
+    /// Iterate static root nodes in this template.
+    pub fn static_roots(&self) -> StaticTemplateNodeIter<'_> {
+        StaticTemplateNodeIter {
+            template: self,
+            cursor: 0,
+            end: self.ops.len(),
+        }
+    }
+
+    /// Return a static node by flat template op.
+    pub fn static_node(&self, op: usize) -> Option<StaticTemplateNode<'_>> {
+        self.static_element(op)
+            .map(StaticTemplateNode::Element)
+            .or_else(|| self.static_text(op).map(StaticTemplateNode::Text))
+    }
+
+    /// Return a static element by flat template op.
+    pub fn static_element(&self, op: usize) -> Option<StaticTemplateElement<'_>> {
+        self.element_meta_at_op(op)
+            .is_some()
+            .then_some(StaticTemplateElement { template: self, op })
+    }
+
+    /// Return a static text node by flat template op.
+    pub fn static_text(&self, op: usize) -> Option<StaticTemplateText<'_>> {
+        self.static_text_at_op(op)
+            .is_some()
+            .then_some(StaticTemplateText { template: self, op })
+    }
+
     /// Get a static string from this template's string pool.
     fn string(&self, id: u16) -> &'static str {
         self.strings[id as usize]
@@ -169,8 +371,7 @@ impl Template {
         }
     }
 
-    /// Return the tag and namespace for an element op.
-    pub fn element_meta_at_op(&self, op: usize) -> Option<(&'static str, Option<&'static str>)> {
+    fn element_meta_at_op(&self, op: usize) -> Option<(&'static str, Option<&'static str>)> {
         let (_, has_namespace) = self.enter_meta(op)?;
         let tag = self.static_string_at_op(op + 1)?;
         let namespace = has_namespace
@@ -179,14 +380,12 @@ impl Template {
         Some((tag, namespace))
     }
 
-    /// Return the first child/attribute op inside an element.
-    pub fn element_children_start(&self, op: usize) -> Option<usize> {
+    fn element_children_start(&self, op: usize) -> Option<usize> {
         let (_, has_namespace) = self.enter_meta(op)?;
         Some(op + if has_namespace { 3 } else { 2 })
     }
 
-    /// Return the name, value, and namespace for a static attr op.
-    pub fn static_attr_at_op(
+    fn static_attr_at_op(
         &self,
         op: usize,
     ) -> Option<(&'static str, &'static str, Option<&'static str>)> {
@@ -202,15 +401,13 @@ impl Template {
         Some((name, value, namespace))
     }
 
-    /// Return the text for a static `Text, Static` node marker.
-    pub fn static_text_at_op(&self, op: usize) -> Option<&'static str> {
+    fn static_text_at_op(&self, op: usize) -> Option<&'static str> {
         (self.ops.get(op).map(|op| op.decode()) == Some(DecodedTemplateOp::Text))
             .then(|| self.static_string_at_op(op + 1))
             .flatten()
     }
 
-    /// Return the number of ops used by a static attr at `op`.
-    pub fn attr_op_len(&self, op: usize) -> Option<usize> {
+    fn attr_op_len(&self, op: usize) -> Option<usize> {
         match self.ops.get(op).map(|op| op.decode()) {
             Some(DecodedTemplateOp::Attr { namespace: true }) => Some(4),
             Some(DecodedTemplateOp::Attr { .. }) => Some(3),
@@ -218,8 +415,7 @@ impl Template {
         }
     }
 
-    /// Return the op immediately after an element subtree.
-    pub fn element_end(&self, op: usize) -> Option<usize> {
+    fn element_end(&self, op: usize) -> Option<usize> {
         let (skip, _) = self.enter_meta(op)?;
         Some(op + skip)
     }
@@ -236,59 +432,6 @@ impl Template {
             }
         }
         Some((attr_start, cursor, end))
-    }
-
-    pub fn first_child_node_op(&self, element_op: usize) -> Option<usize> {
-        Some(self.element_attr_child_ops(element_op)?.1)
-    }
-
-    /// Find a static attr fallback value for a key in an element.
-    pub fn static_attr_value_for_key(
-        &self,
-        element_op: usize,
-        key: (&'static str, Option<&'static str>),
-    ) -> Option<&'static str> {
-        let (mut cursor, end, _) = self.element_attr_child_ops(element_op)?;
-        let mut found = None;
-        while cursor < end {
-            if let Some((name, value, namespace)) = self.static_attr_at_op(cursor) {
-                if (name, namespace) == key {
-                    found = Some(value);
-                }
-                cursor += self.attr_op_len(cursor)?;
-            } else {
-                break;
-            }
-        }
-        found
-    }
-
-    /// Iterate static template root nodes with their materialized root positions.
-    pub fn static_root_nodes(&self) -> impl Iterator<Item = StaticRoot> + '_ {
-        let mut op = 0usize;
-        let mut static_root_index = 0usize;
-        std::iter::from_fn(move || {
-            while op < self.ops.len() && !self.is_static_node_op(op) {
-                op = self.next_sibling_op(op);
-            }
-
-            if op >= self.ops.len() {
-                return None;
-            }
-
-            let current_op = op;
-            op = self.next_sibling_op(op);
-            let current_static_root_index = static_root_index;
-            static_root_index += 1;
-
-            Some(StaticRoot {
-                root_position: self
-                    .root_position_for_static_root(current_static_root_index)
-                    .expect("static root position"),
-                static_root_index: current_static_root_index,
-                op: current_op,
-            })
-        })
     }
 
     /// Return the number of materialized root positions.
@@ -371,53 +514,13 @@ impl Template {
             .count()
     }
 
-    /// Return the flat op index immediately after the static node or op at `op`.
-    pub fn next_sibling_op(&self, op: usize) -> usize {
+    fn next_sibling_op(&self, op: usize) -> usize {
         Self::next_sibling_op_in(self.ops, op)
     }
 
     /// Return true if an op starts an element or static text node.
     fn is_static_node_op(&self, op: usize) -> bool {
         Self::is_static_node_op_in(self.ops, op)
-    }
-
-    /// Iterate static child node ops of an element.
-    pub fn static_children(&self, element_op: usize) -> impl Iterator<Item = usize> + '_ {
-        let (mut cursor, end) = match self.element_attr_child_ops(element_op) {
-            Some((_, child_start, element_end)) => (child_start, element_end),
-            None => (0, 0),
-        };
-        std::iter::from_fn(move || {
-            while cursor < end {
-                let op = cursor;
-                cursor = self.next_sibling_op(cursor);
-                if self.is_static_node_op(op) {
-                    return Some(op);
-                }
-            }
-            None
-        })
-    }
-
-    /// Iterate static attributes of an element.
-    pub fn static_attrs(
-        &self,
-        element_op: usize,
-    ) -> impl Iterator<Item = (&'static str, &'static str, Option<&'static str>)> + '_ {
-        let (mut cursor, child_start) = match self.element_attr_child_ops(element_op) {
-            Some((attr_start, child_start, _)) => (attr_start, child_start),
-            None => (0, 0),
-        };
-        std::iter::from_fn(move || {
-            while cursor < child_start {
-                let op = cursor;
-                cursor += self.attr_op_len(cursor).unwrap_or(1);
-                if let Some(attr) = self.static_attr_at_op(op) {
-                    return Some(attr);
-                }
-            }
-            None
-        })
     }
 
     const fn is_static_node_op_in(ops: &[TemplateOp], op: usize) -> bool {

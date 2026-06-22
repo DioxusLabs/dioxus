@@ -106,7 +106,10 @@ mod serialization;
 mod storage;
 
 pub use anchor::TemplateAnchor;
-pub use data::{StaticRoot, Template};
+pub use data::{
+    StaticTemplateAttribute, StaticTemplateAttributeIter, StaticTemplateElement,
+    StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText, Template,
+};
 pub use op::DecodedTemplateOp;
 pub(crate) use path::TemplateSlotPath;
 pub use path::{TemplatePath, TemplateSlotTarget};

@@ -138,7 +138,7 @@ pub use diff::template::{
     EffectiveAttributeValue, ElementAttributes, StaticElement, StaticText, VNodeChild,
     VNodeChildren,
 };
-pub use dioxus_core_template::{StaticRoot, TemplatePath, TemplateSlotTarget};
+pub use dioxus_core_template::{TemplatePath, TemplateSlotTarget};
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
 ///

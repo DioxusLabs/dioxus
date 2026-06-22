@@ -1,6 +1,6 @@
 use crate::{
     DynamicNode::*,
-    MountedVNode, Template, VNode, VNodeChild, VirtualDom, WriteMutations,
+    MountedVNode, VNode, VNodeChild, VirtualDom, WriteMutations,
     arena::{ElementId, MountedElementId},
     diff::{
         CreatedVNode,
@@ -17,7 +17,7 @@ use crate::{
     nodes::DynamicNode,
     scopes::ScopeId,
 };
-use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
+use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath, TemplateSlotTarget};
 
 impl MountedVNode<'_> {
     /// Diff this mounted vnode against `new`.
@@ -944,7 +944,10 @@ impl VNode {
             Some(id) => id,
             None => {
                 let id = dom.allocate_template_root(target_id, self.template, root_idx);
-                create_static_prototype(&self.template, root_op, to);
+                create_static_prototype(
+                    self.template.static_node(root_op).expect("bad static root"),
+                    to,
+                );
                 to.pop_id(id.element_id());
                 id
             }
@@ -1012,37 +1015,31 @@ fn anchor_static_target(anchor: &TemplateAnchor) -> Option<TemplatePath> {
     }
 }
 
-fn create_static_prototype(template: &Template, op: usize, to: &mut dyn WriteMutations) -> usize {
-    if let Some((tag, namespace)) = template.element_meta_at_op(op) {
-        to.create_element(tag, namespace);
+fn create_static_prototype(node: StaticTemplateNode<'_>, to: &mut dyn WriteMutations) -> usize {
+    match node {
+        StaticTemplateNode::Element(element) => {
+            to.create_element(element.tag(), element.namespace());
 
-        let mut attr = template.element_children_start(op).expect("bad element");
-        let first_child = template.first_child_node_op(op).expect("bad element");
-        while attr < first_child {
-            let (name, value, namespace) =
-                template.static_attr_at_op(attr).expect("bad static attr");
-            let value = crate::AttributeValue::Text(value.to_string());
-            to.set_attribute(name, namespace, &value);
-            attr += template.attr_op_len(attr).expect("bad static attr");
-        }
+            for attr in element.attributes() {
+                let value = crate::AttributeValue::Text(attr.value.to_string());
+                to.set_attribute(attr.name, attr.namespace, &value);
+            }
 
-        let mut child = first_child;
-        let end = template.element_end(op).expect("bad element");
-        let mut children = 0;
-        while child < end {
-            children += create_static_prototype(template, child, to);
-            child = template.next_sibling_op(child);
-        }
+            let mut children = 0;
+            for child in element.children() {
+                children += create_static_prototype(child, to);
+            }
 
-        if children > 0 {
-            to.append_children(children);
+            if children > 0 {
+                to.append_children(children);
+            }
+            1
         }
-        return 1;
+        StaticTemplateNode::Text(text) => {
+            to.create_text(text.text());
+            1
+        }
     }
-
-    let text = template.static_text_at_op(op).expect("bad static root");
-    to.create_text(text);
-    1
 }
 
 fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {

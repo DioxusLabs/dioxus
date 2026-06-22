@@ -93,19 +93,6 @@ pub fn dynamic_attributes_builder(attrs: Box<[Attribute]>) -> DynamicAttributesB
     DynamicAttributesBuilder { attrs }
 }
 
-/// Create a dynamic attribute slot.
-#[inline]
-pub fn dynamic_attribute<T>(
-    name: &'static str,
-    value: impl IntoAttributeValue<T>,
-    namespace: Option<&'static str>,
-    volatile: bool,
-) -> DynamicAttributesBuilder {
-    DynamicAttributesBuilder {
-        attrs: Box::new([Attribute::new(name, value, namespace, volatile)]),
-    }
-}
-
 impl ViewTemplate for DynamicAttributesBuilder {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::DynamicAttr;
 }

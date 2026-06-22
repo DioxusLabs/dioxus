@@ -869,15 +869,19 @@ mod tests {
             )],
         });
 
-        // Static attributes are emitted into the op tape sorted by name; dynamic attributes leave
-        // the tape entirely and live in the anchor table (2 dynamic attribute values here).
+        // Static attributes are emitted sorted by name; dynamic attributes leave the static
+        // element view entirely and live in the anchor table (2 dynamic attribute values here).
+        let attrs = template
+            .static_roots()
+            .next()
+            .and_then(|node| node.as_element())
+            .expect("root element")
+            .attributes()
+            .map(|attr| (attr.name, attr.value, attr.namespace))
+            .collect::<Vec<_>>();
         assert_eq!(
-            template.static_attr_at_op(2),
-            Some(("attr1", "static4", None))
-        );
-        assert_eq!(
-            template.static_attr_at_op(5),
-            Some(("attr2", "static3", None))
+            attrs,
+            vec![("attr1", "static4", None), ("attr2", "static3", None)]
         );
         assert_eq!(dynamic_value_count(template), 2);
     }

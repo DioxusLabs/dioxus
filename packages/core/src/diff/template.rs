@@ -1,5 +1,8 @@
 use crate::{AttributeValue, Template, VNode};
-use dioxus_core_template::{TemplateAnchor, TemplatePath, TemplateSlotTarget};
+use dioxus_core_template::{
+    StaticTemplateElement, StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText,
+    TemplateAnchor, TemplatePath, TemplateSlotTarget,
+};
 
 /// A rendered child of a [`VNode`] or a static template element.
 #[derive(Clone, Copy)]
@@ -34,22 +37,21 @@ impl<'a> StaticElement<'a> {
         self.op
     }
 
-    /// The element tag.
-    pub fn tag(self) -> &'static str {
+    fn template_element(self) -> StaticTemplateElement<'a> {
         self.vnode
             .template
-            .element_meta_at_op(self.op)
+            .static_element(self.op)
             .expect("static element")
-            .0
+    }
+
+    /// The element tag.
+    pub fn tag(self) -> &'static str {
+        self.template_element().tag()
     }
 
     /// The element namespace.
     pub fn namespace(self) -> Option<&'static str> {
-        self.vnode
-            .template
-            .element_meta_at_op(self.op)
-            .expect("static element")
-            .1
+        self.template_element().namespace()
     }
 
     /// The root position when this element is a vnode root.
@@ -66,7 +68,9 @@ impl<'a> StaticElement<'a> {
     pub fn static_attributes(
         self,
     ) -> impl Iterator<Item = (&'static str, &'static str, Option<&'static str>)> + 'a {
-        self.vnode.template.static_attrs(self.op)
+        self.template_element()
+            .attributes()
+            .map(|attr| (attr.name, attr.value, attr.namespace))
     }
 
     /// Iterate rendered children for this element.
@@ -109,12 +113,16 @@ impl<'a> StaticText<'a> {
         self.op
     }
 
-    /// The static text value.
-    pub fn text(self) -> &'static str {
+    fn template_text(self) -> StaticTemplateText<'a> {
         self.vnode
             .template
-            .static_text_at_op(self.op)
+            .static_text(self.op)
             .expect("static text")
+    }
+
+    /// The static text value.
+    pub fn text(self) -> &'static str {
+        self.template_text().text()
     }
 
     /// The root position when this text node is a vnode root.
@@ -213,14 +221,12 @@ impl PositionedChild<'_> {
 enum StaticChildCursor<'a> {
     Roots {
         vnode: &'a VNode,
-        op: usize,
-        op_count: usize,
+        nodes: StaticTemplateNodeIter<'a>,
         static_root_index: usize,
     },
     Element {
-        element: StaticElement<'a>,
-        cursor: usize,
-        end: usize,
+        vnode: &'a VNode,
+        nodes: StaticTemplateNodeIter<'a>,
         slot: usize,
     },
 }
@@ -229,20 +235,16 @@ impl<'a> StaticChildCursor<'a> {
     fn roots(vnode: &'a VNode) -> Self {
         Self::Roots {
             vnode,
-            op: 0,
-            op_count: vnode.template.decoded_ops().len(),
+            nodes: vnode.template.static_roots(),
             static_root_index: 0,
         }
     }
 
     fn element(element: StaticElement<'a>) -> Self {
         let vnode = element.vnode;
-        let cursor = vnode.template.first_child_node_op(element.op).unwrap_or(0);
-        let end = vnode.template.element_end(element.op).unwrap_or(0);
         Self::Element {
-            element,
-            cursor,
-            end,
+            vnode,
+            nodes: element.template_element().children(),
             slot: 0,
         }
     }
@@ -251,20 +253,10 @@ impl<'a> StaticChildCursor<'a> {
         match self {
             Self::Roots {
                 vnode,
-                op,
-                op_count,
+                nodes,
                 static_root_index,
             } => {
-                while *op < *op_count && !is_static_child(vnode, *op) {
-                    *op = vnode.template.next_sibling_op(*op);
-                }
-
-                if *op >= *op_count {
-                    return None;
-                }
-
-                let current_op = *op;
-                *op = vnode.template.next_sibling_op(current_op);
+                let node = nodes.next()?;
                 let current_static_root_index = *static_root_index;
                 *static_root_index += 1;
                 let root_position = vnode
@@ -275,30 +267,18 @@ impl<'a> StaticChildCursor<'a> {
                 Some(PositionedChild {
                     position: root_position,
                     order: current_static_root_index,
-                    child: static_child(vnode, current_op, Some(root_position)),
+                    child: static_child(vnode, node, Some(root_position)),
                 })
             }
-            Self::Element {
-                element,
-                cursor,
-                end,
-                slot,
-            } => {
-                let vnode = element.vnode;
-                while *cursor < *end {
-                    let current_op = *cursor;
-                    *cursor = vnode.template.next_sibling_op(current_op);
-                    if is_static_child(vnode, current_op) {
-                        let current_slot = *slot;
-                        *slot += 1;
-                        return Some(PositionedChild {
-                            position: current_slot * 2 + 1,
-                            order: current_slot,
-                            child: static_child(vnode, current_op, None),
-                        });
-                    }
-                }
-                None
+            Self::Element { vnode, nodes, slot } => {
+                let node = nodes.next()?;
+                let current_slot = *slot;
+                *slot += 1;
+                Some(PositionedChild {
+                    position: current_slot * 2 + 1,
+                    order: current_slot,
+                    child: static_child(vnode, node, None),
+                })
             }
         }
     }
@@ -455,13 +435,13 @@ pub struct ElementAttributes<'a> {
 impl<'a> ElementAttributes<'a> {
     fn new(element: StaticElement<'a>) -> Self {
         let mut attributes = Vec::new();
-        for (name, value, namespace) in element.vnode.template.static_attrs(element.op) {
+        for attr in element.template_element().attributes() {
             upsert_effective_attribute(
                 &mut attributes,
                 EffectiveAttribute {
-                    name,
-                    namespace,
-                    value: EffectiveAttributeValue::Static(value),
+                    name: attr.name,
+                    namespace: attr.namespace,
+                    value: EffectiveAttributeValue::Static(attr.value),
                     volatile: false,
                     source: EffectiveAttributeSource::Static,
                 },
@@ -769,23 +749,25 @@ impl<'a> DynamicAttrGroup<'a> {
             .anchor
             .parent_element_op_index()
             .expect("bad attr anchor");
-        self.template.static_attr_value_for_key(element_op, key)
+        self.template
+            .static_element(element_op)?
+            .attribute_value(key)
     }
 }
 
-fn static_child<'a>(vnode: &'a VNode, op: usize, root_position: Option<usize>) -> VNodeChild<'a> {
-    if vnode.template.element_meta_at_op(op).is_some() {
-        VNodeChild::Element(StaticElement::new(vnode, op, root_position))
-    } else if vnode.template.static_text_at_op(op).is_some() {
-        VNodeChild::Text(StaticText::new(vnode, op, root_position))
-    } else {
-        unreachable!("static child must start at an element or static text op")
+fn static_child<'a>(
+    vnode: &'a VNode,
+    node: StaticTemplateNode<'_>,
+    root_position: Option<usize>,
+) -> VNodeChild<'a> {
+    match node {
+        StaticTemplateNode::Element(element) => {
+            VNodeChild::Element(StaticElement::new(vnode, element.op(), root_position))
+        }
+        StaticTemplateNode::Text(text) => {
+            VNodeChild::Text(StaticText::new(vnode, text.op(), root_position))
+        }
     }
-}
-
-fn is_static_child(vnode: &VNode, op: usize) -> bool {
-    vnode.template.element_meta_at_op(op).is_some()
-        || vnode.template.static_text_at_op(op).is_some()
 }
 
 fn child_position(target: TemplateSlotTarget) -> usize {

@@ -16,29 +16,24 @@ fn attributes_pass_properly() {
 
     let o = h.unwrap();
 
-    let template = &o.template;
-
     // The three numeric attributes (cx, cy, r) are dynamic; there are no dynamic nodes.
     assert_eq!(o.dynamic_values().len(), 3);
 
     let circle = o
         .children()
         .find_map(|child| match child {
-            VNodeChild::Element(element) => Some(element.op()),
+            VNodeChild::Element(element) => Some(element),
             _ => None,
         })
         .expect("expected one static root element");
-    let (tag, namespace) = template
-        .element_meta_at_op(circle)
-        .expect("expected an element op");
-    assert_eq!(tag, "circle");
-    assert_eq!(namespace, Some("http://www.w3.org/2000/svg"));
+    assert_eq!(circle.tag(), "circle");
+    assert_eq!(circle.namespace(), Some("http://www.w3.org/2000/svg"));
 
     // Five attributes total: cx, cy, r (dynamic) and stroke, fill (static).
-    let static_attr_count = template.static_attrs(circle).count();
+    let static_attr_count = circle.static_attributes().count();
     let dynamic_attr_count = o
         .dynamic_attributes()
-        .filter(|group| group.parent_element_op_index() == circle)
+        .filter(|group| group.parent_element_op_index() == circle.op())
         .map(|group| group.ids().count())
         .sum::<usize>();
     assert_eq!(static_attr_count + dynamic_attr_count, 5);

@@ -1307,3 +1307,18 @@ fn valid_spread() {
 
     assert!(valid);
 }
+
+#[test]
+fn zzz_key_text_order_probe() {
+    let old = quote! {
+        div {
+            key: "{key_val}",
+            "child-{text_val}"
+        }
+    };
+    let new = old.clone();
+    let templates = hot_reload_from_tokens(old, new).expect("hot reload");
+    let t = templates.get(&0).unwrap();
+    eprintln!("KEY = {:?}", t.key);
+    eprintln!("NODES = {:?}", t.dynamic_nodes);
+}
