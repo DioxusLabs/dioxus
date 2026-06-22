@@ -63,7 +63,6 @@ impl WebsysDom {
             #[cfg(debug_assertions)]
             debug_locations,
         } = message;
-
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
         let resolved_suspense_id = path_to_resolved_suspense_id(&suspense_path);
@@ -77,7 +76,6 @@ impl WebsysDom {
             .suspense_hydration_ids
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
-
         // Snapshot the new nodes. `resolve_suspense` pushes them after it
         // pushes the placeholder target so replacement stays stack-only.
         let children = children_array(resolved_suspense_element.unchecked_ref());
@@ -156,7 +154,7 @@ impl WebsysDom {
             }
             self.collect_suspense_only(root_scope, dom);
         } else {
-            self.start_hydration_at_scope(root_scope, dom, children, false)?;
+            self.start_hydration_at_scope(root_scope, dom, children, false, true)?;
         }
 
         Ok(())
@@ -168,6 +166,7 @@ impl WebsysDom {
         dom: &VirtualDom,
         under: js_sys::Array,
         filter_scripts: bool,
+        collect_suspense: bool,
     ) -> Result<(), RehydrationError> {
         let mut cursor = HydrationCursor::new(
             self.interpreter.base(),
@@ -189,13 +188,13 @@ impl WebsysDom {
             );
             cursor.enter_root(0);
             cursor.begin_children();
-            self.emit_scope(scope, dom, &mut cursor)?;
+            self.emit_scope(scope, dom, &mut cursor, collect_suspense)?;
             cursor.end_children();
         } else {
             // Park the cursor on the first root; subsequent roots are stepped via
             // `advance(1)` as the VDOM walker descends siblings.
             cursor.enter_root(0);
-            self.emit_scope(scope, dom, &mut cursor)?;
+            self.emit_scope(scope, dom, &mut cursor, collect_suspense)?;
         }
 
         Ok(())
@@ -232,9 +231,10 @@ impl WebsysDom {
         // children. The JS cursor filters dx-injected hydration scripts before
         // exposing the root list.
         let base_scope = vdom.base_scope().id();
+        self.collect_initial_suspense(vdom.base_scope(), vdom);
         SuspenseBoundaryProps::hydrate_suspended_primary_branches(base_scope, vdom);
         let roots = children_array(&self.root);
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true)?;
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true, false)?;
 
         dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
         closure.forget();

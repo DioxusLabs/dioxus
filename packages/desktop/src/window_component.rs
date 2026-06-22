@@ -1,5 +1,6 @@
 use crate::{
-    Config, DesktopContext, document::DesktopDocument, event_handlers::WindowCloseHandler, window,
+    Config, DesktopContext, app::SharedContext, desktop_context::PendingWindowCancellation,
+    document::DesktopDocument, event_handlers::WindowCloseHandler, window,
 };
 use dioxus_core::view::ViewExt;
 use dioxus_core::{
@@ -187,6 +188,8 @@ struct WindowProviders {
 #[derive(Clone)]
 struct WindowState {
     target_id: RenderTargetId,
+    shared: Rc<SharedContext>,
+    pending_cancellation: PendingWindowCancellation,
     providers: Rc<RefCell<Option<WindowProviders>>>,
     closed: Rc<Cell<bool>>,
     onclose: Rc<RefCell<Option<EventHandler<()>>>>,
@@ -194,6 +197,20 @@ struct WindowState {
 }
 
 impl WindowState {
+    fn cancel_pending_webview(&self) -> bool {
+        self.pending_cancellation.cancel();
+
+        let mut pending_webviews = self.shared.pending_webviews.borrow_mut();
+        let Some(index) = pending_webviews.iter().position(|pending| {
+            pending.matches_pending_window(self.target_id, &self.pending_cancellation)
+        }) else {
+            return false;
+        };
+
+        pending_webviews.remove(index);
+        true
+    }
+
     fn remove_close_handler(&self) {
         let Some(handler) = self.close_handler.borrow_mut().take() else {
             return;
@@ -218,12 +235,19 @@ impl WindowState {
     /// anyway, so the reclaim is simply skipped.
     fn close_window(&self) {
         self.remove_close_handler();
-        if let Some(providers) = self.providers.borrow_mut().take() {
+        let pending_removed = self.cancel_pending_webview();
+        let providers = self.providers.borrow_mut().take();
+        let can_reclaim_target = pending_removed || providers.is_some() || self.closed.get();
+
+        if let Some(providers) = providers {
             if !self.closed.get() {
                 providers.context.close();
             }
         }
-        if let Some(runtime) = Runtime::try_current() {
+        if can_reclaim_target {
+            let Some(runtime) = Runtime::try_current() else {
+                return;
+            };
             runtime.remove_render_target(self.target_id);
         }
     }
@@ -268,15 +292,29 @@ pub fn Window(props: WindowProps) -> Element {
             let closed = Rc::new(Cell::new(false));
             let onclose = Rc::new(RefCell::new(None::<EventHandler<()>>));
             let close_handler = Rc::new(RefCell::new(None));
-            let pending = window().new_window(config.borrow_mut().take().unwrap_or_default());
+            let desktop_context = window();
+            let shared = desktop_context.shared.clone();
+            let pending =
+                desktop_context.new_window(config.borrow_mut().take().unwrap_or_default());
             let target_id = pending.target_id();
+            let pending_cancellation = pending.cancellation();
             let providers_for_task = providers.clone();
             let closed_for_task = closed.clone();
             let onclose_for_task = onclose.clone();
             let close_handler_for_task = close_handler.clone();
+            let pending_cancellation_for_task = pending_cancellation.clone();
 
             spawn(async move {
-                let resolved_context = pending.await;
+                let Ok(resolved_context) = pending.try_resolve().await else {
+                    return;
+                };
+                if pending_cancellation_for_task.is_canceled() {
+                    resolved_context.close();
+                    if let Some(runtime) = Runtime::try_current() {
+                        runtime.remove_render_target(target_id);
+                    }
+                    return;
+                }
                 let window_id = resolved_context.window.id();
                 let closed_for_close_handler = closed_for_task.clone();
                 let schedule_update_for_close_handler = schedule_update.clone();
@@ -305,6 +343,8 @@ pub fn Window(props: WindowProps) -> Element {
 
             WindowState {
                 target_id,
+                shared,
+                pending_cancellation,
                 providers,
                 closed,
                 onclose,

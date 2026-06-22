@@ -47,6 +47,29 @@ pub type DesktopContext = Rc<DesktopService>;
 /// This was due to the Rc that had still references because of multiple copies when creating a webview.
 pub type WeakDesktopContext = Weak<DesktopService>;
 
+/// Shared cancellation state for a queued desktop window.
+#[derive(Clone, Default)]
+pub(crate) struct PendingWindowCancellation {
+    canceled: Rc<Cell<bool>>,
+}
+
+impl PendingWindowCancellation {
+    /// Mark the queued window as canceled.
+    pub(crate) fn cancel(&self) {
+        self.canceled.set(true);
+    }
+
+    /// Returns true if the queued window was canceled before creation.
+    pub(crate) fn is_canceled(&self) -> bool {
+        self.canceled.get()
+    }
+
+    /// Returns true if both handles point at the same queued window.
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.canceled, &other.canceled)
+    }
+}
+
 /// An imperative interface to the current window.
 ///
 /// To get a handle to the current window, use the [`window`] function.
@@ -365,12 +388,18 @@ fn is_main_thread() -> bool {
 pub struct PendingDesktopWindow {
     pub(crate) target_id: RenderTargetId,
     pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
+    pub(crate) cancellation: PendingWindowCancellation,
 }
 
 impl PendingDesktopWindow {
     /// The render target associated with the pending window.
     pub fn target_id(&self) -> RenderTargetId {
         self.target_id
+    }
+
+    /// Get the cancellation handle for the queued window.
+    pub(crate) fn cancellation(&self) -> PendingWindowCancellation {
+        self.cancellation.clone()
     }
 
     /// Resolve the pending context into a [`DesktopContext`].

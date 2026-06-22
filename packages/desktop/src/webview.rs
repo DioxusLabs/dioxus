@@ -1,5 +1,5 @@
-use crate::PendingDesktopWindow;
 use crate::WeakDesktopContext;
+use crate::desktop_context::{PendingDesktopWindow, PendingWindowCancellation};
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
@@ -575,21 +575,33 @@ pub(crate) struct PendingWebview {
     target_id: RenderTargetId,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
+    cancellation: PendingWindowCancellation,
 }
 
 impl PendingWebview {
     pub(crate) fn new(target_id: RenderTargetId, cfg: Config) -> (Self, PendingDesktopWindow) {
         let (sender, receiver) = futures_channel::oneshot::channel();
+        let cancellation = PendingWindowCancellation::default();
         let webview = Self {
             target_id,
             cfg,
             sender,
+            cancellation: cancellation.clone(),
         };
         let pending = PendingDesktopWindow {
             target_id,
             receiver,
+            cancellation,
         };
         (webview, pending)
+    }
+
+    pub(crate) fn matches_pending_window(
+        &self,
+        target_id: RenderTargetId,
+        cancellation: &PendingWindowCancellation,
+    ) -> bool {
+        self.target_id == target_id && self.cancellation.ptr_eq(cancellation)
     }
 
     pub(crate) fn create_window(
@@ -605,5 +617,43 @@ impl PendingWebview {
             target_id: self.target_id,
             webview: window,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::{Element, VNode};
+    use futures_util::FutureExt;
+
+    fn empty_app() -> Element {
+        VNode::empty()
+    }
+
+    #[test]
+    fn canceling_pending_webview_cancels_receiver_before_reusing_target() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_runtime(|| {
+            let target_id = Runtime::current().create_render_target();
+            let (pending_webview, pending_window) = PendingWebview::new(target_id, Config::new());
+            let cancellation = pending_window.cancellation();
+
+            cancellation.cancel();
+            assert!(cancellation.is_canceled());
+            assert!(pending_webview.matches_pending_window(target_id, &cancellation));
+
+            drop(pending_webview);
+
+            assert!(Runtime::current().remove_render_target(target_id));
+            assert_eq!(Runtime::current().create_render_target(), target_id);
+            assert!(
+                pending_window
+                    .try_resolve()
+                    .now_or_never()
+                    .expect("dropped pending webview should cancel immediately")
+                    .is_err()
+            );
+        });
     }
 }

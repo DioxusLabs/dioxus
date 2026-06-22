@@ -212,11 +212,15 @@ impl Scope {
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_location.suspense_context() else {
-            return false;
-        };
+        if let Some(context) = self.suspense_boundary.borrow().as_ref() {
+            if !context.frozen() && (context.is_suspended() || context.has_suspended_tasks()) {
+                return true;
+            }
+        }
 
-        !context.frozen()
+        self.suspense_location
+            .suspense_context()
+            .is_some_and(|context| !context.frozen())
     }
 
     /// Mark this scope as dirty, and schedule a render for it.

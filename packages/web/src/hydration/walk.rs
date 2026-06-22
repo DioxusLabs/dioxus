@@ -31,8 +31,11 @@ impl WebsysDom {
         scope: &'a ScopeState,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
+        collect_suspense: bool,
     ) -> Result<(), RehydrationError> {
-        self.collect_suspense_only(scope, dom);
+        if collect_suspense {
+            self.collect_suspense_only(scope, dom);
+        }
 
         let root = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
         let mut state = LevelState::default();

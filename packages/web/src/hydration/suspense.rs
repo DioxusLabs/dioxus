@@ -149,76 +149,53 @@ pub(super) fn first_dynamic_root_element_id(
     from_vnode(scope.try_mounted_root_node()?, dom)
 }
 
-fn scope_has_dom_root(scope: &ScopeState, dom: &VirtualDom) -> bool {
-    fn from_vnode(vnode: MountedVNode<'_>, dom: &VirtualDom) -> bool {
-        for child in vnode.vnode().children() {
-            match child {
-                VNodeChild::Dynamic(group) => {
-                    for value_idx in group.ids() {
-                        if from_dynamic(vnode, value_idx, dom) {
-                            return true;
-                        }
-                    }
-                }
-                VNodeChild::Element(_) | VNodeChild::Text(_) => return true,
-            }
-        }
-
-        false
-    }
-
-    fn from_dynamic(vnode: MountedVNode<'_>, value_idx: usize, dom: &VirtualDom) -> bool {
-        let Some(node) = vnode.vnode().dynamic_values()[value_idx].as_node() else {
-            return false;
-        };
-
-        match node {
-            DynamicNode::Text(_) => true,
-            DynamicNode::Component(comp) => comp
-                .mounted_scope(value_idx, vnode, dom)
-                .and_then(|child| child.try_mounted_root_node())
-                .is_some_and(|child| from_vnode(child, dom)),
-            DynamicNode::Fragment(fragment) => {
-                let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
-                if mounted_children.len() != fragment.len() {
-                    return false;
-                }
-
-                mounted_children
-                    .into_iter()
-                    .any(|child| from_vnode(child, dom))
-            }
-        }
-    }
-
-    scope
-        .try_mounted_root_node()
-        .is_some_and(|root| from_vnode(root, dom))
-}
-
 impl WebsysDom {
+    /// Record suspense boundaries from the tree currently rendered in the DOM.
+    /// During initial hydration this matches the server's first streaming pass:
+    /// suspended boundaries reserve ids for their fallback output, but retained
+    /// primary branches are not discovered until that boundary resolves.
+    pub(super) fn collect_initial_suspense(&mut self, scope: &ScopeState, dom: &VirtualDom) {
+        self.collect_suspense(scope, dom, false);
+    }
+
     /// Walk a scope's rendered VDOM, recording any nested suspense boundaries
     /// in `suspense_hydration_ids`. Used by the empty-chunk hydration path
     /// where no real DOM exists to drive the full walker, but nested
     /// streaming-suspense scopes still need their discovery-order ids
     /// registered so subsequent chunks can resolve them.
     pub(super) fn collect_suspense_only(&mut self, scope: &ScopeState, dom: &VirtualDom) {
+        self.collect_suspense(scope, dom, true);
+    }
+
+    fn collect_suspense(
+        &mut self,
+        scope: &ScopeState,
+        dom: &VirtualDom,
+        include_retained_branches: bool,
+    ) {
         self.track_suspense_for_scope(scope, dom);
 
-        if let Some(suspense) =
-            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
-        {
-            let _ = suspense.with_suspended_mounted_root(|root| {
-                self.collect_suspense_in_vnode(root, dom);
-            });
+        if include_retained_branches {
+            if let Some(suspense) =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
+            {
+                let _ = suspense.with_suspended_mounted_root(|root| {
+                    self.collect_suspense_in_vnode(root, dom, include_retained_branches);
+                });
+            }
         }
 
         if let Some(root) = scope.try_mounted_root_node() {
-            self.collect_suspense_in_vnode(root, dom);
+            self.collect_suspense_in_vnode(root, dom, include_retained_branches);
         }
     }
 
-    fn collect_suspense_in_vnode(&mut self, vnode: MountedVNode<'_>, dom: &VirtualDom) {
+    fn collect_suspense_in_vnode(
+        &mut self,
+        vnode: MountedVNode<'_>,
+        dom: &VirtualDom,
+        include_retained_branches: bool,
+    ) {
         for group in vnode.vnode().dynamic_nodes() {
             for idx in group.ids() {
                 let Some(node) = vnode.vnode().dynamic_values()[idx].as_node() else {
@@ -227,7 +204,7 @@ impl WebsysDom {
                 match node {
                     DynamicNode::Component(comp) => {
                         if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
-                            self.collect_suspense_only(child_scope, dom);
+                            self.collect_suspense(child_scope, dom, include_retained_branches);
                         }
                     }
                     DynamicNode::Fragment(fragment) => {
@@ -237,7 +214,7 @@ impl WebsysDom {
                         }
 
                         for sub in mounted_children {
-                            self.collect_suspense_in_vnode(sub, dom);
+                            self.collect_suspense_in_vnode(sub, dom, include_retained_branches);
                         }
                     }
                     DynamicNode::Text(_) => {}
@@ -251,13 +228,6 @@ impl WebsysDom {
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
         {
             if !suspense.is_suspended() || !suspense.has_suspended_tasks() {
-                return;
-            }
-            // Streaming hydration can only target boundaries that rendered a
-            // concrete placeholder node. A zero-DOM fallback, like the
-            // implicit root suspense boundary, can be locally suspended without
-            // corresponding to a streamed server placeholder.
-            if !scope_has_dom_root(scope, dom) {
                 return;
             }
             self.suspense_hydration_ids
