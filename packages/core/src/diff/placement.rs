@@ -31,8 +31,8 @@ pub(super) enum ElementEdge {
 impl ElementEdge {
     fn site(self, id: ElementId) -> InsertionSite {
         match self {
-            ElementEdge::First => InsertionSite::Before(id),
-            ElementEdge::Last => InsertionSite::After(id),
+            ElementEdge::First => InsertionSite::before(id),
+            ElementEdge::Last => InsertionSite::after(id),
         }
     }
 
@@ -48,27 +48,58 @@ impl ElementEdge {
     }
 }
 
-/// A renderer-level position where `m` DOM nodes, already on the renderer stack,
-/// should be spliced in.
-/// A renderer-level insertion site for nodes already on the renderer stack.
-#[derive(Clone)]
-pub(super) enum InsertionSite {
-    Before(ElementId),
-    After(ElementId),
-    AppendTo(ElementId),
+/// Which side of an [`InsertionSite`]'s anchor `m` already-stacked DOM nodes are spliced onto.
+#[derive(Clone, Copy)]
+pub(super) enum InsertionEdge {
+    /// Insert immediately before the sibling anchor.
+    Before,
+    /// Insert immediately after the sibling anchor.
+    After,
+    /// Append as the last children of the parent anchor.
+    Append,
+}
+
+/// A renderer-level insertion site for nodes already on the renderer stack: the anchor element and
+/// which side of it to splice onto. For `Before`/`After` the anchor is a sibling; for `Append` it
+/// is the parent the nodes become the last children of.
+#[derive(Clone, Copy)]
+pub(super) struct InsertionSite {
+    anchor: ElementId,
+    edge: InsertionEdge,
 }
 
 impl InsertionSite {
+    pub(super) fn before(anchor: ElementId) -> Self {
+        Self {
+            anchor,
+            edge: InsertionEdge::Before,
+        }
+    }
+
+    pub(super) fn after(anchor: ElementId) -> Self {
+        Self {
+            anchor,
+            edge: InsertionEdge::After,
+        }
+    }
+
+    pub(super) fn append_to(anchor: ElementId) -> Self {
+        Self {
+            anchor,
+            edge: InsertionEdge::Append,
+        }
+    }
+
     fn create_and_place(
         &self,
         to: &mut dyn WriteMutations,
         runtime: Rc<Runtime>,
         create: impl FnOnce(&mut dyn WriteMutations) -> usize,
     ) -> usize {
-        match self {
-            InsertionSite::Before(id) | InsertionSite::After(id) => {
-                let id = *id;
-                let before = matches!(self, InsertionSite::Before(_));
+        match self.edge {
+            InsertionEdge::Before | InsertionEdge::After => {
+                let id = self.anchor;
+                let before = matches!(self.edge, InsertionEdge::Before);
                 let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
                 let count = create(&mut to);
                 if count > 0 {
@@ -80,7 +111,7 @@ impl InsertionSite {
                 }
                 count
             }
-            InsertionSite::AppendTo(id) => append_children_to(to, *id, runtime, create),
+            InsertionEdge::Append => append_children_to(to, self.anchor, runtime, create),
         }
     }
 }
@@ -118,13 +149,13 @@ pub(super) fn insertion_site_for_slot(
     if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
-        return InsertionSite::Before(id);
+        return InsertionSite::before(id);
     }
 
     if slot.is_root_level() {
         // No adjacent sibling: scan later root positions, then walk up to committed root siblings.
         if let Some(id) = root_content_after_slot(parent_mount, root_idx, dom) {
-            return InsertionSite::Before(id);
+            return InsertionSite::before(id);
         }
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
@@ -142,9 +173,9 @@ pub(super) fn insertion_site_for_mounted_anchor(
         .unchecked_mounted_anchor_node(parent_mount, anchor_index)
         .element_id();
     if append {
-        InsertionSite::AppendTo(anchor_id)
+        InsertionSite::append_to(anchor_id)
     } else {
-        InsertionSite::Before(anchor_id)
+        InsertionSite::before(anchor_id)
     }
 }
 
@@ -189,32 +220,22 @@ pub(crate) fn splice_on_stack_at_vnode_start<M: WriteMutations>(
     to: &mut M,
     push_nodes: impl FnOnce(&mut M) -> usize,
 ) -> usize {
-    match insertion_site_at(ElementEdge::First, vnode, dom, None) {
-        InsertionSite::Before(id) => {
-            to.push_id(id);
-            let count = push_nodes(to);
-            if count > 0 {
-                to.insert_before(count);
-            }
-            count
-        }
-        InsertionSite::After(id) => {
-            to.push_id(id);
-            let count = push_nodes(to);
-            if count > 0 {
-                to.insert_after(count);
-            }
-            count
-        }
-        InsertionSite::AppendTo(id) => {
-            to.push_id(id);
-            let count = push_nodes(to);
-            if count > 0 {
-                to.append_children(count);
-            }
-            count
+    // Push the anchor, let `push_nodes` stack the replacement nodes above it, then splice. Unlike
+    // `replace_with` (which consumes its target), `insert_before`/`insert_after`/`append_children`
+    // leave the anchor on the stack, so pop it afterwards to keep the renderer stack balanced — the
+    // same discipline `TargetedLazyScope` applies on drop in the diff create path.
+    let site = insertion_site_at(ElementEdge::First, vnode, dom, None);
+    to.push_id(site.anchor);
+    let count = push_nodes(to);
+    if count > 0 {
+        match site.edge {
+            InsertionEdge::Before => to.insert_before(count),
+            InsertionEdge::After => to.insert_after(count),
+            InsertionEdge::Append => to.append_children(count),
         }
     }
+    to.pop();
+    count
 }
 
 fn insertion_site_for_mounted_child(
@@ -223,7 +244,7 @@ fn insertion_site_for_mounted_child(
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     let Some(parent_ref) = dom.mounted_render_parent(mount) else {
-        return InsertionSite::AppendTo(ElementId::ROOT);
+        return InsertionSite::append_to(ElementId::ROOT);
     };
     let parent_mount = parent_ref.mount;
 
@@ -263,7 +284,7 @@ fn insertion_site_for_child_in_parent(
                     if let Some(id) =
                         first_live_sibling_after(children, &child_mounts, position, mount, dom)
                     {
-                        return Some(InsertionSite::Before(id));
+                        return Some(InsertionSite::before(id));
                     }
                     return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                 }

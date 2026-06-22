@@ -1,9 +1,86 @@
 use dioxus::prelude::*;
-use dioxus_core::{ScopeId, generation};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_core::{
+    ScopeId, SuspenseBoundaryProps, WriteMutations, current_scope_id, generation,
+};
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use pretty_assertions::assert_eq;
+use std::cell::Cell;
 use std::future::poll_fn;
 use std::task::Poll;
+
+fn div_snapshot(children: Vec<SnapshotNode>) -> SnapshotNode {
+    SnapshotNode::Element {
+        tag: "div".into(),
+        namespace: None,
+        attrs: vec![],
+        listeners: vec![],
+        children,
+    }
+}
+
+thread_local! {
+    static SUSPENDED_CHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+}
+
+/// Regression for the streaming-resume panic when a suspense boundary's fallback renders to zero
+/// DOM nodes. With markerless placeholders an empty fallback has no element to `replace_with`, so
+/// [`SuspenseBoundaryProps::resolve_suspense`] must splice the streamed nodes in at the boundary's
+/// position (here, before the trailing "after" text) instead of panicking on a missing placeholder.
+#[test]
+fn resolve_suspense_with_empty_fallback() {
+    fn empty_fallback_app() -> Element {
+        rsx! {
+            div {
+                "before"
+                SuspenseBoundary {
+                    fallback: |_| rsx! {},
+                    pending_child {}
+                }
+                "after"
+            }
+        }
+    }
+
+    fn pending_child() -> Element {
+        SUSPENDED_CHILD_SCOPE.with(|s| s.set(Some(current_scope_id())));
+        // Suspend on a task that never resolves so the boundary stays in its (empty) fallback.
+        let task = spawn(std::future::pending::<()>());
+        suspend(task)?;
+        rsx! { "resolved-child" }
+    }
+
+    let mut dom = VirtualDom::new(empty_fallback_app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    // The empty fallback contributes no DOM, so the div holds only its static text.
+    oracle.assert_snapshot_eq(&[div_snapshot(vec![
+        SnapshotNode::Text("before".into()),
+        SnapshotNode::Text("after".into()),
+    ])]);
+
+    let child_scope = SUSPENDED_CHILD_SCOPE
+        .with(|s| s.get())
+        .expect("pending child rendered");
+    let boundary_scope = dom
+        .runtime()
+        .parent_scope(child_scope)
+        .expect("suspended child has a parent boundary scope");
+
+    // Simulate the server stream arriving: push one resolved text node as the replacement. With no
+    // fallback element to replace, this must splice in at the boundary's slot (before "after").
+    SuspenseBoundaryProps::resolve_suspense(boundary_scope, &mut dom, &mut oracle, |to| {
+        to.create_text("resolved");
+        1
+    });
+
+    oracle.assert_stack_clean();
+    oracle.assert_snapshot_eq(&[div_snapshot(vec![
+        SnapshotNode::Text("before".into()),
+        SnapshotNode::Text("resolved".into()),
+        SnapshotNode::Text("after".into()),
+    ])]);
+}
 
 async fn poll_three_times() {
     // Poll each task 3 times

@@ -283,7 +283,7 @@ impl ViewBuilderPieces {
     fn from_element(element: &Element) -> Self {
         let mut builder = ViewBuilder::new();
         let template_stats = element_storage_stats(element);
-        let view = builder.visit_element(element, true);
+        let view = builder.visit_element_with_diagnostics(element, true, false);
         builder.finish(view, template_stats)
     }
 
@@ -428,6 +428,15 @@ impl ViewBuilder {
     }
 
     fn visit_element(&mut self, element: &Element, implicit_key: bool) -> TokenStream2 {
+        self.visit_element_with_diagnostics(element, implicit_key, true)
+    }
+
+    fn visit_element_with_diagnostics(
+        &mut self,
+        element: &Element,
+        implicit_key: bool,
+        emit_diagnostics: bool,
+    ) -> TokenStream2 {
         let tag = self.element_tag(element);
 
         let mut attrs = TokenStream2::new();
@@ -452,8 +461,17 @@ impl ViewBuilder {
         let groups = group_sibling_views(children);
         let (first, rest) = groups.split_first().expect("at least one group");
         let rest = rest.iter();
+        let diagnostics = &element.diagnostics;
+        let view = quote! { #tag #attrs.with_children(#first) #(.child(#rest))* };
 
-        quote! { #tag #attrs.with_children(#first) #(.child(#rest))* }
+        if emit_diagnostics {
+            quote! {{
+                #diagnostics
+                #view
+            }}
+        } else {
+            view
+        }
     }
 
     fn static_text(&mut self, text: &TextNode) -> TokenStream2 {

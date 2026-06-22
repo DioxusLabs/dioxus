@@ -185,7 +185,7 @@ impl VNode {
         let create_new = |state: &mut DiffState<'_, '_, '_, '_>| {
             if state.has_writer() {
                 let site = match live_first {
-                    Some(first) => InsertionSite::Before(first),
+                    Some(first) => InsertionSite::before(first),
                     None => insertion_site_for_slot(mount, slot, state.dom, context),
                 };
                 let runtime = state.dom.runtime.clone();

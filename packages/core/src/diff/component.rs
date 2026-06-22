@@ -199,7 +199,7 @@ impl VNode {
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
         if state.has_writer() {
-            let site = live_first.map(InsertionSite::Before).unwrap_or_else(|| {
+            let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
                 let slot = self.dynamic_node_slot(idx).expect("component anchor");
                 insertion_site_for_slot(mount, slot, state.dom, context)
             });

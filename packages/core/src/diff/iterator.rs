@@ -692,7 +692,7 @@ fn insertion_site_in_new_order(
                     .map(|id| (sibling.index, id))
             })
             .min_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::Before(id)),
+            .map(|(_, id)| InsertionSite::before(id)),
         ElementEdge::Last => mounted_new
             .iter()
             .filter(|sibling| sibling.index <= sibling_idx)
@@ -702,7 +702,7 @@ fn insertion_site_in_new_order(
                     .map(|id| (sibling.index, id))
             })
             .max_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::After(id)),
+            .map(|(_, id)| InsertionSite::after(id)),
     }
 }
 

@@ -83,11 +83,20 @@ impl WebsysDom {
                 for value_idx in group.ids() {
                     self.emit_dynamic_node_at_level(vnode, value_idx, dom, cursor, state)?;
                 }
+                // A `BeforeStatic` group anchors before the following static
+                // sibling at this level. Record its id so that sibling's emission
+                // binds it too: core keys the anchor by the sibling's own path, so
+                // it dedups to whatever id the sibling would otherwise receive.
+                if matches!(group.slot_target(), TemplateSlotTarget::BeforeStatic(_)) {
+                    state.pending_before_anchor =
+                        vnode.mounted_anchor_node_by_index(group.anchor_index(), dom);
+                }
             }
             VNodeChild::Element(element) => {
                 let root_id = element
                     .root_position()
-                    .and_then(|root_position| vnode.mounted_root(root_position, dom));
+                    .and_then(|root_position| vnode.mounted_root(root_position, dom))
+                    .or_else(|| state.take_pending_before_anchor());
                 state.flush_text(cursor)?;
                 state.advance(cursor);
                 self.emit_element(vnode, element, root_id, cursor, dom)?;
@@ -96,7 +105,8 @@ impl WebsysDom {
             VNodeChild::Text(text) => {
                 let root_id = text
                     .root_position()
-                    .and_then(|root_position| vnode.mounted_root(root_position, dom));
+                    .and_then(|root_position| vnode.mounted_root(root_position, dom))
+                    .or_else(|| state.take_pending_before_anchor());
                 state.push_text(utf16_len(text.text()), root_id);
             }
         }
@@ -260,11 +270,18 @@ struct TextContribution {
 struct LevelState {
     pending_text: Vec<TextContribution>,
     prev_consumed: u32,
+    /// Anchor id from a preceding `BeforeStatic` dynamic group, awaiting the
+    /// static sibling it anchors before so that sibling's binding adopts it.
+    pending_before_anchor: Option<ElementId>,
 }
 
 impl LevelState {
     fn push_text(&mut self, len: u32, id: Option<ElementId>) {
         self.pending_text.push(TextContribution { len, id });
+    }
+
+    fn take_pending_before_anchor(&mut self) -> Option<ElementId> {
+        self.pending_before_anchor.take()
     }
 
     fn flush_text(&mut self, cursor: &mut HydrationCursor) -> Result<(), RehydrationError> {
