@@ -708,8 +708,12 @@ impl VirtualDom {
     }
 
     fn drain_remaining_effects(&mut self) {
-        for effect in self.runtime.drain_remaining_effects() {
+        while let Some(effect) = self.pop_effect() {
             effect.run();
+            self.queue_events();
+            if self.has_dirty_scopes() {
+                return;
+            }
         }
     }
 

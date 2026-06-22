@@ -300,12 +300,6 @@ fn MyComponent() -> Element {{
         targets.try_remove(id.index()).is_some()
     }
 
-    /// Drain every pending effect, in `ScopeOrder` (height-asc, id-asc).
-    pub(crate) fn drain_remaining_effects(&self) -> Vec<Effect> {
-        let mut pending = self.pending_effects.borrow_mut();
-        std::mem::take(&mut *pending).into_iter().collect()
-    }
-
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id.index();

@@ -79,6 +79,7 @@
 use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
+use crate::innerlude::Effect;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -186,6 +187,18 @@ impl VirtualDom {
             dirty_tasks.pop_first();
         }
         Some(task)
+    }
+
+    /// Take any effects from the highest scope. This should only be called if there are no pending scope reruns or tasks.
+    pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
+        let mut pending_effects = self.runtime.pending_effects.borrow_mut();
+        let effect = pending_effects.pop_first()?;
+
+        // The scope that owns the effect should still exist. We can't just ignore the effect if the scope doesn't exist
+        // because the scope id may have been reallocated.
+        debug_assert!(self.scopes.contains(effect.order.id.index()));
+
+        Some(effect)
     }
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
