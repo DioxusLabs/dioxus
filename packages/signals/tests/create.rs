@@ -28,25 +28,18 @@ fn create_signals_global() {
 
     let muts = dom.rebuild_to_vec();
 
-    // 11 edits: 10x CreateTextNode and 1x AppendChildren. These assertions rely on the VirtualDOM's
+    // 11 edits: 10x CreateText and 1x AppendChildren. These assertions rely on the VirtualDOM's
     // logic, but doing this means not introducing a dependency on a renderer.
     assert_eq!(11, muts.edits.len());
     for i in 0..10 {
         assert_eq!(
             &muts.edits[i],
-            &Mutation::CreateTextNode {
-                value: ("hello world".to_string()),
-                id: ElementId::from_raw(i + 1)
+            &Mutation::CreateText {
+                value: "hello world".to_string()
             }
         );
     }
-    assert_eq!(
-        &muts.edits[10],
-        &Mutation::AppendChildren {
-            id: ElementId::from_raw(0),
-            m: 10
-        }
-    )
+    assert_eq!(&muts.edits[10], &Mutation::AppendChildren { m: 10 })
 }
 
 #[test]

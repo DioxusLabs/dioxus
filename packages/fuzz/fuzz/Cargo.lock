@@ -376,7 +376,6 @@ version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-core",
  "dioxus-core-macro",
- "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-html",
  "futures-channel",

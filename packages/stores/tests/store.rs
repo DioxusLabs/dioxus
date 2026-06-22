@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_core::Mutation::*;
 use dioxus_core::*;
 use dioxus_stores::GlobalStore;
 use std::{cell::RefCell, rc::Rc};
@@ -57,9 +56,8 @@ fn children_see_parent_write() {
     let edits = dom.render_immediate_to_vec();
     assert_eq!(
         edits.edits,
-        [SetText {
-            value: "x = 1".into(),
-            id: ElementId::from_raw(1)
+        [Mutation::SetText {
+            value: "x = 1".into()
         }]
     );
 }
