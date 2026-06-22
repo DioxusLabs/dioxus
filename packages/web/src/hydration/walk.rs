@@ -14,8 +14,8 @@
 //! `MountedVNode`. No DOM reads happen here — the cursor performs them.
 
 use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, StaticElement, VNodeChild,
-    VirtualDom,
+    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, StaticElement,
+    TemplateSlotTarget, VNodeChild, VirtualDom,
 };
 
 use crate::dom::WebsysDom;
@@ -168,6 +168,24 @@ impl WebsysDom {
             #[cfg(feature = "mounted")]
             &mut mounted_events,
         )?;
+
+        // A trailing dynamic-node group appends directly into this element (its
+        // static parent). Core gives that append anchor its own ElementId pointing
+        // at this same element (`assign_template_anchor_ids`), distinct from any
+        // root/attr id, so hydration must bind it here too — otherwise the group's
+        // later `AppendTo(anchor)` resolves to an unbound node and the interpreter
+        // dereferences `undefined`. The append anchor shares this element's static
+        // path, so it dedups to the same id as any attr/root binding above.
+        for group in vnode.vnode().dynamic_nodes() {
+            if group.parent_element_op_index() == Some(element.op())
+                && matches!(group.slot_target(), TemplateSlotTarget::AppendChildren(_))
+            {
+                let anchor_id = vnode
+                    .mounted_anchor_node_by_index(group.anchor_index(), dom)
+                    .ok_or(VNodeNotInitialized)?;
+                mounted_id = Some(anchor_id);
+            }
+        }
 
         // Always map the element so the cursor can verify the tag and step past
         // parser-inserted wrappers. id == 0 means the element needs no node

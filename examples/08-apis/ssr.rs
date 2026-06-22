@@ -22,8 +22,8 @@ fn main() {
         })
     );
 
-    // We can configure the SSR rendering to add ids for rehydration
-    println!("{}", dioxus_ssr::pre_render(&vdom));
+    // We can configure the SSR renderer directly
+    println!("{}", dioxus_ssr::Renderer::new().render(&vdom));
 
     // We can render to a buf directly too
     let mut file = String::new();

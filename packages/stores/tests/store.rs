@@ -56,9 +56,15 @@ fn children_see_parent_write() {
     let edits = dom.render_immediate_to_vec();
     assert_eq!(
         edits.edits,
-        [Mutation::SetText {
-            value: "x = 1".into()
-        }]
+        [
+            Mutation::PushId {
+                id: ElementId::from_raw(1)
+            },
+            Mutation::SetText {
+                value: "x = 1".into()
+            },
+            Mutation::Pop,
+        ]
     );
 }
 

@@ -109,9 +109,11 @@ impl ToTokens for Element {
         let builder = self.view_builder_pieces();
         let definitions = builder.definitions();
         let view = builder.view_expr();
+        let diagnostics = &self.diagnostics;
 
         tokens.append_all(quote! {
             {
+                #diagnostics
                 #(#definitions)*
                 #view
             }

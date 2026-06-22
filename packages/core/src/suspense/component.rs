@@ -640,13 +640,19 @@ impl SuspenseBoundaryProps {
                 branch.into_root().remove_node(mount, &mut *dom, None);
             }
 
-            // Streaming replacements are pushed after the placeholder target
-            // so `replace_with` can stay stack-only.
-            let id = currently_rendered
-                .mounted_vnode()
-                .find_first_element(dom)
-                .expect("placeholder");
-            replace_id_with(to, id, push_replacements);
+            // Streaming replacements are pushed after the target node so the splice can stay
+            // stack-only. The fallback usually has a DOM node to swap; an empty (or all-suspense)
+            // fallback renders to nothing, so there is no element to `replace_with` and the streamed
+            // nodes are inserted at the boundary's position instead.
+            match currently_rendered.mounted_vnode().find_first_element(dom) {
+                Some(id) => replace_id_with(to, id, push_replacements),
+                None => crate::diff::placement::splice_on_stack_at_vnode_start(
+                    currently_rendered.mounted_vnode(),
+                    dom,
+                    to,
+                    push_replacements,
+                ),
+            };
             currently_rendered.as_vnode().remove_node(
                 currently_rendered.root_mount(),
                 &mut *dom,

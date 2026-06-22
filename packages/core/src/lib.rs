@@ -134,9 +134,8 @@ pub use crate::innerlude::{
     use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner,
 };
 pub use diff::template::{
-    DynamicAttrGroup, DynamicNodeGroup, EffectiveAttribute, EffectiveAttributeSource,
-    EffectiveAttributeValue, ElementAttributes, StaticElement, StaticText, VNodeChild,
-    VNodeChildren,
+    DynamicAttrGroup, DynamicNodeGroup, EffectiveAttribute, EffectiveAttributeValue,
+    ElementAttributes, StaticElement, StaticText, VNodeChild, VNodeChildren,
 };
 pub use dioxus_core_template::{TemplatePath, TemplateSlotTarget};
 

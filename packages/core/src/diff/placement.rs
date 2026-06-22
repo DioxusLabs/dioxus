@@ -173,6 +173,50 @@ pub(super) fn at_site(
     site.create_and_place(to, runtime, create)
 }
 
+/// Splice DOM nodes that are already on the renderer stack into the position where `vnode` is
+/// mounted, anchoring before its first live element — or, when `vnode` has no live DOM, at the
+/// first live insertion point found by walking up its mounted parents.
+///
+/// `push_nodes` pushes the nodes and returns their count. This is the no-element analogue of
+/// [`crate::mutations::replace_id_with`]: streaming suspense resume uses it when a resolved
+/// boundary's fallback rendered to zero DOM nodes, so there is no element to `replace_with` and the
+/// streamed nodes are inserted at the boundary's position instead. It is generic over the writer so
+/// the caller's `push_nodes` keeps concrete access to its renderer (e.g. dioxus-web pushing
+/// server-streamed nodes directly onto the interpreter stack).
+pub(crate) fn splice_on_stack_at_vnode_start<M: WriteMutations>(
+    vnode: MountedVNode<'_>,
+    dom: &VirtualDom,
+    to: &mut M,
+    push_nodes: impl FnOnce(&mut M) -> usize,
+) -> usize {
+    match insertion_site_at(ElementEdge::First, vnode, dom, None) {
+        InsertionSite::Before(id) => {
+            to.push_id(id);
+            let count = push_nodes(to);
+            if count > 0 {
+                to.insert_before(count);
+            }
+            count
+        }
+        InsertionSite::After(id) => {
+            to.push_id(id);
+            let count = push_nodes(to);
+            if count > 0 {
+                to.insert_after(count);
+            }
+            count
+        }
+        InsertionSite::AppendTo(id) => {
+            to.push_id(id);
+            let count = push_nodes(to);
+            if count > 0 {
+                to.append_children(count);
+            }
+            count
+        }
+    }
+}
+
 fn insertion_site_for_mounted_child(
     mount: MountId,
     dom: &VirtualDom,

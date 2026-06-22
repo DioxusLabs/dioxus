@@ -400,8 +400,6 @@ pub struct EffectiveAttribute<'a> {
     pub value: EffectiveAttributeValue<'a>,
     /// Whether renderers should always write this attribute.
     pub volatile: bool,
-    /// The value source.
-    pub source: EffectiveAttributeSource,
 }
 
 /// Where an effective attribute value came from.
@@ -411,20 +409,6 @@ pub enum EffectiveAttributeValue<'a> {
     Static(&'static str),
     /// A dynamic runtime attribute value.
     Dynamic(&'a AttributeValue),
-}
-
-/// The template/runtime source for an effective attribute.
-#[derive(Clone, Copy)]
-pub enum EffectiveAttributeSource {
-    /// A static template attribute.
-    Static,
-    /// A dynamic runtime attribute.
-    Dynamic {
-        /// The dynamic value index.
-        value_index: usize,
-        /// The template anchor index.
-        anchor_index: usize,
-    },
 }
 
 /// Iterator over the final effective attributes for an element.
@@ -443,7 +427,6 @@ impl<'a> ElementAttributes<'a> {
                     namespace: attr.namespace,
                     value: EffectiveAttributeValue::Static(attr.value),
                     volatile: false,
-                    source: EffectiveAttributeSource::Static,
                 },
             );
         }
@@ -464,10 +447,6 @@ impl<'a> ElementAttributes<'a> {
                             namespace: attr.namespace,
                             value: EffectiveAttributeValue::Dynamic(&attr.value),
                             volatile: attr.volatile,
-                            source: EffectiveAttributeSource::Dynamic {
-                                value_index,
-                                anchor_index: group.anchor_index(),
-                            },
                         },
                     );
                 }
@@ -487,13 +466,7 @@ impl<'a> Iterator for ElementAttributes<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
 }
-
-impl ExactSizeIterator for ElementAttributes<'_> {}
 
 /// A chunk of dynamic values attached to one template anchor.
 #[derive(Clone, Copy)]
