@@ -462,12 +462,6 @@ impl VNode {
             .flat_map(|group| group.ids())
     }
 
-    fn nested_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.dynamic_nodes()
-            .filter(|group| !group.is_root_level())
-            .flat_map(|group| group.ids())
-    }
-
     /// Remove a node from the DOM and destroy component state.
     ///
     /// Invariant: `mount` is live and committed to `self` when removal begins.
@@ -495,14 +489,39 @@ impl VNode {
         // Will not generate mutations!
         self.reclaim_anchor_nodes(mount, dom);
 
-        // Remove the nested dynamic nodes
-        // We don't generate mutations for these, as they will be removed by the parent (in the next line)
-        // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
-        self.remove_nested_dyn_nodes(mount, dom, destroy_component_state);
+        // Walk the template's dynamic node groups exactly once, partitioning into nested vs root.
+        // Nested nodes are removed inline now — they emit no mutations, since the parent owns those.
+        // Root node ids are collected and reclaimed afterward (they own renderer mutations and must
+        // reclaim in reverse order of claim). Splitting the work into separate `nested`/`root` passes
+        // re-walked the whole anchor list (rebuilding groups + `is_empty`/`slot_target`) twice per
+        // removed node; the root pass usually found nothing (most dynamics nest under a static
+        // element). `root_ids` stays empty — and unallocated — in that common case.
+        let mut root_ids: Vec<usize> = Vec::new();
+        for anchor in self.template.anchors() {
+            // Root-level node anchors own renderer mutations and reclaim after nested ones; this is
+            // a static property of the anchor's slot target. Iterate the anchor's value range
+            // directly and pick out the node values — equivalent to `dynamic_nodes().flat_map(ids)`
+            // but without building a `DynamicNodeGroup`/`DynamicChunk` or running the `is_empty`
+            // filter per anchor.
+            let root_level = match anchor.slot_target() {
+                TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
+                TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
+            };
+            for idx in anchor.values() {
+                if self.dynamic_values[idx].as_node().is_none() {
+                    continue;
+                }
+                if root_level {
+                    root_ids.push(idx);
+                } else {
+                    self.remove_dynamic_node(mount, dom, None, destroy_component_state, idx);
+                }
+            }
+        }
 
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-        self.reclaim_roots(mount, dom, to, destroy_component_state);
+        self.reclaim_roots(mount, dom, to, destroy_component_state, &root_ids);
 
         if destroy_component_state {
             dom.remove_mount(mount);
@@ -515,8 +534,9 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
+        root_ids: &[usize],
     ) {
-        for id in self.root_dynamic_node_ids() {
+        for &id in root_ids {
             let dynamic_node = self.dynamic_values[id].node();
             // Empty Fragments contribute no DOM and have nothing to reclaim
             // via the renderer — skip them entirely.
@@ -542,17 +562,6 @@ impl VNode {
             if anchor_static_target(anchor).is_some_and(TemplatePath::is_root) {
                 dom.clear_mounted_anchor_node(mount, anchor_idx);
             }
-        }
-    }
-
-    fn remove_nested_dyn_nodes(
-        &self,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        destroy_component_state: bool,
-    ) {
-        for idx in self.nested_dynamic_node_ids() {
-            self.remove_dynamic_node(mount, dom, None, destroy_component_state, idx);
         }
     }
 

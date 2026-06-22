@@ -105,11 +105,14 @@ pub(crate) struct Mount {
 
     mode: RenderMode,
 
-    mounted_root_nodes_by_position: Box<[PackedMountedSlot]>,
-
-    anchor_slots: Box<[PackedMountedSlot]>,
-
-    dynamic_slots: Box<[PackedMountedSlot]>,
+    /// Mounted slots for this node in one allocation, laid out as three regions:
+    /// `[ root nodes (root_count) | anchor slots (anchor_count) | dynamic slots (rest) ]`.
+    /// Previously these were three separate `Box<[_]>` — one heap allocation per region, so three
+    /// allocs/frees per mounted node. A list of N rows is N mounts, so that tripled the per-node
+    /// allocator traffic on both create and removal. One backing slice means one alloc/free.
+    slots: Box<[PackedMountedSlot]>,
+    root_count: u32,
+    anchor_count: u32,
 
     fragment_child_mounts: Vec<MountId>,
 }
@@ -133,9 +136,9 @@ impl Mount {
             target_id,
             node,
             mode: RenderMode::Foreground,
-            mounted_root_nodes_by_position: vec![PackedMountedSlot::empty(); root_count].into(),
-            anchor_slots: vec![PackedMountedSlot::empty(); anchor_count].into(),
-            dynamic_slots: vec![PackedMountedSlot::empty(); dynamic_count].into(),
+            slots: vec![PackedMountedSlot::empty(); root_count + anchor_count + dynamic_count].into(),
+            root_count: root_count as u32,
+            anchor_count: anchor_count as u32,
             fragment_child_mounts: Vec::new(),
         }
     }
@@ -165,28 +168,34 @@ impl Mount {
         &self.node
     }
 
+    fn dynamic_offset(&self) -> usize {
+        self.root_count as usize + self.anchor_count as usize
+    }
+
     fn dynamic_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.dynamic_slots[idx]
+        self.slots[self.dynamic_offset() + idx]
     }
 
     fn dynamic_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.dynamic_slots[idx]
+        let offset = self.dynamic_offset();
+        &mut self.slots[offset + idx]
     }
 
     fn anchor_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.anchor_slots[idx]
+        self.slots[self.root_count as usize + idx]
     }
 
     fn anchor_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.anchor_slots[idx]
+        let offset = self.root_count as usize;
+        &mut self.slots[offset + idx]
     }
 
     fn root_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.mounted_root_nodes_by_position[idx]
+        self.slots[idx]
     }
 
     fn root_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        &mut self.mounted_root_nodes_by_position[idx]
+        &mut self.slots[idx]
     }
 }
 
@@ -262,7 +271,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.mounted_root_nodes_by_position.len())
+        self.with_mount(mount, |mount| mount.root_count as usize)
     }
 
     pub(crate) fn mounted_anchor_node(
