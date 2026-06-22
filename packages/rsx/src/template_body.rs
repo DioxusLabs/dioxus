@@ -462,7 +462,7 @@ impl ViewBuilder {
         let (first, rest) = groups.split_first().expect("at least one group");
         let rest = rest.iter();
         let diagnostics = &element.diagnostics;
-        let view = quote! { #tag #attrs.with_children(#first) #(.child(#rest))* };
+        let view = quote! { #tag #attrs.child(#first) #(.child(#rest))* };
 
         if emit_diagnostics {
             quote! {{

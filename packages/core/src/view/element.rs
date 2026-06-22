@@ -63,19 +63,6 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
             _tag: PhantomData,
         }
     }
-
-    /// Replace the children with an already-normalized typed view tuple.
-    #[inline]
-    pub fn with_children<NewChildren>(
-        self,
-        children: NewChildren,
-    ) -> ElementBuilder<Tag, Attributes, NewChildren> {
-        ElementBuilder {
-            attrs: self.attrs,
-            children,
-            _tag: PhantomData,
-        }
-    }
 }
 
 impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate

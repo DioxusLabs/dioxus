@@ -39,12 +39,6 @@ impl<Children> FragmentBuilder<Children> {
             children: (self.children, child.into_child()),
         }
     }
-
-    /// Replace the children with an already-normalized typed view.
-    #[inline]
-    pub fn with_children<NewChildren>(self, children: NewChildren) -> FragmentBuilder<NewChildren> {
-        FragmentBuilder { children }
-    }
 }
 
 impl<Children: ViewTemplate> ViewTemplate for FragmentBuilder<Children> {
