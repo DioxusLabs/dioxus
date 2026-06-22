@@ -18,6 +18,7 @@ fn app() -> Element {
         EmptyPlaceholderToContent {}
         SeparatedEmptyDynamicSlots {}
         PlaceholderAsTrailingSibling {}
+        NestedTrailingPlaceholder {}
         RemovePlaceholder {}
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
@@ -383,6 +384,39 @@ fn RootTrailingPlaceholder() -> Element {
         div { id: "trailing-root-before", "before trailing root" }
         if show() {
             div { id: "trailing-root-late", "late trailing root" }
+        }
+    }
+}
+
+// A trailing empty conditional whose append target is a *nested, non-root*
+// static element. Unlike `PlaceholderAsTrailingSibling`/`SeparatedEmptyDynamicSlots`
+// (where the parent is a template root), this parent is buried inside the root
+// and carries no dynamic attributes, so the markerless walk maps it positionally
+// with no node binding (`map_element` id == 0). Its create-time append anchor is
+// a freshly allocated `ElementId` (`assign_template_anchor_ids` non-root branch),
+// which hydration must bind too — otherwise materializing the conditional appends
+// into an unbound node and the interpreter dereferences `undefined`
+// ("Cannot read properties of undefined (reading 'insertBefore')").
+//
+// Regression for the docsite search-modal crash, where `if SHOW_SEARCH() { input }`
+// sits several divs deep under a plain static `div` and only renders once opened.
+#[component]
+fn NestedTrailingPlaceholder() -> Element {
+    let mut show = use_signal(|| false);
+    rsx! {
+        div {
+            div {
+                id: "nested-trailing",
+                span { "HEAD" }
+                if show() {
+                    span { id: "nested-trailing-late", "LATE" }
+                }
+            }
+        }
+        button {
+            id: "show-nested-trailing",
+            onclick: move |_| show.set(true),
+            "show nested trailing"
         }
     }
 }

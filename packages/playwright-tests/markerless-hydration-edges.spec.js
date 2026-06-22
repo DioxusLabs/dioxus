@@ -212,6 +212,40 @@ test("trailing root-level placeholder keeps the mount parent", async ({
   ]);
 });
 
+// Regression for the docsite search-modal crash. A trailing empty conditional
+// whose append target is a *nested, non-root* static element: the parent is
+// buried inside the template root and has no dynamic attributes, so the
+// markerless walk maps it positionally with no node binding. Its create-time
+// append anchor is a separately allocated ElementId that hydration must also
+// bind — otherwise materializing the conditional appends into an unbound node
+// and the interpreter throws
+// "Cannot read properties of undefined (reading 'insertBefore')".
+test("trailing conditional under a nested non-root element hydrates and appends", async ({
+  page,
+}) => {
+  // The branch starts hidden, so SSR must not emit the late content.
+  const res = await page.request.get(URL);
+  const html = await res.text();
+  expect(html).not.toContain("nested-trailing-late");
+
+  // Fail loudly on the original symptom rather than only on a missing node.
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+
+  await page.goto(URL);
+  await page.waitForTimeout(2000);
+
+  const container = page.locator("#nested-trailing");
+  await expect(container).toHaveText("HEAD");
+  await expect(page.locator("#nested-trailing-late")).toHaveCount(0);
+
+  await page.locator("#show-nested-trailing").click();
+  await expect(page.locator("#nested-trailing-late")).toHaveText("LATE");
+  await expect(container).toHaveText("HEADLATE");
+
+  expect(errors).toEqual([]);
+});
+
 test("svg elements can receive hydrated listeners", async ({ page }) => {
   await page.goto(URL);
   await page.waitForTimeout(2000);
