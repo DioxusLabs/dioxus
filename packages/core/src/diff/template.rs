@@ -125,78 +125,44 @@ impl<'a> StaticText<'a> {
 
 /// Iterator over rendered children.
 pub struct VNodeChildren<'a> {
-    inner: std::vec::IntoIter<VNodeChild<'a>>,
+    static_children: StaticChildCursor<'a>,
+    dynamic_children: DynamicChildCursor<'a>,
+    next_static: Option<PositionedChild<'a>>,
+    next_dynamic: Option<PositionedChild<'a>>,
 }
 
 impl<'a> VNodeChildren<'a> {
     fn roots(vnode: &'a VNode) -> Self {
-        let mut children = Vec::new();
-
-        for root in vnode.template.static_root_nodes() {
-            children.push(PositionedChild {
-                position: root.root_position,
-                order: root.static_root_index,
-                child: static_child(vnode, root.op, Some(root.root_position)),
-            });
-        }
-
-        for (order, group) in vnode
-            .dynamic_nodes()
-            .filter(|group| group.is_root_level())
-            .enumerate()
-        {
-            children.push(PositionedChild {
-                position: group.root_position(),
-                order,
-                child: VNodeChild::Dynamic(group),
-            });
-        }
-
-        Self::from_positioned(children)
+        let static_children = StaticChildCursor::roots(vnode);
+        let dynamic_children = DynamicChildCursor::roots(vnode);
+        Self::new(static_children, dynamic_children)
     }
 
     fn element(element: StaticElement<'a>) -> Self {
-        let vnode = element.vnode;
-        let static_children = vnode
-            .template
-            .static_children(element.op)
-            .collect::<Vec<_>>();
-        let trailing_slot = static_children.len();
-        let mut children = Vec::new();
-
-        for (slot, op) in static_children.into_iter().enumerate() {
-            children.push(PositionedChild {
-                position: slot * 2 + 1,
-                order: slot,
-                child: static_child(vnode, op, None),
-            });
-        }
-
-        for (order, group) in vnode
-            .dynamic_nodes()
-            .filter(|group| group.parent_element_op_index() == Some(element.op))
-            .enumerate()
-        {
-            let slot = child_slot(group.slot_target(), trailing_slot);
-            children.push(PositionedChild {
-                position: slot * 2,
-                order,
-                child: VNodeChild::Dynamic(group),
-            });
-        }
-
-        Self::from_positioned(children)
+        let static_children = StaticChildCursor::element(element);
+        let dynamic_children = DynamicChildCursor::element(element);
+        Self::new(static_children, dynamic_children)
     }
 
-    fn from_positioned(mut children: Vec<PositionedChild<'a>>) -> Self {
-        children.sort_by_key(|child| (child.position, child.order));
+    fn new(
+        mut static_children: StaticChildCursor<'a>,
+        mut dynamic_children: DynamicChildCursor<'a>,
+    ) -> Self {
+        let next_static = static_children.next();
+        let next_dynamic = dynamic_children.next();
         Self {
-            inner: children
-                .into_iter()
-                .map(|child| child.child)
-                .collect::<Vec<_>>()
-                .into_iter(),
+            static_children,
+            dynamic_children,
+            next_static,
+            next_dynamic,
         }
+    }
+
+    fn remaining_len(&self) -> usize {
+        usize::from(self.next_static.is_some())
+            + usize::from(self.next_dynamic.is_some())
+            + self.static_children.remaining_len()
+            + self.dynamic_children.remaining_len()
     }
 }
 
@@ -204,20 +170,243 @@ impl<'a> Iterator for VNodeChildren<'a> {
     type Item = VNodeChild<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        let take_static = match (self.next_static, self.next_dynamic) {
+            (Some(static_child), Some(dynamic_child)) => static_child.key() <= dynamic_child.key(),
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => return None,
+        };
+
+        if take_static {
+            let child = self.next_static.take().expect("static child checked");
+            self.next_static = self.static_children.next();
+            Some(child.child)
+        } else {
+            let child = self.next_dynamic.take().expect("dynamic child checked");
+            self.next_dynamic = self.dynamic_children.next();
+            Some(child.child)
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
+        let len = self.remaining_len();
+        (len, Some(len))
     }
 }
 
 impl ExactSizeIterator for VNodeChildren<'_> {}
 
+#[derive(Clone, Copy)]
 struct PositionedChild<'a> {
     position: usize,
     order: usize,
     child: VNodeChild<'a>,
+}
+
+impl PositionedChild<'_> {
+    fn key(self) -> (usize, usize) {
+        (self.position, self.order)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StaticChildCursor<'a> {
+    Roots {
+        vnode: &'a VNode,
+        op: usize,
+        op_count: usize,
+        static_root_index: usize,
+    },
+    Element {
+        element: StaticElement<'a>,
+        cursor: usize,
+        end: usize,
+        slot: usize,
+    },
+}
+
+impl<'a> StaticChildCursor<'a> {
+    fn roots(vnode: &'a VNode) -> Self {
+        Self::Roots {
+            vnode,
+            op: 0,
+            op_count: vnode.template.decoded_ops().len(),
+            static_root_index: 0,
+        }
+    }
+
+    fn element(element: StaticElement<'a>) -> Self {
+        let vnode = element.vnode;
+        let cursor = vnode.template.first_child_node_op(element.op).unwrap_or(0);
+        let end = vnode.template.element_end(element.op).unwrap_or(0);
+        Self::Element {
+            element,
+            cursor,
+            end,
+            slot: 0,
+        }
+    }
+
+    fn next(&mut self) -> Option<PositionedChild<'a>> {
+        match self {
+            Self::Roots {
+                vnode,
+                op,
+                op_count,
+                static_root_index,
+            } => {
+                while *op < *op_count && !is_static_child(vnode, *op) {
+                    *op = vnode.template.next_sibling_op(*op);
+                }
+
+                if *op >= *op_count {
+                    return None;
+                }
+
+                let current_op = *op;
+                *op = vnode.template.next_sibling_op(current_op);
+                let current_static_root_index = *static_root_index;
+                *static_root_index += 1;
+                let root_position = vnode
+                    .template
+                    .root_position_for_static_root(current_static_root_index)
+                    .expect("static root position");
+
+                Some(PositionedChild {
+                    position: root_position,
+                    order: current_static_root_index,
+                    child: static_child(vnode, current_op, Some(root_position)),
+                })
+            }
+            Self::Element {
+                element,
+                cursor,
+                end,
+                slot,
+            } => {
+                let vnode = element.vnode;
+                while *cursor < *end {
+                    let current_op = *cursor;
+                    *cursor = vnode.template.next_sibling_op(current_op);
+                    if is_static_child(vnode, current_op) {
+                        let current_slot = *slot;
+                        *slot += 1;
+                        return Some(PositionedChild {
+                            position: current_slot * 2 + 1,
+                            order: current_slot,
+                            child: static_child(vnode, current_op, None),
+                        });
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    fn remaining_len(self) -> usize {
+        let mut remaining = 0;
+        let mut cursor = self;
+        while cursor.next().is_some() {
+            remaining += 1;
+        }
+        remaining
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DynamicChildCursor<'a> {
+    Roots {
+        vnode: &'a VNode,
+        anchor_index: usize,
+        order: usize,
+    },
+    Element {
+        element: StaticElement<'a>,
+        anchor_index: usize,
+        order: usize,
+    },
+}
+
+impl<'a> DynamicChildCursor<'a> {
+    fn roots(vnode: &'a VNode) -> Self {
+        Self::Roots {
+            vnode,
+            anchor_index: 0,
+            order: 0,
+        }
+    }
+
+    fn element(element: StaticElement<'a>) -> Self {
+        Self::Element {
+            element,
+            anchor_index: 0,
+            order: 0,
+        }
+    }
+
+    fn next(&mut self) -> Option<PositionedChild<'a>> {
+        match self {
+            Self::Roots {
+                vnode,
+                anchor_index,
+                order,
+            } => next_dynamic_child(vnode, anchor_index, order, |group| {
+                group.is_root_level().then(|| group.root_position())
+            }),
+            Self::Element {
+                element,
+                anchor_index,
+                order,
+            } => {
+                let element_op = element.op;
+                next_dynamic_child(element.vnode, anchor_index, order, |group| {
+                    (group.parent_element_op_index() == Some(element_op))
+                        .then(|| child_position(group.slot_target()))
+                })
+            }
+        }
+    }
+
+    fn remaining_len(self) -> usize {
+        let mut remaining = 0;
+        let mut cursor = self;
+        while cursor.next().is_some() {
+            remaining += 1;
+        }
+        remaining
+    }
+}
+
+fn next_dynamic_child<'a>(
+    vnode: &'a VNode,
+    anchor_index: &mut usize,
+    order: &mut usize,
+    mut position: impl FnMut(DynamicNodeGroup<'a>) -> Option<usize>,
+) -> Option<PositionedChild<'a>> {
+    let anchors = vnode.template.anchors();
+    while *anchor_index < anchors.len() {
+        let current_anchor_index = *anchor_index;
+        *anchor_index += 1;
+        let group =
+            DynamicNodeGroup::new(vnode, &anchors[current_anchor_index], current_anchor_index);
+        if group.is_empty() {
+            continue;
+        }
+
+        let Some(position) = position(group) else {
+            continue;
+        };
+
+        let current_order = *order;
+        *order += 1;
+        return Some(PositionedChild {
+            position,
+            order: current_order,
+            child: VNodeChild::Dynamic(group),
+        });
+    }
+
+    None
 }
 
 /// Effective final attribute value for an element.
@@ -594,10 +783,15 @@ fn static_child<'a>(vnode: &'a VNode, op: usize, root_position: Option<usize>) -
     }
 }
 
-fn child_slot(target: TemplateSlotTarget, trailing_slot: usize) -> usize {
+fn is_static_child(vnode: &VNode, op: usize) -> bool {
+    vnode.template.element_meta_at_op(op).is_some()
+        || vnode.template.static_text_at_op(op).is_some()
+}
+
+fn child_position(target: TemplateSlotTarget) -> usize {
     match target {
-        TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1,
-        TemplateSlotTarget::AppendChildren(_) => trailing_slot,
+        TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 * 2,
+        TemplateSlotTarget::AppendChildren(_) => usize::MAX,
     }
 }
 

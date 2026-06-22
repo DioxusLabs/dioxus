@@ -231,7 +231,10 @@ fn dynamic_attr_and_trailing_dynamic_child_follow_value_order() {
     let vnode = dynamic_attr_and_trailing_dynamic_child().unwrap();
     let div = root_element(&vnode);
     let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
-    let children = div.children().collect::<Vec<_>>();
+    let mut children_iter = div.children();
+    assert_eq!(children_iter.len(), 3);
+    let children = children_iter.by_ref().collect::<Vec<_>>();
+    assert_eq!(children_iter.len(), 0);
 
     assert_eq!(attr_groups.len(), 1);
     assert_eq!(children.len(), 3);

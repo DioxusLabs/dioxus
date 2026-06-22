@@ -39,9 +39,21 @@ fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
 #[derive(Default)]
 struct StatsCollector {
     stats: TemplateStatsBuilder,
+    following_static_at_parent: bool,
 }
 
 impl<'a> FillOrderVisitor<'a> for StatsCollector {
+    fn visit_siblings(&mut self, nodes: &'a [BodyNode]) -> Option<()> {
+        for (index, node) in nodes.iter().enumerate() {
+            let previous = self.following_static_at_parent;
+            self.following_static_at_parent = siblings_have_static_node(nodes, index + 1);
+            let result = FillOrderVisitor::visit_node(self, node);
+            self.following_static_at_parent = previous;
+            result?;
+        }
+        Some(())
+    }
+
     fn open_element(&mut self, _element: &'a Element) -> Option<()> {
         self.stats.open_element(None);
         Some(())
@@ -67,13 +79,25 @@ impl<'a> FillOrderVisitor<'a> for StatsCollector {
         Some(())
     }
 
-    fn dynamic_node(
-        &mut self,
-        _node: &'a BodyNode,
-        following_static_at_parent: bool,
-    ) -> Option<()> {
-        self.stats.dynamic_node(following_static_at_parent);
+    fn dynamic_node(&mut self, _node: &'a BodyNode) -> Option<()> {
+        self.stats.dynamic_node(self.following_static_at_parent);
         Some(())
+    }
+}
+
+fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
+    nodes[start..].iter().any(node_has_static_root)
+}
+
+fn node_has_static_root(node: &BodyNode) -> bool {
+    match node {
+        BodyNode::Element(_) => true,
+        BodyNode::Text(text) => text.is_static(),
+        BodyNode::RawExpr(_)
+        | BodyNode::Component(_)
+        | BodyNode::ForLoop(_)
+        | BodyNode::IfChain(_)
+        | BodyNode::SyntheticBoundary(_) => false,
     }
 }
 
@@ -598,7 +622,7 @@ impl Element {
         };
 
         let namespace = quote!(None::<&'static str>);
-        let resolved_name = name.resolved(&self.name);
+        let resolved_name = name.resolved();
         let value = value.to_static().unwrap();
         builder.static_attr(
             attr.span(),

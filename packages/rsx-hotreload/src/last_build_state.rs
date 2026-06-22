@@ -229,11 +229,7 @@ impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
         Some(())
     }
 
-    fn dynamic_node(
-        &mut self,
-        node: &'a BodyNode,
-        _following_static_at_parent: bool,
-    ) -> Option<()> {
+    fn dynamic_node(&mut self, node: &'a BodyNode) -> Option<()> {
         match node {
             BodyNode::Text(text) => {
                 self.push_dynamic_node(node.clone());

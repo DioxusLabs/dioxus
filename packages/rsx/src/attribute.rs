@@ -139,22 +139,17 @@ impl Attribute {
             return quote_spanned! { expr.span() => {#expr}.into_boxed_slice() };
         }
 
-        let el_name = self
-            .el_name
-            .as_ref()
-            .expect("el_name rendered as a dynamic attribute should always have an el_name set");
-
         let attribute = |name: &AttributeName| match name {
             AttributeName::BuiltIn(_) | AttributeName::Custom(_) => {
-                let name = name.resolved(el_name);
+                let name = name.resolved();
                 quote! { #name }
             }
             AttributeName::Spread(_) => unreachable!("Spread attributes are handled elsewhere"),
         };
 
-        let ns = |_name: &AttributeName| quote! { None };
+        let ns = || quote! { None };
 
-        let volatile = |_name: &AttributeName| quote! { false };
+        let volatile = || quote! { false };
 
         let attributes = {
             let value = &self.value;
@@ -169,8 +164,8 @@ impl Attribute {
                     if is_not_event =>
                 {
                     let name = &self.name;
-                    let ns = ns(name);
-                    let volatile = volatile(name);
+                    let ns = ns();
+                    let volatile = volatile();
                     let attribute = attribute(name);
                     let value = quote! { #value };
 
@@ -295,7 +290,7 @@ pub enum AttributeName {
 }
 
 impl AttributeName {
-    pub(crate) fn resolved(&self, _element: &ElementName) -> String {
+    pub(crate) fn resolved(&self) -> String {
         match self {
             Self::BuiltIn(ident) => {
                 let raw_name = ident.to_string();
