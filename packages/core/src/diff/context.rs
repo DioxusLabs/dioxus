@@ -3,9 +3,10 @@ use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 /// State required for diffing operations.
 ///
 /// Invariant: one `DiffState` owns the active mutable access to the `VirtualDom` and the optional
-/// renderer writer. `context` describes the vnode frame currently being diffed. Mounts whose
-/// committed position is stale (moved or replaced by the active diff) are tracked on the
-/// `Runtime`, so placement scans can consult them in O(1).
+/// renderer writer. `context`, when present, describes an active same-template vnode frame whose
+/// committed mount table entry still points at the old vnode until the frame commits. Mounts whose
+/// committed position is stale (moved or replaced by the active diff) are tracked on the `Runtime`,
+/// so placement scans can consult them in O(1).
 pub(crate) struct DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) dom: &'dom mut VirtualDom,
     pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
@@ -135,9 +136,9 @@ impl<'a> DiffFrame<'a> {
 /// Diff-local view of the active vnode and its parent while children are being
 /// reconciled.
 ///
-/// The committed mount still points at the old vnode until a vnode finishes
-/// diffing, so placement resolution needs these temporary old/new pairs to reason
-/// about slots inside the active vnode and sibling order in the active parent.
+/// The committed mount table still points at the old vnode while a same-template frame is being
+/// diffed, so placement resolution needs these temporary old/new pairs to reason about slots inside
+/// the active vnode and sibling order in the active parent.
 #[derive(Clone, Copy)]
 pub(crate) struct DiffContext<'a> {
     current: DiffFrame<'a>,

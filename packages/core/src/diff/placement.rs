@@ -1,11 +1,13 @@
 //! Renderer insertion-site selection for diff-created nodes.
 //!
 //! Invariants maintained here:
-//! - Placement is chosen from the committed parent view unless a `DiffContext` identifies the
-//!   active vnode currently being diffed.
-//! - Mounts in the caller-provided skip list are still present in committed fragment storage but
-//!   have already been claimed by an earlier replacement/splice; skip filtering happens while
-//!   scanning that fragment's committed child-mount list.
+//! - Placement scans use the committed mount table by default. During an active same-template vnode
+//!   diff, `DiffContext` supplies the old vnode for the current mount or parent mount because the
+//!   committed mount table is not updated until the frame commits.
+//! - `None` context does not mean there is no old vnode; it means no active diff-local vnode frame is
+//!   available.
+//! - Mounts marked placement-stale on the runtime are still present in committed fragment storage but
+//!   must not be used as insertion anchors while a reorder or replacement is in progress.
 //! - If a mounted child has a render parent, that parent mount must still be live.
 //! - Exact fragment-child access is used for diff internals; a shorter child-mount list is a mount
 //!   table corruption bug.
@@ -388,8 +390,8 @@ fn first_live_slot_after(
 /// Find a live DOM edge for one dynamic slot.
 ///
 /// Invariant: component root mounts returned by the scope state own a committed vnode; fragment
-/// slots have exactly one mount per child. The slot being inspected is outside the active committed
-/// fragment child list, so caller skip lists cannot contain the mounts it owns.
+/// slots have exactly one mount per child. The slot being inspected is outside the active fragment
+/// reorder/replacement, so its mounts are not marked placement-stale for the current placement scan.
 fn live_dynamic_slot_first_element(
     vnode: &VNode,
     mount: MountId,

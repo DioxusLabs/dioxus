@@ -10,7 +10,7 @@ use crate::{
     scope_context::SuspenseLocation,
 };
 
-/// Properties for the [`SuspenseBoundary()`] component.
+/// Properties for the [`SuspenseBoundary`] component.
 #[allow(non_camel_case_types)]
 pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,

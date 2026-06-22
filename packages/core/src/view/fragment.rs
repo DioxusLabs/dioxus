@@ -12,7 +12,7 @@ use super::{IntoViewChild, View, ViewTemplate};
 /// [`FragmentBuilder::child`], but it contributes no node of its own — it lowers to exactly its
 /// children, in order. That makes it the container for a template's roots and for grouping more
 /// siblings than a single tuple can hold: `View`/`ViewTemplate` are only implemented for tuples up
-/// to arity 64, so wider lists are split into several ≤64-wide tuples joined through `.child(..)`.
+/// to arity 128, so wider lists are split into several tuple groups joined through `.child(..)`.
 /// Nested fragments and tuples flatten transparently into the surrounding template, so the grouping
 /// leaves no trace in the lowered ops or dynamic-slot order.
 pub struct FragmentBuilder<Children> {

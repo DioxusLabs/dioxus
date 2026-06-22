@@ -241,8 +241,8 @@ impl VNode {
 ///
 /// Every dynamic attribute slot is required to be sorted by `(name, namespace)`:
 /// - named attributes occupy a slot of length 1 (trivially sorted), and
-/// - spread attributes are user-provided lists whose sortedness is checked in `VNode::new` under
-///   `debug_assertions`.
+/// - spread attributes are normalized by `DynamicValues::normalize` before they are stored on a
+///   `VNode`.
 ///
 /// Duplicate keys across or within slots collapse to the last occurrence in iteration order,
 /// which matches the "later write wins" semantics of RSX source order.
