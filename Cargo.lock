@@ -4151,7 +4151,6 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-macro",
- "dioxus-core-template",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack-core",

@@ -40,9 +40,9 @@
 //! ```text
 //! Path walk    Slot target          Why it is emitted
 //! 0            BeforeStatic(0)      root dynamic node before div
+//! 0            AppendChildren(0)    dynamic class attrs on div
 //! 001          AppendChildren(001)  dynamic text inside strong
 //! 0011         BeforeStatic(0011)   badge and count before span
-//! 0            AppendChildren(0)    dynamic class attrs on div
 //! []           AppendChildren([])   trailing root dynamic node
 //! ```
 //!
@@ -62,16 +62,16 @@
 //! nodes use `None` as their parent instead.
 //!
 //! Dynamic nodes and dynamic attributes are pushed into one flat runtime value
-//! array as the typed view renders. Element children are pushed before that
-//! element's dynamic attributes, so the example above produces values like this:
+//! array as the typed view renders. An element's dynamic attributes are pushed
+//! before its dynamic children, so the example above produces values like this:
 //!
 //! ```text
 //! Value index    Runtime value
 //! 0              Node(before)
-//! 1              Node(text from "{name}")
-//! 2              Node(badge)
-//! 3              Node(text from "{count}")
-//! 4              Attrs(class from "{class_name}")
+//! 1              Attrs(class from "{class_name}")
+//! 2              Node(text from "{name}")
+//! 3              Node(badge)
+//! 4              Node(text from "{count}")
 //! 5              Node(after)
 //! ```
 //!
@@ -84,15 +84,15 @@
 //! ```text
 //! Values    Parent element op    Slot target          Meaning
 //! 0..1      None                 BeforeStatic(0)      root node before div
-//! 1..2      strong               AppendChildren(001)  "{name}" inside strong
-//! 2..4      div                  BeforeStatic(0011)   badge and count before span
-//! 4..5      div                  AppendChildren(0)    dynamic class attrs for div
+//! 1..2      div                  AppendChildren(0)    dynamic class attrs for div
+//! 2..3      strong               AppendChildren(001)  "{name}" inside strong
+//! 3..5      div                  BeforeStatic(0011)   badge and count before span
 //! 5..6      None                 AppendChildren([])   trailing root node
 //! ```
 //!
 //! Adjacent dynamic nodes at the same insertion position share one anchor. In
 //! the example, `{badge}` and `"{count}"` are both before `span`, so they are
-//! represented by the single `2..4` range.
+//! represented by the single `3..5` range.
 //!
 //! The stored anchor slice is in source/dynamic-value order.
 //!

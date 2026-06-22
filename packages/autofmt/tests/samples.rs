@@ -164,3 +164,12 @@ fn empty_braces_oneliner_is_idempotent() {
     pretty_assertions::assert_eq!(&once, &twice, "pass 1 vs pass 2");
     pretty_assertions::assert_eq!(&twice, &thrice, "pass 2 vs pass 3");
 }
+
+#[test]
+fn path_qualified_element_preserves_qualifier() {
+    // Regression: autofmt dropped the `html::` qualifier, rewriting `html::main {}` to `main {}`
+    // and reintroducing the `fn main` shadowing the qualified element syntax exists to avoid.
+    let src = r#"rsx! { html::main { class: "container", "hi" } }"#;
+    let out = dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
+    assert!(out.contains("html::main"), "qualifier was dropped:\n{out}");
+}

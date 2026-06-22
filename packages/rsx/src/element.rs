@@ -262,7 +262,7 @@ impl Parse for ElementName {
 }
 
 impl ElementName {
-    pub(crate) fn tag_name_string(&self) -> String {
+    pub fn tag_name_string(&self) -> String {
         match self {
             ElementName::Path(p) => {
                 let ident = &p.segments.last().unwrap().ident;

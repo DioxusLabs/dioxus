@@ -159,14 +159,24 @@ impl ToTokens for TemplateBody {
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
         let raw_view_expr = &pieces.view;
+        // Dynamic node values are bound to locals before the builder chain so that any borrows they
+        // take are released before the chain moves captured values into event-handler closures. This
+        // intentionally matches the 0.6 dynamic-node-before-attribute evaluation order instead of
+        // the more straightforward typed-builder evaluation order. The key is bound first because it
+        // may borrow a value that one of those dynamic nodes moves.
+        let node_hoists = &pieces.node_hoists;
         let view_expr = match node.implicit_key() {
             Some(key) => quote! {{
                 use dioxus_core::view::ViewKeyExt as _;
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
                 let __key = Some(#key.to_string());
+                #(#node_hoists)*
                 #raw_view_expr.key(__key)
             }},
-            None => quote! { #raw_view_expr },
+            None => quote! {{
+                #(#node_hoists)*
+                #raw_view_expr
+            }},
         };
         let dynamic_text = pieces.dynamic_text_tokens.iter();
 
@@ -259,6 +269,7 @@ impl ToTokens for TemplateBody {
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
+    node_hoists: Vec<TokenStream2>,
     template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
@@ -338,6 +349,7 @@ enum SiblingContext {
 
 struct ViewBuilder {
     definitions: Vec<TokenStream2>,
+    node_hoists: Vec<TokenStream2>,
     dynamic_node_count: usize,
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
@@ -353,6 +365,7 @@ impl ViewBuilder {
     fn new() -> Self {
         Self {
             definitions: Vec::new(),
+            node_hoists: Vec::new(),
             dynamic_node_count: 0,
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
@@ -369,6 +382,7 @@ impl ViewBuilder {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
+            node_hoists: self.node_hoists,
             template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
@@ -450,9 +464,14 @@ impl ViewBuilder {
             .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
         self.hot_reload_dynamic_slots
             .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
-        // The `IntoDynNode` marker must be inferred: plain values resolve to the `()` marker, but
-        // control-flow bodies (`for`/`if`) produce iterators that resolve to `FromNodeIterator`.
-        quote! { dioxus_core::view::dynamic_node::dynamic_node_builder(#tokens) }
+        // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
+        // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
+        // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
+        // captured values into event-handler closures. The `IntoDynNode` marker is still inferred
+        // from the bound value's type.
+        let node = format_ident!("__dyn_node_{id}");
+        self.node_hoists.push(quote! { let #node = #tokens; });
+        quote! { dioxus_core::view::dynamic_node::dynamic_node_builder(#node) }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {

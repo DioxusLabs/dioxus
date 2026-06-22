@@ -1508,7 +1508,7 @@ dioxus_html_internal_macro::define_elements! {
     /// Build a
     /// [`<mmultiscripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mmultiscripts)
     /// element.
-    #[element(namespace = "http://www.w3.org/1998/math/mathml")]
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
     mmultiscripts {}
 
     /// Build a

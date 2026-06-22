@@ -20,7 +20,9 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
     let attribute_name_rust = attr.name.to_string();
     let element_name = attr.el_name.as_ref().unwrap();
     let rust_name = match element_name {
-        ElementName::Path(p) => p.segments.last().unwrap().ident.to_string(),
+        // Strip any `r#` so the mapped name matches what the compiled binary registered (codegen
+        // resolves the tag through the same `tag_name_string`).
+        ElementName::Path(_) => element_name.tag_name_string(),
         // If this is a web component, just use the name of the elements instead of mapping the attribute
         // through the hot reloading context
         ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
@@ -90,7 +92,9 @@ impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilde
     }
 
     fn open_element(&mut self, element: &'a Element) -> Option<()> {
-        let rust_name = element.name.to_string();
+        // Use `tag_name_string` (the same resolution codegen uses) so raw-ident elements like
+        // `r#use` map to the bare name the compiled binary registered, not `r#use`.
+        let rust_name = element.name.tag_name_string();
         let (tag, namespace) =
             Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
         self.template.open_element(tag, namespace);

@@ -236,14 +236,9 @@ impl App {
 
     /// Tear down one webview: fire close callbacks, drop the webview (and
     /// with it the target's writer), re-render the DOM, and exit if it was
-    /// the last window or the root target.
+    /// the last window.
     fn close_window(&mut self, id: WindowId) {
-        let Some(target_id) = self.webviews.get(&id).map(|window| window.target_id) else {
-            return;
-        };
-
-        if self.exit_on_last_window_close && target_id == RenderTargetId::ROOT {
-            self.control_flow = ControlFlow::Exit;
+        if !self.webviews.contains_key(&id) {
             return;
         }
 

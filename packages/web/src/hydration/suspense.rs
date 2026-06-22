@@ -221,7 +221,10 @@ impl WebsysDom {
     fn collect_suspense_in_vnode(&mut self, vnode: MountedVNode<'_>, dom: &VirtualDom) {
         for group in vnode.vnode().dynamic_nodes() {
             for idx in group.ids() {
-                match vnode.vnode().dynamic_values()[idx].node() {
+                let Some(node) = vnode.vnode().dynamic_values()[idx].as_node() else {
+                    continue;
+                };
+                match node {
                     DynamicNode::Component(comp) => {
                         if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
                             self.collect_suspense_only(child_scope, dom);

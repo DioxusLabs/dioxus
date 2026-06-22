@@ -117,6 +117,46 @@ fn component_builders_compile_as_nodes() {
     }
 }
 
+// Regression test: a `move` event handler that captures a non-`Copy` value must coexist with a
+// sibling node that borrows the same value. Dynamic node values are bound to locals before the
+// builder chain, so the borrow completes before the closure moves the value.
+#[test]
+#[allow(unused)]
+fn move_closure_with_sibling_borrow_compiles() {
+    fn app() -> Element {
+        let mut selected = use_signal(String::new);
+        let items = vec![String::from("a"), String::from("b")];
+        rsx! {
+            for wl in items {
+                // The attribute closure moves `wl`; the sibling child borrows `wl` via interpolation.
+                li {
+                    onclick: move |_| selected.set(wl.clone()),
+                    b { "{wl}" }
+                }
+            }
+        }
+    }
+}
+
+// Regression test: the same hazard across nesting — a parent element's attribute closure moves a
+// value that a nested child node borrows.
+#[test]
+#[allow(unused)]
+fn move_closure_with_nested_child_borrow_compiles() {
+    fn app() -> Element {
+        let mut selected = use_signal(String::new);
+        let items = vec![String::from("a")];
+        rsx! {
+            for wl in items {
+                div {
+                    onclick: move |_| selected.set(wl.clone()),
+                    span { "{wl}" }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 #[allow(unused)]
 fn child_owned_component_builders_compile_as_nodes() {
