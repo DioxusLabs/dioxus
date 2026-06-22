@@ -164,7 +164,7 @@ fn from_template_child(
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
     match child {
-        VNodeChild::Element(element) => from_template_element(element, escape_text, chain),
+        VNodeChild::Element(element) => from_template_element(element, chain),
         VNodeChild::Text(text) => from_template_text(text, escape_text, chain),
         VNodeChild::Dynamic(group) => {
             for index in group.ids() {
@@ -177,7 +177,6 @@ fn from_template_child(
 
 fn from_template_element(
     element: StaticElement<'_>,
-    _escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
     let tag = element.tag();

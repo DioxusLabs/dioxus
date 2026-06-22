@@ -429,7 +429,7 @@ fn build_vnode_with_suspense(
                 .collect::<Box<[Attribute]>>()
         })
         .collect::<Vec<_>>();
-    let dynamic_slots = dynamic_slots_for_template(&spec.template, &template);
+    let dynamic_slots = dynamic_slots_for_template(&spec.template);
 
     let dynamic_values: Vec<DynamicValue> = dynamic_slots
         .into_iter()
@@ -459,7 +459,7 @@ enum FuzzDynamicSlot {
 /// lowered at `close_element` (after the children). This mirrors the typed view builder, which
 /// pushes children then attributes, and is the fuzz-side source of truth for slot kinds, which
 /// the lowered template does not record.
-fn dynamic_slots_for_template(spec: &TemplateSpec, _template: &Template) -> Vec<FuzzDynamicSlot> {
+fn dynamic_slots_for_template(spec: &TemplateSpec) -> Vec<FuzzDynamicSlot> {
     let shapes = spec
         .roots
         .iter()
