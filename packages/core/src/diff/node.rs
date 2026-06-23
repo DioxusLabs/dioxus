@@ -927,9 +927,11 @@ impl VNode {
         to: &mut dyn WriteMutations,
     ) {
         let id = dom.unchecked_mounted_anchor_node(mount, anchor.anchor_index());
-        for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
-            Self::write_attribute(attr, id, mount, dom, to);
-        }
+        with_id(to, id.element_id(), |to| {
+            for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
+                Self::write_attribute_to_current(attr, id, mount, dom, to);
+            }
+        });
     }
 
     fn load_template_root(

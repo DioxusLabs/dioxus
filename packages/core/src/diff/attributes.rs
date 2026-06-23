@@ -21,10 +21,8 @@ use core::{cmp::Ordering, iter::Peekable};
 
 use crate::innerlude::MountId;
 use crate::{
-    Attribute, AttributeValue, VNode, VirtualDom, WriteMutations,
-    arena::MountedElementId,
-    diff::template::DynamicAnchor,
-    mutations::{TargetedLazyScope, with_id},
+    Attribute, AttributeValue, VNode, VirtualDom, WriteMutations, arena::MountedElementId,
+    diff::template::DynamicAnchor, mutations::TargetedLazyScope,
 };
 
 /// Attribute identity as seen by renderers. Value changes do not affect the key, but namespace
@@ -206,23 +204,12 @@ impl VNode {
         to.set_attribute(name, namespace, &value);
     }
 
-    /// Write one dynamic attribute to an already mounted element.
+    /// Write one dynamic attribute to the current renderer stack element.
     ///
+    /// The caller must have already pushed `id` onto `to`.
     /// Listener attributes also need a `MountRef` in the runtime so event dispatch can find
     /// the VNode that owns the handler.
-    pub(crate) fn write_attribute(
-        attribute: &Attribute,
-        id: MountedElementId,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        to: &mut dyn WriteMutations,
-    ) {
-        with_id(to, id.element_id(), |to| {
-            Self::write_attribute_to_current(attribute, id, mount, dom, to);
-        });
-    }
-
-    fn write_attribute_to_current(
+    pub(super) fn write_attribute_to_current(
         attribute: &Attribute,
         id: MountedElementId,
         mount: MountId,
