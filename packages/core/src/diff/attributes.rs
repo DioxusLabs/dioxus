@@ -207,7 +207,7 @@ impl VNode {
     /// Write one dynamic attribute to the current renderer stack element.
     ///
     /// The caller must have already pushed `id` onto `to`.
-    /// Listener attributes also need a `MountRef` in the runtime so event dispatch can find
+    /// Listener attributes also need a `MountId` in the runtime so event dispatch can find
     /// the VNode that owns the handler.
     pub(super) fn write_attribute_to_current(
         attribute: &Attribute,

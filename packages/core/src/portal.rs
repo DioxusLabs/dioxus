@@ -233,7 +233,7 @@ fn place_children(
     target_id: RenderTargetId,
     children: LastRenderedNode,
     existing_root_mount: Option<MountId>,
-    parent: Option<MountRef>,
+    parent: Option<MountId>,
     dom: &mut VirtualDom,
     render_to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
@@ -265,7 +265,7 @@ fn place_children_inner(
     dom: &mut VirtualDom,
     children: &LastRenderedNode,
     existing_root_mount: Option<MountId>,
-    parent: Option<MountRef>,
+    parent: Option<MountId>,
     to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> CreatedVNode {
     match existing_root_mount {
@@ -288,7 +288,7 @@ impl RenderDriver for PortalDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         if new {

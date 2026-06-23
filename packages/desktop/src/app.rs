@@ -16,7 +16,7 @@ use dioxus_history::{History, MemoryHistory};
 use futures_util::{FutureExt, pin_mut};
 use std::{
     cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     rc::Rc,
     task::Waker,
     time::Duration,
@@ -330,8 +330,8 @@ impl App {
         };
 
         if !self.initial_dom_rebuild_done {
-            let touched = self.rebuild_dom();
-            self.send_edits_to_targets(&touched);
+            self.rebuild_dom();
+            self.send_touched_edits();
         }
 
         #[cfg(not(target_os = "linux"))]
@@ -492,8 +492,8 @@ impl App {
             #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
-            let touched = self.render_dom_immediate();
-            self.send_edits_to_targets(&touched);
+            self.render_dom_immediate();
+            self.send_touched_edits();
         }
     }
 
@@ -510,34 +510,25 @@ impl App {
             .collect()
     }
 
-    /// Collect every webview whose `WryQueue` was touched during the preceding
-    /// render pass. The diff writes directly into each registered queue (the
-    /// `WriteMutations` impl on `WryQueue`), so a touched queue means "this
-    /// webview has new edits to flush".
-    fn collect_touched(&self) -> BTreeSet<RenderTargetId> {
-        self.webviews
-            .values()
-            .filter(|app_webview| app_webview.edits.wry_queue.is_touched())
-            .map(|app_webview| app_webview.target_id())
-            .collect()
-    }
-
-    fn rebuild_dom(&mut self) -> BTreeSet<RenderTargetId> {
+    fn rebuild_dom(&mut self) {
         let mut writer = self.dom_writer();
         self.dom.rebuild(&mut writer);
         self.initial_dom_rebuild_done = true;
-        self.collect_touched()
     }
 
-    fn render_dom_immediate(&mut self) -> BTreeSet<RenderTargetId> {
+    fn render_dom_immediate(&mut self) {
         let mut writer = self.dom_writer();
         self.dom.render_immediate(&mut writer);
-        self.collect_touched()
     }
 
-    fn send_edits_to_targets(&self, targets: &BTreeSet<RenderTargetId>) {
+    /// Flush queued edits for every webview whose `WryQueue` was touched during
+    /// the preceding render pass. The diff writes directly into each registered
+    /// queue (the `WriteMutations` impl on `WryQueue`), and `dom_writer` cleared
+    /// every `touched` flag at the start of the pass, so a touched queue means
+    /// "this webview received new edits to send".
+    fn send_touched_edits(&self) {
         for app_webview in self.webviews.values() {
-            if targets.contains(&app_webview.target_id()) {
+            if app_webview.edits.wry_queue.is_touched() {
                 app_webview.edits.wry_queue.send_edits();
             }
         }

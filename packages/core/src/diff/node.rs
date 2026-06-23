@@ -12,7 +12,7 @@ use crate::{
         },
         template::{DynamicAnchor, DynamicNodeSlot},
     },
-    innerlude::{MountId, MountRef},
+    innerlude::MountId,
     mutations::{remove_id, with_consumed_id, with_id},
     nodes::DynamicNode,
     scopes::ScopeId,
@@ -247,7 +247,7 @@ impl VNode {
         new: &[VNode],
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
-        let parent = Some(MountRef { mount });
+        let parent = Some(mount);
         let old_mounts = state
             .dom
             .mounted_fragment_children_exact(mount, slot.index(), old.len());
@@ -417,7 +417,7 @@ impl VNode {
         mount: MountId,
         new: &VNode,
         new_mount: MountId,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
@@ -462,7 +462,7 @@ impl VNode {
         &self,
         mount: MountId,
         new: &VNode,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
@@ -474,7 +474,7 @@ impl VNode {
         &self,
         mount: MountId,
         new: &VNode,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         state: &mut DiffState<'_, '_, '_, '_>,
         destroy_component_state: bool,
     ) -> CreatedVNode {
@@ -760,8 +760,8 @@ impl VNode {
     pub(crate) fn create_with_parents(
         &self,
         dom: &mut VirtualDom,
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
@@ -780,8 +780,8 @@ impl VNode {
         &self,
         dom: &mut VirtualDom,
         mount: MountId,
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
@@ -895,7 +895,7 @@ impl VNode {
         reuse_existing_mounts: bool,
     ) -> usize {
         use DynamicNode::*;
-        let parent = Some(MountRef { mount });
+        let parent = Some(mount);
         let node = &self.dynamic_node_values()[idx];
         match node {
             Component(c) => self.create_component_node(mount, idx, c, state),

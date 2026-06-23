@@ -106,7 +106,7 @@ pub(crate) enum MountedDynamicNodeSlot {
 /// Renderer-local state for a render target.
 #[derive(Debug)]
 pub(crate) struct RenderTargetState {
-    pub(crate) elements: Slab<Option<MountRef>>,
+    pub(crate) elements: Slab<Option<MountId>>,
     pub(crate) template_roots: HashMap<(Template, usize), MountedElementId>,
 }
 
@@ -147,12 +147,6 @@ impl RenderTargetState {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MountId(pub(crate) usize);
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct MountRef {
-    // The mount that owns the renderer element.
-    pub(crate) mount: MountId,
-}
 
 impl VirtualDom {
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
@@ -209,7 +203,7 @@ impl VirtualDom {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets.get_mut(target_id.index()).expect("target");
         let element = target.elements.get_mut(el.index()).expect("element");
-        *element = Some(MountRef { mount });
+        *element = Some(mount);
     }
 
     pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {

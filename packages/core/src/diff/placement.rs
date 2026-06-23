@@ -15,7 +15,7 @@ use std::rc::Rc;
 use crate::{
     MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
-    innerlude::{MountId, MountRef},
+    innerlude::MountId,
     mutations::TargetedLazyScope,
     nodes::DynamicNode,
 };
@@ -191,7 +191,7 @@ fn insertion_site_for_anchor_id(anchor: DynamicAnchor<'_>, anchor_id: ElementId)
 
 pub(super) fn create_at_site_with_mounts(
     content: &[VNode],
-    parent: Option<MountRef>,
+    parent: Option<MountId>,
     site: InsertionSite,
     dom: &mut VirtualDom,
     to: &mut dyn WriteMutations,
@@ -206,7 +206,7 @@ pub(super) fn create_at_site_with_mounts(
 
 pub(super) fn create_at_site(
     content: &VNode,
-    parent: Option<MountRef>,
+    parent: Option<MountId>,
     site: InsertionSite,
     dom: &mut VirtualDom,
     to: &mut dyn WriteMutations,
@@ -295,8 +295,7 @@ fn insertion_site_for_mounted_child(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    while let Some(parent_ref) = dom.mounted_render_parent(mount) {
-        let parent_mount = parent_ref.mount;
+    while let Some(parent_mount) = dom.mounted_render_parent(mount) {
         if let Some(site) =
             insertion_site_for_child_in_parent(edge, mount, parent_mount, dom, context)
         {

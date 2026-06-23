@@ -140,7 +140,7 @@ impl WryQueue {
         if poll.is_ready() {
             // If the future is ready, we need to reset it to wait for the next change
             self_mut.server_location_changed_future =
-                owned_notify_future(self_mut.server_location_changed.clone());
+                owned_notify_future(self_mut.websocket.server_location.clone());
         }
         poll
     }
@@ -170,8 +170,8 @@ pub(crate) struct WryQueueInner {
     websocket: EditWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
     edits_in_progress: Option<oneshot::Receiver<()>>,
-    // The socket may be killed by the OS while running. If it does, this channel will receive the new server location
-    server_location_changed: Arc<Notify>,
+    // The socket may be killed by the OS while running. If it does, this future resolves with the
+    // new server location. The notify it waits on is owned by `websocket.server_location`.
     server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
     mutation_state: MutationState,
     /// `true` if any mutation has been forwarded since the last `clear_touched`.
@@ -439,7 +439,6 @@ impl EditWebsocket {
         let server_location = self.server_location.clone();
         WryQueue {
             inner: Rc::new(RefCell::new(WryQueueInner {
-                server_location_changed: server_location.clone(),
                 server_location_changed_future: owned_notify_future(server_location),
                 location: WebviewWebsocketLocation { webview_id, server },
                 websocket: self.clone(),

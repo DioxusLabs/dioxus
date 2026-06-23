@@ -5,7 +5,7 @@ use crate::{
         placement::{InsertionSite, at_site, insertion_site_for_slot},
         template::DynamicNodeSlot,
     },
-    innerlude::{MountId, MountRef, VComponent, WriteMutations},
+    innerlude::{MountId, VComponent, WriteMutations},
     nodes::VNode,
     scopes::{LastRenderedNode, MountedOutput, ScopeId},
     virtual_dom::VirtualDom,
@@ -61,10 +61,10 @@ impl VirtualDom {
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             let new_mount =
                 DiffFrame::new(old_mount, old.as_vnode(), new_real_nodes).diff_into(&mut state);
+            // `replace_mounted_component_root_mount` keeps this scope's `root_mount`
+            // cell in sync, retargeting every cell that holds `old_mount` (this
+            // body-driver scope included) to `new_mount`.
             self.replace_mounted_component_root_mount(old_mount, new_mount);
-            self.runtime
-                .get_state(scope)
-                .set_root_mount(Some(new_mount));
 
             self.scopes[scope.index()].last_rendered_node = Some(MountedOutput::new(
                 LastRenderedNode::new(new_nodes),
@@ -87,7 +87,7 @@ impl VirtualDom {
         to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
@@ -274,7 +274,7 @@ impl VNode {
         let scope_id = scope_id.expect("component mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let to = state.to.as_deref_mut();
-        let parent = Some(MountRef { mount });
+        let parent = Some(mount);
         let nodes = driver.create(&mut *state.dom, scope_id, new, parent, to);
         let root_mount = state
             .dom

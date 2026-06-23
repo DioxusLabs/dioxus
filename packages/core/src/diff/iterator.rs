@@ -17,7 +17,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{InsertionSite, at_site, create_at_site_with_mounts},
     },
-    innerlude::{MountId, MountRef, WriteMutations},
+    innerlude::{MountId, WriteMutations},
     mount::FragmentMountWriter,
     nodes::VNode,
 };
@@ -149,7 +149,7 @@ impl DiffState<'_, '_, '_, '_> {
         old: &[VNode],
         old_mounts: &[MountId],
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         new_children: FragmentMountWriter,
         fallback_site: Option<InsertionSite>,
     ) {
@@ -185,7 +185,7 @@ impl DiffState<'_, '_, '_, '_> {
         old: &[VNode],
         old_mounts: &[MountId],
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         new_children: FragmentMountWriter,
         fallback_site: Option<InsertionSite>,
     ) {
@@ -230,7 +230,7 @@ impl DiffState<'_, '_, '_, '_> {
         old: &[VNode],
         old_mounts: &[MountId],
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         new_children: FragmentMountWriter,
         fallback_site: Option<InsertionSite>,
     ) {
@@ -372,7 +372,7 @@ impl DiffState<'_, '_, '_, '_> {
         old: &[VNode],
         old_mounts: &[MountId],
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         new_children: FragmentMountWriter,
         new_offset: usize,
         plan: FragmentPlacementPlan,
@@ -471,7 +471,7 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         old: &'a [VNode],
         old_mounts: &[MountId],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         plan: &FragmentPlacementPlan,
         range: Range<usize>,
         new_mounts: &mut [Option<MountId>],
@@ -540,7 +540,7 @@ impl DiffState<'_, '_, '_, '_> {
     pub(super) fn create_children_at_site(
         &mut self,
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         site: impl FnOnce(&mut Self) -> InsertionSite,
         children: FragmentMountWriter,
     ) -> usize {
@@ -552,7 +552,7 @@ impl DiffState<'_, '_, '_, '_> {
     fn create_children_at_site_with_mounts(
         &mut self,
         new: &[VNode],
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         site: impl FnOnce(&mut Self) -> InsertionSite,
         created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
     ) -> usize {

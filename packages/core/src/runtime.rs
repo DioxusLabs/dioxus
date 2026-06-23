@@ -546,10 +546,10 @@ fn MyComponent() -> Element {{
         drop(targets);
 
         if let Some(parent_ref) = parent_ref
-            && let Some(path) = self.event_target_path(parent_ref.mount, element)
+            && let Some(path) = self.event_target_path(parent_ref, element)
         {
             let target = EventTarget {
-                mount: parent_ref.mount,
+                mount: parent_ref,
                 path,
             };
             if event.propagates() {
@@ -743,9 +743,9 @@ fn MyComponent() -> Element {{
             }
 
             parent = logical_parent.and_then(|parent_ref| {
-                self.child_slot_path(parent_ref.mount, target.mount)
+                self.child_slot_path(parent_ref, target.mount)
                     .map(|path| EventTarget {
-                        mount: parent_ref.mount,
+                        mount: parent_ref,
                         path,
                     })
             });

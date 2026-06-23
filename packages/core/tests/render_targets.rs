@@ -700,6 +700,46 @@ fn removing_render_target_frees_and_recycles_the_slot() {
     assert_eq!(recycled, target);
 }
 
+fn teardown_target_app(props: AppProps) -> Element {
+    let target = props.target.get();
+    // Mimics the desktop `Window` component: a scope that owns a render target
+    // and reclaims it from its drop cleanup whenever a runtime is still current.
+    use_drop(move || {
+        match Runtime::try_current() {
+            Some(runtime) => {
+                let removed = runtime.remove_render_target(target);
+                eprintln!("DROP: runtime present, remove_render_target -> {removed}");
+            }
+            None => eprintln!("DROP: no runtime current"),
+        }
+    });
+
+    rsx! {
+        Portal {
+            target,
+            div { "content" }
+        }
+    }
+}
+
+#[test]
+fn dropping_vdom_with_target_owning_scope_does_not_panic() {
+    let target_slot = TargetSlot::new();
+    let mut dom = VirtualDom::new_with_props(
+        teardown_target_app,
+        AppProps { target: target_slot.clone() },
+    );
+    let target = dom.runtime().create_render_target();
+    target_slot.set(target);
+
+    let _ = rebuild_to_targeted_vec(&mut dom);
+
+    // The portal is still mounted into `target`. Dropping the whole VirtualDom
+    // must tear everything down without tripping the live-mounts assertion in
+    // the scope's drop cleanup.
+    drop(dom);
+}
+
 #[cfg(debug_assertions)]
 #[test]
 #[should_panic = "live mounted elements"]

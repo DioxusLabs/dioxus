@@ -13,7 +13,7 @@
 
 use crate::{
     DynamicNode, RenderTargetId, ScopeId, VNode,
-    arena::{MountId, MountRef, MountedDynamicNodeSlot, MountedElementId},
+    arena::{MountId, MountedDynamicNodeSlot, MountedElementId},
     virtual_dom::VirtualDom,
 };
 
@@ -110,9 +110,9 @@ impl PackedMountedSlot {
 }
 
 pub(crate) struct Mount {
-    render_parent: Option<MountRef>,
+    render_parent: Option<MountId>,
 
-    logical_parent: Option<MountRef>,
+    logical_parent: Option<MountId>,
 
     target_id: RenderTargetId,
 
@@ -134,8 +134,8 @@ pub(crate) struct Mount {
 impl Mount {
     pub(crate) fn new(
         node: VNode,
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         target_id: RenderTargetId,
     ) -> Self {
         // Anchor and dynamic-node slot counts are structural: the anchor array length is the
@@ -172,7 +172,7 @@ impl Mount {
         self.dynamic_slot(idx).component_scope()
     }
 
-    pub(crate) fn logical_parent(&self) -> Option<MountRef> {
+    pub(crate) fn logical_parent(&self) -> Option<MountId> {
         self.logical_parent
     }
 
@@ -206,8 +206,8 @@ impl VirtualDom {
     pub(crate) fn create_mount(
         &mut self,
         node: &VNode,
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         target_id: RenderTargetId,
     ) -> MountId {
         let mut mounts = self.runtime.mounts.borrow_mut();
@@ -226,8 +226,8 @@ impl VirtualDom {
     pub(crate) fn reuse_mount(
         &mut self,
         mount: MountId,
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         target_id: RenderTargetId,
     ) {
         self.with_mount_mut(mount, |mount| {
@@ -245,11 +245,11 @@ impl VirtualDom {
         self.with_mount(mount, |mount| mount.target_id)
     }
 
-    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<MountRef> {
+    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<MountId> {
         self.with_mount(mount, |mount| mount.render_parent)
     }
 
-    pub(crate) fn mounted_logical_parent(&self, mount: MountId) -> Option<MountRef> {
+    pub(crate) fn mounted_logical_parent(&self, mount: MountId) -> Option<MountId> {
         self.with_mount(mount, |mount| mount.logical_parent)
     }
 

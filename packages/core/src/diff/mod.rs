@@ -18,7 +18,7 @@
 //!   mounted-node queries are reserved for public inspection/event lookup paths.
 
 use crate::{
-    innerlude::{MountId, MountRef, WriteMutations},
+    innerlude::{MountId, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
 };
@@ -45,8 +45,8 @@ impl VirtualDom {
         &mut self,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
-        render_parent: Option<MountRef>,
-        logical_parent: Option<MountRef>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
         mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
     ) -> usize {
         let mut created = 0;

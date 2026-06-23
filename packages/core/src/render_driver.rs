@@ -3,7 +3,7 @@ use std::any::Any;
 use crate::{
     WriteMutations,
     diff::context::DiffContext,
-    innerlude::MountRef,
+    innerlude::MountId,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -37,7 +37,7 @@ pub(crate) trait RenderDriver: 'static {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize;
 
@@ -95,7 +95,7 @@ impl RenderDriver for BodyDriver {
         dom: &mut VirtualDom,
         scope_id: ScopeId,
         new: bool,
-        parent: Option<MountRef>,
+        parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         let new_node = if new {
