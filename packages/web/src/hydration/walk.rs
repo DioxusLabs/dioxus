@@ -94,7 +94,7 @@ impl WebsysDom {
             VNodeChild::Element(element) => {
                 let root_id = mounted_static_node(
                     vnode,
-                    element.root_position(),
+                    element.root_anchor_index(),
                     element.op(),
                     state.take_pending_before_anchor(),
                     dom,
@@ -107,7 +107,7 @@ impl WebsysDom {
             VNodeChild::Text(text) => {
                 let root_id = mounted_static_node(
                     vnode,
-                    text.root_position(),
+                    text.root_anchor_index(),
                     text.op(),
                     state.take_pending_before_anchor(),
                     dom,
@@ -240,13 +240,13 @@ impl WebsysDom {
 
 fn mounted_static_node<'a>(
     vnode: MountedVNode<'a>,
-    root_position: Option<usize>,
+    root_anchor_idx: Option<usize>,
     op: usize,
     pending_before_anchor: Option<ElementId>,
     dom: &'a VirtualDom,
 ) -> Option<ElementId> {
-    root_position
-        .and_then(|root_position| vnode.mounted_root(root_position, dom))
+    root_anchor_idx
+        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
         .or(pending_before_anchor)
         .or_else(|| {
             let path = vnode.vnode().template.static_path_for_op(op)?;

@@ -169,25 +169,32 @@ impl VirtualDom {
         &self,
         target_id: RenderTargetId,
         template: Template,
-        root_idx: usize,
+        root_anchor_idx: usize,
     ) -> Option<MountedElementId> {
         self.runtime
             .render_targets
             .borrow()
             .get(target_id.index())
-            .and_then(|target| target.template_roots.get(&(template, root_idx)).copied())
+            .and_then(|target| {
+                target
+                    .template_roots
+                    .get(&(template, root_anchor_idx))
+                    .copied()
+            })
     }
 
     pub(crate) fn allocate_template_root(
         &mut self,
         target_id: RenderTargetId,
         template: Template,
-        root_idx: usize,
+        root_anchor_idx: usize,
     ) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets.get_mut(target_id.index()).expect("target");
         let id = MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)));
-        target.template_roots.insert((template, root_idx), id);
+        target
+            .template_roots
+            .insert((template, root_anchor_idx), id);
         id
     }
 

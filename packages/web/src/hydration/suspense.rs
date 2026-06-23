@@ -98,16 +98,16 @@ pub(super) fn first_dynamic_root_element_id(
                 }
                 VNodeChild::Element(element) => {
                     if let Some(id) = element
-                        .root_position()
-                        .and_then(|root| vnode.mounted_root(root, dom))
+                        .root_anchor_index()
+                        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
                     {
                         return Some(id);
                     }
                 }
                 VNodeChild::Text(text) => {
                     if let Some(id) = text
-                        .root_position()
-                        .and_then(|root| vnode.mounted_root(root, dom))
+                        .root_anchor_index()
+                        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
                     {
                         return Some(id);
                     }

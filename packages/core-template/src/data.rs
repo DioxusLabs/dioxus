@@ -140,8 +140,9 @@ impl<'a> StaticTemplateElement<'a> {
         key: (&'static str, Option<&'static str>),
     ) -> Option<&'static str> {
         self.attributes()
-            .find(|attr| (attr.name, attr.namespace) == key)
+            .filter(|attr| (attr.name, attr.namespace) == key)
             .map(|attr| attr.value)
+            .last()
     }
 }
 
@@ -379,68 +380,54 @@ impl Template {
 
     /// Return the number of materialized root positions.
     pub fn root_position_count(&self) -> usize {
-        self.static_root_count() + self.root_level_dynamic_anchor_count()
+        let mut count = 0;
+        self.for_each_root_position(|position, _, _| {
+            count = position + 1;
+            true
+        });
+        count
     }
 
-    /// Map a static root index to the materialized root position that renders it.
-    pub fn root_position_for_static_root(&self, static_root_idx: usize) -> Option<usize> {
-        (static_root_idx < self.static_root_count())
-            .then(|| static_root_idx + self.root_dynamic_before_static_count(static_root_idx, true))
+    /// Map a static root's source-order slot to its materialized position and structural anchor.
+    pub fn static_root_anchor(&self, static_root_order: usize) -> Option<(usize, usize)> {
+        let mut found = None;
+        self.for_each_root_position(|position, anchor_idx, order| {
+            if let Some(order) = order {
+                if order == static_root_order {
+                    found = Some((position, anchor_idx));
+                    return false;
+                }
+            }
+            true
+        });
+        found
     }
 
     /// Return the materialized root position that owns an anchor.
     pub fn root_position_for_anchor(&self, anchor_idx: usize) -> Option<usize> {
         let anchor = self.anchors.get(anchor_idx)?;
-        let path = anchor.static_path();
         if anchor.parent_element_op_index().is_none() {
-            if path.is_empty() {
-                return Some(
-                    self.static_root_count()
-                        + self.root_dynamic_before_static_count(usize::MAX, true),
-                );
-            }
-
-            if path.is_root() {
-                let static_root_idx = path.segment(0) as usize;
-                if anchor.is_last_static_node() {
-                    return Some(
-                        static_root_idx
-                            + 1
-                            + self.root_dynamic_before_static_count(static_root_idx, true),
-                    );
+            let mut found_dynamic = None;
+            let mut found_static = None;
+            self.for_each_root_position(|position, idx, static_root_order| {
+                if idx == anchor_idx {
+                    if static_root_order.is_none() {
+                        found_dynamic = Some(position);
+                    } else {
+                        found_static = Some(position);
+                    }
+                    return false;
                 }
-
-                return Some(
-                    static_root_idx + self.root_dynamic_before_static_count(static_root_idx, false),
-                );
-            }
+                true
+            });
+            return found_dynamic.or(found_static);
         }
 
+        let path = anchor.static_path();
         (!path.is_empty())
             .then(|| path.segment(0) as usize)
-            .and_then(|static_root_idx| self.root_position_for_static_root(static_root_idx))
-    }
-
-    /// Return the structural anchor index for a static root index.
-    pub fn root_anchor_for_static_root(&self, static_root_idx: usize) -> Option<usize> {
-        let root_path = TemplatePath::root(static_root_idx);
-        self.anchors.iter().position(|anchor| {
-            anchor.parent_element_op_index().is_none()
-                && !anchor.is_last_static_node()
-                && anchor.static_path() == root_path
-        })
-    }
-
-    /// Return the structural anchor index for a materialized static root position.
-    pub fn root_anchor_for_position(&self, root_position: usize) -> Option<usize> {
-        let mut static_root_idx = 0;
-        while static_root_idx < self.static_root_count() {
-            if self.root_position_for_static_root(static_root_idx) == Some(root_position) {
-                return self.root_anchor_for_static_root(static_root_idx);
-            }
-            static_root_idx += 1;
-        }
-        None
+            .and_then(|static_root_order| self.static_root_anchor(static_root_order))
+            .map(|(position, _)| position)
     }
 
     /// Return the static template path for a flat template op.
@@ -479,49 +466,32 @@ impl Template {
         None
     }
 
-    fn static_root_count(&self) -> usize {
-        let mut op = 0usize;
-        let mut count = 0usize;
-        while op < self.ops.len() {
-            if self.is_static_node_op(op) {
-                count += 1;
+    fn for_each_root_position(&self, mut visit: impl FnMut(usize, usize, Option<usize>) -> bool) {
+        let mut root_position = 0;
+        for (anchor_idx, anchor) in self.anchors.iter().copied().enumerate() {
+            if anchor.parent_element_op_index().is_some() {
+                continue;
             }
-            op = self.next_sibling_op(op);
-        }
-        count
-    }
 
-    fn root_level_dynamic_anchor_count(&self) -> usize {
-        self.anchors
-            .iter()
-            .filter(|anchor| anchor.parent_element_op_index().is_none())
-            .filter(|anchor| !anchor.nodes().is_empty())
-            .filter(|anchor| anchor.static_path().is_root() || anchor.static_path().is_empty())
-            .count()
-    }
+            let path = anchor.static_path();
+            if !path.is_root() && !path.is_empty() {
+                continue;
+            }
 
-    fn root_dynamic_before_static_count(
-        &self,
-        static_root_idx: usize,
-        include_current: bool,
-    ) -> usize {
-        self.anchors
-            .iter()
-            .filter(|anchor| anchor.parent_element_op_index().is_none())
-            .filter(|anchor| !anchor.nodes().is_empty())
-            .filter(|anchor| !anchor.is_last_static_node())
-            .filter_map(|anchor| {
-                let path = anchor.static_path();
-                path.is_root().then(|| path.segment(0) as usize)
-            })
-            .filter(|&idx| {
-                if include_current {
-                    idx <= static_root_idx
-                } else {
-                    idx < static_root_idx
+            if !anchor.nodes().is_empty() {
+                if !visit(root_position, anchor_idx, None) {
+                    return;
                 }
-            })
-            .count()
+                root_position += 1;
+            }
+
+            if !anchor.is_last_static_node() && path.is_root() {
+                if !visit(root_position, anchor_idx, Some(path.segment(0) as usize)) {
+                    return;
+                }
+                root_position += 1;
+            }
+        }
     }
 
     fn next_sibling_op(&self, op: usize) -> usize {

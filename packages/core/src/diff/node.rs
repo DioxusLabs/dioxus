@@ -266,9 +266,9 @@ impl VNode {
         )
     }
 
-    fn find_element_at_root_in_target(
+    fn find_static_anchor_in_target(
         &self,
-        root_idx: usize,
+        anchor_idx: usize,
         mount: MountId,
         target_id: crate::RenderTargetId,
         dom: &VirtualDom,
@@ -276,7 +276,6 @@ impl VNode {
         if dom.mount_target_id(mount) != target_id {
             return None;
         }
-        let anchor_idx = self.template.root_anchor_for_position(root_idx)?;
         dom.mounted_anchor_node(mount, anchor_idx)
             .map(MountedElementId::element_id)
     }
@@ -327,14 +326,14 @@ impl VNode {
             VNodeChild::Dynamic(anchor) => {
                 self.dynamic_anchor_edge_element(anchor, mount, dom, target_id, edge)
             }
-            VNodeChild::Element(element) => self.find_element_at_root_in_target(
-                element.root_position().expect("root element"),
+            VNodeChild::Element(element) => self.find_static_anchor_in_target(
+                element.root_anchor_index().expect("root element"),
                 mount,
                 target_id,
                 dom,
             ),
-            VNodeChild::Text(text) => self.find_element_at_root_in_target(
-                text.root_position().expect("root text"),
+            VNodeChild::Text(text) => self.find_static_anchor_in_target(
+                text.root_anchor_index().expect("root text"),
                 mount,
                 target_id,
                 dom,
@@ -766,7 +765,6 @@ impl VNode {
         reuse_existing_mounts: bool,
     ) -> usize {
         let mut nodes_created = 0;
-        let mut static_root_idx = 0;
 
         for child in self.children() {
             match child {
@@ -781,42 +779,19 @@ impl VNode {
                     }
                 }
                 VNodeChild::Element(element) => {
-                    let current_static_root_idx = static_root_idx;
-                    static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
-                        let id = self.load_template_root(
-                            element.root_position().expect("root element"),
-                            element.op(),
-                            state.dom,
-                            to,
-                        );
-                        self.assign_template_anchor_ids(
-                            mount,
-                            current_static_root_idx,
-                            id,
-                            state.dom,
-                            to,
-                        );
+                        let root_anchor_idx = element.root_anchor_index().expect("root element");
+                        let id =
+                            self.load_template_root(root_anchor_idx, element.op(), state.dom, to);
+                        self.assign_template_anchor_ids(mount, root_anchor_idx, id, state.dom, to);
                         nodes_created += 1;
                     }
                 }
                 VNodeChild::Text(text) => {
-                    let current_static_root_idx = static_root_idx;
-                    static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
-                        let id = self.load_template_root(
-                            text.root_position().expect("root text"),
-                            text.op(),
-                            state.dom,
-                            to,
-                        );
-                        self.assign_template_anchor_ids(
-                            mount,
-                            current_static_root_idx,
-                            id,
-                            state.dom,
-                            to,
-                        );
+                        let root_anchor_idx = text.root_anchor_index().expect("root text");
+                        let id = self.load_template_root(root_anchor_idx, text.op(), state.dom, to);
+                        self.assign_template_anchor_ids(mount, root_anchor_idx, id, state.dom, to);
                         nodes_created += 1;
                     }
                 }
@@ -969,7 +944,7 @@ impl VNode {
 
     fn load_template_root(
         &self,
-        root_idx: usize,
+        root_anchor_idx: usize,
         root_op: usize,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
@@ -979,15 +954,17 @@ impl VNode {
 
         let static_root = self.template.static_node(root_op).expect("bad static root");
         if to.can_cache_template_roots() {
-            let template_id = match dom.cached_template_root(target_id, self.template, root_idx) {
-                Some(id) => id,
-                None => {
-                    let id = dom.allocate_template_root(target_id, self.template, root_idx);
-                    create_static_prototype(static_root, to);
-                    to.pop_id(id.element_id());
-                    id
-                }
-            };
+            let template_id =
+                match dom.cached_template_root(target_id, self.template, root_anchor_idx) {
+                    Some(id) => id,
+                    None => {
+                        let id =
+                            dom.allocate_template_root(target_id, self.template, root_anchor_idx);
+                        create_static_prototype(static_root, to);
+                        to.pop_id(id.element_id());
+                        id
+                    }
+                };
             to.push_id(template_id.element_id());
             WriteMutations::clone(to);
         } else {
@@ -1001,18 +978,19 @@ impl VNode {
     fn assign_template_anchor_ids(
         &self,
         mount: MountId,
-        static_root_idx: usize,
+        root_anchor_idx: usize,
         root_id: MountedElementId,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
+        let root_path = self.template.anchors()[root_anchor_idx].static_path();
         let mut assigned_paths = Vec::new();
 
         for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
             let Some(path) = anchor_static_target(anchor) else {
                 continue;
             };
-            if path.segment(0) as usize != static_root_idx {
+            if !path.starts_with(root_path) {
                 continue;
             }
 

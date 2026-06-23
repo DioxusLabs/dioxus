@@ -794,11 +794,7 @@ impl crate::MountedVNode<'_> {
                 }
                 VNodeChild::Element(element) => {
                     if dom.mount_target_id(mount) == target_id
-                        && let Some(root_position) = element.root_position()
-                        && let Some(anchor_idx) = self
-                            .vnode()
-                            .template
-                            .root_anchor_for_position(root_position)
+                        && let Some(anchor_idx) = element.root_anchor_index()
                         && let Some(id) = dom.mounted_anchor_node(mount, anchor_idx)
                     {
                         count += push_live_root(to, id.element_id());
@@ -806,11 +802,7 @@ impl crate::MountedVNode<'_> {
                 }
                 VNodeChild::Text(text) => {
                     if dom.mount_target_id(mount) == target_id
-                        && let Some(root_position) = text.root_position()
-                        && let Some(anchor_idx) = self
-                            .vnode()
-                            .template
-                            .root_anchor_for_position(root_position)
+                        && let Some(anchor_idx) = text.root_anchor_index()
                         && let Some(id) = dom.mounted_anchor_node(mount, anchor_idx)
                     {
                         count += push_live_root(to, id.element_id());

@@ -116,7 +116,13 @@ impl TemplatePath {
             return self.path == ancestor.path;
         }
 
-        let suffix_bits = self.bit_len() - ancestor.bit_len();
+        let self_bits = self.bit_len();
+        let ancestor_bits = ancestor.bit_len();
+        if ancestor_bits > self_bits {
+            return false;
+        }
+
+        let suffix_bits = self_bits - ancestor_bits;
         suffix_bits > 0
             && (self.path >> suffix_bits) == ancestor.path
             && ((self.path >> (suffix_bits - 1)) & 1) == 1
@@ -286,6 +292,11 @@ mod tests {
         assert!(!TemplatePath::from_bits(0b10).starts_with(TemplatePath::from_bits(0b1)));
         assert!(!TemplatePath::from_bits(0b101).starts_with(TemplatePath::from_bits(0b1)));
         assert!(!TemplatePath::from_bits(0b1001).starts_with(TemplatePath::from_bits(0b10)));
+        assert!(
+            !TemplatePath::root(0)
+                .next_child()
+                .starts_with(TemplatePath::root(5))
+        );
 
         assert!(TemplatePath::from_bits(0b110).starts_with(TemplatePath::from_bits(0b1)));
         assert!(TemplatePath::from_bits(0b101).starts_with(TemplatePath::from_bits(0b10)));

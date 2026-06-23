@@ -3,8 +3,8 @@
 //! Invariants maintained here:
 //! - A live `MountId` owns one committed `VNode`, one render parent, one logical parent, and one
 //!   render target.
-//! - Root slots, anchor slots, and dynamic slots are sized from the committed vnode template and
-//!   remain stable until `commit_mount`.
+//! - Anchor slots and dynamic slots are sized from the committed vnode template and remain stable
+//!   until `commit_mount`.
 //! - Non-empty fragment dynamic slots point at an exact contiguous range in
 //!   `fragment_child_mounts`; empty fragments store an empty slot.
 //! - Diff internals must use `mounted_fragment_children_exact` when vnode shape says a fragment has
@@ -44,6 +44,7 @@ pub(crate) struct FragmentMountWriter {
     len: usize,
 }
 
+#[cfg(debug_assertions)]
 impl FragmentMountWriter {
     pub(crate) fn len(self) -> usize {
         self.len

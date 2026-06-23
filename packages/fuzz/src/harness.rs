@@ -3417,6 +3417,58 @@ mod tests {
     }
 
     #[test]
+    fn removing_dynamic_attr_restores_last_duplicate_static_template_attr() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
+                            name: 13,
+                            namespace: None,
+                            value: AttrValueSpec::Text(0),
+                            volatile: false,
+                        }]),
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Static {
+                            name: 13,
+                            value: 254,
+                            namespace: None,
+                        },
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Static {
+                            name: 13,
+                            value: 190,
+                            namespace: None,
+                        },
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic_attrs(136, 0, ListEdit::Remove { index: 0 }),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn dynamic_attr_namespace_change_removes_old_namespace() {
         replay_ops([
             Op::template(

@@ -56,10 +56,9 @@
 //! after that static node, or append to it when the path is also the anchor's
 //! owning element.
 //!
-//! Anchors are created for dynamic node or attribute groups, not for every static node.
-//! A static element appears as an anchor parent only when it owns dynamic
-//! attributes or a direct dynamic child insertion position. Root-level dynamic
-//! nodes use `None` as their parent instead.
+//! Anchors are created for dynamic node or attribute groups and for every root static node. A
+//! non-root static element appears as an anchor parent only when it owns dynamic attributes or a
+//! direct dynamic child insertion position. Root-level anchors use `None` as their parent.
 //!
 //! Dynamic nodes and dynamic attributes are pushed into separate runtime arrays
 //! as the typed view renders. An element's dynamic attributes are pushed before
@@ -118,9 +117,9 @@ pub use raw::TemplateRawTree;
 #[cfg(feature = "serialize")]
 pub use serialization::{deserialize_option_leaky, deserialize_string_leaky};
 pub use storage::TemplateStorageStats;
+#[cfg(debug_assertions)]
+pub use storage::build_runtime_template;
 pub use storage::{
     RuntimeTemplateBuilder, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_MAX_CAP,
     TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP, TemplateStatsBuilder, TemplateStorage,
 };
-#[cfg(debug_assertions)]
-pub use storage::build_runtime_template;

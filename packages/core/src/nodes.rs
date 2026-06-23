@@ -305,20 +305,18 @@ impl<'a> MountedVNode<'a> {
         }
     }
 
-    /// Get the mounted id for a root node.
-    pub fn mounted_root(self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        let anchor_idx = self.vnode.template.root_anchor_for_position(root_idx)?;
-        dom.mounted_anchor_node(self.mount, anchor_idx)
-            .map(|id| id.element_id())
-    }
-
     /// Get the mounted id for the static template node addressed by a dynamic anchor.
     pub fn mounted_anchor_node(
         self,
         anchor: DynamicAnchor<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        dom.mounted_anchor_node(self.mount, anchor.anchor_index())
+        self.mounted_static_anchor(anchor.anchor_index(), dom)
+    }
+
+    /// Get the mounted id for a static template node by its anchor slot.
+    pub fn mounted_static_anchor(self, anchor_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+        dom.mounted_anchor_node(self.mount, anchor_idx)
             .map(|id| id.element_id())
     }
 

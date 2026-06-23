@@ -770,7 +770,7 @@ mod tests {
         );
         assert_eq!(template.strings()[0], "tag1");
         assert_eq!(template.root_position_count(), 1);
-        assert_eq!(dynamic_value_count(template), 1);
+        assert_eq!(dynamic_node_count(template), 1);
     }
 
     #[test]
@@ -820,6 +820,16 @@ mod tests {
             .anchors()
             .iter()
             .map(|anchor| anchor.attributes().end)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// The number of dynamic node slots a template declares, derived structurally from its anchors.
+    fn dynamic_node_count(template: Template) -> usize {
+        template
+            .anchors()
+            .iter()
+            .map(|anchor| anchor.nodes().end)
             .max()
             .unwrap_or(0)
     }
