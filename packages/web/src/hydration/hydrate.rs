@@ -40,13 +40,7 @@ pub(crate) enum RehydrationError {
 impl WebsysDom {
     pub fn rehydrate_streaming(&mut self, message: SuspenseMessage, dom: &mut VirtualDom) {
         if let Err(err) = self.rehydrate_streaming_inner(message, dom) {
-            #[cfg(debug_assertions)]
             tracing::error!("Rehydration failed. {:?}", err);
-            #[cfg(not(debug_assertions))]
-            {
-                let _ = err;
-                tracing::error!("Rehydration failed.");
-            }
         }
     }
 
