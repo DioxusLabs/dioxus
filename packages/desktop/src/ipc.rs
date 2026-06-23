@@ -17,7 +17,7 @@ pub enum UserWindowEvent {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
-    /// Poll the virtualdom
+    /// Poll the shared VirtualDom.
     Poll,
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview

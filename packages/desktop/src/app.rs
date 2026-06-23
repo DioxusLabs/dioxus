@@ -7,7 +7,7 @@ use crate::{
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
-    waker::tao_waker,
+    waker::create_dom_waker,
     webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
@@ -45,7 +45,7 @@ pub(crate) struct App {
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
     pub(crate) tray_icon_show_window_on_click: bool,
-    pub(crate) waker: Waker,
+    pub(crate) dom_waker: Waker,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
     ///
@@ -73,7 +73,7 @@ impl App {
 
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
         let proxy = event_loop.create_proxy();
-        let waker = tao_waker(proxy.clone());
+        let dom_waker = create_dom_waker(proxy.clone());
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -86,7 +86,7 @@ impl App {
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
-            waker,
+            dom_waker,
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -203,7 +203,7 @@ impl App {
             let app_webview = pending_webview.create_window(&mut self.dom, &self.shared);
             let id = app_webview.desktop_context.window.id();
             self.webviews.insert(id, app_webview);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
+            self.schedule_poll();
         }
     }
 
@@ -322,9 +322,8 @@ impl App {
         }
     }
 
-    /// The webview is finally loaded
-    ///
-    /// Let's rebuild it and then start polling it
+    /// The webview is finally loaded. Rebuild once, then start polling the
+    /// shared VDOM.
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let Some(target_id) = self.webviews.get(&id).map(|view| view.target_id()) else {
             return;
@@ -346,7 +345,7 @@ impl App {
             }
         }
 
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
+        self.schedule_poll();
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -455,18 +454,21 @@ impl App {
         }
     }
 
-    /// Poll the virtualdom until it's pending
+    fn schedule_poll(&self) {
+        _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
+    }
+
+    /// Poll the shared VirtualDom until it is pending.
     ///
-    /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
-    ///
-    /// All IO is done on the tokio runtime we started earlier
+    /// The app-level waker is connected to the event loop, so async work wakes
+    /// the app by scheduling another [`UserWindowEvent::Poll`].
     pub fn poll_vdom(&mut self) {
         if self.webviews.is_empty() {
             return;
         }
 
-        let waker = self.waker.clone();
-        let mut cx = std::task::Context::from_waker(&waker);
+        let dom_waker = self.dom_waker.clone();
+        let mut cx = std::task::Context::from_waker(&dom_waker);
 
         loop {
             if self.poll_webview_queues(&mut cx) {

@@ -3,13 +3,13 @@ use futures_util::task::ArcWake;
 use std::sync::Arc;
 use tao::event_loop::EventLoopProxy;
 
-/// Create a waker that will send a poll event to the event loop.
+/// Create a waker that schedules VDOM polling on the event loop.
 ///
 /// This lets the VirtualDom "come up for air" and process events while the main thread is blocked by the WebView.
 ///
 /// All IO and multithreading lives on other threads. Thanks to tokio's work stealing approach, the main thread can never
 /// claim a task while it's blocked by the event loop.
-pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>) -> std::task::Waker {
+pub fn create_dom_waker(proxy: EventLoopProxy<UserWindowEvent>) -> std::task::Waker {
     struct DomHandle {
         proxy: EventLoopProxy<UserWindowEvent>,
     }
