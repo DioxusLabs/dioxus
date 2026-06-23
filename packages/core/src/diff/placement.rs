@@ -16,11 +16,12 @@ use crate::{
     MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{MountId, MountRef},
-    mutations::{TargetedLazyScope, append_children_to},
+    mutations::TargetedLazyScope,
     nodes::DynamicNode,
 };
 
 use super::{
+    CreatedVNode,
     context::DiffContext,
     node::EdgeScan,
     template::{DynamicAnchor, DynamicNodeSlot},
@@ -33,13 +34,6 @@ pub(super) enum ElementEdge {
 }
 
 impl ElementEdge {
-    fn site(self, id: ElementId) -> InsertionSite {
-        match self {
-            ElementEdge::First => InsertionSite::before(id),
-            ElementEdge::Last => InsertionSite::after(id),
-        }
-    }
-
     pub(super) fn find_map<T>(
         self,
         len: usize,
@@ -52,70 +46,73 @@ impl ElementEdge {
     }
 }
 
-/// Which side of an [`InsertionSite`]'s anchor `m` already-stacked DOM nodes are spliced onto.
+/// A renderer-level insertion site for nodes already on the renderer stack.
+///
+/// For `Before`/`After` the anchor is a sibling; for `AppendTo` it is the parent the nodes become
+/// the last children of.
 #[derive(Clone, Copy)]
-pub(super) enum InsertionEdge {
+pub(crate) enum InsertionSite {
     /// Insert immediately before the sibling anchor.
-    Before,
+    Before(ElementId),
     /// Insert immediately after the sibling anchor.
-    After,
+    After(ElementId),
     /// Append as the last children of the parent anchor.
-    Append,
-}
-
-/// A renderer-level insertion site for nodes already on the renderer stack: the anchor element and
-/// which side of it to splice onto. For `Before`/`After` the anchor is a sibling; for `Append` it
-/// is the parent the nodes become the last children of.
-#[derive(Clone, Copy)]
-pub(crate) struct InsertionSite {
-    anchor: ElementId,
-    edge: InsertionEdge,
+    AppendTo(ElementId),
 }
 
 impl InsertionSite {
     pub(super) fn before(anchor: ElementId) -> Self {
-        Self {
-            anchor,
-            edge: InsertionEdge::Before,
-        }
+        Self::Before(anchor)
     }
 
     pub(super) fn after(anchor: ElementId) -> Self {
-        Self {
-            anchor,
-            edge: InsertionEdge::After,
-        }
+        Self::After(anchor)
     }
 
     pub(super) fn append_to(anchor: ElementId) -> Self {
-        Self {
-            anchor,
-            edge: InsertionEdge::Append,
+        Self::AppendTo(anchor)
+    }
+
+    fn anchor(self) -> ElementId {
+        match self {
+            Self::Before(anchor) | Self::After(anchor) | Self::AppendTo(anchor) => anchor,
         }
     }
 
     fn create_and_place(
-        &self,
+        self,
         to: &mut dyn WriteMutations,
         runtime: Rc<Runtime>,
         create: impl FnOnce(&mut dyn WriteMutations) -> usize,
     ) -> usize {
-        match self.edge {
-            InsertionEdge::Before | InsertionEdge::After => {
-                let id = self.anchor;
-                let before = matches!(self.edge, InsertionEdge::Before);
-                let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
-                let count = create(&mut to);
-                if count > 0 {
-                    if before {
-                        to.insert_before(count);
-                    } else {
-                        to.insert_after(count);
-                    }
-                }
-                count
-            }
-            InsertionEdge::Append => append_children_to(to, self.anchor, runtime, create),
+        self.create_and_place_with_result(to, runtime, |to| {
+            let count = create(to);
+            (count, count)
+        })
+    }
+
+    fn create_and_place_with_result<R>(
+        self,
+        to: &mut dyn WriteMutations,
+        runtime: Rc<Runtime>,
+        create: impl FnOnce(&mut dyn WriteMutations) -> (usize, R),
+    ) -> R {
+        let anchor = self.anchor();
+        let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(anchor));
+        let (count, result) = create(&mut to);
+        self.splice_stack(&mut to, count);
+        result
+    }
+
+    fn splice_stack(self, to: &mut (impl WriteMutations + ?Sized), count: usize) {
+        if count == 0 {
+            return;
+        }
+
+        match self {
+            Self::Before(_) => to.insert_before(count),
+            Self::After(_) => to.insert_after(count),
+            Self::AppendTo(_) => to.append_children(count),
         }
     }
 }
@@ -143,15 +140,19 @@ pub(super) fn insertion_site_for_slot(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let parent_views = parent_views(dom, parent_mount, context);
-
     // An anchor can cover several adjacent dynamic nodes (`{a}{b}` lower to one anchor), so first
     // prefer the closest following sibling that shares it - this applies to both root-level and
     // nested slots - anchoring before its first live element. During a same-template parent diff,
     // following siblings have not been diffed yet, so their mounted slots still match the old view.
-    if let Some(id) = parent_views.find_old_map(|parent_vnode| {
-        adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
-    }) {
+    if let Some(id) = with_parent_vnode(
+        dom,
+        parent_mount,
+        context,
+        ParentVersion::Old,
+        |parent_vnode| {
+            adjacent_dynamic_sibling_after_in_vnode(parent_vnode, parent_mount, slot, dom)
+        },
+    ) {
         return InsertionSite::before(id);
     }
 
@@ -159,9 +160,15 @@ pub(super) fn insertion_site_for_slot(
     // previous sibling before falling back to the static anchor or parent position. Previous
     // siblings have already been diffed, so in a same-template parent diff their mounted slots match
     // the new view, not the old view.
-    if let Some(id) = parent_views.find_new_map(|parent_vnode| {
-        adjacent_dynamic_sibling_before_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
-    }) {
+    if let Some(id) = with_parent_vnode(
+        dom,
+        parent_mount,
+        context,
+        ParentVersion::New,
+        |parent_vnode| {
+            adjacent_dynamic_sibling_before_in_vnode(parent_vnode, parent_mount, slot, dom)
+        },
+    ) {
         return InsertionSite::after(id);
     }
 
@@ -197,6 +204,19 @@ pub(super) fn create_at_site_with_mounts(
     })
 }
 
+pub(super) fn create_at_site(
+    content: &VNode,
+    parent: Option<MountRef>,
+    site: InsertionSite,
+    dom: &mut VirtualDom,
+    to: &mut dyn WriteMutations,
+) -> CreatedVNode {
+    at_site_with_result(site, to, dom.runtime.clone(), |to| {
+        let created = content.create_with_parents(dom, parent, parent, Some(to));
+        (created.nodes, created)
+    })
+}
+
 pub(super) fn at_site(
     site: InsertionSite,
     to: &mut dyn WriteMutations,
@@ -204,6 +224,15 @@ pub(super) fn at_site(
     create: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
     site.create_and_place(to, runtime, create)
+}
+
+fn at_site_with_result<R>(
+    site: InsertionSite,
+    to: &mut dyn WriteMutations,
+    runtime: Rc<Runtime>,
+    create: impl FnOnce(&mut dyn WriteMutations) -> (usize, R),
+) -> R {
+    site.create_and_place_with_result(to, runtime, create)
 }
 
 /// How streamed nodes attach to the renderer relative to an on-screen anchor element.
@@ -237,7 +266,7 @@ pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
 ) -> usize {
     let anchor = match placement {
         StreamPlacement::Replace(id) => id,
-        StreamPlacement::Insert(site) => site.anchor,
+        StreamPlacement::Insert(site) => site.anchor(),
     };
     to.push_id(anchor);
     let count = push_nodes(to);
@@ -253,36 +282,29 @@ pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
         // `insert_before`/`insert_after`/`append_children` leave the anchor on the stack, so pop it
         // to keep the renderer stack balanced - the discipline `TargetedLazyScope` applies on drop.
         StreamPlacement::Insert(site) => {
-            if count > 0 {
-                match site.edge {
-                    InsertionEdge::Before => to.insert_before(count),
-                    InsertionEdge::After => to.insert_after(count),
-                    InsertionEdge::Append => to.append_children(count),
-                }
-            }
+            site.splice_stack(to, count);
             to.pop();
         }
     }
     count
 }
 
-pub(super) fn insertion_site_for_mounted_child(
+fn insertion_site_for_mounted_child(
     edge: ElementEdge,
-    mount: MountId,
+    mut mount: MountId,
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let Some(parent_ref) = dom.mounted_render_parent(mount) else {
-        return InsertionSite::append_to(ElementId::ROOT);
-    };
-    let parent_mount = parent_ref.mount;
-
-    if let Some(site) = insertion_site_for_child_in_parent(edge, mount, parent_mount, dom, context)
-    {
-        return site;
+    while let Some(parent_ref) = dom.mounted_render_parent(mount) {
+        let parent_mount = parent_ref.mount;
+        if let Some(site) =
+            insertion_site_for_child_in_parent(edge, mount, parent_mount, dom, context)
+        {
+            return site;
+        }
+        mount = parent_mount;
     }
-
-    insertion_site_for_mounted_child(edge, parent_mount, dom, context)
+    InsertionSite::append_to(ElementId::ROOT)
 }
 
 /// Resolve a child mount's site inside a specific committed parent.
@@ -296,51 +318,56 @@ fn insertion_site_for_child_in_parent(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<InsertionSite> {
-    let parent_views = parent_views(dom, parent_mount, context);
-
     // Child ownership is a committed-mount-table query. During a parent diff,
     // the new vnode may already have a different fragment shape, but the
     // fragment child mount list is not replaced until that parent diff
     // commits.
-    parent_views.find_old_map(|parent_vnode| {
-        for slot in parent_vnode.vnode().dynamic_node_slots() {
-            let idx = slot.index();
-            match &parent_vnode.vnode().dynamic_node_values()[idx] {
-                DynamicNode::Fragment(children) => {
-                    let site = dom.try_with_mounted_fragment_children(
-                        parent_mount,
-                        idx,
-                        children.len(),
-                        |child_mounts| {
-                            let position = child_mounts.iter().position(|child| *child == mount)?;
-                            insertion_site_near_fragment_child(
-                                edge,
-                                children,
-                                child_mounts,
-                                position,
-                                mount,
-                                dom,
-                            )
-                            .or_else(|| {
-                                Some(insertion_site_for_slot(parent_mount, slot, dom, context))
-                            })
-                        },
-                    );
-                    match site {
-                        Some(Some(site)) => return Some(site),
-                        Some(None) | None => continue,
+    with_parent_vnode(
+        dom,
+        parent_mount,
+        context,
+        ParentVersion::Old,
+        |parent_vnode| {
+            for slot in parent_vnode.dynamic_node_slots() {
+                let idx = slot.index();
+                match &parent_vnode.dynamic_node_values()[idx] {
+                    DynamicNode::Fragment(children) => {
+                        let site = dom.try_with_mounted_fragment_children(
+                            parent_mount,
+                            idx,
+                            children.len(),
+                            |child_mounts| {
+                                let position =
+                                    child_mounts.iter().position(|child| *child == mount)?;
+                                insertion_site_near_fragment_child(
+                                    edge,
+                                    children,
+                                    child_mounts,
+                                    position,
+                                    mount,
+                                    dom,
+                                )
+                                .or_else(|| {
+                                    Some(insertion_site_for_slot(parent_mount, slot, dom, context))
+                                })
+                            },
+                        );
+                        if let Some(site) = site.flatten() {
+                            return Some(site);
+                        }
                     }
-                }
-                DynamicNode::Component(_) => {
-                    if dom.mounted_dynamic_component_root_mount(parent_mount, idx) == Some(mount) {
+                    DynamicNode::Component(_)
+                        if dom.mounted_dynamic_component_root_mount(parent_mount, idx)
+                            == Some(mount) =>
+                    {
                         return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                     }
+                    DynamicNode::Component(_) | DynamicNode::Text(_) => {}
                 }
-                DynamicNode::Text(_) => {}
             }
-        }
-        None
-    })
+            None
+        },
+    )
 }
 
 fn insertion_site_near_fragment_child(
@@ -351,21 +378,28 @@ fn insertion_site_near_fragment_child(
     mount: MountId,
     dom: &VirtualDom,
 ) -> Option<InsertionSite> {
+    let following = || {
+        children
+            .iter()
+            .zip(child_mounts)
+            .skip(position + 1)
+            .filter(|(_, m)| **m != mount)
+            .find_map(|(child, &m)| child.find_first_element(m, dom).map(InsertionSite::before))
+    };
+
+    let previous = || {
+        children
+            .iter()
+            .zip(child_mounts)
+            .take(position)
+            .rev()
+            .filter(|(_, m)| **m != mount)
+            .find_map(|(child, &m)| child.find_last_element(m, dom).map(InsertionSite::after))
+    };
+
     match edge {
-        ElementEdge::First => {
-            first_live_sibling_after(children, child_mounts, position, mount, dom)
-                .map(InsertionSite::before)
-                .or_else(|| {
-                    last_live_sibling_before(children, child_mounts, position, mount, dom)
-                        .map(InsertionSite::after)
-                })
-        }
-        ElementEdge::Last => last_live_sibling_before(children, child_mounts, position, mount, dom)
-            .map(InsertionSite::after)
-            .or_else(|| {
-                first_live_sibling_after(children, child_mounts, position, mount, dom)
-                    .map(InsertionSite::before)
-            }),
+        ElementEdge::First => following().or_else(previous),
+        ElementEdge::Last => previous().or_else(following),
     }
 }
 
@@ -379,18 +413,17 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     slot: DynamicNodeSlot<'_>,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    for sibling in parent_vnode.dynamic_node_slots_after_sharing_insertion_position(slot) {
-        if let Some(id) = parent_vnode.dynamic_node_edge_element(
-            parent_mount,
-            sibling.index(),
-            dom,
-            EdgeScan::placement(dom),
-            ElementEdge::First,
-        ) {
-            return Some(id);
-        }
-    }
-    None
+    parent_vnode
+        .dynamic_node_slots_after_sharing_insertion_position(slot)
+        .find_map(|sibling| {
+            parent_vnode.dynamic_node_edge_element(
+                parent_mount,
+                sibling.index(),
+                dom,
+                EdgeScan::placement(dom),
+                ElementEdge::First,
+            )
+        })
 }
 
 /// Find the previous live dynamic sibling sharing the active slot's insertion position.
@@ -428,112 +461,42 @@ fn adjacent_dynamic_sibling_before_in_vnode(
     None
 }
 
-fn parent_views<'a>(
+#[derive(Clone, Copy)]
+enum ParentVersion {
+    Old,
+    New,
+}
+
+fn with_parent_vnode<T>(
     dom: &VirtualDom,
     parent_mount: MountId,
-    context: Option<DiffContext<'a>>,
-) -> ParentViews<'a> {
-    if let Some(context) = context.and_then(|context| context.for_mount(parent_mount)) {
-        return ParentViews::Context {
-            mount: parent_mount,
-            old: context.old,
-            new: context.new,
+    context: Option<DiffContext<'_>>,
+    version: ParentVersion,
+    f: impl FnOnce(&VNode) -> Option<T>,
+) -> Option<T> {
+    if let Some(frame) = context.and_then(|context| context.for_mount(parent_mount)) {
+        let vnode = match version {
+            ParentVersion::Old => frame.old,
+            ParentVersion::New => frame.new,
         };
-    }
-    ParentViews::Mounted {
-        mount: parent_mount,
-        view: dom
+        f(vnode)
+    } else {
+        let vnode = dom
             .current_mounted_view(parent_mount)
-            .expect("parent mount"),
-    }
-}
-
-enum ParentViews<'a> {
-    Context {
-        mount: MountId,
-        old: &'a VNode,
-        new: &'a VNode,
-    },
-    Mounted {
-        mount: MountId,
-        view: VNode,
-    },
-}
-
-impl<'a> ParentViews<'a> {
-    fn find_old_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
-        match self {
-            Self::Context { mount, old, .. } => f(MountedVNode::new(old, *mount)),
-            Self::Mounted { mount, view } => f(MountedVNode::new(view, *mount)),
-        }
-    }
-
-    fn find_new_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
-        match self {
-            Self::Context { mount, new, .. } => f(MountedVNode::new(new, *mount)),
-            Self::Mounted { mount, view } => f(MountedVNode::new(view, *mount)),
-        }
-    }
-}
-
-fn first_live_sibling_after(
-    children: &[VNode],
-    child_mounts: &[MountId],
-    position: usize,
-    mount: MountId,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    children
-        .iter()
-        .zip(child_mounts)
-        .skip(position + 1)
-        .find_map(|(child, m)| {
-            let m = *m;
-            if m == mount {
-                return None;
-            }
-            child.find_first_element(m, dom)
-        })
-}
-
-fn last_live_sibling_before(
-    children: &[VNode],
-    child_mounts: &[MountId],
-    position: usize,
-    mount: MountId,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    children
-        .iter()
-        .zip(child_mounts)
-        .take(position)
-        .rev()
-        .find_map(|(child, m)| {
-            let m = *m;
-            if m == mount {
-                return None;
-            }
-            child.find_last_element(m, dom)
-        })
-}
-
-fn vnode_edge_element(
-    vnode: MountedVNode<'_>,
-    dom: &VirtualDom,
-    edge: ElementEdge,
-) -> Option<ElementId> {
-    match edge {
-        ElementEdge::First => vnode.find_first_element(dom),
-        ElementEdge::Last => vnode.find_last_element(dom),
+            .expect("parent mount");
+        f(&vnode)
     }
 }
 
 /// The insertion site at one edge of a mounted vnode: anchored before its first live element
 /// (`First`) or after its last (`Last`). `None` when the vnode contributes no live element.
-pub(super) fn vnode_edge_site(
+fn vnode_edge_site(
     edge: ElementEdge,
     vnode: MountedVNode<'_>,
     dom: &VirtualDom,
 ) -> Option<InsertionSite> {
-    vnode_edge_element(vnode, dom, edge).map(|id| edge.site(id))
+    match edge {
+        ElementEdge::First => vnode.find_first_element(dom).map(InsertionSite::before),
+        ElementEdge::Last => vnode.find_last_element(dom).map(InsertionSite::after),
+    }
 }

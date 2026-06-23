@@ -7,7 +7,7 @@ use crate::{
         attributes::AttributeDiffScratch,
         context::{DiffFrame, DiffState},
         placement::{
-            ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
+            ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
             insertion_site_for_slot,
         },
         template::{DynamicAnchor, DynamicNodeSlot},
@@ -496,19 +496,7 @@ impl VNode {
                 )
             });
             let to = state.to.as_deref_mut().expect("writer checked");
-            let mut created_mount = None;
-            let nodes = create_at_site_with_mounts(
-                std::slice::from_ref(new),
-                parent,
-                site,
-                state.dom,
-                to,
-                |_, _, mount| created_mount = Some(mount),
-            );
-            CreatedVNode {
-                nodes,
-                mount: created_mount.expect("single replacement child should create one mount"),
-            }
+            create_at_site(new, parent, site, state.dom, to)
         } else {
             let to = if suppress_mutations {
                 None

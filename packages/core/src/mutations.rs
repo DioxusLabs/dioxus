@@ -227,12 +227,24 @@ pub(crate) fn append_children_to(
     runtime: Rc<Runtime>,
     create_children: impl FnOnce(&mut dyn WriteMutations) -> usize,
 ) -> usize {
+    append_children_to_with_result(to, id, runtime, |to| {
+        let count = create_children(to);
+        (count, count)
+    })
+}
+
+pub(crate) fn append_children_to_with_result<R>(
+    to: &mut dyn WriteMutations,
+    id: ElementId,
+    runtime: Rc<Runtime>,
+    create_children: impl FnOnce(&mut dyn WriteMutations) -> (usize, R),
+) -> R {
     let mut to = TargetedLazyScope::new(to, runtime, move |to| to.push_id(id));
-    let count = create_children(&mut to);
+    let (count, result) = create_children(&mut to);
     if count > 0 {
         to.append_children(count);
     }
-    count
+    result
 }
 
 /// A host's collection of render-target writers.

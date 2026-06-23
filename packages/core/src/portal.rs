@@ -1,7 +1,10 @@
 use std::{any::Any, marker::PhantomData, rc::Rc};
 
 use crate::{
-    RenderTargetId, diff::context::DiffContext, innerlude::*, mutations::append_children_to,
+    RenderTargetId,
+    diff::{CreatedVNode, context::DiffContext},
+    innerlude::*,
+    mutations::append_children_to_with_result,
     render_driver::RenderDriver,
 };
 
@@ -232,56 +235,46 @@ fn place_children(
     existing_root_mount: Option<MountId>,
     parent: Option<MountRef>,
     dom: &mut VirtualDom,
-    to: Option<&mut (dyn WriteMutations + '_)>,
+    render_to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
         target_id,
         "portal (re)mount runs inside the portal scope, whose target_id routes its writes"
     );
-    let render_to = to;
     let should_mount = render_to.is_some();
-    let mut root_mount = existing_root_mount;
-    if let Some(to) = render_to {
-        append_children_to(to, ElementId::ROOT, dom.runtime.clone(), |to| {
-            place_children_inner(dom, &children, &mut root_mount, parent, Some(to))
-        });
+    let root_mount = if let Some(to) = render_to {
+        append_children_to_with_result(to, ElementId::ROOT, dom.runtime.clone(), |to| {
+            let created =
+                place_children_inner(dom, &children, existing_root_mount, parent, Some(to));
+            (created.nodes, created.mount)
+        })
     } else {
-        place_children_inner(dom, &children, &mut root_mount, parent, None);
-    }
-    dom.scopes[scope_id.index()].last_rendered_node = Some(MountedOutput::new(
-        children,
-        root_mount.expect("portal children should create a root mount"),
-    ));
+        place_children_inner(dom, &children, existing_root_mount, parent, None).mount
+    };
+    dom.scopes[scope_id.index()].last_rendered_node =
+        Some(MountedOutput::new(children, root_mount));
     if should_mount {
         dom.runtime.get_state(scope_id).mount(&dom.runtime);
     }
 }
 
-/// Build the portal children, returning the node count. When `root_mount` already holds a mount
-/// the children are re-created onto it; otherwise they are created fresh and `root_mount` is filled
-/// with the new root mount.
+/// Build the portal children. When `existing_root_mount` is `Some` the children are re-created
+/// onto it; otherwise they are created fresh.
 fn place_children_inner(
     dom: &mut VirtualDom,
     children: &LastRenderedNode,
-    root_mount: &mut Option<MountId>,
+    existing_root_mount: Option<MountId>,
     parent: Option<MountRef>,
     to: Option<&mut (dyn WriteMutations + '_)>,
-) -> usize {
-    match *root_mount {
-        Some(existing) => {
-            children
-                .as_vnode()
-                .recreate_with_mount(dom, existing, None, parent, to)
-                .nodes
-        }
-        None => {
-            let created = children
-                .as_vnode()
-                .create_with_parents(dom, None, parent, to);
-            *root_mount = Some(created.mount);
-            created.nodes
-        }
+) -> CreatedVNode {
+    match existing_root_mount {
+        Some(existing) => children
+            .as_vnode()
+            .recreate_with_mount(dom, existing, None, parent, to),
+        None => children
+            .as_vnode()
+            .create_with_parents(dom, None, parent, to),
     }
 }
 
@@ -398,11 +391,10 @@ impl RenderDriver for PortalDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        to: Option<&mut (dyn WriteMutations + '_)>,
+        render_to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let render_to = to;
             // `PortalDriver::create` always sets `last_rendered_node` before
             // returning, and removal only fires after a scope has gone
             // through `create`, so the clone is always `Some`.

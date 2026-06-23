@@ -182,8 +182,6 @@ fn from_template_element(
     let mut styles = Vec::new();
     // we need to collect the inner html and write it at the end
     let mut inner_html = None;
-    // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
-    let mut has_dyn_attrs = false;
     for (name, value, namespace) in element.static_attributes() {
         if name == "dangerous_inner_html" {
             inner_html = Some(value);
@@ -206,7 +204,9 @@ fn from_template_element(
         }
     }
 
-    emit_dynamic_attrs(element, chain, &mut has_dyn_attrs);
+    // Dynamic attrs require style and inner-html placeholders even if those
+    // dynamic attrs are not style or inner-html themselves.
+    let has_dyn_attrs = emit_dynamic_attrs(element, chain);
 
     // write the styles
     if !styles.is_empty() {
@@ -288,17 +288,15 @@ fn from_template_text(
     Ok(())
 }
 
-fn emit_dynamic_attrs(
-    element: StaticElement<'_>,
-    chain: &mut StringChain,
-    has_dyn_attrs: &mut bool,
-) {
+fn emit_dynamic_attrs(element: StaticElement<'_>, chain: &mut StringChain) -> bool {
+    let mut has_dyn_attrs = false;
     for anchor in element.dynamic_anchors() {
         for _ in anchor.attrs() {
             *chain += Segment::Attr;
-            *has_dyn_attrs = true;
+            has_dyn_attrs = true;
         }
     }
+    has_dyn_attrs
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {

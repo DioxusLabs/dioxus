@@ -166,31 +166,22 @@ impl WebsysDom {
 
         // Resolve the mounted ElementId (an anchor id overrides the root id when present) and
         // collect dynamic listeners + onmounted events.
-        let mut mounted_id = root_id;
-        let mut listeners = Vec::new();
-        #[cfg(feature = "mounted")]
-        let mut mounted_events = Vec::new();
-        self.collect_dynamic_attrs_for_element(
-            vnode,
-            element,
-            dom,
-            &mut mounted_id,
-            &mut listeners,
-            #[cfg(feature = "mounted")]
-            &mut mounted_events,
-        )?;
+        let dynamic_attrs = Self::collect_dynamic_attrs_for_element(vnode, element, dom, root_id)?;
 
         // Always map the element so the cursor can verify the tag and step past
         // parser-inserted wrappers. id == 0 means the element needs no node
         // binding but still occupies a positional slot.
-        let id_arg = mounted_id.map(|i| i.raw() as u32).unwrap_or(0);
+        let id_arg = dynamic_attrs
+            .mounted_id
+            .map(|i| i.raw() as u32)
+            .unwrap_or(0);
         cursor.map_element(tag, id_arg)?;
 
         #[cfg(feature = "mounted")]
-        for anchor_id in mounted_events {
+        for anchor_id in dynamic_attrs.mounted_events {
             self.send_mount_event(anchor_id);
         }
-        for (event_name, bubbles) in listeners {
+        for (event_name, bubbles) in dynamic_attrs.listeners {
             cursor.attach_listener(id_arg, event_name, bubbles);
         }
 
@@ -205,37 +196,46 @@ impl WebsysDom {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn collect_dynamic_attrs_for_element<'a>(
-        &mut self,
         vnode: MountedVNode<'a>,
         element: StaticElement<'a>,
         dom: &'a VirtualDom,
-        mounted_id: &mut Option<ElementId>,
-        listeners: &mut Vec<(&'static str, bool)>,
-        #[cfg(feature = "mounted")] mounted_events: &mut Vec<ElementId>,
-    ) -> Result<(), RehydrationError> {
+        root_id: Option<ElementId>,
+    ) -> Result<ElementDynamicAttrs, RehydrationError> {
+        let mut dynamic_attrs = ElementDynamicAttrs {
+            mounted_id: root_id,
+            listeners: Vec::new(),
+            #[cfg(feature = "mounted")]
+            mounted_events: Vec::new(),
+        };
         for anchor in element.dynamic_anchors() {
             let anchor_id = vnode
                 .mounted_anchor_node(anchor, dom)
                 .ok_or(VNodeNotInitialized)?;
-            *mounted_id = Some(anchor_id);
+            dynamic_attrs.mounted_id = Some(anchor_id);
             for attribute in anchor.attrs().flat_map(|slot| slot.attrs()) {
                 if matches!(attribute.value, AttributeValue::Listener(_)) {
                     if attribute.name == "onmounted" {
                         #[cfg(feature = "mounted")]
-                        mounted_events.push(anchor_id);
+                        dynamic_attrs.mounted_events.push(anchor_id);
                     } else {
                         let event_name =
                             attribute.name.strip_prefix("on").unwrap_or(attribute.name);
                         let bubbles = dioxus_core_types::event_bubbles(event_name);
-                        listeners.push((event_name, bubbles));
+                        dynamic_attrs.listeners.push((event_name, bubbles));
                     }
                 }
             }
         }
-        Ok(())
+        Ok(dynamic_attrs)
     }
+}
+
+struct ElementDynamicAttrs {
+    mounted_id: Option<ElementId>,
+    listeners: Vec<(&'static str, bool)>,
+    #[cfg(feature = "mounted")]
+    mounted_events: Vec<ElementId>,
 }
 
 fn mounted_static_node<'a>(
