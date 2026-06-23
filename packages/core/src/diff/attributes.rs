@@ -183,11 +183,6 @@ impl VNode {
         (attribute.name, attribute.namespace)
     }
 
-    /// Compare two attributes by their key for sorting and merging purposes.
-    fn compare_attribute_keys(left: &Attribute, right: &Attribute) -> Ordering {
-        Self::attribute_key(left).cmp(&Self::attribute_key(right))
-    }
-
     /// Restore the static template attribute that was shadowed by a dynamic attribute or clear the attribute.
     ///
     /// This is needed when an attribute from a spread disappears. The template load already wrote
@@ -271,29 +266,30 @@ impl<'items> Iterator for SortedRangeIter<'items, '_> {
     type Item = &'items Attribute;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut min_value = None;
+        let mut min_key = None;
 
         // Find the smallest key currently visible across every range.
         for (range, offset) in self.ranges.iter().zip(self.offsets.iter()) {
             if let Some(item) = range.get(*offset) {
-                match min_value.map(|min_value| VNode::compare_attribute_keys(item, min_value)) {
-                    None | Some(Ordering::Less) => min_value = Some(item),
-                    Some(Ordering::Equal | Ordering::Greater) => {}
+                let item_key = VNode::attribute_key(item);
+                match min_key {
+                    None => min_key = Some(item_key),
+                    Some(current_min_key) if item_key < current_min_key => {
+                        min_key = Some(item_key);
+                    }
+                    Some(_) => {}
                 }
             }
         }
 
-        let min_value = min_value?;
+        let min_key = min_key?;
         let mut last = None;
 
         // Drain that key from every matching range. Later ranges come later in RSX source order,
         // so the final item we see is the effective last-write-wins value.
         for (range_idx, range) in self.ranges.iter().enumerate() {
             while let Some(item) = range.get(self.offsets[range_idx]) {
-                if !matches!(
-                    VNode::compare_attribute_keys(item, min_value),
-                    Ordering::Equal
-                ) {
+                if VNode::attribute_key(item) != min_key {
                     break;
                 }
                 last = Some(item);

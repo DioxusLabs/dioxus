@@ -48,7 +48,8 @@ fn StreamedEmptyHydration() -> Element {
 #[component]
 fn StreamedEmptyChild() -> Element {
     let _ = use_server_future(resolve_empty_stream)?().unwrap();
-    let value = use_signal(String::new);
+    #[cfg_attr(not(feature = "web"), allow(unused_mut))]
+    let mut value = use_signal(String::new);
 
     #[cfg(feature = "web")]
     use_effect(move || {

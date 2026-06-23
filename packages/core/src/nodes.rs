@@ -87,7 +87,7 @@ impl DynamicValues {
     pub(crate) fn normalize(&mut self) {
         for slot in self.dynamic_attrs.iter_mut() {
             if slot.len() > 1 {
-                slot.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
+                slot.sort_by_key(|attribute| (attribute.name, attribute.namespace));
             }
         }
     }
