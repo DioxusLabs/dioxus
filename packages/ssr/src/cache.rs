@@ -89,13 +89,10 @@ impl EscapeText {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Segment {
-    /// A marker for where to insert an attribute with a given index
-    Attr(usize),
-    /// A marker for where to insert a node with a given index
-    Node {
-        index: usize,
-        escape_text: EscapeText,
-    },
+    /// A marker for where to insert the next dynamic attribute slot.
+    Attr,
+    /// A marker for where to insert the next dynamic node slot.
+    Node { escape_text: EscapeText },
     /// Text that we know is static in the template that is pre-rendered
     PreRendered(String),
     /// Text we know is static in the template that is pre-rendered that may or may not be escaped
@@ -166,9 +163,9 @@ fn from_template_child(
     match child {
         VNodeChild::Element(element) => from_template_element(element, chain),
         VNodeChild::Text(text) => from_template_text(text, escape_text, chain),
-        VNodeChild::Dynamic(group) => {
-            for index in group.ids() {
-                chain.push(Segment::Node { index, escape_text });
+        VNodeChild::Dynamic(anchor) => {
+            for _ in anchor.nodes() {
+                chain.push(Segment::Node { escape_text });
             }
             Ok(())
         }
@@ -296,9 +293,9 @@ fn emit_dynamic_attrs(
     chain: &mut StringChain,
     has_dyn_attrs: &mut bool,
 ) {
-    for group in element.dynamic_attributes() {
-        for index in group.ids() {
-            *chain += Segment::Attr(index);
+    for anchor in element.dynamic_anchors() {
+        for _ in anchor.attrs() {
+            *chain += Segment::Attr;
             *has_dyn_attrs = true;
         }
     }

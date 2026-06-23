@@ -1,7 +1,7 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
-    DynamicNode, ElementId, MountedVNode, ScopeId, ScopeState, SuspenseContext, VNodeChild,
-    VirtualDom,
+    DynamicNode, DynamicNodeSlot, ElementId, MountedVNode, ScopeId, ScopeState, SuspenseContext,
+    VNodeChild, VirtualDom,
 };
 use std::fmt::Write;
 
@@ -89,9 +89,9 @@ pub(super) fn first_dynamic_root_element_id(
     fn from_vnode(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Option<ElementId> {
         for child in vnode.vnode().children() {
             match child {
-                VNodeChild::Dynamic(group) => {
-                    for value_idx in group.ids() {
-                        if let Some(id) = from_dynamic(vnode, value_idx, dom) {
+                VNodeChild::Dynamic(anchor) => {
+                    for slot in anchor.nodes() {
+                        if let Some(id) = from_dynamic(vnode, slot, dom) {
                             return Some(id);
                         }
                     }
@@ -119,19 +119,17 @@ pub(super) fn first_dynamic_root_element_id(
 
     fn from_dynamic(
         vnode: MountedVNode<'_>,
-        value_idx: usize,
+        slot: DynamicNodeSlot<'_>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let node = vnode.vnode().dynamic_node_values().get(value_idx)?;
-
-        match node {
-            DynamicNode::Text(_) => vnode.mounted_dynamic_node(value_idx, dom),
+        match &*slot {
+            DynamicNode::Text(_) => vnode.mounted_dynamic_node(slot, dom),
             DynamicNode::Component(comp) => {
-                let child = comp.mounted_scope(value_idx, vnode, dom)?;
+                let child = comp.mounted_scope(slot, vnode, dom)?;
                 from_vnode(child.try_mounted_root_node()?, dom)
             }
             DynamicNode::Fragment(fragment) => {
-                let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
+                let mounted_children = vnode.mounted_fragment_children(slot, dom);
                 if mounted_children.len() != fragment.len() {
                     return None;
                 }
@@ -196,19 +194,16 @@ impl WebsysDom {
         dom: &VirtualDom,
         include_retained_branches: bool,
     ) {
-        for group in vnode.vnode().dynamic_nodes() {
-            for idx in group.ids() {
-                let Some(node) = vnode.vnode().dynamic_node_values().get(idx) else {
-                    continue;
-                };
-                match node {
+        for anchor in vnode.vnode().dynamic_anchors() {
+            for slot in anchor.nodes() {
+                match &*slot {
                     DynamicNode::Component(comp) => {
-                        if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
+                        if let Some(child_scope) = comp.mounted_scope(slot, vnode, dom) {
                             self.collect_suspense(child_scope, dom, include_retained_branches);
                         }
                     }
                     DynamicNode::Fragment(fragment) => {
-                        let mounted_children = vnode.mounted_fragment_children(idx, dom);
+                        let mounted_children = vnode.mounted_fragment_children(slot, dom);
                         if mounted_children.len() != fragment.len() {
                             continue;
                         }

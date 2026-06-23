@@ -117,11 +117,22 @@ impl Renderer {
 
         // We need to keep track of the dynamic styles so we can insert them into the right place
         let mut accumulated_dynamic_styles = Vec::new();
+        let mut dynamic_nodes = template
+            .vnode()
+            .dynamic_anchors()
+            .flat_map(|anchor| anchor.nodes());
+        let mut dynamic_attrs = template
+            .vnode()
+            .dynamic_anchors()
+            .flat_map(|anchor| anchor.attrs());
 
         for segment in entry.segments.iter() {
             match segment {
-                Segment::Attr(idx) => {
-                    let attrs = &template.dynamic_attr_values()[*idx];
+                Segment::Attr => {
+                    let attrs = dynamic_attrs
+                        .next()
+                        .expect("SSR attr segment must point at dynamic attributes")
+                        .attrs();
                     for attr in attrs {
                         if attr.name == "dangerous_inner_html" {
                             inner_html = Some(attr);
@@ -136,17 +147,19 @@ impl Renderer {
                         }
                     }
                 }
-                Segment::Node { index, escape_text } => {
+                Segment::Node { escape_text } => {
                     let escaped = escape_text.should_escape(parent_escaped);
-                    match &template.dynamic_node_values()[*index] {
+                    let slot = dynamic_nodes
+                        .next()
+                        .expect("SSR node segment must point at a dynamic node");
+                    match &*slot {
                         DynamicNode::Component(node) => {
                             if let Some(render_components) = self.render_components.clone() {
-                                let scope_id =
-                                    node.mounted_scope_id(*index, template, dom).unwrap();
+                                let scope_id = node.mounted_scope_id(slot, template, dom).unwrap();
 
                                 render_components(self, &mut buf, dom, scope_id)?;
                             } else {
-                                let scope = node.mounted_scope(*index, template, dom).unwrap();
+                                let scope = node.mounted_scope(slot, template, dom).unwrap();
                                 let node = scope.try_mounted_root_node().unwrap();
                                 self.render_template(buf, dom, node, escaped)?
                             }
@@ -163,7 +176,7 @@ impl Renderer {
                             }
                         }
                         DynamicNode::Fragment(_) => {
-                            let mounted_children = template.mounted_fragment_children(*index, dom);
+                            let mounted_children = template.mounted_fragment_children(slot, dom);
 
                             for child in mounted_children {
                                 self.render_template(buf, dom, child, escaped)?;

@@ -10,7 +10,7 @@
 //! can reveal an earlier dynamic attribute with the same key, or the static template attribute that
 //! was loaded with the template. To preserve those "last write wins" semantics, the diff:
 //!
-//! 1. groups all adjacent dynamic attribute slots for the same element cursor;
+//! 1. collects the dynamic attribute slots for the same element anchor;
 //! 2. flattens the old and new slots for that element;
 //! 3. reduces each side to the effective attribute for each `(name, namespace)` key, keeping the
 //!    last matching attribute; and
@@ -23,7 +23,7 @@ use crate::innerlude::MountId;
 use crate::{
     Attribute, AttributeValue, VNode, VirtualDom, WriteMutations,
     arena::MountedElementId,
-    diff::template::DynamicAttrGroup,
+    diff::template::DynamicAnchor,
     mutations::{TargetedLazyScope, with_id},
 };
 
@@ -50,7 +50,8 @@ impl VNode {
     /// key.
     pub(super) fn diff_attribute_list<'a>(
         &'a self,
-        attr_group: &DynamicAttrGroup<'a>,
+        old_anchor: DynamicAnchor<'a>,
+        new_anchor: DynamicAnchor<'a>,
         id: MountedElementId,
         mount: MountId,
         scratch: &mut AttributeDiffScratch<'a>,
@@ -63,10 +64,18 @@ impl VNode {
             new_ranges,
             new_offsets,
         } = scratch;
-        let mut from_iter =
-            iter_sorted_last_wins(attr_group.attrs(), old_ranges, old_offsets).peekable();
-        let mut to_iter =
-            iter_sorted_last_wins(attr_group.attrs(), new_ranges, new_offsets).peekable();
+        let mut from_iter = iter_sorted_last_wins(
+            old_anchor.attrs().map(|slot| slot.attrs()),
+            old_ranges,
+            old_offsets,
+        )
+        .peekable();
+        let mut to_iter = iter_sorted_last_wins(
+            new_anchor.attrs().map(|slot| slot.attrs()),
+            new_ranges,
+            new_offsets,
+        )
+        .peekable();
 
         let element_id = id.element_id();
         // The attribute diff never changes the active render target, so the targeted gate is
@@ -74,7 +83,7 @@ impl VNode {
         let mut to =
             TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
-            self.diff_dynamic_attribute(attr_group, key, id, mount, old, new, dom, &mut to);
+            self.diff_dynamic_attribute(old_anchor, key, id, mount, old, new, dom, &mut to);
         }
     }
 
@@ -117,7 +126,7 @@ impl VNode {
 
     fn diff_dynamic_attribute(
         &self,
-        attr_group: &DynamicAttrGroup<'_>,
+        anchor: DynamicAnchor<'_>,
         key: AttributeKey,
         id: MountedElementId,
         mount: MountId,
@@ -161,7 +170,7 @@ impl VNode {
         if let Some(new) = new {
             Self::write_attribute_to_current(new, id, mount, dom, to);
         } else if !old_listener {
-            Self::remove_attribute_or_restore_static(attr_group, key, to)
+            Self::remove_attribute_or_restore_static(anchor, key, to)
         }
     }
 
@@ -181,12 +190,12 @@ impl VNode {
     /// the static value during creation, but the dynamic attribute may have overwritten or removed
     /// it on a previous render.
     fn remove_attribute_or_restore_static(
-        attr_group: &DynamicAttrGroup<'_>,
+        anchor: DynamicAnchor<'_>,
         key: AttributeKey,
         to: &mut dyn WriteMutations,
     ) {
         let (name, namespace) = key;
-        let value = attr_group
+        let value = anchor
             .static_attr_value_for_key(key)
             .map(|value| AttributeValue::Text(value.to_string()))
             .unwrap_or(AttributeValue::None);

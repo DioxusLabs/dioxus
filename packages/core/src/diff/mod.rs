@@ -102,12 +102,12 @@ impl VirtualDom {
 /// Invariant: this is only a capacity hint. Non-root component scopes are allocated lazily when
 /// their owning template root is materialized.
 fn root_component_count(node: &VNode) -> usize {
-    node.dynamic_nodes()
-        .filter(|group| group.is_root_level())
-        .map(|group| {
-            group
-                .ids()
-                .filter(|idx| matches!(&node.dynamic_nodes[*idx], DynamicNode::Component(_)))
+    node.dynamic_anchors()
+        .filter(|anchor| anchor.is_root_level())
+        .map(|anchor| {
+            anchor
+                .nodes()
+                .filter(|slot| matches!(std::ops::Deref::deref(*slot), DynamicNode::Component(_)))
                 .count()
         })
         .sum()

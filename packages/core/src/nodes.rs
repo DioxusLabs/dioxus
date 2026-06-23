@@ -1,11 +1,12 @@
 use crate::{
-    Element, Event, Properties, ScopeId, Template, VirtualDom,
+    DynamicAnchor, DynamicAttrSlot, DynamicNodeSlot, Element, Event, Properties, ScopeId, Template,
+    VirtualDom,
     arena::ElementId,
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
 };
-use dioxus_core_template::{TemplateAnchor, TemplateRawTree, TemplateStorage};
+use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 use dioxus_core_types::DioxusFormattable;
 
 use std::ops::Deref;
@@ -292,9 +293,10 @@ impl<'a> MountedVNode<'a> {
     /// Get the mounted id for a dynamic node.
     pub fn mounted_dynamic_node(
         self,
-        dynamic_node_idx: usize,
+        slot: DynamicNodeSlot<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
+        let dynamic_node_idx = slot.index();
         match &self.vnode.dynamic_nodes[dynamic_node_idx] {
             DynamicNode::Text(_) => dom
                 .mounted_dynamic_text_node(self.mount, dynamic_node_idx)
@@ -316,52 +318,30 @@ impl<'a> MountedVNode<'a> {
     /// Get the mounted id for the static template node addressed by a dynamic anchor.
     pub fn mounted_anchor_node(
         self,
-        anchor: &TemplateAnchor,
+        anchor: DynamicAnchor<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let anchor_idx = self
-            .vnode
-            .template
-            .anchors()
-            .iter()
-            .position(|candidate| *candidate == *anchor)?;
-        self.mounted_anchor_node_by_index(anchor_idx, dom)
-    }
-
-    /// Get the mounted id for the static template node addressed by an indexed dynamic anchor.
-    pub fn mounted_anchor_node_by_index(
-        self,
-        anchor_idx: usize,
-        dom: &VirtualDom,
-    ) -> Option<ElementId> {
-        dom.mounted_anchor_node(self.mount, anchor_idx)
+        dom.mounted_anchor_node(self.mount, anchor.anchor_index())
             .map(|id| id.element_id())
     }
 
     /// Get the mounted id for the anchor that owns a dynamic attribute.
     pub fn mounted_dynamic_attribute(
         self,
-        dynamic_attribute_idx: usize,
+        slot: DynamicAttrSlot<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        self.vnode.dynamic_attrs.get(dynamic_attribute_idx)?;
-        let anchor_idx = self
-            .vnode
-            .template
-            .anchors()
-            .iter()
-            .enumerate()
-            .find(|(_, anchor)| anchor.attributes().contains(&dynamic_attribute_idx))
-            .map(|(idx, _)| idx)?;
-        self.mounted_anchor_node_by_index(anchor_idx, dom)
+        self.vnode.dynamic_attrs.get(slot.index())?;
+        self.mounted_anchor_node(slot.anchor(), dom)
     }
 
     /// Get mounted children for a dynamic fragment.
     pub fn mounted_fragment_children(
         self,
-        dynamic_node_idx: usize,
+        slot: DynamicNodeSlot<'a>,
         dom: &VirtualDom,
     ) -> Vec<MountedVNode<'a>> {
+        let dynamic_node_idx = slot.index();
         let DynamicNode::Fragment(children) = &self.vnode.dynamic_nodes[dynamic_node_idx] else {
             return Vec::new();
         };
@@ -492,11 +472,11 @@ impl VComponent {
     /// Returns [`None`] if the node is not mounted
     pub fn mounted_scope_id(
         &self,
-        dynamic_node_index: usize,
+        slot: DynamicNodeSlot<'_>,
         vnode: MountedVNode<'_>,
         dom: &VirtualDom,
     ) -> Option<ScopeId> {
-        dom.mounted_dynamic_component_scope(vnode.mount(), dynamic_node_index)
+        dom.mounted_dynamic_component_scope(vnode.mount(), slot.index())
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -506,11 +486,11 @@ impl VComponent {
     /// Returns [`None`] if the node is not mounted
     pub fn mounted_scope<'a>(
         &self,
-        dynamic_node_index: usize,
+        slot: DynamicNodeSlot<'_>,
         vnode: MountedVNode<'_>,
         dom: &'a VirtualDom,
     ) -> Option<&'a ScopeState> {
-        let scope_id = dom.mounted_dynamic_component_scope(vnode.mount(), dynamic_node_index)?;
+        let scope_id = dom.mounted_dynamic_component_scope(vnode.mount(), slot.index())?;
 
         dom.scopes.get(scope_id.index())
     }

@@ -14,8 +14,8 @@
 //! `MountedVNode`. No DOM reads happen here — the cursor performs them.
 
 use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, MountedVNode, ScopeState, StaticElement,
-    TemplateSlotTarget, VNodeChild, VirtualDom,
+    AttributeValue, DynamicNode, DynamicNodeSlot, ElementId, MountedVNode, ScopeState,
+    StaticElement, TemplateSlotTarget, VNodeChild, VirtualDom,
 };
 
 use crate::dom::WebsysDom;
@@ -82,17 +82,16 @@ impl WebsysDom {
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
         match child {
-            VNodeChild::Dynamic(group) => {
-                for node in group.nodes() {
-                    self.emit_dynamic_node_at_level(vnode, node, dom, cursor, state)?;
+            VNodeChild::Dynamic(anchor) => {
+                for slot in anchor.nodes() {
+                    self.emit_dynamic_node_at_level(vnode, slot, dom, cursor, state)?;
                 }
-                // A `BeforeStatic` group anchors before the following static
+                // A `BeforeStatic` anchor sits before the following static
                 // sibling at this level. Record its id so that sibling's emission
                 // binds it too: core keys the anchor by the sibling's own path, so
                 // it dedups to whatever id the sibling would otherwise receive.
-                if matches!(group.slot_target(), TemplateSlotTarget::BeforeStatic(_)) {
-                    state.pending_before_anchor =
-                        vnode.mounted_anchor_node_by_index(group.anchor_index(), dom);
+                if matches!(anchor.slot_target(), TemplateSlotTarget::BeforeStatic(_)) {
+                    state.pending_before_anchor = vnode.mounted_anchor_node(anchor, dom);
                 }
             }
             VNodeChild::Element(element) => {
@@ -119,27 +118,27 @@ impl WebsysDom {
     fn emit_dynamic_node_at_level<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        node: &'a DynamicNode,
+        slot: DynamicNodeSlot<'a>,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
-        match node {
+        match &*slot {
             DynamicNode::Text(text) => {
                 let id = vnode
-                    .mounted_dynamic_node(value_idx, dom)
+                    .mounted_dynamic_node(slot, dom)
                     .ok_or(VNodeNotInitialized)?;
                 state.push_text(utf16_len(&text.value), Some(id));
             }
             DynamicNode::Component(comp) => {
                 let scope = comp
-                    .mounted_scope(value_idx, vnode, dom)
+                    .mounted_scope(slot, vnode, dom)
                     .ok_or(VNodeNotInitialized)?;
                 let child = scope.try_mounted_root_node().ok_or(VNodeNotInitialized)?;
                 self.emit_vnode_roots_at_level(child, dom, cursor, state)?;
             }
             DynamicNode::Fragment(fragment) => {
-                let mounted_children = vnode.mounted_fragment_children(value_idx, dom);
+                let mounted_children = vnode.mounted_fragment_children(slot, dom);
                 if mounted_children.len() != fragment.len() {
                     return Err(VNodeNotInitialized);
                 }
@@ -178,19 +177,20 @@ impl WebsysDom {
             &mut mounted_events,
         )?;
 
-        // A trailing dynamic-node group appends directly into this element (its
+        // A trailing dynamic-node anchor appends directly into this element (its
         // static parent). Core gives that append anchor its own ElementId pointing
         // at this same element (`assign_template_anchor_ids`), distinct from any
-        // root/attr id, so hydration must bind it here too — otherwise the group's
+        // root/attr id, so hydration must bind it here too — otherwise the anchor's
         // later `AppendTo(anchor)` resolves to an unbound node and the interpreter
         // dereferences `undefined`. The append anchor shares this element's static
         // path, so it dedups to the same id as any attr/root binding above.
-        for group in vnode.vnode().dynamic_nodes() {
-            if group.parent_element_op_index() == Some(element.op())
-                && matches!(group.slot_target(), TemplateSlotTarget::AppendChildren(_))
+        for anchor in vnode.vnode().dynamic_anchors() {
+            if anchor.nodes().len() > 0
+                && anchor.parent_element_op_index() == Some(element.op())
+                && matches!(anchor.slot_target(), TemplateSlotTarget::AppendChildren(_))
             {
                 let anchor_id = vnode
-                    .mounted_anchor_node_by_index(group.anchor_index(), dom)
+                    .mounted_anchor_node(anchor, dom)
                     .ok_or(VNodeNotInitialized)?;
                 mounted_id = Some(anchor_id);
             }
@@ -231,12 +231,12 @@ impl WebsysDom {
         listeners: &mut Vec<(&'static str, bool)>,
         #[cfg(feature = "mounted")] mounted_events: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        for group in element.dynamic_attributes() {
+        for anchor in element.dynamic_anchors() {
             let anchor_id = vnode
-                .mounted_anchor_node_by_index(group.anchor_index(), dom)
+                .mounted_anchor_node(anchor, dom)
                 .ok_or(VNodeNotInitialized)?;
             *mounted_id = Some(anchor_id);
-            for attribute in group.attrs().flatten() {
+            for attribute in anchor.attrs().flat_map(|slot| slot.attrs()) {
                 if matches!(attribute.value, AttributeValue::Listener(_)) {
                     if attribute.name == "onmounted" {
                         #[cfg(feature = "mounted")]
@@ -264,7 +264,7 @@ struct TextContribution {
 struct LevelState {
     pending_text: Vec<TextContribution>,
     prev_consumed: u32,
-    /// Anchor id from a preceding `BeforeStatic` dynamic group, awaiting the
+    /// Anchor id from a preceding `BeforeStatic` dynamic anchor, awaiting the
     /// static sibling it anchors before so that sibling's binding adopts it.
     pending_before_anchor: Option<ElementId>,
 }

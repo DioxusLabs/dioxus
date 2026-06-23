@@ -7,8 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    DynamicNode, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext, VirtualDom,
-    consume_context, has_context, try_consume_context,
+    DynamicNode, DynamicNodeSlot, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext,
+    VirtualDom, consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
@@ -566,27 +566,27 @@ impl SsrRendererPool {
     }
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
-        for group in vnode.vnode().dynamic_nodes() {
-            for (dyn_node_index, dynamic_node) in group.enumerate_nodes() {
-                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dyn_node_index);
+        for anchor in vnode.vnode().dynamic_anchors() {
+            for slot in anchor.nodes() {
+                Self::take_from_dynamic_node(context, vdom, vnode, slot);
             }
         }
     }
+
     fn take_from_dynamic_node(
         context: &HydrationContext,
         vdom: &VirtualDom,
         vnode: MountedVNode<'_>,
-        dyn_node: &DynamicNode,
-        dynamic_node_index: usize,
+        slot: DynamicNodeSlot<'_>,
     ) {
-        match dyn_node {
+        match &*slot {
             DynamicNode::Component(comp) => {
-                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                if let Some(scope) = comp.mounted_scope(slot, vnode, vdom) {
                     Self::take_from_scope(context, vdom, scope.id());
                 }
             }
             DynamicNode::Fragment(nodes) => {
-                let mounted_children = vnode.mounted_fragment_children(dynamic_node_index, vdom);
+                let mounted_children = vnode.mounted_fragment_children(slot, vdom);
                 if mounted_children.len() != nodes.len() {
                     return;
                 }

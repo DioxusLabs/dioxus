@@ -593,9 +593,12 @@ fn MyComponent() -> Element {{
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
 
-        for group in node.dynamic_attributes() {
-            let path = group.static_path();
-            let Some(id) = mount.mounted_anchor_node(group.anchor_index()) else {
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| anchor.attrs().len() > 0)
+        {
+            let path = anchor.static_path();
+            let Some(id) = mount.mounted_anchor_node(anchor.anchor_index()) else {
                 continue;
             };
             if id.element_id() == element {
@@ -615,10 +618,14 @@ fn MyComponent() -> Element {{
         let parent = mounts.get(parent_mount.0)?;
         let parent_node = parent.node();
 
-        for group in parent_node.dynamic_nodes() {
-            let target = group.slot_target();
-            for (idx, node) in group.enumerate_nodes() {
-                match node {
+        for anchor in parent_node
+            .dynamic_anchors()
+            .filter(|anchor| anchor.nodes().len() > 0)
+        {
+            let target = anchor.slot_target();
+            for slot in anchor.nodes() {
+                let idx = slot.index();
+                match &*slot {
                     DynamicNode::Fragment(children) => {
                         if children.is_empty() {
                             continue;
@@ -659,13 +666,16 @@ fn MyComponent() -> Element {{
         path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
         mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
     ) {
-        for group in node.dynamic_attributes() {
-            let attr_path = group.static_path();
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| anchor.attrs().len() > 0)
+        {
+            let attr_path = anchor.static_path();
             if !path_matches(target_path, attr_path) {
                 continue;
             }
 
-            for attr in group.attrs().flatten() {
+            for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
                     break;

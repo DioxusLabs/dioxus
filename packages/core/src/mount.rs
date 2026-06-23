@@ -629,9 +629,10 @@ fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
     }
 
     let old_children = std::mem::take(&mut mount.fragment_child_mounts);
-    for group in node.dynamic_nodes() {
-        for idx in group.ids() {
-            let DynamicNode::Fragment(nodes) = &node.dynamic_nodes[idx] else {
+    for anchor in node.dynamic_anchors() {
+        for slot in anchor.nodes() {
+            let idx = slot.index();
+            let DynamicNode::Fragment(nodes) = &*slot else {
                 continue;
             };
 

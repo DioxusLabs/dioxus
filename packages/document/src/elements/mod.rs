@@ -92,8 +92,8 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         // rsx! { "static text" }
         (VNodeChild::Text(text), 0, 0) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }
-        (VNodeChild::Dynamic(group), 1, 0) => match group.ids().next() {
-            Some(0) => match &vnode.dynamic_node_values()[0] {
+        (VNodeChild::Dynamic(anchor), 1, 0) => match anchor.nodes().next() {
+            Some(slot) => match &*slot {
                 DynamicNode::Text(text) => Ok(text.value.clone()),
                 _ => Err(ExtractSingleTextNodeError::NonTextNode),
             },

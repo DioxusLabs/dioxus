@@ -208,17 +208,14 @@ fn custom_elements_get_gated_global_attrs_unless_they_define_the_attr() {
 fn dynamic_attr_and_child_share_one_anchor() {
     let vnode = mixed_dynamic_attr_and_child().unwrap();
     let div = root_element(&vnode);
-    let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
-    let node_groups = vnode
-        .dynamic_nodes()
-        .filter(|group| group.parent_element_op_index() == Some(div.op()))
+    let anchors = div
+        .dynamic_anchors()
+        .filter(|anchor| anchor.nodes().len() > 0)
         .collect::<Vec<_>>();
 
-    assert_eq!(attr_groups.len(), 1);
-    assert_eq!(node_groups.len(), 1);
-    assert_eq!(attr_groups[0].anchor_index(), node_groups[0].anchor_index());
-    assert_eq!(attr_groups[0].attrs().count(), 1);
-    assert_eq!(node_groups[0].nodes().count(), 1);
+    assert_eq!(anchors.len(), 1);
+    assert_eq!(anchors[0].attrs().len(), 1);
+    assert_eq!(anchors[0].nodes().len(), 1);
 
     let mut dom = VirtualDom::new(mixed_dynamic_attr_and_child);
     let mut oracle = RendererOracle::new();
@@ -230,19 +227,28 @@ fn dynamic_attr_and_child_share_one_anchor() {
 fn dynamic_attr_and_trailing_dynamic_child_uses_split_anchor_ranges() {
     let vnode = dynamic_attr_and_trailing_dynamic_child().unwrap();
     let div = root_element(&vnode);
-    let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
-    let node_groups = vnode
-        .dynamic_nodes()
-        .filter(|group| group.parent_element_op_index() == Some(div.op()))
+    let anchors = vnode
+        .dynamic_anchors()
+        .filter(|anchor| anchor.parent_element_op_index() == Some(div.op()))
+        .collect::<Vec<_>>();
+    let attr_anchors = anchors
+        .iter()
+        .copied()
+        .filter(|anchor| anchor.attrs().len() > 0)
+        .collect::<Vec<_>>();
+    let node_anchors = anchors
+        .iter()
+        .copied()
+        .filter(|anchor| anchor.nodes().len() > 0)
         .collect::<Vec<_>>();
 
-    assert_eq!(attr_groups.len(), 1);
-    assert_eq!(attr_groups[0].attrs().count(), 1);
-    assert_eq!(node_groups.len(), 2);
+    assert_eq!(attr_anchors.len(), 1);
+    assert_eq!(attr_anchors[0].attrs().len(), 1);
+    assert_eq!(node_anchors.len(), 2);
     assert_eq!(
-        node_groups
+        node_anchors
             .iter()
-            .map(|group| group.nodes().count())
+            .map(|anchor| anchor.nodes().len())
             .sum::<usize>(),
         2
     );
@@ -266,30 +272,33 @@ fn nested_dynamic_attr_after_root_dynamic_uses_static_root_slot() {
 fn separated_empty_fragment_slots_stay_inside_static_parent() {
     let vnode = separated_empty_fragment_slots().unwrap();
     let div = root_element(&vnode);
-    let groups = vnode
-        .dynamic_nodes()
-        .filter(|group| group.parent_element_op_index() == Some(div.op()))
+    let anchors = vnode
+        .dynamic_anchors()
+        .filter(|anchor| anchor.parent_element_op_index() == Some(div.op()))
+        .filter(|anchor| anchor.nodes().len() > 0)
         .collect::<Vec<_>>();
 
-    assert_eq!(groups.len(), 2);
-    for group in &groups {
-        assert!(group.parent_element_op_index().is_some());
-    }
+    assert_eq!(anchors.len(), 2);
 
-    let before_span = groups
+    let before_span = anchors
         .iter()
         .copied()
-        .find(|group| group.ids().eq([0]))
+        .find(|anchor| matches!(anchor.slot_target(), TemplateSlotTarget::BeforeStatic(_)))
         .expect("expected leading empty fragment anchor");
     assert!(matches!(
         before_span.slot_target(),
         TemplateSlotTarget::BeforeStatic(_)
     ));
 
-    let after_span = groups
+    let after_span = anchors
         .iter()
         .copied()
-        .find(|group| group.ids().eq([1]))
+        .find(|anchor| {
+            matches!(
+                anchor.slot_target(),
+                TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
+            )
+        })
         .expect("expected trailing empty fragment anchor");
     assert!(matches!(
         after_span.slot_target(),

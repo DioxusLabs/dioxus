@@ -581,16 +581,16 @@ impl SuspenseBoundaryProps {
         }
 
         fn collect_child_scopes(vnode: MountedVNode<'_>, dom: &VirtualDom, out: &mut Vec<ScopeId>) {
-            for group in vnode.vnode().dynamic_nodes() {
-                for idx in group.ids() {
-                    match &vnode.vnode().dynamic_nodes[idx] {
+            for anchor in vnode.vnode().dynamic_anchors() {
+                for slot in anchor.nodes() {
+                    match &*slot {
                         DynamicNode::Component(comp) => {
-                            if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
+                            if let Some(child_scope) = comp.mounted_scope(slot, vnode, dom) {
                                 out.push(child_scope.id());
                             }
                         }
                         DynamicNode::Fragment(fragment) => {
-                            let mounted_children = vnode.mounted_fragment_children(idx, dom);
+                            let mounted_children = vnode.mounted_fragment_children(slot, dom);
                             if mounted_children.len() != fragment.len() {
                                 continue;
                             }
@@ -986,9 +986,10 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
     // must visit every mounted descendant before renderer-visible writes resume.
     set_suspense_mounts_render_mode(dom, vnode, mount, RenderMode::Foreground);
 
-    for group in vnode.dynamic_nodes() {
-        for idx in group.ids() {
-            match &vnode.dynamic_nodes[idx] {
+    for anchor in vnode.dynamic_anchors() {
+        for slot in anchor.nodes() {
+            let idx = slot.index();
+            match &*slot {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     if dom.mark_clean(scope_id) {
@@ -1029,9 +1030,10 @@ fn set_suspense_mounts_render_mode(
     // branch root before placement can run again.
     dom.set_mount_mode(mount, mode);
 
-    for group in vnode.dynamic_nodes() {
-        for idx in group.ids() {
-            match &vnode.dynamic_nodes[idx] {
+    for anchor in vnode.dynamic_anchors() {
+        for slot in anchor.nodes() {
+            let idx = slot.index();
+            match &*slot {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     let rendered = dom.scopes[scope_id.index()]

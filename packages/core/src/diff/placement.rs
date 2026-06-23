@@ -162,7 +162,12 @@ pub(super) fn insertion_site_for_slot(
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
-    insertion_site_for_mounted_anchor(parent_mount, slot.anchor_index(), slot.appends(), dom)
+    insertion_site_for_mounted_anchor(
+        parent_mount,
+        slot.anchor().anchor_index(),
+        slot.appends(),
+        dom,
+    )
 }
 
 pub(super) fn insertion_site_for_mounted_anchor(
@@ -481,11 +486,11 @@ fn root_content_after_slot(
 
     for child in probe.children() {
         match child {
-            VNodeChild::Dynamic(group) => {
-                if group.root_position() <= our_root_idx {
+            VNodeChild::Dynamic(anchor) => {
+                if anchor.root_position() <= our_root_idx {
                     continue;
                 }
-                for slot in group.slots() {
+                for slot in anchor.nodes() {
                     if let Some(id) =
                         live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)
                     {

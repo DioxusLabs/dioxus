@@ -786,9 +786,10 @@ impl crate::MountedVNode<'_> {
         let mut count = 0;
         for child in self.vnode().children() {
             match child {
-                VNodeChild::Dynamic(group) => {
-                    for index in group.ids() {
-                        count += self.push_dynamic_root_node(index, mount, target_id, dom, to);
+                VNodeChild::Dynamic(anchor) => {
+                    for slot in anchor.nodes() {
+                        count +=
+                            self.push_dynamic_root_node(slot.index(), mount, target_id, dom, to);
                     }
                 }
                 VNodeChild::Element(element) => {

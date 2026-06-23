@@ -11,7 +11,7 @@ use crate::{
             insertion_site_for_mounted_anchor, insertion_site_for_mounted_child,
             insertion_site_for_slot,
         },
-        template::{DynamicAttrGroup, DynamicChunk, DynamicNodeGroup, DynamicNodeSlot},
+        template::{DynamicAnchor, DynamicNodeSlot},
     },
     innerlude::{MountId, MountRef},
     mutations::{remove_id, with_consumed_id, with_id},
@@ -77,23 +77,17 @@ impl<'a> DiffFrame<'a> {
 
         // If the templates are the same, we can diff the attributes and children
         let mut scratch = AttributeDiffScratch::default();
-        for group in old.dynamic_groups() {
-            match group {
-                DynamicChunk::Nodes(node_group) => {
-                    for slot in node_group.slots() {
-                        old.diff_dynamic_node(current_mount, slot, new, &mut state);
-                    }
-                }
-                DynamicChunk::Attributes(attr_group) => {
-                    // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
-                    let Some(to) = state.to.as_deref_mut() else {
-                        continue;
-                    };
+        for anchor in old.dynamic_anchors() {
+            if anchor.attrs().len() > 0 {
+                // Since the attributes are only side effects, we can skip diffing them entirely if the node is suspended and we aren't outputting mutations
+                if let Some(to) = state.to.as_deref_mut() {
                     let attribute_id = state
                         .dom
-                        .unchecked_mounted_anchor_node(current_mount, attr_group.anchor_index());
+                        .unchecked_mounted_anchor_node(current_mount, anchor.anchor_index());
+                    let new_anchor = new.dynamic_anchor(anchor.anchor_index());
                     old.diff_attribute_list(
-                        &attr_group,
+                        anchor,
+                        new_anchor,
                         attribute_id,
                         current_mount,
                         &mut scratch,
@@ -101,6 +95,10 @@ impl<'a> DiffFrame<'a> {
                         to,
                     );
                 }
+            }
+
+            for slot in anchor.nodes() {
+                old.diff_dynamic_node(current_mount, slot, new, &mut state);
             }
         }
         state.dom.commit_mount(current_mount, new);
@@ -329,8 +327,8 @@ impl VNode {
         edge: ElementEdge,
     ) -> Option<ElementId> {
         match child {
-            VNodeChild::Dynamic(group) => {
-                self.dynamic_group_edge_element(group, mount, dom, target_id, edge)
+            VNodeChild::Dynamic(anchor) => {
+                self.dynamic_anchor_edge_element(anchor, mount, dom, target_id, edge)
             }
             VNodeChild::Element(element) => self.find_element_at_root_in_target(
                 element.root_position().expect("root element"),
@@ -347,19 +345,19 @@ impl VNode {
         }
     }
 
-    fn dynamic_group_edge_element(
+    fn dynamic_anchor_edge_element(
         &self,
-        group: DynamicNodeGroup<'_>,
+        anchor: DynamicAnchor<'_>,
         mount: MountId,
         dom: &VirtualDom,
         target_id: crate::RenderTargetId,
         edge: ElementEdge,
     ) -> Option<ElementId> {
         match edge {
-            ElementEdge::First => group.slots().find_map(|slot| {
+            ElementEdge::First => anchor.nodes().find_map(|slot| {
                 self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
             }),
-            ElementEdge::Last => group.slots().rev().find_map(|slot| {
+            ElementEdge::Last => anchor.nodes().rev().find_map(|slot| {
                 self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
             }),
         }
@@ -500,9 +498,9 @@ impl VNode {
     }
 
     fn root_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.dynamic_nodes()
-            .filter(|group| group.is_root_level())
-            .flat_map(|group| group.ids())
+        self.dynamic_anchors()
+            .filter(|anchor| anchor.is_root_level())
+            .flat_map(|anchor| anchor.nodes().map(|slot| slot.index()))
     }
 
     /// Remove a node from the DOM and destroy component state.
@@ -780,11 +778,11 @@ impl VNode {
 
         for child in self.children() {
             match child {
-                VNodeChild::Dynamic(group) => {
-                    for index in group.ids() {
+                VNodeChild::Dynamic(anchor) => {
+                    for slot in anchor.nodes() {
                         nodes_created += self.create_dynamic_node_inner(
                             mount,
-                            index,
+                            slot.index(),
                             state,
                             reuse_existing_mounts,
                         );
@@ -843,18 +841,15 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
-        for group in self.dynamic_groups() {
-            match group {
-                DynamicChunk::Attributes(group) => {
-                    if let Some(to) = state.to.as_deref_mut() {
-                        self.write_attr_group(mount, &group, state.dom, to);
-                    }
-                }
-                DynamicChunk::Nodes(group) => {
-                    if group.parent_element_op_index().is_some() {
-                        self.load_dynamic_anchor(mount, group, state, reuse_existing_mounts);
-                    }
-                }
+        for anchor in self.dynamic_anchors() {
+            if anchor.attrs().len() > 0
+                && let Some(to) = state.to.as_deref_mut()
+            {
+                self.write_attr_anchor(mount, anchor, state.dom, to);
+            }
+
+            if anchor.nodes().len() > 0 && anchor.parent_element_op_index().is_some() {
+                self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
             }
         }
     }
@@ -937,18 +932,13 @@ impl VNode {
     fn load_dynamic_anchor(
         &self,
         mount: MountId,
-        group: DynamicNodeGroup<'_>,
+        anchor: DynamicAnchor<'_>,
         state: &mut DiffState<'_, '_, '_, '_>,
         reuse_existing_mounts: bool,
     ) {
         if !state.has_writer() {
-            for dynamic_node_id in group.ids() {
-                self.create_dynamic_node_inner(
-                    mount,
-                    dynamic_node_id,
-                    state,
-                    reuse_existing_mounts,
-                );
+            for slot in anchor.nodes() {
+                self.create_dynamic_node_inner(mount, slot.index(), state, reuse_existing_mounts);
             }
             return;
         }
@@ -956,8 +946,8 @@ impl VNode {
         let context = state.context();
         let site = insertion_site_for_mounted_anchor(
             mount,
-            group.anchor_index(),
-            group.appends(),
+            anchor.anchor_index(),
+            anchor.appends(),
             state.dom,
         );
         let runtime = state.dom.runtime.clone();
@@ -965,12 +955,12 @@ impl VNode {
         let to = state.to.as_deref_mut().expect("writer checked");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
-            group
-                .ids()
-                .map(|dynamic_node_id| {
+            anchor
+                .nodes()
+                .map(|slot| {
                     self.create_dynamic_node_inner(
                         mount,
-                        dynamic_node_id,
+                        slot.index(),
                         &mut state,
                         reuse_existing_mounts,
                     )
@@ -979,15 +969,15 @@ impl VNode {
         });
     }
 
-    fn write_attr_group(
+    fn write_attr_anchor(
         &self,
         mount: MountId,
-        group: &DynamicAttrGroup<'_>,
+        anchor: DynamicAnchor<'_>,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        let id = dom.unchecked_mounted_anchor_node(mount, group.anchor_index());
-        for attr in group.attrs().flatten() {
+        let id = dom.unchecked_mounted_anchor_node(mount, anchor.anchor_index());
+        for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
             Self::write_attribute(attr, id, mount, dom, to);
         }
     }

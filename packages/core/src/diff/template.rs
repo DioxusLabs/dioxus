@@ -1,4 +1,4 @@
-use crate::{Attribute, DynamicNode, Template, VNode};
+use crate::{Attribute, DynamicNode, VNode};
 use dioxus_core_template::{
     StaticTemplateElement, StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText,
     TemplateAnchor, TemplatePath, TemplateSlotTarget,
@@ -12,7 +12,7 @@ pub enum VNodeChild<'a> {
     /// A static template text node.
     Text(StaticText<'a>),
     /// One or more dynamic node values at the same insertion position.
-    Dynamic(DynamicNodeGroup<'a>),
+    Dynamic(DynamicAnchor<'a>),
 }
 
 /// A static template element viewed through a specific rendered [`VNode`].
@@ -78,11 +78,11 @@ impl<'a> StaticElement<'a> {
         self.children().next().is_some()
     }
 
-    /// Iterate dynamic attribute groups that target this element.
-    pub fn dynamic_attributes(self) -> impl Iterator<Item = DynamicAttrGroup<'a>> + 'a {
-        self.vnode
-            .dynamic_attributes()
-            .filter(move |group| group.parent_element_op_index() == self.op)
+    /// Iterate dynamic anchors with attributes that target this element.
+    pub fn dynamic_anchors(self) -> impl Iterator<Item = DynamicAnchor<'a>> + 'a {
+        self.vnode.dynamic_anchors().filter(move |anchor| {
+            anchor.parent_element_op_index() == Some(self.op) && anchor.attrs().len() > 0
+        })
     }
 }
 
@@ -325,8 +325,8 @@ impl<'a> DynamicChildCursor<'a> {
                 vnode,
                 anchor_index,
                 order,
-            } => next_dynamic_child(vnode, anchor_index, order, |group| {
-                group.is_root_level().then(|| group.root_position())
+            } => next_dynamic_child(vnode, anchor_index, order, |anchor| {
+                anchor.is_root_level().then(|| anchor.root_position())
             }),
             Self::Element {
                 element,
@@ -334,9 +334,9 @@ impl<'a> DynamicChildCursor<'a> {
                 order,
             } => {
                 let element_op = element.op;
-                next_dynamic_child(element.vnode, anchor_index, order, |group| {
-                    (group.parent_element_op_index() == Some(element_op))
-                        .then(|| child_position(group.slot_target()))
+                next_dynamic_child(element.vnode, anchor_index, order, |anchor| {
+                    (anchor.parent_element_op_index() == Some(element_op))
+                        .then(|| child_position(anchor.slot_target()))
                 })
             }
         }
@@ -356,19 +356,17 @@ fn next_dynamic_child<'a>(
     vnode: &'a VNode,
     anchor_index: &mut usize,
     order: &mut usize,
-    mut position: impl FnMut(DynamicNodeGroup<'a>) -> Option<usize>,
+    mut position: impl FnMut(DynamicAnchor<'a>) -> Option<usize>,
 ) -> Option<PositionedChild<'a>> {
-    let anchors = vnode.template.anchors();
-    while *anchor_index < anchors.len() {
+    while *anchor_index < vnode.template.anchors().len() {
         let current_anchor_index = *anchor_index;
         *anchor_index += 1;
-        let group =
-            DynamicNodeGroup::new(vnode, &anchors[current_anchor_index], current_anchor_index);
-        if group.is_empty() {
+        let anchor = DynamicAnchor::new(vnode, current_anchor_index);
+        if anchor.nodes().len() == 0 {
             continue;
         }
 
-        let Some(position) = position(group) else {
+        let Some(position) = position(anchor) else {
             continue;
         };
 
@@ -377,29 +375,11 @@ fn next_dynamic_child<'a>(
         return Some(PositionedChild {
             position,
             order: current_order,
-            child: VNodeChild::Dynamic(group),
+            child: VNodeChild::Dynamic(anchor),
         });
     }
 
     None
-}
-
-/// A chunk of dynamic nodes or attributes attached to one template anchor.
-#[derive(Clone, Copy)]
-pub(crate) enum DynamicChunk<'a> {
-    /// Dynamic node values inserted at one template position.
-    Nodes(DynamicNodeGroup<'a>),
-    /// Dynamic attribute values applied to one static element.
-    Attributes(DynamicAttrGroup<'a>),
-}
-
-impl<'a> DynamicChunk<'a> {
-    fn is_empty(&self) -> bool {
-        match self {
-            DynamicChunk::Nodes(group) => group.is_empty(),
-            DynamicChunk::Attributes(group) => group.is_empty(),
-        }
-    }
 }
 
 impl VNode {
@@ -413,118 +393,85 @@ impl VNode {
         self.template.root_position_count()
     }
 
-    /// Iterate dynamic chunks in template document order.
-    pub(crate) fn dynamic_groups(&self) -> impl DoubleEndedIterator<Item = DynamicChunk<'_>> + '_ {
-        self.template
-            .anchors()
-            .iter()
-            .enumerate()
-            .flat_map(|(anchor_index, anchor)| {
-                [
-                    DynamicChunk::Attributes(DynamicAttrGroup::new(self, anchor, anchor_index)),
-                    DynamicChunk::Nodes(DynamicNodeGroup::new(self, anchor, anchor_index)),
-                ]
-            })
-            .filter(|chunk| !chunk.is_empty())
-    }
-
-    /// Iterate dynamic node groups in template document order.
-    pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = DynamicNodeGroup<'_>> + '_ {
-        self.dynamic_groups().filter_map(|chunk| match chunk {
-            DynamicChunk::Nodes(nodes) => Some(nodes),
-            DynamicChunk::Attributes(_) => None,
-        })
-    }
-
-    /// Iterate dynamic attribute groups in template document order.
-    pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = DynamicAttrGroup<'_>> + '_ {
-        self.dynamic_groups().filter_map(|chunk| match chunk {
-            DynamicChunk::Attributes(attrs) => Some(attrs),
-            DynamicChunk::Nodes(_) => None,
-        })
+    /// Iterate dynamic anchors in template document order.
+    pub fn dynamic_anchors(&self) -> impl DoubleEndedIterator<Item = DynamicAnchor<'_>> + '_ {
+        (0..self.template.anchors().len())
+            .map(|anchor_index| DynamicAnchor::new(self, anchor_index))
     }
 
     pub(super) fn dynamic_node_slots(
         &self,
     ) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'_>> + '_ {
-        self.dynamic_nodes().flat_map(|group| group.slots())
+        self.dynamic_anchors().flat_map(|anchor| anchor.nodes())
+    }
+
+    pub(super) fn dynamic_anchor(&self, anchor_index: usize) -> DynamicAnchor<'_> {
+        DynamicAnchor::new(self, anchor_index)
     }
 
     pub(super) fn dynamic_node_slots_after(
         &self,
         slot: DynamicNodeSlot<'_>,
     ) -> impl Iterator<Item = DynamicNodeSlot<'_>> + '_ {
-        let start_anchor = slot.anchor_index();
+        let start_anchor = slot.anchor().anchor_index();
         let after_idx = slot.index();
-        self.template
-            .anchors()
-            .iter()
-            .enumerate()
-            .skip(start_anchor)
-            .flat_map(move |(anchor_index, anchor)| {
-                DynamicNodeGroup::new(self, anchor, anchor_index)
-                    .slots()
-                    .filter(move |slot| anchor_index > start_anchor || slot.index() > after_idx)
-            })
+        (start_anchor..self.template.anchors().len()).flat_map(move |anchor_index| {
+            DynamicAnchor::new(self, anchor_index)
+                .nodes()
+                .filter(move |slot| anchor_index > start_anchor || slot.index() > after_idx)
+        })
     }
 }
 
-/// A group of dynamic node values that share one insertion anchor.
+/// A dynamic template anchor viewed through a rendered [`VNode`].
 #[derive(Clone, Copy)]
-pub struct DynamicNodeGroup<'a> {
-    dynamic_nodes: &'a [DynamicNode],
-    anchor: &'a TemplateAnchor,
+pub struct DynamicAnchor<'a> {
+    vnode: &'a VNode,
     anchor_index: usize,
-    root_position: usize,
 }
 
-impl<'a> DynamicNodeGroup<'a> {
-    pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor, anchor_index: usize) -> Self {
+impl<'a> DynamicAnchor<'a> {
+    pub(super) fn new(vnode: &'a VNode, anchor_index: usize) -> Self {
         Self {
-            dynamic_nodes: &vnode.dynamic_nodes,
-            anchor,
+            vnode,
             anchor_index,
-            root_position: vnode
-                .template
-                .root_position_for_anchor(anchor_index)
-                .expect("bad anchor root"),
         }
     }
 
-    /// Iterate the dynamic node indexes in this group.
-    pub fn ids(self) -> impl DoubleEndedIterator<Item = usize> + 'a {
-        self.anchor.nodes()
+    fn template_anchor(self) -> &'a TemplateAnchor {
+        &self.vnode.template.anchors()[self.anchor_index]
     }
 
-    /// Iterate the dynamic nodes in this group.
-    pub fn nodes(self) -> impl DoubleEndedIterator<Item = &'a DynamicNode> + 'a {
-        self.anchor.nodes().map(move |idx| &self.dynamic_nodes[idx])
-    }
-
-    /// Enumerate the dynamic nodes in this group.
-    pub fn enumerate_nodes(self) -> impl DoubleEndedIterator<Item = (usize, &'a DynamicNode)> + 'a {
-        self.anchor
+    /// Iterate the dynamic node slots owned by this anchor.
+    pub fn nodes(
+        self,
+    ) -> impl ExactSizeIterator<Item = DynamicNodeSlot<'a>> + DoubleEndedIterator + 'a {
+        self.template_anchor()
             .nodes()
-            .map(move |idx| (idx, &self.dynamic_nodes[idx]))
+            .map(move |index| DynamicNodeSlot {
+                anchor: self,
+                index,
+            })
     }
 
-    pub(super) fn slots(self) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'a>> + 'a {
-        self.anchor
-            .nodes()
-            .map(move |index| DynamicNodeSlot { group: self, index })
+    /// Iterate the dynamic attribute slots owned by this anchor.
+    pub fn attrs(
+        self,
+    ) -> impl ExactSizeIterator<Item = DynamicAttrSlot<'a>> + DoubleEndedIterator + 'a {
+        self.template_anchor()
+            .attributes()
+            .map(move |index| DynamicAttrSlot {
+                anchor: self,
+                index,
+            })
     }
 
-    fn is_empty(self) -> bool {
-        self.anchor.nodes().is_empty()
-    }
-
-    /// The static template position where this group is inserted.
+    /// The static template position where this anchor is inserted.
     pub fn slot_target(self) -> TemplateSlotTarget {
-        self.anchor.slot_target()
+        self.template_anchor().slot_target()
     }
 
-    /// The template anchor index for this group.
-    pub fn anchor_index(self) -> usize {
+    pub(crate) fn anchor_index(self) -> usize {
         self.anchor_index
     }
 
@@ -532,12 +479,15 @@ impl<'a> DynamicNodeGroup<'a> {
         matches!(self.slot_target(), TemplateSlotTarget::AppendChildren(_))
     }
 
-    /// The root position this group belongs to.
+    /// The root position this anchor belongs to.
     pub fn root_position(self) -> usize {
-        self.root_position
+        self.vnode
+            .template
+            .root_position_for_anchor(self.anchor_index)
+            .expect("bad anchor root")
     }
 
-    /// Return true when this dynamic group is inserted at the vnode root level, with no enclosing
+    /// Return true when this dynamic anchor is inserted at the vnode root level, with no enclosing
     /// static element.
     pub fn is_root_level(self) -> bool {
         match self.slot_target() {
@@ -546,126 +496,101 @@ impl<'a> DynamicNodeGroup<'a> {
         }
     }
 
-    /// The static element op that owns this group, or `None` for root-level groups.
+    /// The static element op that owns this anchor, or `None` for root-level anchors.
     pub fn parent_element_op_index(self) -> Option<usize> {
-        self.anchor.parent_element_op_index()
+        self.template_anchor().parent_element_op_index()
     }
 
-    pub(super) fn parent_path(self) -> TemplatePath {
-        self.anchor.static_path()
+    /// The static template path for this anchor.
+    pub fn static_path(self) -> TemplatePath {
+        self.template_anchor().static_path()
     }
 
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
         self.slot_target() == other.slot_target()
     }
+
+    pub(super) fn static_attr_value_for_key(
+        self,
+        key: (&'static str, Option<&'static str>),
+    ) -> Option<&'static str> {
+        let element_op = self
+            .template_anchor()
+            .parent_element_op_index()
+            .expect("bad attr anchor");
+        self.vnode
+            .template
+            .static_element(element_op)?
+            .attribute_value(key)
+    }
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct DynamicNodeSlot<'a> {
-    group: DynamicNodeGroup<'a>,
+/// A dynamic node slot owned by a [`DynamicAnchor`].
+pub struct DynamicNodeSlot<'a> {
+    anchor: DynamicAnchor<'a>,
     index: usize,
 }
 
 impl<'a> DynamicNodeSlot<'a> {
-    pub(super) fn index(self) -> usize {
+    /// The dynamic anchor that owns this node slot.
+    pub fn anchor(self) -> DynamicAnchor<'a> {
+        self.anchor
+    }
+
+    pub(crate) fn index(self) -> usize {
         self.index
     }
 
-    pub(super) fn anchor_index(self) -> usize {
-        self.group.anchor_index()
-    }
-
     pub(super) fn root_position(self) -> usize {
-        self.group.root_position()
+        self.anchor.root_position()
     }
 
     pub(super) fn appends(self) -> bool {
-        self.group.appends()
+        self.anchor.appends()
     }
 
     pub(super) fn is_root_level(self) -> bool {
-        self.group.is_root_level()
+        self.anchor.is_root_level()
     }
 
     pub(super) fn parent_path(self) -> TemplatePath {
-        self.group.parent_path()
-    }
-
-    pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.group.shares_insertion_position(other.group)
-    }
-}
-
-/// A group of dynamic attribute values that all attach to one static element, viewed directly over
-/// its [`TemplateAnchor`].
-#[derive(Clone, Copy)]
-pub struct DynamicAttrGroup<'a> {
-    template: &'a Template,
-    dynamic_attrs: &'a [Box<[Attribute]>],
-    anchor: &'a TemplateAnchor,
-    anchor_index: usize,
-}
-
-impl<'a> DynamicAttrGroup<'a> {
-    pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor, anchor_index: usize) -> Self {
-        Self {
-            template: &vnode.template,
-            dynamic_attrs: &vnode.dynamic_attrs,
-            anchor,
-            anchor_index,
-        }
-    }
-
-    /// Iterate the dynamic attribute indexes in this group.
-    pub fn ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.anchor.attributes()
-    }
-
-    /// Iterate the dynamic attributes in this group.
-    pub fn attrs(&self) -> impl Iterator<Item = &'a [Attribute]> + '_ {
-        let dynamic_attrs = self.dynamic_attrs;
-        self.anchor
-            .attributes()
-            .map(move |idx| dynamic_attrs[idx].as_ref())
-    }
-
-    /// Get the number of dynamic attributes in this group.
-    pub fn len(&self) -> usize {
-        self.attrs().map(|attrs| attrs.len()).sum()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.anchor.attributes().is_empty()
-    }
-
-    /// The template anchor index for the static element this group applies to.
-    pub fn anchor_index(&self) -> usize {
-        self.anchor_index
-    }
-
-    /// The static template path for the element this group applies to.
-    pub fn static_path(&self) -> TemplatePath {
         self.anchor.static_path()
     }
 
-    /// The static element op this group applies to.
-    pub fn parent_element_op_index(&self) -> usize {
-        self.anchor
-            .parent_element_op_index()
-            .expect("bad attr anchor")
+    pub(super) fn shares_insertion_position(self, other: Self) -> bool {
+        self.anchor.shares_insertion_position(other.anchor)
+    }
+}
+
+impl std::ops::Deref for DynamicNodeSlot<'_> {
+    type Target = DynamicNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.anchor.vnode.dynamic_nodes[self.index]
+    }
+}
+
+#[derive(Clone, Copy)]
+/// A dynamic attribute slot owned by a [`DynamicAnchor`].
+pub struct DynamicAttrSlot<'a> {
+    anchor: DynamicAnchor<'a>,
+    index: usize,
+}
+
+impl<'a> DynamicAttrSlot<'a> {
+    /// The dynamic attributes for this slot.
+    pub fn attrs(self) -> &'a [Attribute] {
+        self.anchor.vnode.dynamic_attrs[self.index].as_ref()
     }
 
-    pub(super) fn static_attr_value_for_key(
-        &self,
-        key: (&'static str, Option<&'static str>),
-    ) -> Option<&'static str> {
-        let element_op = self
-            .anchor
-            .parent_element_op_index()
-            .expect("bad attr anchor");
-        self.template
-            .static_element(element_op)?
-            .attribute_value(key)
+    /// The dynamic anchor that owns this attribute slot.
+    pub fn anchor(self) -> DynamicAnchor<'a> {
+        self.anchor
+    }
+
+    pub(crate) fn index(self) -> usize {
+        self.index
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VNodeChild, VirtualDom,
+    Attribute, AttributeValue, DynamicNode, DynamicNodeSlot, Element, MountedVNode, VNodeChild,
+    VirtualDom,
 };
 
 /// Render `app` from scratch into a stable snapshot.
@@ -55,8 +56,8 @@ fn child_snapshot<'a>(
                     value.to_string(),
                 );
             }
-            for group in element.dynamic_attributes() {
-                for attr in group.attrs().flatten() {
+            for anchor in element.dynamic_anchors() {
+                for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
                     apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
                 }
             }
@@ -74,10 +75,10 @@ fn child_snapshot<'a>(
             }]
         }
         VNodeChild::Text(text) => vec![SnapshotNode::Text(text.text().to_string())],
-        VNodeChild::Dynamic(group) => {
+        VNodeChild::Dynamic(anchor) => {
             let mut out = Vec::new();
-            for idx in group.ids() {
-                out.extend(dynamic_node_snapshot(vdom, vnode, idx));
+            for slot in anchor.nodes() {
+                out.extend(dynamic_node_snapshot(vdom, vnode, slot));
             }
             out
         }
@@ -87,16 +88,16 @@ fn child_snapshot<'a>(
 fn dynamic_node_snapshot(
     vdom: &VirtualDom,
     owner: MountedVNode<'_>,
-    id: usize,
+    slot: DynamicNodeSlot<'_>,
 ) -> Vec<SnapshotNode> {
-    match &owner.dynamic_node_values()[id] {
+    match &*slot {
         DynamicNode::Text(text) => vec![SnapshotNode::Text(text.value.clone())],
         DynamicNode::Fragment(nodes) => {
-            let mounted_children = owner.mounted_fragment_children(id, vdom);
+            let mounted_children = owner.mounted_fragment_children(slot, vdom);
             assert_eq!(
                 mounted_children.len(),
                 nodes.len(),
-                "fragment dynamic node {id} is not mounted"
+                "fragment dynamic node is not mounted"
             );
             mounted_children
                 .into_iter()
@@ -104,12 +105,11 @@ fn dynamic_node_snapshot(
                 .collect()
         }
         DynamicNode::Component(component) => {
-            let scope = component.mounted_scope(id, owner, vdom).unwrap_or_else(|| {
-                panic!(
-                    "component dynamic node {id} ({}) is not mounted",
-                    component.name
-                )
-            });
+            let scope = component
+                .mounted_scope(slot, owner, vdom)
+                .unwrap_or_else(|| {
+                    panic!("component dynamic node ({}) is not mounted", component.name)
+                });
             vnode_snapshot(vdom, scope.try_mounted_root_node().unwrap())
         }
     }
