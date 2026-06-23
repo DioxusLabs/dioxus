@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn extracts_static_text() {
         static TREE: TemplateRawTree = TemplateRawTree::StaticText("static text");
-        static STORAGE: TemplateStorage<2, 1, 0> = TemplateStorage::build_from_tree(&TREE);
+        static STORAGE: TemplateStorage<2, 1, 1> = TemplateStorage::build_from_tree(&TREE);
         let children = Ok(VNode::new(
             STORAGE.as_template(),
             DynamicValues::from_parts(None, Box::new([]), Box::new([])),
