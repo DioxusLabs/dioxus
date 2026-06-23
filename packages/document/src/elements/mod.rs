@@ -84,11 +84,16 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    match (
-        child,
-        vnode.dynamic_node_values().len(),
-        vnode.dynamic_attr_values().len(),
-    ) {
+    let dynamic_node_count = vnode
+        .dynamic_anchors()
+        .map(|anchor| anchor.nodes().len())
+        .sum::<usize>();
+    let dynamic_attr_count = vnode
+        .dynamic_anchors()
+        .map(|anchor| anchor.attrs().len())
+        .sum::<usize>();
+
+    match (child, dynamic_node_count, dynamic_attr_count) {
         // rsx! { "static text" }
         (VNodeChild::Text(text), 0, 0) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }

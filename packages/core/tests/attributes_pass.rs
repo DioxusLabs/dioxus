@@ -17,8 +17,18 @@ fn attributes_pass_properly() {
     let o = h.unwrap();
 
     // The three numeric attributes (cx, cy, r) are dynamic; there are no dynamic nodes.
-    assert_eq!(o.dynamic_node_values().len(), 0);
-    assert_eq!(o.dynamic_attr_values().len(), 3);
+    assert_eq!(
+        o.dynamic_anchors()
+            .map(|anchor| anchor.nodes().len())
+            .sum::<usize>(),
+        0
+    );
+    assert_eq!(
+        o.dynamic_anchors()
+            .map(|anchor| anchor.attrs().len())
+            .sum::<usize>(),
+        3
+    );
 
     let circle = o
         .children()

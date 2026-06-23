@@ -44,6 +44,12 @@ pub(crate) struct FragmentMountWriter {
     len: usize,
 }
 
+impl FragmentMountWriter {
+    pub(crate) fn len(self) -> usize {
+        self.len
+    }
+}
+
 impl PackedMountedSlot {
     const fn empty() -> Self {
         Self { value: 0 }
