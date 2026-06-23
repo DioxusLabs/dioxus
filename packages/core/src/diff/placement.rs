@@ -144,20 +144,23 @@ pub(super) fn insertion_site_for_slot(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
+    let parent_views = parent_views(dom, parent_mount, context);
+
     // An anchor can cover several adjacent dynamic nodes (`{a}{b}` lower to one anchor), so first
     // prefer the closest following sibling that shares it - this applies to both root-level and
-    // nested slots - anchoring before its first live element.
-    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+    // nested slots - anchoring before its first live element. During a same-template parent diff,
+    // following siblings have not been diffed yet, so their mounted slots still match the old view.
+    if let Some(id) = parent_views.find_old_map(|parent_vnode| {
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
         return InsertionSite::before(id);
     }
 
     // If this is the last live dynamic node at the insertion position, place it after the closest
-    // previous sibling before falling back to the static anchor or parent position. Root-level
-    // anchors made only of dynamic nodes have no static anchor, and falling back to the parent would
-    // put later slots before earlier ones.
-    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+    // previous sibling before falling back to the static anchor or parent position. Previous
+    // siblings have already been diffed, so in a same-template parent diff their mounted slots match
+    // the new view, not the old view.
+    if let Some(id) = parent_views.find_new_map(|parent_vnode| {
         adjacent_dynamic_sibling_before_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
         return InsertionSite::after(id);
@@ -296,7 +299,7 @@ fn insertion_site_for_child_in_parent(
     // the new vnode may already have a different fragment shape, but the
     // fragment child mount list is not replaced until that parent diff
     // commits.
-    parent_views.find_committed_map(|parent_vnode| {
+    parent_views.find_old_map(|parent_vnode| {
         for slot in parent_vnode.vnode().dynamic_node_slots() {
             let idx = slot.index();
             match &parent_vnode.vnode().dynamic_node_values()[idx] {
@@ -407,25 +410,30 @@ fn live_dynamic_slot_edge_element(
     dom: &VirtualDom,
     edge: ElementEdge,
 ) -> Option<ElementId> {
+    let target_id = dom.current_render_target_id();
     match &vnode.dynamic_node_values()[idx] {
-        DynamicNode::Text(_) => dom
+        DynamicNode::Text(_) if dom.mount_target_id(mount) == target_id => dom
             .mounted_dynamic_text_node(mount, idx)
             .map(|id| id.element_id()),
+        DynamicNode::Text(_) => None,
         DynamicNode::Fragment(children) => dom
             .try_with_mounted_fragment_children(mount, idx, children.len(), |child_mounts| {
                 edge.find_map(children.len(), |idx| {
-                    vnode_edge_element(
-                        MountedVNode::new(&children[idx], child_mounts[idx]),
-                        dom,
-                        edge,
-                    )
+                    let child_mount = child_mounts[idx];
+                    if dom.runtime.is_placement_stale(child_mount) {
+                        return None;
+                    }
+                    children[idx].find_element_in_roots(child_mount, dom, target_id, edge)
                 })
             })
             .flatten(),
         DynamicNode::Component(_) => {
             let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
             let vnode = dom.current_mounted_view(component_root_mount)?;
-            vnode_edge_element(MountedVNode::new(&vnode, component_root_mount), dom, edge)
+            if dom.runtime.is_placement_stale(component_root_mount) {
+                return None;
+            }
+            vnode.find_element_in_roots(component_root_mount, dom, target_id, edge)
         }
     }
 }
@@ -439,6 +447,7 @@ fn parent_views<'a>(
         return ParentViews::Context {
             mount: parent_mount,
             old: context.old,
+            new: context.new,
         };
     }
     ParentViews::Mounted {
@@ -450,14 +459,28 @@ fn parent_views<'a>(
 }
 
 enum ParentViews<'a> {
-    Context { mount: MountId, old: &'a VNode },
-    Mounted { mount: MountId, view: VNode },
+    Context {
+        mount: MountId,
+        old: &'a VNode,
+        new: &'a VNode,
+    },
+    Mounted {
+        mount: MountId,
+        view: VNode,
+    },
 }
 
 impl<'a> ParentViews<'a> {
-    fn find_committed_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
+    fn find_old_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
         match self {
-            Self::Context { mount, old } => f(MountedVNode::new(old, *mount)),
+            Self::Context { mount, old, .. } => f(MountedVNode::new(old, *mount)),
+            Self::Mounted { mount, view } => f(MountedVNode::new(view, *mount)),
+        }
+    }
+
+    fn find_new_map<T>(&self, mut f: impl FnMut(MountedVNode<'_>) -> Option<T>) -> Option<T> {
+        match self {
+            Self::Context { mount, new, .. } => f(MountedVNode::new(new, *mount)),
             Self::Mounted { mount, view } => f(MountedVNode::new(view, *mount)),
         }
     }

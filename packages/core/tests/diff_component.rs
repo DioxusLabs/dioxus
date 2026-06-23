@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
-use dioxus_core::ScopeId;
+use dioxus_core::{NoOpMutations, ScopeId};
 use dioxus_renderer_oracle::{OracleNodeId, RendererOracle};
+use std::cell::RefCell;
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -122,4 +123,44 @@ fn identity_by_attr(oracle: &RendererOracle, attr: &str, value: &str) -> OracleN
         .into_iter()
         .find_map(|(current_value, id)| (current_value == value).then_some(id))
         .unwrap_or_else(|| panic!("no live element with `{attr}={value}` found in the oracle DOM"))
+}
+
+#[test]
+fn child_owned_signal_prop_updates_before_new_owner_drops() {
+    thread_local! {
+        static COUNT: RefCell<Option<Signal<i32>>> = const { RefCell::new(None) };
+    }
+
+    fn app() -> Element {
+        let count = use_signal(|| 0);
+        use_hook(|| {
+            COUNT.with(|slot| {
+                *slot.borrow_mut() = Some(count);
+            });
+        });
+
+        rsx! {
+            Child { count }
+        }
+    }
+
+    #[component]
+    fn Child(count: WriteSignal<i32>) -> Element {
+        let doubled = use_memo(move || count() * 2);
+
+        rsx! {
+            div { "{doubled}" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild_in_place();
+
+    let mut count = COUNT.with(|slot| slot.borrow().expect("count signal captured"));
+    count.set(1);
+    dom.render_immediate(&mut NoOpMutations);
+
+    COUNT.with(|slot| {
+        *slot.borrow_mut() = None;
+    });
 }

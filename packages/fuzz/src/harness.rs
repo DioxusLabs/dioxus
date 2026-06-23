@@ -1630,6 +1630,37 @@ mod tests {
     }
 
     #[test]
+    fn moved_root_skips_removed_portal_anchor() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Portal),
+                },
+            ),
+            Op::RenderSuspenseDirty,
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 248,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Text(38)),
+                    },
+                },
+            ),
+            Op::RenderDirty,
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Move { from: 199, to: 116 },
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
         replay_ops([
             Op::template(

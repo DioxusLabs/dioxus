@@ -288,7 +288,7 @@ impl VNode {
         )
     }
 
-    fn find_element_in_roots(
+    pub(super) fn find_element_in_roots(
         &self,
         mount: MountId,
         dom: &VirtualDom,

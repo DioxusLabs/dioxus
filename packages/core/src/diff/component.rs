@@ -173,7 +173,11 @@ impl VNode {
             return;
         }
 
-        state.dom.queue_scope(scope_id);
+        let context = state.context();
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        let to = state.to.as_deref_mut();
+        driver.diff(&mut *state.dom, scope_id, context, to);
+        state.dom.mark_clean(scope_id);
     }
 
     fn replace_vcomponent(
