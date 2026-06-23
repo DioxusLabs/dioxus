@@ -244,12 +244,28 @@ impl App {
         let Some(app_webview) = self.webviews.remove(&id) else {
             return;
         };
-        self.dom
-            .runtime()
-            .remove_render_target(app_webview.target_id());
+        let target_id = app_webview.target_id();
+        // A component-owned `Window` reclaims its own target when its portal is
+        // torn down, so this is usually a no-op. When the OS destroys a window
+        // (or the app is shutting down) before that teardown runs the portal is
+        // still mounted; `remove_render_target` leaves such a target in place and
+        // it is reclaimed when the runtime is dropped.
+        self.dom.runtime().remove_render_target(target_id);
 
-        if self.exit_on_last_window_close && self.webviews.is_empty() {
+        // The root webview hosts the shared VirtualDom; every other window is a
+        // render target fed by a `Window`/`Portal` inside it. Closing the root
+        // window therefore tears down the whole app, just like closing the last
+        // window does.
+        let closed_host = target_id == RenderTargetId::ROOT;
+        if self.exit_on_last_window_close && (closed_host || self.webviews.is_empty()) {
             self.control_flow = ControlFlow::Exit
+        } else {
+            // Removing the webview drops its `WryQueue`, including any
+            // `edits_in_progress` receiver that was gating `poll_vdom`. The
+            // webview's pending ack can no longer wake the event loop, so
+            // schedule a poll to resume any VDOM work that was waiting on it
+            // (for example effects queued by the window's `onclose`).
+            self.schedule_poll();
         }
     }
 

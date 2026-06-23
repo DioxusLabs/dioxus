@@ -249,25 +249,26 @@ fn MyComponent() -> Element {{
     /// a later [`create_render_target`](Self::create_render_target). The root target
     /// ([`RenderTargetId::ROOT`]) is permanent and is never removed.
     ///
-    /// The caller must ensure nothing renders into the target anymore: every node
-    /// mounted into it - for example the [`Portal`](crate::Portal) feeding it - must
-    /// already have been removed from the tree. Removing a target that still has
-    /// live mounts leaves those mounts dangling and panics on the next render that
-    /// touches the target.
+    /// Removing a target that still has live mounts - for example because the
+    /// [`Portal`](crate::Portal) feeding it has not been torn down yet - would
+    /// leave those mounts dangling, so this leaves the target in place instead.
+    /// That happens when a host window is destroyed by the OS or during shutdown
+    /// before its owning component reclaims the target; the target is then freed
+    /// when the runtime is dropped. Callers that own the target's teardown should
+    /// remove the feeding node first so the slot can be recycled.
     ///
-    /// Returns `true` if a target was removed, or `false` if `id` was the root or
-    /// referred to a target that was already gone.
+    /// Returns `true` if a target was removed, or `false` if `id` was the root,
+    /// referred to a target that was already gone, or still had live mounts.
     pub fn remove_render_target(&self, id: RenderTargetId) -> bool {
         if id == RenderTargetId::ROOT {
             return false;
         }
         let mut targets = self.render_targets.borrow_mut();
-        #[cfg(debug_assertions)]
-        if let Some(target) = targets.get(id.index()) {
-            debug_assert!(
-                target.elements.iter().all(|(_, slot)| slot.is_none()),
-                "removing render target {id:?} while it still has live mounted elements"
-            );
+        let Some(target) = targets.get(id.index()) else {
+            return false;
+        };
+        if target.elements.iter().any(|(_, slot)| slot.is_some()) {
+            return false;
         }
         targets.try_remove(id.index()).is_some()
     }

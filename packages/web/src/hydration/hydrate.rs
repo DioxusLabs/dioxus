@@ -148,36 +148,16 @@ impl WebsysDom {
         filter_scripts: bool,
         collect_suspense: bool,
     ) -> Result<(), RehydrationError> {
-        let mut cursor = HydrationCursor::new(
-            self.interpreter.base(),
-            self.root.clone(),
-            under,
-            filter_scripts,
-        );
-        let under_is_empty = cursor.root_count() == 0;
-
-        if under_is_empty {
-            // No real root nodes were emitted by SSR. Hydrate under the mount
-            // element so zero-DOM root ids still get anchors with a concrete
-            // parent.
-            cursor = HydrationCursor::new(
-                self.interpreter.base(),
-                self.root.clone(),
-                node_array(&self.root),
-                false,
-            );
-            cursor.enter_root(0);
-            cursor.begin_children();
-            self.emit_scope(scope, dom, &mut cursor, collect_suspense)?;
-            cursor.end_children();
-        } else {
-            // Park the cursor on the first root; subsequent roots are stepped via
-            // `advance(1)` as the VDOM walker descends siblings.
-            cursor.enter_root(0);
-            self.emit_scope(scope, dom, &mut cursor, collect_suspense)?;
-        }
-
-        Ok(())
+        // Park on the first server-rendered root; subsequent roots are stepped
+        // via `advance(1)` as the VDOM walker descends siblings. When SSR emitted
+        // no roots, hydrate directly inside the mount element so zero-DOM root ids
+        // still get anchors with a concrete parent.
+        let mut cursor =
+            match HydrationCursor::over_roots(self.interpreter.base(), under, filter_scripts)? {
+                Some(cursor) => cursor,
+                None => HydrationCursor::in_parent(self.interpreter.base(), self.root.clone()),
+            };
+        self.emit_scope(scope, dom, &mut cursor, collect_suspense)
     }
 
     pub fn rehydrate(

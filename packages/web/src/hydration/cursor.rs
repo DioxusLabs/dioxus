@@ -21,70 +21,69 @@ fn document() -> Document {
     web_sys::window().unwrap().document().unwrap()
 }
 
-/// A parent on the descent stack. `wrapper` marks a parser-inserted element the
-/// template doesn't know about (skipped over when ascending).
-struct HydrationFrame {
-    node: Option<Node>,
+/// A saved descent level, restored on ascent. `parent`/`resume` are the parent
+/// and cursor to return to; `wrapper` marks a parser-inserted element the
+/// template doesn't know about (popped transparently when ascending).
+struct Ascent {
+    parent: Node,
+    resume: Node,
     wrapper: bool,
 }
 
 pub(super) struct HydrationCursor {
     base: JsValue,
-    /// The DOM node the cursor currently points at.
+    /// Current parent: matched children live here and synthesized nodes insert
+    /// here. Always a concrete node - set on construction, updated on each
+    /// descent and ascent.
+    parent: Node,
+    /// Current child position within `parent`. `None` once past the last child.
     cursor: Option<Node>,
-    /// Parent stack accumulated while descending into children.
-    frames: Vec<HydrationFrame>,
-    /// Top-level nodes that roots map into (scripts optionally filtered out).
-    under: Vec<Node>,
-    /// The hydration container; the insertion fallback for synthesized nodes.
-    root: Node,
-    /// The current root's parent, used as a synth-insertion fallback.
-    current_root_parent: Node,
+    /// Saved descent levels (innermost last), restored by `end_children`.
+    stack: Vec<Ascent>,
 }
 
 impl HydrationCursor {
-    pub(super) fn new(
+    /// Park on the first server-rendered root. Returns `None` when SSR emitted no
+    /// roots (after script filtering), so the caller can fall to hydrating inside
+    /// the mount element via [`in_parent`](Self::in_parent).
+    pub(super) fn over_roots(
         base: &BaseInterpreter,
-        root: Node,
         under: js_sys::Array,
         filter_scripts: bool,
-    ) -> Self {
-        let mut nodes = Vec::with_capacity(under.length() as usize);
-        for value in under.iter() {
-            let node: Node = value.unchecked_into();
-            if filter_scripts && is_script(&node) {
-                continue;
-            }
-            nodes.push(node);
-        }
+    ) -> Result<Option<Self>, RehydrationError> {
+        let Some(first) = under
+            .iter()
+            .map(|value| value.unchecked_into::<Node>())
+            .find(|node| !(filter_scripts && is_script(node)))
+        else {
+            return Ok(None);
+        };
 
+        // An attached root always has a parent; a detached one is a real SSR
+        // shape mismatch, not a case to paper over with a default parent.
+        let parent = first.parent_node().ok_or(HydrationMismatch)?;
+
+        Ok(Some(Self {
+            base: base.unchecked_ref::<JsValue>().clone(),
+            parent,
+            cursor: Some(first),
+            stack: Vec::new(),
+        }))
+    }
+
+    /// Hydrate directly inside `parent` (used when SSR emitted no roots).
+    pub(super) fn in_parent(base: &BaseInterpreter, parent: Node) -> Self {
+        let cursor = parent.first_child();
         Self {
             base: base.unchecked_ref::<JsValue>().clone(),
-            cursor: None,
-            frames: Vec::new(),
-            under: nodes,
-            current_root_parent: root.clone(),
-            root,
+            parent,
+            cursor,
+            stack: Vec::new(),
         }
     }
 
     fn base(&self) -> &BaseInterpreter {
         self.base.unchecked_ref()
-    }
-
-    pub(super) fn root_count(&self) -> u32 {
-        self.under.len() as u32
-    }
-
-    /// Park the cursor on a root node.
-    pub(super) fn enter_root(&mut self, idx: usize) {
-        let node = self.under.get(idx).cloned();
-        self.current_root_parent = node
-            .as_ref()
-            .and_then(|n| n.parent_node())
-            .unwrap_or_else(|| self.root.clone());
-        self.cursor = node;
-        self.frames.clear();
     }
 
     /// Match and bind an element at the current cursor, stepping past
@@ -99,10 +98,12 @@ impl HydrationCursor {
                 break;
             }
             let first = node.first_child();
-            self.frames.push(HydrationFrame {
-                node: Some(node),
+            self.stack.push(Ascent {
+                parent: self.parent.clone(),
+                resume: node.clone(),
                 wrapper: true,
             });
+            self.parent = node;
             self.cursor = first;
         }
 
@@ -129,20 +130,28 @@ impl HydrationCursor {
 
     /// Descend into the current cursor's children.
     pub(super) fn begin_children(&mut self) {
-        let frame = self.cursor.clone();
-        self.cursor = frame.as_ref().and_then(|n| n.first_child());
-        self.frames.push(HydrationFrame {
-            node: frame,
+        // Only reached after a successful `map_element`, so the cursor is set.
+        let element = self.cursor.clone().expect("begin_children with no cursor");
+        self.stack.push(Ascent {
+            parent: self.parent.clone(),
+            resume: element.clone(),
             wrapper: false,
         });
+        self.cursor = element.first_child();
+        self.parent = element;
     }
 
-    /// Return to the parent cursor, popping any wrapper frames first.
+    /// Return to the parent level, popping any wrapper levels first.
     pub(super) fn end_children(&mut self) {
-        while self.frames.last().is_some_and(|f| f.wrapper) {
-            self.frames.pop();
+        while self.stack.last().is_some_and(|ascent| ascent.wrapper) {
+            self.stack.pop();
         }
-        self.cursor = self.frames.pop().and_then(|f| f.node);
+        let ascent = self
+            .stack
+            .pop()
+            .expect("end_children without matching begin_children");
+        self.parent = ascent.parent;
+        self.cursor = Some(ascent.resume);
     }
 
     /// Advance through `n` sibling DOM nodes.
@@ -231,14 +240,9 @@ impl HydrationCursor {
         is_empty_text(&node).then_some(node)
     }
 
-    /// The parent to insert synthesized nodes into: the cursor's parent, else
-    /// the innermost frame, else the current root's parent.
-    fn synth_parent(&self) -> Node {
-        self.cursor
-            .as_ref()
-            .and_then(|c| c.parent_node())
-            .or_else(|| self.frames.last().and_then(|f| f.node.clone()))
-            .unwrap_or_else(|| self.current_root_parent.clone())
+    /// The parent to insert synthesized nodes into.
+    fn synth_parent(&self) -> &Node {
+        &self.parent
     }
 }
 

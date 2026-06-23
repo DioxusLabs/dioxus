@@ -700,60 +700,111 @@ fn removing_render_target_frees_and_recycles_the_slot() {
     assert_eq!(recycled, target);
 }
 
-fn teardown_target_app(props: AppProps) -> Element {
-    let target = props.target.get();
-    // Mimics the desktop `Window` component: a scope that owns a render target
-    // and reclaims it from its drop cleanup whenever a runtime is still current.
+/// Mirrors the desktop `Window` component: a keyed scope that owns a render
+/// target, renders a `Portal` with live content into it, and reclaims the
+/// target from its drop cleanup whenever a runtime is still current. The portal
+/// body carries an event listener so the target holds a live, tracked mount at
+/// drop time.
+#[component]
+fn TeardownWindow(slot: usize) -> Element {
+    let target = use_hook(|| Runtime::current().create_render_target());
+
     use_drop(move || {
-        match Runtime::try_current() {
-            Some(runtime) => {
-                let removed = runtime.remove_render_target(target);
-                eprintln!("DROP: runtime present, remove_render_target -> {removed}");
-            }
-            None => eprintln!("DROP: no runtime current"),
+        if let Some(runtime) = Runtime::try_current() {
+            runtime.remove_render_target(target);
         }
     });
 
     rsx! {
         Portal {
             target,
-            div { "content" }
+            button {
+                onclick: move |_| {
+                    PORTAL_CLICKS.fetch_add(1, Ordering::SeqCst);
+                },
+                "window {slot}"
+            }
+        }
+    }
+}
+
+fn teardown_windows_app() -> Element {
+    rsx! {
+        for slot in 0..3usize {
+            TeardownWindow { key: "{slot}", slot }
+        }
+    }
+}
+
+/// Dropping the whole `VirtualDom` while several target-owning scopes are still
+/// mounted - each with live content in its target - must not panic in their drop
+/// cleanups; `remove_render_target` leaves the still-live targets alone.
+#[test]
+fn dropping_vdom_with_open_target_windows_does_not_panic() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+
+    let mut dom = VirtualDom::new(teardown_windows_app);
+    let _ = rebuild_to_targeted_vec(&mut dom);
+    drop(dom);
+}
+
+/// Like [`removable_target_app`], but the portal body carries an event listener
+/// so the target holds a live, individually tracked mount (a static-only body
+/// reserves no element slot, so it would already read as empty).
+fn removable_listener_target_app(props: AppProps) -> Element {
+    let mut show = use_signal(|| true);
+
+    rsx! {
+        button {
+            onclick: move |_| show.set(false),
+            "hide"
+        }
+        if show() {
+            Portal {
+                target: props.target.get(),
+                button {
+                    onclick: move |_| {
+                        PORTAL_CLICKS.fetch_add(1, Ordering::SeqCst);
+                    },
+                    "portal"
+                }
+            }
         }
     }
 }
 
 #[test]
-fn dropping_vdom_with_target_owning_scope_does_not_panic() {
+fn removing_render_target_with_live_content_is_skipped() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+
     let target_slot = TargetSlot::new();
     let mut dom = VirtualDom::new_with_props(
-        teardown_target_app,
+        removable_listener_target_app,
         AppProps { target: target_slot.clone() },
     );
     let target = dom.runtime().create_render_target();
     target_slot.set(target);
 
-    let _ = rebuild_to_targeted_vec(&mut dom);
+    let edits = rebuild_to_targeted_vec(&mut dom);
+    let hide_button = first_click_listener(edits.get(&RenderTargetId::ROOT).unwrap());
 
-    // The portal is still mounted into `target`. Dropping the whole VirtualDom
-    // must tear everything down without tripping the live-mounts assertion in
-    // the scope's drop cleanup.
-    drop(dom);
-}
+    // The portal is still mounted into `target`. Removing it would orphan live
+    // mounts, so `remove_render_target` leaves the target in place and reports
+    // that nothing was removed instead of panicking. The root is likewise never
+    // removable.
+    assert!(!dom.runtime().remove_render_target(RenderTargetId::ROOT));
+    assert!(!dom.runtime().remove_render_target(target));
 
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic = "live mounted elements"]
-fn removing_render_target_with_live_content_panics() {
-    let target_slot = TargetSlot::new();
-    let mut dom = VirtualDom::new_with_props(app, AppProps { target: target_slot.clone() });
-    let target = dom.runtime().create_render_target();
-    target_slot.set(target);
+    // Once the portal is dropped the target is empty and gets reclaimed, freeing
+    // its slot for reuse.
+    dom.runtime()
+        .handle_event("click", click_event(), hide_button);
+    let _ = render_immediate_to_targeted_vec(&mut dom);
 
-    let _ = rebuild_to_targeted_vec(&mut dom);
-
-    // The portal is still mounted into `target`, so removing it would orphan
-    // live mounts. The debug-only contract check catches the misuse.
-    dom.runtime().remove_render_target(target);
+    assert!(dom.runtime().remove_render_target(target));
+    // A target that is already gone is a no-op.
+    assert!(!dom.runtime().remove_render_target(target));
+    assert_eq!(dom.runtime().create_render_target(), target);
 }
 
 static PORTAL_STATE_INITS: AtomicUsize = AtomicUsize::new(0);

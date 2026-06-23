@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use dioxus_core::{NoOpMutations, ScopeId};
+use dioxus_core::{NoOpMutations, ScopeId, current_scope_id, generation};
 use dioxus_renderer_oracle::{OracleNodeId, RendererOracle};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -182,6 +182,66 @@ fn component_replacement_from_empty_output_uses_slot_site() {
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_live);
     assert_eq!(summary.loads, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
+#[test]
+fn same_component_empty_output_rerender_uses_owner_slot_site() {
+    thread_local! {
+        static CHILD_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+    }
+
+    fn app() -> Element {
+        rsx! {
+            div {
+                "before"
+                Child {}
+                "after"
+            }
+        }
+    }
+
+    #[component]
+    #[allow(non_snake_case)]
+    fn Child() -> Element {
+        CHILD_SCOPE.with(|scope| scope.set(Some(current_scope_id())));
+        if generation() % 2 == 0 {
+            rsx! {}
+        } else {
+            rsx! { span { "middle" } }
+        }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! {
+            div {
+                "before"
+                "after"
+            }
+        }
+    }
+
+    fn expected_live() -> Element {
+        rsx! {
+            div {
+                "before"
+                span { "middle" }
+                "after"
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_empty);
+
+    let child_scope = CHILD_SCOPE
+        .with(|scope| scope.get())
+        .expect("child component rendered");
+    dom.mark_dirty(child_scope);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_live);
     assert_eq!(summary.replaces, 0);
 }
 
