@@ -136,7 +136,8 @@ impl Mount {
             target_id,
             node,
             mode: RenderMode::Foreground,
-            slots: vec![PackedMountedSlot::empty(); root_count + anchor_count + dynamic_count].into(),
+            slots: vec![PackedMountedSlot::empty(); root_count + anchor_count + dynamic_count]
+                .into(),
             root_count: root_count as u32,
             anchor_count: anchor_count as u32,
             fragment_child_mounts: Vec::new(),

@@ -55,7 +55,7 @@ fn app() -> Element {
     rsx! {
         h1 { "WebSocket Chat" }
         p { "Connection status: {socket.status():?} as {user_name}" }
-        html::input {
+        input {
             placeholder: "Type a message",
             value: "{input}",
             oninput: move |e| async move { input.set(e.value()) },

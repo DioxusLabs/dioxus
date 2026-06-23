@@ -22,7 +22,7 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
     let rust_name = match element_name {
         // Strip any `r#` so the mapped name matches what the compiled binary registered (codegen
         // resolves the tag through the same `tag_name_string`).
-        ElementName::Path(_) => element_name.tag_name_string(),
+        ElementName::Ident(_) => element_name.tag_name_string(),
         // If this is a web component, just use the name of the elements instead of mapping the attribute
         // through the hot reloading context
         ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
