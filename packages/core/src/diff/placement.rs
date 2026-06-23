@@ -289,7 +289,7 @@ fn insertion_site_for_child_in_parent(
     parent_views.find_committed_map(|parent_vnode| {
         for slot in parent_vnode.vnode().dynamic_node_slots() {
             let idx = slot.index();
-            match &parent_vnode.dynamic_nodes[idx] {
+            match &parent_vnode.vnode().dynamic_node_values()[idx] {
                 DynamicNode::Fragment(children) => {
                     let site = dom.try_with_mounted_fragment_children(
                         parent_mount,
@@ -357,7 +357,7 @@ fn live_dynamic_slot_first_element(
     idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    match &vnode.dynamic_nodes[idx] {
+    match &vnode.dynamic_node_values()[idx] {
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
             .map(|id| id.element_id()),

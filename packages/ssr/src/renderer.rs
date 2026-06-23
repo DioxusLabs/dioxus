@@ -109,7 +109,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.vnode().template)
+            .entry(*template.vnode().template())
             .or_insert_with(move || Arc::new(StringCache::from_template(template.vnode()).unwrap()))
             .clone();
 

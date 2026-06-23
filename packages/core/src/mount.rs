@@ -141,7 +141,7 @@ impl Mount {
         // Anchor and dynamic-node slot counts are structural: the anchor array length is the
         // number of template anchors, and the dynamic array length is the number of runtime
         // dynamic nodes. Static roots are stored in their structural root anchors.
-        let anchor_count = node.template.anchors().len();
+        let anchor_count = node.template().anchors().len();
         let dynamic_count = node.dynamic_node_values().len();
         Self {
             render_parent,

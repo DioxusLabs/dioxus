@@ -723,6 +723,22 @@ mod tests {
         }
     }
 
+    fn first_root_element(template: &Template) -> dioxus_core_template::StaticTemplateElement<'_> {
+        let root = template
+            .anchors()
+            .iter()
+            .filter(|anchor| anchor.parent_element_op_index().is_none())
+            .filter(|anchor| !anchor.is_last_static_node())
+            .filter(|anchor| anchor.static_path().is_root())
+            .find_map(|anchor| template.static_node_at_path(anchor.static_path()))
+            .expect("root node");
+
+        match root {
+            dioxus_core_template::StaticTemplateNode::Element(element) => element,
+            dioxus_core_template::StaticTemplateNode::Text(_) => panic!("expected root element"),
+        }
+    }
+
     #[test]
     fn identical_expanded_templates_reuse_packed_parts() {
         let spec = TemplateSpec {
@@ -799,11 +815,7 @@ mod tests {
 
         // Static attributes are emitted sorted by name; dynamic attributes leave the static
         // element view entirely and live in the anchor table (2 dynamic attribute values here).
-        let attrs = template
-            .static_roots()
-            .next()
-            .and_then(|node| node.as_element())
-            .expect("root element")
+        let attrs = first_root_element(&template)
             .attributes()
             .map(|attr| (attr.name, attr.value, attr.namespace))
             .collect::<Vec<_>>();

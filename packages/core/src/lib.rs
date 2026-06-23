@@ -125,19 +125,17 @@ pub use crate::innerlude::{
     OptionCallbackMarker, OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext,
     RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
     SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-    SuspenseBoundaryProps, SuspenseContext, Task, Template, UnitClosure, VComponent, VNode,
-    VNodeInner, VText, VirtualDom, WriteMutations, anyhow, consume_context,
-    consume_context_from_scope, current_owner, current_scope_id, generation, has_context,
-    needs_update, needs_update_any, parent_scope, provide_context, provide_create_error_boundary,
-    provide_root_context, queue_effect, remove_future, schedule_update, schedule_update_any, spawn,
-    spawn_forever, spawn_isomorphic, suspend, throw_error, try_consume_context, use_after_render,
-    use_before_render, use_drop, use_hook, use_hook_with_cleanup, with_owner,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, UnitClosure, VComponent, VNode, VText,
+    VirtualDom, WriteMutations, anyhow, consume_context, consume_context_from_scope, current_owner,
+    current_scope_id, generation, has_context, needs_update, needs_update_any, parent_scope,
+    provide_context, provide_create_error_boundary, provide_root_context, queue_effect,
+    remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
+    suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
+    use_hook, use_hook_with_cleanup, with_owner,
 };
 pub use diff::template::{
     DynamicAnchor, DynamicAttrSlot, DynamicNodeSlot, StaticElement, StaticText, VNodeChild,
-    VNodeChildren,
 };
-pub use dioxus_core_template::{TemplatePath, TemplateSlotTarget};
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
 ///

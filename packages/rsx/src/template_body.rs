@@ -189,7 +189,7 @@ impl ToTokens for TemplateBody {
         let index = node.template_idx.get();
         // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block. The
         // base template is the const `&'static Template` built by the shared typed view expansion.
-        let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { __vnode.template });
+        let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { *__vnode.template() });
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({

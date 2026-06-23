@@ -262,8 +262,8 @@ impl DynamicValuePool {
 
     /// Create a dynamic node/attribute value pool from a vnode.
     pub fn from_vnode(vnode: &VNode, literal_pool: DynamicLiteralPool) -> Self {
-        let dynamic_nodes = vnode.dynamic_nodes.clone();
-        let dynamic_attributes = vnode.dynamic_attrs.clone();
+        let dynamic_nodes = vnode.dynamic_node_values().to_vec();
+        let dynamic_attributes = vnode.dynamic_attr_values().to_vec();
 
         Self::new(dynamic_nodes, dynamic_attributes, literal_pool)
     }

@@ -249,7 +249,7 @@ fn mounted_static_node<'a>(
         .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
         .or(pending_before_anchor)
         .or_else(|| {
-            let path = vnode.vnode().template.static_path_for_op(op)?;
+            let path = vnode.vnode().template().static_path_for_op(op)?;
             vnode
                 .vnode()
                 .dynamic_anchors()

@@ -44,14 +44,14 @@ impl DiffState<'_, '_, '_, '_> {
             new_children.len() == new.len(),
             "pending fragment range must match the new child list"
         );
-        let new_is_keyed = new[0].key.is_some();
-        let old_is_keyed = old[0].key.is_some();
+        let new_is_keyed = new[0].key().is_some();
+        let old_is_keyed = old[0].key().is_some();
         dioxus_debug_assert!(
-            new.iter().all(|n| n.key.is_some() == new_is_keyed),
+            new.iter().all(|n| n.key().is_some() == new_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
         dioxus_debug_assert!(
-            old.iter().all(|o| o.key.is_some() == old_is_keyed),
+            old.iter().all(|o| o.key().is_some() == old_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
 
@@ -167,11 +167,10 @@ impl DiffState<'_, '_, '_, '_> {
     ) {
         #[cfg(debug_assertions)]
         {
-            let mut keys = rustc_hash::FxHashSet::default();
-            let mut assert_unique_keys = |children: &[VNode]| {
-                keys.clear();
+            let assert_unique_keys = |children: &[VNode]| {
+                let mut keys = rustc_hash::FxHashSet::default();
                 for child in children {
-                    let key = child.key.clone();
+                    let key = child.key();
                     dioxus_debug_assert!(
                         key.is_some(),
                         "if any sibling is keyed, all siblings must be keyed"
@@ -193,12 +192,12 @@ impl DiffState<'_, '_, '_, '_> {
         // large stable list - never build a full-length key map.
         let min_len = old.len().min(new.len());
         let mut prefix = 0;
-        while prefix < min_len && old[prefix].key == new[prefix].key {
+        while prefix < min_len && old[prefix].key() == new[prefix].key() {
             prefix += 1;
         }
         let mut suffix = 0;
         while suffix < min_len - prefix
-            && old[old.len() - 1 - suffix].key == new[new.len() - 1 - suffix].key
+            && old[old.len() - 1 - suffix].key() == new[new.len() - 1 - suffix].key()
         {
             suffix += 1;
         }
@@ -210,9 +209,9 @@ impl DiffState<'_, '_, '_, '_> {
         let pure_insert = prefix + suffix == old.len() && prefix + suffix != new.len();
         let pure_insert_anchor_keeps_template = pure_insert
             && if suffix > 0 {
-                old[old_suffix_start].template == new[new_suffix_start].template
+                old[old_suffix_start].template() == new[new_suffix_start].template()
             } else {
-                old[prefix - 1].template == new[prefix - 1].template
+                old[prefix - 1].template() == new[prefix - 1].template()
             };
 
         if !pure_insert || pure_insert_anchor_keeps_template {
@@ -326,7 +325,7 @@ impl DiffState<'_, '_, '_, '_> {
         let old_key_to_old_index = old
             .iter()
             .enumerate()
-            .map(|(i, o)| (o.key.as_ref().unwrap().as_str(), i))
+            .map(|(i, o)| (o.key().unwrap(), i))
             .collect::<FxHashMap<_, _>>();
 
         let mut old_is_shared = vec![false; old.len()];
@@ -334,8 +333,8 @@ impl DiffState<'_, '_, '_, '_> {
         let new_index_to_old_index = new
             .iter()
             .map(|node| {
-                let key = node.key.as_ref().unwrap();
-                if let Some(&index) = old_key_to_old_index.get(key.as_str()) {
+                let key = node.key().unwrap();
+                if let Some(&index) = old_key_to_old_index.get(key) {
                     if !old_is_shared[index] {
                         old_is_shared[index] = true;
                         shared_count += 1;
@@ -618,7 +617,7 @@ impl DiffState<'_, '_, '_, '_> {
             let (created_nodes, mount) = if old_index != usize::MAX {
                 let old_mount = old_mounts[old_index];
                 let old_node = &old[old_index];
-                let (nodes, mount) = if old_node.template != new_node.template {
+                let (nodes, mount) = if old_node.template() != new_node.template() {
                     let created = new_node.create_with_parents(
                         self.dom,
                         parent,
@@ -794,7 +793,7 @@ impl crate::MountedVNode<'_> {
         dom: &VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> usize {
-        match &self.dynamic_nodes[idx] {
+        match &self.vnode().dynamic_node_values()[idx] {
             DynamicNode::Fragment(nodes) => {
                 let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
                 nodes

@@ -60,7 +60,7 @@ impl<'a> DiffFrame<'a> {
         // `Template` equality includes anchor node/attribute ranges, so two vnodes
         // with incompatible dynamic slot layouts compare unequal here and take the
         // full-replace path.
-        if old.template != new.template {
+        if old.template() != new.template() {
             let parent = state.dom.mounted_render_parent(current_mount);
             let created = old.replace_inner(current_mount, new, parent, &mut state, true);
             return created.mount;
@@ -118,8 +118,8 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
         let idx = slot.index();
-        let old_node = &self.dynamic_nodes[idx];
-        let new_node = &new.dynamic_nodes[idx];
+        let old_node = &self.dynamic_node_values()[idx];
+        let new_node = &new.dynamic_node_values()[idx];
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
@@ -488,8 +488,9 @@ impl VNode {
     }
 
     fn has_reclaimable_root(&self) -> bool {
-        self.root_dynamic_node_ids()
-            .any(|id| matches!(&self.dynamic_nodes[id], Text(text) if text.value.is_empty()))
+        self.root_dynamic_node_ids().any(
+            |id| matches!(&self.dynamic_node_values()[id], Text(text) if text.value.is_empty()),
+        )
     }
 
     fn root_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
@@ -550,7 +551,7 @@ impl VNode {
         let mut root_ids = Vec::new();
         let mut root_anchor_indices = Vec::new();
 
-        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
+        for (anchor_idx, anchor) in self.template().anchors().iter().enumerate() {
             if let Some(path) = anchor_static_target(anchor) {
                 if path.is_root() {
                     root_anchor_indices.push(anchor_idx);
@@ -588,7 +589,7 @@ impl VNode {
         root_anchor_indices: &[usize],
     ) {
         for &id in root_ids {
-            let dynamic_node = &self.dynamic_nodes[id];
+            let dynamic_node = &self.dynamic_node_values()[id];
             // Empty Fragments contribute no DOM and have nothing to reclaim
             // via the renderer - skip them entirely.
             if matches!(dynamic_node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
@@ -620,7 +621,7 @@ impl VNode {
         destroy_component_state: bool,
         idx: usize,
     ) {
-        let node = &self.dynamic_nodes[idx];
+        let node = &self.dynamic_node_values()[idx];
         match node {
             Component(_comp) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
@@ -661,7 +662,7 @@ impl VNode {
         target_id: crate::RenderTargetId,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        let node = &self.dynamic_nodes[idx];
+        let node = &self.dynamic_node_values()[idx];
         match node {
             Component(_) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
@@ -687,7 +688,7 @@ impl VNode {
         idx: usize,
         dom: &VirtualDom,
     ) -> bool {
-        if !matches!(&self.dynamic_nodes[idx], Component(_)) {
+        if !matches!(&self.dynamic_node_values()[idx], Component(_)) {
             return false;
         }
 
@@ -745,8 +746,8 @@ impl VNode {
             "background mounts must be created without renderer writes"
         );
 
-        let nodes_created = self.materialize_static_roots(mount, state);
-        self.fill_dynamic_slots(mount, state, reuse_existing_mounts);
+        let nodes_created = self.create_root_children(mount, state, reuse_existing_mounts);
+        self.fill_nested_dynamic_slots(mount, state, reuse_existing_mounts);
 
         state.dom.commit_mount(mount, self);
         CreatedVNode {
@@ -757,16 +758,24 @@ impl VNode {
 }
 
 impl VNode {
-    fn materialize_static_roots(
+    fn create_root_children(
         &self,
         mount: MountId,
         state: &mut DiffState<'_, '_, '_, '_>,
+        reuse_existing_mounts: bool,
     ) -> usize {
         let mut nodes_created = 0;
 
         for child in self.children() {
             match child {
-                VNodeChild::Dynamic(_) => {}
+                VNodeChild::Dynamic(anchor) => {
+                    nodes_created += self.create_dynamic_anchor_nodes(
+                        mount,
+                        anchor,
+                        state,
+                        reuse_existing_mounts,
+                    );
+                }
                 VNodeChild::Element(element) => {
                     if let Some(to) = state.to.as_deref_mut() {
                         let root_anchor_idx = element.anchor_index().expect("root element");
@@ -790,7 +799,7 @@ impl VNode {
         nodes_created
     }
 
-    fn fill_dynamic_slots(
+    fn fill_nested_dynamic_slots(
         &self,
         mount: MountId,
         state: &mut DiffState<'_, '_, '_, '_>,
@@ -803,7 +812,7 @@ impl VNode {
                 self.write_attr_anchor(mount, anchor, state.dom, to);
             }
 
-            if anchor.nodes().len() > 0 {
+            if anchor.nodes().len() > 0 && !anchor.is_root_level() {
                 self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
             }
         }
@@ -830,7 +839,7 @@ impl VNode {
     ) -> usize {
         use DynamicNode::*;
         let parent = Some(MountRef { mount });
-        let node = &self.dynamic_nodes[idx];
+        let node = &self.dynamic_node_values()[idx];
         match node {
             Component(c) => self.create_component_node(mount, idx, c, state),
             Fragment(frag) => {
@@ -883,6 +892,21 @@ impl VNode {
         }
     }
 
+    fn create_dynamic_anchor_nodes(
+        &self,
+        mount: MountId,
+        anchor: DynamicAnchor<'_>,
+        state: &mut DiffState<'_, '_, '_, '_>,
+        reuse_existing_mounts: bool,
+    ) -> usize {
+        anchor
+            .nodes()
+            .map(|slot| {
+                self.create_dynamic_node_inner(mount, slot.index(), state, reuse_existing_mounts)
+            })
+            .sum()
+    }
+
     fn load_dynamic_anchor(
         &self,
         mount: MountId,
@@ -905,17 +929,7 @@ impl VNode {
         let to = state.to.as_deref_mut().expect("writer checked");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
-            anchor
-                .nodes()
-                .map(|slot| {
-                    self.create_dynamic_node_inner(
-                        mount,
-                        slot.index(),
-                        &mut state,
-                        reuse_existing_mounts,
-                    )
-                })
-                .sum()
+            self.create_dynamic_anchor_nodes(mount, anchor, &mut state, reuse_existing_mounts)
         });
     }
 
@@ -944,14 +958,20 @@ impl VNode {
         let target_id = dom.current_render_target_id();
         let id = dom.next_element_in_target(target_id);
 
-        let static_root = self.template.static_node(root_op).expect("bad static root");
+        let static_root = self
+            .template()
+            .static_node(root_op)
+            .expect("bad static root");
         if to.can_cache_template_roots() {
             let template_id =
-                match dom.cached_template_root(target_id, self.template, root_anchor_idx) {
+                match dom.cached_template_root(target_id, *self.template(), root_anchor_idx) {
                     Some(id) => id,
                     None => {
-                        let id =
-                            dom.allocate_template_root(target_id, self.template, root_anchor_idx);
+                        let id = dom.allocate_template_root(
+                            target_id,
+                            *self.template(),
+                            root_anchor_idx,
+                        );
                         create_static_prototype(static_root, to);
                         to.set_id(id.element_id());
                         to.pop();

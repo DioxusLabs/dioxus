@@ -13,7 +13,7 @@ fn component_swap() {
     let dynamic = 0;
     let template_1 = rsx! { "{dynamic}" };
     let template_2 = rsx! { "{dynamic}" };
-    if template_1.unwrap().template != template_2.unwrap().template {
+    if template_1.unwrap().template() != template_2.unwrap().template() {
         return;
     }
 

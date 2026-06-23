@@ -39,7 +39,7 @@ impl<'a> StaticElement<'a> {
 
     fn template_element(self) -> StaticTemplateElement<'a> {
         self.vnode
-            .template
+            .template()
             .static_element(self.op)
             .expect("static element")
     }
@@ -69,7 +69,7 @@ impl<'a> StaticElement<'a> {
     }
 
     /// Iterate rendered children for this element.
-    pub fn children(self) -> VNodeChildren<'a> {
+    pub fn children(self) -> impl ExactSizeIterator<Item = VNodeChild<'a>> + 'a {
         VNodeChildren::element(self)
     }
 
@@ -110,7 +110,7 @@ impl<'a> StaticText<'a> {
 
     fn template_text(self) -> StaticTemplateText<'a> {
         self.vnode
-            .template
+            .template()
             .static_text(self.op)
             .expect("static text")
     }
@@ -127,7 +127,7 @@ impl<'a> StaticText<'a> {
 }
 
 /// Iterator over rendered children.
-pub struct VNodeChildren<'a> {
+pub(crate) struct VNodeChildren<'a> {
     inner: VNodeChildrenInner<'a>,
 }
 
@@ -211,7 +211,7 @@ impl<'a> RootChildCursor<'a> {
             return Some(static_child(self.vnode, node, Some(anchor_index)));
         }
 
-        while self.anchor_index < self.vnode.template.anchors().len() {
+        while self.anchor_index < self.vnode.template().anchors().len() {
             let anchor_index = self.anchor_index;
             self.anchor_index += 1;
             let anchor = DynamicAnchor::new(self.vnode, anchor_index);
@@ -222,7 +222,7 @@ impl<'a> RootChildCursor<'a> {
             let static_root = (!anchor.is_last_static_node() && anchor.static_path().is_root())
                 .then(|| {
                     self.vnode
-                        .template
+                        .template()
                         .static_node_at_path(anchor.static_path())
                         .expect("static root anchor")
                 });
@@ -361,7 +361,7 @@ fn next_dynamic_child<'a>(
     order: &mut usize,
     mut position: impl FnMut(DynamicAnchor<'a>) -> Option<usize>,
 ) -> Option<PositionedChild<'a>> {
-    while *anchor_index < vnode.template.anchors().len() {
+    while *anchor_index < vnode.template().anchors().len() {
         let current_anchor_index = *anchor_index;
         *anchor_index += 1;
         let anchor = DynamicAnchor::new(vnode, current_anchor_index);
@@ -387,7 +387,7 @@ fn next_dynamic_child<'a>(
 
 impl VNode {
     /// Iterate rendered root children in document order.
-    pub fn children(&self) -> VNodeChildren<'_> {
+    pub fn children(&self) -> impl ExactSizeIterator<Item = VNodeChild<'_>> + '_ {
         VNodeChildren::roots(self)
     }
 
@@ -398,7 +398,7 @@ impl VNode {
 
     /// Iterate dynamic anchors in template document order.
     pub fn dynamic_anchors(&self) -> impl DoubleEndedIterator<Item = DynamicAnchor<'_>> + '_ {
-        (0..self.template.anchors().len())
+        (0..self.template().anchors().len())
             .map(|anchor_index| DynamicAnchor::new(self, anchor_index))
     }
 
@@ -420,7 +420,7 @@ impl VNode {
         let anchor_index = anchor.anchor_index();
         let current_anchor_slots = ((slot.index() + 1)..anchor.template_anchor().nodes().end)
             .map(move |index| DynamicNodeSlot { anchor, index });
-        let later_anchor_slots = ((anchor_index + 1)..self.template.anchors().len())
+        let later_anchor_slots = ((anchor_index + 1)..self.template().anchors().len())
             .flat_map(move |anchor_index| DynamicAnchor::new(self, anchor_index).nodes());
 
         current_anchor_slots.chain(later_anchor_slots)
@@ -447,8 +447,8 @@ impl VNode {
         &self,
         root_anchor_index: usize,
     ) -> impl Iterator<Item = StaticAnchorTarget> + '_ {
-        let root_path = self.template.anchors()[root_anchor_index].static_path();
-        self.template
+        let root_path = self.template().anchors()[root_anchor_index].static_path();
+        self.template()
             .anchors()
             .iter()
             .enumerate()
@@ -476,7 +476,7 @@ impl<'a> DynamicAnchor<'a> {
     }
 
     fn template_anchor(self) -> &'a TemplateAnchor {
-        &self.vnode.template.anchors()[self.anchor_index]
+        &self.vnode.template().anchors()[self.anchor_index]
     }
 
     /// Iterate the dynamic node slots owned by this anchor.
@@ -530,7 +530,7 @@ impl<'a> DynamicAnchor<'a> {
         let Some(parent_op) = self.parent_element_op_index() else {
             return false;
         };
-        self.vnode.template.static_path_for_op(parent_op) == Some(path)
+        self.vnode.template().static_path_for_op(parent_op) == Some(path)
     }
 
     /// Return true when this dynamic anchor is inserted at the vnode root level, with no enclosing
@@ -566,7 +566,7 @@ impl<'a> DynamicAnchor<'a> {
             .parent_element_op_index()
             .expect("bad attr anchor");
         self.vnode
-            .template
+            .template()
             .static_element(element_op)?
             .attribute_value(key)
     }
@@ -602,7 +602,7 @@ impl std::ops::Deref for DynamicNodeSlot<'_> {
     type Target = DynamicNode;
 
     fn deref(&self) -> &Self::Target {
-        &self.anchor.vnode.dynamic_nodes[self.index]
+        &self.anchor.vnode.dynamic_node_values()[self.index]
     }
 }
 
@@ -616,7 +616,7 @@ pub struct DynamicAttrSlot<'a> {
 impl<'a> DynamicAttrSlot<'a> {
     /// The dynamic attributes for this slot.
     pub fn attrs(self) -> &'a [Attribute] {
-        self.anchor.vnode.dynamic_attrs[self.index].as_ref()
+        self.anchor.vnode.dynamic_attr_values()[self.index].as_ref()
     }
 
     /// The dynamic anchor that owns this attribute slot.

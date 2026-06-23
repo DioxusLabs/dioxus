@@ -53,32 +53,6 @@ pub enum StaticTemplateNode<'a> {
     Text(StaticTemplateText<'a>),
 }
 
-impl<'a> StaticTemplateNode<'a> {
-    /// Return the flat template op that starts this node.
-    pub fn op(self) -> usize {
-        match self {
-            Self::Element(element) => element.op(),
-            Self::Text(text) => text.op(),
-        }
-    }
-
-    /// Return this node as an element, if it is one.
-    pub fn as_element(self) -> Option<StaticTemplateElement<'a>> {
-        match self {
-            Self::Element(element) => Some(element),
-            Self::Text(_) => None,
-        }
-    }
-
-    /// Return this node as text, if it is one.
-    pub fn as_text(self) -> Option<StaticTemplateText<'a>> {
-        match self {
-            Self::Element(_) => None,
-            Self::Text(text) => Some(text),
-        }
-    }
-}
-
 /// A static element inside a [`Template`].
 #[derive(Clone, Copy)]
 pub struct StaticTemplateElement<'a> {
@@ -262,15 +236,6 @@ impl Template {
     /// Get dynamic slot anchors in document order.
     pub const fn anchors(&self) -> &'static [TemplateAnchor] {
         self.anchors
-    }
-
-    /// Iterate static root nodes in this template.
-    pub fn static_roots(&self) -> StaticTemplateNodeIter<'_> {
-        StaticTemplateNodeIter {
-            template: self,
-            cursor: 0,
-            end: self.ops.len(),
-        }
     }
 
     /// Return a static node by flat template op.

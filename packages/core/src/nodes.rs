@@ -112,7 +112,7 @@ impl DynamicValues {
 }
 
 /// A static template with the values rendered for it.
-pub struct VNodeInner {
+pub(crate) struct VNodeInner {
     /// The static template.
     pub template: Template,
 
@@ -161,15 +161,32 @@ impl PartialEq for VNode {
     }
 }
 
-impl Deref for VNode {
-    type Target = VNodeInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.vnode
-    }
-}
-
 impl VNode {
+    /// The static template for this rendered node.
+    pub fn template(&self) -> &Template {
+        &self.vnode.template
+    }
+
+    /// The rendered dynamic node/attribute values.
+    pub fn dynamic_values(&self) -> &DynamicValues {
+        &self.vnode.view
+    }
+
+    /// The dynamic node values in template order.
+    pub fn dynamic_node_values(&self) -> &[DynamicNode] {
+        self.dynamic_values().dynamic_node_values()
+    }
+
+    /// The dynamic attribute values in template order.
+    pub fn dynamic_attr_values(&self) -> &[Box<[Attribute]>] {
+        self.dynamic_values().dynamic_attr_values()
+    }
+
+    /// The root key for this render.
+    pub fn key(&self) -> Option<&str> {
+        self.dynamic_values().key()
+    }
+
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
@@ -297,7 +314,7 @@ impl<'a> MountedVNode<'a> {
         dom: &VirtualDom,
     ) -> Option<ElementId> {
         let dynamic_node_idx = slot.index();
-        match &self.vnode.dynamic_nodes[dynamic_node_idx] {
+        match &self.vnode.dynamic_node_values()[dynamic_node_idx] {
             DynamicNode::Text(_) => dom
                 .mounted_dynamic_text_node(self.mount, dynamic_node_idx)
                 .map(|id| id.element_id()),
@@ -326,7 +343,7 @@ impl<'a> MountedVNode<'a> {
         slot: DynamicAttrSlot<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        self.vnode.dynamic_attrs.get(slot.index())?;
+        self.vnode.dynamic_attr_values().get(slot.index())?;
         self.mounted_anchor_node(slot.anchor(), dom)
     }
 
@@ -337,7 +354,8 @@ impl<'a> MountedVNode<'a> {
         dom: &VirtualDom,
     ) -> Vec<MountedVNode<'a>> {
         let dynamic_node_idx = slot.index();
-        let DynamicNode::Fragment(children) = &self.vnode.dynamic_nodes[dynamic_node_idx] else {
+        let DynamicNode::Fragment(children) = &self.vnode.dynamic_node_values()[dynamic_node_idx]
+        else {
             return Vec::new();
         };
 
