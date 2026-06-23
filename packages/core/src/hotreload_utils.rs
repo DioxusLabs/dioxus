@@ -401,7 +401,7 @@ impl HotReloadedTemplate {
 
     /// Return the number of root positions in the template.
     pub fn root_count(&self) -> usize {
-        self.template.root_position_count()
+        self.template.root_count()
     }
 
     /// Return decoded template operations for inspection.

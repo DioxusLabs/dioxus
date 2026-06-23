@@ -94,7 +94,7 @@ impl WebsysDom {
             VNodeChild::Element(element) => {
                 let root_id = mounted_static_node(
                     vnode,
-                    element.root_anchor_index(),
+                    element.anchor_index(),
                     element.op(),
                     state.take_pending_before_anchor(),
                     dom,
@@ -107,7 +107,7 @@ impl WebsysDom {
             VNodeChild::Text(text) => {
                 let root_id = mounted_static_node(
                     vnode,
-                    text.root_anchor_index(),
+                    text.anchor_index(),
                     text.op(),
                     state.take_pending_before_anchor(),
                     dom,

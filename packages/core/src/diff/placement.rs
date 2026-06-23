@@ -145,12 +145,9 @@ pub(super) fn insertion_site_for_slot(
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    let root_position = slot.root_position();
-
-    // A root-level slot has a materialized root position. An anchor can cover several adjacent
-    // dynamic nodes (`{a}{b}` lower to one anchor), so first prefer the closest following sibling
-    // that shares it — this applies to both root-level and nested slots — anchoring before its first
-    // live element.
+    // An anchor can cover several adjacent dynamic nodes (`{a}{b}` lower to one anchor), so first
+    // prefer the closest following sibling that shares it — this applies to both root-level and
+    // nested slots — anchoring before its first live element.
     if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
@@ -162,8 +159,10 @@ pub(super) fn insertion_site_for_slot(
     }
 
     if slot.is_root_level() {
-        // No adjacent sibling: scan later root positions, then walk up to committed root siblings.
-        if let Some(id) = root_content_after_slot(parent_mount, root_position, dom) {
+        // No adjacent sibling: scan later root anchors, then walk up to committed root siblings.
+        if let Some(id) =
+            root_content_after_anchor(parent_mount, slot.anchor().anchor_index(), dom)
+        {
             return InsertionSite::before(id);
         }
         return insertion_site_for_mounted_child(parent_mount, dom, context);
@@ -476,9 +475,9 @@ fn first_live_sibling_after(
         })
 }
 
-fn root_content_after_slot(
+fn root_content_after_anchor(
     parent_mount: MountId,
-    our_root_position: usize,
+    our_anchor_idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     // Probe the committed mount view of `parent_mount`. The diff context's
@@ -491,15 +490,13 @@ fn root_content_after_slot(
         .current_mounted_view(parent_mount)
         .expect("parent_root_after requires a live parent mount");
 
-    let mut children = probe.children();
-    while let Some(child) = children.next_positioned() {
-        let root_position = child.position();
-        if root_position <= our_root_position {
-            continue;
-        }
-
-        match child.child() {
+    for child in probe.children() {
+        match child {
             VNodeChild::Dynamic(anchor) => {
+                if anchor.anchor_index() <= our_anchor_idx {
+                    continue;
+                }
+
                 for slot in anchor.nodes() {
                     if let Some(id) =
                         live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)
@@ -509,20 +506,26 @@ fn root_content_after_slot(
                 }
             }
             VNodeChild::Element(element) => {
+                let anchor_idx = element.anchor_index().expect("root element");
+                if anchor_idx <= our_anchor_idx {
+                    continue;
+                }
+
                 if let Some(id) = static_anchor_element(
                     parent_mount,
-                    element.root_anchor_index().expect("root element"),
+                    anchor_idx,
                     dom,
                 ) {
                     return Some(id);
                 }
             }
             VNodeChild::Text(text) => {
-                if let Some(id) = static_anchor_element(
-                    parent_mount,
-                    text.root_anchor_index().expect("root text"),
-                    dom,
-                ) {
+                let anchor_idx = text.anchor_index().expect("root text");
+                if anchor_idx <= our_anchor_idx {
+                    continue;
+                }
+
+                if let Some(id) = static_anchor_element(parent_mount, anchor_idx, dom) {
                     return Some(id);
                 }
             }

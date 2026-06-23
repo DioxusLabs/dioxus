@@ -124,7 +124,7 @@ const RECENT_MUTATION_LIMIT: usize = 64;
 #[derive(Clone, Debug)]
 enum MutationTrace {
     PushId { id: ElementId },
-    PopId { id: ElementId },
+    SetId { id: ElementId },
     Child { index: usize },
     Pop,
     CreateElement { tag: String },
@@ -145,7 +145,7 @@ impl fmt::Display for MutationTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::PushId { id } => write!(f, "push_id(id: {id:?})"),
-            Self::PopId { id } => write!(f, "pop_id(id: {id:?})"),
+            Self::SetId { id } => write!(f, "set_id(id: {id:?})"),
             Self::Child { index } => write!(f, "child(index: {index})"),
             Self::Pop => write!(f, "pop()"),
             Self::CreateElement { tag } => write!(f, "create_element(tag: {tag:?})"),
@@ -252,9 +252,9 @@ impl WriteMutations for TargetedRendererOracle {
         self.current_renderer().push_id(id);
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        self.record_mutation(MutationTrace::PopId { id });
-        self.current_renderer().pop_id(id);
+    fn set_id(&mut self, id: ElementId) {
+        self.record_mutation(MutationTrace::SetId { id });
+        self.current_renderer().set_id(id);
     }
 
     fn child(&mut self, index: usize) {

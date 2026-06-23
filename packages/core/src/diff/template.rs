@@ -20,15 +20,15 @@ pub enum VNodeChild<'a> {
 pub struct StaticElement<'a> {
     vnode: &'a VNode,
     op: usize,
-    root_anchor_idx: Option<usize>,
+    anchor_idx: Option<usize>,
 }
 
 impl<'a> StaticElement<'a> {
-    fn new(vnode: &'a VNode, op: usize, root_anchor_idx: Option<usize>) -> Self {
+    fn new(vnode: &'a VNode, op: usize, anchor_idx: Option<usize>) -> Self {
         Self {
             vnode,
             op,
-            root_anchor_idx,
+            anchor_idx,
         }
     }
 
@@ -54,9 +54,9 @@ impl<'a> StaticElement<'a> {
         self.template_element().namespace()
     }
 
-    /// The structural root anchor for this element when it is a vnode root.
-    pub fn root_anchor_index(self) -> Option<usize> {
-        self.root_anchor_idx
+    /// The structural anchor for this static node when it has one.
+    pub fn anchor_index(self) -> Option<usize> {
+        self.anchor_idx
     }
 
     /// Iterate static template attributes for this element.
@@ -91,15 +91,15 @@ impl<'a> StaticElement<'a> {
 pub struct StaticText<'a> {
     vnode: &'a VNode,
     op: usize,
-    root_anchor_idx: Option<usize>,
+    anchor_idx: Option<usize>,
 }
 
 impl<'a> StaticText<'a> {
-    fn new(vnode: &'a VNode, op: usize, root_anchor_idx: Option<usize>) -> Self {
+    fn new(vnode: &'a VNode, op: usize, anchor_idx: Option<usize>) -> Self {
         Self {
             vnode,
             op,
-            root_anchor_idx,
+            anchor_idx,
         }
     }
 
@@ -120,52 +120,36 @@ impl<'a> StaticText<'a> {
         self.template_text().text()
     }
 
-    /// The structural root anchor for this text node when it is a vnode root.
-    pub fn root_anchor_index(self) -> Option<usize> {
-        self.root_anchor_idx
+    /// The structural anchor for this static node when it has one.
+    pub fn anchor_index(self) -> Option<usize> {
+        self.anchor_idx
     }
 }
 
 /// Iterator over rendered children.
 pub struct VNodeChildren<'a> {
-    static_children: StaticChildCursor<'a>,
-    dynamic_children: DynamicChildCursor<'a>,
-    next_static: Option<PositionedChild<'a>>,
-    next_dynamic: Option<PositionedChild<'a>>,
+    inner: VNodeChildrenInner<'a>,
 }
 
 impl<'a> VNodeChildren<'a> {
     fn roots(vnode: &'a VNode) -> Self {
-        let static_children = StaticChildCursor::roots(vnode);
-        let dynamic_children = DynamicChildCursor::roots(vnode);
-        Self::new(static_children, dynamic_children)
+        Self {
+            inner: VNodeChildrenInner::Roots(RootChildCursor {
+                vnode,
+                anchor_index: 0,
+                pending_static: None,
+            }),
+        }
     }
 
     fn element(element: StaticElement<'a>) -> Self {
-        let static_children = StaticChildCursor::element(element);
-        let dynamic_children = DynamicChildCursor::element(element);
-        Self::new(static_children, dynamic_children)
-    }
-
-    fn new(
-        mut static_children: StaticChildCursor<'a>,
-        mut dynamic_children: DynamicChildCursor<'a>,
-    ) -> Self {
-        let next_static = static_children.next();
-        let next_dynamic = dynamic_children.next();
         Self {
-            static_children,
-            dynamic_children,
-            next_static,
-            next_dynamic,
+            inner: VNodeChildrenInner::Element(ElementChildCursor::new(element)),
         }
     }
 
     fn remaining_len(&self) -> usize {
-        usize::from(self.next_static.is_some())
-            + usize::from(self.next_dynamic.is_some())
-            + self.static_children.remaining_len()
-            + self.dynamic_children.remaining_len()
+        self.inner.remaining_len()
     }
 }
 
@@ -173,7 +157,7 @@ impl<'a> Iterator for VNodeChildren<'a> {
     type Item = VNodeChild<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_positioned().map(PositionedChild::child)
+        self.inner.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -184,8 +168,96 @@ impl<'a> Iterator for VNodeChildren<'a> {
 
 impl ExactSizeIterator for VNodeChildren<'_> {}
 
-impl<'a> VNodeChildren<'a> {
-    pub(super) fn next_positioned(&mut self) -> Option<PositionedChild<'a>> {
+#[derive(Clone, Copy)]
+enum VNodeChildrenInner<'a> {
+    Roots(RootChildCursor<'a>),
+    Element(ElementChildCursor<'a>),
+}
+
+impl<'a> VNodeChildrenInner<'a> {
+    fn next(&mut self) -> Option<VNodeChild<'a>> {
+        match self {
+            Self::Roots(cursor) => cursor.next(),
+            Self::Element(cursor) => cursor.next(),
+        }
+    }
+
+    fn remaining_len(self) -> usize {
+        let mut remaining = 0;
+        let mut cursor = self;
+        while cursor.next().is_some() {
+            remaining += 1;
+        }
+        remaining
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RootChildCursor<'a> {
+    vnode: &'a VNode,
+    anchor_index: usize,
+    pending_static: Option<(usize, StaticTemplateNode<'a>)>,
+}
+
+impl<'a> RootChildCursor<'a> {
+    fn next(&mut self) -> Option<VNodeChild<'a>> {
+        if let Some((anchor_index, node)) = self.pending_static.take() {
+            return Some(static_child(self.vnode, node, Some(anchor_index)));
+        }
+
+        while self.anchor_index < self.vnode.template.anchors().len() {
+            let anchor_index = self.anchor_index;
+            self.anchor_index += 1;
+            let anchor = DynamicAnchor::new(self.vnode, anchor_index);
+            if !anchor.is_root_level() {
+                continue;
+            }
+
+            let static_root = (!anchor.is_last_static_node() && anchor.static_path().is_root())
+                .then(|| {
+                    self.vnode
+                        .template
+                        .static_node_at_path(anchor.static_path())
+                        .expect("static root anchor")
+                });
+
+            if anchor.nodes().len() > 0 {
+                self.pending_static = static_root.map(|node| (anchor_index, node));
+                return Some(VNodeChild::Dynamic(anchor));
+            }
+
+            if let Some(node) = static_root {
+                return Some(static_child(self.vnode, node, Some(anchor_index)));
+            }
+        }
+
+        None
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ElementChildCursor<'a> {
+    static_children: StaticChildCursor<'a>,
+    dynamic_children: DynamicChildCursor<'a>,
+    next_static: Option<PositionedChild<'a>>,
+    next_dynamic: Option<PositionedChild<'a>>,
+}
+
+impl<'a> ElementChildCursor<'a> {
+    fn new(element: StaticElement<'a>) -> Self {
+        let mut static_children = StaticChildCursor::new(element);
+        let mut dynamic_children = DynamicChildCursor::new(element);
+        let next_static = static_children.next();
+        let next_dynamic = dynamic_children.next();
+        Self {
+            static_children,
+            dynamic_children,
+            next_static,
+            next_dynamic,
+        }
+    }
+
+    fn next(&mut self) -> Option<VNodeChild<'a>> {
         let take_static = match (self.next_static, self.next_dynamic) {
             (Some(static_child), Some(dynamic_child)) => static_child.key() <= dynamic_child.key(),
             (Some(_), None) => true,
@@ -196,17 +268,17 @@ impl<'a> VNodeChildren<'a> {
         if take_static {
             let child = self.next_static.take().expect("static child checked");
             self.next_static = self.static_children.next();
-            Some(child)
+            Some(child.child)
         } else {
             let child = self.next_dynamic.take().expect("dynamic child checked");
             self.next_dynamic = self.dynamic_children.next();
-            Some(child)
+            Some(child.child)
         }
     }
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct PositionedChild<'a> {
+struct PositionedChild<'a> {
     position: usize,
     order: usize,
     child: VNodeChild<'a>,
@@ -216,42 +288,19 @@ impl<'a> PositionedChild<'a> {
     fn key(self) -> (usize, usize) {
         (self.position, self.order)
     }
-
-    pub(super) fn position(self) -> usize {
-        self.position
-    }
-
-    pub(super) fn child(self) -> VNodeChild<'a> {
-        self.child
-    }
 }
 
 #[derive(Clone, Copy)]
-enum StaticChildCursor<'a> {
-    Roots {
-        vnode: &'a VNode,
-        nodes: StaticTemplateNodeIter<'a>,
-        static_root_order: usize,
-    },
-    Element {
-        vnode: &'a VNode,
-        nodes: StaticTemplateNodeIter<'a>,
-        slot: usize,
-    },
+struct StaticChildCursor<'a> {
+    vnode: &'a VNode,
+    nodes: StaticTemplateNodeIter<'a>,
+    slot: usize,
 }
 
 impl<'a> StaticChildCursor<'a> {
-    fn roots(vnode: &'a VNode) -> Self {
-        Self::Roots {
-            vnode,
-            nodes: vnode.template.static_roots(),
-            static_root_order: 0,
-        }
-    }
-
-    fn element(element: StaticElement<'a>) -> Self {
+    fn new(element: StaticElement<'a>) -> Self {
         let vnode = element.vnode;
-        Self::Element {
+        Self {
             vnode,
             nodes: element.template_element().children(),
             slot: 0,
@@ -259,74 +308,27 @@ impl<'a> StaticChildCursor<'a> {
     }
 
     fn next(&mut self) -> Option<PositionedChild<'a>> {
-        match self {
-            Self::Roots {
-                vnode,
-                nodes,
-                static_root_order,
-            } => {
-                let node = nodes.next()?;
-                let current_static_root_order = *static_root_order;
-                *static_root_order += 1;
-                let root_anchor = vnode
-                    .template
-                    .static_root_anchor(current_static_root_order)
-                    .expect("static root anchor");
-
-                Some(PositionedChild {
-                    position: root_anchor.0,
-                    order: current_static_root_order,
-                    child: static_child(vnode, node, Some(root_anchor.1)),
-                })
-            }
-            Self::Element { vnode, nodes, slot } => {
-                let node = nodes.next()?;
-                let current_slot = *slot;
-                *slot += 1;
-                Some(PositionedChild {
-                    position: current_slot * 2 + 1,
-                    order: current_slot,
-                    child: static_child(vnode, node, None),
-                })
-            }
-        }
-    }
-
-    fn remaining_len(self) -> usize {
-        let mut remaining = 0;
-        let mut cursor = self;
-        while cursor.next().is_some() {
-            remaining += 1;
-        }
-        remaining
+        let node = self.nodes.next()?;
+        let current_slot = self.slot;
+        self.slot += 1;
+        Some(PositionedChild {
+            position: current_slot * 2 + 1,
+            order: current_slot,
+            child: static_child(self.vnode, node, None),
+        })
     }
 }
 
 #[derive(Clone, Copy)]
-enum DynamicChildCursor<'a> {
-    Roots {
-        vnode: &'a VNode,
-        anchor_index: usize,
-        order: usize,
-    },
-    Element {
-        element: StaticElement<'a>,
-        anchor_index: usize,
-        order: usize,
-    },
+struct DynamicChildCursor<'a> {
+    element: StaticElement<'a>,
+    anchor_index: usize,
+    order: usize,
 }
 
 impl<'a> DynamicChildCursor<'a> {
-    fn roots(vnode: &'a VNode) -> Self {
-        Self::Roots {
-            vnode,
-            anchor_index: 0,
-            order: 0,
-        }
-    }
-
-    fn element(element: StaticElement<'a>) -> Self {
-        Self::Element {
+    fn new(element: StaticElement<'a>) -> Self {
+        Self {
             element,
             anchor_index: 0,
             order: 0,
@@ -334,35 +336,16 @@ impl<'a> DynamicChildCursor<'a> {
     }
 
     fn next(&mut self) -> Option<PositionedChild<'a>> {
-        match self {
-            Self::Roots {
-                vnode,
-                anchor_index,
-                order,
-            } => next_dynamic_child(vnode, anchor_index, order, |anchor| {
-                anchor.is_root_level().then(|| anchor.root_position())
-            }),
-            Self::Element {
-                element,
-                anchor_index,
-                order,
-            } => {
-                let element_op = element.op;
-                next_dynamic_child(element.vnode, anchor_index, order, |anchor| {
-                    (anchor.parent_element_op_index() == Some(element_op))
-                        .then(|| child_position(anchor.slot_target()))
-                })
-            }
-        }
-    }
-
-    fn remaining_len(self) -> usize {
-        let mut remaining = 0;
-        let mut cursor = self;
-        while cursor.next().is_some() {
-            remaining += 1;
-        }
-        remaining
+        let element_op = self.element.op;
+        next_dynamic_child(
+            self.element.vnode,
+            &mut self.anchor_index,
+            &mut self.order,
+            |anchor| {
+                (anchor.parent_element_op_index() == Some(element_op))
+                    .then(|| child_position(anchor.slot_target()))
+            },
+        )
     }
 }
 
@@ -404,7 +387,7 @@ impl VNode {
 
     /// Return the number of root child positions.
     pub fn root_child_count(&self) -> usize {
-        self.template.root_position_count()
+        self.children().len()
     }
 
     /// Iterate dynamic anchors in template document order.
@@ -510,14 +493,6 @@ impl<'a> DynamicAnchor<'a> {
         self.vnode.template.static_path_for_op(parent_op) == Some(path)
     }
 
-    /// The root position this anchor belongs to.
-    pub fn root_position(self) -> usize {
-        self.vnode
-            .template
-            .root_position_for_anchor(self.anchor_index)
-            .expect("bad anchor root")
-    }
-
     /// Return true when this dynamic anchor is inserted at the vnode root level, with no enclosing
     /// static element.
     pub fn is_root_level(self) -> bool {
@@ -568,10 +543,6 @@ impl<'a> DynamicNodeSlot<'a> {
 
     pub(crate) fn index(self) -> usize {
         self.index
-    }
-
-    pub(super) fn root_position(self) -> usize {
-        self.anchor.root_position()
     }
 
     pub(super) fn is_root_level(self) -> bool {

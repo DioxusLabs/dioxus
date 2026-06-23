@@ -378,56 +378,29 @@ impl Template {
         Some((attr_start, cursor, end))
     }
 
-    /// Return the number of materialized root positions.
-    pub fn root_position_count(&self) -> usize {
+    /// Return the number of rendered root children in this template.
+    pub fn root_count(&self) -> usize {
         let mut count = 0;
-        self.for_each_root_position(|position, _, _| {
-            count = position + 1;
-            true
-        });
-        count
-    }
-
-    /// Map a static root's source-order slot to its materialized position and structural anchor.
-    pub fn static_root_anchor(&self, static_root_order: usize) -> Option<(usize, usize)> {
-        let mut found = None;
-        self.for_each_root_position(|position, anchor_idx, order| {
-            if let Some(order) = order {
-                if order == static_root_order {
-                    found = Some((position, anchor_idx));
-                    return false;
-                }
+        for anchor in self.anchors.iter().copied() {
+            if anchor.parent_element_op_index().is_some() {
+                continue;
             }
-            true
-        });
-        found
-    }
 
-    /// Return the materialized root position that owns an anchor.
-    pub fn root_position_for_anchor(&self, anchor_idx: usize) -> Option<usize> {
-        let anchor = self.anchors.get(anchor_idx)?;
-        if anchor.parent_element_op_index().is_none() {
-            let mut found_dynamic = None;
-            let mut found_static = None;
-            self.for_each_root_position(|position, idx, static_root_order| {
-                if idx == anchor_idx {
-                    if static_root_order.is_none() {
-                        found_dynamic = Some(position);
-                    } else {
-                        found_static = Some(position);
-                    }
-                    return false;
-                }
-                true
-            });
-            return found_dynamic.or(found_static);
+            let path = anchor.static_path();
+            if !path.is_root() && !path.is_empty() {
+                continue;
+            }
+
+            if !anchor.nodes().is_empty() {
+                count += 1;
+            }
+
+            if !anchor.is_last_static_node() && path.is_root() {
+                count += 1;
+            }
         }
 
-        let path = anchor.static_path();
-        (!path.is_empty())
-            .then(|| path.segment(0) as usize)
-            .and_then(|static_root_order| self.static_root_anchor(static_root_order))
-            .map(|(position, _)| position)
+        count
     }
 
     /// Return the static template path for a flat template op.
@@ -466,32 +439,49 @@ impl Template {
         None
     }
 
-    fn for_each_root_position(&self, mut visit: impl FnMut(usize, usize, Option<usize>) -> bool) {
-        let mut root_position = 0;
-        for (anchor_idx, anchor) in self.anchors.iter().copied().enumerate() {
-            if anchor.parent_element_op_index().is_some() {
-                continue;
-            }
-
-            let path = anchor.static_path();
-            if !path.is_root() && !path.is_empty() {
-                continue;
-            }
-
-            if !anchor.nodes().is_empty() {
-                if !visit(root_position, anchor_idx, None) {
-                    return;
-                }
-                root_position += 1;
-            }
-
-            if !anchor.is_last_static_node() && path.is_root() {
-                if !visit(root_position, anchor_idx, Some(path.segment(0) as usize)) {
-                    return;
-                }
-                root_position += 1;
-            }
+    /// Return a static node by compact template path.
+    pub fn static_node_at_path(&self, path: TemplatePath) -> Option<StaticTemplateNode<'_>> {
+        if path.is_empty() {
+            return None;
         }
+
+        let mut start = 0;
+        let mut end = self.ops.len();
+        let mut depth = 0;
+        let path_depth = path.depth();
+
+        while depth < path_depth {
+            let op = self.static_node_op_in_range(start, end, path.segment(depth) as usize)?;
+            if depth + 1 == path_depth {
+                return self.static_node(op);
+            }
+
+            let (_, child_start, child_end) = self.element_attr_child_ops(op)?;
+            start = child_start;
+            end = child_end;
+            depth += 1;
+        }
+
+        None
+    }
+
+    fn static_node_op_in_range(&self, start: usize, end: usize, target: usize) -> Option<usize> {
+        let mut cursor = start;
+        let mut index = 0;
+        while cursor < end {
+            let op = cursor;
+            cursor = self.next_sibling_op(op);
+            if self.static_node(op).is_none() {
+                continue;
+            }
+
+            if index == target {
+                return Some(op);
+            }
+            index += 1;
+        }
+
+        None
     }
 
     fn next_sibling_op(&self, op: usize) -> usize {

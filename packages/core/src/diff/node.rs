@@ -327,13 +327,13 @@ impl VNode {
                 self.dynamic_anchor_edge_element(anchor, mount, dom, target_id, edge)
             }
             VNodeChild::Element(element) => self.find_static_anchor_in_target(
-                element.root_anchor_index().expect("root element"),
+                element.anchor_index().expect("root element"),
                 mount,
                 target_id,
                 dom,
             ),
             VNodeChild::Text(text) => self.find_static_anchor_in_target(
-                text.root_anchor_index().expect("root text"),
+                text.anchor_index().expect("root text"),
                 mount,
                 target_id,
                 dom,
@@ -780,7 +780,7 @@ impl VNode {
                 }
                 VNodeChild::Element(element) => {
                     if let Some(to) = state.to.as_deref_mut() {
-                        let root_anchor_idx = element.root_anchor_index().expect("root element");
+                        let root_anchor_idx = element.anchor_index().expect("root element");
                         let id =
                             self.load_template_root(root_anchor_idx, element.op(), state.dom, to);
                         self.assign_template_anchor_ids(mount, root_anchor_idx, id, state.dom, to);
@@ -789,7 +789,7 @@ impl VNode {
                 }
                 VNodeChild::Text(text) => {
                     if let Some(to) = state.to.as_deref_mut() {
-                        let root_anchor_idx = text.root_anchor_index().expect("root text");
+                        let root_anchor_idx = text.anchor_index().expect("root text");
                         let id = self.load_template_root(root_anchor_idx, text.op(), state.dom, to);
                         self.assign_template_anchor_ids(mount, root_anchor_idx, id, state.dom, to);
                         nodes_created += 1;
@@ -884,8 +884,7 @@ impl VNode {
                     let id = state.dom.next_element_in_target(target_id);
                     state.dom.set_mounted_dynamic_text_node(mount, idx, id);
                     to.create_text(&text.value);
-                    to.pop_id(id.element_id());
-                    to.push_id(id.element_id());
+                    to.set_id(id.element_id());
                     1
                 } else {
                     0
@@ -961,7 +960,8 @@ impl VNode {
                         let id =
                             dom.allocate_template_root(target_id, self.template, root_anchor_idx);
                         create_static_prototype(static_root, to);
-                        to.pop_id(id.element_id());
+                        to.set_id(id.element_id());
+                        to.pop();
                         id
                     }
                 };
@@ -970,8 +970,7 @@ impl VNode {
         } else {
             create_static_prototype(static_root, to);
         }
-        to.pop_id(id.element_id());
-        to.push_id(id.element_id());
+        to.set_id(id.element_id());
         id
     }
 
@@ -1011,7 +1010,8 @@ impl VNode {
                     for depth in 1..path.depth() {
                         to.child(path.segment(depth) as usize);
                     }
-                    to.pop_id(id.element_id());
+                    to.set_id(id.element_id());
+                    to.pop();
                 });
                 id
             };

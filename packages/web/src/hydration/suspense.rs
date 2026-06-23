@@ -98,7 +98,7 @@ pub(super) fn first_dynamic_root_element_id(
                 }
                 VNodeChild::Element(element) => {
                     if let Some(id) = element
-                        .root_anchor_index()
+                        .anchor_index()
                         .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
                     {
                         return Some(id);
@@ -106,7 +106,7 @@ pub(super) fn first_dynamic_root_element_id(
                 }
                 VNodeChild::Text(text) => {
                     if let Some(id) = text
-                        .root_anchor_index()
+                        .anchor_index()
                         .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
                     {
                         return Some(id);
