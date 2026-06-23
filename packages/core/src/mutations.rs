@@ -25,9 +25,6 @@ pub trait WriteMutations {
     /// Push the node registered to `id` onto the stack.
     fn push_id(&mut self, id: ElementId);
 
-    /// Pop the current top node and register it to `id`.
-    fn pop_id(&mut self, id: ElementId);
-
     /// Replace the current top node with its `index`th child.
     fn child(&mut self, index: usize);
 
@@ -83,6 +80,12 @@ pub trait WriteMutations {
 
     /// Remove the current top node from the DOM and consume it.
     fn remove(&mut self);
+
+    /// Register the current top node under `id`, leaving it on the stack.
+    ///
+    /// Replaces the old `pop_id` (which registered *and* popped): callers that want the node gone
+    /// follow with `pop`, and freshly-created nodes that will be appended just stay on the stack.
+    fn set_id(&mut self, id: ElementId);
 }
 
 macro_rules! write_mutation_methods {
@@ -90,7 +93,6 @@ macro_rules! write_mutation_methods {
         $macro! {
             $($prefix)*
             push_id(id: ElementId);
-            pop_id(id: ElementId);
             child(index: usize);
             pop();
             create_element(tag: &str, ns: Option<&str>);
@@ -105,6 +107,7 @@ macro_rules! write_mutation_methods {
             add_event_listener(name: &str);
             remove_event_listener(name: &str);
             remove();
+            set_id(id: ElementId);
         }
     };
 }
@@ -321,8 +324,8 @@ pub enum Mutation {
         /// The renderer-local element id to read.
         id: ElementId,
     },
-    /// Pop the top stack node and register it to an element id.
-    PopId {
+    /// Register the top stack node to an element id, leaving it on the stack.
+    SetId {
         /// The renderer-local element id to write.
         id: ElementId,
     },
@@ -455,7 +458,7 @@ macro_rules! collect_unit_mutations {
 impl WriteMutations for Mutations {
     collect_field_mutations! {
         push_id(id: ElementId) => PushId;
-        pop_id(id: ElementId) => PopId;
+        set_id(id: ElementId) => SetId;
         child(index: usize) => Child;
         append_children(m: usize) => AppendChildren;
         replace_with(m: usize) => ReplaceWith;

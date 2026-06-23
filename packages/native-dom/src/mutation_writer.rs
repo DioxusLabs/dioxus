@@ -141,9 +141,9 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         self.state.push(node, Some(id));
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        let entry = self.state.pop_entry();
-        self.state.set_mapping(id, entry.node);
+    fn set_id(&mut self, id: ElementId) {
+        let node = self.state.top().node;
+        self.state.set_mapping(id, node);
     }
 
     fn child(&mut self, index: usize) {

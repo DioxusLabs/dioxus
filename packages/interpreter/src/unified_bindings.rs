@@ -52,6 +52,9 @@ mod js {
     fn pop_id(id: u32) {
         "{this.popId($id$);}"
     }
+    fn set_id(id: u32) {
+        "{this.setId($id$);}"
+    }
     fn child(index: u32) {
         "{this.child($index$);}"
     }

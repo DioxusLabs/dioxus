@@ -336,7 +336,7 @@ fn maps_id(mutations: &Mutations, id: ElementId) -> bool {
     mutations
         .edits
         .iter()
-        .any(|mutation| matches!(mutation, Mutation::PopId { id: mapped_id } if *mapped_id == id))
+        .any(|mutation| matches!(mutation, Mutation::SetId { id: mapped_id } if *mapped_id == id))
 }
 
 fn appends_to_root(mutations: &Mutations) -> bool {
@@ -366,7 +366,8 @@ fn appends_to_root(mutations: &Mutations) -> bool {
             Mutation::ReplaceWith { m } => {
                 stack_depth -= *m + 1;
             }
-            Mutation::PopId { .. } | Mutation::Pop | Mutation::Remove => {
+            // `SetId` registers the top without popping, so it doesn't change stack depth.
+            Mutation::Pop | Mutation::Remove => {
                 stack_depth -= 1;
                 if root_depth.is_some_and(|depth| depth >= stack_depth) {
                     root_depth = None;

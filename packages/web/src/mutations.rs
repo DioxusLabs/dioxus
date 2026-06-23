@@ -45,8 +45,8 @@ impl WriteMutations for WebsysDom {
         self.interpreter.push_id(id.raw() as u32)
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        self.interpreter.pop_id(id.raw() as u32)
+    fn set_id(&mut self, id: ElementId) {
+        self.interpreter.set_id(id.raw() as u32)
     }
 
     fn child(&mut self, index: usize) {

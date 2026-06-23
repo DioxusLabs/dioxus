@@ -321,7 +321,12 @@ fn no_op_rebuild_places_separated_empty_fragment_inside_static_parent() {
     for mutation in &mutations.edits {
         match mutation {
             Mutation::PushId { id } => stack.push(Some(*id)),
-            Mutation::PopId { .. } | Mutation::Pop => {
+            Mutation::SetId { id } => {
+                if let Some(top) = stack.last_mut() {
+                    *top = Some(*id);
+                }
+            }
+            Mutation::Pop => {
                 stack.pop();
             }
             Mutation::CreateElement { .. } | Mutation::CreateText { .. } => stack.push(None),

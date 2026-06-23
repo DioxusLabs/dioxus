@@ -640,3 +640,36 @@ fn child_position(target: TemplateSlotTarget) -> usize {
         target.static_path().split_insertion().1 * 2
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DynamicNode, DynamicValues};
+    use dioxus_core_template::RuntimeTemplateBuilder;
+
+    #[test]
+    fn nested_trailing_dynamic_before_root_dynamic_is_parent_append_target() {
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("tag0", None);
+        builder.dynamic_node(false);
+        builder.close_element();
+        builder.dynamic_node(false);
+        let template = builder.template.finish();
+
+        let vnode = VNode::new(
+            template,
+            DynamicValues::from_parts(
+                None,
+                Box::new([DynamicNode::Fragment(Vec::new()), DynamicNode::Fragment(Vec::new())]),
+                Box::new([]),
+            ),
+        );
+
+        let anchor = vnode
+            .dynamic_anchors()
+            .find(|anchor| anchor.parent_element_op_index().is_some() && anchor.nodes().len() > 0)
+            .expect("nested dynamic anchor");
+
+        assert!(anchor.is_parent_append_target());
+    }
+}

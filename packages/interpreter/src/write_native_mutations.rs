@@ -27,8 +27,8 @@ impl WriteMutations for MutationState {
         self.channel.push_id(id.raw() as u32);
     }
 
-    fn pop_id(&mut self, id: dioxus_core::ElementId) {
-        self.channel.pop_id(id.raw() as u32);
+    fn set_id(&mut self, id: dioxus_core::ElementId) {
+        self.channel.set_id(id.raw() as u32);
     }
 
     fn child(&mut self, index: usize) {

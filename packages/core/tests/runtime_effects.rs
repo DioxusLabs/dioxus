@@ -112,7 +112,7 @@ impl BufferedRenderer {
 impl WriteMutations for BufferedRenderer {
     fn push_id(&mut self, _id: ElementId) {}
 
-    fn pop_id(&mut self, _id: ElementId) {}
+    fn set_id(&mut self, _id: ElementId) {}
 
     fn child(&mut self, _index: usize) {}
 

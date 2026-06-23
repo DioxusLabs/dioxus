@@ -143,9 +143,9 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
         self.state.push(node, Some(id));
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        let entry = self.state.pop_entry();
-        self.state.set_mapping(id, entry.node);
+    fn set_id(&mut self, id: ElementId) {
+        let node = self.state.top().node;
+        self.state.set_mapping(id, node);
     }
 
     fn child(&mut self, index: usize) {
@@ -771,13 +771,17 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
         self.inner.push_id(id);
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        let source = self.pop_source("pop_id");
-        self.pop_element("pop_id");
+    fn set_id(&mut self, id: ElementId) {
+        // Registers the top node under `id` but leaves it on the stack, so the shadow stacks are
+        // not popped here (a later `pop`/`append_children`/`replace_with` consumes them).
+        let source = self.top_source("set_id");
         match source {
             StackSource::NewText => self.summary.create_texts += 1,
             StackSource::PrototypeClone => self.summary.loads += 1,
             StackSource::Live | StackSource::PrototypeBuild => {}
+        }
+        if let Some(slot) = self.element_stack.last_mut() {
+            *slot = Some(id);
         }
         self.set_role(
             id,
@@ -787,7 +791,7 @@ impl<W: WriteMutations> WriteMutations for EditCountingWriter<'_, W> {
                 NodeRole::Live
             },
         );
-        self.inner.pop_id(id);
+        self.inner.set_id(id);
     }
 
     fn child(&mut self, index: usize) {
@@ -1235,8 +1239,8 @@ impl WriteMutations for RendererOracle {
         remove();
     }
 
-    fn pop_id(&mut self, id: ElementId) {
-        self.writer().pop_id(id);
+    fn set_id(&mut self, id: ElementId) {
+        self.writer().set_id(id);
         // Record the id on the node core just mapped it to, so semantic lookups
         // can resolve node -> ElementId without core owning a reverse index.
         if let Some(node) = self.state.element_to_node(id) {

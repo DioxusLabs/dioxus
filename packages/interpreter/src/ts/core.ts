@@ -207,6 +207,13 @@ export class BaseInterpreter {
     this.nodes[id] = entry[0];
   }
 
+  setId(id: NodeId) {
+    const top = this.stack[this.stack.length - 1];
+    if (!top) throw new Error("setId: empty stack");
+    this.nodes[id] = top[0];
+    top[1] = id;
+  }
+
   currentTopId(): NodeId {
     const id = this.stack[this.stack.length - 1][1];
     if (id == null) throw new Error("currentTopId: top node has no ElementId");
