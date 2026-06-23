@@ -229,14 +229,31 @@ impl ToTokens for TemplateBody {
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
-                // Build the template through the typed view. The template is a const
-                // `&'static Template`, so it is already stable across hot reloads without a cache.
-                let __vnode = dioxus_core::view::into_vnode_with_capacity::<
-                    #template_ops_cap,
-                    #template_string_cap,
-                    #template_dynamic_cap,
-                    _,
-                >(#view_expr);
+                // Build the vnode from the typed view. In release the optimized template is the
+                // const `&'static Template` built through the type system (stable across hot reloads
+                // with no cache). In debug builds that per-site const evaluation dominates compile
+                // time, so the template is lowered once at runtime and cached per site instead,
+                // keeping dev rebuilds fast while producing the identical template.
+                let __vnode = {
+                    let __view = #view_expr;
+
+                    #[cfg(not(debug_assertions))]
+                    {
+                        dioxus_core::view::into_vnode_with_capacity::<
+                            #template_ops_cap,
+                            #template_string_cap,
+                            #template_dynamic_cap,
+                            _,
+                        >(__view)
+                    }
+
+                    #[cfg(debug_assertions)]
+                    {
+                        static __RUNTIME_TEMPLATE: ::std::sync::OnceLock<dioxus_core::Template> =
+                            ::std::sync::OnceLock::new();
+                        dioxus_core::view::into_vnode_cached(__view, &__RUNTIME_TEMPLATE)
+                    }
+                };
 
                 #[cfg(not(debug_assertions))]
                 {

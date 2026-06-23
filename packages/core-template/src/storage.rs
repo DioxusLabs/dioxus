@@ -160,6 +160,66 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
     }
 }
 
+/// Lower a raw template tree into a leaked [`Template`] at runtime.
+///
+/// Runs the same lowering (`build_from_tree`/`lower_raw_tree`) the const path uses, but at runtime
+/// instead of in const evaluation. The debug-only lazy template path uses this so dev builds skip
+/// const-evaluating the optimized template for every `rsx!` site. The leak is bounded because
+/// callers cache the result per template.
+#[cfg(debug_assertions)]
+pub fn build_runtime_template(tree: &'static TemplateRawTree) -> Template {
+    let mut builder = RuntimeTemplateBuilder::new();
+    lower_raw_tree_runtime(tree, &mut builder, false);
+    builder.finish()
+}
+
+/// Runtime mirror of [`lower_raw_tree`] that drives the non-generic [`RuntimeTemplateBuilder`].
+///
+/// Mirrors the const lowering arm-for-arm so it produces the identical op tape, strings, anchors,
+/// and value-kind hash, but without the capacity const generics — so the debug lazy path codegens
+/// the lowering once instead of monomorphizing it per `(ops, strings, anchors)` capacity combo.
+#[cfg(debug_assertions)]
+fn lower_raw_tree_runtime(
+    tree: &'static TemplateRawTree,
+    builder: &mut RuntimeTemplateBuilder,
+    following_static_at_parent: bool,
+) {
+    match tree {
+        TemplateRawTree::Empty => {}
+        TemplateRawTree::Sequence(children) => {
+            let mut index = 0;
+            while index < children.len() {
+                lower_raw_tree_runtime(
+                    children[index],
+                    builder,
+                    following_static_at_parent
+                        || children_have_static_root_node(children, index + 1),
+                );
+                index += 1;
+            }
+        }
+        TemplateRawTree::Element {
+            tag,
+            namespace,
+            attrs,
+            children,
+        } => {
+            builder.open_element(tag, *namespace);
+            lower_raw_tree_runtime(attrs, builder, false);
+            lower_raw_tree_runtime(children, builder, false);
+            builder.close_element();
+        }
+        TemplateRawTree::StaticAttr {
+            name,
+            value,
+            namespace,
+        } => builder.static_attr(name, value, *namespace),
+        TemplateRawTree::DynamicAttr => builder.dynamic_attr(),
+        TemplateRawTree::StaticText(value) => builder.static_text(value),
+        TemplateRawTree::DynamicNode => builder.dynamic_node(following_static_at_parent),
+    }
+}
+
 #[derive(Clone, Copy)]
 struct TemplateElementFrame {
     enter_index: usize,

@@ -103,6 +103,20 @@ fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
     VNode::new(*template, dynamic)
 }
 
+/// Convert a view into a [`VNode`] using a debug-only lazy template cached per call site.
+///
+/// In dev builds the optimized template is lowered once at runtime from the view's
+/// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
+/// debug compile time) and cached in `cache`. Release builds use [`into_vnode_with_capacity`] and
+/// its const template instead.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn into_vnode_cached<V: View>(view: V, cache: &std::sync::OnceLock<Template>) -> VNode {
+    let template =
+        *cache.get_or_init(|| dioxus_core_template::build_runtime_template(V::TEMPLATE_TREE));
+    into_vnode_with_template(view, &template)
+}
+
 /// Convert a view into a [`VNode`] using template capacities resolved at the call site.
 pub fn into_vnode_with_capacity<
     const OPS_CAP: usize,
