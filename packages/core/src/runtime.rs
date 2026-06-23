@@ -16,7 +16,6 @@ use crate::{
     scopes::ScopeId,
 };
 use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
-use rustc_hash::FxHashSet;
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
@@ -105,11 +104,6 @@ pub struct Runtime {
     // Each mount is associated with a whole rsx block. [`Runtime::elements`]
     // link to a specific node in that block.
     pub(crate) mounts: RefCell<Slab<Mount>>,
-
-    // Mounts that the in-progress diff has moved or replaced and whose committed
-    // position is therefore stale. Placement scans consult this set so they never
-    // anchor against a node that is mid-move. It is empty between diffs.
-    placement_stale: RefCell<FxHashSet<MountId>>,
 }
 
 struct ScopeStackGuard<'a> {
@@ -152,26 +146,7 @@ impl Runtime {
             dirty_tasks: Default::default(),
             render_targets: RefCell::new(render_targets),
             mounts: Default::default(),
-            placement_stale: Default::default(),
         })
-    }
-
-    /// Mark a mount as having a stale committed position for the duration of the
-    /// active diff, so placement scans skip it. O(1). Cleared by
-    /// [`Runtime::unmark_placement_stale`] once the diff that moved it commits.
-    pub(crate) fn mark_placement_stale(&self, mount: MountId) {
-        self.placement_stale.borrow_mut().insert(mount);
-    }
-
-    /// Clear a stale marker once the mount's new position is committed. O(1).
-    pub(crate) fn unmark_placement_stale(&self, mount: MountId) {
-        self.placement_stale.borrow_mut().remove(&mount);
-    }
-
-    /// Whether `mount`'s committed position is stale and must not anchor an
-    /// insertion. O(1).
-    pub(crate) fn is_placement_stale(&self, mount: MountId) -> bool {
-        self.placement_stale.borrow().contains(&mount)
     }
 
     /// Get the current runtime

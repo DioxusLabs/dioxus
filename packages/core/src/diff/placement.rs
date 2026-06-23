@@ -6,8 +6,6 @@
 //!   committed mount table is not updated until the frame commits.
 //! - `None` context does not mean there is no old vnode; it means no active diff-local vnode frame is
 //!   available.
-//! - Mounts marked placement-stale on the runtime are still present in committed fragment storage but
-//!   must not be used as insertion anchors while a reorder or replacement is in progress.
 //! - If a mounted child has a render parent, that parent mount must still be live.
 //! - Exact fragment-child access is used for diff internals; a shorter child-mount list is a mount
 //!   table corruption bug.
@@ -24,6 +22,7 @@ use crate::{
 
 use super::{
     context::DiffContext,
+    node::EdgeScan,
     template::{DynamicAnchor, DynamicNodeSlot},
 };
 
@@ -131,7 +130,7 @@ pub(super) fn insertion_site_at(
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     let at_edge = vnode_edge_site(edge, vnode, dom);
-    at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(vnode.mount(), dom, context))
+    at_edge.unwrap_or_else(|| insertion_site_for_mounted_child(edge, vnode.mount(), dom, context))
 }
 
 /// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
@@ -170,7 +169,7 @@ pub(super) fn insertion_site_for_slot(
         return insertion_site_for_anchor_id(slot.anchor(), id.element_id());
     }
 
-    insertion_site_for_mounted_child(parent_mount, dom, context)
+    insertion_site_for_mounted_child(ElementEdge::First, parent_mount, dom, context)
 }
 
 fn insertion_site_for_anchor_id(anchor: DynamicAnchor<'_>, anchor_id: ElementId) -> InsertionSite {
@@ -268,6 +267,7 @@ pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
 }
 
 pub(super) fn insertion_site_for_mounted_child(
+    edge: ElementEdge,
     mount: MountId,
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
@@ -277,11 +277,12 @@ pub(super) fn insertion_site_for_mounted_child(
     };
     let parent_mount = parent_ref.mount;
 
-    if let Some(site) = insertion_site_for_child_in_parent(mount, parent_mount, dom, context) {
+    if let Some(site) = insertion_site_for_child_in_parent(edge, mount, parent_mount, dom, context)
+    {
         return site;
     }
 
-    insertion_site_for_mounted_child(parent_mount, dom, context)
+    insertion_site_for_mounted_child(edge, parent_mount, dom, context)
 }
 
 /// Resolve a child mount's site inside a specific committed parent.
@@ -289,12 +290,14 @@ pub(super) fn insertion_site_for_mounted_child(
 /// Invariant: if this returns `Some`, `mount` is owned by the returned parent slot. If no slot owns
 /// `mount`, the caller must continue walking render parents.
 fn insertion_site_for_child_in_parent(
+    edge: ElementEdge,
     mount: MountId,
     parent_mount: MountId,
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> Option<InsertionSite> {
     let parent_views = parent_views(dom, parent_mount, context);
+
     // Child ownership is a committed-mount-table query. During a parent diff,
     // the new vnode may already have a different fragment shape, but the
     // fragment child mount list is not replaced until that parent diff
@@ -310,16 +313,17 @@ fn insertion_site_for_child_in_parent(
                         children.len(),
                         |child_mounts| {
                             let position = child_mounts.iter().position(|child| *child == mount)?;
-                            if let Some(id) = first_live_sibling_after(
+                            insertion_site_near_fragment_child(
+                                edge,
                                 children,
                                 child_mounts,
                                 position,
                                 mount,
                                 dom,
-                            ) {
-                                return Some(InsertionSite::before(id));
-                            }
-                            Some(insertion_site_for_slot(parent_mount, slot, dom, context))
+                            )
+                            .or_else(|| {
+                                Some(insertion_site_for_slot(parent_mount, slot, dom, context))
+                            })
                         },
                     );
                     match site {
@@ -339,6 +343,32 @@ fn insertion_site_for_child_in_parent(
     })
 }
 
+fn insertion_site_near_fragment_child(
+    edge: ElementEdge,
+    children: &[VNode],
+    child_mounts: &[MountId],
+    position: usize,
+    mount: MountId,
+    dom: &VirtualDom,
+) -> Option<InsertionSite> {
+    match edge {
+        ElementEdge::First => {
+            first_live_sibling_after(children, child_mounts, position, mount, dom)
+                .map(InsertionSite::before)
+                .or_else(|| {
+                    last_live_sibling_before(children, child_mounts, position, mount, dom)
+                        .map(InsertionSite::after)
+                })
+        }
+        ElementEdge::Last => last_live_sibling_before(children, child_mounts, position, mount, dom)
+            .map(InsertionSite::after)
+            .or_else(|| {
+                first_live_sibling_after(children, child_mounts, position, mount, dom)
+                    .map(InsertionSite::before)
+            }),
+    }
+}
+
 /// Find the next live dynamic sibling sharing the active slot's insertion position.
 ///
 /// Invariant: `slot.index()` must exist in the committed parent view. Parent diffs only call this
@@ -350,11 +380,11 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     for sibling in parent_vnode.dynamic_node_slots_after_sharing_insertion_position(slot) {
-        if let Some(id) = live_dynamic_slot_edge_element(
-            parent_vnode,
+        if let Some(id) = parent_vnode.dynamic_node_edge_element(
             parent_mount,
             sibling.index(),
             dom,
+            EdgeScan::placement(dom),
             ElementEdge::First,
         ) {
             return Some(id);
@@ -385,57 +415,17 @@ fn adjacent_dynamic_sibling_before_in_vnode(
             break;
         }
 
-        if let Some(id) = live_dynamic_slot_edge_element(
-            parent_vnode,
+        if let Some(id) = parent_vnode.dynamic_node_edge_element(
             parent_mount,
             sibling.index(),
             dom,
+            EdgeScan::placement(dom),
             ElementEdge::Last,
         ) {
             return Some(id);
         }
     }
     None
-}
-
-/// Find a live DOM edge for one dynamic slot.
-///
-/// Invariant: component root mounts returned by the scope state own a committed vnode; fragment
-/// slots have exactly one mount per child. The slot being inspected is outside the active fragment
-/// reorder/replacement, so its mounts are not marked placement-stale for the current placement scan.
-fn live_dynamic_slot_edge_element(
-    vnode: &VNode,
-    mount: MountId,
-    idx: usize,
-    dom: &VirtualDom,
-    edge: ElementEdge,
-) -> Option<ElementId> {
-    let target_id = dom.current_render_target_id();
-    match &vnode.dynamic_node_values()[idx] {
-        DynamicNode::Text(_) if dom.mount_target_id(mount) == target_id => dom
-            .mounted_dynamic_text_node(mount, idx)
-            .map(|id| id.element_id()),
-        DynamicNode::Text(_) => None,
-        DynamicNode::Fragment(children) => dom
-            .try_with_mounted_fragment_children(mount, idx, children.len(), |child_mounts| {
-                edge.find_map(children.len(), |idx| {
-                    let child_mount = child_mounts[idx];
-                    if dom.runtime.is_placement_stale(child_mount) {
-                        return None;
-                    }
-                    children[idx].find_element_in_roots(child_mount, dom, target_id, edge)
-                })
-            })
-            .flatten(),
-        DynamicNode::Component(_) => {
-            let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
-            let vnode = dom.current_mounted_view(component_root_mount)?;
-            if dom.runtime.is_placement_stale(component_root_mount) {
-                return None;
-            }
-            vnode.find_element_in_roots(component_root_mount, dom, target_id, edge)
-        }
-    }
 }
 
 fn parent_views<'a>(
@@ -499,12 +489,31 @@ fn first_live_sibling_after(
         .skip(position + 1)
         .find_map(|(child, m)| {
             let m = *m;
-            // Skip the node itself and any sibling the active diff has already
-            // moved/replaced - its committed position is stale.
-            if m == mount || dom.runtime.is_placement_stale(m) {
+            if m == mount {
                 return None;
             }
             child.find_first_element(m, dom)
+        })
+}
+
+fn last_live_sibling_before(
+    children: &[VNode],
+    child_mounts: &[MountId],
+    position: usize,
+    mount: MountId,
+    dom: &VirtualDom,
+) -> Option<ElementId> {
+    children
+        .iter()
+        .zip(child_mounts)
+        .take(position)
+        .rev()
+        .find_map(|(child, m)| {
+            let m = *m;
+            if m == mount {
+                return None;
+            }
+            child.find_last_element(m, dom)
         })
 }
 

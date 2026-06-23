@@ -34,7 +34,7 @@ pub(crate) struct MountedDynamicNodeSlotSnapshot {
     value: usize,
 }
 
-const PENDING_FRAGMENT_CHILD_MOUNT: MountId = MountId(usize::MAX);
+const UNWRITTEN_FRAGMENT_CHILD_MOUNT: MountId = MountId(usize::MAX);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FragmentMountWriter {
@@ -385,7 +385,7 @@ impl VirtualDom {
             let start = mount_state.fragment_child_mounts.len();
             mount_state
                 .fragment_child_mounts
-                .resize(start + len, PENDING_FRAGMENT_CHILD_MOUNT);
+                .resize(start + len, UNWRITTEN_FRAGMENT_CHILD_MOUNT);
             FragmentMountWriter {
                 mount,
                 dyn_node_idx,
@@ -402,8 +402,8 @@ impl VirtualDom {
         child: MountId,
     ) {
         debug_assert_ne!(
-            child, PENDING_FRAGMENT_CHILD_MOUNT,
-            "pending fragment sentinel cannot be a live child mount"
+            child, UNWRITTEN_FRAGMENT_CHILD_MOUNT,
+            "unwritten fragment child sentinel cannot be a live child mount"
         );
         debug_assert!(
             idx < writer.len,
@@ -424,13 +424,13 @@ impl VirtualDom {
             let range = writer.start..writer.start + writer.len;
             debug_assert!(
                 range.end <= mount.fragment_child_mounts.len(),
-                "pending fragment range must fit fragment storage"
+                "fragment child writer range must fit fragment storage"
             );
             debug_assert!(
                 mount.fragment_child_mounts[range]
                     .iter()
-                    .all(|mount| { *mount != PENDING_FRAGMENT_CHILD_MOUNT }),
-                "pending fragment range must be fully written before commit"
+                    .all(|mount| { *mount != UNWRITTEN_FRAGMENT_CHILD_MOUNT }),
+                "fragment child writer range must be fully written before commit"
             );
             *mount.dynamic_slot_mut(writer.dyn_node_idx) =
                 PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(writer.start));
@@ -542,7 +542,7 @@ impl VirtualDom {
 
     /// Commit the new vnode for a mount after its roots/dynamic slots have been updated.
     ///
-    /// Invariant: fragment child storage may contain stale ranges accumulated during the diff; this
+    /// Invariant: fragment child storage may contain old ranges accumulated during the diff; this
     /// compacts storage so every committed non-empty fragment slot owns exactly its current range.
     pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
         let mut mounts = self.runtime.mounts.borrow_mut();

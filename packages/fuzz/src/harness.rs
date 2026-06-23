@@ -1661,6 +1661,102 @@ mod tests {
     }
 
     #[test]
+    fn non_keyed_tail_after_empty_replacement_uses_parent_slot() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Attrs {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateAttrSpec::Dynamic(vec![AttrSpec {
+                            name: 0,
+                            namespace: None,
+                            value: AttrValueSpec::Text(0),
+                            volatile: false,
+                        }]),
+                    },
+                },
+            ),
+            Op::fragment(
+                0,
+                0,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 0,
+                    item: None,
+                }),
+            ),
+            Op::RenderDirty,
+            Op::template(
+                147,
+                TemplateEdit::SetNode {
+                    node: 30,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Placeholder),
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 167,
+                        key_base: None,
+                    }),
+                },
+            ),
+            Op::RenderDirty,
+        ]);
+    }
+
+    #[test]
+    fn fragment_child_diff_uses_captured_slot_fallback() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 2,
+                        key_base: None,
+                    }),
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                },
+            ),
+            Op::RenderDirty,
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
         replay_ops([
             Op::template(

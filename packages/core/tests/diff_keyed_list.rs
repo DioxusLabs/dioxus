@@ -434,6 +434,122 @@ fn keyed_list_with_dynamic_placeholder_and_text() {
     assert_eq!(patch, EditSummary::default());
 }
 
+#[test]
+fn keyed_reorder_with_empty_components_and_text_roots() {
+    fn app() -> Element {
+        let order: &[_] = match generation() % 2 {
+            0 => &[0, 1, 2, 3],
+            1 => &[2, 0, 3, 1],
+            _ => unreachable!(),
+        };
+
+        rsx! {
+            div {
+                {order.iter().map(|id| rsx! {
+                    mixed_row { key: "{id}", id: *id }
+                })}
+            }
+        }
+    }
+
+    #[component]
+    fn mixed_row(id: i32) -> Element {
+        match id {
+            0 => rsx! {},
+            1 => rsx! { "one" },
+            2 => rsx! { span { id: "two", "two" } },
+            3 => rsx! {
+                "three-a"
+                span { id: "three", "three" }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            div {
+                "one"
+                span { id: "two", "two" }
+                "three-a"
+                span { id: "three", "three" }
+            }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            div {
+                span { id: "two", "two" }
+                "three-a"
+                span { id: "three", "three" }
+                "one"
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+    assert_move_only(summary);
+}
+
+#[test]
+fn keyed_lis_child_that_changes_template_is_placed_not_stable() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+        let order: &[_] = if phase == 0 {
+            &["a", "b", "c"]
+        } else {
+            &["b", "a", "x", "c"]
+        };
+
+        rsx!({
+            order.iter().map(|id| {
+                let id = *id;
+                match (id, phase) {
+                    ("b", 1) => rsx! { em { key: "{id}", id: "{id}", "{id}" } },
+                    _ => rsx! { span { key: "{id}", id: "{id}", "{id}" } },
+                }
+            })
+        })
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            span { id: "a", "a" }
+            span { id: "b", "b" }
+            span { id: "c", "c" }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            em { id: "b", "b" }
+            span { id: "a", "a" }
+            span { id: "x", "x" }
+            span { id: "c", "c" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
 fn rebuild(
     app: fn() -> Element,
     expected_order: &[i32],

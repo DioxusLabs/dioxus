@@ -265,6 +265,131 @@ fn nested_unkeyed_lists() {
     assert_eq!(summary.set_texts, 2);
 }
 
+#[test]
+fn non_keyed_tail_after_paired_child_becomes_empty() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+        let count = if phase == 0 { 1 } else { 2 };
+
+        rsx! {
+            div {
+                "before"
+                {(0..count).map(move |idx| {
+                    if phase == 0 {
+                        rsx! { span { "gone" } }
+                    } else if idx == 0 {
+                        VNode::empty()
+                    } else {
+                        rsx! { span { "tail" } }
+                    }
+                })}
+                "after"
+            }
+        }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(
+        app,
+        vec![snapshot_div(vec![
+            text("before"),
+            element("span", vec![text("gone")]),
+            text("after"),
+        ])],
+    );
+
+    let summary = rerender(
+        &mut dom,
+        &mut oracle,
+        vec![snapshot_div(vec![
+            text("before"),
+            element("span", vec![text("tail")]),
+            text("after"),
+        ])],
+    );
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
+#[test]
+fn non_keyed_replacements_use_live_stable_edges() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+
+        rsx! {
+            div {
+                {(0..3).map(move |idx| match (phase, idx) {
+                    (0, 0) => rsx! { p { "left" } },
+                    (0, 1) => rsx! { span { "stable" } },
+                    (0, 2) => rsx! { p { "right" } },
+                    (_, 0) => rsx! { em { "left" } },
+                    (_, 1) => rsx! { span { "stable" } },
+                    (_, 2) => rsx! { strong { "right" } },
+                    _ => unreachable!(),
+                })}
+            }
+        }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(
+        app,
+        vec![snapshot_div(vec![
+            snapshot_p(vec![text("left")]),
+            element("span", vec![text("stable")]),
+            snapshot_p(vec![text("right")]),
+        ])],
+    );
+
+    let summary = rerender(
+        &mut dom,
+        &mut oracle,
+        vec![snapshot_div(vec![
+            element("em", vec![text("left")]),
+            element("span", vec![text("stable")]),
+            element("strong", vec![text("right")]),
+        ])],
+    );
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 2);
+    assert_eq!(summary.replaces, 0);
+}
+
+#[test]
+fn all_empty_fragment_children_insert_into_slot_fallback() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+
+        rsx! {
+            div {
+                "before"
+                {(0..3).map(move |idx| {
+                    if phase == 1 && idx == 1 {
+                        rsx! { span { "live" } }
+                    } else {
+                        VNode::empty()
+                    }
+                })}
+                "after"
+            }
+        }
+    }
+
+    let (mut dom, mut oracle, _) =
+        rebuild(app, vec![snapshot_div(vec![text("before"), text("after")])]);
+
+    let summary = rerender(
+        &mut dom,
+        &mut oracle,
+        vec![snapshot_div(vec![
+            text("before"),
+            element("span", vec![text("live")]),
+            text("after"),
+        ])],
+    );
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
 fn rebuild(
     app: fn() -> Element,
     expected: Vec<SnapshotNode>,

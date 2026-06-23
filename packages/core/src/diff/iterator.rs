@@ -1,24 +1,21 @@
 //! Fragment child reconciliation.
 //!
 //! Invariants maintained here:
-//! - Non-empty fragment diffs always write one mount per new child into the pending parent range.
-//! - Pairwise diffs run in document order so earlier replacements can still use later committed
-//!   siblings as placement anchors.
-//! - Keyed removals are delayed until every splice has selected its insertion site.
+//! - Non-empty fragment diffs always write one mount per new child into the fragment child writer
+//!   range.
+//! - Stable children diff first in final document order; then the local placement plan computes
+//!   stable host edges once for every placed run.
+//! - Keyed removals are delayed until every placed run has selected and executed its insertion site.
 //! - `usize::MAX` in `new_index_to_old_index` is the only marker for a newly created keyed child;
 //!   every other index must point into the old sibling list.
 //! - Keyed lists whose edits are confined to one end (append, prepend, truncation, or no change)
-//!   skip the key map and LIS entirely: the shared prefix/suffix is diffed in place and the single
-//!   remaining gap is a bulk insert or remove. Only genuine middle reorders pay for the key map.
+//!   skip the key map and LIS entirely. Only genuine middle reorders pay for the key map.
 
 use crate::{
     DynamicNode, ElementId, VNodeChild, VirtualDom,
     diff::{
         context::{DiffFrame, DiffState},
-        placement::{
-            ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
-            vnode_edge_site,
-        },
+        placement::{InsertionSite, at_site, create_at_site_with_mounts},
     },
     innerlude::{MountId, MountRef, WriteMutations},
     mount::FragmentMountWriter,
@@ -26,6 +23,121 @@ use crate::{
 };
 
 use rustc_hash::FxHashMap;
+use std::ops::Range;
+
+struct FragmentPlacementPlan {
+    new_to_old: Vec<Option<usize>>,
+    stable: Vec<bool>,
+}
+
+impl FragmentPlacementPlan {
+    fn new(len: usize) -> Self {
+        Self {
+            new_to_old: vec![None; len],
+            stable: vec![false; len],
+        }
+    }
+
+    fn reuse(&mut self, new_index: usize, old_index: usize, old: &VNode, new: &VNode) {
+        self.new_to_old[new_index] = Some(old_index);
+        self.stable[new_index] = old.template() == new.template();
+    }
+
+    fn placement_runs(&self, live_stable: &[bool]) -> Vec<Range<usize>> {
+        let mut runs = Vec::new();
+        let mut run_start = None;
+        let mut run_has_placed_child = false;
+
+        for index in 0..self.stable.len() {
+            if live_stable[index] {
+                if let Some(start) = run_start.take()
+                    && run_has_placed_child
+                {
+                    runs.push(start..index);
+                }
+                run_has_placed_child = false;
+                continue;
+            }
+
+            if !self.stable[index] {
+                run_start.get_or_insert(index);
+                run_has_placed_child = true;
+            }
+        }
+
+        if let Some(start) = run_start
+            && run_has_placed_child
+        {
+            runs.push(start..self.stable.len());
+        }
+
+        runs
+    }
+}
+
+struct StableFragmentEdges {
+    live_stable: Vec<bool>,
+    next_first: Vec<Option<ElementId>>,
+    prev_last: Vec<Option<ElementId>>,
+}
+
+impl StableFragmentEdges {
+    fn new(
+        new: &[VNode],
+        new_mounts: &[Option<MountId>],
+        stable: &[bool],
+        dom: &VirtualDom,
+    ) -> Self {
+        let mut first_edges = vec![None; new.len()];
+        let mut last_edges = vec![None; new.len()];
+        let mut live_stable = vec![false; new.len()];
+
+        for idx in 0..new.len() {
+            if !stable[idx] {
+                continue;
+            }
+            let Some(mount) = new_mounts[idx] else {
+                continue;
+            };
+            first_edges[idx] = new[idx].find_first_element(mount, dom);
+            last_edges[idx] = new[idx].find_last_element(mount, dom);
+            live_stable[idx] = first_edges[idx].is_some() || last_edges[idx].is_some();
+        }
+
+        let mut next_first = vec![None; new.len() + 1];
+        let mut next = None;
+        for idx in (0..new.len()).rev() {
+            if live_stable[idx] {
+                next = first_edges[idx];
+            }
+            next_first[idx] = next;
+        }
+
+        let mut prev_last = vec![None; new.len() + 1];
+        let mut prev = None;
+        for idx in 0..new.len() {
+            prev_last[idx] = prev;
+            if live_stable[idx] {
+                prev = last_edges[idx];
+            }
+        }
+        prev_last[new.len()] = prev;
+
+        Self {
+            live_stable,
+            next_first,
+            prev_last,
+        }
+    }
+
+    fn next_first(&self, boundary: usize) -> Option<ElementId> {
+        self.next_first[boundary]
+    }
+
+    fn prev_last(&self, boundary: usize) -> Option<ElementId> {
+        self.prev_last[boundary]
+    }
+}
 
 impl DiffState<'_, '_, '_, '_> {
     /// Diff two non-empty fragment child lists.
@@ -39,10 +151,11 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountRef>,
         new_children: FragmentMountWriter,
+        fallback_site: Option<InsertionSite>,
     ) {
         dioxus_debug_assert!(
             new_children.len() == new.len(),
-            "pending fragment range must match the new child list"
+            "fragment child writer range must match the new child list"
         );
         let new_is_keyed = new[0].key().is_some();
         let old_is_keyed = old[0].key().is_some();
@@ -56,9 +169,9 @@ impl DiffState<'_, '_, '_, '_> {
         );
 
         if new_is_keyed && old_is_keyed {
-            self.diff_keyed_children(old, old_mounts, new, parent, new_children)
+            self.diff_keyed_children(old, old_mounts, new, parent, new_children, fallback_site)
         } else {
-            self.diff_non_keyed_children(old, old_mounts, new, parent, new_children)
+            self.diff_non_keyed_children(old, old_mounts, new, parent, new_children, fallback_site)
         }
     }
 
@@ -74,82 +187,37 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountRef>,
         new_children: FragmentMountWriter,
+        fallback_site: Option<InsertionSite>,
     ) {
         // Handled these cases in `diff_children` before calling this function.
         dioxus_debug_assert!(!new.is_empty());
         dioxus_debug_assert!(!old.is_empty());
 
         let paired = old.len().min(new.len());
-        let mut new_mounts = Vec::with_capacity(new.len());
+        let mut plan = FragmentPlacementPlan::new(new.len());
+
         for idx in 0..paired {
-            let mount = DiffFrame::new(old_mounts[idx], &old[idx], &new[idx]).diff_into(self);
-            new_mounts.push(mount);
-            self.dom
-                .set_mounted_fragment_child(new_children, idx, mount);
+            plan.reuse(idx, idx, &old[idx], &new[idx]);
         }
 
-        if old.len() < new.len() {
-            // Insert the new tail after the last paired child. Anchor on the
-            // freshly diffed *new* child, not the old one: an old child with no
-            // live DOM (e.g. an empty fragment) offers no insertion edge, so
-            // anchoring on it would lose the tail to the document root. The
-            // already-diffed new child exposes its current content's edge, and
-            // diffing the pairs first means an empty leading child's own content
-            // is placed before the tail rather than after it.
-            let anchor_idx = paired - 1;
-            self.create_and_insert(
-                ElementEdge::Last,
-                &new[old.len()..],
-                &new[anchor_idx],
-                new_mounts[anchor_idx],
-                parent,
-                |dom, offset, mount| {
-                    new_mounts.push(mount);
-                    dom.set_mounted_fragment_child(new_children, old.len() + offset, mount);
-                },
-            );
-        } else if old.len() > new.len() {
-            // Removed tail children stayed mounted through the pair diffs above
-            // so paired replacements could anchor against them; remove them now.
-            // The committed parent fragment mount list is not replaced until this
-            // fragment diff returns.
+        self.execute_fragment_plan(
+            old,
+            old_mounts,
+            new,
+            parent,
+            new_children,
+            0,
+            plan,
+            fallback_site,
+        );
+
+        if old.len() > new.len() {
             self.dom.remove_nodes(
                 self.to.as_deref_mut(),
                 &old[new.len()..],
                 &old_mounts[new.len()..],
             );
         }
-    }
-
-    /// Diff the shared prefix and suffix pairs in place, before any removals, so a pair whose
-    /// template changed can still anchor against its live neighbours.
-    fn diff_shared_ends(
-        &mut self,
-        old: &[VNode],
-        old_mounts: &[MountId],
-        new: &[VNode],
-        new_mounts: &mut [Option<MountId>],
-        new_children: FragmentMountWriter,
-        prefix: usize,
-        old_suffix_start: usize,
-        new_suffix_start: usize,
-    ) {
-        self.diff_child_pairs(
-            &old[..prefix],
-            &old_mounts[..prefix],
-            &new[..prefix],
-            new_mounts,
-            new_children,
-            0,
-        );
-        self.diff_child_pairs(
-            &old[old_suffix_start..],
-            &old_mounts[old_suffix_start..],
-            &new[new_suffix_start..],
-            new_mounts,
-            new_children,
-            new_suffix_start,
-        );
     }
 
     /// Diff keyed children.
@@ -164,6 +232,7 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountRef>,
         new_children: FragmentMountWriter,
+        fallback_site: Option<InsertionSite>,
     ) {
         #[cfg(debug_assertions)]
         {
@@ -205,271 +274,89 @@ impl DiffState<'_, '_, '_, '_> {
         let old_suffix_start = old.len() - suffix;
         let new_suffix_start = new.len() - suffix;
 
-        let mut new_mounts = vec![None; new.len()];
-        let pure_insert = prefix + suffix == old.len() && prefix + suffix != new.len();
-        let pure_insert_anchor_keeps_template = pure_insert
-            && if suffix > 0 {
-                old[old_suffix_start].template() == new[new_suffix_start].template()
-            } else {
-                old[prefix - 1].template() == new[prefix - 1].template()
-            };
-
-        if !pure_insert || pure_insert_anchor_keeps_template {
-            self.diff_shared_ends(
-                old,
-                old_mounts,
-                new,
-                &mut new_mounts,
-                new_children,
-                prefix,
-                old_suffix_start,
-                new_suffix_start,
-            );
-        }
-
-        match (prefix + suffix == old.len(), prefix + suffix == new.len()) {
-            // Children remain only between the shared ends on the new side: insert.
-            (true, false) => {
-                let inserted = &new[prefix..new_suffix_start];
-                // Anchor the inserted run against the shared end beside it: `First`/before the
-                // suffix's first node when there is a suffix, otherwise `Last`/after the prefix's
-                // last node. The prefix is shared (same index on both sides); the suffix starts at
-                // different indices in old vs new.
-                let (edge, new_boundary, old_boundary) = if suffix > 0 {
-                    (ElementEdge::First, new_suffix_start, old_suffix_start)
-                } else {
-                    (ElementEdge::Last, prefix - 1, prefix - 1)
-                };
-                // A kept-template boundary's NEW mount is already committed, so anchor on the new
-                // side; otherwise the boundary still shows its OLD committed mount (not yet diffed),
-                // so anchor there before it moves.
-                let (anchor_node, anchor_mount) = if pure_insert_anchor_keeps_template {
-                    (
-                        &new[new_boundary],
-                        new_mounts[new_boundary].expect("shared boundary mount"),
-                    )
-                } else {
-                    (&old[old_boundary], old_mounts[old_boundary])
-                };
-                self.create_and_insert(
-                    edge,
-                    inserted,
-                    anchor_node,
-                    anchor_mount,
-                    parent,
-                    |dom, offset, mount| {
-                        let idx = prefix + offset;
-                        new_mounts[idx] = Some(mount);
-                        dom.set_mounted_fragment_child(new_children, idx, mount);
-                    },
-                );
-                if !pure_insert_anchor_keeps_template {
-                    // The insert anchored against the old mounts above, so the shared ends are
-                    // diffed only now that the new run is placed.
-                    self.diff_shared_ends(
-                        old,
-                        old_mounts,
-                        new,
-                        &mut new_mounts,
-                        new_children,
-                        prefix,
-                        old_suffix_start,
-                        new_suffix_start,
-                    );
-                }
-            }
-            // Children remain only between the shared ends on the old side: remove.
-            (false, true) => {
-                self.dom.remove_nodes(
-                    self.to.as_deref_mut(),
-                    &old[prefix..old_suffix_start],
-                    &old_mounts[prefix..old_suffix_start],
-                );
-            }
-            // Both ends are fully shared: nothing remains between them.
-            (true, true) => {}
-            // A genuine reorder remains between the shared ends: build the key map
-            // and run the LIS over the reduced middle only.
-            (false, false) => self.diff_keyed_middle(
-                &old[prefix..old_suffix_start],
-                &old_mounts[prefix..old_suffix_start],
-                &new[prefix..new_suffix_start],
-                parent,
-                &mut new_mounts[prefix..new_suffix_start],
-                new_children,
-                prefix,
-            ),
-        }
-    }
-
-    /// Reconcile a genuine reorder confined between the shared ends.
-    ///
-    /// Builds the old-key map and runs the longest-increasing-subsequence search
-    /// over this reduced middle only - the shared prefix/suffix were already
-    /// diffed in place by [`Self::diff_keyed_children`]. `new_mounts` is the
-    /// middle's slice of the parent's mount list and is filled with one mount per
-    /// new middle child.
-    ///
-    /// Invariant: both `old` and `new` are non-empty (pure inserts and removes are
-    /// handled by the caller) and share no prefix or suffix key.
-    fn diff_keyed_middle(
-        &mut self,
-        old: &[VNode],
-        old_mounts: &[MountId],
-        new: &[VNode],
-        parent: Option<MountRef>,
-        new_mounts: &mut [Option<MountId>],
-        new_children: FragmentMountWriter,
-        new_offset: usize,
-    ) {
-        let old_key_to_old_index = old
-            .iter()
-            .enumerate()
-            .map(|(i, o)| (o.key().unwrap(), i))
-            .collect::<FxHashMap<_, _>>();
-
+        let mut plan = FragmentPlacementPlan::new(new.len());
         let mut old_is_shared = vec![false; old.len()];
-        let mut shared_count = 0usize;
-        let new_index_to_old_index = new
-            .iter()
-            .map(|node| {
-                let key = node.key().unwrap();
-                if let Some(&index) = old_key_to_old_index.get(key) {
-                    if !old_is_shared[index] {
-                        old_is_shared[index] = true;
-                        shared_count += 1;
-                    }
-                    index
-                } else {
-                    usize::MAX
-                }
-            })
-            .collect::<Box<[_]>>();
 
-        if shared_count == 0 {
-            self.create_and_insert(
-                ElementEdge::First,
-                new,
-                old.first().unwrap(),
-                old_mounts[0],
-                parent,
-                |dom, offset, mount| {
-                    new_mounts[offset] = Some(mount);
-                    dom.set_mounted_fragment_child(new_children, new_offset + offset, mount);
-                },
-            );
-            self.dom
-                .remove_nodes(self.to.as_deref_mut(), old, old_mounts);
-            return;
+        for idx in 0..prefix {
+            plan.reuse(idx, idx, &old[idx], &new[idx]);
+            old_is_shared[idx] = true;
         }
 
-        let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
-        let mut allocation = vec![0; new_index_to_old_index.len() * 2];
-        let (predecessors, starts) = allocation.split_at_mut(new_index_to_old_index.len());
+        for offset in 0..suffix {
+            let old_idx = old_suffix_start + offset;
+            let new_idx = new_suffix_start + offset;
+            plan.reuse(new_idx, old_idx, &old[old_idx], &new[new_idx]);
+            old_is_shared[old_idx] = true;
+        }
 
-        longest_increasing_subsequence::lis_with(
-            &new_index_to_old_index,
-            &mut lis_sequence,
-            |a, b| a < b,
-            predecessors,
-            starts,
+        if prefix < old_suffix_start && prefix < new_suffix_start {
+            let old_key_to_old_index = old[prefix..old_suffix_start]
+                .iter()
+                .enumerate()
+                .map(|(i, o)| (o.key().unwrap(), prefix + i))
+                .collect::<FxHashMap<_, _>>();
+
+            let mut shared_count = 0usize;
+            let new_index_to_old_index = new[prefix..new_suffix_start]
+                .iter()
+                .map(|node| {
+                    let key = node.key().unwrap();
+                    if let Some(&index) = old_key_to_old_index.get(key) {
+                        if !old_is_shared[index] {
+                            old_is_shared[index] = true;
+                            shared_count += 1;
+                        }
+                        index
+                    } else {
+                        usize::MAX
+                    }
+                })
+                .collect::<Box<[_]>>();
+
+            let mut in_lis = vec![false; new_index_to_old_index.len()];
+            if shared_count > 0 {
+                let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
+                let mut allocation = vec![0; new_index_to_old_index.len() * 2];
+                let (predecessors, starts) = allocation.split_at_mut(new_index_to_old_index.len());
+
+                longest_increasing_subsequence::lis_with(
+                    &new_index_to_old_index,
+                    &mut lis_sequence,
+                    |a, b| a < b,
+                    predecessors,
+                    starts,
+                );
+
+                if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(usize::MAX) {
+                    lis_sequence.remove(0);
+                }
+
+                for idx in lis_sequence {
+                    in_lis[idx] = true;
+                }
+            }
+
+            for (middle_new_idx, old_index) in new_index_to_old_index.iter().copied().enumerate() {
+                if old_index == usize::MAX {
+                    continue;
+                }
+                let new_idx = prefix + middle_new_idx;
+                plan.reuse(new_idx, old_index, &old[old_index], &new[new_idx]);
+                plan.stable[new_idx] = plan.stable[new_idx] && in_lis[middle_new_idx];
+            }
+        }
+
+        self.execute_fragment_plan(
+            old,
+            old_mounts,
+            new,
+            parent,
+            new_children,
+            0,
+            plan,
+            fallback_site,
         );
 
-        if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(usize::MAX) {
-            lis_sequence.remove(0);
-        }
-
-        // Every shared child not in the stable LIS will move, so its committed
-        // position is stale for the rest of this reorder. Mark them all up front
-        // (O(1) each) so placement scans never anchor on a node that is mid-move,
-        // and clear the markers once the fragment commits below. The set lives on
-        // the runtime, so nothing is threaded or cloned per splice.
-        let mut marked: Vec<MountId> = Vec::new();
-        if self.has_writer() {
-            let mut in_lis = vec![false; new.len()];
-            for &idx in &lis_sequence {
-                in_lis[idx] = true;
-            }
-            for (new_idx, &old_index) in new_index_to_old_index.iter().enumerate() {
-                if old_index != usize::MAX && !in_lis[new_idx] {
-                    let mount = old_mounts[old_index];
-                    self.dom.runtime.mark_placement_stale(mount);
-                    marked.push(mount);
-                }
-            }
-        }
-
-        // Diff the stable LIS children in place, in document order. A child whose
-        // template changed gets a fresh mount, so its old mount is stale too.
-        for idx in lis_sequence.iter().rev() {
-            let old_index = new_index_to_old_index[*idx];
-            let old_node = &old[old_index];
-            let old_mount = old_mounts[old_index];
-            let mount = DiffFrame::new(old_mount, old_node, &new[*idx]).diff_into(self);
-            if mount != old_mount && self.has_writer() {
-                self.dom.runtime.mark_placement_stale(old_mount);
-                marked.push(old_mount);
-            }
-            new_mounts[*idx] = Some(mount);
-            self.dom
-                .set_mounted_fragment_child(new_children, new_offset + *idx, mount);
-        }
-
-        let last = *lis_sequence.first().unwrap();
-        if last < (new.len() - 1) {
-            self.splice_around_diffing(
-                ElementEdge::Last,
-                new,
-                old,
-                old_mounts,
-                last,
-                parent,
-                &new_index_to_old_index,
-                (last + 1)..new.len(),
-                &mut *new_mounts,
-                new_children,
-                new_offset,
-            );
-        }
-
-        for pair in lis_sequence.windows(2) {
-            let (last, next) = (pair[0], pair[1]);
-            if last - next > 1 {
-                self.splice_around_diffing(
-                    ElementEdge::First,
-                    new,
-                    old,
-                    old_mounts,
-                    last,
-                    parent,
-                    &new_index_to_old_index,
-                    (next + 1)..last,
-                    new_mounts,
-                    new_children,
-                    new_offset,
-                );
-            }
-        }
-
-        let first_lis = *lis_sequence.last().unwrap();
-        if first_lis > 0 {
-            self.splice_around_diffing(
-                ElementEdge::First,
-                new,
-                old,
-                old_mounts,
-                first_lis,
-                parent,
-                &new_index_to_old_index,
-                0..first_lis,
-                &mut *new_mounts,
-                new_children,
-                new_offset,
-            );
-        }
-
-        // Remove the keyed children whose keys disappeared. They stayed mounted
-        // until now so splices could still see them while choosing placement.
         for (_, (child_to_remove, mount_to_remove)) in old
             .iter()
             .zip(old_mounts)
@@ -478,143 +365,140 @@ impl DiffState<'_, '_, '_, '_> {
         {
             child_to_remove.remove_node(*mount_to_remove, self.dom, self.to.as_deref_mut());
         }
-
-        // The fragment is committed and the moved mounts now hold their new
-        // positions, so clear their stale markers.
-        for mount in marked {
-            self.dom.runtime.unmark_placement_stale(mount);
-        }
     }
 
-    fn diff_child_pairs(
+    fn execute_fragment_plan(
         &mut self,
         old: &[VNode],
         old_mounts: &[MountId],
         new: &[VNode],
-        new_mounts: &mut [Option<MountId>],
+        parent: Option<MountRef>,
         new_children: FragmentMountWriter,
         new_offset: usize,
+        plan: FragmentPlacementPlan,
+        fallback_site: Option<InsertionSite>,
     ) {
-        let len = old.len().min(new.len());
-        // Parent fragment mount lists are committed after the whole fragment
-        // diff finishes. Diff pairs in document order so replacements at an
-        // earlier index can still use later old siblings as live placement
-        // anchors.
-        for idx in 0..len {
-            let old = &old[idx];
-            let new = &new[idx];
-            let mount = DiffFrame::new(old_mounts[idx], old, new).diff_into(self);
-            new_mounts[new_offset + idx] = Some(mount);
+        let mut new_mounts = vec![None; new.len()];
+        let mut anchorable = plan.stable.clone();
+
+        for idx in 0..new.len() {
+            if !plan.stable[idx] {
+                continue;
+            }
+            let old_index = plan.new_to_old[idx].expect("stable child must be reused");
+            let old_mount = old_mounts[old_index];
+            self.dom
+                .set_mounted_fragment_child(new_children, new_offset + idx, old_mount);
+            let mount = DiffFrame::new(old_mount, &old[old_index], &new[idx]).diff_into(self);
+            new_mounts[idx] = Some(mount);
+            self.dom
+                .set_mounted_fragment_child(new_children, new_offset + idx, mount);
+            if mount != old_mount {
+                anchorable[idx] = false;
+            }
+        }
+
+        let stable_edges = StableFragmentEdges::new(new, &new_mounts, &anchorable, self.dom);
+        for range in plan.placement_runs(&stable_edges.live_stable) {
+            let site = self.has_writer().then(|| {
+                stable_edges
+                    .next_first(range.end)
+                    .map(InsertionSite::before)
+                    .or_else(|| {
+                        stable_edges
+                            .prev_last(range.start)
+                            .map(InsertionSite::after)
+                    })
+                    .or(fallback_site)
+                    .expect("visible fragment placement requires a fallback insertion site")
+            });
+
+            let context = self.context();
+            let runtime = self.dom.runtime.clone();
+            let dom = &mut *self.dom;
+            let to = self.to.as_deref_mut();
+            let mut replaced_nodes = Vec::new();
+            if let Some(site) = site {
+                let to = to.expect("writer checked");
+                at_site(site, to, runtime, |to| {
+                    let mut state = DiffState::new_with_context(dom, Some(to), context);
+                    state.create_or_diff_placed_range(
+                        new,
+                        old,
+                        old_mounts,
+                        parent,
+                        &plan,
+                        range.clone(),
+                        &mut new_mounts,
+                        new_children,
+                        new_offset,
+                        &mut replaced_nodes,
+                    )
+                });
+            } else {
+                let mut state = DiffState::new_with_context(dom, to, context);
+                state.create_or_diff_placed_range(
+                    new,
+                    old,
+                    old_mounts,
+                    parent,
+                    &plan,
+                    range.clone(),
+                    &mut new_mounts,
+                    new_children,
+                    new_offset,
+                    &mut replaced_nodes,
+                );
+            }
+
+            for (node, mount) in replaced_nodes.into_iter().rev() {
+                node.remove_node(mount, self.dom, self.to.as_deref_mut());
+            }
+        }
+
+        for (idx, mount) in new_mounts.into_iter().enumerate() {
+            let mount = mount.expect("fragment plan must materialize every new child");
             self.dom
                 .set_mounted_fragment_child(new_children, new_offset + idx, mount);
         }
     }
 
-    /// Create, move, or diff one non-LIS keyed splice range around an already materialized sibling.
-    ///
-    /// Invariant: every moved/replaced mount in this reorder is already marked stale on the runtime
-    /// before this runs, so placement scans skip them without a threaded list.
-    fn splice_around_diffing(
-        &mut self,
-        edge: ElementEdge,
-        new: &[VNode],
-        old: &[VNode],
-        old_mounts: &[MountId],
-        sibling_idx: usize,
-        parent: Option<MountRef>,
-        new_index_to_old_index: &[usize],
-        range: std::ops::Range<usize>,
-        new_mounts: &mut [Option<MountId>],
-        new_children: FragmentMountWriter,
-        new_offset: usize,
-    ) {
-        let context = self.context();
-        let sibling_mount = new_mounts[sibling_idx].expect("sibling");
-        // The splice sits immediately next to its LIS-boundary sibling, which is
-        // stable and never moves, so when that sibling has a live DOM edge it is
-        // the exact anchor - O(1). Only when it has no live edge (e.g. an empty
-        // fragment) do we walk the new sibling order, then the committed view;
-        // both consult the runtime's stale set so they never anchor mid-move.
-        let site = self.has_writer().then(|| {
-            vnode_edge_site(
-                edge,
-                crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
-                self.dom,
-            )
-            .or_else(|| insertion_site_in_new_order(edge, new, new_mounts, sibling_idx, self.dom))
-            .unwrap_or_else(|| {
-                insertion_site_at(
-                    edge,
-                    crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
-                    self.dom,
-                    context,
-                )
-            })
-        });
-        let runtime = self.dom.runtime.clone();
-        let dom = &mut *self.dom;
-        let to = self.to.as_deref_mut();
-        let mut replaced_nodes = Vec::new();
-        if let Some(site) = site {
-            let to = to.expect("writer checked");
-            at_site(site, to, runtime, |to| {
-                let mut state = DiffState::new_with_context(dom, Some(to), context);
-                state.create_or_diff_range(
-                    new,
-                    old,
-                    old_mounts,
-                    parent,
-                    new_index_to_old_index,
-                    range,
-                    new_mounts,
-                    new_children,
-                    new_offset,
-                    &mut replaced_nodes,
-                )
-            });
-        } else {
-            let mut state = DiffState::new_with_context(dom, to, context);
-            state.create_or_diff_range(
-                new,
-                old,
-                old_mounts,
-                parent,
-                new_index_to_old_index,
-                range,
-                new_mounts,
-                new_children,
-                new_offset,
-                &mut replaced_nodes,
-            );
-        }
-        for (node, mount) in replaced_nodes.into_iter().rev() {
-            node.remove_node(mount, self.dom, self.to.as_deref_mut());
-        }
-    }
-
-    /// Materialize every child in a keyed splice range at the current renderer insertion site.
-    ///
-    /// Invariant: `old_index != usize::MAX` means the index came from the old key map and is valid
-    /// for `old`/`old_mounts`; `usize::MAX` means this new child has no previous mount.
-    fn create_or_diff_range<'a>(
+    /// Materialize every non-stable child in a fragment placement range at the current renderer
+    /// insertion site. Stable children inside the range are DOM-empty anchors in the logical order,
+    /// so they are skipped while neighbouring placed children are spliced as one host segment.
+    fn create_or_diff_placed_range<'a>(
         &mut self,
         new: &[VNode],
         old: &'a [VNode],
         old_mounts: &[MountId],
         parent: Option<MountRef>,
-        new_index_to_old_index: &[usize],
-        range: std::ops::Range<usize>,
+        plan: &FragmentPlacementPlan,
+        range: Range<usize>,
         new_mounts: &mut [Option<MountId>],
         new_children: FragmentMountWriter,
         new_offset: usize,
         replaced_nodes: &mut Vec<(&'a VNode, MountId)>,
     ) -> usize {
-        let range_start = range.start;
+        for new_index in range.clone() {
+            if plan.stable[new_index] {
+                continue;
+            }
+            if let Some(old_index) = plan.new_to_old[new_index] {
+                self.dom.set_mounted_fragment_child(
+                    new_children,
+                    new_offset + new_index,
+                    old_mounts[old_index],
+                );
+            }
+        }
+
         let mut nodes = 0;
-        for (idx, new_node) in new[range.clone()].iter().enumerate() {
-            let new_index = range_start + idx;
-            let old_index = new_index_to_old_index[range_start + idx];
-            let (created_nodes, mount) = if old_index != usize::MAX {
+        for new_index in range {
+            if plan.stable[new_index] {
+                continue;
+            }
+            let new_node = &new[new_index];
+            let (created_nodes, mount) = if let Some(old_index) = plan.new_to_old[new_index] {
                 let old_mount = old_mounts[old_index];
                 let old_node = &old[old_index];
                 let (nodes, mount) = if old_node.template() != new_node.template() {
@@ -636,8 +520,6 @@ impl DiffState<'_, '_, '_, '_> {
                     };
                     (nodes, mount)
                 };
-                // `old_mount` was already marked stale up front in
-                // `diff_keyed_middle`, so placement scans skip it.
                 (nodes, mount)
             } else {
                 let created =
@@ -650,33 +532,6 @@ impl DiffState<'_, '_, '_, '_> {
             nodes += created_nodes;
         }
         nodes
-    }
-
-    /// Create new non-keyed tail children next to a mounted sibling.
-    ///
-    /// Invariant: `sibling_mount` is still live and belongs to `sibling` when placement is chosen.
-    fn create_and_insert(
-        &mut self,
-        edge: ElementEdge,
-        new: &[VNode],
-        sibling: &VNode,
-        sibling_mount: MountId,
-        parent: Option<MountRef>,
-        created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
-    ) -> usize {
-        self.create_children_at_site_with_mounts(
-            new,
-            parent,
-            |state| {
-                insertion_site_at(
-                    edge,
-                    crate::MountedVNode::new(sibling, sibling_mount),
-                    state.dom,
-                    state.context(),
-                )
-            },
-            created_mount,
-        )
     }
 
     /// Create `new` under `parent`. When a writer is active the children are placed at `site`
@@ -714,33 +569,6 @@ impl DiffState<'_, '_, '_, '_> {
                 created_mount,
             )
         }
-    }
-}
-
-/// Prefer anchors already materialized in the new sibling order.
-///
-/// Invariant: every `Some` entry in `new_mounts` owns a materialized sibling in new order. Pending
-/// new siblings are `None` and therefore cannot be used as anchors.
-fn insertion_site_in_new_order(
-    edge: ElementEdge,
-    new: &[VNode],
-    new_mounts: &[Option<MountId>],
-    sibling_idx: usize,
-    dom: &VirtualDom,
-) -> Option<InsertionSite> {
-    match edge {
-        ElementEdge::First => (sibling_idx..new.len()).find_map(|index| {
-            let mount = new_mounts[index]?;
-            new[index]
-                .find_first_element(mount, dom)
-                .map(InsertionSite::before)
-        }),
-        ElementEdge::Last => (0..=sibling_idx).rev().find_map(|index| {
-            let mount = new_mounts[index]?;
-            new[index]
-                .find_last_element(mount, dom)
-                .map(InsertionSite::after)
-        }),
     }
 }
 

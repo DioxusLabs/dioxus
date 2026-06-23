@@ -109,6 +109,100 @@ fn dynamic_node_before_non_first_static_sibling_keeps_order() {
     assert_eq!(summary.replaces, 0);
 }
 
+#[test]
+fn adjacent_dynamic_slots_preserve_order_through_empty_transitions() {
+    fn app() -> Element {
+        let phase = generation() % 4;
+        let a = (phase == 1 || phase == 2).then_some("A");
+        let b = (phase == 2 || phase == 3).then_some("B");
+
+        rsx! {
+            div {
+                {a}
+                {b}
+            }
+        }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! { div {} }
+    }
+
+    fn expected_a() -> Element {
+        rsx! { div { "A" } }
+    }
+
+    fn expected_ab() -> Element {
+        rsx! { div { "A" "B" } }
+    }
+
+    fn expected_b() -> Element {
+        rsx! { div { "B" } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_empty);
+
+    for expected in [expected_a, expected_ab, expected_b, expected_empty] {
+        dom.mark_dirty(ScopeId::APP);
+        let summary = oracle.render(&mut dom);
+        oracle.assert_matches(expected);
+        assert_eq!(summary.replaces, 0);
+    }
+}
+
+#[test]
+fn dynamic_node_replacement_from_empty_output_uses_slot_site() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+        let middle = if phase == 0 {
+            VNode::empty()
+        } else {
+            rsx! { span { "middle" } }
+        };
+
+        rsx! {
+            div {
+                "before"
+                {middle}
+                "after"
+            }
+        }
+    }
+
+    fn expected_empty_middle() -> Element {
+        rsx! {
+            div {
+                "before"
+                "after"
+            }
+        }
+    }
+
+    fn expected_live_middle() -> Element {
+        rsx! {
+            div {
+                "before"
+                span { "middle" }
+                "after"
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_empty_middle);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_live_middle);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2815
 #[test]
 fn toggle_template() {

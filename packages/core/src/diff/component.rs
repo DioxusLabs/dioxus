@@ -200,14 +200,16 @@ impl VNode {
             .as_ref()
             .and_then(|n| n.mounted_vnode().find_first_element(state.dom));
         let context = state.context();
+        let site = state.has_writer().then(|| {
+            live_first
+                .map(InsertionSite::before)
+                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context))
+        });
 
         // Free the scope slot so `create_component_node` allocates a new scope.
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
-        if state.has_writer() {
-            let site = live_first
-                .map(InsertionSite::before)
-                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
+        if let Some(site) = site {
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state.to.as_deref_mut().expect("writer checked");

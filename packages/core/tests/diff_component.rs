@@ -126,6 +126,66 @@ fn identity_by_attr(oracle: &RendererOracle, attr: &str, value: &str) -> OracleN
 }
 
 #[test]
+fn component_replacement_from_empty_output_uses_slot_site() {
+    fn app() -> Element {
+        let phase = dioxus_core::generation() % 2;
+        let child = if phase == 0 {
+            rsx! { empty_child {} }
+        } else {
+            rsx! { live_child {} }
+        };
+
+        rsx! {
+            div {
+                "before"
+                {child}
+                "after"
+            }
+        }
+    }
+
+    #[component]
+    fn empty_child() -> Element {
+        rsx! {}
+    }
+
+    #[component]
+    fn live_child() -> Element {
+        rsx! { span { "middle" } }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! {
+            div {
+                "before"
+                "after"
+            }
+        }
+    }
+
+    fn expected_live() -> Element {
+        rsx! {
+            div {
+                "before"
+                span { "middle" }
+                "after"
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_empty);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_live);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
+#[test]
 fn child_owned_signal_prop_updates_before_new_owner_drops() {
     thread_local! {
         static COUNT: RefCell<Option<Signal<i32>>> = const { RefCell::new(None) };

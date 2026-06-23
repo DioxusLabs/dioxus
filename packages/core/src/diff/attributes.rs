@@ -184,11 +184,11 @@ impl VNode {
     /// This is needed when an attribute from a spread disappears. The template load already wrote
     /// the static value during creation, but the dynamic attribute may have overwritten or removed
     /// it on a previous render.
-    /// ```rust
+    /// ```rust,ignore
     /// div { width: "15px", ..spread } // spread = [attribute("width", "25px")]
     /// ```
     /// Diffs to:
-    /// ```rust
+    /// ```rust,ignore
     /// div { width: "15px", ..spread } // spread = []
     /// ```
     fn remove_attribute_or_restore_static(

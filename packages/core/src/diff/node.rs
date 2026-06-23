@@ -8,7 +8,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{
             ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
-            insertion_site_for_mounted_child, insertion_site_for_slot,
+            insertion_site_for_slot,
         },
         template::{DynamicAnchor, DynamicNodeSlot},
     },
@@ -18,6 +18,36 @@ use crate::{
     scopes::ScopeId,
 };
 use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath};
+
+/// How a dynamic-slot edge scan ([`VNode::dynamic_node_edge_element`]) reads mount state.
+///
+/// `find_first`/`find_last` walk the *live* render output of a subtree and trust every mount
+/// ([`EdgeScan::live`]). Placement sibling scans ([`EdgeScan::placement`]) read the committed
+/// component mount view so placement queries only observe coherent committed state.
+#[derive(Clone, Copy)]
+pub(super) struct EdgeScan {
+    target_id: crate::RenderTargetId,
+    committed_component_view: bool,
+}
+
+impl EdgeScan {
+    /// Walk the live render output of a subtree in `target_id`, trusting every mount.
+    pub(super) fn live(target_id: crate::RenderTargetId) -> Self {
+        Self {
+            target_id,
+            committed_component_view: false,
+        }
+    }
+
+    /// Scan a sibling slot for a placement anchor in the current render target using the committed
+    /// component root view.
+    pub(super) fn placement(dom: &VirtualDom) -> Self {
+        Self {
+            target_id: dom.current_render_target_id(),
+            committed_component_view: true,
+        }
+    }
+}
 
 impl MountedVNode<'_> {
     /// Diff this mounted vnode against `new`.
@@ -155,9 +185,21 @@ impl VNode {
         // The old slot's first live element (if any) is both the "is there live
         // DOM to remove" signal and the anchor the replacement inserts before.
         let target_id = state.dom.current_render_target_id();
-        let live_first =
-            self.dynamic_node_edge_element(mount, idx, state.dom, target_id, ElementEdge::First);
+        let live_first = self.dynamic_node_edge_element(
+            mount,
+            idx,
+            state.dom,
+            EdgeScan::live(target_id),
+            ElementEdge::First,
+        );
         let old_has_live_dom = live_first.is_some();
+        let context = state.context();
+        let site = state.has_writer().then(|| {
+            live_first
+                .map(InsertionSite::before)
+                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context))
+        });
+
         if !old_has_live_dom {
             // The old slot has no nodes in the current target. It may still own component nodes
             // routed to another target (for example a portal), so let those removals write through
@@ -170,14 +212,8 @@ impl VNode {
             self.remove_dynamic_node(mount, state.dom, to, true, idx);
         }
 
-        let context = state.context();
-
         let create_new = |state: &mut DiffState<'_, '_, '_, '_>| {
-            if state.has_writer() {
-                let site = match live_first {
-                    Some(first) => InsertionSite::before(first),
-                    None => insertion_site_for_slot(mount, slot, state.dom, context),
-                };
+            if let Some(site) = site {
                 let runtime = state.dom.runtime.clone();
                 let dom = &mut *state.dom;
                 let to = state.to.as_deref_mut().expect("writer checked");
@@ -225,6 +261,10 @@ impl VNode {
                 // Empty → non-empty: visible diffs stage new content at the
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
+                let context = state.context();
+                let site = state
+                    .has_writer()
+                    .then(|| insertion_site_for_slot(mount, slot, state.dom, context));
                 let children =
                     state
                         .dom
@@ -232,7 +272,7 @@ impl VNode {
                 state.create_children_at_site(
                     new,
                     parent,
-                    |state| insertion_site_for_slot(mount, slot, state.dom, state.context()),
+                    |_| site.expect("visible fragment creation requires an insertion site"),
                     children,
                 );
                 state.dom.commit_mounted_fragment_children(children);
@@ -246,11 +286,22 @@ impl VNode {
                     .clear_mounted_fragment_children(mount, slot.index());
             }
             (false, false) => {
+                let context = state.context();
+                let fallback_site = state
+                    .has_writer()
+                    .then(|| insertion_site_for_slot(mount, slot, state.dom, context));
                 let children =
                     state
                         .dom
                         .begin_mounted_fragment_children(mount, slot.index(), new.len());
-                state.diff_non_empty_fragment(old, &old_mounts, new, parent, children);
+                state.diff_non_empty_fragment(
+                    old,
+                    &old_mounts,
+                    new,
+                    parent,
+                    children,
+                    fallback_site,
+                );
                 state.dom.commit_mounted_fragment_children(children);
             }
         }
@@ -348,12 +399,13 @@ impl VNode {
         target_id: crate::RenderTargetId,
         edge: ElementEdge,
     ) -> Option<ElementId> {
+        let scan = EdgeScan::live(target_id);
         match edge {
             ElementEdge::First => anchor.nodes().find_map(|slot| {
-                self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
+                self.dynamic_node_edge_element(mount, slot.index(), dom, scan, edge)
             }),
             ElementEdge::Last => anchor.nodes().rev().find_map(|slot| {
-                self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
+                self.dynamic_node_edge_element(mount, slot.index(), dom, scan, edge)
             }),
         }
     }
@@ -371,16 +423,12 @@ impl VNode {
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         let nodes = if state.has_writer() {
-            // The replacement mount is already allocated and must not anchor the
-            // insertion against itself; mark it stale for this lookup only.
-            state.dom.runtime.mark_placement_stale(new_mount);
             let site = insertion_site_at(
                 ElementEdge::First,
                 MountedVNode::new(self, mount),
                 state.dom,
                 state.context(),
             );
-            state.dom.runtime.unmark_placement_stale(new_mount);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state.to.as_deref_mut().expect("writer checked");
@@ -439,9 +487,14 @@ impl VNode {
         let context = state.context();
         let write_local_mutations = !suppress_mutations && state.has_writer();
         let created = if write_local_mutations {
-            let site = live_first
-                .map(InsertionSite::before)
-                .unwrap_or_else(|| insertion_site_for_mounted_child(mount, state.dom, context));
+            let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
+                insertion_site_at(
+                    ElementEdge::First,
+                    MountedVNode::new(self, mount),
+                    state.dom,
+                    context,
+                )
+            });
             let to = state.to.as_deref_mut().expect("writer checked");
             let mut created_mount = None;
             let nodes = create_at_site_with_mounts(
@@ -654,30 +707,46 @@ impl VNode {
         };
     }
 
-    fn dynamic_node_edge_element(
+    /// The live DOM element on `edge` contributed by one dynamic node slot, or `None` when the slot
+    /// contributes nothing in `scan.target_id`: an empty fragment/component, a node in another
+    /// render target, or a component whose committed root has no live edge.
+    pub(super) fn dynamic_node_edge_element(
         &self,
         mount: MountId,
         idx: usize,
         dom: &VirtualDom,
-        target_id: crate::RenderTargetId,
+        scan: EdgeScan,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        let node = &self.dynamic_node_values()[idx];
-        match node {
-            Component(_) => {
-                let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
-                let root = live_component_root(dom, scope_id)?;
-                root.find_element_in_roots(root.mount(), dom, target_id, edge)
-            }
+        let EdgeScan {
+            target_id,
+            committed_component_view,
+        } = scan;
+        match &self.dynamic_node_values()[idx] {
             Text(_) if dom.mount_target_id(mount) == target_id => dom
                 .mounted_dynamic_text_node(mount, idx)
                 .map(MountedElementId::element_id),
             Text(_) => None,
-            Fragment(nodes) => {
-                let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
-                edge.find_map(nodes.len(), |idx| {
-                    nodes[idx].find_element_in_roots(mounts[idx], dom, target_id, edge)
+            Fragment(nodes) => dom
+                .try_with_mounted_fragment_children(mount, idx, nodes.len(), |child_mounts| {
+                    edge.find_map(nodes.len(), |i| {
+                        let child_mount = child_mounts[i];
+                        nodes[i].find_element_in_roots(child_mount, dom, target_id, edge)
+                    })
                 })
+                .flatten(),
+            Component(_) => {
+                // Placement scans read the committed mount view, which is stable while a sibling
+                // component is mid-diff; the live edge walk reads the scope's current render output.
+                if committed_component_view {
+                    let root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
+                    let view = dom.current_mounted_view(root_mount)?;
+                    view.find_element_in_roots(root_mount, dom, target_id, edge)
+                } else {
+                    let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
+                    let root = live_component_root(dom, scope_id)?;
+                    root.find_element_in_roots(root.mount(), dom, target_id, edge)
+                }
             }
         }
     }
