@@ -84,26 +84,24 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    let dynamic_node_count = vnode
-        .dynamic_anchors()
-        .map(|anchor| anchor.nodes().len())
-        .sum::<usize>();
-    let dynamic_attr_count = vnode
-        .dynamic_anchors()
-        .map(|anchor| anchor.attrs().len())
-        .sum::<usize>();
-
-    match (child, dynamic_node_count, dynamic_attr_count) {
+    match child {
         // rsx! { "static text" }
-        (VNodeChild::Text(text), 0, 0) => Ok(text.text().to_string()),
+        VNodeChild::Text(text) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }
-        (VNodeChild::Dynamic(anchor), 1, 0) => match anchor.nodes().next() {
-            Some(slot) => match &*slot {
-                DynamicNode::Text(text) => Ok(text.value.clone()),
-                _ => Err(ExtractSingleTextNodeError::NonTextNode),
-            },
-            _ => Err(ExtractSingleTextNodeError::NonTemplate),
-        },
+        VNodeChild::Dynamic(anchor) => {
+            let mut dynamic_nodes = anchor.nodes();
+            let dynamic_node = dynamic_nodes.next();
+            if dynamic_nodes.next().is_some() {
+                return Err(ExtractSingleTextNodeError::NonTemplate);
+            }
+            match dynamic_node {
+                Some(slot) => match &*slot {
+                    DynamicNode::Text(text) => Ok(text.value.clone()),
+                    _ => Err(ExtractSingleTextNodeError::NonTextNode),
+                },
+                _ => Err(ExtractSingleTextNodeError::NonTemplate),
+            }
+        }
         _ => Err(ExtractSingleTextNodeError::NonTemplate),
     }
 }
