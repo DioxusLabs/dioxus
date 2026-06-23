@@ -366,13 +366,13 @@ impl VNode {
         }
     }
 
-    /// Replace this node with `right`, reusing an already allocated mount for
+    /// Replace this node with `new`, reusing an already allocated mount for
     /// the replacement.
     pub(crate) fn replace_with_existing_mount(
         &self,
         mount: MountId,
-        right: &VNode,
-        right_mount: MountId,
+        new: &VNode,
+        new_mount: MountId,
         parent: Option<MountRef>,
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
@@ -381,27 +381,26 @@ impl VNode {
         let nodes = if state.has_writer() {
             // The replacement mount is already allocated and must not anchor the
             // insertion against itself; mark it stale for this lookup only.
-            state.dom.runtime.mark_placement_stale(right_mount);
+            state.dom.runtime.mark_placement_stale(new_mount);
             let site = insertion_site_at(
                 ElementEdge::First,
                 MountedVNode::new(self, mount),
                 state.dom,
                 state.context(),
             );
-            state.dom.runtime.unmark_placement_stale(right_mount);
+            state.dom.runtime.unmark_placement_stale(new_mount);
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state.to.as_deref_mut().expect("writer checked");
             at_site(site, to, runtime, |to| {
-                right
-                    .recreate_with_mount(dom, right_mount, parent, parent, Some(to))
+                new.recreate_with_mount(dom, new_mount, parent, parent, Some(to))
                     .nodes
             })
         } else {
-            right
+            new
                 .recreate_with_mount(
                     state.dom,
-                    right_mount,
+                    new_mount,
                     parent,
                     parent,
                     state.to.as_deref_mut(),
@@ -413,7 +412,7 @@ impl VNode {
 
         CreatedVNode {
             nodes,
-            mount: right_mount,
+            mount: new_mount,
         }
     }
 
@@ -423,19 +422,19 @@ impl VNode {
     pub(crate) fn move_node_to_background(
         &self,
         mount: MountId,
-        right: &VNode,
+        new: &VNode,
         parent: Option<MountRef>,
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
-        self.replace_inner(mount, right, parent, &mut state, false)
+        self.replace_inner(mount, new, parent, &mut state, false)
     }
 
     pub(crate) fn replace_inner(
         &self,
         mount: MountId,
-        right: &VNode,
+        new: &VNode,
         parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_, '_>,
         destroy_component_state: bool,
@@ -455,7 +454,7 @@ impl VNode {
             let to = state.to.as_deref_mut().expect("writer checked");
             let mut created_mount = None;
             let nodes = create_at_site_with_mounts(
-                std::slice::from_ref(right),
+                std::slice::from_ref(new),
                 parent,
                 site,
                 state.dom,
@@ -472,7 +471,7 @@ impl VNode {
             } else {
                 state.to.as_deref_mut()
             };
-            right.create_with_parents(state.dom, parent, parent, to)
+            new.create_with_parents(state.dom, parent, parent, to)
         };
         let to_for_remove = state.to.as_deref_mut().filter(|_| !suppress_mutations);
         self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
