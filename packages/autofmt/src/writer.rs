@@ -112,17 +112,7 @@ impl<'a> Writer<'a> {
             ..
         } = el;
 
-        // Path-qualified element names like `html::main` must keep their qualifier, so write the
-        // full path (mirroring how component paths are written below). Custom hyphenated names keep
-        // their unquoted spelling.
-        match name {
-            ElementName::Path(path) => {
-                let mut name = path.to_token_stream().to_string();
-                name.retain(|c| !c.is_whitespace());
-                write!(self.out, "{name} ")?;
-            }
-            ElementName::Custom(custom) => write!(self.out, "{} ", custom.value())?,
-        }
+        write!(self.out, "{name} ")?;
         self.write_rsx_block(attributes, spreads, children, &brace.unwrap_or_default())?;
 
         Ok(())

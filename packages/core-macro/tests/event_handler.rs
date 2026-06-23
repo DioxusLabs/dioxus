@@ -94,7 +94,7 @@ fn component_builders_compile_as_nodes() {
 
     #[component]
     fn Dashboard(#[props(into)] title: String, count: usize) -> Element {
-        Ok(dioxus::html::main()
+        Ok(html::main
             .child((
                 Header.builder().title(title).build(),
                 (0..count).map(|index| Card.builder().index(index).build()),

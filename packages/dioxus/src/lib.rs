@@ -184,20 +184,24 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     pub use dioxus_html as dioxus_elements;
 
+    // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
+    // consts on this type. The crate module is still reachable as the fully-qualified
+    // `dioxus::html` for `dioxus::html::define_elements!` and friends.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html as html;
+    pub use dioxus_html::html;
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(inline)]
     pub use dioxus_elements::{Code, Key, Location, Modifiers};
 
+    // Element associated-const traits (`html::div`, `html::main`, …) come from the single
+    // generated `prelude` module, not from flattening every per-element module into scope.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(no_inline)]
-    #[allow(ambiguous_glob_reexports)]
-    pub use dioxus_elements::elements::*;
+    pub use dioxus_elements::elements::prelude::*;
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]

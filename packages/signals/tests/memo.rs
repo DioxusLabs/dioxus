@@ -1,5 +1,4 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
-use dioxus::html::p;
 use dioxus::prelude::*;
 use dioxus_core::{ElementId, generation};
 use dioxus_core::{NoOpMutations, ScopeState};

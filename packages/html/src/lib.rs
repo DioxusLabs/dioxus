@@ -15,6 +15,13 @@
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
 
+/// The shared root every element associated-const hangs off of. Both the built-in
+/// `define_elements!` invocation and user `define_elements!` invocations `impl` their
+/// per-element traits for this type, so `html::div`, `html::main`, and user-defined
+/// `html::mycustom` all live under one namespace and aggregate in `html::` autocomplete.
+#[allow(non_camel_case_types)]
+pub enum html {}
+
 #[macro_use]
 pub mod elements;
 #[cfg(feature = "hot-reload-context")]

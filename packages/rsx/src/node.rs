@@ -97,21 +97,6 @@ impl Parse for BodyNode {
             }
         }
 
-        // A path whose final segment is a lowercase element name is a path-qualified
-        // element, e.g. `html::main {}`. This lets users disambiguate an element from a
-        // same-named local binding (e.g. `fn main` shadowing the `<main>` element).
-        if stream.peek(Ident::peek_any)
-            && stream.peek2(Token![::])
-            && let Ok(path) = stream.fork().parse::<syn::Path>()
-            && let Some(last) = path.segments.last()
-        {
-            let el_name = last.ident.to_string();
-            let first_char = el_name.chars().next().unwrap();
-            if first_char.is_ascii_lowercase() && !el_name.contains('_') {
-                return Ok(BodyNode::Element(stream.parse::<Element>()?));
-            }
-        }
-
         // Otherwise this should be Component, allowed syntax:
         // - syn::Path
         // - PathArguments can only apper in last segment

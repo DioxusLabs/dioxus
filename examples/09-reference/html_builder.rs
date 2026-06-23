@@ -1,10 +1,10 @@
-//! Build HTML with typed element constructors and normal components.
+//! Build HTML with typed element builders and normal components.
 //!
 //! The builder API is useful when Rust control flow or helper functions are a
 //! better fit than an `rsx!` block. It supports the same elements, attributes,
 //! events, and child values you would use in regular Dioxus components.
 
-use dioxus::{core::view::ViewExt, html, prelude::*};
+use dioxus::{core::view::ViewExt, prelude::*};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Metric {
@@ -46,18 +46,18 @@ fn app() -> Element {
 
 #[component]
 fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Element {
-    Ok(html::main()
+    Ok(html::main
         .onclick(|event| println!("{event:?}"))
         .class("dashboard")
         .child((
             Header.builder().title(title).total(metrics.len()).build(),
-            html::section().class("metric-grid").child(
+            html::section.class("metric-grid").child(
                 metrics
                     .iter()
                     .copied()
                     .map(|metric| MetricCard.builder().metric(metric).build()),
             ),
-            html::footer()
+            html::footer
                 .class("note")
                 .child("Created with typed HTML builders and component props builders."),
         ))
@@ -66,12 +66,12 @@ fn Dashboard(#[props(into)] title: String, metrics: &'static [Metric]) -> Elemen
 
 #[component]
 fn Header(#[props(into)] title: String, total: usize) -> Element {
-    Ok(html::header()
+    Ok(html::header
         .class("intro")
         .child((
-            html::p().class("eyebrow").child("typed views"),
-            html::h1().child(title),
-            html::p().child(format!(
+            html::p.class("eyebrow").child("typed views"),
+            html::h1.child(title),
+            html::p.child(format!(
                 "{total} cards are rendered from a runtime iterator."
             )),
         ))
@@ -80,12 +80,12 @@ fn Header(#[props(into)] title: String, total: usize) -> Element {
 
 #[component]
 fn MetricCard(metric: Metric) -> Element {
-    Ok(html::article()
+    Ok(html::article
         .class("metric-card")
         .child((
-            html::span().class("metric-label").child(metric.label),
-            html::strong().child(metric.value),
-            html::small()
+            html::span.class("metric-label").child(metric.label),
+            html::strong.child(metric.value),
+            html::small
                 .class("metric-status")
                 .child(format!("status: {}", metric.status)),
         ))

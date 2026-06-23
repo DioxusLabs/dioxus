@@ -4,7 +4,7 @@ use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, quote};
 use std::fmt::{Display, Formatter};
 use syn::{
-    Ident, LitStr, Path, Result, Token,
+    Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -220,18 +220,14 @@ impl Element {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementName {
-    /// An element name, optionally path-qualified. A bare element like `div` is a
-    /// single-segment path; a qualified name like `html::main` lets callers
-    /// disambiguate an element from a same-named local binding (e.g. `fn main`
-    /// shadowing the `<main>` element).
-    Path(Path),
+    Ident(Ident),
     Custom(LitStr),
 }
 
 impl ToTokens for ElementName {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ElementName::Path(p) => tokens.append_all(quote! { #p }),
+            ElementName::Ident(i) => tokens.append_all(quote! { #i }),
             ElementName::Custom(s) => s.to_tokens(tokens),
         }
     }
@@ -239,17 +235,10 @@ impl ToTokens for ElementName {
 
 impl Parse for ElementName {
     fn parse(stream: ParseStream) -> Result<Self> {
-        // A path-qualified element name like `html::main`.
-        if stream.peek2(Token![::]) {
-            return Ok(ElementName::Path(stream.parse()?));
-        }
-
         let raw =
             Punctuated::<Ident, Token![-]>::parse_separated_nonempty_with(stream, parse_raw_ident)?;
         if raw.len() == 1 {
-            Ok(ElementName::Path(Path::from(
-                raw.into_iter().next().unwrap(),
-            )))
+            Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
             let span = raw.span();
             let tag = raw
@@ -266,21 +255,18 @@ impl Parse for ElementName {
 impl ElementName {
     pub fn tag_name_string(&self) -> String {
         match self {
-            ElementName::Path(p) => {
-                let ident = &p.segments.last().unwrap().ident;
-                ident
-                    .to_string()
-                    .strip_prefix("r#")
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| ident.to_string())
-            }
+            ElementName::Ident(i) => i
+                .to_string()
+                .strip_prefix("r#")
+                .map(ToString::to_string)
+                .unwrap_or_else(|| i.to_string()),
             ElementName::Custom(s) => s.value(),
         }
     }
 
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
-            ElementName::Path(_) => {
+            ElementName::Ident(_) => {
                 let name = self.tag_name_string();
                 quote! { #name }
             }
@@ -290,7 +276,7 @@ impl ElementName {
 
     pub fn span(&self) -> Span {
         match self {
-            ElementName::Path(p) => p.span(),
+            ElementName::Ident(i) => i.span(),
             ElementName::Custom(s) => s.span(),
         }
     }
@@ -299,7 +285,7 @@ impl ElementName {
 impl PartialEq<&str> for ElementName {
     fn eq(&self, other: &&str) -> bool {
         match self {
-            ElementName::Path(p) => p.segments.last().is_some_and(|s| s.ident == *other),
+            ElementName::Ident(i) => i == *other,
             ElementName::Custom(s) => s.value() == *other,
         }
     }
@@ -308,7 +294,7 @@ impl PartialEq<&str> for ElementName {
 impl Display for ElementName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ElementName::Path(p) => write!(f, "{}", p.segments.last().unwrap().ident),
+            ElementName::Ident(i) => write!(f, "{}", i),
             ElementName::Custom(s) => write!(f, "{}", s.value()),
         }
     }

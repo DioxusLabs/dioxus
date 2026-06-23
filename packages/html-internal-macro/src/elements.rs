@@ -177,11 +177,15 @@ impl ToTokens for DefineElements {
             .elements
             .iter()
             .map(|element| element.to_tokens_with_paths(core, html, gated_attribute_groups));
-        let completion_variants = self
-            .elements
-            .iter()
-            .map(ElementDef::completion_variant_tokens);
-        let completion_reexports = self.elements.iter().map(|element| &element.name);
+        // Each element's associated-const trait and attribute-method extension trait, re-exported
+        // anonymously. Glob-importing this one module brings every element into scope so
+        // `html::div` resolves and `.class(..)` etc. type-check — the single place downstream
+        // preludes (and `define_elements!` callers) pull element names from.
+        let prelude_exports = self.elements.iter().map(|element| {
+            let name = &element.name;
+            let extension = element.extension_ident();
+            quote! { pub use super::#name::{#name as _, #extension as _}; }
+        });
         let context = self.context.then(|| self.context_tokens(html));
         let detected_duplicate_macros = (!self.explicit_gated_attribute_groups)
             .then(|| self.detected_duplicate_macro_tokens(gated_attribute_groups));
@@ -192,18 +196,17 @@ impl ToTokens for DefineElements {
             #detected_duplicate_macros
             #marker_traits
             #(#elements)*
-            #[doc(hidden)]
-            mod element_completions {
-                #[doc(hidden)]
-                #[allow(non_camel_case_types)]
-                /// This enum is generated to help autocomplete braces after an element name.
-                pub enum Element {
-                    #(#completion_variants),*
-                }
-            }
 
             #[allow(unused_imports)]
-            pub use element_completions::Element::{#(#completion_reexports),*};
+            pub mod prelude {
+                #(#prelude_exports)*
+            }
+
+            // Bring the elements into the defining module too, so `define_elements!` callers can
+            // use their custom elements in the same module without importing the prelude. This is
+            // a private import, so it does not widen the public surface.
+            #[allow(unused_imports)]
+            use self::prelude::*;
             #context
         });
     }
@@ -440,10 +443,14 @@ impl ElementDef {
                 }
             }
         }
+        // Element doc comments, reused on both the trait const and the impl const, so
+        // collect into a reusable token stream rather than a single-use iterator.
         let attrs = self
             .attrs
             .iter()
-            .filter(|attr| !attr.path().is_ident("element"));
+            .filter(|attr| !attr.path().is_ident("element"))
+            .map(|attr| quote! { #attr })
+            .collect::<TokenStream2>();
         let descriptors = self.attributes.iter().map(|attr| {
             let ident = &attr.name;
             let ident_string = ident.to_string();
@@ -470,7 +477,6 @@ impl ElementDef {
             let volatile = attr.metadata.volatile;
 
             quote! {
-                /// Static metadata for this generated attribute.
                 pub struct #descriptor;
 
                 impl #core::view::AttributeDescriptor for #descriptor {
@@ -515,45 +521,64 @@ impl ElementDef {
         });
 
         quote! {
-            #[allow(non_camel_case_types)]
-            /// Static metadata for this generated element.
-            pub struct #tag;
+            // One public module per element. It holds the element's tag marker, attribute
+            // descriptors, the element associated-const trait, the attribute-method extension
+            // trait, and the spread marker. The element trait is brought into scope through the
+            // generated `prelude` module (anonymously) and the extension/spread traits through
+            // `extensions`; the tag and descriptor markers stay reachable only by path here.
+            #[allow(non_snake_case, non_camel_case_types)]
+            pub mod #name {
+                // Zero-information markers for the tag and its attributes. `pub` only so they
+                // can appear in this module's public trait signatures.
+                #[allow(non_camel_case_types)]
+                pub struct #tag;
 
-            impl #core::view::ElementTag for #tag {
-                const NAME: &'static str = #tag_name;
-                const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
-            }
+                impl #core::view::ElementTag for #tag {
+                    const NAME: &'static str = #tag_name;
+                    const NAMESPACE: ::std::option::Option<&'static str> = #namespace;
+                }
 
-            #[allow(non_snake_case)]
-            #(#attrs)*
-            pub const fn #name() -> #core::view::ElementBuilder<#tag, (), ()> {
-                #core::view::element_builder::<#tag>()
-            }
+                impl #attribute_group_marker for #tag {}
+                #(#gated_marker_impls)*
 
-            impl #attribute_group_marker for #tag {}
-            #(#gated_marker_impls)*
+                #(#descriptors)*
 
-            #(#descriptors)*
+                /// Per-element trait carrying the element as an associated const on the
+                /// shared `html` root, so `html::#name` resolves wherever this trait is
+                /// in scope. Other vocabularies extend the same root the same way.
+                #[allow(non_camel_case_types, non_upper_case_globals)]
+                pub trait #name {
+                    #attrs
+                    const #name: #core::view::ElementBuilder<#tag, (), ()>;
+                }
 
-            pub trait #extension_name: #core::view::AttributeBuilderTarget + Sized {
-                #(#methods)*
-            }
+                #[allow(non_upper_case_globals)]
+                impl #name for #html::html {
+                    #attrs
+                    const #name: #core::view::ElementBuilder<#tag, (), ()> =
+                        #core::view::element_builder::<#tag>();
+                }
 
-            impl<__DioxusAttributes, __DioxusChildren> #extension_name
-                for #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>
-            {
-            }
+                pub trait #extension_name: #core::view::AttributeBuilderTarget + Sized {
+                    #(#methods)*
+                }
 
-            /// Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
-            /// builders) that accept this element's attributes. Implementing it grants the
-            /// element's attribute methods.
-            pub trait #spread_marker {}
+                impl<__DioxusAttributes, __DioxusChildren> #extension_name
+                    for #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>
+                {
+                }
 
-            impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
-            where
-                __DioxusSpreadTarget:
-                    #spread_marker + #core::view::AttributeBuilderTarget,
-            {
+                /// Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]`
+                /// spread builders) that accept this element's attributes. Implementing it
+                /// grants the element's attribute methods.
+                pub trait #spread_marker {}
+
+                impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
+                where
+                    __DioxusSpreadTarget:
+                        #spread_marker + #core::view::AttributeBuilderTarget,
+                {
+                }
             }
         }
     }
@@ -569,19 +594,6 @@ impl ElementDef {
             .strip_prefix("r#")
             .map(ToString::to_string)
             .unwrap_or_else(|| self.rust_name())
-    }
-
-    fn completion_variant_tokens(&self) -> TokenStream2 {
-        let name = &self.name;
-        let attrs = self
-            .attrs
-            .iter()
-            .filter(|attr| !attr.path().is_ident("element"));
-
-        quote! {
-            #(#attrs)*
-            #name {}
-        }
     }
 
     fn tag_name_value(&self) -> String {
@@ -686,11 +698,12 @@ impl ElementDef {
     }
 
     fn extension_export_tokens(&self) -> TokenStream2 {
+        let name = &self.name;
         let extension = self.extension_ident();
         let spread_marker = self.spread_marker_ident();
         quote! {
-            pub use super::#extension;
-            pub use super::#spread_marker;
+            pub use super::#name::#extension;
+            pub use super::#name::#spread_marker;
         }
     }
 }

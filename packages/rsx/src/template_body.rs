@@ -455,14 +455,18 @@ impl ViewBuilder {
             }
         }
 
-        let children = self.visit_sibling_nodes(&element.children, false);
-        // The first group seeds the element's children; any further groups (only when there are
-        // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
-        let groups = group_sibling_views(children);
-        let (first, rest) = groups.split_first().expect("at least one group");
-        let rest = rest.iter();
         let diagnostics = &element.diagnostics;
-        let view = quote! { #tag #attrs.child(#first) #(.child(#rest))* };
+        let view = if element.children.is_empty() {
+            quote! { #tag #attrs }
+        } else {
+            let children = self.visit_sibling_nodes(&element.children, false);
+            // The first group seeds the element's children; any further groups (only when there are
+            // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
+            let groups = group_sibling_views(children);
+            let (first, rest) = groups.split_first().expect("at least one group");
+            let rest = rest.iter();
+            quote! { #tag #attrs.child(#first) #(.child(#rest))* }
+        };
 
         if emit_diagnostics {
             quote! {{
@@ -605,7 +609,7 @@ impl ViewBuilder {
 
     fn element_tag(&mut self, element: &Element) -> TokenStream2 {
         match &element.name {
-            ElementName::Path(path) => quote_spanned! { element.name.span() => #path() },
+            ElementName::Ident(ident) => quote_spanned! { element.name.span() => html::#ident },
             ElementName::Custom(_) => {
                 let tag = self.define_tag(element);
                 quote! { dioxus_core::view::element_builder::<#tag>() }
@@ -639,7 +643,7 @@ impl Element {
     }
 
     fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
-        if matches!(self.name, ElementName::Path(_))
+        if matches!(self.name, ElementName::Ident(_))
             && let AttributeName::BuiltIn(method) = &attr.name
             && !attr.name.is_likely_key()
         {

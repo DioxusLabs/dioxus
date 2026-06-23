@@ -22,7 +22,7 @@ fn app() -> Element {
 
     rsx! {
         Stylesheet { href: STYLE }
-        html::main {
+        main {
             class: "main-container",
 
             h1 { "Theme Switcher" }

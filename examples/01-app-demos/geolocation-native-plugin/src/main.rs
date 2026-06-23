@@ -82,7 +82,7 @@ fn App() -> Element {
     rsx! {
         Stylesheet { href: asset!("/assets/main.css") }
 
-        html::main { class: "app",
+        main { class: "app",
             header { class: "hero",
                 div { class: "hero__copy",
                     h1 { "Geolocation plugin demo" }
