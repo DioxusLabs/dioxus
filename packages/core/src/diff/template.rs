@@ -1,4 +1,4 @@
-use crate::{Attribute, Template, VNode};
+use crate::{Attribute, DynamicNode, Template, VNode};
 use dioxus_core_template::{
     StaticTemplateElement, StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText,
     TemplateAnchor, TemplatePath, TemplateSlotTarget,
@@ -498,18 +498,15 @@ impl<'a> DynamicNodeGroup<'a> {
             .filter(move |&idx| self.dynamic_values[idx].as_node().is_some())
     }
 
+    /// Iterate the dynamic nodes in this group.
+    pub fn nodes(self) -> impl DoubleEndedIterator<Item = &'a DynamicNode> + 'a {
+        self.anchor
+            .values()
+            .filter_map(move |idx| self.dynamic_values[idx].as_node())
+    }
+
     fn is_empty(self) -> bool {
         self.ids().next().is_none()
-    }
-
-    pub(super) fn slots(self) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'a>> + 'a {
-        self.ids().map(move |index| self.slot(index))
-    }
-
-    fn slot(self, index: usize) -> DynamicNodeSlot<'a> {
-        debug_assert!(self.anchor.values().contains(&index));
-        debug_assert!(self.dynamic_values[index].as_node().is_some());
-        DynamicNodeSlot { group: self, index }
     }
 
     /// The static template position where this group is inserted.
@@ -554,48 +551,6 @@ impl<'a> DynamicNodeGroup<'a> {
     }
 }
 
-/// One dynamic node value (`index`) viewed over its owning [`TemplateAnchor`].
-///
-/// An anchor can cover several adjacent node values at the same insertion position (e.g. `{a}{b}`);
-/// the diff processes each value separately, so this picks out one `index` from `anchor.values()`.
-#[derive(Clone, Copy)]
-pub(super) struct DynamicNodeSlot<'a> {
-    group: DynamicNodeGroup<'a>,
-    index: usize,
-}
-
-impl<'a> DynamicNodeSlot<'a> {
-    pub(super) fn index(self) -> usize {
-        self.index
-    }
-
-    pub(super) fn anchor_index(self) -> usize {
-        self.group.anchor_index()
-    }
-
-    pub(super) fn appends(self) -> bool {
-        self.group.appends()
-    }
-
-    pub(super) fn root_position(self) -> usize {
-        self.group.root_position()
-    }
-
-    /// Return true when this dynamic node is inserted at the vnode root level, with no enclosing
-    /// static element.
-    pub(super) fn is_root_level(self) -> bool {
-        self.group.is_root_level()
-    }
-
-    pub(super) fn parent_path(self) -> TemplatePath {
-        self.group.parent_path()
-    }
-
-    pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.group.shares_insertion_position(other.group)
-    }
-}
-
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
 /// its [`TemplateAnchor`].
 #[derive(Clone, Copy)]
@@ -630,8 +585,13 @@ impl<'a> DynamicAttrGroup<'a> {
             .filter_map(|idx| self.dynamic_values[idx].as_attrs())
     }
 
+    /// Get the number of dynamic attributes in this group.
+    pub fn len(&self) -> usize {
+        self.attrs().map(|attrs| attrs.len()).sum()
+    }
+
     fn is_empty(&self) -> bool {
-        self.ids().next().is_none()
+        self.attrs().next().is_none()
     }
 
     /// The template anchor index for the static element this group applies to.

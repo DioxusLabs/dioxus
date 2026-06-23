@@ -50,8 +50,7 @@ impl VNode {
     /// key.
     pub(super) fn diff_attribute_list<'a>(
         &'a self,
-        new: &'a VNode,
-        attr_group: &DynamicAttrGroup<'_>,
+        attr_group: &DynamicAttrGroup<'a>,
         id: MountedElementId,
         mount: MountId,
         scratch: &mut AttributeDiffScratch<'a>,
@@ -64,18 +63,10 @@ impl VNode {
             new_ranges,
             new_offsets,
         } = scratch;
-        let mut from_iter = iter_sorted_last_wins(
-            attr_group.ids().map(|idx| self.dynamic_values[idx].attrs()),
-            old_ranges,
-            old_offsets,
-        )
-        .peekable();
-        let mut to_iter = iter_sorted_last_wins(
-            attr_group.ids().map(|idx| new.dynamic_values[idx].attrs()),
-            new_ranges,
-            new_offsets,
-        )
-        .peekable();
+        let mut from_iter =
+            iter_sorted_last_wins(attr_group.attrs(), old_ranges, old_offsets).peekable();
+        let mut to_iter =
+            iter_sorted_last_wins(attr_group.attrs(), new_ranges, new_offsets).peekable();
 
         let element_id = id.element_id();
         // The attribute diff never changes the active render target, so the targeted gate is

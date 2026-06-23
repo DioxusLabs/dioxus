@@ -665,12 +665,10 @@ fn MyComponent() -> Element {{
                 continue;
             }
 
-            for idx in group.ids() {
-                let attrs = node.dynamic_values[idx].attrs();
-                for attr in attrs.iter() {
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
-                        break;
+            for attr in group.attrs().flatten() {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
+                    break;
                     }
                 }
             }

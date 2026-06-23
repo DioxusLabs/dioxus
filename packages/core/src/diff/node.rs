@@ -81,7 +81,7 @@ impl<'a> DiffFrame<'a> {
         for group in old.dynamic_groups() {
             match group {
                 DynamicChunk::Nodes(node_group) => {
-                    for slot in node_group.slots() {
+                    for slot in node_group.nodes() {
                         old.diff_dynamic_node(current_mount, slot, new, &mut state);
                     }
                 }
@@ -94,7 +94,6 @@ impl<'a> DiffFrame<'a> {
                         .dom
                         .unchecked_mounted_anchor_node(current_mount, attr_group.anchor_index());
                     old.diff_attribute_list(
-                        new,
                         &attr_group,
                         attribute_id,
                         current_mount,
@@ -997,10 +996,8 @@ impl VNode {
         to: &mut dyn WriteMutations,
     ) {
         let id = dom.unchecked_mounted_anchor_node(mount, group.anchor_index());
-        for attribute_idx in group.ids() {
-            for attr in self.dynamic_values[attribute_idx].attrs() {
-                Self::write_attribute(attr, id, mount, dom, to);
-            }
+        for attr in group.attrs().flatten() {
+            Self::write_attribute(attr, id, mount, dom, to);
         }
     }
 

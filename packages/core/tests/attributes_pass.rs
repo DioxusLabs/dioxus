@@ -34,7 +34,7 @@ fn attributes_pass_properly() {
     let dynamic_attr_count = o
         .dynamic_attributes()
         .filter(|group| group.parent_element_op_index() == circle.op())
-        .map(|group| group.ids().count())
+        .map(|group| group.attrs().count())
         .sum::<usize>();
     assert_eq!(static_attr_count + dynamic_attr_count, 5);
 }

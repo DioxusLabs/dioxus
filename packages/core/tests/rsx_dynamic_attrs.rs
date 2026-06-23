@@ -217,8 +217,8 @@ fn dynamic_attr_and_child_share_one_anchor() {
     assert_eq!(attr_groups.len(), 1);
     assert_eq!(node_groups.len(), 1);
     assert_eq!(attr_groups[0].anchor_index(), node_groups[0].anchor_index());
-    assert_eq!(attr_groups[0].ids().count(), 1);
-    assert_eq!(node_groups[0].ids().count(), 1);
+    assert_eq!(attr_groups[0].attrs().count(), 1);
+    assert_eq!(node_groups[0].attrs().count(), 1);
 
     let mut dom = VirtualDom::new(mixed_dynamic_attr_and_child);
     let mut oracle = RendererOracle::new();
