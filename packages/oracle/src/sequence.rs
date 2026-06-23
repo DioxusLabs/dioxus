@@ -40,11 +40,11 @@ struct ExpectedStep(Rc<StepSource>);
 /// The source app dispatches on `dioxus_core::generation()` to pick the current
 /// step, cloned from a root context. Between steps
 /// `Sequence` marks `ScopeId::APP` dirty and renders. The expected DOM is built
-/// by walking the VNode tree of the same step in a throwaway `VirtualDom` —
+/// by walking the VNode tree of the same step in a throwaway `VirtualDom` -
 /// independent of the renderer's mutation path.
 /// How a step's source/expected content is produced.
 ///
-/// `Static` is a pre-built `Element` — what `rsx!{...}` evaluates to outside any
+/// `Static` is a pre-built `Element` - what `rsx!{...}` evaluates to outside any
 /// runtime. Works for handler-free, signal-free content.
 ///
 /// `Lazy` is a closure invoked inside the Dioxus runtime each time the step
@@ -124,14 +124,14 @@ impl Sequence {
 
     /// Append a state from a closure that runs *inside* the Dioxus runtime each
     /// time the step renders. Use this when the rsx contains event handlers or
-    /// reads signals — those constructions require an active runtime.
+    /// reads signals - those constructions require an active runtime.
     pub fn step_with(mut self, state: impl Fn() -> Element + 'static) -> Self {
         self.items
             .push(SequenceItem::Step(StepSource::Lazy(Box::new(state))));
         self
     }
 
-    /// Append a side-effect that runs in authoring position — between the
+    /// Append a side-effect that runs in authoring position - between the
     /// previous step's assertion and the next step's `mark_dirty`. The closure
     /// receives both the `VirtualDom` and the oracle's current view of the DOM
     /// so that event targets can be resolved semantically:
@@ -178,7 +178,7 @@ impl Sequence {
     /// Register an assertion against the [`EditSummary`] captured for the render
     /// at `step` (0-indexed: step 0 is the initial rebuild, step 1 is the first
     /// rerender, ...). Use this to guard structural diff properties that
-    /// final-DOM snapshots cannot see — minimal move counts, in-place patches,
+    /// final-DOM snapshots cannot see - minimal move counts, in-place patches,
     /// no-op rerenders:
     ///
     /// ```ignore
@@ -210,7 +210,7 @@ impl Sequence {
     /// the timeline.
     pub fn run(mut self) {
         // Pull the steps into a shared list. Interludes don't reach the source
-        // VDom — they manipulate it externally between renders.
+        // VDom - they manipulate it externally between renders.
         let just_steps: Vec<Rc<StepSource>> = self
             .items
             .iter_mut()
@@ -313,7 +313,7 @@ fn assert_identity_preserved(
                 "step {step}: node identity for `{attr}={value}` was not preserved \
                  (previous OracleNodeId {prev_id:?}, current {current_id:?}). \
                  This means the renderer dropped and recreated the node when it should \
-                 have moved it — any browser-side state (animations, focus, scroll) \
+                 have moved it - any browser-side state (animations, focus, scroll) \
                  would be lost.",
             );
         }

@@ -1,13 +1,13 @@
 //! A hydration cursor driven by the Rust VDOM walk.
 //!
 //! SSR emits no hydration markers. The Rust walker decides which template and
-//! dynamic leaves should be matched; this cursor owns the actual DOM cursor —
+//! dynamic leaves should be matched; this cursor owns the actual DOM cursor -
 //! sibling/child traversal, parser-inserted wrapper skipping, text splitting,
 //! empty-slot materialization, node-id binding, and listener attachment.
 //!
 //! The DOM is read and mutated directly through `web-sys`. Only the two
-//! operations that touch interpreter-internal state — binding an `ElementId`
-//! to a node and registering an event listener — are delegated to the JS
+//! operations that touch interpreter-internal state - binding an `ElementId`
+//! to a node and registering an event listener - are delegated to the JS
 //! `BaseInterpreter` via the generic `setNode` / `setNodeListener` primitives.
 
 use dioxus_interpreter_js::unified_bindings::BaseInterpreter;

@@ -74,7 +74,7 @@ test("dangerous inner html hydrates host and updates innerHTML", async ({
 
 // Adjacent dynamic texts merge into one DOM text node during SSR; the walker
 // must split it so each dynamic slice owns its own node. Split offsets are
-// UTF-16 code units (matching JS `Text.splitText`) — splitting mid surrogate
+// UTF-16 code units (matching JS `Text.splitText`) - splitting mid surrogate
 // pair would corrupt non-BMP text.
 test("adjacent dynamic texts split correctly after hydration", async ({
   page,
@@ -99,7 +99,7 @@ test("adjacent dynamic texts split correctly after hydration", async ({
 // Empty dynamic texts in every position of a text run: long runs
 // (trailing/leading/all-empty), an empty sandwiched between non-empties
 // (addressable via `SynthText` between two `SplitText` cursor moves), and
-// empties separated by static text — all must hydrate in source order and
+// empties separated by static text - all must hydrate in source order and
 // stay individually addressable.
 test("empty dynamic texts hydrate in source order in every position", async ({
   page,
@@ -231,7 +231,7 @@ test("trailing root-level placeholder keeps the mount parent", async ({
 // buried inside the template root and has no dynamic attributes, so the
 // markerless walk maps it positionally with no node binding. Its create-time
 // append anchor is a separately allocated ElementId that hydration must also
-// bind — otherwise materializing the conditional appends into an unbound node
+// bind - otherwise materializing the conditional appends into an unbound node
 // and the interpreter throws
 // "Cannot read properties of undefined (reading 'insertBefore')".
 test("trailing conditional under a nested non-root element hydrates and appends", async ({
@@ -300,7 +300,7 @@ test("textarea dynamic body hydrates without markers and updates", async ({
 // `textarea`/`pre`/`listing` are raw-text elements: the HTML parser strips one
 // newline immediately after the start tag, but SSR emits the dynamic body
 // verbatim. Markerless hydration reconstructs text positions by UTF-16 length,
-// so a leading `\n` must not desync that contract — the dynamic body has to stay
+// so a leading `\n` must not desync that contract - the dynamic body has to stay
 // bound to the right text node and updates must land on it (not appended to a
 // mis-bound trailing node, and without a hydration mismatch). Assertions are
 // kept independent of whether the fix preserves or strips the leading newline.

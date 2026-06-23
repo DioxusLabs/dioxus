@@ -11,7 +11,7 @@ use dioxus_renderer_oracle::RendererOracle;
 ///
 /// The retarget here moves the portal body from `ROOT` to an inner target while
 /// a sibling text node next to the portal placeholder is recreated across the
-/// retarget. Both render-target mutation stacks must stay balanced — the canary
+/// retarget. Both render-target mutation stacks must stay balanced - the canary
 /// that the new body and the outer sibling were placed against a consistent
 /// mount rather than a stale one.
 #[test]

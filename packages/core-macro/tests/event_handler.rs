@@ -138,7 +138,7 @@ fn move_closure_with_sibling_borrow_compiles() {
     }
 }
 
-// Regression test: the same hazard across nesting — a parent element's attribute closure moves a
+// Regression test: the same hazard across nesting - a parent element's attribute closure moves a
 // value that a nested child node borrows.
 #[test]
 #[allow(unused)]

@@ -3,7 +3,7 @@
 //!
 //! These deliberately avoid per-row components, signals-in-children, and dynamic
 //! text so the only meaningful work per render is:
-//!   1. running the app component (formatting `N` keys — common-mode cost), and
+//!   1. running the app component (formatting `N` keys - common-mode cost), and
 //!   2. the keyed children diff in `diff/iterator.rs`.
 //!
 //! Both costs are constant across runs, so the keyed diff itself shows up

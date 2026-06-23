@@ -176,7 +176,7 @@ pub fn build_runtime_template(tree: &'static TemplateRawTree) -> Template {
 /// Runtime mirror of [`lower_raw_tree`] that drives the non-generic [`RuntimeTemplateBuilder`].
 ///
 /// Mirrors the const lowering arm-for-arm so it produces the identical op tape, strings, anchors,
-/// and value-kind hash, but without the capacity const generics — so the debug lazy path codegens
+/// and value-kind hash, but without the capacity const generics - so the debug lazy path codegens
 /// the lowering once instead of monomorphizing it per `(ops, strings, anchors)` capacity combo.
 #[cfg(debug_assertions)]
 fn lower_raw_tree_runtime(

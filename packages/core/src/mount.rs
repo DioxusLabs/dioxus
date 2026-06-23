@@ -122,7 +122,7 @@ pub(crate) struct Mount {
 
     /// Mounted slots for this node in one allocation, laid out as two regions:
     /// `[ anchor slots (anchor_count) | dynamic slots (rest) ]`.
-    /// Previously these were three separate `Box<[_]>` — one heap allocation per region, so three
+    /// Previously these were three separate `Box<[_]>` - one heap allocation per region, so three
     /// allocs/frees per mounted node. A list of N rows is N mounts, so that tripled the per-node
     /// allocator traffic on both create and removal. One backing slice means one alloc/free.
     slots: Box<[PackedMountedSlot]>,

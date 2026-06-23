@@ -590,7 +590,7 @@ impl VNode {
         for &id in root_ids {
             let dynamic_node = &self.dynamic_nodes[id];
             // Empty Fragments contribute no DOM and have nothing to reclaim
-            // via the renderer — skip them entirely.
+            // via the renderer - skip them entirely.
             if matches!(dynamic_node, DynamicNode::Fragment(nodes) if nodes.is_empty()) {
                 continue;
             }
@@ -789,6 +789,7 @@ impl VNode {
 
         nodes_created
     }
+
     fn fill_dynamic_slots(
         &self,
         mount: MountId,

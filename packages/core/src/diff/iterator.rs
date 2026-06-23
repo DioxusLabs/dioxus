@@ -188,9 +188,9 @@ impl DiffState<'_, '_, '_, '_> {
         }
 
         // Peel the shared prefix and suffix so the key map and LIS only cover the
-        // middle that actually reordered. Edits confined to the ends — append,
+        // middle that actually reordered. Edits confined to the ends - append,
         // prepend, truncation, in-place updates, or a localized reorder inside a
-        // large stable list — never build a full-length key map.
+        // large stable list - never build a full-length key map.
         let min_len = old.len().min(new.len());
         let mut prefix = 0;
         while prefix < min_len && old[prefix].key == new[prefix].key {
@@ -306,7 +306,7 @@ impl DiffState<'_, '_, '_, '_> {
     /// Reconcile a genuine reorder confined between the shared ends.
     ///
     /// Builds the old-key map and runs the longest-increasing-subsequence search
-    /// over this reduced middle only — the shared prefix/suffix were already
+    /// over this reduced middle only - the shared prefix/suffix were already
     /// diffed in place by [`Self::diff_keyed_children`]. `new_mounts` is the
     /// middle's slice of the parent's mount list and is filled with one mount per
     /// new middle child.
@@ -533,7 +533,7 @@ impl DiffState<'_, '_, '_, '_> {
         let sibling_mount = new_mounts[sibling_idx].expect("sibling");
         // The splice sits immediately next to its LIS-boundary sibling, which is
         // stable and never moves, so when that sibling has a live DOM edge it is
-        // the exact anchor — O(1). Only when it has no live edge (e.g. an empty
+        // the exact anchor - O(1). Only when it has no live edge (e.g. an empty
         // fragment) do we walk the new sibling order, then the committed view;
         // both consult the runtime's stale set so they never anchor mid-move.
         let site = self.has_writer().then(|| {
@@ -681,7 +681,7 @@ impl DiffState<'_, '_, '_, '_> {
     }
 
     /// Create `new` under `parent`. When a writer is active the children are placed at `site`
-    /// (computed lazily — no-writer diffs only materialize mount state and resolve no placement);
+    /// (computed lazily - no-writer diffs only materialize mount state and resolve no placement);
     /// otherwise only their mount state is created.
     pub(super) fn create_children_at_site(
         &mut self,

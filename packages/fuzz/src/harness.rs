@@ -1511,6 +1511,25 @@ mod tests {
     }
 
     #[test]
+    fn pending_suspense_inserted_under_static_root_stays_nested() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                            mode: SuspenseMode::Pending,
+                        }),
+                    },
+                },
+            ),
+            Op::RenderSuspenseDirty,
+        ]);
+    }
+
+    #[test]
     fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
         replay_ops([
             Op::template(

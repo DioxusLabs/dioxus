@@ -70,8 +70,8 @@ async fn resolve_empty_stream() -> usize {
 
 // `textarea`, `pre`, and `listing` are raw-text elements: the HTML parser strips
 // one newline immediately after the start tag. When the first text contribution
-// starts with `\n`, the markerless walk — which reconstructs text-node positions
-// by UTF-16 length — must keep the dynamic body bound to the correct text node
+// starts with `\n`, the markerless walk - which reconstructs text-node positions
+// by UTF-16 length - must keep the dynamic body bound to the correct text node
 // so later updates land on it, rather than splitting against a length the parser
 // already shortened (which mis-binds the body or raises a hydration mismatch).
 // Regression for the leading-newline case of
@@ -203,8 +203,8 @@ fn AdjacentDynamicTexts() -> Element {
 // Dynamic text with non-BMP characters (surrogate pairs in UTF-16). The
 // walker computes `SplitText` offsets via `s.encode_utf16().count()` and the
 // JS interpreter calls `Text.splitText(offset)` which is also UTF-16-indexed.
-// A byte-vs-codepoint mix-up — or splitting in the middle of a surrogate
-// pair — would either crash, produce unpaired surrogates, or shift text by
+// A byte-vs-codepoint mix-up - or splitting in the middle of a surrogate
+// pair - would either crash, produce unpaired surrogates, or shift text by
 // one code unit per emoji. We sandwich emoji-bearing dynamics between static
 // text so the merged DOM text node has known split points.
 #[component]
@@ -236,7 +236,7 @@ fn Utf16Text() -> Element {
 // the walker still has to map the empty's ElementId (via `SynthText` between
 // two `SplitText` cursor moves) so the runtime can later set its text.
 // After the swap, the empty becomes "MID" and the surrounding texts change
-// too — the rendered result must read "leftMIDright".
+// too - the rendered result must read "leftMIDright".
 #[component]
 fn EmptyMiddleOfRun() -> Element {
     let mut a = use_signal(|| "AAA".to_string());
@@ -295,7 +295,7 @@ fn ChildText(value: String) -> Element {
 }
 
 // SSR renders no bytes for an `Option::None` child. With markerless hydration
-// the walker records a *virtual* placeholder for that ElementId — no
+// the walker records a *virtual* placeholder for that ElementId - no
 // comment node is inserted. Toggling to `Some(_)` issues `replace_with` on the
 // placeholder ID, which must operate via `parent.insertBefore(real, after)`
 // against the virtual entry. Toggling back to `None` reinstates a virtual
@@ -433,7 +433,7 @@ fn RootTrailingPlaceholder() -> Element {
 // and carries no dynamic attributes, so the markerless walk maps it positionally
 // with no node binding (`map_element` id == 0). Its create-time append anchor is
 // a freshly allocated `ElementId` (`assign_template_anchor_ids` non-root branch),
-// which hydration must bind too — otherwise materializing the conditional appends
+// which hydration must bind too - otherwise materializing the conditional appends
 // into an unbound node and the interpreter dereferences `undefined`
 // ("Cannot read properties of undefined (reading 'insertBefore')").
 //
@@ -485,12 +485,12 @@ fn SvgHydratedListener() -> Element {
 
 // Long runs of empty dynamic texts in each of the three position classes the
 // walker treats differently:
-//   * trailing — synth-after the last non-empty (`SynthTextAfter`, must
+//   * trailing - synth-after the last non-empty (`SynthTextAfter`, must
 //     advance cursor between inserts so consecutive synths chain correctly
 //     instead of reversing)
-//   * leading  — synth-before the merged text node (`SynthText` insertBefore
+//   * leading  - synth-before the merged text node (`SynthText` insertBefore
 //     against a fixed cursor, which appends in order naturally)
-//   * all-empty — no merged text exists, so all synths append to the parent
+//   * all-empty - no merged text exists, so all synths append to the parent
 //     frame via the `cursor==null` branch
 // 10-wide makes a buggy walker fail loudly: any off-by-one in the chain
 // reverses the visible order once the empties become non-empty.

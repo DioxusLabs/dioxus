@@ -27,7 +27,7 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
             ["a", "b", "c", "d", "e"]
         } else {
             // Shuffle so the keyed-middle splice actually has to move
-            // entries past each other — and not just trim from the ends.
+            // entries past each other - and not just trim from the ends.
             ["c", "a", "e", "b", "d"]
         };
         rsx! {

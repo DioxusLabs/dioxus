@@ -186,7 +186,7 @@ fn sequence_tracks_identity_for_moved_nodes() {
             }
         }
     }
-    // Reordering keyed nodes should *move* DOM nodes — identities preserved.
+    // Reordering keyed nodes should *move* DOM nodes - identities preserved.
     Sequence::new()
         .track_identity_by("id")
         .step(divs(&[0, 1, 2, 3]))
@@ -219,7 +219,7 @@ fn sequence_runs_interlude_between_steps() {
 #[test]
 #[should_panic(expected = "node identity for `id=hot` was not preserved")]
 fn sequence_identity_check_catches_recreation() {
-    // Two unkeyed elements of different tag — the diff has to drop the old
+    // Two unkeyed elements of different tag - the diff has to drop the old
     // node and create a new one. The identity tracker catches that.
     Sequence::new()
         .track_identity_by("id")
@@ -231,7 +231,7 @@ fn sequence_identity_check_catches_recreation() {
 #[test]
 fn edit_summary_counts_rebuild_then_in_place_patch() {
     // First step builds the tree; rerender with the same shape but a
-    // different *dynamic* text body should patch in place — same static shape,
+    // different *dynamic* text body should patch in place - same static shape,
     // just a new value for the dynamic slot.
     fn body(value: &str) -> Element {
         rsx! { div { id: "0", "{value}" } }

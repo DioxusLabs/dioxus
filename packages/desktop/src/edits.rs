@@ -53,7 +53,7 @@ impl WryQueue {
         self.inner.borrow().touched
     }
 
-    /// Reset the touched flag — called after `send_edits` so the next render
+    /// Reset the touched flag - called after `send_edits` so the next render
     /// pass can detect a fresh batch of writes.
     pub(crate) fn clear_touched(&self) {
         self.inner.borrow_mut().touched = false;

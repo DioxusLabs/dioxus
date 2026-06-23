@@ -275,7 +275,7 @@ fn MyComponent() -> Element {{
     /// ([`RenderTargetId::ROOT`]) is permanent and is never removed.
     ///
     /// The caller must ensure nothing renders into the target anymore: every node
-    /// mounted into it — for example the [`Portal`](crate::Portal) feeding it — must
+    /// mounted into it - for example the [`Portal`](crate::Portal) feeding it - must
     /// already have been removed from the tree. Removing a target that still has
     /// live mounts leaves those mounts dangling and panics on the next render that
     /// touches the target.

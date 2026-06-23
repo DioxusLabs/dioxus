@@ -145,8 +145,8 @@ pub(super) fn insertion_site_for_slot(
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
     // An anchor can cover several adjacent dynamic nodes (`{a}{b}` lower to one anchor), so first
-    // prefer the closest following sibling that shares it — this applies to both root-level and
-    // nested slots — anchoring before its first live element.
+    // prefer the closest following sibling that shares it - this applies to both root-level and
+    // nested slots - anchoring before its first live element.
     if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
@@ -239,7 +239,7 @@ pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
             }
         }
         // `insert_before`/`insert_after`/`append_children` leave the anchor on the stack, so pop it
-        // to keep the renderer stack balanced — the discipline `TargetedLazyScope` applies on drop.
+        // to keep the renderer stack balanced - the discipline `TargetedLazyScope` applies on drop.
         StreamPlacement::Insert(site) => {
             if count > 0 {
                 match site.edge {
@@ -434,7 +434,7 @@ fn first_live_sibling_after(
         .find_map(|(child, m)| {
             let m = *m;
             // Skip the node itself and any sibling the active diff has already
-            // moved/replaced — its committed position is stale.
+            // moved/replaced - its committed position is stale.
             if m == mount || dom.runtime.is_placement_stale(m) {
                 return None;
             }

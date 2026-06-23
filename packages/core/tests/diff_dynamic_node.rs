@@ -55,7 +55,7 @@ fn toggle_option_text() {
 /// Expected order `span0, A, span1, B, span2`; the bug produces
 /// `span0, A, B, span1, span2`. A fresh rebuild is correct (fill order
 /// materializes the later slot first), so this only reproduces on the
-/// incremental update — which is exactly what `assert_matches` (incremental DOM
+/// incremental update - which is exactly what `assert_matches` (incremental DOM
 /// vs fresh build) checks.
 #[test]
 fn dynamic_node_before_non_first_static_sibling_keeps_order() {

@@ -11,7 +11,7 @@
 //! The template structure comes from the flat op-tape [`dioxus_core::Template`]
 //! (`VNode::children` / element children / dynamic anchors, the same document-order
 //! walk SSR uses in `dioxus_ssr`); mounted `ElementId`s come from the rendered
-//! `MountedVNode`. No DOM reads happen here — the cursor performs them.
+//! `MountedVNode`. No DOM reads happen here - the cursor performs them.
 
 use dioxus_core::{
     AttributeValue, DynamicNode, DynamicNodeSlot, ElementId, MountedVNode, ScopeState,

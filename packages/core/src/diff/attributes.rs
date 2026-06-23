@@ -78,7 +78,8 @@ impl VNode {
         .peekable();
 
         let element_id = id.element_id();
-        // If we write any attributes while diffing, push/pop the current id
+        // The attribute diff never changes the active render target, so the targeted gate is
+        // always satisfied here - equivalent to an unconditional lazy push.
         let mut to =
             TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {

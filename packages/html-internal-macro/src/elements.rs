@@ -179,7 +179,7 @@ impl ToTokens for DefineElements {
             .map(|element| element.to_tokens_with_paths(core, html, gated_attribute_groups));
         // Each element's associated-const trait and attribute-method extension trait, re-exported
         // anonymously. Glob-importing this one module brings every element into scope so
-        // `html::div` resolves and `.class(..)` etc. type-check — the single place downstream
+        // `html::div` resolves and `.class(..)` etc. type-check - the single place downstream
         // preludes (and `define_elements!` callers) pull element names from.
         let prelude_exports = self.elements.iter().map(|element| {
             let name = &element.name;

@@ -237,7 +237,7 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
 /// The provenance of a node, used only to categorize edits (see [`EditSummary`]).
 ///
 /// A node built as part of a reusable template prototype is a `PrototypeRoot`;
-/// everything else is `Live`. This drives nothing in the tree itself — it only
+/// everything else is `Live`. This drives nothing in the tree itself - it only
 /// lets the edit counters distinguish "assembling a prototype" from "patching
 /// the live tree".
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -258,7 +258,7 @@ enum StackSource {
 
 /// A stable identity token for a node in the oracle's arena. The same node retains
 /// the same token across renders, which lets tests verify that the renderer moved a
-/// DOM node (preserving its browser-side state — animations, focus, selection) instead
+/// DOM node (preserving its browser-side state - animations, focus, selection) instead
 /// of dropping and re-creating it. Recreated nodes get a fresh `OracleNodeId`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OracleNodeId(usize);
@@ -298,7 +298,7 @@ const NO_LOGICAL_INDEX: u8 = u8::MAX;
 /// Counts edits by *kind* (prototype clone, create text, move, set attribute, ...)
 /// without exposing any specific `ElementId` or edit ordering. Tests use this to
 /// assert structural properties of the diff that final-DOM snapshots cannot
-/// observe — e.g. "this keyed reorder moved at most one node," "this rerender
+/// observe - e.g. "this keyed reorder moved at most one node," "this rerender
 /// patched text in place without recreating elements," "exactly two attributes
 /// changed."
 ///
@@ -306,7 +306,7 @@ const NO_LOGICAL_INDEX: u8 = u8::MAX;
 /// start of every `rebuild` / `render` / `wait_and_render`.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct EditSummary {
-    /// Prototype clone operations — a fresh element subtree was cloned from
+    /// Prototype clone operations - a fresh element subtree was cloned from
     /// the renderer stack.
     pub loads: usize,
     /// `create_text` calls.
@@ -315,14 +315,14 @@ pub struct EditSummary {
     pub removes: usize,
     /// `replace_with` calls.
     pub replaces: usize,
-    /// `insert_*` / `append_children` calls — placing nodes into the tree.
+    /// `insert_*` / `append_children` calls - placing nodes into the tree.
     pub inserts: usize,
-    /// `push_id` calls — proxy for "an existing live node was brought onto the
+    /// `push_id` calls - proxy for "an existing live node was brought onto the
     /// stack to be moved." A keyed reorder that moves N survivors emits N pushes.
     pub pushes: usize,
     /// `set_attribute` calls.
     pub set_attrs: usize,
-    /// `set_text` calls — in-place text patches.
+    /// `set_text` calls - in-place text patches.
     pub set_texts: usize,
 }
 
@@ -342,7 +342,7 @@ pub struct EventListenerTarget {
     pub id: ElementId,
 }
 
-/// The oracle's in-memory tree — the "real semantics" half of the renderer.
+/// The oracle's in-memory tree - the "real semantics" half of the renderer.
 ///
 /// This implements [`RealDom`] (via [`ArenaBackend`]) and knows nothing about
 /// the mutation stack or `ElementId`s; the stack machine lives in
@@ -502,7 +502,7 @@ impl OracleArena {
             .unwrap_or_else(|| panic!("renderer tried to drop already-dead node {node}"));
         for child in node_data.children {
             // Children of a dropped subtree are still attached (in the dead node's
-            // `children`), so just recurse — no need to detach them first.
+            // `children`), so just recurse - no need to detach them first.
             self.arena[child]
                 .as_mut()
                 .map(|n| n.parent = None)
@@ -1081,7 +1081,7 @@ impl RendererOracle {
 
     /// Find the live [`ElementId`] of the unique element whose tag matches
     /// `tag` (default namespace). Panics if zero or more than one element
-    /// matches — tests should make the target unambiguous (add an `id` attr
+    /// matches - tests should make the target unambiguous (add an `id` attr
     /// and use [`Self::element_id_by_attr`] instead when multiple elements
     /// share a tag).
     ///

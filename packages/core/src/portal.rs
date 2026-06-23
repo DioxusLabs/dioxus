@@ -46,7 +46,7 @@ impl Properties for PortalProps {
         // Unconditionally adopt the new props' fields. Each `rsx!` macro
         // expansion produces fresh `Rc<VNodeInner>` instances even for
         // identical markup, so the `self == new` short-circuit on
-        // `Rc::ptr_eq` is effectively unreachable in practice — we still
+        // `Rc::ptr_eq` is effectively unreachable in practice - we still
         // return the equality flag so callers can skip a redundant diff
         // when the pointers happen to alias (e.g. cached test fixtures).
         let equal = self == new;

@@ -58,7 +58,7 @@ struct RenderRootContext;
 fn GeneratedPortal(props: GeneratedPortalProps) -> Element {
     // Each generated portal scope allocates its own real render target. We
     // intentionally never register a `WriteMutations` writer for that target
-    // in the harness — the diff dispatcher silently drops mutations destined
+    // in the harness - the diff dispatcher silently drops mutations destined
     // for a target with no writer. This exercises the "writes enabled"
     // branches of `Portal::{create,diff,remove}` and the generic diff helpers
     // (`at_anchor`, `create_at_anchor_with_parents`, `create_with_parents`

@@ -9,7 +9,7 @@ use super::{IntoViewChild, View, ViewTemplate};
 /// A typed fragment view: an ordered group of children with no enclosing element.
 ///
 /// Like [`ElementBuilder`](super::ElementBuilder) it collects children into a cons list via
-/// [`FragmentBuilder::child`], but it contributes no node of its own — it lowers to exactly its
+/// [`FragmentBuilder::child`], but it contributes no node of its own - it lowers to exactly its
 /// children, in order. That makes it the container for a template's roots and for grouping more
 /// siblings than a single tuple can hold: `View`/`ViewTemplate` are only implemented for tuples up
 /// to arity 128, so wider lists are split into several tuple groups joined through `.child(..)`.

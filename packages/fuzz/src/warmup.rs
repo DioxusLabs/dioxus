@@ -497,7 +497,7 @@ fn warmup_suspense_then_remove() {
 
     fn app() -> Element {
         if warmup_gen() >= 2 {
-            // After the remove gen, render nothing — the boundary and its
+            // After the remove gen, render nothing - the boundary and its
             // suspended subtree get fully removed.
             return rsx! { "removed" };
         }
@@ -512,7 +512,7 @@ fn warmup_suspense_then_remove() {
     }
 
     // generation 1: re-render, boundary stays suspended; generation 2:
-    // replace the boundary with plain text — removes the suspended subtree,
+    // replace the boundary with plain text - removes the suspended subtree,
     // exercising remove_node_inner on unmounted hidden children.
     run_generations(app, 3);
 }
@@ -579,7 +579,7 @@ fn warmup_portal_target_switch() {
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut writer);
 
-    // mode 3: same props as mode 2 — memoize sees self == new and the
+    // mode 3: same props as mode 2 - memoize sees self == new and the
     // `equal` branch of `PortalProps::memoize` fires.
     MODE.with(|c| c.set(2));
     dom.mark_dirty(ScopeId::APP);
@@ -605,7 +605,7 @@ fn warmup_portal_target_switch() {
 
 /// Mount a scope with a pending effect, then drop it. Exercises the
 /// `drop_scope` filter closure that drains `pending_effects` entries for
-/// the dropped subtree — unreachable from the fuzz harness because the
+/// the dropped subtree - unreachable from the fuzz harness because the
 /// model never uses `use_effect`.
 fn warmup_scope_with_pending_effect() {
     use dioxus::prelude::*;
@@ -671,7 +671,7 @@ fn warmup_scope_with_pending_effect() {
 /// Drive `use_before_render` and `use_after_render` hooks so the pre/post-render
 /// closure loops in `run_scope` actually iterate something. The hooks are
 /// pushed into the scope's `before_render`/`after_render` lists on the first
-/// render, but the loops only see them on subsequent renders — so this warmup
+/// render, but the loops only see them on subsequent renders - so this warmup
 /// captures the child's `ScopeId` on first render and marks the child dirty
 /// to force a re-run that actually iterates the hook lists.
 fn warmup_before_after_render_hooks() {
@@ -838,7 +838,7 @@ fn warmup_portal_dynamic_text_root() {
         // Reverse a fully-keyed list (shared keys, no shared prefix/suffix) so
         // `diff_keyed_middle` *moves* most entries through its splice. Each
         // moved entry is re-pushed via `push_all_root_nodes`, which recurses
-        // into the portal body — a dynamic text root mounted in `target`.
+        // into the portal body - a dynamic text root mounted in `target`.
         let keys: &[u32] = if warmup_gen() == 0 {
             &[0, 1, 2, 3]
         } else {
@@ -885,7 +885,7 @@ fn warmup_keyed_component_anchor() {
     }
 
     fn app() -> Element {
-        // gen 0: [a, b, c, d, e]; gen 1: [a, e] — the middle three component
+        // gen 0: [a, b, c, d, e]; gen 1: [a, e] - the middle three component
         // scopes drop while the list keeps a shared prefix/suffix, so anchors
         // are resolved around components mid-removal.
         let keys: &[u32] = if warmup_gen() == 0 {

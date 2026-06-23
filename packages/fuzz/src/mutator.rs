@@ -794,7 +794,7 @@ fn biased_attr(value: u8) -> AttrSpec {
 
 fn biased_dynamic_attr_name(value: &AttrValueSpec, seed: u8) -> u8 {
     // Listeners use a name format that's keyed by slot, not by this byte's
-    // value — leave the existing `seed & 0x7f` selection alone.
+    // value - leave the existing `seed & 0x7f` selection alone.
     if matches!(value, AttrValueSpec::Listener) {
         return seed & 0x7f;
     }

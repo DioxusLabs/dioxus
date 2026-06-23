@@ -76,15 +76,15 @@ cannot produce unbounded replay work.
 
 Crate layout:
 
-- `src/case.rs` — encoded op stream, replay, failure reporting
-- `src/ops.rs` — the operation grammar and how ops apply to the model
-- `src/model.rs` — the spec tree the generated app renders from
-- `src/mutator.rs` — structure-aware mutation (the op strategy table)
-- `src/reducer.rs` — structured shrinking of failing cases
-- `src/harness.rs` — incremental-vs-fresh renderer oracle and lifecycle checks
-- `src/vdom.rs` — compiles model specs into real `VNode`s/`Template`s
-- `src/warmup.rs` — one-shot scenarios for paths replay cannot reach
-- `src/targeted.rs` — hand-built recipes replayed as tests and exportable as
+- `src/case.rs` - encoded op stream, replay, failure reporting
+- `src/ops.rs` - the operation grammar and how ops apply to the model
+- `src/model.rs` - the spec tree the generated app renders from
+- `src/mutator.rs` - structure-aware mutation (the op strategy table)
+- `src/reducer.rs` - structured shrinking of failing cases
+- `src/harness.rs` - incremental-vs-fresh renderer oracle and lifecycle checks
+- `src/vdom.rs` - compiles model specs into real `VNode`s/`Template`s
+- `src/warmup.rs` - one-shot scenarios for paths replay cannot reach
+- `src/targeted.rs` - hand-built recipes replayed as tests and exportable as
   corpus seeds
 
 ## Failures

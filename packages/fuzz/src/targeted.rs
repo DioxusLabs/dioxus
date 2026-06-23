@@ -22,7 +22,7 @@ fn targeted_diff_coverage_cases_replay() {
 /// Regression: two adjacent root-level dynamic nodes lower to a single
 /// append-at-root anchor (`{a}{b}`). When the first slot becomes a pending
 /// suspense and re-renders, its fallback must be placed before the live sibling
-/// value sharing that anchor — not appended to the document root, which left
+/// value sharing that anchor - not appended to the document root, which left
 /// the two roots in swapped order versus a fresh build. Minimized libfuzzer
 /// artifact for that divergence.
 #[test]
@@ -1103,7 +1103,7 @@ fn dynamic_before_non_first_static_with_live_sibling() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        // {a} (dynamic text, node 2) — stays live across both renders
+        // {a} (dynamic text, node 2) - stays live across both renders
         insert_child(0, 0, 1, TemplateNodeKind::Dynamic(DynamicKind::Text(0))),
         // span (static, node 3)
         insert_child(
@@ -1115,7 +1115,7 @@ fn dynamic_before_non_first_static_with_live_sibling() -> Vec<Op> {
                 namespace: None,
             },
         ),
-        // {b} (dynamic, node 4) — starts empty, before a non-first static span
+        // {b} (dynamic, node 4) - starts empty, before a non-first static span
         insert_child(0, 0, 3, TemplateNodeKind::Dynamic(DynamicKind::Empty)),
         // span (static, node 5)
         insert_child(
