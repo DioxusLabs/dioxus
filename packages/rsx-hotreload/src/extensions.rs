@@ -1,5 +1,4 @@
 use dioxus_core::Template;
-use dioxus_core::internal::HotReloadDynamicSlot;
 use dioxus_core_template::RuntimeTemplateBuilder;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
@@ -34,7 +33,6 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
 
 pub(crate) struct HotReloadTemplateParts<'a> {
     pub(crate) template: Template,
-    pub(crate) dynamic_slots: Vec<HotReloadDynamicSlot>,
     pub(crate) dynamic_nodes: Vec<&'a BodyNode>,
     pub(crate) dynamic_attributes: Vec<&'a Attribute>,
 }
@@ -44,7 +42,6 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
 ) -> Option<HotReloadTemplateParts<'a>> {
     let mut builder = NativeTemplateBuilder::<'a, Ctx> {
         template: RuntimeTemplateBuilder::default(),
-        dynamic_slots: Vec::new(),
         dynamic_nodes: Vec::new(),
         dynamic_attributes: Vec::new(),
         following_static_at_parent: false,
@@ -56,7 +53,6 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
 
     let NativeTemplateBuilder {
         template,
-        dynamic_slots,
         dynamic_nodes,
         dynamic_attributes,
         ..
@@ -64,7 +60,6 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
 
     Some(HotReloadTemplateParts {
         template: template.finish(),
-        dynamic_slots,
         dynamic_nodes,
         dynamic_attributes,
     })
@@ -72,7 +67,6 @@ pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
 
 struct NativeTemplateBuilder<'a, Ctx> {
     template: RuntimeTemplateBuilder,
-    dynamic_slots: Vec<HotReloadDynamicSlot>,
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a Attribute>,
     following_static_at_parent: bool,
@@ -117,10 +111,7 @@ impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilde
     }
 
     fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
-        // Emitted before children, matching runtime `DynamicValues` order.
-        let id = self.dynamic_attributes.len();
         self.template.dynamic_attr();
-        self.dynamic_slots.push(HotReloadDynamicSlot::Attribute(id));
         self.dynamic_attributes.push(attr);
         Some(())
     }
@@ -132,9 +123,7 @@ impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilde
     }
 
     fn dynamic_node(&mut self, node: &'a BodyNode) -> Option<()> {
-        let id = self.dynamic_nodes.len();
         self.template.dynamic_node(self.following_static_at_parent);
-        self.dynamic_slots.push(HotReloadDynamicSlot::Node(id));
         self.dynamic_nodes.push(node);
         Some(())
     }

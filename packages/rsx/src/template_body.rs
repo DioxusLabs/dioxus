@@ -1,4 +1,4 @@
-//! Lower parsed RSX bodies into static templates and dynamic values.
+//! Lower parsed RSX bodies into static templates plus dynamic node and attribute values.
 
 use self::location::DynIdx;
 use crate::*;
@@ -275,7 +275,6 @@ pub(crate) struct ViewBuilderPieces {
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
-    hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
 }
 
@@ -326,7 +325,6 @@ impl ViewBuilderPieces {
         let dynamic_nodes = self.hot_reload_dynamic_nodes.iter();
         let dyn_attrs = self.hot_reload_dynamic_attrs.iter();
         let component_values = self.component_value_tokens.iter();
-        let dynamic_slots = self.hot_reload_dynamic_slots.iter();
 
         quote! {
             dioxus_core::internal::HotReloadedTemplate::from_template(
@@ -335,7 +333,6 @@ impl ViewBuilderPieces {
                 vec![ #( #dyn_attrs ),* ],
                 vec![ #( #component_values ),* ],
                 #template,
-                vec![ #( #dynamic_slots ),* ],
             )
         }
     }
@@ -356,7 +353,6 @@ struct ViewBuilder {
     component_value_tokens: Vec<TokenStream2>,
     hot_reload_dynamic_nodes: Vec<TokenStream2>,
     hot_reload_dynamic_attrs: Vec<TokenStream2>,
-    hot_reload_dynamic_slots: Vec<TokenStream2>,
     hot_reload_key: Option<TokenStream2>,
     next_marker: usize,
 }
@@ -372,7 +368,6 @@ impl ViewBuilder {
             component_value_tokens: Vec::new(),
             hot_reload_dynamic_nodes: Vec::new(),
             hot_reload_dynamic_attrs: Vec::new(),
-            hot_reload_dynamic_slots: Vec::new(),
             hot_reload_key: None,
             next_marker: 0,
         }
@@ -388,7 +383,6 @@ impl ViewBuilder {
             component_value_tokens: self.component_value_tokens,
             hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
             hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
-            hot_reload_dynamic_slots: self.hot_reload_dynamic_slots,
             hot_reload_key: self.hot_reload_key,
         }
     }
@@ -488,8 +482,6 @@ impl ViewBuilder {
         self.dynamic_node_count += 1;
         self.hot_reload_dynamic_nodes
             .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
-        self.hot_reload_dynamic_slots
-            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Node(#id) });
         // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
         // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
         // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
@@ -523,8 +515,6 @@ impl ViewBuilder {
         self.dynamic_attr_count += 1;
         self.hot_reload_dynamic_attrs
             .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
-        self.hot_reload_dynamic_slots
-            .push(quote! { dioxus_core::internal::HotReloadDynamicSlot::Attribute(#id) });
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
             self.allocate_formatted(lit);
         }
@@ -774,7 +764,8 @@ impl TemplateBody {
         stats.path_overflow
             || stats.ops > TEMPLATE_STORAGE_MAX_CAP
             || stats.strings > TEMPLATE_STORAGE_MAX_CAP
-            || stats.dynamic_values > u16::MAX as usize
+            || stats.dynamic_nodes > u16::MAX as usize
+            || stats.dynamic_attributes > u16::MAX as usize
             || matches!(context, SiblingContext::Roots) && nodes.len() > u16::MAX as usize
     }
 

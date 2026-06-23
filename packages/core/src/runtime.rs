@@ -617,8 +617,8 @@ fn MyComponent() -> Element {{
 
         for group in parent_node.dynamic_nodes() {
             let target = group.slot_target();
-            for idx in group.ids() {
-                match parent_node.dynamic_values[idx].node() {
+            for (idx, node) in group.enumerate_nodes() {
+                match node {
                     DynamicNode::Fragment(children) => {
                         if children.is_empty() {
                             continue;
@@ -669,7 +669,6 @@ fn MyComponent() -> Element {{
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
                     break;
-                    }
                 }
             }
         }

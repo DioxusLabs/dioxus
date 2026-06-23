@@ -218,7 +218,7 @@ fn dynamic_attr_and_child_share_one_anchor() {
     assert_eq!(node_groups.len(), 1);
     assert_eq!(attr_groups[0].anchor_index(), node_groups[0].anchor_index());
     assert_eq!(attr_groups[0].attrs().count(), 1);
-    assert_eq!(node_groups[0].attrs().count(), 1);
+    assert_eq!(node_groups[0].nodes().count(), 1);
 
     let mut dom = VirtualDom::new(mixed_dynamic_attr_and_child);
     let mut oracle = RendererOracle::new();
@@ -227,36 +227,25 @@ fn dynamic_attr_and_child_share_one_anchor() {
 }
 
 #[test]
-fn dynamic_attr_and_trailing_dynamic_child_follow_value_order() {
+fn dynamic_attr_and_trailing_dynamic_child_uses_split_anchor_ranges() {
     let vnode = dynamic_attr_and_trailing_dynamic_child().unwrap();
     let div = root_element(&vnode);
     let attr_groups = div.dynamic_attributes().collect::<Vec<_>>();
-    let mut children_iter = div.children();
-    assert_eq!(children_iter.len(), 3);
-    let children = children_iter.by_ref().collect::<Vec<_>>();
-    assert_eq!(children_iter.len(), 0);
+    let node_groups = vnode
+        .dynamic_nodes()
+        .filter(|group| group.parent_element_op_index() == Some(div.op()))
+        .collect::<Vec<_>>();
 
     assert_eq!(attr_groups.len(), 1);
-    assert_eq!(children.len(), 3);
-    let attr_group = attr_groups[0];
-    let VNodeChild::Dynamic(before_button_group) = children[0] else {
-        panic!("expected leading dynamic child first");
-    };
-    let VNodeChild::Dynamic(append_group) = children[2] else {
-        panic!("expected trailing dynamic child third");
-    };
-
-    assert!(attr_group.ids().eq([0]));
-    assert!(before_button_group.ids().eq([1]));
-    assert!(append_group.ids().eq([2]));
-    assert!(matches!(
-        before_button_group.slot_target(),
-        TemplateSlotTarget::BeforeStatic(_)
-    ));
-    assert!(matches!(
-        append_group.slot_target(),
-        TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
-    ));
+    assert_eq!(attr_groups[0].attrs().count(), 1);
+    assert_eq!(node_groups.len(), 2);
+    assert_eq!(
+        node_groups
+            .iter()
+            .map(|group| group.nodes().count())
+            .sum::<usize>(),
+        2
+    );
 
     let mut dom = VirtualDom::new(dynamic_attr_and_trailing_dynamic_child);
     let mut oracle = RendererOracle::new();

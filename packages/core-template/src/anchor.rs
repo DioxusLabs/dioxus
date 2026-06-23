@@ -4,7 +4,7 @@ use super::{TemplatePath, TemplateSlotPath, TemplateSlotTarget};
 /// which has no enclosing static element.
 pub(crate) const ROOT_PARENT_OP_INDEX: u16 = u16::MAX;
 
-/// A dynamic value anchor in a static template.
+/// A dynamic slot anchor in a static template.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct TemplateAnchor {
@@ -12,10 +12,14 @@ pub struct TemplateAnchor {
     pub(crate) path: TemplateSlotPath,
     /// Static template operation index for the anchor's parent element.
     pub(crate) parent_op_index: u16,
-    /// First dynamic value index owned by this anchor.
-    pub(crate) value_start: u16,
-    /// One past the last dynamic value index owned by this anchor.
-    pub(crate) value_end: u16,
+    /// First dynamic node index owned by this anchor.
+    pub(crate) node_start: u16,
+    /// One past the last dynamic node index owned by this anchor.
+    pub(crate) node_end: u16,
+    /// First dynamic attribute index owned by this anchor.
+    pub(crate) attr_start: u16,
+    /// One past the last dynamic attribute index owned by this anchor.
+    pub(crate) attr_end: u16,
 }
 
 impl TemplateAnchor {
@@ -35,8 +39,12 @@ impl TemplateAnchor {
         self.slot_path().static_parent()
     }
 
-    pub const fn values(self) -> std::ops::Range<usize> {
-        self.value_start as usize..self.value_end as usize
+    pub const fn nodes(self) -> std::ops::Range<usize> {
+        self.node_start as usize..self.node_end as usize
+    }
+
+    pub const fn attributes(self) -> std::ops::Range<usize> {
+        self.attr_start as usize..self.attr_end as usize
     }
 
     pub(crate) const fn same_anchor(self, parent_op_index: u16, path: TemplateSlotPath) -> bool {

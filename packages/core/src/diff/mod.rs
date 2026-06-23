@@ -107,12 +107,7 @@ fn root_component_count(node: &VNode) -> usize {
         .map(|group| {
             group
                 .ids()
-                .filter(|idx| {
-                    matches!(
-                        node.dynamic_values[*idx].as_node(),
-                        Some(DynamicNode::Component(_))
-                    )
-                })
+                .filter(|idx| matches!(&node.dynamic_nodes[*idx], DynamicNode::Component(_)))
                 .count()
         })
         .sum()

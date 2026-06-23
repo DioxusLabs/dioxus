@@ -83,8 +83,8 @@ impl WebsysDom {
     ) -> Result<(), RehydrationError> {
         match child {
             VNodeChild::Dynamic(group) => {
-                for value_idx in group.ids() {
-                    self.emit_dynamic_node_at_level(vnode, value_idx, dom, cursor, state)?;
+                for node in group.nodes() {
+                    self.emit_dynamic_node_at_level(vnode, node, dom, cursor, state)?;
                 }
                 // A `BeforeStatic` group anchors before the following static
                 // sibling at this level. Record its id so that sibling's emission
@@ -119,15 +119,11 @@ impl WebsysDom {
     fn emit_dynamic_node_at_level<'a>(
         &mut self,
         vnode: MountedVNode<'a>,
-        value_idx: usize,
+        node: &'a DynamicNode,
         dom: &'a VirtualDom,
         cursor: &mut HydrationCursor,
         state: &mut LevelState,
     ) -> Result<(), RehydrationError> {
-        let Some(node) = vnode.vnode().dynamic_values()[value_idx].as_node() else {
-            return Err(HydrationMismatch);
-        };
-
         match node {
             DynamicNode::Text(text) => {
                 let id = vnode
@@ -240,21 +236,16 @@ impl WebsysDom {
                 .mounted_anchor_node_by_index(group.anchor_index(), dom)
                 .ok_or(VNodeNotInitialized)?;
             *mounted_id = Some(anchor_id);
-            for value_idx in group.ids() {
-                let Some(attrs) = vnode.vnode().dynamic_values()[value_idx].as_attrs() else {
-                    return Err(HydrationMismatch);
-                };
-                for attribute in attrs {
-                    if matches!(attribute.value, AttributeValue::Listener(_)) {
-                        if attribute.name == "onmounted" {
-                            #[cfg(feature = "mounted")]
-                            mounted_events.push(anchor_id);
-                        } else {
-                            let event_name =
-                                attribute.name.strip_prefix("on").unwrap_or(attribute.name);
-                            let bubbles = dioxus_core_types::event_bubbles(event_name);
-                            listeners.push((event_name, bubbles));
-                        }
+            for attribute in group.attrs().flatten() {
+                if matches!(attribute.value, AttributeValue::Listener(_)) {
+                    if attribute.name == "onmounted" {
+                        #[cfg(feature = "mounted")]
+                        mounted_events.push(anchor_id);
+                    } else {
+                        let event_name =
+                            attribute.name.strip_prefix("on").unwrap_or(attribute.name);
+                        let bubbles = dioxus_core_types::event_bubbles(event_name);
+                        listeners.push((event_name, bubbles));
                     }
                 }
             }

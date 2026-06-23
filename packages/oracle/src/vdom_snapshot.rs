@@ -89,10 +89,7 @@ fn dynamic_node_snapshot(
     owner: MountedVNode<'_>,
     id: usize,
 ) -> Vec<SnapshotNode> {
-    match owner.dynamic_values()[id]
-        .as_node()
-        .expect("snapshot node slot must point at a dynamic node")
-    {
+    match &owner.dynamic_node_values()[id] {
         DynamicNode::Text(text) => vec![SnapshotNode::Text(text.value.clone())],
         DynamicNode::Fragment(nodes) => {
             let mounted_children = owner.mounted_fragment_children(id, vdom);

@@ -1,7 +1,7 @@
 //! Diffing for dynamic attributes.
 //!
 //! Templates keep static attributes in the packed op tape and store runtime attributes in
-//! `VNode::dynamic_values`. Each dynamic attribute path points at the element that owns the
+//! `VNode::dynamic_attrs`. Each dynamic attribute path points at the element that owns the
 //! corresponding dynamic attribute slot. Several adjacent slots may point at the same element when
 //! RSX mixes named dynamic attributes and spreads.
 //!

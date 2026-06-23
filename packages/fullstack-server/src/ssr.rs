@@ -567,11 +567,8 @@ impl SsrRendererPool {
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
         for group in vnode.vnode().dynamic_nodes() {
-            for dynamic_node_id in group.ids() {
-                let dynamic_node = vnode.dynamic_values()[dynamic_node_id]
-                    .as_node()
-                    .expect("hydration data node slot must point at a dynamic node");
-                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dynamic_node_id);
+            for (dyn_node_index, dynamic_node) in group.enumerate_nodes() {
+                Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, dyn_node_index);
             }
         }
     }

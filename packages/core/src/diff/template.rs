@@ -384,7 +384,7 @@ fn next_dynamic_child<'a>(
     None
 }
 
-/// A chunk of dynamic values attached to one template anchor.
+/// A chunk of dynamic nodes or attributes attached to one template anchor.
 #[derive(Clone, Copy)]
 pub(crate) enum DynamicChunk<'a> {
     /// Dynamic node values inserted at one template position.
@@ -413,7 +413,7 @@ impl VNode {
         self.template.root_position_count()
     }
 
-    /// Iterate dynamic value groups in template document order.
+    /// Iterate dynamic chunks in template document order.
     pub(crate) fn dynamic_groups(&self) -> impl DoubleEndedIterator<Item = DynamicChunk<'_>> + '_ {
         self.template
             .anchors()
@@ -472,7 +472,7 @@ impl VNode {
 /// A group of dynamic node values that share one insertion anchor.
 #[derive(Clone, Copy)]
 pub struct DynamicNodeGroup<'a> {
-    dynamic_values: &'a [crate::DynamicValue],
+    dynamic_nodes: &'a [DynamicNode],
     anchor: &'a TemplateAnchor,
     anchor_index: usize,
     root_position: usize,
@@ -481,7 +481,7 @@ pub struct DynamicNodeGroup<'a> {
 impl<'a> DynamicNodeGroup<'a> {
     pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor, anchor_index: usize) -> Self {
         Self {
-            dynamic_values: &vnode.dynamic_values,
+            dynamic_nodes: &vnode.dynamic_nodes,
             anchor,
             anchor_index,
             root_position: vnode
@@ -491,22 +491,31 @@ impl<'a> DynamicNodeGroup<'a> {
         }
     }
 
-    /// Iterate the dynamic value indexes in this group.
+    /// Iterate the dynamic node indexes in this group.
     pub fn ids(self) -> impl DoubleEndedIterator<Item = usize> + 'a {
-        self.anchor
-            .values()
-            .filter(move |&idx| self.dynamic_values[idx].as_node().is_some())
+        self.anchor.nodes()
     }
 
     /// Iterate the dynamic nodes in this group.
     pub fn nodes(self) -> impl DoubleEndedIterator<Item = &'a DynamicNode> + 'a {
+        self.anchor.nodes().map(move |idx| &self.dynamic_nodes[idx])
+    }
+
+    /// Enumerate the dynamic nodes in this group.
+    pub fn enumerate_nodes(self) -> impl DoubleEndedIterator<Item = (usize, &'a DynamicNode)> + 'a {
         self.anchor
-            .values()
-            .filter_map(move |idx| self.dynamic_values[idx].as_node())
+            .nodes()
+            .map(move |idx| (idx, &self.dynamic_nodes[idx]))
+    }
+
+    pub(super) fn slots(self) -> impl DoubleEndedIterator<Item = DynamicNodeSlot<'a>> + 'a {
+        self.anchor
+            .nodes()
+            .map(move |index| DynamicNodeSlot { group: self, index })
     }
 
     fn is_empty(self) -> bool {
-        self.ids().next().is_none()
+        self.anchor.nodes().is_empty()
     }
 
     /// The static template position where this group is inserted.
@@ -551,12 +560,48 @@ impl<'a> DynamicNodeGroup<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct DynamicNodeSlot<'a> {
+    group: DynamicNodeGroup<'a>,
+    index: usize,
+}
+
+impl<'a> DynamicNodeSlot<'a> {
+    pub(super) fn index(self) -> usize {
+        self.index
+    }
+
+    pub(super) fn anchor_index(self) -> usize {
+        self.group.anchor_index()
+    }
+
+    pub(super) fn root_position(self) -> usize {
+        self.group.root_position()
+    }
+
+    pub(super) fn appends(self) -> bool {
+        self.group.appends()
+    }
+
+    pub(super) fn is_root_level(self) -> bool {
+        self.group.is_root_level()
+    }
+
+    pub(super) fn parent_path(self) -> TemplatePath {
+        self.group.parent_path()
+    }
+
+    pub(super) fn shares_insertion_position(self, other: Self) -> bool {
+        self.group.shares_insertion_position(other.group)
+    }
+}
+
 /// A group of dynamic attribute values that all attach to one static element, viewed directly over
 /// its [`TemplateAnchor`].
 #[derive(Clone, Copy)]
 pub struct DynamicAttrGroup<'a> {
     template: &'a Template,
-    dynamic_values: &'a [crate::DynamicValue],
+    dynamic_attrs: &'a [Box<[Attribute]>],
     anchor: &'a TemplateAnchor,
     anchor_index: usize,
 }
@@ -565,24 +610,23 @@ impl<'a> DynamicAttrGroup<'a> {
     pub(super) fn new(vnode: &'a VNode, anchor: &'a TemplateAnchor, anchor_index: usize) -> Self {
         Self {
             template: &vnode.template,
-            dynamic_values: &vnode.dynamic_values,
+            dynamic_attrs: &vnode.dynamic_attrs,
             anchor,
             anchor_index,
         }
     }
 
-    /// Iterate the dynamic value indexes in this group.
+    /// Iterate the dynamic attribute indexes in this group.
     pub fn ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.anchor
-            .values()
-            .filter(|&idx| self.dynamic_values[idx].as_attrs().is_some())
+        self.anchor.attributes()
     }
 
     /// Iterate the dynamic attributes in this group.
-    pub fn attrs(&self) -> impl Iterator<Item = &'a [Attribute]> + 'a {
+    pub fn attrs(&self) -> impl Iterator<Item = &'a [Attribute]> + '_ {
+        let dynamic_attrs = self.dynamic_attrs;
         self.anchor
-            .values()
-            .filter_map(|idx| self.dynamic_values[idx].as_attrs())
+            .attributes()
+            .map(move |idx| dynamic_attrs[idx].as_ref())
     }
 
     /// Get the number of dynamic attributes in this group.
@@ -591,7 +635,7 @@ impl<'a> DynamicAttrGroup<'a> {
     }
 
     fn is_empty(&self) -> bool {
-        self.attrs().next().is_none()
+        self.anchor.attributes().is_empty()
     }
 
     /// The template anchor index for the static element this group applies to.

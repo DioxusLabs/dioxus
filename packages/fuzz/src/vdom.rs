@@ -8,8 +8,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_core::{
-    Attribute, AttributeValue, DynamicNode, DynamicValue, DynamicValues, Portal, Runtime, Task,
-    Template, VComponent, VNode, VText,
+    Attribute, AttributeValue, DynamicNode, DynamicValues, Portal, Runtime, Task, Template,
+    VComponent, VNode, VText,
 };
 #[cfg(test)]
 use dioxus_core_template::DecodedTemplateOp;
@@ -375,7 +375,8 @@ fn build_suspense_child_vnode(
         template,
         DynamicValues::from_parts(
             None,
-            Box::new([DynamicValue::Node(DynamicNode::Fragment(vec![child]))]),
+            Box::new([DynamicNode::Fragment(vec![child])]),
+            Box::new([]),
         ),
     )
 }
@@ -429,87 +430,14 @@ fn build_vnode_with_suspense(
                 .collect::<Box<[Attribute]>>()
         })
         .collect::<Vec<_>>();
-    let dynamic_slots = dynamic_slots_for_template(&spec.template);
-
-    let dynamic_values: Vec<DynamicValue> = dynamic_slots
-        .into_iter()
-        .map(|slot| match slot {
-            FuzzDynamicSlot::Node(id) => DynamicValue::Node(dynamic_nodes[id].clone()),
-            FuzzDynamicSlot::Attrs(id) => DynamicValue::Attrs(dynamic_attrs[id].clone()),
-        })
-        .collect();
-
     VNode::new(
         template,
         DynamicValues::from_parts(
             spec.key.map(|key| format!("k{key}")),
-            dynamic_values.into_boxed_slice(),
+            dynamic_nodes.into_boxed_slice(),
+            dynamic_attrs.into_boxed_slice(),
         ),
     )
-}
-
-#[derive(Clone, Copy, Debug)]
-enum FuzzDynamicSlot {
-    Node(usize),
-    Attrs(usize),
-}
-
-/// Compute the node/attribute classification of each dynamic value in template fill order: an
-/// element's children are filled before its own dynamic attributes, because attribute anchors are
-/// lowered at `close_element` (after the children). This mirrors the typed view builder, which
-/// pushes children then attributes, and is the fuzz-side source of truth for slot kinds, which
-/// the lowered template does not record.
-fn dynamic_slots_for_template(spec: &TemplateSpec) -> Vec<FuzzDynamicSlot> {
-    let shapes = spec
-        .roots
-        .iter()
-        .map(TemplateNodeSpec::shape)
-        .collect::<Vec<_>>();
-    let mut slots = Vec::new();
-    let mut next_node = 0;
-    let mut next_attr = 0;
-    for shape in &shapes {
-        collect_fuzz_slots(shape, &mut slots, &mut next_node, &mut next_attr);
-    }
-    slots
-}
-
-fn collect_fuzz_slots(
-    node: &TemplateNodeShape,
-    slots: &mut Vec<FuzzDynamicSlot>,
-    next_node: &mut usize,
-    next_attr: &mut usize,
-) {
-    match node {
-        TemplateNodeShape::Element {
-            attrs, children, ..
-        } => {
-            // An element's dynamic-attribute slots are lowered to anchors at its
-            // `close_element` — *after* its children — so the template fills the
-            // children's dynamic values before the element's attributes (matching
-            // the typed view builder, which pushes `children` then `attrs`). Mirror
-            // that fill order here: emit the attribute slots after recursing the
-            // children. Attribute *ids* are still reserved before the children so
-            // they stay aligned with `collect_dynamic_attr_lists`, which numbers a
-            // parent's attribute lists ahead of its descendants'.
-            let mut attr_slots = Vec::new();
-            for attr in attrs {
-                if matches!(attr, TemplateAttrShape::Dynamic) {
-                    attr_slots.push(FuzzDynamicSlot::Attrs(*next_attr));
-                    *next_attr += 1;
-                }
-            }
-            for child in children {
-                collect_fuzz_slots(child, slots, next_node, next_attr);
-            }
-            slots.extend(attr_slots);
-        }
-        TemplateNodeShape::Dynamic => {
-            slots.push(FuzzDynamicSlot::Node(*next_node));
-            *next_node += 1;
-        }
-        TemplateNodeShape::Text(_) => {}
-    }
 }
 
 fn build_dynamic(
@@ -883,15 +811,15 @@ mod tests {
             attrs,
             vec![("attr1", "static4", None), ("attr2", "static3", None)]
         );
-        assert_eq!(dynamic_value_count(template), 2);
+        assert_eq!(dynamic_attr_count(template), 2);
     }
 
-    /// The number of dynamic values a template declares, derived structurally from its anchors.
-    fn dynamic_value_count(template: Template) -> usize {
+    /// The number of dynamic attributes a template declares, derived structurally from its anchors.
+    fn dynamic_attr_count(template: Template) -> usize {
         template
             .anchors()
             .iter()
-            .map(|anchor| anchor.values().end)
+            .map(|anchor| anchor.attributes().end)
             .max()
             .unwrap_or(0)
     }

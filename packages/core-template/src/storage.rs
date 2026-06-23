@@ -37,8 +37,10 @@ pub struct TemplateStorageStats {
     pub strings: usize,
     /// Number of dynamic anchors.
     pub anchors: usize,
-    /// Number of runtime dynamic values.
-    pub dynamic_values: usize,
+    /// Number of runtime dynamic node slots.
+    pub dynamic_nodes: usize,
+    /// Number of runtime dynamic attribute slots.
+    pub dynamic_attributes: usize,
     /// Whether lowering overflowed the path stack.
     pub path_overflow: bool,
 }
@@ -58,8 +60,13 @@ impl TemplateStorageStats {
         anchors: &mut Vec<AnchorStats>,
         parent_op_index: u16,
         path: TemplateSlotPath,
+        is_attr: bool,
     ) {
-        self.dynamic_values += 1;
+        if is_attr {
+            self.dynamic_attributes += 1;
+        } else {
+            self.dynamic_nodes += 1;
+        }
 
         if let Some(last) = anchors.last_mut() {
             if last.same_anchor(parent_op_index, path) {
@@ -96,10 +103,6 @@ pub struct TemplateStorage<
     ops: ConstVec<TemplateOp, OPS_CAP>,
     strings: ConstVec<&'static str, STRING_CAP>,
     anchors: ConstVec<TemplateAnchor, DYNAMIC_CAP>,
-    /// Running hash of each dynamic value's kind (attribute vs node) in dynamic-value
-    /// order. Folded into the template hash so kind-incompatible templates that
-    /// share an op tape compare unequal; never stored on the template itself.
-    value_kind_hash: u64,
 }
 
 impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
@@ -111,7 +114,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             ops: ConstVec::new_with_max_size(),
             strings: ConstVec::new_with_max_size(),
             anchors: ConstVec::new_with_max_size(),
-            value_kind_hash: 0,
         };
         let mut cursor = TemplateLoweringCursor::new();
 
@@ -126,7 +128,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             self.ops.as_slice(),
             self.strings.as_slice(),
             self.anchors.as_slice(),
-            self.value_kind_hash,
         )
     }
 
@@ -137,7 +138,6 @@ impl<const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
             Box::leak(self.ops.as_slice().to_vec().into_boxed_slice()),
             Box::leak(self.strings.as_slice().to_vec().into_boxed_slice()),
             Box::leak(self.anchors.as_slice().to_vec().into_boxed_slice()),
-            self.value_kind_hash,
         )
     }
 }
@@ -338,7 +338,7 @@ impl TemplateStatsBuilder {
         }
         let path = TemplateSlotPath::append_children(frame.path);
         self.stats
-            .push_anchor(&mut self.anchors, frame.enter_index as u16, path);
+            .push_anchor(&mut self.anchors, frame.enter_index as u16, path, true);
     }
 
     /// Count a static text node.
@@ -359,6 +359,7 @@ impl TemplateStatsBuilder {
                     &mut self.anchors,
                     self.cursor.node_anchor_parent_op_index(),
                     path,
+                    false,
                 );
             }
             Err(()) => {
@@ -367,6 +368,7 @@ impl TemplateStatsBuilder {
                     &mut self.anchors,
                     self.cursor.node_anchor_parent_op_index(),
                     TemplateSlotPath::append_children(TemplatePath::empty()),
+                    false,
                 );
             }
         }
@@ -486,45 +488,53 @@ macro_rules! template_storage_methods {
             path: TemplateSlotPath,
             is_attr: bool,
         ) {
-            // Fold this value's kind into the running signature in dynamic-value order
-            // (one value per call, including merges into the previous anchor).
-            // The template hash mixes this in so an attribute slot and a node
-            // slot at the same anchor never produce equal templates.
-            self.value_kind_hash =
-                xxhash_rust::const_xxh64::xxh64(&[is_attr as u8], self.value_kind_hash);
-
             let len = self.anchors.len();
             if len > 0 {
                 let last = self.anchors.at(len - 1);
                 if last.same_anchor(parent_op_index, path) {
-                    if last.value_end == u16::MAX {
-                        panic!("anchor overflow");
+                    if is_attr {
+                        if last.attr_end == u16::MAX {
+                            panic!("anchor overflow");
+                        }
+                        self.anchors.set(
+                            len - 1,
+                            TemplateAnchor {
+                                attr_end: last.attr_end + 1,
+                                ..last
+                            },
+                        );
+                    } else {
+                        if last.node_end == u16::MAX {
+                            panic!("anchor overflow");
+                        }
+                        self.anchors.set(
+                            len - 1,
+                            TemplateAnchor {
+                                node_end: last.node_end + 1,
+                                ..last
+                            },
+                        );
                     }
-                    self.anchors.set(
-                        len - 1,
-                        TemplateAnchor {
-                            value_end: last.value_end + 1,
-                            ..last
-                        },
-                    );
                     return;
                 }
             }
 
-            let value_start = if len == 0 {
-                0
+            let (node_start, attr_start) = if len == 0 {
+                (0, 0)
             } else {
                 let last = self.anchors.at(len - 1);
-                last.value_end
+                (last.node_end, last.attr_end)
             };
-            if value_start == u16::MAX {
+            if (is_attr && attr_start == u16::MAX) || (!is_attr && node_start == u16::MAX) {
                 panic!("anchor overflow");
             }
             self.anchors.push(TemplateAnchor {
                 parent_op_index,
                 path,
-                value_start,
-                value_end: value_start + 1,
+                node_start,
+                node_end: node_start + (!is_attr as u16),
+                attr_start,
+                attr_end: attr_start + (is_attr as u16),
             });
         }
 
@@ -638,9 +648,6 @@ struct RuntimeTemplateStorage {
     ops: RuntimeTemplateVec<TemplateOp>,
     strings: RuntimeTemplateVec<&'static str>,
     anchors: RuntimeTemplateVec<TemplateAnchor>,
-    /// Running hash of each dynamic value's kind (attribute vs node) in dynamic-value
-    /// order. See [`TemplateStorage::value_kind_hash`].
-    value_kind_hash: u64,
 }
 
 struct RuntimeTemplateVec<T>(Vec<T>);
@@ -748,7 +755,6 @@ impl RuntimeTemplateStorage {
             Box::leak(self.ops.into_boxed_slice()),
             Box::leak(self.strings.into_boxed_slice()),
             Box::leak(self.anchors.into_boxed_slice()),
-            self.value_kind_hash,
         )
     }
 
@@ -763,7 +769,7 @@ mod tests {
         TemplateStorage::<64, 64, 16>::build_from_tree(tree).into_leaked_template()
     }
 
-    fn anchor_parts(template: Template) -> Vec<(u16, u128, u16, u16)> {
+    fn anchor_parts(template: Template) -> Vec<(u16, u128, u16, u16, u16, u16)> {
         template
             .anchors()
             .iter()
@@ -771,8 +777,10 @@ mod tests {
                 (
                     anchor.parent_op_index,
                     anchor.path.bits(),
-                    anchor.value_start,
-                    anchor.value_end,
+                    anchor.node_start,
+                    anchor.node_end,
+                    anchor.attr_start,
+                    anchor.attr_end,
                 )
             })
             .collect()
@@ -852,7 +860,7 @@ mod tests {
 
         let template = builder.finish();
         assert_same_template(template, template_from_tree(&TREE));
-        assert_eq!(template.anchors()[0].values(), 0..2);
+        assert_eq!(template.anchors()[0].nodes(), 0..2);
     }
 
     #[test]
@@ -879,12 +887,19 @@ mod tests {
         assert!(stats.ops >= template.decoded_ops().len());
         assert!(stats.strings >= template.strings().len());
         assert_eq!(stats.anchors, template.anchors().len());
-        let dynamic_value_count = template
+        let dynamic_node_count = template
             .anchors()
             .iter()
-            .map(|anchor| anchor.values().end)
+            .map(|anchor| anchor.nodes().end)
             .max()
             .unwrap_or_default();
-        assert_eq!(stats.dynamic_values, dynamic_value_count);
+        let dynamic_attribute_count = template
+            .anchors()
+            .iter()
+            .map(|anchor| anchor.attributes().end)
+            .max()
+            .unwrap_or_default();
+        assert_eq!(stats.dynamic_nodes, dynamic_node_count);
+        assert_eq!(stats.dynamic_attributes, dynamic_attribute_count);
     }
 }

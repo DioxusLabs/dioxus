@@ -84,15 +84,18 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Err(ExtractSingleTextNodeError::NonTemplate);
     }
 
-    match (child, vnode.dynamic_values().len()) {
+    match (
+        child,
+        vnode.dynamic_node_values().len(),
+        vnode.dynamic_attr_values().len(),
+    ) {
         // rsx! { "static text" }
-        (VNodeChild::Text(text), 0) => Ok(text.text().to_string()),
+        (VNodeChild::Text(text), 0, 0) => Ok(text.text().to_string()),
         // rsx! { "title: {dynamic_text}" }
-        (VNodeChild::Dynamic(group), 1) => match group.ids().next() {
-            Some(0) => match vnode.dynamic_values()[0].as_node() {
-                Some(DynamicNode::Text(text)) => Ok(text.value.clone()),
-                Some(_) => Err(ExtractSingleTextNodeError::NonTextNode),
-                None => Err(ExtractSingleTextNodeError::NonTemplate),
+        (VNodeChild::Dynamic(group), 1, 0) => match group.ids().next() {
+            Some(0) => match &vnode.dynamic_node_values()[0] {
+                DynamicNode::Text(text) => Ok(text.value.clone()),
+                _ => Err(ExtractSingleTextNodeError::NonTextNode),
             },
             _ => Err(ExtractSingleTextNodeError::NonTemplate),
         },
@@ -102,7 +105,7 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
 
 #[cfg(test)]
 mod tests {
-    use dioxus_core::{DynamicNode, DynamicValue, DynamicValues, VNode, VText};
+    use dioxus_core::{DynamicNode, DynamicValues, VNode, VText};
     use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 
     use super::*;
@@ -113,7 +116,7 @@ mod tests {
         static STORAGE: TemplateStorage<2, 1, 0> = TemplateStorage::build_from_tree(&TREE);
         let children = Ok(VNode::new(
             STORAGE.as_template(),
-            DynamicValues::from_parts(None, Box::new([])),
+            DynamicValues::from_parts(None, Box::new([]), Box::new([])),
         ));
 
         assert_eq!(
@@ -130,9 +133,8 @@ mod tests {
             STORAGE.as_template(),
             DynamicValues::from_parts(
                 None,
-                Box::new([DynamicValue::Node(DynamicNode::Text(VText::new(
-                    "title: dynamic text",
-                )))]),
+                Box::new([DynamicNode::Text(VText::new("title: dynamic text"))]),
+                Box::new([]),
             ),
         ));
 

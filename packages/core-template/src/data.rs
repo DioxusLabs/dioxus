@@ -23,7 +23,7 @@ pub struct Template {
     )]
     strings: &'static [&'static str],
 
-    /// Dynamic value groups in document/value order, each anchored to a static element.
+    /// Dynamic node and attribute ranges in document order, each anchored to a static element.
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "super::serialization::deserialize_leaky")
@@ -236,25 +236,16 @@ impl std::fmt::Debug for Template {
 
 impl Template {
     /// Create a new template.
-    ///
-    /// `value_kind_hash` folds in the per-dynamic-value kind (attribute vs node)
-    /// in dynamic-value order. Attributes and nodes share kind-agnostic anchors — the
-    /// runtime value decides which a slot is — so two templates with the same op
-    /// tape and anchors but a different kind layout (`{attr}` where the other has
-    /// `{node}`) must not compare equal. Folding the kind layout into the hash
-    /// keeps `Template` equality meaning "structurally interchangeable for
-    /// diffing" without storing the kinds anywhere on the template.
     pub(crate) const fn new(
         ops: &'static [TemplateOp],
         strings: &'static [&'static str],
         anchors: &'static [TemplateAnchor],
-        value_kind_hash: u64,
     ) -> Self {
         Self {
             ops,
             strings,
             anchors,
-            hash: Self::compute_hash(ops, strings, anchors, value_kind_hash),
+            hash: Self::compute_hash(ops, strings, anchors),
         }
     }
 
@@ -268,7 +259,7 @@ impl Template {
         self.ops.iter().map(|op| op.decode())
     }
 
-    /// Get dynamic value anchors in document/value order.
+    /// Get dynamic slot anchors in document order.
     pub const fn anchors(&self) -> &'static [TemplateAnchor] {
         self.anchors
     }
@@ -502,7 +493,6 @@ impl Template {
         ops: &[TemplateOp],
         strings: &'static [&'static str],
         anchors: &[TemplateAnchor],
-        value_kind_hash: u64,
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
@@ -532,15 +522,12 @@ impl Template {
             let anchor = anchors[i];
             hash = xxh64(&anchor.parent_op_index.to_le_bytes(), hash);
             hash = xxh64(&anchor.slot_path().bits().to_le_bytes(), hash);
-            hash = xxh64(&anchor.value_start.to_le_bytes(), hash);
-            hash = xxh64(&anchor.value_end.to_le_bytes(), hash);
+            hash = xxh64(&anchor.node_start.to_le_bytes(), hash);
+            hash = xxh64(&anchor.node_end.to_le_bytes(), hash);
+            hash = xxh64(&anchor.attr_start.to_le_bytes(), hash);
+            hash = xxh64(&anchor.attr_end.to_le_bytes(), hash);
             i += 1;
         }
-
-        // Fold the per-value kind layout (attribute vs node) so structurally
-        // incompatible templates that share an op tape and anchors hash apart.
-        hash = xxh64(&[0xA2], hash);
-        hash = xxh64(&value_kind_hash.to_le_bytes(), hash);
 
         hash
     }
@@ -564,9 +551,7 @@ impl<'de> serde::Deserialize<'de> for Template {
         }
 
         let serialized = SerializedTemplate::deserialize(deserializer)?;
-        // The hash folds in the per-value kind layout, which is not recoverable
-        // from the op tape and anchors alone, so trust the serialized hash that
-        // the original builder computed rather than recomputing it here.
+        // Trust the serialized hash that the original builder computed.
         Ok(Self {
             ops: serialized.ops,
             strings: serialized.strings,

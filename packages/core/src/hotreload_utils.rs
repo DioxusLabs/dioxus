@@ -3,7 +3,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::nodes::DynamicValue;
 use crate::{Attribute, AttributeValue, DynamicNode, DynamicValues, Template, VNode, VText};
 #[cfg(feature = "serialize")]
 use dioxus_core_template::deserialize_string_leaky;
@@ -125,7 +124,7 @@ pub enum FmtSegment {
 //     vec![...],
 //     vec![...],
 // );
-// Hot reload templates carry a decoded Template plus a dynamic value mapping.
+// Hot reload templates carry a decoded Template plus dynamic node/attribute mappings.
 
 // Open questions:
 // - How do we handle type coercion for different sized component property integers?
@@ -248,7 +247,7 @@ pub struct DynamicValuePool {
 }
 
 impl DynamicValuePool {
-    /// Create a dynamic value pool.
+    /// Create a dynamic node/attribute value pool.
     fn new(
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attributes: Vec<Box<[Attribute]>>,
@@ -261,19 +260,10 @@ impl DynamicValuePool {
         }
     }
 
-    /// Create a dynamic value pool from a vnode.
+    /// Create a dynamic node/attribute value pool from a vnode.
     pub fn from_vnode(vnode: &VNode, literal_pool: DynamicLiteralPool) -> Self {
-        let mut dynamic_nodes = Vec::new();
-        let mut dynamic_attributes = Vec::new();
-
-        for anchor in vnode.template.anchors() {
-            for idx in anchor.values() {
-                match &vnode.dynamic_values[idx] {
-                    DynamicValue::Node(node) => dynamic_nodes.push(node.clone()),
-                    DynamicValue::Attrs(attrs) => dynamic_attributes.push(attrs.clone()),
-                }
-            }
-        }
+        let dynamic_nodes = vnode.dynamic_nodes.clone();
+        let dynamic_attributes = vnode.dynamic_attrs.clone();
 
         Self::new(dynamic_nodes, dynamic_attributes, literal_pool)
     }
@@ -284,22 +274,24 @@ impl DynamicValuePool {
             .key
             .as_ref()
             .map(|key| self.literal_pool.render_formatted(key));
-        let dynamic_values = hot_reload
-            .dynamic_slots
+        let dynamic_nodes = hot_reload
+            .dynamic_nodes
             .iter()
-            .map(|slot| match slot {
-                HotReloadDynamicSlot::Node(id) => {
-                    DynamicValue::Node(self.render_dynamic_node(&hot_reload.dynamic_nodes[*id]))
-                }
-                HotReloadDynamicSlot::Attribute(id) => {
-                    DynamicValue::Attrs(self.render_attribute(&hot_reload.dynamic_attributes[*id]))
-                }
-            })
-            .collect();
+            .map(|node| self.render_dynamic_node(node))
+            .collect::<Vec<_>>();
+        let dynamic_attributes = hot_reload
+            .dynamic_attributes
+            .iter()
+            .map(|attr| self.render_attribute(attr))
+            .collect::<Vec<_>>();
 
         VNode::new(
             hot_reload.template,
-            DynamicValues::from_parts(key, dynamic_values),
+            DynamicValues::from_parts(
+                key,
+                dynamic_nodes.into_boxed_slice(),
+                dynamic_attributes.into_boxed_slice(),
+            ),
         )
     }
 
@@ -376,7 +368,7 @@ pub struct TemplateGlobalKey {
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[doc(hidden)]
-/// Template data and dynamic value mapping for hot reload.
+/// Template data and dynamic node/attribute mappings for hot reload.
 pub struct HotReloadedTemplate {
     /// Optional dynamic key segments.
     pub key: Option<FmtedSegments>,
@@ -386,26 +378,23 @@ pub struct HotReloadedTemplate {
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
     /// Component literal values.
     pub component_values: Vec<HotReloadLiteral>,
-    dynamic_slots: Vec<HotReloadDynamicSlot>,
     template: Template,
 }
 
 impl HotReloadedTemplate {
-    /// Create hot-reload data from a template and dynamic value mappings.
+    /// Create hot-reload data from a template and dynamic node/attribute mappings.
     pub fn from_template(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         template: Template,
-        dynamic_slots: Vec<HotReloadDynamicSlot>,
     ) -> Self {
         Self {
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
-            dynamic_slots,
             template,
         }
     }
@@ -424,22 +413,6 @@ impl HotReloadedTemplate {
     pub fn static_strings(&self) -> &'static [&'static str] {
         self.template.strings()
     }
-
-    /// Return whether the dynamic value at the given index is a node.
-    pub fn dynamic_is_node(&self, dynamic_idx: usize) -> bool {
-        matches!(
-            self.dynamic_slots.get(dynamic_idx),
-            Some(HotReloadDynamicSlot::Node(_))
-        )
-    }
-
-    /// Return whether the dynamic value at the given index is an attribute.
-    pub fn dynamic_is_attr(&self, dynamic_idx: usize) -> bool {
-        matches!(
-            self.dynamic_slots.get(dynamic_idx),
-            Some(HotReloadDynamicSlot::Attribute(_))
-        )
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -454,7 +427,6 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
             dynamic_nodes: Vec<HotReloadDynamicNode>,
             dynamic_attributes: Vec<HotReloadDynamicAttribute>,
             component_values: Vec<HotReloadLiteral>,
-            dynamic_slots: Vec<HotReloadDynamicSlot>,
             template: Template,
         }
 
@@ -465,20 +437,8 @@ impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
             serialized.dynamic_attributes,
             serialized.component_values,
             serialized.template,
-            serialized.dynamic_slots,
         ))
     }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
-/// The kind and source index of a hot-reload dynamic value slot.
-pub enum HotReloadDynamicSlot {
-    /// Dynamic node slot.
-    Node(usize),
-    /// Dynamic attribute slot.
-    Attribute(usize),
 }
 
 #[derive(Debug, PartialEq, Clone, Hash)]

@@ -821,7 +821,7 @@ impl crate::MountedVNode<'_> {
         dom: &VirtualDom,
         to: &mut dyn WriteMutations,
     ) -> usize {
-        match self.dynamic_values[idx].node() {
+        match &self.dynamic_nodes[idx] {
             DynamicNode::Fragment(nodes) => {
                 let mounts = dom.mounted_fragment_children_exact(mount, idx, nodes.len());
                 nodes

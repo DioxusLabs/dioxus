@@ -44,12 +44,6 @@ pub(crate) struct FragmentMountWriter {
     len: usize,
 }
 
-impl FragmentMountWriter {
-    pub(crate) fn len(self) -> usize {
-        self.len
-    }
-}
-
 impl PackedMountedSlot {
     const fn empty() -> Self {
         Self { value: 0 }
@@ -110,6 +104,12 @@ impl PackedMountedSlot {
     }
 }
 
+impl FragmentMountWriter {
+    pub(crate) fn len(self) -> usize {
+        self.len
+    }
+}
+
 pub(crate) struct Mount {
     render_parent: Option<MountRef>,
 
@@ -140,12 +140,12 @@ impl Mount {
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
     ) -> Self {
-        // Root and dynamic-value slot counts are structural: the root array length is the number
+        // Root and dynamic-node slot counts are structural: the root array length is the number
         // of template root positions, the anchor array length is the number of dynamic anchors, and
-        // the dynamic array length is the number of runtime values.
+        // the dynamic array length is the number of runtime dynamic nodes.
         let root_count = node.root_child_count();
         let anchor_count = node.template.anchors().len();
-        let dynamic_count = node.dynamic_values().len();
+        let dynamic_count = node.dynamic_node_values().len();
         Self {
             render_parent,
             logical_parent,
@@ -631,7 +631,7 @@ fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
     let old_children = std::mem::take(&mut mount.fragment_child_mounts);
     for group in node.dynamic_nodes() {
         for idx in group.ids() {
-            let DynamicNode::Fragment(nodes) = node.dynamic_values[idx].node() else {
+            let DynamicNode::Fragment(nodes) = &node.dynamic_nodes[idx] else {
                 continue;
             };
 

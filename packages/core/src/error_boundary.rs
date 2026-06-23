@@ -1,6 +1,5 @@
 use crate::{
-    DynamicValue, DynamicValues, Element, IntoDynNode, ReactiveContext, Subscribers, Template,
-    VNode,
+    DynamicValues, Element, IntoDynNode, ReactiveContext, Subscribers, Template, VNode,
     innerlude::{CapturedError, provide_context},
     try_consume_context, use_hook,
 };
@@ -174,31 +173,31 @@ fn default_handler(errors: ErrorContext) -> Element {
         TEMPLATE,
         DynamicValues::from_parts(
             None,
-            Box::new([DynamicValue::Node(
-                errors
-                    .error()
-                    .iter()
-                    .map(|e| {
-                        static TREE: TemplateRawTree = TemplateRawTree::Element {
-                            tag: "pre",
-                            namespace: None,
-                            attrs: &TemplateRawTree::Empty,
-                            children: &ERROR_DYNAMIC_TREE,
-                        };
-                        static STORAGE: TemplateStorage<4, 1, 1> =
-                            TemplateStorage::build_from_tree(&TREE);
-                        static INNER_TEMPLATE: Template = STORAGE.as_template();
+            Box::new([errors
+                .error()
+                .iter()
+                .map(|e| {
+                    static TREE: TemplateRawTree = TemplateRawTree::Element {
+                        tag: "pre",
+                        namespace: None,
+                        attrs: &TemplateRawTree::Empty,
+                        children: &ERROR_DYNAMIC_TREE,
+                    };
+                    static STORAGE: TemplateStorage<4, 1, 1> =
+                        TemplateStorage::build_from_tree(&TREE);
+                    static INNER_TEMPLATE: Template = STORAGE.as_template();
 
-                        VNode::new(
-                            INNER_TEMPLATE,
-                            DynamicValues::from_parts(
-                                None,
-                                Box::new([DynamicValue::Node(e.to_string().into_dyn_node())]),
-                            ),
-                        )
-                    })
-                    .into_dyn_node(),
-            )]),
+                    VNode::new(
+                        INNER_TEMPLATE,
+                        DynamicValues::from_parts(
+                            None,
+                            Box::new([e.to_string().into_dyn_node()]),
+                            Box::new([]),
+                        ),
+                    )
+                })
+                .into_dyn_node()]),
+            Box::new([]),
         ),
     ))
 }
@@ -345,7 +344,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
                 TEMPLATE,
                 DynamicValues::from_parts(
                     None,
-                    Box::new([DynamicValue::Node((props.children).into_dyn_node())]),
+                    Box::new([(props.children).into_dyn_node()]),
+                    Box::new([]),
                 ),
             )
         })

@@ -264,7 +264,8 @@ pub struct VNodeInner {
 
 pub struct DynamicValues {
     pub(crate) key: Option<String>,
-    pub(crate) dynamic_values: Box<[DynamicValue]>,
+    pub(crate) dynamic_nodes: Vec<DynamicNode>,
+    pub(crate) dynamic_attrs: Vec<Box<[Attribute]>>,
 }
 ```
 

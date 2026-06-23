@@ -63,7 +63,7 @@ mod hotreload_utils;
 pub mod internal {
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
-        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadDynamicSlot, HotReloadLiteral,
+        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute, TemplateGlobalKey,
     };
 
@@ -118,10 +118,10 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, AsyncMarker, AsyncResultMarker, Attribute, AttributeValue, Callback,
     CapturedError, Component, ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender,
-    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValue, DynamicValues, Element,
-    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
-    IntoAttributeValue, IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper,
-    MountedVNode, MultiWriter, Mutation, Mutations, NoOpMutations, OptionArgumentsFromMarker,
+    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValues, Element, ElementId,
+    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+    IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode,
+    MultiWriter, Mutation, Mutations, NoOpMutations, OptionArgumentsFromMarker,
     OptionCallbackMarker, OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext,
     RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
     SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,

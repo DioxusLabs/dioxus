@@ -282,7 +282,7 @@ fn template_local_cost(nodes: &[TemplateNodeSpec]) -> u64 {
                     + template_local_cost(children)
             }
             TemplateNodeSpec::Text(_) => 1,
-            // One for the template slot itself plus one for the dynamic value.
+            // One for the template slot itself plus one for the dynamic node value.
             TemplateNodeSpec::Dynamic(_) => 2,
         })
         .sum()

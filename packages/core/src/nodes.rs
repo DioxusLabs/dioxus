@@ -15,13 +15,16 @@ use std::{
     fmt::{Arguments, Debug},
 };
 
-/// Runtime values that hydrate a static [`Template`].
+/// Runtime node and attribute values that hydrate a static [`Template`].
 pub struct DynamicValues {
     /// Root key for this render.
     pub(crate) key: Option<String>,
 
-    /// Dynamic values in template order.
-    pub(crate) dynamic_values: Vec<DynamicValue>,
+    /// Dynamic node values in template order.
+    pub(crate) dynamic_nodes: Vec<DynamicNode>,
+
+    /// Dynamic attribute values in template order.
+    pub(crate) dynamic_attrs: Vec<Box<[Attribute]>>,
 }
 
 impl Debug for DynamicValues {
@@ -31,26 +34,32 @@ impl Debug for DynamicValues {
 }
 
 impl DynamicValues {
-    /// Create a dynamic values payload.
+    /// Create a dynamic node/attribute payload.
     ///
     /// Each dynamic attribute slot is normalized so its attributes are sorted by
     /// `(name, namespace)`. Duplicate keys keep their relative input order, giving
     /// last-wins semantics for spread attributes like `..props.attributes`.
     #[inline]
-    pub fn from_parts(key: Option<String>, dynamic_values: Box<[DynamicValue]>) -> Self {
+    pub fn from_parts(
+        key: Option<String>,
+        dynamic_nodes: Box<[DynamicNode]>,
+        dynamic_attrs: Box<[Box<[Attribute]>]>,
+    ) -> Self {
         let mut values = Self {
             key,
-            dynamic_values: dynamic_values.into_vec(),
+            dynamic_nodes: dynamic_nodes.into_vec(),
+            dynamic_attrs: dynamic_attrs.into_vec(),
         };
         values.normalize();
         values
     }
 
-    /// Create an empty dynamic values payload.
+    /// Create an empty dynamic node/attribute payload.
     pub(crate) fn new() -> Self {
         Self {
             key: None,
-            dynamic_values: Vec::new(),
+            dynamic_nodes: Vec::new(),
+            dynamic_attrs: Vec::new(),
         }
     }
 
@@ -61,7 +70,7 @@ impl DynamicValues {
 
     /// Push a dynamic node slot.
     pub(crate) fn push_node(&mut self, value: DynamicNode) {
-        self.dynamic_values.push(DynamicValue::Node(value));
+        self.dynamic_nodes.push(value);
     }
 
     /// Push a dynamic attribute slot.
@@ -69,17 +78,15 @@ impl DynamicValues {
     /// Dynamic attribute slots are normalized by [`Self::normalize`] before the values are stored
     /// on a [`VNode`].
     pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
-        self.dynamic_values.push(DynamicValue::Attrs(value));
+        self.dynamic_attrs.push(value);
     }
 
     /// Normalize dynamic attribute slots for diffing.
     #[inline]
     pub(crate) fn normalize(&mut self) {
-        for value in self.dynamic_values.iter_mut() {
-            if let DynamicValue::Attrs(slot) = value {
-                if slot.len() > 1 {
-                    slot.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
-                }
+        for slot in self.dynamic_attrs.iter_mut() {
+            if slot.len() > 1 {
+                slot.sort_by(|a, b| (a.name, a.namespace).cmp(&(b.name, b.namespace)));
             }
         }
     }
@@ -90,10 +97,16 @@ impl DynamicValues {
         self.key.as_deref()
     }
 
-    /// The dynamic values in template order.
+    /// The dynamic node values in template order.
     #[inline]
-    pub fn dynamic_values(&self) -> &[DynamicValue] {
-        &self.dynamic_values
+    pub fn dynamic_node_values(&self) -> &[DynamicNode] {
+        &self.dynamic_nodes
+    }
+
+    /// The dynamic attribute values in template order.
+    #[inline]
+    pub fn dynamic_attr_values(&self) -> &[Box<[Attribute]>] {
+        &self.dynamic_attrs
     }
 }
 
@@ -102,7 +115,7 @@ pub struct VNodeInner {
     /// The static template.
     pub template: Template,
 
-    /// The rendered dynamic values.
+    /// The rendered dynamic node/attribute values.
     pub view: DynamicValues,
 }
 
@@ -178,7 +191,8 @@ impl VNode {
                     template: EMPTY_TEMPLATE,
                     view: DynamicValues::from_parts(
                         None,
-                        Box::new([DynamicValue::Node(DynamicNode::Fragment(Vec::new()))]),
+                        Box::new([DynamicNode::Fragment(Vec::new())]),
+                        Box::new([]),
                     ),
                 })
             })
@@ -205,9 +219,10 @@ impl VNode {
                     template: ERROR_ANCHOR_TEMPLATE,
                     view: DynamicValues::from_parts(
                         None,
-                        Box::new([DynamicValue::Node(DynamicNode::Text(VText {
+                        Box::new([DynamicNode::Text(VText {
                             value: String::new(),
-                        }))]),
+                        })]),
+                        Box::new([]),
                     ),
                 })
             })
@@ -216,19 +231,29 @@ impl VNode {
         Self { vnode }
     }
 
-    /// Create a new VNode from a static template and dynamic values payload.
+    /// Create a new VNode from a static template and dynamic node/attribute payload.
     pub fn new(template: Template, mut values: DynamicValues) -> Self {
         values.normalize();
 
         debug_assert!(
-            values.dynamic_values.len()
+            values.dynamic_nodes.len()
                 == template
                     .anchors()
                     .iter()
-                    .map(|anchor| anchor.values().end)
+                    .map(|anchor| anchor.nodes().end)
                     .max()
                     .unwrap_or_default(),
-            "bad dynamic count"
+            "bad dynamic node count"
+        );
+        debug_assert!(
+            values.dynamic_attrs.len()
+                == template
+                    .anchors()
+                    .iter()
+                    .map(|anchor| anchor.attributes().end)
+                    .max()
+                    .unwrap_or_default(),
+            "bad dynamic attribute count"
         );
 
         // Dynamic attribute slots are required to be sorted by `(name, namespace)` for the diff.
@@ -270,7 +295,7 @@ impl<'a> MountedVNode<'a> {
         dynamic_node_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        match self.vnode.dynamic_values[dynamic_node_idx].node() {
+        match &self.vnode.dynamic_nodes[dynamic_node_idx] {
             DynamicNode::Text(_) => dom
                 .mounted_dynamic_text_node(self.mount, dynamic_node_idx)
                 .map(|id| id.element_id()),
@@ -319,17 +344,14 @@ impl<'a> MountedVNode<'a> {
         dynamic_attribute_idx: usize,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        self.vnode
-            .dynamic_values
-            .get(dynamic_attribute_idx)?
-            .as_attrs()?;
+        self.vnode.dynamic_attrs.get(dynamic_attribute_idx)?;
         let anchor_idx = self
             .vnode
             .template
             .anchors()
             .iter()
             .enumerate()
-            .find(|(_, anchor)| anchor.values().contains(&dynamic_attribute_idx))
+            .find(|(_, anchor)| anchor.attributes().contains(&dynamic_attribute_idx))
             .map(|(idx, _)| idx)?;
         self.mounted_anchor_node_by_index(anchor_idx, dom)
     }
@@ -340,9 +362,7 @@ impl<'a> MountedVNode<'a> {
         dynamic_node_idx: usize,
         dom: &VirtualDom,
     ) -> Vec<MountedVNode<'a>> {
-        let Some(DynamicNode::Fragment(children)) =
-            self.vnode.dynamic_values[dynamic_node_idx].as_node()
-        else {
+        let DynamicNode::Fragment(children) = &self.vnode.dynamic_nodes[dynamic_node_idx] else {
             return Vec::new();
         };
 
@@ -396,41 +416,6 @@ impl DynamicNode {
 impl Default for DynamicNode {
     fn default() -> Self {
         Self::Fragment(Vec::new())
-    }
-}
-
-/// A runtime value for one flat template dynamic slot.
-#[derive(Debug, Clone)]
-pub enum DynamicValue {
-    /// A dynamic node value.
-    Node(DynamicNode),
-    /// A dynamic attribute list value.
-    Attrs(Box<[Attribute]>),
-}
-
-impl DynamicValue {
-    /// Return this value as a dynamic node if it is one.
-    pub fn as_node(&self) -> Option<&DynamicNode> {
-        match self {
-            Self::Node(node) => Some(node),
-            Self::Attrs(_) => None,
-        }
-    }
-
-    /// Return this value as dynamic attributes if it is an attribute slot.
-    pub fn as_attrs(&self) -> Option<&[Attribute]> {
-        match self {
-            Self::Attrs(attrs) => Some(attrs),
-            Self::Node(_) => None,
-        }
-    }
-
-    pub(crate) fn node(&self) -> &DynamicNode {
-        self.as_node().expect("node slot")
-    }
-
-    pub(crate) fn attrs(&self) -> &[Attribute] {
-        self.as_attrs().expect("attr slot")
     }
 }
 

@@ -145,7 +145,7 @@ pub(super) fn insertion_site_for_slot(
     let root_idx = slot.root_position();
 
     // A node cursor always starts with its root index (see `compile_template` and rsx codegen), so
-    // an empty cursor is unreachable. An anchor can cover several adjacent dynamic values (`{a}{b}`
+    // an empty cursor is unreachable. An anchor can cover several adjacent dynamic nodes (`{a}{b}`
     // lower to one anchor), so first prefer the closest following sibling that shares it — this
     // applies to both root-level and nested slots — anchoring before its first live element.
     if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
@@ -300,7 +300,7 @@ fn insertion_site_for_child_in_parent(
     parent_views.find_committed_map(|parent_vnode| {
         for slot in parent_vnode.vnode().dynamic_node_slots() {
             let idx = slot.index();
-            match parent_vnode.dynamic_values[idx].node() {
+            match &parent_vnode.dynamic_nodes[idx] {
                 DynamicNode::Fragment(children) => {
                     let child_mounts =
                         dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
@@ -381,7 +381,7 @@ fn live_dynamic_slot_first_element(
     idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    match vnode.dynamic_values[idx].node() {
+    match &vnode.dynamic_nodes[idx] {
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
             .map(|id| id.element_id()),

@@ -1,7 +1,7 @@
 //! Shared template fill-order traversal.
 //!
 //! Static and dynamic attributes are visited before an element's children, matching runtime
-//! `DynamicValues` order and the template anchor order.
+//! `DynamicValues` node/attribute array order and the template anchor order.
 //!
 //! This module centralizes that single authoritative order — open, attributes, key, children,
 //! close — so every consumer stays in lockstep with the typed

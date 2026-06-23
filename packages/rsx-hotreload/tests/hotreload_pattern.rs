@@ -167,8 +167,6 @@ fn valid_reorder() {
     );
     assert_eq!(template.static_strings().len(), 1);
     assert_eq!(template.static_strings()[0], "div");
-    assert!(template.dynamic_is_node(0));
-    assert!(template.dynamic_is_node(1));
     assert_eq!(
         template.dynamic_nodes,
         &[
@@ -275,9 +273,6 @@ fn valid_new_dynamic_attribute() {
     assert_eq!(template.static_strings().len(), 2);
     assert_eq!(template.static_strings()[0], "div");
     assert_eq!(template.static_strings()[1], "div");
-    assert!(template.dynamic_is_attr(0));
-    assert!(template.dynamic_is_attr(1));
-
     // The new dynamic attribute should be created from the formatted segments pool
     assert_eq!(
         template.dynamic_attributes,
@@ -337,7 +332,7 @@ fn valid_move_dynamic_segment_between_nodes() {
 
     // We should have a new dynamic node and no attributes
     assert_eq!(template.decoded_ops(), vec![]);
-    assert!(template.dynamic_is_node(0));
+    assert!(template.dynamic_attributes.is_empty());
 
     // The new dynamic node should be created from the formatted segments pool
     assert_eq!(
@@ -469,7 +464,6 @@ fn invalid_cases() {
     );
     assert_eq!(template.static_strings().len(), 1);
     assert_eq!(template.static_strings()[0], "div");
-    assert!(template.dynamic_is_node(0));
     assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 
     // Adding a new dynamic node should not be hot reloadable

@@ -4,8 +4,7 @@
 //!
 //! - a static [`Template`] describing the stable element, text, and static
 //!   attribute structure
-//! - a runtime `DynamicValue` array containing dynamic nodes and dynamic
-//!   attribute groups for one render
+//! - runtime dynamic node and dynamic attribute arrays for one render
 //!
 //! The template uses compact paths and anchors to connect those runtime values
 //! back to stable locations in the static tree.
@@ -56,45 +55,47 @@
 //! index. Dynamic slots at the end of a parent use
 //! `AppendChildren(parent_path)`.
 //!
-//! Anchors are created for dynamic value groups, not for every static node.
+//! Anchors are created for dynamic node or attribute groups, not for every static node.
 //! A static element appears as an anchor parent only when it owns dynamic
 //! attributes or a direct dynamic child insertion position. Root-level dynamic
 //! nodes use `None` as their parent instead.
 //!
-//! Dynamic nodes and dynamic attributes are pushed into one flat runtime value
-//! array as the typed view renders. An element's dynamic attributes are pushed
-//! before its dynamic children, so the example above produces values like this:
+//! Dynamic nodes and dynamic attributes are pushed into separate runtime arrays
+//! as the typed view renders. An element's dynamic attributes are pushed before
+//! its dynamic children, so the example above produces values like this:
 //!
 //! ```text
-//! Value index    Runtime value
-//! 0              Node(before)
-//! 1              Attrs(class from "{class_name}")
-//! 2              Node(text from "{name}")
-//! 3              Node(badge)
-//! 4              Node(text from "{count}")
-//! 5              Node(after)
+//! Node index    Runtime node
+//! 0             before
+//! 1             text from "{name}"
+//! 2             badge
+//! 3             text from "{count}"
+//! 4             after
+//!
+//! Attr index    Runtime attrs
+//! 0             class from "{class_name}"
 //! ```
 //!
-//! Anchors map ranges from that value array to insertion targets. A target is
-//! either `BeforeStatic(path)` for values that should be inserted before a
-//! following static node, or `AppendChildren(path)` for values that should be
-//! appended to a static parent. `AppendChildren([])` means append at the vnode
-//! root site.
+//! Anchors map ranges from those arrays to insertion targets. A target is either
+//! `BeforeStatic(path)` for nodes that should be inserted before a following
+//! static node, or `AppendChildren(path)` for nodes that should be appended to a
+//! static parent and attributes that belong to that static parent.
+//! `AppendChildren([])` means append at the vnode root site.
 //!
 //! ```text
-//! Values    Parent element op    Slot target          Meaning
-//! 0..1      None                 BeforeStatic(0)      root node before div
-//! 1..2      div                  AppendChildren(0)    dynamic class attrs for div
-//! 2..3      strong               AppendChildren(001)  "{name}" inside strong
-//! 3..5      div                  BeforeStatic(0011)   badge and count before span
-//! 5..6      None                 AppendChildren([])   trailing root node
+//! Nodes    Attrs    Parent element op    Slot target          Meaning
+//! 0..1     0..0     None                 BeforeStatic(0)      root node before div
+//! 1..1     0..1     div                  AppendChildren(0)    dynamic class attrs for div
+//! 1..2     1..1     strong               AppendChildren(001)  "{name}" inside strong
+//! 2..4     1..1     div                  BeforeStatic(0011)   badge and count before span
+//! 4..5     1..1     None                 AppendChildren([])   trailing root node
 //! ```
 //!
 //! Adjacent dynamic nodes at the same insertion position share one anchor. In
 //! the example, `{badge}` and `"{count}"` are both before `span`, so they are
-//! represented by the single `3..5` range.
+//! represented by the single `2..4` node range.
 //!
-//! The stored anchor slice is in source/dynamic-value order.
+//! The stored anchor slice is in source/template order.
 //!
 mod anchor;
 mod data;

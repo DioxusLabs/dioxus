@@ -242,7 +242,6 @@ impl HotReloadResult {
             new_dynamic_attributes,
             literal_component_properties,
             parts.template,
-            parts.dynamic_slots,
         );
 
         self.templates

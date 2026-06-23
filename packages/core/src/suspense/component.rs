@@ -583,7 +583,7 @@ impl SuspenseBoundaryProps {
         fn collect_child_scopes(vnode: MountedVNode<'_>, dom: &VirtualDom, out: &mut Vec<ScopeId>) {
             for group in vnode.vnode().dynamic_nodes() {
                 for idx in group.ids() {
-                    match vnode.vnode().dynamic_values()[idx].node() {
+                    match &vnode.vnode().dynamic_nodes[idx] {
                         DynamicNode::Component(comp) => {
                             if let Some(child_scope) = comp.mounted_scope(idx, vnode, dom) {
                                 out.push(child_scope.id());
@@ -988,7 +988,7 @@ fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mo
 
     for group in vnode.dynamic_nodes() {
         for idx in group.ids() {
-            match vnode.dynamic_values[idx].node() {
+            match &vnode.dynamic_nodes[idx] {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     if dom.mark_clean(scope_id) {
@@ -1031,7 +1031,7 @@ fn set_suspense_mounts_render_mode(
 
     for group in vnode.dynamic_nodes() {
         for idx in group.ids() {
-            match vnode.dynamic_values[idx].node() {
+            match &vnode.dynamic_nodes[idx] {
                 DynamicNode::Component(_) => {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     let rendered = dom.scopes[scope_id.index()]

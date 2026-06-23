@@ -37,9 +37,9 @@ impl ViewTemplate for () {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Empty;
 }
 
-/// A typed view that can collect runtime dynamic values.
+/// A typed view that can collect runtime dynamic nodes and attributes.
 pub trait View: ViewTemplate + Sized {
-    /// Push runtime dynamic values in template order.
+    /// Push runtime dynamic nodes and attributes in template order.
     #[inline]
     fn push(self, _: &mut DynamicValues) {}
 }
