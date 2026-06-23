@@ -104,12 +104,6 @@ impl PackedMountedSlot {
     }
 }
 
-impl FragmentMountWriter {
-    pub(crate) fn len(self) -> usize {
-        self.len
-    }
-}
-
 pub(crate) struct Mount {
     render_parent: Option<MountRef>,
 

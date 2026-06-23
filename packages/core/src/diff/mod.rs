@@ -18,7 +18,6 @@
 //!   mounted-node queries are reserved for public inspection/event lookup paths.
 
 use crate::{
-    DynamicNode,
     innerlude::{MountId, MountRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
@@ -50,8 +49,6 @@ impl VirtualDom {
         logical_parent: Option<MountRef>,
         mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
     ) -> usize {
-        self.reserve_fragment_children(nodes);
-
         let mut created = 0;
         for (idx, child) in nodes.iter().enumerate() {
             let child =
@@ -60,25 +57,6 @@ impl VirtualDom {
             created_mount(self, idx, child.mount);
         }
         created
-    }
-
-    /// Reserve enough mount/scope storage for a fragment creation.
-    ///
-    /// Invariant: this only affects allocation capacity; it does not allocate mount ids or mutate
-    /// the committed mount graph.
-    fn reserve_fragment_children(&mut self, nodes: &[VNode]) {
-        self.runtime.mounts.borrow_mut().reserve(nodes.len());
-
-        let root_components = nodes.iter().map(root_component_count).sum::<usize>();
-        if root_components == 0 {
-            return;
-        }
-
-        self.scopes.reserve(root_components);
-        self.runtime
-            .scope_states
-            .borrow_mut()
-            .reserve(root_components);
     }
 
     /// Remove sibling vnodes in reverse order.
@@ -95,20 +73,4 @@ impl VirtualDom {
             node.remove_node(*mount, self, to.as_deref_mut());
         }
     }
-}
-
-/// Count root-level component dynamic nodes for scope storage reservation.
-///
-/// Invariant: this is only a capacity hint. Non-root component scopes are allocated lazily when
-/// their owning template root is materialized.
-fn root_component_count(node: &VNode) -> usize {
-    node.dynamic_anchors()
-        .filter(|anchor| anchor.is_root_level())
-        .map(|anchor| {
-            anchor
-                .nodes()
-                .filter(|slot| matches!(std::ops::Deref::deref(*slot), DynamicNode::Component(_)))
-                .count()
-        })
-        .sum()
 }
