@@ -78,8 +78,7 @@ impl VNode {
         .peekable();
 
         let element_id = id.element_id();
-        // The attribute diff never changes the active render target, so the targeted gate is
-        // always satisfied here — equivalent to an unconditional lazy push.
+        // If we write any attributes while diffing, push/pop the current id
         let mut to =
             TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
         while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
@@ -89,9 +88,7 @@ impl VNode {
 
     /// Merge two sorted streams of effective attributes.
     ///
-    /// Each returned item contains the key plus the old and/or new attribute for that key. This is
-    /// the same shape as a map diff, but it avoids building maps because the inputs are already
-    /// emitted in sorted order.
+    /// Each returned item contains the key plus the old and/or new attribute for that key.
     fn next_attribute_diff<'a>(
         from_iter: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
         to_iter: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
@@ -188,6 +185,13 @@ impl VNode {
     /// This is needed when an attribute from a spread disappears. The template load already wrote
     /// the static value during creation, but the dynamic attribute may have overwritten or removed
     /// it on a previous render.
+    /// ```rust
+    /// div { width: "15px", ..spread } // spread = [attribute("width", "25px")]
+    /// ```
+    /// Diffs to:
+    /// ```rust
+    /// div { width: "15px", ..spread } // spread = []
+    /// ```
     fn remove_attribute_or_restore_static(
         anchor: DynamicAnchor<'_>,
         key: AttributeKey,
