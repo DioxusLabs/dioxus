@@ -7,6 +7,7 @@ use crate::{
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
+    waker::tao_waker,
     webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
@@ -17,6 +18,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap},
     rc::Rc,
+    task::Waker,
     time::Duration,
 };
 use tao::{
@@ -43,6 +45,7 @@ pub(crate) struct App {
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
     pub(crate) tray_icon_show_window_on_click: bool,
+    pub(crate) waker: Waker,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
     ///
@@ -69,6 +72,8 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
+        let proxy = event_loop.create_proxy();
+        let waker = tao_waker(proxy.clone());
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -81,13 +86,14 @@ impl App {
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
+            waker,
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
                 window_close_handlers: Default::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
-                proxy: event_loop.create_proxy(),
+                proxy,
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
             }),
@@ -197,7 +203,7 @@ impl App {
             let app_webview = pending_webview.create_window(&mut self.dom, &self.shared);
             let id = app_webview.desktop_context.window.id();
             self.webviews.insert(id, app_webview);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+            _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
         }
     }
 
@@ -213,36 +219,34 @@ impl App {
                 window.desktop_context.window.set_visible(false);
             }
 
-            // If the window is set to close, we can remove it from the list of webviews
-            // If the app is set to exit when the last window closes, we should also exit the app
+            // Component-owned windows mark themselves closed and render out
+            // before native teardown. Root/unowned windows can be dropped here.
             WindowCloseBehaviour::WindowCloses => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.close_window(id);
+                if !self.shared.window_close_handlers.notify(id) {
+                    self.close_window(id);
+                }
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
-        self.close_window(id);
+        if !self.shared.window_close_handlers.notify(id) {
+            self.close_window(id);
+        }
     }
 
-    /// Tear down one webview: fire close callbacks, drop the webview (and
-    /// with it the target's writer), re-render the DOM, and exit if it was
-    /// the last window.
+    /// Tear down one webview after its Dioxus owner has released the target, or
+    /// immediately for root/unowned windows.
     fn close_window(&mut self, id: WindowId) {
-        if !self.webviews.contains_key(&id) {
+        let Some(app_webview) = self.webviews.remove(&id) else {
             return;
-        }
-
-        self.shared.window_close_handlers.notify(id);
-
-        // Dropping the webview drops its WryQueue with it; the next render
-        // pass simply won't include the target.
-        self.webviews.remove(&id);
-
-        self.render_after_webview_removed();
+        };
+        self.dom
+            .runtime()
+            .remove_render_target(app_webview.target_id());
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
@@ -256,16 +260,13 @@ impl App {
         if let Some(app_webview) = self.webviews.get(&id) {
             use wry::Rect;
 
-            _ = app_webview
-                .desktop_context
-                .webview
-                .set_bounds(Rect {
-                    position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
-                    size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
-                        size.width,
-                        size.height,
-                    )),
-                });
+            _ = app_webview.desktop_context.webview.set_bounds(Rect {
+                position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
+                size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
+                    size.width,
+                    size.height,
+                )),
+            });
         }
     }
 
@@ -345,7 +346,7 @@ impl App {
             }
         }
 
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+        _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -372,7 +373,7 @@ impl App {
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
-                if let Some(id) = self.webviews.keys().next().copied() {
+                if !self.webviews.is_empty() {
                     {
                         // This is a place where wry says it's threadsafe but it's actually not.
                         // If we're patching the app, we want to make sure it's not going to progress in the interim.
@@ -382,7 +383,7 @@ impl App {
                         dioxus_devtools::apply_changes(&self.dom, &hr_msg);
                     }
 
-                    self.poll_vdom(id);
+                    self.poll_vdom();
                 }
 
                 if !hr_msg.assets.is_empty() {
@@ -459,14 +460,12 @@ impl App {
     /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
     ///
     /// All IO is done on the tokio runtime we started earlier
-    pub fn poll_vdom(&mut self, id: WindowId) {
-        let Some(waker) = self
-            .webviews
-            .get(&id)
-            .map(|app_webview| app_webview.waker.clone())
-        else {
+    pub fn poll_vdom(&mut self) {
+        if self.webviews.is_empty() {
             return;
-        };
+        }
+
+        let waker = self.waker.clone();
         let mut cx = std::task::Context::from_waker(&waker);
 
         loop {
@@ -504,10 +503,7 @@ impl App {
             .values()
             .map(|app_webview| {
                 app_webview.edits.wry_queue.clear_touched();
-                (
-                    app_webview.target_id(),
-                    app_webview.edits.wry_queue.clone(),
-                )
+                (app_webview.target_id(), app_webview.edits.wry_queue.clone())
             })
             .collect()
     }
@@ -537,25 +533,11 @@ impl App {
         self.collect_touched()
     }
 
-    fn render_after_webview_removed(&mut self) {
-        let touched = self.render_dom_immediate();
-        self.send_edits_to_targets(&touched);
-        self.poll_next_webview();
-    }
-
     fn send_edits_to_targets(&self, targets: &BTreeSet<RenderTargetId>) {
         for app_webview in self.webviews.values() {
             if targets.contains(&app_webview.target_id()) {
                 app_webview.edits.wry_queue.send_edits();
             }
-        }
-    }
-
-    fn poll_next_webview(&mut self) {
-        let next_webview = self.webviews.keys().next().copied();
-
-        if let Some(id) = next_webview {
-            self.poll_vdom(id);
         }
     }
 

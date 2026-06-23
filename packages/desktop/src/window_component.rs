@@ -224,9 +224,10 @@ impl WindowState {
         }
     }
 
-    /// Close the underlying window. Closing drops the app-side webview and
-    /// its `WryQueue`, so later render passes see the target writerless and
-    /// skip its writes.
+    /// Close the underlying window after the `Window` component has been
+    /// removed from the tree. At this point the portal feeding `target_id` has
+    /// already been torn down, so the render target can be reclaimed before the
+    /// app drops the native webview and its `WryQueue`.
     ///
     /// Runs from the `Window` scope's drop cleanup, after its rendered subtree
     /// (the portal feeding `target_id`) has already been torn down, so the
@@ -240,9 +241,7 @@ impl WindowState {
         let can_reclaim_target = pending_removed || providers.is_some() || self.closed.get();
 
         if let Some(providers) = providers {
-            if !self.closed.get() {
-                providers.context.close();
-            }
+            providers.context.close();
         }
         if can_reclaim_target {
             let Some(runtime) = Runtime::try_current() else {
@@ -254,7 +253,11 @@ impl WindowState {
 
     fn release_closed_window(&self) {
         self.remove_close_handler();
-        self.providers.borrow_mut().take();
+        if let Some(providers) = self.providers.borrow_mut().take() {
+            // Queue native teardown after this render removes the portal. The
+            // app reclaims the render target when it receives this close event.
+            providers.context.close();
+        }
     }
 }
 

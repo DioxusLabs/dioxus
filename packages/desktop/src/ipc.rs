@@ -18,7 +18,7 @@ pub enum UserWindowEvent {
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
     /// Poll the virtualdom
-    Poll(WindowId),
+    Poll,
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
     Ipc {

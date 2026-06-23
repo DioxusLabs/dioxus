@@ -5,16 +5,15 @@ use crate::menubar::DioxusMenu;
 use crate::{
     Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
     edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
-    waker::tao_waker,
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
+use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
-use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
 #[derive(Clone)]
@@ -194,7 +193,6 @@ impl WebviewEdits {
 pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
-    pub waker: Waker,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -517,7 +515,6 @@ impl WebviewInstance {
 
         WebviewInstance {
             edits,
-            waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             _menu: menu,
             _web_context: web_context,

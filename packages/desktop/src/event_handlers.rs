@@ -57,7 +57,7 @@ impl WindowCloseHandlers {
         self.handlers.borrow_mut().try_remove(id.0);
     }
 
-    pub(crate) fn notify(&self, window_id: WindowId) {
+    pub(crate) fn notify(&self, window_id: WindowId) -> bool {
         let handlers: Vec<_> = self
             .handlers
             .borrow()
@@ -66,9 +66,13 @@ impl WindowCloseHandlers {
             .map(|(_, handler)| handler.handler.clone())
             .collect();
 
+        let handled = !handlers.is_empty();
+
         for handler in handlers {
             handler();
         }
+
+        handled
     }
 }
 
