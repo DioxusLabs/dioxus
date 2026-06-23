@@ -508,24 +508,20 @@ impl Template {
 
         let mut hash = 0u64;
 
+        // Raw operations
         let mut i = 0;
         while i < ops.len() {
-            hash = match ops[i].decode() {
-                DecodedTemplateOp::Enter { skip, namespace } => {
-                    let mut h = xxh64(&[0x01], hash);
-                    h = xxh64(&skip.to_le_bytes(), h);
-                    xxh64(&[namespace as u8], h)
-                }
-                DecodedTemplateOp::Attr { namespace } => {
-                    let h = xxh64(&[0x02], hash);
-                    xxh64(&[namespace as u8], h)
-                }
-                DecodedTemplateOp::Text => xxh64(&[0x03], hash),
-                DecodedTemplateOp::Static(id) => {
-                    let h = xxh64(&[0x04], hash);
-                    xxh64(strings[id as usize].as_bytes(), h)
-                }
-            };
+            hash = xxh64(&ops[i].bits().to_le_bytes(), hash);
+            i += 1;
+        }
+
+        // Static strings
+        hash = xxh64(&[0xA0], hash);
+        let mut i = 0;
+        while i < strings.len() {
+            let string = strings[i];
+            let bytes = string.as_bytes();
+            hash = xxh64(bytes, hash);
             i += 1;
         }
 

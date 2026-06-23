@@ -59,6 +59,11 @@ impl TemplateOp {
             DecodedTemplateOp::Static(self.0 - Self::STATIC_BASE)
         }
     }
+
+    /// Get the bits of this packed op.
+    pub(crate) const fn bits(self) -> u16 {
+        self.0
+    }
 }
 
 impl std::fmt::Debug for TemplateOp {

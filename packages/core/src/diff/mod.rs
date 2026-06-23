@@ -17,8 +17,6 @@
 //! - Internal diff code that needs a fragment's child mounts must use exact accessors; permissive
 //!   mounted-node queries are reserved for public inspection/event lookup paths.
 
-#![allow(clippy::too_many_arguments)]
-
 use crate::{
     DynamicNode,
     innerlude::{MountId, MountRef, WriteMutations},
@@ -50,6 +48,9 @@ impl VirtualDom {
     /// Invariant: the returned `mounts` has exactly one mount per input vnode, in input order. If
     /// `to` is `None`, mount/component state is still fully materialized while renderer nodes are
     /// not emitted.
+    ///
+    /// Render and logical parents may be different under portals. The render parent is the dom
+    /// mount point if any, the logical parent is the node events/context bubble through
     pub(crate) fn create_children_with_parents(
         &mut self,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
