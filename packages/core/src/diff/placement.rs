@@ -136,8 +136,8 @@ pub(super) fn insertion_site_at(
 
 /// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
 ///
-/// Invariant: slots with a mounted static anchor are placed relative to that anchor; slots without
-/// one are parent-level append targets.
+/// Invariant: adjacent dynamic slots at the same template insertion position keep their relative
+/// order even when the position has no static anchor of its own.
 pub(super) fn insertion_site_for_slot(
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
@@ -151,6 +151,16 @@ pub(super) fn insertion_site_for_slot(
         adjacent_dynamic_sibling_after_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
     }) {
         return InsertionSite::before(id);
+    }
+
+    // If this is the last live dynamic node at the insertion position, place it after the closest
+    // previous sibling before falling back to the static anchor or parent position. Root-level
+    // anchors made only of dynamic nodes have no static anchor, and falling back to the parent would
+    // put later slots before earlier ones.
+    if let Some(id) = parent_views(dom, parent_mount, context).find_committed_map(|parent_vnode| {
+        adjacent_dynamic_sibling_before_in_vnode(parent_vnode.vnode(), parent_mount, slot, dom)
+    }) {
+        return InsertionSite::after(id);
     }
 
     if let Some(id) = dom.mounted_anchor_node(parent_mount, slot.anchor().anchor_index()) {
@@ -337,9 +347,48 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     dom: &VirtualDom,
 ) -> Option<ElementId> {
     for sibling in parent_vnode.dynamic_node_slots_after_sharing_insertion_position(slot) {
-        if let Some(id) =
-            live_dynamic_slot_first_element(parent_vnode, parent_mount, sibling.index(), dom)
-        {
+        if let Some(id) = live_dynamic_slot_edge_element(
+            parent_vnode,
+            parent_mount,
+            sibling.index(),
+            dom,
+            ElementEdge::First,
+        ) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// Find the previous live dynamic sibling sharing the active slot's insertion position.
+fn adjacent_dynamic_sibling_before_in_vnode(
+    parent_vnode: &VNode,
+    parent_mount: MountId,
+    slot: DynamicNodeSlot<'_>,
+    dom: &VirtualDom,
+) -> Option<ElementId> {
+    let mut seen_slot = false;
+    for sibling in parent_vnode.dynamic_node_slots().rev() {
+        if !seen_slot {
+            seen_slot = sibling.index() == slot.index();
+            continue;
+        }
+
+        if !sibling.has_same_insertion_parent(slot) {
+            continue;
+        }
+
+        if !sibling.shares_insertion_position(slot) {
+            break;
+        }
+
+        if let Some(id) = live_dynamic_slot_edge_element(
+            parent_vnode,
+            parent_mount,
+            sibling.index(),
+            dom,
+            ElementEdge::Last,
+        ) {
             return Some(id);
         }
     }
@@ -351,11 +400,12 @@ fn adjacent_dynamic_sibling_after_in_vnode(
 /// Invariant: component root mounts returned by the scope state own a committed vnode; fragment
 /// slots have exactly one mount per child. The slot being inspected is outside the active fragment
 /// reorder/replacement, so its mounts are not marked placement-stale for the current placement scan.
-fn live_dynamic_slot_first_element(
+fn live_dynamic_slot_edge_element(
     vnode: &VNode,
     mount: MountId,
     idx: usize,
     dom: &VirtualDom,
+    edge: ElementEdge,
 ) -> Option<ElementId> {
     match &vnode.dynamic_node_values()[idx] {
         DynamicNode::Text(_) => dom
@@ -363,26 +413,19 @@ fn live_dynamic_slot_first_element(
             .map(|id| id.element_id()),
         DynamicNode::Fragment(children) => dom
             .try_with_mounted_fragment_children(mount, idx, children.len(), |child_mounts| {
-                children
-                    .iter()
-                    .zip(child_mounts)
-                    .find_map(|(child, mount)| {
-                        vnode_edge_element(
-                            MountedVNode::new(child, *mount),
-                            dom,
-                            ElementEdge::First,
-                        )
-                    })
+                edge.find_map(children.len(), |idx| {
+                    vnode_edge_element(
+                        MountedVNode::new(&children[idx], child_mounts[idx]),
+                        dom,
+                        edge,
+                    )
+                })
             })
             .flatten(),
         DynamicNode::Component(_) => {
             let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
             let vnode = dom.current_mounted_view(component_root_mount)?;
-            vnode_edge_element(
-                MountedVNode::new(&vnode, component_root_mount),
-                dom,
-                ElementEdge::First,
-            )
+            vnode_edge_element(MountedVNode::new(&vnode, component_root_mount), dom, edge)
         }
     }
 }

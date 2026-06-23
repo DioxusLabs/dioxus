@@ -1530,6 +1530,106 @@ mod tests {
     }
 
     #[test]
+    fn resolved_suspense_fragment_child_keeps_text_after_static_root() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Suspense {
+                            mode: SuspenseMode::Resolved,
+                        }),
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentB),
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Placeholder),
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Text(118),
+                },
+            ),
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::Fragment {
+                        children: 99,
+                        key_base: Some(166),
+                    }),
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 240,
+                    kind: TemplateNodeKind::Text(67),
+                },
+            ),
+            Op::RenderSuspenseDirty,
+        ]);
+    }
+
+    #[test]
+    fn root_dynamic_slot_scan_skips_unmounted_portal_component() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Portal),
+                    },
+                },
+            ),
+            Op::RenderDirty,
+            Op::template(
+                0,
+                TemplateEdit::Fragment {
+                    node: 182,
+                    edit: FragmentEdit::Children(ListEdit::Insert {
+                        index: 32,
+                        item: None,
+                    }),
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 2,
+                    kind: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
         replay_ops([
             Op::template(

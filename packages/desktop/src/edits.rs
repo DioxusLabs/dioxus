@@ -80,7 +80,7 @@ macro_rules! forward_wry_queue_mutations {
 impl WriteMutations for WryQueue {
     forward_wry_queue_mutations! {
         push_id(id: ElementId);
-        pop_id(id: ElementId);
+        set_id(id: ElementId);
         child(index: usize);
         pop();
         create_element(tag: &str, ns: Option<&str>);

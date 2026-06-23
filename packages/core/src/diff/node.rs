@@ -666,7 +666,7 @@ impl VNode {
         match node {
             Component(_) => {
                 let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
-                let root = live_component_root(dom, scope_id);
+                let root = live_component_root(dom, scope_id)?;
                 root.find_element_in_roots(root.mount(), dom, target_id, edge)
             }
             Text(_) if dom.mount_target_id(mount) == target_id => dom
@@ -1070,15 +1070,8 @@ fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
 }
 
 /// Look up the rendered root VNode for a component scope, for walking with
-/// `find_element_in_roots` during placement.
-///
-/// Callers resolve a component's rendered root only after establishing the
-/// component is live and rendered (placement resolution walks mounted siblings,
-/// and dynamic replacement asks for a component edge only after a live-DOM
-/// check), so this panics if the scope or its root is missing.
-fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> MountedVNode<'_> {
-    dom.get_scope(scope_id)
-        .expect("component scope")
-        .try_mounted_root_node()
-        .expect("component root")
+/// `find_element_in_roots` during placement. A mounted component slot may have no
+/// live root after portal or hidden-branch cleanup; such slots cannot anchor placement.
+fn live_component_root(dom: &VirtualDom, scope_id: ScopeId) -> Option<MountedVNode<'_>> {
+    dom.get_scope(scope_id)?.try_mounted_root_node()
 }
