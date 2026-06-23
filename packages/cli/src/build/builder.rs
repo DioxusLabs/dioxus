@@ -2,7 +2,10 @@ use crate::{
     BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx,
     Result, StructuredOutput, serve::WebServer, verbosity_or_default,
 };
-use crate::{BuildPhaseProfile, opt::process_file_to};
+use crate::{
+    BuildPhaseProfile,
+    opt::{copy_file_verbatim, process_file_to},
+};
 use anyhow::{Context, Error, bail};
 use futures_util::{FutureExt, future::OptionFuture, pin_mut};
 use itertools::Itertools;
@@ -833,8 +836,13 @@ impl AppBuilder {
             let to = asset_dir.join(bundled.bundled_path());
 
             tracing::debug!("Copying asset from patch: {}", from.display());
-            let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            if let Err(e) = process_file_to(bundled.options(), &from, &to, esbuild.as_deref()) {
+            let res = if self.build.path_is_in_public_dir(&from) {
+                copy_file_verbatim(&from, &to)
+            } else {
+                let esbuild = crate::esbuild::Esbuild::path_if_installed();
+                process_file_to(bundled.options(), &from, &to, esbuild.as_deref())
+            };
+            if let Err(e) = res {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
             }
@@ -939,9 +947,17 @@ impl AppBuilder {
             // And then process the asset with the options into the **old** asset location. If we recompiled,
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
-            let options = *resource.options();
-            let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            let res = process_file_to(&options, &changed_file, &output_path, esbuild.as_deref());
+            let res = if self.build.path_is_in_public_dir(&changed_file) {
+                copy_file_verbatim(&changed_file, &output_path)
+            } else {
+                let esbuild = crate::esbuild::Esbuild::path_if_installed();
+                process_file_to(
+                    resource.options(),
+                    &changed_file,
+                    &output_path,
+                    esbuild.as_deref(),
+                )
+            };
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
