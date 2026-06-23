@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use dioxus_core::{Mutation, Mutations, ScopeId, VNode, VNodeChild};
-use dioxus_core_template::TemplateSlotTarget;
 use dioxus_renderer_oracle::{RendererOracle, SnapshotAttr, SnapshotNode, fresh_snapshot};
 
 dioxus::html::define_elements! {
@@ -205,17 +204,29 @@ fn custom_elements_get_gated_global_attrs_unless_they_define_the_attr() {
 }
 
 #[test]
-fn dynamic_attr_and_child_share_one_anchor() {
+fn dynamic_attr_and_child_share_static_path() {
     let vnode = mixed_dynamic_attr_and_child().unwrap();
     let div = root_element(&vnode);
-    let anchors = div
+    let anchors = vnode
         .dynamic_anchors()
-        .filter(|anchor| anchor.nodes().len() > 0)
+        .filter(|anchor| anchor.parent_element_op_index() == Some(div.op()))
         .collect::<Vec<_>>();
+    let attr_anchor = anchors
+        .iter()
+        .copied()
+        .find(|anchor| anchor.attrs().len() > 0)
+        .expect("dynamic attr anchor");
+    let node_anchor = anchors
+        .iter()
+        .copied()
+        .find(|anchor| anchor.nodes().len() > 0)
+        .expect("dynamic node anchor");
 
-    assert_eq!(anchors.len(), 1);
-    assert_eq!(anchors[0].attrs().len(), 1);
-    assert_eq!(anchors[0].nodes().len(), 1);
+    assert_eq!(attr_anchor.attrs().len(), 1);
+    assert_eq!(node_anchor.nodes().len(), 1);
+    assert!(attr_anchor.static_path() == node_anchor.static_path());
+    assert!(!attr_anchor.is_last_static_node());
+    assert!(node_anchor.is_last_static_node());
 
     let mut dom = VirtualDom::new(mixed_dynamic_attr_and_child);
     let mut oracle = RendererOracle::new();
@@ -283,27 +294,16 @@ fn separated_empty_fragment_slots_stay_inside_static_parent() {
     let before_span = anchors
         .iter()
         .copied()
-        .find(|anchor| matches!(anchor.slot_target(), TemplateSlotTarget::BeforeStatic(_)))
+        .find(|anchor| !anchor.is_last_static_node())
         .expect("expected leading empty fragment anchor");
-    assert!(matches!(
-        before_span.slot_target(),
-        TemplateSlotTarget::BeforeStatic(_)
-    ));
+    assert!(!before_span.is_last_static_node());
 
     let after_span = anchors
         .iter()
         .copied()
-        .find(|anchor| {
-            matches!(
-                anchor.slot_target(),
-                TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
-            )
-        })
+        .find(|anchor| anchor.is_last_static_node() && !anchor.static_path().is_empty())
         .expect("expected trailing empty fragment anchor");
-    assert!(matches!(
-        after_span.slot_target(),
-        TemplateSlotTarget::AppendChildren(path) if !path.is_empty()
-    ));
+    assert!(after_span.is_last_static_node());
 }
 
 #[test]

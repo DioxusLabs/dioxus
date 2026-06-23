@@ -27,7 +27,7 @@ use std::{
 };
 use tracing::instrument;
 
-use dioxus_core_template::{TemplatePath, TemplateSlotTarget};
+use dioxus_core_template::TemplatePath;
 
 #[derive(Clone, Copy)]
 struct EventTarget {
@@ -38,17 +38,14 @@ struct EventTarget {
 #[derive(Clone, Copy)]
 enum EventTargetPath {
     Static(TemplatePath),
-    Slot(TemplateSlotTarget),
+    Slot(TemplatePath),
 }
 
 impl EventTargetPath {
     fn is_under_attr(self, attr: TemplatePath) -> bool {
         match self {
             Self::Static(path) => path.starts_with(attr),
-            Self::Slot(TemplateSlotTarget::BeforeStatic(path)) => {
-                path.split_insertion().0.starts_with(attr)
-            }
-            Self::Slot(TemplateSlotTarget::AppendChildren(path)) => path.starts_with(attr),
+            Self::Slot(path) => path.starts_with(attr),
         }
     }
 
@@ -622,7 +619,11 @@ fn MyComponent() -> Element {{
             .dynamic_anchors()
             .filter(|anchor| anchor.nodes().len() > 0)
         {
-            let target = anchor.slot_target();
+            let target = if anchor.is_parent_append_target() {
+                anchor.static_path()
+            } else {
+                anchor.static_path().split_insertion().0
+            };
             for slot in anchor.nodes() {
                 let idx = slot.index();
                 match &*slot {

@@ -153,17 +153,27 @@ impl<'de> serde::Deserialize<'de> for TemplatePath {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct TemplateSlotPath(NonZeroU128);
 
-/// The resolved renderer target for a dynamic node slot.
+/// The static path an anchor binds to and whether that path is the last static node at its level.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum TemplateSlotTarget {
-    /// Insert before a static node.
-    BeforeStatic(TemplatePath),
-    /// Append to a static parent. An empty path means append at the vnode's render-parent site.
-    AppendChildren(TemplatePath),
+pub struct TemplateSlotTarget {
+    static_path: TemplatePath,
+    is_last_static_node: bool,
+}
+
+impl TemplateSlotTarget {
+    /// The static path this anchor binds to.
+    pub const fn static_path(self) -> TemplatePath {
+        self.static_path
+    }
+
+    /// Whether this anchor points at the last static node before its dynamic slot.
+    pub const fn is_last_static_node(self) -> bool {
+        self.is_last_static_node
+    }
 }
 
 impl TemplateSlotPath {
-    const TARGET_APPEND_CHILDREN: u128 = 1;
+    const TARGET_LAST_STATIC_NODE: u128 = 1;
     const MAX_PAYLOAD: u128 = u128::MAX >> 1;
 
     const fn new(bits: u128) -> Self {
@@ -181,15 +191,15 @@ impl TemplateSlotPath {
         payload << 1
     }
 
-    pub(crate) const fn before_static(path: TemplatePath) -> Self {
+    pub(crate) const fn static_node(path: TemplatePath) -> Self {
         if path.is_empty() {
             panic!("bad slot target");
         }
         Self::new(Self::encode_payload(path))
     }
 
-    pub(crate) const fn append_children(path: TemplatePath) -> Self {
-        Self::new(Self::encode_payload(path) | Self::TARGET_APPEND_CHILDREN)
+    pub(crate) const fn last_static_node(path: TemplatePath) -> Self {
+        Self::new(Self::encode_payload(path) | Self::TARGET_LAST_STATIC_NODE)
     }
 
     /// Return the raw tagged bits.
@@ -199,19 +209,19 @@ impl TemplateSlotPath {
 
     pub(crate) const fn target(self) -> TemplateSlotTarget {
         let bits = self.bits();
-        let path = TemplatePath::from_bits(bits >> 1);
-        if bits & Self::TARGET_APPEND_CHILDREN == Self::TARGET_APPEND_CHILDREN {
-            TemplateSlotTarget::AppendChildren(path)
-        } else {
-            TemplateSlotTarget::BeforeStatic(path)
+        TemplateSlotTarget {
+            static_path: TemplatePath::from_bits(bits >> 1),
+            is_last_static_node: bits & Self::TARGET_LAST_STATIC_NODE
+                == Self::TARGET_LAST_STATIC_NODE,
         }
     }
 
-    pub(crate) const fn static_parent(self) -> TemplatePath {
-        match self.target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().0,
-            TemplateSlotTarget::AppendChildren(path) => path,
-        }
+    pub(crate) const fn static_path(self) -> TemplatePath {
+        self.target().static_path()
+    }
+
+    pub(crate) const fn is_last_static_node(self) -> bool {
+        self.target().is_last_static_node()
     }
 }
 
@@ -295,31 +305,14 @@ mod tests {
     }
 
     #[test]
-    fn static_parent_resolves_enclosing_element_for_before_static_anchor() {
-        // Shape: `div { span  {slot}  span }`. The slot is anchored before the
-        // *second* child of `div`, i.e. a non-first static sibling.
-        let div = TemplatePath::root(0); // 0b1
-        let first_child = div.next_child(); // 0b11   (div's child 0)
-        let second_child = first_child.next_sibling(); // 0b110 (div's child 1)
+    fn slot_path_tag_marks_last_static_node() {
+        let path = TemplatePath::root(0).next_child().next_sibling();
+        let static_node = TemplateSlotPath::static_node(path);
+        let last_static_node = TemplateSlotPath::last_static_node(path);
 
-        // `split_insertion` agrees the enclosing element is `div` for both
-        // anchor positions; `static_parent` must match it.
-        assert_eq!(first_child.split_insertion().0.bits(), div.bits());
-        assert_eq!(second_child.split_insertion().0.bits(), div.bits());
-
-        // First-child anchor already resolves to `div`.
-        let before_first = TemplateSlotPath::before_static(first_child);
-        assert_eq!(before_first.static_parent().bits(), div.bits());
-
-        // Non-first-child anchor must ALSO resolve to the enclosing element
-        // `div`, not to the preceding sibling. A raw bit shift parent would
-        // return `first_child` (the preceding span).
-        let before_second = TemplateSlotPath::before_static(second_child);
-        assert_eq!(
-            before_second.static_parent().bits(),
-            div.bits(),
-            "static_parent of a BeforeStatic anchor before a non-first child must \
-             be the enclosing element, not the preceding sibling"
-        );
+        assert_eq!(static_node.static_path().bits(), path.bits());
+        assert!(!static_node.is_last_static_node());
+        assert_eq!(last_static_node.static_path().bits(), path.bits());
+        assert!(last_static_node.is_last_static_node());
     }
 }

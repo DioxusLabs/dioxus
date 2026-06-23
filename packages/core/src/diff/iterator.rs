@@ -795,7 +795,11 @@ impl crate::MountedVNode<'_> {
                 VNodeChild::Element(element) => {
                     if dom.mount_target_id(mount) == target_id
                         && let Some(root_position) = element.root_position()
-                        && let Some(id) = dom.mounted_root_node(mount, root_position)
+                        && let Some(anchor_idx) = self
+                            .vnode()
+                            .template
+                            .root_anchor_for_position(root_position)
+                        && let Some(id) = dom.mounted_anchor_node(mount, anchor_idx)
                     {
                         count += push_live_root(to, id.element_id());
                     }
@@ -803,7 +807,11 @@ impl crate::MountedVNode<'_> {
                 VNodeChild::Text(text) => {
                     if dom.mount_target_id(mount) == target_id
                         && let Some(root_position) = text.root_position()
-                        && let Some(id) = dom.mounted_root_node(mount, root_position)
+                        && let Some(anchor_idx) = self
+                            .vnode()
+                            .template
+                            .root_anchor_for_position(root_position)
+                        && let Some(id) = dom.mounted_anchor_node(mount, anchor_idx)
                     {
                         count += push_live_root(to, id.element_id());
                     }
@@ -855,10 +863,9 @@ impl crate::MountedVNode<'_> {
 
 fn push_live_root(to: &mut dyn WriteMutations, id: ElementId) -> usize {
     // Callers (`push_all_root_nodes`) only reach this with `id` values just
-    // read from `unchecked_mounted_root_node`/`unchecked_mounted_dynamic_text_node` for a vnode
-    // whose mount target already matches `target_id`, so the live element id
-    // has been allocated in that target by `load_template_root` /
-    // `assign_node_id`.
+    // read from a root anchor/dynamic text slot for a vnode whose mount target already matches
+    // `target_id`, so the live element id has been allocated in that target by
+    // `load_template_root` / `assign_node_id`.
     to.push_id(id);
     1
 }

@@ -166,7 +166,7 @@ fn default_handler(errors: ErrorContext) -> Element {
         attrs: &ATTRS,
         children: &ERROR_DYNAMIC_TREE,
     };
-    static STORAGE: TemplateStorage<8, 4, 1> = TemplateStorage::build_from_tree(&TREE);
+    static STORAGE: TemplateStorage<8, 4, 2> = TemplateStorage::build_from_tree(&TREE);
     static TEMPLATE: Template = STORAGE.as_template();
 
     std::result::Result::Ok(VNode::new(
@@ -183,7 +183,7 @@ fn default_handler(errors: ErrorContext) -> Element {
                         attrs: &TemplateRawTree::Empty,
                         children: &ERROR_DYNAMIC_TREE,
                     };
-                    static STORAGE: TemplateStorage<4, 1, 1> =
+                    static STORAGE: TemplateStorage<4, 1, 2> =
                         TemplateStorage::build_from_tree(&TREE);
                     static INNER_TEMPLATE: Template = STORAGE.as_template();
 

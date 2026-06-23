@@ -79,6 +79,24 @@ impl TemplateStorageStats {
             path,
         });
     }
+
+    fn push_static_anchor(
+        &mut self,
+        anchors: &mut Vec<AnchorStats>,
+        parent_op_index: u16,
+        path: TemplateSlotPath,
+    ) {
+        if let Some(last) = anchors.last_mut() {
+            if last.same_anchor(parent_op_index, path) {
+                return;
+            }
+        }
+
+        anchors.push(AnchorStats {
+            parent_op_index,
+            path,
+        });
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -152,6 +170,7 @@ struct TemplateElementFrame {
 struct TemplateLoweringCursor {
     enter_stack: [TemplateElementFrame; TEMPLATE_PATH_STACK_CAP],
     next_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
+    last_static_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
     stack_pointer: usize,
 }
 
@@ -166,6 +185,7 @@ impl TemplateLoweringCursor {
                 path: TemplatePath::empty(),
             }; TEMPLATE_PATH_STACK_CAP],
             next_paths,
+            last_static_paths: [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP],
             stack_pointer: 0,
         }
     }
@@ -182,6 +202,8 @@ impl TemplateLoweringCursor {
             path,
         };
         self.next_paths[self.stack_pointer + 1] = path.next_child();
+        self.last_static_paths[self.stack_pointer + 1] = TemplatePath::empty();
+        self.last_static_paths[self.stack_pointer] = path;
         self.stack_pointer += 1;
     }
 
@@ -222,6 +244,7 @@ impl TemplateLoweringCursor {
     const fn next_node_path(&mut self) -> TemplatePath {
         let path = self.next_paths[self.stack_pointer];
         self.next_paths[self.stack_pointer] = path.next_sibling();
+        self.last_static_paths[self.stack_pointer] = path;
         path
     }
 
@@ -230,13 +253,16 @@ impl TemplateLoweringCursor {
         has_following_static_at_parent: bool,
     ) -> TemplateSlotPath {
         if has_following_static_at_parent {
-            return TemplateSlotPath::before_static(self.next_paths[self.stack_pointer]);
+            return TemplateSlotPath::static_node(self.next_paths[self.stack_pointer]);
         }
 
-        if self.stack_pointer == 0 {
-            TemplateSlotPath::append_children(TemplatePath::empty())
+        let last_static_path = self.last_static_paths[self.stack_pointer];
+        if !last_static_path.is_empty() {
+            TemplateSlotPath::last_static_node(last_static_path)
+        } else if self.stack_pointer == 0 {
+            TemplateSlotPath::last_static_node(TemplatePath::empty())
         } else {
-            TemplateSlotPath::append_children(self.current_element_path())
+            TemplateSlotPath::last_static_node(self.current_element_path())
         }
     }
 
@@ -249,17 +275,20 @@ impl TemplateLoweringCursor {
             if path.is_empty() {
                 return Err(());
             }
-            return Ok(TemplateSlotPath::before_static(path));
+            return Ok(TemplateSlotPath::static_node(path));
         }
 
-        if self.stack_pointer == 0 {
-            Ok(TemplateSlotPath::append_children(TemplatePath::empty()))
+        let last_static_path = self.last_static_paths[self.stack_pointer];
+        if !last_static_path.is_empty() {
+            Ok(TemplateSlotPath::last_static_node(last_static_path))
+        } else if self.stack_pointer == 0 {
+            Ok(TemplateSlotPath::last_static_node(TemplatePath::empty()))
         } else {
             let path = self.current_element_path();
             if path.is_empty() {
                 return Err(());
             }
-            Ok(TemplateSlotPath::append_children(path))
+            Ok(TemplateSlotPath::last_static_node(path))
         }
     }
 
@@ -300,6 +329,7 @@ impl TemplateStatsBuilder {
     /// `namespace` is `Some(true)` when a namespace is known, `Some(false)` when no namespace is
     /// known, and `None` when macro expansion cannot know whether the typed builder will add one.
     pub fn open_element(&mut self, namespace: Option<bool>) {
+        self.static_root_anchor();
         let has_namespace = namespace.unwrap_or(false);
         self.cursor.open_element(self.stats.ops, has_namespace);
         self.stats.push_op();
@@ -336,13 +366,26 @@ impl TemplateStatsBuilder {
         if frame.path.is_empty() {
             self.stats.path_overflow = true;
         }
-        let path = TemplateSlotPath::append_children(frame.path);
+        let path = TemplateSlotPath::static_node(frame.path);
         self.stats
             .push_anchor(&mut self.anchors, frame.enter_index as u16, path, true);
     }
 
+    /// Count a structural root static anchor.
+    pub fn static_root_anchor(&mut self) {
+        let path = self.cursor.next_paths[self.cursor.stack_pointer];
+        if self.cursor.stack_pointer == 0 && !path.is_empty() {
+            self.stats.push_static_anchor(
+                &mut self.anchors,
+                ROOT_PARENT_OP_INDEX,
+                TemplateSlotPath::static_node(path),
+            );
+        }
+    }
+
     /// Count a static text node.
     pub fn static_text(&mut self) {
+        self.static_root_anchor();
         let _ = self.cursor.next_node_path();
         self.stats.push_op();
         self.stats.push_static();
@@ -367,7 +410,7 @@ impl TemplateStatsBuilder {
                 self.stats.push_anchor(
                     &mut self.anchors,
                     self.cursor.node_anchor_parent_op_index(),
-                    TemplateSlotPath::append_children(TemplatePath::empty()),
+                    TemplateSlotPath::last_static_node(TemplatePath::empty()),
                     false,
                 );
             }
@@ -419,6 +462,12 @@ macro_rules! template_lowering {
     (open_element($storage:expr, $cursor:expr, $tag:expr, $namespace:expr)) => {{
         let namespace = $namespace;
         let has_namespace = namespace.is_some();
+        if ($cursor).stack_pointer == 0 {
+            ($storage).push_static_anchor(
+                ROOT_PARENT_OP_INDEX,
+                TemplateSlotPath::static_node(($cursor).next_paths[0]),
+            );
+        }
         ($cursor).open_element(($storage).ops_len(), has_namespace);
         ($storage).push_op(TemplateOp::enter(0, has_namespace));
         ($storage).push_static($tag);
@@ -446,6 +495,12 @@ macro_rules! template_lowering {
         }
     }};
     (static_text($storage:expr, $cursor:expr, $value:expr)) => {{
+        if ($cursor).stack_pointer == 0 {
+            ($storage).push_static_anchor(
+                ROOT_PARENT_OP_INDEX,
+                TemplateSlotPath::static_node(($cursor).next_paths[0]),
+            );
+        }
         let _ = ($cursor).next_node_path();
         ($storage).push_op(TemplateOp::text());
         ($storage).push_static($value);
@@ -538,6 +593,35 @@ macro_rules! template_storage_methods {
             });
         }
 
+        $($constness)? fn push_static_anchor(
+            &mut self,
+            parent_op_index: u16,
+            path: TemplateSlotPath,
+        ) {
+            let len = self.anchors.len();
+            if len > 0 {
+                let last = self.anchors.at(len - 1);
+                if last.same_anchor(parent_op_index, path) {
+                    return;
+                }
+            }
+
+            let (node_start, attr_start) = if len == 0 {
+                (0, 0)
+            } else {
+                let last = self.anchors.at(len - 1);
+                (last.node_end, last.attr_end)
+            };
+            self.anchors.push(TemplateAnchor {
+                parent_op_index,
+                path,
+                node_start,
+                node_end: node_start,
+                attr_start,
+                attr_end: attr_start,
+            });
+        }
+
     };
 }
 
@@ -625,7 +709,7 @@ const fn lower_raw_tree<const OPS_CAP: usize, const STRING_CAP: usize, const DYN
         }
         TemplateRawTree::DynamicAttr => {
             let frame = cursor.current_element_frame();
-            let path = TemplateSlotPath::append_children(frame.path);
+            let path = TemplateSlotPath::static_node(frame.path);
             storage.push_anchor(frame.enter_index as u16, path, true);
         }
         TemplateRawTree::StaticText(value) => {
@@ -723,7 +807,7 @@ impl RuntimeTemplateBuilder {
     /// Emit a dynamic attribute slot on the current element.
     pub fn dynamic_attr(&mut self) {
         let frame = self.cursor.current_element_frame();
-        let path = TemplateSlotPath::append_children(frame.path);
+        let path = TemplateSlotPath::static_node(frame.path);
         self.storage
             .push_anchor(frame.enter_index as u16, path, true);
     }

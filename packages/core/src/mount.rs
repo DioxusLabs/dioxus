@@ -121,13 +121,12 @@ pub(crate) struct Mount {
 
     mode: RenderMode,
 
-    /// Mounted slots for this node in one allocation, laid out as three regions:
-    /// `[ root nodes (root_count) | anchor slots (anchor_count) | dynamic slots (rest) ]`.
+    /// Mounted slots for this node in one allocation, laid out as two regions:
+    /// `[ anchor slots (anchor_count) | dynamic slots (rest) ]`.
     /// Previously these were three separate `Box<[_]>` — one heap allocation per region, so three
     /// allocs/frees per mounted node. A list of N rows is N mounts, so that tripled the per-node
     /// allocator traffic on both create and removal. One backing slice means one alloc/free.
     slots: Box<[PackedMountedSlot]>,
-    root_count: u32,
     anchor_count: u32,
 
     fragment_child_mounts: Vec<MountId>,
@@ -140,10 +139,9 @@ impl Mount {
         logical_parent: Option<MountRef>,
         target_id: RenderTargetId,
     ) -> Self {
-        // Root and dynamic-node slot counts are structural: the root array length is the number
-        // of template root positions, the anchor array length is the number of dynamic anchors, and
-        // the dynamic array length is the number of runtime dynamic nodes.
-        let root_count = node.root_child_count();
+        // Anchor and dynamic-node slot counts are structural: the anchor array length is the
+        // number of template anchors, and the dynamic array length is the number of runtime
+        // dynamic nodes. Static roots are stored in their structural root anchors.
         let anchor_count = node.template.anchors().len();
         let dynamic_count = node.dynamic_node_values().len();
         Self {
@@ -152,9 +150,7 @@ impl Mount {
             target_id,
             node,
             mode: RenderMode::Foreground,
-            slots: vec![PackedMountedSlot::empty(); root_count + anchor_count + dynamic_count]
-                .into(),
-            root_count: root_count as u32,
+            slots: vec![PackedMountedSlot::empty(); anchor_count + dynamic_count].into(),
             anchor_count: anchor_count as u32,
             fragment_child_mounts: Vec::new(),
         }
@@ -186,7 +182,7 @@ impl Mount {
     }
 
     fn dynamic_offset(&self) -> usize {
-        self.root_count as usize + self.anchor_count as usize
+        self.anchor_count as usize
     }
 
     fn dynamic_slot(&self, idx: usize) -> PackedMountedSlot {
@@ -199,41 +195,12 @@ impl Mount {
     }
 
     fn anchor_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.slots[self.root_count as usize + idx]
-    }
-
-    fn anchor_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
-        let offset = self.root_count as usize;
-        &mut self.slots[offset + idx]
-    }
-
-    fn root_slot(&self, idx: usize) -> PackedMountedSlot {
         self.slots[idx]
     }
 
-    fn root_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
+    fn anchor_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
         &mut self.slots[idx]
     }
-}
-
-macro_rules! mounted_element_accessors {
-    ($mounted:ident, $set:ident, $clear:ident, $idx:ident, $get:expr, $set_slot:expr) => {
-        pub(crate) fn $mounted(&self, mount: MountId, $idx: usize) -> Option<MountedElementId> {
-            self.with_mount(mount, $get)
-        }
-
-        pub(crate) fn $set(&self, mount: MountId, $idx: usize, value: MountedElementId) {
-            self.with_mount_mut(mount, |mount| {
-                ($set_slot)(mount, $idx, PackedMountedSlot::from_mounted_element(value))
-            });
-        }
-
-        pub(crate) fn $clear(&self, mount: MountId, $idx: usize) {
-            self.with_mount_mut(mount, |mount| {
-                ($set_slot)(mount, $idx, PackedMountedSlot::empty())
-            });
-        }
-    };
 }
 
 impl VirtualDom {
@@ -285,10 +252,6 @@ impl VirtualDom {
 
     pub(crate) fn mounted_logical_parent(&self, mount: MountId) -> Option<MountRef> {
         self.with_mount(mount, |mount| mount.logical_parent)
-    }
-
-    pub(crate) fn mounted_root_count(&self, mount: MountId) -> usize {
-        self.with_mount(mount, |mount| mount.root_count as usize)
     }
 
     pub(crate) fn mounted_anchor_node(
@@ -551,15 +514,6 @@ impl VirtualDom {
                 .set_component_scope(value);
         });
     }
-
-    mounted_element_accessors!(
-        mounted_root_node,
-        set_mounted_root_node,
-        clear_mounted_root_node,
-        root_idx,
-        |mount: &Mount| mount.root_slot(root_idx).mounted_element(),
-        |mount: &mut Mount, idx, value| *mount.root_slot_mut(idx) = value
-    );
 
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
         self.runtime

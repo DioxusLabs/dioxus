@@ -475,8 +475,25 @@ impl<'a> DynamicAnchor<'a> {
         self.anchor_index
     }
 
-    pub(super) fn appends(self) -> bool {
-        matches!(self.slot_target(), TemplateSlotTarget::AppendChildren(_))
+    /// Whether this anchor points at the last static node at its sibling level.
+    pub fn is_last_static_node(self) -> bool {
+        self.slot_target().is_last_static_node()
+    }
+
+    pub(crate) fn is_parent_append_target(self) -> bool {
+        if !self.is_last_static_node() {
+            return false;
+        }
+
+        let path = self.static_path();
+        if path.is_empty() {
+            return true;
+        }
+
+        let Some(parent_op) = self.parent_element_op_index() else {
+            return false;
+        };
+        self.vnode.template.static_path_for_op(parent_op) == Some(path)
     }
 
     /// The root position this anchor belongs to.
@@ -490,10 +507,7 @@ impl<'a> DynamicAnchor<'a> {
     /// Return true when this dynamic anchor is inserted at the vnode root level, with no enclosing
     /// static element.
     pub fn is_root_level(self) -> bool {
-        match self.slot_target() {
-            TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
-            TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
-        }
+        self.parent_element_op_index().is_none()
     }
 
     /// The static element op that owns this anchor, or `None` for root-level anchors.
@@ -544,10 +558,6 @@ impl<'a> DynamicNodeSlot<'a> {
 
     pub(super) fn root_position(self) -> usize {
         self.anchor.root_position()
-    }
-
-    pub(super) fn appends(self) -> bool {
-        self.anchor.appends()
     }
 
     pub(super) fn is_root_level(self) -> bool {
@@ -610,8 +620,9 @@ fn static_child<'a>(
 }
 
 fn child_position(target: TemplateSlotTarget) -> usize {
-    match target {
-        TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 * 2,
-        TemplateSlotTarget::AppendChildren(_) => usize::MAX,
+    if target.is_last_static_node() {
+        usize::MAX
+    } else {
+        target.static_path().split_insertion().1 * 2
     }
 }

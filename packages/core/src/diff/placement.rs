@@ -22,7 +22,10 @@ use crate::{
     nodes::DynamicNode,
 };
 
-use super::{context::DiffContext, template::DynamicNodeSlot};
+use super::{
+    context::DiffContext,
+    template::{DynamicAnchor, DynamicNodeSlot},
+};
 
 #[derive(Clone, Copy)]
 pub(super) enum ElementEdge {
@@ -154,6 +157,10 @@ pub(super) fn insertion_site_for_slot(
         return InsertionSite::before(id);
     }
 
+    if let Some(id) = dom.mounted_anchor_node(parent_mount, slot.anchor().anchor_index()) {
+        return insertion_site_for_anchor_id(slot.anchor(), id.element_id());
+    }
+
     if slot.is_root_level() {
         // No adjacent sibling: scan later root positions, then walk up to committed root siblings.
         if let Some(id) = root_content_after_slot(parent_mount, root_idx, dom) {
@@ -162,25 +169,25 @@ pub(super) fn insertion_site_for_slot(
         return insertion_site_for_mounted_child(parent_mount, dom, context);
     }
 
-    insertion_site_for_mounted_anchor(
-        parent_mount,
-        slot.anchor().anchor_index(),
-        slot.appends(),
-        dom,
-    )
+    insertion_site_for_mounted_anchor(parent_mount, slot.anchor(), dom)
 }
 
 pub(super) fn insertion_site_for_mounted_anchor(
     parent_mount: MountId,
-    anchor_index: usize,
-    append: bool,
+    anchor: DynamicAnchor<'_>,
     dom: &VirtualDom,
 ) -> InsertionSite {
     let anchor_id = dom
-        .unchecked_mounted_anchor_node(parent_mount, anchor_index)
+        .unchecked_mounted_anchor_node(parent_mount, anchor.anchor_index())
         .element_id();
-    if append {
+    insertion_site_for_anchor_id(anchor, anchor_id)
+}
+
+fn insertion_site_for_anchor_id(anchor: DynamicAnchor<'_>, anchor_id: ElementId) -> InsertionSite {
+    if anchor.is_parent_append_target() {
         InsertionSite::append_to(anchor_id)
+    } else if anchor.is_last_static_node() {
+        InsertionSite::after(anchor_id)
     } else {
         InsertionSite::before(anchor_id)
     }
@@ -524,11 +531,9 @@ pub(super) fn static_root_element(
     root_idx: usize,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    debug_assert!(
-        root_idx < dom.mounted_root_count(mount),
-        "root lookup must stay within the vnode template"
-    );
-    dom.mounted_root_node(mount, root_idx)
+    let vnode = dom.current_mounted_view(mount)?;
+    let anchor_idx = vnode.template.root_anchor_for_position(root_idx)?;
+    dom.mounted_anchor_node(mount, anchor_idx)
         .map(|id| id.element_id())
 }
 

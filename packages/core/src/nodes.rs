@@ -307,11 +307,8 @@ impl<'a> MountedVNode<'a> {
 
     /// Get the mounted id for a root node.
     pub fn mounted_root(self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        if root_idx >= dom.mounted_root_count(self.mount) {
-            return None;
-        }
-
-        dom.mounted_root_node(self.mount, root_idx)
+        let anchor_idx = self.vnode.template.root_anchor_for_position(root_idx)?;
+        dom.mounted_anchor_node(self.mount, anchor_idx)
             .map(|id| id.element_id())
     }
 

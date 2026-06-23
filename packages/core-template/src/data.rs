@@ -1,5 +1,4 @@
-use super::{DecodedTemplateOp, TemplateAnchor};
-use crate::TemplateSlotTarget;
+use super::{DecodedTemplateOp, TemplateAnchor, TemplatePath};
 use crate::op::TemplateOp;
 
 /// A static layout of a UI tree.
@@ -392,23 +391,92 @@ impl Template {
     /// Return the materialized root position that owns an anchor.
     pub fn root_position_for_anchor(&self, anchor_idx: usize) -> Option<usize> {
         let anchor = self.anchors.get(anchor_idx)?;
-        match anchor.slot_target() {
-            TemplateSlotTarget::BeforeStatic(path) if path.is_root() => {
+        let path = anchor.static_path();
+        if anchor.parent_element_op_index().is_none() {
+            if path.is_empty() {
+                return Some(
+                    self.static_root_count()
+                        + self.root_dynamic_before_static_count(usize::MAX, true),
+                );
+            }
+
+            if path.is_root() {
                 let static_root_idx = path.segment(0) as usize;
-                Some(
+                if anchor.is_last_static_node() {
+                    return Some(
+                        static_root_idx
+                            + 1
+                            + self.root_dynamic_before_static_count(static_root_idx, true),
+                    );
+                }
+
+                return Some(
                     static_root_idx + self.root_dynamic_before_static_count(static_root_idx, false),
-                )
+                );
             }
-            TemplateSlotTarget::AppendChildren(path) if path.is_empty() => Some(
-                self.static_root_count() + self.root_dynamic_before_static_count(usize::MAX, true),
-            ),
-            TemplateSlotTarget::BeforeStatic(path) => {
-                self.root_position_for_static_root(path.segment(0) as usize)
-            }
-            TemplateSlotTarget::AppendChildren(path) => (!path.is_empty())
-                .then(|| path.segment(0) as usize)
-                .and_then(|static_root_idx| self.root_position_for_static_root(static_root_idx)),
         }
+
+        (!path.is_empty())
+            .then(|| path.segment(0) as usize)
+            .and_then(|static_root_idx| self.root_position_for_static_root(static_root_idx))
+    }
+
+    /// Return the structural anchor index for a static root index.
+    pub fn root_anchor_for_static_root(&self, static_root_idx: usize) -> Option<usize> {
+        let root_path = TemplatePath::root(static_root_idx);
+        self.anchors.iter().position(|anchor| {
+            anchor.parent_element_op_index().is_none()
+                && !anchor.is_last_static_node()
+                && anchor.static_path() == root_path
+        })
+    }
+
+    /// Return the structural anchor index for a materialized static root position.
+    pub fn root_anchor_for_position(&self, root_position: usize) -> Option<usize> {
+        let mut static_root_idx = 0;
+        while static_root_idx < self.static_root_count() {
+            if self.root_position_for_static_root(static_root_idx) == Some(root_position) {
+                return self.root_anchor_for_static_root(static_root_idx);
+            }
+            static_root_idx += 1;
+        }
+        None
+    }
+
+    /// Return the static template path for a flat template op.
+    pub fn static_path_for_op(&self, target_op: usize) -> Option<TemplatePath> {
+        let mut cursor = 0;
+        let mut path = TemplatePath::root(0);
+        while cursor < self.ops.len() {
+            if let Some(found) = self.static_path_for_op_inner(cursor, path, target_op) {
+                return Some(found);
+            }
+            cursor = self.next_sibling_op(cursor);
+            path = path.next_sibling();
+        }
+        None
+    }
+
+    fn static_path_for_op_inner(
+        &self,
+        op: usize,
+        path: TemplatePath,
+        target_op: usize,
+    ) -> Option<TemplatePath> {
+        if op == target_op && self.is_static_node_op(op) {
+            return Some(path);
+        }
+
+        let (_, mut child, end) = self.element_attr_child_ops(op)?;
+        let mut child_path = path.next_child();
+        while child < end {
+            if let Some(found) = self.static_path_for_op_inner(child, child_path, target_op) {
+                return Some(found);
+            }
+            child = self.next_sibling_op(child);
+            child_path = child_path.next_sibling();
+        }
+        None
     }
 
     fn static_root_count(&self) -> usize {
@@ -427,10 +495,8 @@ impl Template {
         self.anchors
             .iter()
             .filter(|anchor| anchor.parent_element_op_index().is_none())
-            .filter(|anchor| match anchor.slot_target() {
-                TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
-                TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
-            })
+            .filter(|anchor| !anchor.nodes().is_empty())
+            .filter(|anchor| anchor.static_path().is_root() || anchor.static_path().is_empty())
             .count()
     }
 
@@ -442,11 +508,11 @@ impl Template {
         self.anchors
             .iter()
             .filter(|anchor| anchor.parent_element_op_index().is_none())
-            .filter_map(|anchor| match anchor.slot_target() {
-                TemplateSlotTarget::BeforeStatic(path) if path.is_root() => {
-                    Some(path.segment(0) as usize)
-                }
-                _ => None,
+            .filter(|anchor| !anchor.nodes().is_empty())
+            .filter(|anchor| !anchor.is_last_static_node())
+            .filter_map(|anchor| {
+                let path = anchor.static_path();
+                path.is_root().then(|| path.segment(0) as usize)
             })
             .filter(|&idx| {
                 if include_current {

@@ -36,7 +36,11 @@ impl TemplateAnchor {
     }
 
     pub const fn static_path(self) -> TemplatePath {
-        self.slot_path().static_parent()
+        self.slot_path().static_path()
+    }
+
+    pub const fn is_last_static_node(self) -> bool {
+        self.slot_path().is_last_static_node()
     }
 
     pub const fn nodes(self) -> std::ops::Range<usize> {

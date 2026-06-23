@@ -18,7 +18,7 @@ use crate::{
     nodes::DynamicNode,
     scopes::ScopeId,
 };
-use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath, TemplateSlotTarget};
+use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath};
 
 impl MountedVNode<'_> {
     /// Diff this mounted vnode against `new`.
@@ -276,11 +276,8 @@ impl VNode {
         if dom.mount_target_id(mount) != target_id {
             return None;
         }
-        debug_assert!(
-            root_idx < dom.mounted_root_count(mount),
-            "mounted root count must match the vnode template"
-        );
-        dom.mounted_root_node(mount, root_idx)
+        let anchor_idx = self.template.root_anchor_for_position(root_idx)?;
+        dom.mounted_anchor_node(mount, anchor_idx)
             .map(MountedElementId::element_id)
     }
 
@@ -570,10 +567,7 @@ impl VNode {
 
             // Root-level node anchors own renderer mutations and reclaim after nested ones; this is
             // a static property of the anchor's slot target.
-            let root_level = match anchor.slot_target() {
-                TemplateSlotTarget::BeforeStatic(path) => path.is_root(),
-                TemplateSlotTarget::AppendChildren(path) => path.is_empty(),
-            };
+            let root_level = anchor.parent_element_op_index().is_none();
             for idx in anchor.nodes() {
                 if root_level {
                     root_ids.push(idx);
@@ -605,19 +599,17 @@ impl VNode {
             self.remove_dynamic_node(mount, dom, to.as_deref_mut(), destroy_component_state, id);
         }
 
-        for idx in 0..dom.mounted_root_count(mount) {
-            let Some(id) = dom.mounted_root_node(mount, idx) else {
-                // Already reclaimed during a previous `move_node_to_background`.
-                continue;
-            };
-            if let Some(to) = to.as_deref_mut() {
-                remove_id(to, id.element_id());
-            }
-            dom.reclaim_for_mount(mount, id);
-            dom.clear_mounted_root_node(mount, idx);
-        }
-
+        let mut removed_roots = Vec::new();
         for &anchor_idx in root_anchor_indices {
+            if let Some(id) = dom.mounted_anchor_node(mount, anchor_idx)
+                && !removed_roots.contains(&id)
+            {
+                if let Some(to) = to.as_deref_mut() {
+                    remove_id(to, id.element_id());
+                }
+                dom.reclaim_for_mount(mount, id);
+                removed_roots.push(id);
+            }
             dom.clear_mounted_anchor_node(mount, anchor_idx);
         }
     }
@@ -793,7 +785,6 @@ impl VNode {
                     static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
                         let id = self.load_template_root(
-                            mount,
                             element.root_position().expect("root element"),
                             element.op(),
                             state.dom,
@@ -814,7 +805,6 @@ impl VNode {
                     static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
                         let id = self.load_template_root(
-                            mount,
                             text.root_position().expect("root text"),
                             text.op(),
                             state.dom,
@@ -944,12 +934,7 @@ impl VNode {
         }
 
         let context = state.context();
-        let site = insertion_site_for_mounted_anchor(
-            mount,
-            anchor.anchor_index(),
-            anchor.appends(),
-            state.dom,
-        );
+        let site = insertion_site_for_mounted_anchor(mount, anchor, state.dom);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
         let to = state.to.as_deref_mut().expect("writer checked");
@@ -984,7 +969,6 @@ impl VNode {
 
     fn load_template_root(
         &self,
-        mount: MountId,
         root_idx: usize,
         root_op: usize,
         dom: &mut VirtualDom,
@@ -992,7 +976,6 @@ impl VNode {
     ) -> MountedElementId {
         let target_id = dom.current_render_target_id();
         let id = dom.next_element_in_target(target_id);
-        dom.set_mounted_root_node(mount, root_idx, id);
 
         let static_root = self.template.static_node(root_op).expect("bad static root");
         if to.can_cache_template_roots() {
@@ -1062,11 +1045,8 @@ impl VNode {
 }
 
 fn anchor_static_target(anchor: &TemplateAnchor) -> Option<TemplatePath> {
-    match anchor.slot_target() {
-        TemplateSlotTarget::BeforeStatic(path) => Some(path),
-        TemplateSlotTarget::AppendChildren(path) if !path.is_empty() => Some(path),
-        TemplateSlotTarget::AppendChildren(_) => None,
-    }
+    let path = anchor.static_path();
+    (!path.is_empty()).then_some(path)
 }
 
 fn create_static_prototype(node: StaticTemplateNode<'_>, to: &mut dyn WriteMutations) -> usize {

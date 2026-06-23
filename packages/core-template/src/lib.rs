@@ -28,7 +28,7 @@
 //! ```
 //!
 //! Dynamic nodes do not receive their own paths. Paths are only stored when an
-//! emitted anchor needs to point to a static node or static parent. The path
+//! emitted anchor needs to point to a static node. The path
 //! notation below is a tree walk: `0` means "next child", and `1` means "next
 //! sibling". The empty path is the vnode render-parent site; it is not a real
 //! static node.
@@ -37,23 +37,24 @@
 //! targets for the example above:
 //!
 //! ```text
-//! Path walk    Slot target          Why it is emitted
-//! 0            BeforeStatic(0)      root dynamic node before div
-//! 0            AppendChildren(0)    dynamic class attrs on div
-//! 001          AppendChildren(001)  dynamic text inside strong
-//! 0011         BeforeStatic(0011)   badge and count before span
-//! []           AppendChildren([])   trailing root dynamic node
+//! Path walk    Last static node?    Why it is emitted
+//! 0            false                root anchor for div / node before div
+//! 0            false                dynamic class attrs on div
+//! 001          true                 dynamic text inside strong
+//! 0011         false                badge and count before span
+//! 0            true                 trailing root dynamic node after div
 //! ```
 //!
 //! There is no emitted path for `"Hello "` because no dynamic slot is anchored
-//! to that static text node. The same path can appear with different target
-//! kinds: `BeforeStatic(0)` inserts before `div`, while `AppendChildren(0)`
-//! appends dynamic attributes to `div`.
+//! to that static text node. The same path can appear with different parent
+//! ownership: a root-level anchor at `0` can insert before `div`, while an
+//! element-owned anchor at `0` applies dynamic attributes to `div`.
 //!
-//! `BeforeStatic(path)` means the dynamic slot is inserted before the static
-//! node at `path`. The diff uses that path to find the parent and insertion
-//! index. Dynamic slots at the end of a parent use
-//! `AppendChildren(parent_path)`.
+//! The low tag bit on an anchor path records whether the path is the last
+//! static node before the dynamic slot. When it is false, dynamic nodes insert
+//! before the static node at `path`. When it is true, dynamic nodes insert
+//! after that static node, or append to it when the path is also the anchor's
+//! owning element.
 //!
 //! Anchors are created for dynamic node or attribute groups, not for every static node.
 //! A static element appears as an anchor parent only when it owns dynamic
@@ -76,19 +77,18 @@
 //! 0             class from "{class_name}"
 //! ```
 //!
-//! Anchors map ranges from those arrays to insertion targets. A target is either
-//! `BeforeStatic(path)` for nodes that should be inserted before a following
-//! static node, or `AppendChildren(path)` for nodes that should be appended to a
-//! static parent and attributes that belong to that static parent.
-//! `AppendChildren([])` means append at the vnode root site.
+//! Anchors map ranges from those arrays to static paths plus the last-static
+//! flag. A root static node always has an anchor, even when it owns no dynamic
+//! values, so renderers can use the same anchor list for hydration and template
+//! cloning.
 //!
 //! ```text
-//! Nodes    Attrs    Parent element op    Slot target          Meaning
-//! 0..1     0..0     None                 BeforeStatic(0)      root node before div
-//! 1..1     0..1     div                  AppendChildren(0)    dynamic class attrs for div
-//! 1..2     1..1     strong               AppendChildren(001)  "{name}" inside strong
-//! 2..4     1..1     div                  BeforeStatic(0011)   badge and count before span
-//! 4..5     1..1     None                 AppendChildren([])   trailing root node
+//! Nodes    Attrs    Parent element op    Path    Last?    Meaning
+//! 0..1     0..0     None                 0       false    root node before div
+//! 1..1     0..1     div                  0       false    dynamic class attrs for div
+//! 1..2     1..1     strong               001     true     "{name}" inside strong
+//! 2..4     1..1     div                  0011    false    badge and count before span
+//! 4..5     1..1     None                 0       true     trailing root node
 //! ```
 //!
 //! Adjacent dynamic nodes at the same insertion position share one anchor. In

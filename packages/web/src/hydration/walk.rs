@@ -15,7 +15,7 @@
 
 use dioxus_core::{
     AttributeValue, DynamicNode, DynamicNodeSlot, ElementId, MountedVNode, ScopeState,
-    StaticElement, TemplateSlotTarget, VNodeChild, VirtualDom,
+    StaticElement, VNodeChild, VirtualDom,
 };
 
 use crate::dom::WebsysDom;
@@ -86,29 +86,32 @@ impl WebsysDom {
                 for slot in anchor.nodes() {
                     self.emit_dynamic_node_at_level(vnode, slot, dom, cursor, state)?;
                 }
-                // A `BeforeStatic` anchor sits before the following static
-                // sibling at this level. Record its id so that sibling's emission
-                // binds it too: core keys the anchor by the sibling's own path, so
-                // it dedups to whatever id the sibling would otherwise receive.
-                if matches!(anchor.slot_target(), TemplateSlotTarget::BeforeStatic(_)) {
+                // A non-last-static anchor sits before the following static sibling at this level.
+                if !anchor.is_last_static_node() {
                     state.pending_before_anchor = vnode.mounted_anchor_node(anchor, dom);
                 }
             }
             VNodeChild::Element(element) => {
-                let root_id = element
-                    .root_position()
-                    .and_then(|root_position| vnode.mounted_root(root_position, dom))
-                    .or_else(|| state.take_pending_before_anchor());
+                let root_id = mounted_static_node(
+                    vnode,
+                    element.root_position(),
+                    element.op(),
+                    state.take_pending_before_anchor(),
+                    dom,
+                );
                 state.flush_text(cursor)?;
                 state.advance(cursor);
                 self.emit_element(vnode, element, root_id, cursor, dom)?;
                 state.prev_consumed = 1;
             }
             VNodeChild::Text(text) => {
-                let root_id = text
-                    .root_position()
-                    .and_then(|root_position| vnode.mounted_root(root_position, dom))
-                    .or_else(|| state.take_pending_before_anchor());
+                let root_id = mounted_static_node(
+                    vnode,
+                    text.root_position(),
+                    text.op(),
+                    state.take_pending_before_anchor(),
+                    dom,
+                );
                 state.push_text(utf16_len(text.text()), root_id);
             }
         }
@@ -177,25 +180,6 @@ impl WebsysDom {
             &mut mounted_events,
         )?;
 
-        // A trailing dynamic-node anchor appends directly into this element (its
-        // static parent). Core gives that append anchor its own ElementId pointing
-        // at this same element (`assign_template_anchor_ids`), distinct from any
-        // root/attr id, so hydration must bind it here too — otherwise the anchor's
-        // later `AppendTo(anchor)` resolves to an unbound node and the interpreter
-        // dereferences `undefined`. The append anchor shares this element's static
-        // path, so it dedups to the same id as any attr/root binding above.
-        for anchor in vnode.vnode().dynamic_anchors() {
-            if anchor.nodes().len() > 0
-                && anchor.parent_element_op_index() == Some(element.op())
-                && matches!(anchor.slot_target(), TemplateSlotTarget::AppendChildren(_))
-            {
-                let anchor_id = vnode
-                    .mounted_anchor_node(anchor, dom)
-                    .ok_or(VNodeNotInitialized)?;
-                mounted_id = Some(anchor_id);
-            }
-        }
-
         // Always map the element so the cursor can verify the tag and step past
         // parser-inserted wrappers. id == 0 means the element needs no node
         // binding but still occupies a positional slot.
@@ -254,6 +238,26 @@ impl WebsysDom {
     }
 }
 
+fn mounted_static_node<'a>(
+    vnode: MountedVNode<'a>,
+    root_position: Option<usize>,
+    op: usize,
+    pending_before_anchor: Option<ElementId>,
+    dom: &'a VirtualDom,
+) -> Option<ElementId> {
+    root_position
+        .and_then(|root_position| vnode.mounted_root(root_position, dom))
+        .or(pending_before_anchor)
+        .or_else(|| {
+            let path = vnode.vnode().template.static_path_for_op(op)?;
+            vnode
+                .vnode()
+                .dynamic_anchors()
+                .find(|anchor| anchor.static_path() == path)
+                .and_then(|anchor| vnode.mounted_anchor_node(anchor, dom))
+        })
+}
+
 #[derive(Clone, Copy)]
 struct TextContribution {
     len: u32,
@@ -264,7 +268,7 @@ struct TextContribution {
 struct LevelState {
     pending_text: Vec<TextContribution>,
     prev_consumed: u32,
-    /// Anchor id from a preceding `BeforeStatic` dynamic anchor, awaiting the
+    /// Anchor id from a preceding non-last-static dynamic anchor, awaiting the
     /// static sibling it anchors before so that sibling's binding adopts it.
     pending_before_anchor: Option<ElementId>,
 }
