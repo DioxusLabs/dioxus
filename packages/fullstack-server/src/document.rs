@@ -39,10 +39,10 @@ pub struct ServerDocument(RefCell<ServerDocumentInner>);
 impl ServerDocument {
     pub(crate) fn title(&self) -> Option<String> {
         let myself = self.0.borrow();
-        myself.title.as_ref().map(|title_text| {
+        myself.title.as_ref().map(|title| {
             RENDERER
                 .write()
-                .render_element(rsx! { title { "{title_text}" } })
+                .render_element(rsx! { title { "{title}" } })
         })
     }
 
