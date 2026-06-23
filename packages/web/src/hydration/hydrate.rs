@@ -12,7 +12,7 @@ use wasm_bindgen::JsCast;
 use super::cursor::HydrationCursor;
 
 use super::SuspenseMessage;
-use super::suspense::{first_dynamic_root_element_id, path_to_resolved_suspense_id};
+use super::suspense::path_to_resolved_suspense_id;
 
 fn children_array(parent: &web_sys::Node) -> js_sys::Array {
     js_sys::Array::from(parent.child_nodes().unchecked_ref())
@@ -75,12 +75,10 @@ impl WebsysDom {
         let children = children_array(resolved_suspense_element.unchecked_ref());
         let children_len = children.length();
 
-        // Empty non-error chunks use a real empty text node as the
-        // `replace_with(loading_id, 1)` item; the replacement positions it at
-        // the loading slot. Hydration later binds the new scope's placeholder
-        // ElementId to that same node.
-        let empty_bootstrap = children_len == 0;
-        let mut empty_bootstrap_node = None;
+        // A zero-DOM stream still needs core's suspense placement. Push one
+        // empty text node through that placement, then let the hydration cursor
+        // claim it if the mounted scope has an addressable empty slot.
+        let mut empty_hydration_root = None;
 
         #[cfg(not(debug_assertions))]
         let debug_types = None;
@@ -102,10 +100,10 @@ impl WebsysDom {
                 // the JS interpreter stack, so flush first to keep the target
                 // below the replacement nodes for `replace_with`.
                 to.flush_edits();
-                if empty_bootstrap {
+                if children_len == 0 {
                     let node: web_sys::Node = document.create_text_node("").unchecked_into();
                     to.interpreter.base().push_root(node.clone());
-                    empty_bootstrap_node = Some(node);
+                    empty_hydration_root = Some(node);
                     1
                 } else {
                     for index in 0..children_len {
@@ -133,23 +131,11 @@ impl WebsysDom {
             .current_path
             .clone_from(&suspense_path);
 
-        if empty_bootstrap {
-            // Empty-chunk path: the empty text node pushed earlier was placed
-            // at the loading slot by `replace_with`. Bind it to the resolved
-            // scope's first empty dynamic-root ElementId so later mutations
-            // target it, then walk the scope to record nested suspense ids.
-            if let (Some(claim_id), Some(node)) = (
-                first_dynamic_root_element_id(root_scope, dom),
-                empty_bootstrap_node.as_ref(),
-            ) {
-                self.interpreter.base().push_root(node.clone());
-                self.interpreter.pop_id(claim_id.raw() as u32);
-                self.flush_edits();
-            }
-            self.collect_suspense_only(root_scope, dom);
-        } else {
-            self.start_hydration_at_scope(root_scope, dom, children, false, true)?;
-        }
+        let roots = empty_hydration_root
+            .as_ref()
+            .map(node_array)
+            .unwrap_or(children);
+        self.start_hydration_at_scope(root_scope, dom, roots, false, true)?;
 
         Ok(())
     }

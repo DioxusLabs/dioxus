@@ -151,7 +151,7 @@ pub(crate) fn with_id<R>(
 /// Push `id` and let `consume_node` consume it.
 ///
 /// Invariant: `consume_node` must consume the pushed node with a terminal stack
-/// operation such as `remove`, `replace_with`, or `pop_id`.
+/// operation such as `remove`, `replace_with`, or `pop`.
 pub(crate) fn with_consumed_id<R>(
     to: &mut dyn WriteMutations,
     id: ElementId,

@@ -97,21 +97,25 @@ impl VNode {
         to_iter: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
     ) -> Option<(AttributeKey, Option<&'a Attribute>, Option<&'a Attribute>)> {
         match (from_iter.peek().copied(), to_iter.peek().copied()) {
-            (Some(from), Some(to_attr)) => match Self::compare_attribute_keys(from, to_attr) {
-                Ordering::Less => {
-                    from_iter.next();
-                    Some((Self::attribute_key(from), Some(from), None))
+            (Some(from), Some(to_attr)) => {
+                let from_key = Self::attribute_key(from);
+                let to_key = Self::attribute_key(to_attr);
+                match from_key.cmp(&to_key) {
+                    Ordering::Less => {
+                        from_iter.next();
+                        Some((from_key, Some(from), None))
+                    }
+                    Ordering::Greater => {
+                        to_iter.next();
+                        Some((to_key, None, Some(to_attr)))
+                    }
+                    Ordering::Equal => {
+                        from_iter.next();
+                        to_iter.next();
+                        Some((to_key, Some(from), Some(to_attr)))
+                    }
                 }
-                Ordering::Greater => {
-                    to_iter.next();
-                    Some((Self::attribute_key(to_attr), None, Some(to_attr)))
-                }
-                Ordering::Equal => {
-                    from_iter.next();
-                    to_iter.next();
-                    Some((Self::attribute_key(to_attr), Some(from), Some(to_attr)))
-                }
-            },
+            }
             (Some(from), None) => {
                 from_iter.next();
                 Some((Self::attribute_key(from), Some(from), None))

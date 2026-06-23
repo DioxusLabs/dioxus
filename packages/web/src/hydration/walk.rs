@@ -336,9 +336,9 @@ fn emit_text_leaf(
         let Some(id) = contribution.id else {
             return Ok(());
         };
-        // All-empty runs insert before the cursor. Otherwise, empty sentinels
-        // after the last real text contribution are inserted after it.
-        cursor.synth(id.raw() as u32, last_nonempty.is_some_and(|last| i >= last))?;
+        // All-empty runs bind before the cursor. Otherwise, empty slots after
+        // the last real text contribution bind after it.
+        cursor.empty_text_slot(id.raw() as u32, last_nonempty.is_some_and(|last| i >= last))?;
     } else {
         let id_arg = contribution.id.map(|i| i.raw() as u32).unwrap_or(0);
         let split_after = matches!(last_nonempty, Some(last) if i < last);

@@ -15,7 +15,7 @@
 use std::rc::Rc;
 
 use crate::{
-    MountedVNode, Runtime, VNode, VNodeChild, VirtualDom, WriteMutations,
+    MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
     arena::ElementId,
     innerlude::{MountId, MountRef},
     mutations::{TargetedLazyScope, append_children_to},
@@ -136,9 +136,8 @@ pub(super) fn insertion_site_at(
 
 /// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
 ///
-/// Invariant: root-level slots are placed relative to committed root siblings; non-root slots are
-/// placed inside their enclosing static root, which must be mounted before renderer placement is
-/// requested.
+/// Invariant: slots with a mounted static anchor are placed relative to that anchor; slots without
+/// one are parent-level append targets.
 pub(super) fn insertion_site_for_slot(
     parent_mount: MountId,
     slot: DynamicNodeSlot<'_>,
@@ -158,28 +157,7 @@ pub(super) fn insertion_site_for_slot(
         return insertion_site_for_anchor_id(slot.anchor(), id.element_id());
     }
 
-    if slot.is_root_level() {
-        // No adjacent sibling: scan later root anchors, then walk up to committed root siblings.
-        if let Some(id) =
-            root_content_after_anchor(parent_mount, slot.anchor().anchor_index(), dom)
-        {
-            return InsertionSite::before(id);
-        }
-        return insertion_site_for_mounted_child(parent_mount, dom, context);
-    }
-
-    insertion_site_for_mounted_anchor(parent_mount, slot.anchor(), dom)
-}
-
-pub(super) fn insertion_site_for_mounted_anchor(
-    parent_mount: MountId,
-    anchor: DynamicAnchor<'_>,
-    dom: &VirtualDom,
-) -> InsertionSite {
-    let anchor_id = dom
-        .unchecked_mounted_anchor_node(parent_mount, anchor.anchor_index())
-        .element_id();
-    insertion_site_for_anchor_id(anchor, anchor_id)
+    insertion_site_for_mounted_child(parent_mount, dom, context)
 }
 
 fn insertion_site_for_anchor_id(anchor: DynamicAnchor<'_>, anchor_id: ElementId) -> InsertionSite {
@@ -313,23 +291,31 @@ fn insertion_site_for_child_in_parent(
             let idx = slot.index();
             match &parent_vnode.dynamic_nodes[idx] {
                 DynamicNode::Fragment(children) => {
-                    let child_mounts =
-                        dom.mounted_fragment_children_exact(parent_mount, idx, children.len());
-                    let Some(position) = child_mounts.iter().position(|child| *child == mount)
-                    else {
-                        continue;
-                    };
-                    if let Some(id) =
-                        first_live_sibling_after(children, &child_mounts, position, mount, dom)
-                    {
-                        return Some(InsertionSite::before(id));
+                    let site = dom.try_with_mounted_fragment_children(
+                        parent_mount,
+                        idx,
+                        children.len(),
+                        |child_mounts| {
+                            let position = child_mounts.iter().position(|child| *child == mount)?;
+                            if let Some(id) = first_live_sibling_after(
+                                children,
+                                child_mounts,
+                                position,
+                                mount,
+                                dom,
+                            ) {
+                                return Some(InsertionSite::before(id));
+                            }
+                            Some(insertion_site_for_slot(parent_mount, slot, dom, context))
+                        },
+                    );
+                    match site {
+                        Some(Some(site)) => return Some(site),
+                        Some(None) | None => continue,
                     }
-                    return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                 }
                 DynamicNode::Component(_) => {
-                    if dom.unchecked_mounted_dynamic_component_root_mount(parent_mount, idx)
-                        == mount
-                    {
+                    if dom.mounted_dynamic_component_root_mount(parent_mount, idx) == Some(mount) {
                         return Some(insertion_site_for_slot(parent_mount, slot, dom, context));
                     }
                 }
@@ -350,32 +336,11 @@ fn adjacent_dynamic_sibling_after_in_vnode(
     slot: DynamicNodeSlot<'_>,
     dom: &VirtualDom,
 ) -> Option<ElementId> {
-    first_live_slot_after(parent_vnode, parent_mount, slot, dom, |sibling| {
-        let shares_position = sibling.shares_insertion_position(slot);
-        if sibling.parent_path() == slot.parent_path() && !shares_position {
-            None
-        } else {
-            Some(shares_position)
-        }
-    })
-}
-
-fn first_live_slot_after(
-    vnode: &VNode,
-    mount: MountId,
-    active_slot: DynamicNodeSlot<'_>,
-    dom: &VirtualDom,
-    mut scan: impl FnMut(DynamicNodeSlot<'_>) -> Option<bool>,
-) -> Option<ElementId> {
-    for slot in vnode.dynamic_node_slots_after(active_slot) {
-        match scan(slot) {
-            Some(true) => {
-                if let Some(id) = live_dynamic_slot_first_element(vnode, mount, slot.index(), dom) {
-                    return Some(id);
-                }
-            }
-            Some(false) => {}
-            None => break,
+    for sibling in parent_vnode.dynamic_node_slots_after_sharing_insertion_position(slot) {
+        if let Some(id) =
+            live_dynamic_slot_first_element(parent_vnode, parent_mount, sibling.index(), dom)
+        {
+            return Some(id);
         }
     }
     None
@@ -396,21 +361,23 @@ fn live_dynamic_slot_first_element(
         DynamicNode::Text(_) => dom
             .mounted_dynamic_text_node(mount, idx)
             .map(|id| id.element_id()),
-        DynamicNode::Fragment(children) => {
-            let child_mounts = dom.mounted_fragment_children_exact(mount, idx, children.len());
-            children
-                .iter()
-                .zip(child_mounts)
-                .find_map(|(child, mount)| {
-                    vnode_edge_element(MountedVNode::new(child, mount), dom, ElementEdge::First)
-                })
-        }
+        DynamicNode::Fragment(children) => dom
+            .try_with_mounted_fragment_children(mount, idx, children.len(), |child_mounts| {
+                children
+                    .iter()
+                    .zip(child_mounts)
+                    .find_map(|(child, mount)| {
+                        vnode_edge_element(
+                            MountedVNode::new(child, *mount),
+                            dom,
+                            ElementEdge::First,
+                        )
+                    })
+            })
+            .flatten(),
         DynamicNode::Component(_) => {
-            let component_root_mount =
-                dom.unchecked_mounted_dynamic_component_root_mount(mount, idx);
-            let vnode = dom
-                .current_mounted_view(component_root_mount)
-                .expect("component vnode");
+            let component_root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
+            let vnode = dom.current_mounted_view(component_root_mount)?;
             vnode_edge_element(
                 MountedVNode::new(&vnode, component_root_mount),
                 dom,
@@ -473,74 +440,6 @@ fn first_live_sibling_after(
             }
             child.find_first_element(m, dom)
         })
-}
-
-fn root_content_after_anchor(
-    parent_mount: MountId,
-    our_anchor_idx: usize,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    // Probe the committed mount view of `parent_mount`. The diff context's
-    // `old` snapshot matches the committed view by construction (both are
-    // the pre-diff `mount.node`), so reading directly from the mount
-    // registry covers both cases. Callers (`insertion_site_for_slot` after the
-    // path-length check) only reach here with a `parent_mount` that's
-    // currently being diffed, so its mount is registered.
-    let probe = dom
-        .current_mounted_view(parent_mount)
-        .expect("parent_root_after requires a live parent mount");
-
-    for child in probe.children() {
-        match child {
-            VNodeChild::Dynamic(anchor) => {
-                if anchor.anchor_index() <= our_anchor_idx {
-                    continue;
-                }
-
-                for slot in anchor.nodes() {
-                    if let Some(id) =
-                        live_dynamic_slot_first_element(&probe, parent_mount, slot.index(), dom)
-                    {
-                        return Some(id);
-                    }
-                }
-            }
-            VNodeChild::Element(element) => {
-                let anchor_idx = element.anchor_index().expect("root element");
-                if anchor_idx <= our_anchor_idx {
-                    continue;
-                }
-
-                if let Some(id) = static_anchor_element(
-                    parent_mount,
-                    anchor_idx,
-                    dom,
-                ) {
-                    return Some(id);
-                }
-            }
-            VNodeChild::Text(text) => {
-                let anchor_idx = text.anchor_index().expect("root text");
-                if anchor_idx <= our_anchor_idx {
-                    continue;
-                }
-
-                if let Some(id) = static_anchor_element(parent_mount, anchor_idx, dom) {
-                    return Some(id);
-                }
-            }
-        }
-    }
-    None
-}
-
-pub(super) fn static_anchor_element(
-    mount: MountId,
-    anchor_idx: usize,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    dom.mounted_anchor_node(mount, anchor_idx)
-        .map(|id| id.element_id())
 }
 
 fn vnode_edge_element(

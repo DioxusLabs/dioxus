@@ -131,6 +131,12 @@ pub struct VNodeChildren<'a> {
     inner: VNodeChildrenInner<'a>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct StaticAnchorTarget {
+    pub(super) anchor_index: usize,
+    pub(super) path: TemplatePath,
+}
+
 impl<'a> VNodeChildren<'a> {
     fn roots(vnode: &'a VNode) -> Self {
         Self {
@@ -406,17 +412,51 @@ impl VNode {
         DynamicAnchor::new(self, anchor_index)
     }
 
-    pub(super) fn dynamic_node_slots_after(
+    pub(super) fn dynamic_node_slots_after<'a>(
+        &'a self,
+        slot: DynamicNodeSlot<'a>,
+    ) -> impl Iterator<Item = DynamicNodeSlot<'a>> + 'a {
+        let anchor = slot.anchor();
+        let anchor_index = anchor.anchor_index();
+        let current_anchor_slots = ((slot.index() + 1)..anchor.template_anchor().nodes().end)
+            .map(move |index| DynamicNodeSlot { anchor, index });
+        let later_anchor_slots = ((anchor_index + 1)..self.template.anchors().len())
+            .flat_map(move |anchor_index| DynamicAnchor::new(self, anchor_index).nodes());
+
+        current_anchor_slots.chain(later_anchor_slots)
+    }
+
+    pub(super) fn dynamic_node_slots_after_sharing_insertion_position<'a>(
+        &'a self,
+        slot: DynamicNodeSlot<'a>,
+    ) -> impl Iterator<Item = DynamicNodeSlot<'a>> + 'a {
+        self.dynamic_node_slots_after(slot)
+            .map_while(move |sibling| {
+                if !sibling.has_same_insertion_parent(slot) {
+                    Some(None)
+                } else if sibling.shares_insertion_position(slot) {
+                    Some(Some(sibling))
+                } else {
+                    None
+                }
+            })
+            .flatten()
+    }
+
+    pub(super) fn static_anchor_targets_under(
         &self,
-        slot: DynamicNodeSlot<'_>,
-    ) -> impl Iterator<Item = DynamicNodeSlot<'_>> + '_ {
-        let start_anchor = slot.anchor().anchor_index();
-        let after_idx = slot.index();
-        (start_anchor..self.template.anchors().len()).flat_map(move |anchor_index| {
-            DynamicAnchor::new(self, anchor_index)
-                .nodes()
-                .filter(move |slot| anchor_index > start_anchor || slot.index() > after_idx)
-        })
+        root_anchor_index: usize,
+    ) -> impl Iterator<Item = StaticAnchorTarget> + '_ {
+        let root_path = self.template.anchors()[root_anchor_index].static_path();
+        self.template
+            .anchors()
+            .iter()
+            .enumerate()
+            .filter_map(move |(anchor_index, anchor)| {
+                let path = anchor.static_path();
+                (!path.is_empty() && path.starts_with(root_path))
+                    .then_some(StaticAnchorTarget { anchor_index, path })
+            })
     }
 }
 
@@ -509,8 +549,12 @@ impl<'a> DynamicAnchor<'a> {
         self.template_anchor().static_path()
     }
 
+    fn has_same_insertion_parent(self, other: Self) -> bool {
+        self.parent_element_op_index() == other.parent_element_op_index()
+    }
+
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
-        self.slot_target() == other.slot_target()
+        self.has_same_insertion_parent(other) && self.slot_target() == other.slot_target()
     }
 
     pub(super) fn static_attr_value_for_key(
@@ -545,12 +589,8 @@ impl<'a> DynamicNodeSlot<'a> {
         self.index
     }
 
-    pub(super) fn is_root_level(self) -> bool {
-        self.anchor.is_root_level()
-    }
-
-    pub(super) fn parent_path(self) -> TemplatePath {
-        self.anchor.static_path()
+    pub(super) fn has_same_insertion_parent(self, other: Self) -> bool {
+        self.anchor.has_same_insertion_parent(other.anchor)
     }
 
     pub(super) fn shares_insertion_position(self, other: Self) -> bool {
@@ -615,8 +655,29 @@ fn child_position(target: TemplateSlotTarget) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DynamicNode, DynamicValues};
+    use crate::{Attribute, DynamicNode, DynamicValues};
     use dioxus_core_template::RuntimeTemplateBuilder;
+
+    fn vnode_from_builder(
+        builder: RuntimeTemplateBuilder,
+        dynamic_nodes: usize,
+        dynamic_attrs: usize,
+    ) -> VNode {
+        VNode::new(
+            builder.finish(),
+            DynamicValues::from_parts(
+                None,
+                (0..dynamic_nodes)
+                    .map(|_| DynamicNode::Fragment(Vec::new()))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                (0..dynamic_attrs)
+                    .map(|_| vec![Attribute::new("class", "value", None, false)].into_boxed_slice())
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            ),
+        )
+    }
 
     #[test]
     fn nested_trailing_dynamic_before_root_dynamic_is_parent_append_target() {
@@ -625,13 +686,16 @@ mod tests {
         builder.dynamic_node(false);
         builder.close_element();
         builder.dynamic_node(false);
-        let template = builder.template.finish();
+        let template = builder.finish();
 
         let vnode = VNode::new(
             template,
             DynamicValues::from_parts(
                 None,
-                Box::new([DynamicNode::Fragment(Vec::new()), DynamicNode::Fragment(Vec::new())]),
+                Box::new([
+                    DynamicNode::Fragment(Vec::new()),
+                    DynamicNode::Fragment(Vec::new()),
+                ]),
                 Box::new([]),
             ),
         );

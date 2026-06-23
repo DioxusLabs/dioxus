@@ -1,8 +1,5 @@
 use crate::dom::WebsysDom;
-use dioxus_core::{
-    DynamicNode, DynamicNodeSlot, ElementId, MountedVNode, ScopeId, ScopeState, SuspenseContext,
-    VNodeChild, VirtualDom,
-};
+use dioxus_core::{DynamicNode, MountedVNode, ScopeId, ScopeState, SuspenseContext, VirtualDom};
 use std::fmt::Write;
 
 #[derive(Debug)]
@@ -74,77 +71,6 @@ impl SuspenseHydrationIds {
         let root = self.children.get(path[0] as usize)?;
         root.traverse(&path[1..]).map(|node| node.scope_id)
     }
-}
-
-/// Locate the ElementId of the first leaf in a scope's render that should be
-/// bound to the empty-chunk bootstrap sentinel. Walks roots in order; for
-/// each root, if it's a static element/text the root_id is returned, if it's
-/// a Dynamic node we recurse into the dynamic node. Returns the FIRST
-/// ElementId encountered — for the error path, this is the placeholder the
-/// fallback ultimately collapses to.
-pub(super) fn first_dynamic_root_element_id(
-    scope: &ScopeState,
-    dom: &VirtualDom,
-) -> Option<ElementId> {
-    fn from_vnode(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Option<ElementId> {
-        for child in vnode.vnode().children() {
-            match child {
-                VNodeChild::Dynamic(anchor) => {
-                    for slot in anchor.nodes() {
-                        if let Some(id) = from_dynamic(vnode, slot, dom) {
-                            return Some(id);
-                        }
-                    }
-                }
-                VNodeChild::Element(element) => {
-                    if let Some(id) = element
-                        .anchor_index()
-                        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
-                    {
-                        return Some(id);
-                    }
-                }
-                VNodeChild::Text(text) => {
-                    if let Some(id) = text
-                        .anchor_index()
-                        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
-                    {
-                        return Some(id);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn from_dynamic(
-        vnode: MountedVNode<'_>,
-        slot: DynamicNodeSlot<'_>,
-        dom: &VirtualDom,
-    ) -> Option<ElementId> {
-        match &*slot {
-            DynamicNode::Text(_) => vnode.mounted_dynamic_node(slot, dom),
-            DynamicNode::Component(comp) => {
-                let child = comp.mounted_scope(slot, vnode, dom)?;
-                from_vnode(child.try_mounted_root_node()?, dom)
-            }
-            DynamicNode::Fragment(fragment) => {
-                let mounted_children = vnode.mounted_fragment_children(slot, dom);
-                if mounted_children.len() != fragment.len() {
-                    return None;
-                }
-
-                for sub in mounted_children {
-                    if let Some(id) = from_vnode(sub, dom) {
-                        return Some(id);
-                    }
-                }
-                None
-            }
-        }
-    }
-
-    from_vnode(scope.try_mounted_root_node()?, dom)
 }
 
 impl WebsysDom {

@@ -8,6 +8,8 @@ fn main() {
 }
 
 fn app() -> Element {
+    use_hook(dioxus::fullstack::commit_initial_chunk);
+
     rsx! {
         DangerousInnerHtml {}
         AdjacentDynamicTexts {}
@@ -23,10 +25,46 @@ fn app() -> Element {
         RootTrailingPlaceholder {}
         SvgHydratedListener {}
         EmptyRootHydration {}
+        StreamedEmptyHydration {}
         TextareaHydration {}
         TextareaLeadingNewline {}
         PreLeadingNewline {}
     }
+}
+
+#[component]
+fn StreamedEmptyHydration() -> Element {
+    rsx! {
+        div {
+            id: "streamed-empty-hydration",
+            SuspenseBoundary {
+                fallback: |_| rsx! {},
+                StreamedEmptyChild {}
+            }
+        }
+    }
+}
+
+#[component]
+fn StreamedEmptyChild() -> Element {
+    let _ = use_server_future(resolve_empty_stream)?().unwrap();
+    let value = use_signal(String::new);
+
+    #[cfg(feature = "web")]
+    use_effect(move || {
+        value.set("streamed empty hydrated".to_string());
+    });
+
+    rsx! {
+        "{value}"
+    }
+}
+
+async fn resolve_empty_stream() -> usize {
+    #[cfg(feature = "server")]
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    0
 }
 
 // `textarea`, `pre`, and `listing` are raw-text elements: the HTML parser strips

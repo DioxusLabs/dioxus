@@ -36,6 +36,20 @@ test("scope with no SSR roots hydrates virtual root anchors", async ({
   expect(bodyText).toContain("root text ready");
 });
 
+test("streamed suspense resolving to empty hydrates its empty slot", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+
+  await page.goto(URL);
+
+  const streamed = page.locator("#streamed-empty-hydration");
+  await expect(streamed).toHaveText("streamed empty hydrated");
+  expect(await streamed.evaluate((el) => el.innerHTML)).not.toContain("<!--");
+  expect(errors).toEqual([]);
+});
+
 test("dangerous inner html hydrates host and updates innerHTML", async ({
   page,
 }) => {

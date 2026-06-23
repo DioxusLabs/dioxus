@@ -380,8 +380,6 @@ impl DiffState<'_, '_, '_, '_> {
             lis_sequence.remove(0);
         }
 
-        let mut mounted_new = Vec::new();
-
         // Every shared child not in the stable LIS will move, so its committed
         // position is stale for the rest of this reorder. Mark them all up front
         // (O(1) each) so placement scans never anchor on a node that is mid-move,
@@ -416,7 +414,6 @@ impl DiffState<'_, '_, '_, '_> {
             new_mounts[*idx] = Some(mount);
             self.dom
                 .set_mounted_fragment_child(new_children, new_offset + *idx, mount);
-            mounted_new.push(MountedSibling { index: *idx, mount });
         }
 
         let last = *lis_sequence.first().unwrap();
@@ -433,7 +430,6 @@ impl DiffState<'_, '_, '_, '_> {
                 &mut *new_mounts,
                 new_children,
                 new_offset,
-                &mut mounted_new,
             );
         }
 
@@ -452,7 +448,6 @@ impl DiffState<'_, '_, '_, '_> {
                     new_mounts,
                     new_children,
                     new_offset,
-                    &mut mounted_new,
                 );
             }
         }
@@ -471,7 +466,6 @@ impl DiffState<'_, '_, '_, '_> {
                 &mut *new_mounts,
                 new_children,
                 new_offset,
-                &mut mounted_new,
             );
         }
 
@@ -534,7 +528,6 @@ impl DiffState<'_, '_, '_, '_> {
         new_mounts: &mut [Option<MountId>],
         new_children: FragmentMountWriter,
         new_offset: usize,
-        mounted_new: &mut Vec<MountedSibling>,
     ) {
         let context = self.context();
         let sibling_mount = new_mounts[sibling_idx].expect("sibling");
@@ -549,7 +542,7 @@ impl DiffState<'_, '_, '_, '_> {
                 crate::MountedVNode::new(&new[sibling_idx], sibling_mount),
                 self.dom,
             )
-            .or_else(|| insertion_site_in_new_order(edge, new, mounted_new, sibling_idx, self.dom))
+            .or_else(|| insertion_site_in_new_order(edge, new, new_mounts, sibling_idx, self.dom))
             .unwrap_or_else(|| {
                 insertion_site_at(
                     edge,
@@ -577,7 +570,6 @@ impl DiffState<'_, '_, '_, '_> {
                     new_mounts,
                     new_children,
                     new_offset,
-                    mounted_new,
                     &mut replaced_nodes,
                 )
             });
@@ -593,7 +585,6 @@ impl DiffState<'_, '_, '_, '_> {
                 new_mounts,
                 new_children,
                 new_offset,
-                mounted_new,
                 &mut replaced_nodes,
             );
         }
@@ -617,7 +608,6 @@ impl DiffState<'_, '_, '_, '_> {
         new_mounts: &mut [Option<MountId>],
         new_children: FragmentMountWriter,
         new_offset: usize,
-        mounted_new: &mut Vec<MountedSibling>,
         replaced_nodes: &mut Vec<(&'a VNode, MountId)>,
     ) -> usize {
         let range_start = range.start;
@@ -658,10 +648,6 @@ impl DiffState<'_, '_, '_, '_> {
             new_mounts[new_index] = Some(mount);
             self.dom
                 .set_mounted_fragment_child(new_children, new_offset + new_index, mount);
-            mounted_new.push(MountedSibling {
-                index: new_index,
-                mount,
-            });
             nodes += created_nodes;
         }
         nodes
@@ -732,44 +718,30 @@ impl DiffState<'_, '_, '_, '_> {
     }
 }
 
-#[derive(Clone, Copy)]
-struct MountedSibling {
-    index: usize,
-    mount: MountId,
-}
-
 /// Prefer anchors already materialized in the new sibling order.
 ///
-/// Invariant: every entry in `mounted_new` owns a live mount in `new` order. Pending new siblings are
-/// not representable in this slice and therefore cannot be used as anchors.
+/// Invariant: every `Some` entry in `new_mounts` owns a materialized sibling in new order. Pending
+/// new siblings are `None` and therefore cannot be used as anchors.
 fn insertion_site_in_new_order(
     edge: ElementEdge,
     new: &[VNode],
-    mounted_new: &[MountedSibling],
+    new_mounts: &[Option<MountId>],
     sibling_idx: usize,
     dom: &VirtualDom,
 ) -> Option<InsertionSite> {
     match edge {
-        ElementEdge::First => mounted_new
-            .iter()
-            .filter(|sibling| sibling.index >= sibling_idx)
-            .filter_map(|sibling| {
-                new[sibling.index]
-                    .find_first_element(sibling.mount, dom)
-                    .map(|id| (sibling.index, id))
-            })
-            .min_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::before(id)),
-        ElementEdge::Last => mounted_new
-            .iter()
-            .filter(|sibling| sibling.index <= sibling_idx)
-            .filter_map(|sibling| {
-                new[sibling.index]
-                    .find_last_element(sibling.mount, dom)
-                    .map(|id| (sibling.index, id))
-            })
-            .max_by_key(|(index, _)| *index)
-            .map(|(_, id)| InsertionSite::after(id)),
+        ElementEdge::First => (sibling_idx..new.len()).find_map(|index| {
+            let mount = new_mounts[index]?;
+            new[index]
+                .find_first_element(mount, dom)
+                .map(InsertionSite::before)
+        }),
+        ElementEdge::Last => (0..=sibling_idx).rev().find_map(|index| {
+            let mount = new_mounts[index]?;
+            new[index]
+                .find_last_element(mount, dom)
+                .map(InsertionSite::after)
+        }),
     }
 }
 

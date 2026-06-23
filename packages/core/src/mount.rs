@@ -70,9 +70,7 @@ impl PackedMountedSlot {
     }
 
     fn from_index(index: usize) -> Self {
-        Self {
-            value: index.checked_add(1).expect("slot overflow"),
-        }
+        Self { value: index + 1 }
     }
 
     fn from_non_zero(index: usize) -> Self {
@@ -445,15 +443,28 @@ impl VirtualDom {
         dyn_node_idx: usize,
         len: usize,
     ) -> Vec<MountId> {
+        self.try_with_mounted_fragment_children(mount, dyn_node_idx, len, |children| {
+            children.to_vec()
+        })
+        .expect("non-empty mounted fragment should have a child range")
+    }
+
+    pub(crate) fn try_with_mounted_fragment_children<R>(
+        &self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        len: usize,
+        with_children: impl FnOnce(&[MountId]) -> R,
+    ) -> Option<R> {
         self.with_mount(mount, |mount| {
             if len == 0 {
-                return Vec::new();
+                return Some(with_children(&[]));
             }
-            let start = mount
-                .dynamic_slot(dyn_node_idx)
-                .fragment_start()
-                .expect("non-empty mounted fragment should have a child range");
-            mount.fragment_child_mounts[start..start + len].to_vec()
+            let start = mount.dynamic_slot(dyn_node_idx).fragment_start()?;
+            mount
+                .fragment_child_mounts
+                .get(start..start + len)
+                .map(with_children)
         })
     }
 
@@ -482,16 +493,13 @@ impl VirtualDom {
         })
     }
 
-    pub(crate) fn unchecked_mounted_dynamic_component_root_mount(
+    pub(crate) fn mounted_dynamic_component_root_mount(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
-    ) -> MountId {
-        let scope = self.unchecked_mounted_dynamic_component_scope(mount, dyn_node_idx);
-        self.runtime
-            .get_state(scope)
-            .root_mount()
-            .expect("component root")
+    ) -> Option<MountId> {
+        let scope = self.mounted_dynamic_component_scope(mount, dyn_node_idx)?;
+        self.runtime.try_get_state(scope)?.root_mount()
     }
 
     pub(crate) fn unchecked_mounted_dynamic_component_scope(

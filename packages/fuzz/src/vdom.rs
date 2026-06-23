@@ -769,7 +769,7 @@ mod tests {
             ]
         );
         assert_eq!(template.strings()[0], "tag1");
-        assert_eq!(template.root_position_count(), 1);
+        assert_eq!(template.root_count(), 1);
         assert_eq!(dynamic_node_count(template), 1);
     }
 

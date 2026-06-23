@@ -3,7 +3,7 @@
 //! SSR emits no hydration markers. The Rust walker decides which template and
 //! dynamic leaves should be matched; this cursor owns the actual DOM cursor —
 //! sibling/child traversal, parser-inserted wrapper skipping, text splitting,
-//! synthesized empty text nodes, node-id binding, and listener attachment.
+//! empty-slot materialization, node-id binding, and listener attachment.
 //!
 //! The DOM is read and mutated directly through `web-sys`. Only the two
 //! operations that touch interpreter-internal state — binding an `ElementId`
@@ -180,8 +180,32 @@ impl HydrationCursor {
         Ok(())
     }
 
+    /// Bind an addressable empty text slot at the current cursor position.
+    ///
+    /// SSR emits no bytes for an empty dynamic text, but the mounted VDOM may
+    /// still need an ElementId for later updates. When core has already placed
+    /// an empty text node for this slot (streaming suspense), claim it. Otherwise
+    /// synthesize the anchor in the same position.
+    pub(super) fn empty_text_slot(
+        &mut self,
+        id: u32,
+        after_cursor: bool,
+    ) -> Result<(), RehydrationError> {
+        if let Some(node) = self.claimable_empty_text(after_cursor) {
+            self.base().set_node(id, &node);
+            if after_cursor {
+                self.cursor = Some(node);
+            } else {
+                self.cursor = node.next_sibling();
+            }
+            return Ok(());
+        }
+
+        self.synth_empty_text(id, after_cursor)
+    }
+
     /// Synthesize an empty text node around the current cursor.
-    pub(super) fn synth(&mut self, id: u32, after_cursor: bool) -> Result<(), RehydrationError> {
+    fn synth_empty_text(&mut self, id: u32, after_cursor: bool) -> Result<(), RehydrationError> {
         let before = if after_cursor {
             self.cursor.as_ref().and_then(|c| c.next_sibling())
         } else {
@@ -198,6 +222,15 @@ impl HydrationCursor {
         Ok(())
     }
 
+    fn claimable_empty_text(&self, after_cursor: bool) -> Option<Node> {
+        let node = if after_cursor {
+            self.cursor.as_ref()?.next_sibling()?
+        } else {
+            self.cursor.clone()?
+        };
+        is_empty_text(&node).then_some(node)
+    }
+
     /// The parent to insert synthesized nodes into: the cursor's parent, else
     /// the innermost frame, else the current root's parent.
     fn synth_parent(&self) -> Node {
@@ -212,4 +245,8 @@ impl HydrationCursor {
 fn is_script(node: &Node) -> bool {
     node.node_type() == Node::ELEMENT_NODE
         && node.unchecked_ref::<Element>().local_name() == "script"
+}
+
+fn is_empty_text(node: &Node) -> bool {
+    node.node_type() == Node::TEXT_NODE && node.unchecked_ref::<Text>().length() == 0
 }

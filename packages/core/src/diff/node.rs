@@ -8,8 +8,7 @@ use crate::{
         context::{DiffFrame, DiffState},
         placement::{
             ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
-            insertion_site_for_mounted_anchor, insertion_site_for_mounted_child,
-            insertion_site_for_slot,
+            insertion_site_for_mounted_child, insertion_site_for_slot,
         },
         template::{DynamicAnchor, DynamicNodeSlot},
     },
@@ -746,7 +745,7 @@ impl VNode {
             "background mounts must be created without renderer writes"
         );
 
-        let nodes_created = self.materialize_template_roots(mount, state, reuse_existing_mounts);
+        let nodes_created = self.materialize_static_roots(mount, state);
         self.fill_dynamic_slots(mount, state, reuse_existing_mounts);
 
         state.dom.commit_mount(mount, self);
@@ -758,26 +757,16 @@ impl VNode {
 }
 
 impl VNode {
-    fn materialize_template_roots(
+    fn materialize_static_roots(
         &self,
         mount: MountId,
         state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
     ) -> usize {
         let mut nodes_created = 0;
 
         for child in self.children() {
             match child {
-                VNodeChild::Dynamic(anchor) => {
-                    for slot in anchor.nodes() {
-                        nodes_created += self.create_dynamic_node_inner(
-                            mount,
-                            slot.index(),
-                            state,
-                            reuse_existing_mounts,
-                        );
-                    }
-                }
+                VNodeChild::Dynamic(_) => {}
                 VNodeChild::Element(element) => {
                     if let Some(to) = state.to.as_deref_mut() {
                         let root_anchor_idx = element.anchor_index().expect("root element");
@@ -813,7 +802,7 @@ impl VNode {
                 self.write_attr_anchor(mount, anchor, state.dom, to);
             }
 
-            if anchor.nodes().len() > 0 && anchor.parent_element_op_index().is_some() {
+            if anchor.nodes().len() > 0 {
                 self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
             }
         }
@@ -907,8 +896,9 @@ impl VNode {
             return;
         }
 
+        let first_slot = anchor.nodes().next().expect("dynamic anchor has nodes");
         let context = state.context();
-        let site = insertion_site_for_mounted_anchor(mount, anchor, state.dom);
+        let site = insertion_site_for_slot(mount, first_slot, state.dom, context);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
         let to = state.to.as_deref_mut().expect("writer checked");
@@ -982,16 +972,11 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
-        let root_path = self.template.anchors()[root_anchor_idx].static_path();
         let mut assigned_paths = Vec::new();
 
-        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
-            let Some(path) = anchor_static_target(anchor) else {
-                continue;
-            };
-            if !path.starts_with(root_path) {
-                continue;
-            }
+        for target in self.static_anchor_targets_under(root_anchor_idx) {
+            let anchor_idx = target.anchor_index;
+            let path = target.path;
 
             if let Some((_, id)) = assigned_paths
                 .iter()

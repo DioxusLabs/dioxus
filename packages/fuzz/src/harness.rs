@@ -1476,6 +1476,41 @@ mod tests {
     }
 
     #[test]
+    fn nested_empty_fragment_with_following_root_dynamic_component_stays_nested() {
+        replay_ops([
+            Op::template(
+                0,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::Empty),
+                    },
+                },
+            ),
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateNodeKind::Dynamic(DynamicKind::ComponentA),
+                    },
+                },
+            ),
+            Op::RenderSuspenseDirty,
+            Op::fragment(
+                2,
+                236,
+                FragmentEdit::Children(ListEdit::Insert {
+                    index: 103,
+                    item: None,
+                }),
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
     fn keyed_fragment_splice_uses_committed_parent_view_for_child_lookup() {
         replay_ops([
             Op::template(
