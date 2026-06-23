@@ -11,8 +11,10 @@ use winit::window::WindowId;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::ApplicationHandlerExtMacOS;
 
+use crate::DioxusDocument;
 use crate::DioxusNativeWindowRenderer;
-use crate::{BlitzShellEvent, DioxusDocument, WindowConfig, contexts::DioxusNativeDocument};
+use crate::shell::contexts::DioxusNativeDocument;
+use blitz_shell::{BlitzShellEvent, WindowConfig};
 
 /// Dioxus-native specific event type
 pub enum DioxusNativeEvent {
