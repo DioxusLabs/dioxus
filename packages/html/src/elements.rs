@@ -15,7 +15,7 @@ pub use crate::html;
 dioxus_html_internal_macro::define_elements! {
     core = dioxus_core,
     html = crate,
-    context = true;
+    hot_reload_context = true;
 
     // Document metadata
 

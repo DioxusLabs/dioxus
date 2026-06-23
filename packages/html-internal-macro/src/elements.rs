@@ -19,7 +19,7 @@ use crate::common::{
 pub(crate) struct DefineElements {
     core_path: Path,
     html_path: Path,
-    context: bool,
+    hot_reload_context: bool,
     gated_attribute_groups: Vec<GatedAttributeGroup>,
     explicit_gated_attribute_groups: bool,
     elements: Vec<ElementDef>,
@@ -55,7 +55,7 @@ impl Parse for DefineElements {
         input.parse::<Token![=]>()?;
         let html_path = input.parse()?;
 
-        let mut context = false;
+        let mut hot_reload_context = false;
         while input.peek(Token![,]) {
             input.parse::<Token![,]>()?;
             if input.peek(Token![;]) {
@@ -65,12 +65,12 @@ impl Parse for DefineElements {
             let option: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             let enabled: LitBool = input.parse()?;
-            if option == "context" {
-                context = enabled.value;
+            if option == "hot_reload_context" {
+                hot_reload_context = enabled.value;
             } else {
                 return Err(syn::Error::new(
                     option.span(),
-                    "expected `context = true` or `context = false`",
+                    "expected `hot_reload_context = true` or `hot_reload_context = false`",
                 ));
             }
         }
@@ -103,7 +103,7 @@ impl Parse for DefineElements {
         Ok(Self {
             core_path,
             html_path,
-            context,
+            hot_reload_context,
             gated_attribute_groups,
             explicit_gated_attribute_groups,
             elements,
@@ -186,7 +186,9 @@ impl ToTokens for DefineElements {
             let extension = element.extension_ident();
             quote! { pub use super::#name::{#name as _, #extension as _}; }
         });
-        let context = self.context.then(|| self.context_tokens(html));
+        let context = self
+            .hot_reload_context
+            .then(|| self.hot_reload_context_tokens(html));
         let detected_duplicate_macros = (!self.explicit_gated_attribute_groups)
             .then(|| self.detected_duplicate_macro_tokens(gated_attribute_groups));
         let marker_traits = (!self.explicit_gated_attribute_groups)
@@ -315,7 +317,7 @@ impl DefineElements {
         }
     }
 
-    fn context_tokens(&self, html: &Path) -> TokenStream2 {
+    fn hot_reload_context_tokens(&self, html: &Path) -> TokenStream2 {
         let map_attribute = self
             .elements
             .iter()
