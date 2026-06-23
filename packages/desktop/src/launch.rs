@@ -60,7 +60,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(app_webview) = app.webviews.get(&id) {
                         _ = app_webview
-                            .webview
                             .desktop_context
                             .webview
                             .evaluate_script("window.interpreter.handleWindowsDragDrop();");
@@ -69,7 +68,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(app_webview) = app.webviews.get(&id) {
                         _ = app_webview
-                            .webview
                             .desktop_context
                             .webview
                             .evaluate_script("window.interpreter.handleWindowsDragLeave();");
@@ -78,7 +76,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(app_webview) = app.webviews.get(&id) {
                         _ = app_webview
-                            .webview
                             .desktop_context
                             .webview
                             .evaluate_script(&format!(

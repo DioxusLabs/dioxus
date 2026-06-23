@@ -209,6 +209,12 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
+    /// The render target this webview draws. Stored once in [`WebviewEdits`];
+    /// this exposes it as the webview's identity to the app layer.
+    pub(crate) fn target_id(&self) -> RenderTargetId {
+        self.edits.target_id
+    }
+
     pub(crate) fn new(
         mut cfg: Config,
         target_id: RenderTargetId,
@@ -608,15 +614,12 @@ impl PendingWebview {
         self,
         dom: &mut VirtualDom,
         shared: &Rc<SharedContext>,
-    ) -> crate::app::AppWebview {
+    ) -> WebviewInstance {
         let window = WebviewInstance::new(self.cfg, self.target_id, dom, shared.clone());
 
         _ = self.sender.send(window.desktop_context.clone());
 
-        crate::app::AppWebview {
-            target_id: self.target_id,
-            webview: window,
-        }
+        window
     }
 }
 
