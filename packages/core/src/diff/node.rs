@@ -7,8 +7,9 @@ use crate::{
         attributes::AttributeDiffScratch,
         context::{DiffFrame, DiffState},
         placement::{
-            ElementEdge, InsertionSite, at_site, create_at_site, find_root_dynamic_slot,
-            insertion_site_at, insertion_site_for_mounted_anchor, insertion_site_for_slot,
+            ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
+            insertion_site_for_mounted_anchor, insertion_site_for_mounted_child,
+            insertion_site_for_slot,
         },
         template::{DynamicAttrGroup, DynamicChunk, DynamicNodeGroup, DynamicNodeSlot},
     },
@@ -63,14 +64,8 @@ impl<'a> DiffFrame<'a> {
         // than reaching the kind-assuming in-place diff below.
         if old.template != new.template {
             let parent = state.dom.mounted_render_parent(current_mount);
-            let created = old.replace_inner(
-                current_mount,
-                std::slice::from_ref(new),
-                parent,
-                &mut state,
-                true,
-            );
-            return created.mounts[0];
+            let created = old.replace_inner(current_mount, new, parent, &mut state, true);
+            return created.mount;
         }
 
         state.enter_context(current_mount, old, new);
@@ -148,7 +143,7 @@ impl VNode {
                 let scope_id = state
                     .dom
                     .unchecked_mounted_dynamic_component_scope(mount, idx);
-                self.diff_vcomponent(mount, idx, new, old, scope_id, state)
+                self.diff_vcomponent(mount, slot, new, old, scope_id, state)
             }
             _ => self.replace_dynamic_node_at_slot(mount, slot, new, state),
         };
@@ -235,12 +230,17 @@ impl VNode {
                 // Empty → non-empty: visible diffs stage new content at the
                 // slot insertion site. Hidden/no-writer diffs only materialize
                 // mount state, so there is no renderer placement to resolve.
-                let created = state.create_children_at_site(new, parent, |state| {
-                    insertion_site_for_slot(mount, slot, state.dom, state.context())
-                });
-                state
-                    .dom
-                    .set_mounted_fragment_children_vec(mount, slot.index(), created.mounts);
+                let children =
+                    state
+                        .dom
+                        .begin_mounted_fragment_children(mount, slot.index(), new.len());
+                state.create_children_at_site(
+                    new,
+                    parent,
+                    |state| insertion_site_for_slot(mount, slot, state.dom, state.context()),
+                    children,
+                );
+                state.dom.commit_mounted_fragment_children(children);
             }
             (false, true) => {
                 state
@@ -251,10 +251,12 @@ impl VNode {
                     .clear_mounted_fragment_children(mount, slot.index());
             }
             (false, false) => {
-                let new_mounts = state.diff_non_empty_fragment(old, &old_mounts, new, parent);
-                state
-                    .dom
-                    .set_mounted_fragment_children_vec(mount, slot.index(), new_mounts);
+                let children =
+                    state
+                        .dom
+                        .begin_mounted_fragment_children(mount, slot.index(), new.len());
+                state.diff_non_empty_fragment(old, &old_mounts, new, parent, children);
+                state.dom.commit_mounted_fragment_children(children);
             }
         }
     }
@@ -302,30 +304,67 @@ impl VNode {
         target_id: crate::RenderTargetId,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        edge.find_map(dom.mounted_root_count(mount), |root_idx| {
-            let dynamic =
-                || self.find_root_dynamic_at_cursor(root_idx, mount, target_id, dom, edge);
-            let static_root =
-                || self.find_element_at_root_in_target(root_idx, mount, target_id, dom);
-            match edge {
-                ElementEdge::First => dynamic().or_else(static_root),
-                ElementEdge::Last => static_root().or_else(dynamic),
+        match edge {
+            ElementEdge::First => self
+                .children()
+                .find_map(|child| self.root_child_edge_element(child, mount, target_id, dom, edge)),
+            ElementEdge::Last => {
+                let mut found = None;
+                for child in self.children() {
+                    if let Some(id) =
+                        self.root_child_edge_element(child, mount, target_id, dom, edge)
+                    {
+                        found = Some(id);
+                    }
+                }
+                found
             }
-        })
+        }
     }
 
-    fn find_root_dynamic_at_cursor(
+    fn root_child_edge_element(
         &self,
-        cursor_idx: usize,
+        child: VNodeChild<'_>,
         mount: MountId,
         target_id: crate::RenderTargetId,
         dom: &VirtualDom,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        find_root_dynamic_slot(self, cursor_idx, edge, |slot| {
-            let idx = slot.index();
-            self.dynamic_node_edge_element(mount, idx, dom, target_id, edge)
-        })
+        match child {
+            VNodeChild::Dynamic(group) => {
+                self.dynamic_group_edge_element(group, mount, dom, target_id, edge)
+            }
+            VNodeChild::Element(element) => self.find_element_at_root_in_target(
+                element.root_position().expect("root element"),
+                mount,
+                target_id,
+                dom,
+            ),
+            VNodeChild::Text(text) => self.find_element_at_root_in_target(
+                text.root_position().expect("root text"),
+                mount,
+                target_id,
+                dom,
+            ),
+        }
+    }
+
+    fn dynamic_group_edge_element(
+        &self,
+        group: DynamicNodeGroup<'_>,
+        mount: MountId,
+        dom: &VirtualDom,
+        target_id: crate::RenderTargetId,
+        edge: ElementEdge,
+    ) -> Option<ElementId> {
+        match edge {
+            ElementEdge::First => group.slots().find_map(|slot| {
+                self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
+            }),
+            ElementEdge::Last => group.slots().rev().find_map(|slot| {
+                self.dynamic_node_edge_element(mount, slot.index(), dom, target_id, edge)
+            }),
+        }
     }
 
     /// Replace this node with `right`, reusing an already allocated mount for
@@ -385,11 +424,11 @@ impl VNode {
     pub(crate) fn move_node_to_background(
         &self,
         mount: MountId,
-        right: &[VNode],
+        right: &VNode,
         parent: Option<MountRef>,
         dom: &mut VirtualDom,
         to: Option<&mut (dyn WriteMutations + '_)>,
-    ) -> crate::diff::CreatedNodes {
+    ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         self.replace_inner(mount, right, parent, &mut state, false)
     }
@@ -397,36 +436,44 @@ impl VNode {
     pub(crate) fn replace_inner(
         &self,
         mount: MountId,
-        right: &[VNode],
+        right: &VNode,
         parent: Option<MountRef>,
         state: &mut DiffState<'_, '_, '_, '_>,
         destroy_component_state: bool,
-    ) -> crate::diff::CreatedNodes {
+    ) -> CreatedVNode {
         // When the old subtree has no live DOM and the boundary is hidden, we
         // still materialize mount/component state for the new subtree, but no
         // renderer insertion site exists or is needed.
+        let live_first = self.find_first_element(mount, state.dom);
         let suppress_mutations =
-            self.should_suppress_mutations(mount, state.dom, destroy_component_state);
+            self.should_suppress_mutations(live_first, state.dom, destroy_component_state);
         let context = state.context();
         let write_local_mutations = !suppress_mutations && state.has_writer();
         let created = if write_local_mutations {
-            let site = insertion_site_at(
-                ElementEdge::First,
-                MountedVNode::new(self, mount),
-                state.dom,
-                context,
-            );
+            let site = live_first
+                .map(InsertionSite::before)
+                .unwrap_or_else(|| insertion_site_for_mounted_child(mount, state.dom, context));
             let to = state.to.as_deref_mut().expect("writer checked");
-            create_at_site(right, parent, site, state.dom, to)
+            let mut created_mount = None;
+            let nodes = create_at_site_with_mounts(
+                std::slice::from_ref(right),
+                parent,
+                site,
+                state.dom,
+                to,
+                |_, _, mount| created_mount = Some(mount),
+            );
+            CreatedVNode {
+                nodes,
+                mount: created_mount.expect("single replacement child should create one mount"),
+            }
         } else {
             let to = if suppress_mutations {
                 None
             } else {
                 state.to.as_deref_mut()
             };
-            state
-                .dom
-                .create_children_with_parents(to, right, parent, parent)
+            right.create_with_parents(state.dom, parent, parent, to)
         };
         let to_for_remove = state.to.as_deref_mut().filter(|_| !suppress_mutations);
         self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
@@ -438,14 +485,14 @@ impl VNode {
     /// boundary (or have no `WriteMutations` sink at all).
     fn should_suppress_mutations(
         &self,
-        mount: MountId,
+        live_first: Option<ElementId>,
         dom: &VirtualDom,
         destroy_component_state: bool,
     ) -> bool {
         if !destroy_component_state {
             return false;
         }
-        if self.find_first_element(mount, dom).is_some() {
+        if live_first.is_some() {
             return false;
         }
         current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root()
@@ -485,19 +532,48 @@ impl VNode {
         to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
-        // Clean up any anchors that have claimed a static node for mount/unmounts
-        // Will not generate mutations!
-        self.reclaim_anchor_nodes(mount, dom);
+        let (root_ids, root_anchor_indices) =
+            self.prepare_node_removal(mount, dom, destroy_component_state);
 
-        // Walk the template's dynamic node groups exactly once, partitioning into nested vs root.
-        // Nested nodes are removed inline now — they emit no mutations, since the parent owns those.
-        // Root node ids are collected and reclaimed afterward (they own renderer mutations and must
-        // reclaim in reverse order of claim). Splitting the work into separate `nested`/`root` passes
-        // re-walked the whole anchor list (rebuilding groups + `is_empty`/`slot_target`) twice per
-        // removed node; the root pass usually found nothing (most dynamics nest under a static
-        // element). `root_ids` stays empty — and unallocated — in that common case.
-        let mut root_ids: Vec<usize> = Vec::new();
-        for anchor in self.template.anchors() {
+        // Clean up the roots, assuming we need to generate mutations for these
+        // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
+        self.reclaim_roots(
+            mount,
+            dom,
+            to,
+            destroy_component_state,
+            &root_ids,
+            &root_anchor_indices,
+        );
+
+        if destroy_component_state {
+            dom.remove_mount(mount);
+        }
+    }
+
+    fn prepare_node_removal(
+        &self,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        destroy_component_state: bool,
+    ) -> (Vec<usize>, Vec<usize>) {
+        let mut reclaimed = Vec::new();
+        let mut root_ids = Vec::new();
+        let mut root_anchor_indices = Vec::new();
+
+        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
+            if let Some(path) = anchor_static_target(anchor) {
+                if path.is_root() {
+                    root_anchor_indices.push(anchor_idx);
+                } else if let Some(id) = dom.mounted_anchor_node(mount, anchor_idx) {
+                    if !reclaimed.contains(&id) {
+                        dom.reclaim_for_mount(mount, id);
+                        reclaimed.push(id);
+                    }
+                    dom.clear_mounted_anchor_node(mount, anchor_idx);
+                }
+            }
+
             // Root-level node anchors own renderer mutations and reclaim after nested ones; this is
             // a static property of the anchor's slot target. Iterate the anchor's value range
             // directly and pick out the node values — equivalent to `dynamic_nodes().flat_map(ids)`
@@ -519,13 +595,7 @@ impl VNode {
             }
         }
 
-        // Clean up the roots, assuming we need to generate mutations for these
-        // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-        self.reclaim_roots(mount, dom, to, destroy_component_state, &root_ids);
-
-        if destroy_component_state {
-            dom.remove_mount(mount);
-        }
+        (root_ids, root_anchor_indices)
     }
 
     fn reclaim_roots(
@@ -535,6 +605,7 @@ impl VNode {
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         root_ids: &[usize],
+        root_anchor_indices: &[usize],
     ) {
         for &id in root_ids {
             let dynamic_node = self.dynamic_values[id].node();
@@ -558,10 +629,8 @@ impl VNode {
             dom.clear_mounted_root_node(mount, idx);
         }
 
-        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
-            if anchor_static_target(anchor).is_some_and(TemplatePath::is_root) {
-                dom.clear_mounted_anchor_node(mount, anchor_idx);
-            }
+        for &anchor_idx in root_anchor_indices {
+            dom.clear_mounted_anchor_node(mount, anchor_idx);
         }
     }
 
@@ -648,27 +717,6 @@ impl VNode {
         dom.runtime.get_state(scope_id).target_id() != dom.current_render_target_id()
     }
 
-    pub(super) fn reclaim_anchor_nodes(&self, mount: MountId, dom: &mut VirtualDom) {
-        let mut reclaimed = Vec::new();
-        for (anchor_idx, anchor) in self.template.anchors().iter().enumerate() {
-            let Some(path) = anchor_static_target(anchor) else {
-                continue;
-            };
-            // We clean up the roots in the next step, so don't worry about them here.
-            if path.is_root() {
-                continue;
-            }
-
-            if let Some(id) = dom.mounted_anchor_node(mount, anchor_idx) {
-                if !reclaimed.contains(&id) {
-                    dom.reclaim_for_mount(mount, id);
-                    reclaimed.push(id);
-                }
-                dom.clear_mounted_anchor_node(mount, anchor_idx);
-            }
-        }
-    }
-
     /// Create this vnode under explicit render/logical parents.
     ///
     /// Invariant: when `to` is `Some`, the new mount is foreground-renderable and every static
@@ -738,6 +786,7 @@ impl VNode {
         reuse_existing_mounts: bool,
     ) -> usize {
         let mut nodes_created = 0;
+        let mut static_root_idx = 0;
 
         for child in self.children() {
             match child {
@@ -752,11 +801,20 @@ impl VNode {
                     }
                 }
                 VNodeChild::Element(element) => {
+                    let current_static_root_idx = static_root_idx;
+                    static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
-                        self.load_template_root(
+                        let id = self.load_template_root(
                             mount,
                             element.root_position().expect("root element"),
                             element.op(),
+                            state.dom,
+                            to,
+                        );
+                        self.assign_template_anchor_ids(
+                            mount,
+                            current_static_root_idx,
+                            id,
                             state.dom,
                             to,
                         );
@@ -764,11 +822,20 @@ impl VNode {
                     }
                 }
                 VNodeChild::Text(text) => {
+                    let current_static_root_idx = static_root_idx;
+                    static_root_idx += 1;
                     if let Some(to) = state.to.as_deref_mut() {
-                        self.load_template_root(
+                        let id = self.load_template_root(
                             mount,
                             text.root_position().expect("root text"),
                             text.op(),
+                            state.dom,
+                            to,
+                        );
+                        self.assign_template_anchor_ids(
+                            mount,
+                            current_static_root_idx,
+                            id,
                             state.dom,
                             to,
                         );
@@ -842,22 +909,22 @@ impl VNode {
                         );
                         nodes += created.nodes;
                     }
-                    state
-                        .dom
-                        .set_mounted_fragment_children_vec(mount, idx, mounts);
                     return nodes;
                 }
 
-                let created = state.dom.create_children_with_parents(
+                let children = state
+                    .dom
+                    .begin_mounted_fragment_children(mount, idx, frag.len());
+                let nodes = state.dom.create_children_with_mounts(
                     state.to.as_deref_mut(),
                     frag,
                     parent,
                     parent,
+                    |dom, idx, child_mount| {
+                        dom.set_mounted_fragment_child(children, idx, child_mount)
+                    },
                 );
-                let nodes = created.nodes;
-                state
-                    .dom
-                    .set_mounted_fragment_children_vec(mount, idx, created.mounts);
+                state.dom.commit_mounted_fragment_children(children);
                 nodes
             }
             Text(text) => {
@@ -966,7 +1033,6 @@ impl VNode {
             create_static_prototype(static_root, to);
         }
         to.pop_id(id.element_id());
-        self.assign_template_anchor_ids(mount, root_idx, id, dom, to);
         to.push_id(id.element_id());
         id
     }
@@ -974,7 +1040,7 @@ impl VNode {
     fn assign_template_anchor_ids(
         &self,
         mount: MountId,
-        root_idx: usize,
+        static_root_idx: usize,
         root_id: MountedElementId,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
@@ -985,8 +1051,7 @@ impl VNode {
             let Some(path) = anchor_static_target(anchor) else {
                 continue;
             };
-            let static_root_idx = path.segment(0) as usize;
-            if self.template.root_position_for_static_root(static_root_idx) != Some(root_idx) {
+            if path.segment(0) as usize != static_root_idx {
                 continue;
             }
 

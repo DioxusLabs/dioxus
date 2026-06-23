@@ -770,12 +770,12 @@ fn suspense_diff(
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {
                         let created = old_children.as_vnode().move_node_to_background(
                             old_children_mount,
-                            std::slice::from_ref(new_placeholder.as_vnode()),
+                            new_placeholder.as_vnode(),
                             parent,
                             dom,
                             to.as_deref_mut(),
                         );
-                        created.mounts[0]
+                        created.mount
                     });
 
                 // Then diff the new children in the background

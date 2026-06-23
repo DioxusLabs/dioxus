@@ -276,13 +276,10 @@ fn place_children_inner(
                 .nodes
         }
         None => {
-            let created = dom.create_children_with_parents(
-                to,
-                std::slice::from_ref(children.as_vnode()),
-                None,
-                parent,
-            );
-            *root_mount = created.mounts.first().copied();
+            let created = children
+                .as_vnode()
+                .create_with_parents(dom, None, parent, to);
+            *root_mount = Some(created.mount);
             created.nodes
         }
     }

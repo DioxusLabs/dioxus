@@ -37,38 +37,27 @@ pub(crate) struct CreatedVNode {
     pub(crate) mount: MountId,
 }
 
-pub(crate) struct CreatedNodes {
-    pub(crate) nodes: usize,
-    pub(crate) mounts: Vec<MountId>,
-}
-
 impl VirtualDom {
-    /// Create sibling vnodes under one render/logical parent.
+    /// Create sibling vnodes and report each created mount in input order.
     ///
-    /// Invariant: the returned `mounts` has exactly one mount per input vnode, in input order. If
-    /// `to` is `None`, mount/component state is still fully materialized while renderer nodes are
-    /// not emitted.
-    ///
-    /// Render and logical parents may be different under portals. The render parent is the dom
-    /// mount point if any, the logical parent is the node events/context bubble through
-    pub(crate) fn create_children_with_parents(
+    /// Invariant: `created_mount` is called exactly once per input vnode after that vnode's mount
+    /// state has been materialized.
+    pub(crate) fn create_children_with_mounts(
         &mut self,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
         render_parent: Option<MountRef>,
         logical_parent: Option<MountRef>,
-    ) -> CreatedNodes {
+        mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
+    ) -> usize {
         self.reserve_fragment_children(nodes);
 
-        let mut created = CreatedNodes {
-            nodes: 0,
-            mounts: Vec::with_capacity(nodes.len()),
-        };
-        for child in nodes {
+        let mut created = 0;
+        for (idx, child) in nodes.iter().enumerate() {
             let child =
                 child.create_with_parents(self, render_parent, logical_parent, to.as_deref_mut());
-            created.nodes += child.nodes;
-            created.mounts.push(child.mount);
+            created += child.nodes;
+            created_mount(self, idx, child.mount);
         }
         created
     }

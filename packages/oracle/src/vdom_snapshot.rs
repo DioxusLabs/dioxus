@@ -1,8 +1,7 @@
 use crate::renderer::RendererOracle;
 use crate::snapshot::{SnapshotAttr, SnapshotNode, attr_key, attr_to_string};
 use dioxus_core::{
-    AttributeValue, DynamicNode, EffectiveAttribute, EffectiveAttributeValue, Element,
-    MountedVNode, VNodeChild, VirtualDom,
+    Attribute, AttributeValue, DynamicNode, Element, MountedVNode, VNodeChild, VirtualDom,
 };
 
 /// Render `app` from scratch into a stable snapshot.
@@ -48,8 +47,18 @@ fn child_snapshot<'a>(
         VNodeChild::Element(element) => {
             let mut element_attrs = Vec::new();
             let mut listeners = Vec::new();
-            for attr in element.attributes() {
-                apply_effective_attr(&mut element_attrs, &mut listeners, attr);
+            for (name, value, namespace) in element.static_attributes() {
+                set_snapshot_attr(
+                    &mut element_attrs,
+                    name.to_string(),
+                    namespace.map(ToString::to_string),
+                    value.to_string(),
+                );
+            }
+            for group in element.dynamic_attributes() {
+                for attr in group.attrs().flatten() {
+                    apply_dynamic_attr(&mut element_attrs, &mut listeners, attr);
+                }
             }
             let rendered_children = element
                 .children()
@@ -109,13 +118,13 @@ fn dynamic_node_snapshot(
     }
 }
 
-fn apply_effective_attr(
+fn apply_dynamic_attr(
     attrs: &mut Vec<SnapshotAttr>,
     listeners: &mut Vec<String>,
-    attr: EffectiveAttribute<'_>,
+    attr: &Attribute,
 ) {
-    match attr.value {
-        EffectiveAttributeValue::Dynamic(AttributeValue::Listener(_)) => {
+    match &attr.value {
+        AttributeValue::Listener(_) => {
             let name = attr
                 .name
                 .strip_prefix("on")
@@ -126,13 +135,7 @@ fn apply_effective_attr(
                 Err(index) => listeners.insert(index, name),
             }
         }
-        EffectiveAttributeValue::Static(value) => set_snapshot_attr(
-            attrs,
-            attr.name.to_string(),
-            attr.namespace.map(ToString::to_string),
-            value.to_string(),
-        ),
-        EffectiveAttributeValue::Dynamic(value) => match attr_to_string(value) {
+        value => match attr_to_string(value) {
             Some(value) => set_snapshot_attr(
                 attrs,
                 attr.name.to_string(),

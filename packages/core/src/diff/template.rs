@@ -1,4 +1,4 @@
-use crate::{AttributeValue, Template, VNode};
+use crate::{Attribute, Template, VNode};
 use dioxus_core_template::{
     StaticTemplateElement, StaticTemplateNode, StaticTemplateNodeIter, StaticTemplateText,
     TemplateAnchor, TemplatePath, TemplateSlotTarget,
@@ -57,11 +57,6 @@ impl<'a> StaticElement<'a> {
     /// The root position when this element is a vnode root.
     pub fn root_position(self) -> Option<usize> {
         self.root_position
-    }
-
-    /// Iterate effective attributes for this element.
-    pub fn attributes(self) -> ElementAttributes<'a> {
-        ElementAttributes::new(self)
     }
 
     /// Iterate static template attributes for this element.
@@ -389,85 +384,6 @@ fn next_dynamic_child<'a>(
     None
 }
 
-/// Effective final attribute value for an element.
-#[derive(Clone, Copy)]
-pub struct EffectiveAttribute<'a> {
-    /// The attribute name.
-    pub name: &'static str,
-    /// The attribute namespace.
-    pub namespace: Option<&'static str>,
-    /// The final effective value.
-    pub value: EffectiveAttributeValue<'a>,
-    /// Whether renderers should always write this attribute.
-    pub volatile: bool,
-}
-
-/// Where an effective attribute value came from.
-#[derive(Clone, Copy)]
-pub enum EffectiveAttributeValue<'a> {
-    /// A static template attribute value.
-    Static(&'static str),
-    /// A dynamic runtime attribute value.
-    Dynamic(&'a AttributeValue),
-}
-
-/// Iterator over the final effective attributes for an element.
-pub struct ElementAttributes<'a> {
-    inner: std::vec::IntoIter<EffectiveAttribute<'a>>,
-}
-
-impl<'a> ElementAttributes<'a> {
-    fn new(element: StaticElement<'a>) -> Self {
-        let mut attributes = Vec::new();
-        for attr in element.template_element().attributes() {
-            upsert_effective_attribute(
-                &mut attributes,
-                EffectiveAttribute {
-                    name: attr.name,
-                    namespace: attr.namespace,
-                    value: EffectiveAttributeValue::Static(attr.value),
-                    volatile: false,
-                },
-            );
-        }
-
-        for group in element.dynamic_attributes() {
-            for value_index in group.ids() {
-                for attr in element.vnode.dynamic_values[value_index].attrs() {
-                    let key = (attr.name, attr.namespace);
-                    if matches!(attr.value, AttributeValue::None) {
-                        remove_effective_attribute(&mut attributes, key);
-                        continue;
-                    }
-
-                    upsert_effective_attribute(
-                        &mut attributes,
-                        EffectiveAttribute {
-                            name: attr.name,
-                            namespace: attr.namespace,
-                            value: EffectiveAttributeValue::Dynamic(&attr.value),
-                            volatile: attr.volatile,
-                        },
-                    );
-                }
-            }
-        }
-
-        attributes.sort_by_key(|attr| (attr.name, attr.namespace));
-        Self {
-            inner: attributes.into_iter(),
-        }
-    }
-}
-
-impl<'a> Iterator for ElementAttributes<'a> {
-    type Item = EffectiveAttribute<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
-
 /// A chunk of dynamic values attached to one template anchor.
 #[derive(Clone, Copy)]
 pub(crate) enum DynamicChunk<'a> {
@@ -534,8 +450,22 @@ impl VNode {
         self.dynamic_nodes().flat_map(|group| group.slots())
     }
 
-    pub(super) fn dynamic_node_slot(&self, index: usize) -> Option<DynamicNodeSlot<'_>> {
-        self.dynamic_node_slots().find(|slot| slot.index() == index)
+    pub(super) fn dynamic_node_slots_after(
+        &self,
+        slot: DynamicNodeSlot<'_>,
+    ) -> impl Iterator<Item = DynamicNodeSlot<'_>> + '_ {
+        let start_anchor = slot.anchor_index();
+        let after_idx = slot.index();
+        self.template
+            .anchors()
+            .iter()
+            .enumerate()
+            .skip(start_anchor)
+            .flat_map(move |(anchor_index, anchor)| {
+                DynamicNodeGroup::new(self, anchor, anchor_index)
+                    .slots()
+                    .filter(move |slot| anchor_index > start_anchor || slot.index() > after_idx)
+            })
     }
 }
 
@@ -693,6 +623,13 @@ impl<'a> DynamicAttrGroup<'a> {
             .filter(|&idx| self.dynamic_values[idx].as_attrs().is_some())
     }
 
+    /// Iterate the dynamic attributes in this group.
+    pub fn attrs(&self) -> impl Iterator<Item = &'a [Attribute]> + 'a {
+        self.anchor
+            .values()
+            .filter_map(|idx| self.dynamic_values[idx].as_attrs())
+    }
+
     fn is_empty(&self) -> bool {
         self.ids().next().is_none()
     }
@@ -747,31 +684,5 @@ fn child_position(target: TemplateSlotTarget) -> usize {
     match target {
         TemplateSlotTarget::BeforeStatic(path) => path.split_insertion().1 * 2,
         TemplateSlotTarget::AppendChildren(_) => usize::MAX,
-    }
-}
-
-fn upsert_effective_attribute<'a>(
-    attributes: &mut Vec<EffectiveAttribute<'a>>,
-    attribute: EffectiveAttribute<'a>,
-) {
-    let key = (attribute.name, attribute.namespace);
-    match attributes
-        .iter_mut()
-        .find(|existing| (existing.name, existing.namespace) == key)
-    {
-        Some(existing) => *existing = attribute,
-        None => attributes.push(attribute),
-    }
-}
-
-fn remove_effective_attribute(
-    attributes: &mut Vec<EffectiveAttribute<'_>>,
-    key: (&'static str, Option<&'static str>),
-) {
-    if let Some(index) = attributes
-        .iter()
-        .position(|attr| (attr.name, attr.namespace) == key)
-    {
-        attributes.remove(index);
     }
 }

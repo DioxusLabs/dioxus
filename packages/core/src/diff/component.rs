@@ -3,6 +3,7 @@ use crate::{
     diff::{
         context::{DiffContext, DiffFrame, DiffState},
         placement::{InsertionSite, at_site, insertion_site_for_slot},
+        template::DynamicNodeSlot,
     },
     innerlude::{MountId, MountRef, VComponent, WriteMutations},
     nodes::VNode,
@@ -150,10 +151,10 @@ impl VNode {
     ///
     /// Invariant: `scope_id` is the component scope mounted in `mount` at `idx`. If the driver
     /// identity changes, replacement owns both new scope creation and old scope removal.
-    pub(crate) fn diff_vcomponent(
+    pub(super) fn diff_vcomponent(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
@@ -161,7 +162,7 @@ impl VNode {
     ) {
         // Replace components whose render function or specialized lifecycle driver changed.
         if old.render_fn != new.render_fn || !old.driver.same_component(&*new.driver) {
-            return self.replace_vcomponent(mount, idx, new, state);
+            return self.replace_vcomponent(mount, slot, new, state);
         }
 
         // If the props are static, then we try to memoize by setting the new with the old. The
@@ -178,10 +179,11 @@ impl VNode {
     fn replace_vcomponent(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         new: &VComponent,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
+        let idx = slot.index();
         let scope = state
             .dom
             .unchecked_mounted_dynamic_component_scope(mount, idx);
@@ -199,10 +201,9 @@ impl VNode {
         state.dom.clear_mounted_dynamic_node_slot(mount, idx);
 
         if state.has_writer() {
-            let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
-                let slot = self.dynamic_node_slot(idx).expect("component anchor");
-                insertion_site_for_slot(mount, slot, state.dom, context)
-            });
+            let site = live_first
+                .map(InsertionSite::before)
+                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
             let to = state.to.as_deref_mut().expect("writer checked");

@@ -1,7 +1,7 @@
 //! Fragment child reconciliation.
 //!
 //! Invariants maintained here:
-//! - Non-empty fragment diffs always return one mount per new child.
+//! - Non-empty fragment diffs always write one mount per new child into the pending parent range.
 //! - Pairwise diffs run in document order so earlier replacements can still use later committed
 //!   siblings as placement anchors.
 //! - Keyed removals are delayed until every splice has selected its insertion site.
@@ -16,10 +16,12 @@ use crate::{
     diff::{
         context::{DiffFrame, DiffState},
         placement::{
-            ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at, vnode_edge_site,
+            ElementEdge, InsertionSite, at_site, create_at_site_with_mounts, insertion_site_at,
+            vnode_edge_site,
         },
     },
     innerlude::{MountId, MountRef, WriteMutations},
+    mount::FragmentMountWriter,
     nodes::VNode,
 };
 
@@ -36,7 +38,12 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         parent: Option<MountRef>,
-    ) -> Vec<MountId> {
+        new_children: FragmentMountWriter,
+    ) {
+        dioxus_debug_assert!(
+            new_children.len() == new.len(),
+            "pending fragment range must match the new child list"
+        );
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
         dioxus_debug_assert!(
@@ -49,9 +56,9 @@ impl DiffState<'_, '_, '_, '_> {
         );
 
         if new_is_keyed && old_is_keyed {
-            self.diff_keyed_children(old, old_mounts, new, parent)
+            self.diff_keyed_children(old, old_mounts, new, parent, new_children)
         } else {
-            self.diff_non_keyed_children(old, old_mounts, new, parent)
+            self.diff_non_keyed_children(old, old_mounts, new, parent, new_children)
         }
     }
 
@@ -66,7 +73,8 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         parent: Option<MountRef>,
-    ) -> Vec<MountId> {
+        new_children: FragmentMountWriter,
+    ) {
         // Handled these cases in `diff_children` before calling this function.
         dioxus_debug_assert!(!new.is_empty());
         dioxus_debug_assert!(!old.is_empty());
@@ -76,6 +84,8 @@ impl DiffState<'_, '_, '_, '_> {
         for idx in 0..paired {
             let mount = DiffFrame::new(old_mounts[idx], &old[idx], &new[idx]).diff_into(self);
             new_mounts.push(mount);
+            self.dom
+                .set_mounted_fragment_child(new_children, idx, mount);
         }
 
         if old.len() < new.len() {
@@ -87,14 +97,17 @@ impl DiffState<'_, '_, '_, '_> {
             // diffing the pairs first means an empty leading child's own content
             // is placed before the tail rather than after it.
             let anchor_idx = paired - 1;
-            let tail = self.create_and_insert(
+            self.create_and_insert(
                 ElementEdge::Last,
                 &new[old.len()..],
                 &new[anchor_idx],
                 new_mounts[anchor_idx],
                 parent,
+                |dom, offset, mount| {
+                    new_mounts.push(mount);
+                    dom.set_mounted_fragment_child(new_children, old.len() + offset, mount);
+                },
             );
-            new_mounts.extend(tail.mounts);
         } else if old.len() > new.len() {
             // Removed tail children stayed mounted through the pair diffs above
             // so paired replacements could anchor against them; remove them now.
@@ -106,7 +119,6 @@ impl DiffState<'_, '_, '_, '_> {
                 &old_mounts[new.len()..],
             );
         }
-        new_mounts
     }
 
     /// Diff the shared prefix and suffix pairs in place, before any removals, so a pair whose
@@ -117,6 +129,7 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         new_mounts: &mut [Option<MountId>],
+        new_children: FragmentMountWriter,
         prefix: usize,
         old_suffix_start: usize,
         new_suffix_start: usize,
@@ -126,6 +139,7 @@ impl DiffState<'_, '_, '_, '_> {
             &old_mounts[..prefix],
             &new[..prefix],
             new_mounts,
+            new_children,
             0,
         );
         self.diff_child_pairs(
@@ -133,6 +147,7 @@ impl DiffState<'_, '_, '_, '_> {
             &old_mounts[old_suffix_start..],
             &new[new_suffix_start..],
             new_mounts,
+            new_children,
             new_suffix_start,
         );
     }
@@ -148,7 +163,8 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         parent: Option<MountRef>,
-    ) -> Vec<MountId> {
+        new_children: FragmentMountWriter,
+    ) {
         #[cfg(debug_assertions)]
         {
             let mut keys = rustc_hash::FxHashSet::default();
@@ -205,6 +221,7 @@ impl DiffState<'_, '_, '_, '_> {
                 old_mounts,
                 new,
                 &mut new_mounts,
+                new_children,
                 prefix,
                 old_suffix_start,
                 new_suffix_start,
@@ -235,14 +252,18 @@ impl DiffState<'_, '_, '_, '_> {
                 } else {
                     (&old[old_boundary], old_mounts[old_boundary])
                 };
-                let created =
-                    self.create_and_insert(edge, inserted, anchor_node, anchor_mount, parent);
-                for (slot, mount) in new_mounts[prefix..new_suffix_start]
-                    .iter_mut()
-                    .zip(created.mounts)
-                {
-                    *slot = Some(mount);
-                }
+                self.create_and_insert(
+                    edge,
+                    inserted,
+                    anchor_node,
+                    anchor_mount,
+                    parent,
+                    |dom, offset, mount| {
+                        let idx = prefix + offset;
+                        new_mounts[idx] = Some(mount);
+                        dom.set_mounted_fragment_child(new_children, idx, mount);
+                    },
+                );
                 if !pure_insert_anchor_keeps_template {
                     // The insert anchored against the old mounts above, so the shared ends are
                     // diffed only now that the new run is placed.
@@ -251,6 +272,7 @@ impl DiffState<'_, '_, '_, '_> {
                         old_mounts,
                         new,
                         &mut new_mounts,
+                        new_children,
                         prefix,
                         old_suffix_start,
                         new_suffix_start,
@@ -275,13 +297,10 @@ impl DiffState<'_, '_, '_, '_> {
                 &new[prefix..new_suffix_start],
                 parent,
                 &mut new_mounts[prefix..new_suffix_start],
+                new_children,
+                prefix,
             ),
         }
-
-        new_mounts
-            .into_iter()
-            .map(|mount| mount.expect("new child should have a mount after keyed diff"))
-            .collect()
     }
 
     /// Reconcile a genuine reorder confined between the shared ends.
@@ -301,6 +320,8 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountRef>,
         new_mounts: &mut [Option<MountId>],
+        new_children: FragmentMountWriter,
+        new_offset: usize,
     ) {
         let old_key_to_old_index = old
             .iter()
@@ -327,18 +348,19 @@ impl DiffState<'_, '_, '_, '_> {
             .collect::<Box<[_]>>();
 
         if shared_count == 0 {
-            let created = self.create_and_insert(
+            self.create_and_insert(
                 ElementEdge::First,
                 new,
                 old.first().unwrap(),
                 old_mounts[0],
                 parent,
+                |dom, offset, mount| {
+                    new_mounts[offset] = Some(mount);
+                    dom.set_mounted_fragment_child(new_children, new_offset + offset, mount);
+                },
             );
             self.dom
                 .remove_nodes(self.to.as_deref_mut(), old, old_mounts);
-            for (slot, mount) in new_mounts.iter_mut().zip(created.mounts) {
-                *slot = Some(mount);
-            }
             return;
         }
 
@@ -392,6 +414,8 @@ impl DiffState<'_, '_, '_, '_> {
                 marked.push(old_mount);
             }
             new_mounts[*idx] = Some(mount);
+            self.dom
+                .set_mounted_fragment_child(new_children, new_offset + *idx, mount);
             mounted_new.push(MountedSibling { index: *idx, mount });
         }
 
@@ -407,6 +431,8 @@ impl DiffState<'_, '_, '_, '_> {
                 &new_index_to_old_index,
                 (last + 1)..new.len(),
                 &mut *new_mounts,
+                new_children,
+                new_offset,
                 &mut mounted_new,
             );
         }
@@ -424,6 +450,8 @@ impl DiffState<'_, '_, '_, '_> {
                     &new_index_to_old_index,
                     (next + 1)..last,
                     new_mounts,
+                    new_children,
+                    new_offset,
                     &mut mounted_new,
                 );
             }
@@ -441,6 +469,8 @@ impl DiffState<'_, '_, '_, '_> {
                 &new_index_to_old_index,
                 0..first_lis,
                 &mut *new_mounts,
+                new_children,
+                new_offset,
                 &mut mounted_new,
             );
         }
@@ -469,6 +499,7 @@ impl DiffState<'_, '_, '_, '_> {
         old_mounts: &[MountId],
         new: &[VNode],
         new_mounts: &mut [Option<MountId>],
+        new_children: FragmentMountWriter,
         new_offset: usize,
     ) {
         let len = old.len().min(new.len());
@@ -481,6 +512,8 @@ impl DiffState<'_, '_, '_, '_> {
             let new = &new[idx];
             let mount = DiffFrame::new(old_mounts[idx], old, new).diff_into(self);
             new_mounts[new_offset + idx] = Some(mount);
+            self.dom
+                .set_mounted_fragment_child(new_children, new_offset + idx, mount);
         }
     }
 
@@ -499,6 +532,8 @@ impl DiffState<'_, '_, '_, '_> {
         new_index_to_old_index: &[usize],
         range: std::ops::Range<usize>,
         new_mounts: &mut [Option<MountId>],
+        new_children: FragmentMountWriter,
+        new_offset: usize,
         mounted_new: &mut Vec<MountedSibling>,
     ) {
         let context = self.context();
@@ -540,6 +575,8 @@ impl DiffState<'_, '_, '_, '_> {
                     new_index_to_old_index,
                     range,
                     new_mounts,
+                    new_children,
+                    new_offset,
                     mounted_new,
                     &mut replaced_nodes,
                 )
@@ -554,6 +591,8 @@ impl DiffState<'_, '_, '_, '_> {
                 new_index_to_old_index,
                 range,
                 new_mounts,
+                new_children,
+                new_offset,
                 mounted_new,
                 &mut replaced_nodes,
             );
@@ -576,6 +615,8 @@ impl DiffState<'_, '_, '_, '_> {
         new_index_to_old_index: &[usize],
         range: std::ops::Range<usize>,
         new_mounts: &mut [Option<MountId>],
+        new_children: FragmentMountWriter,
+        new_offset: usize,
         mounted_new: &mut Vec<MountedSibling>,
         replaced_nodes: &mut Vec<(&'a VNode, MountId)>,
     ) -> usize {
@@ -615,6 +656,8 @@ impl DiffState<'_, '_, '_, '_> {
                 (created.nodes, created.mount)
             };
             new_mounts[new_index] = Some(mount);
+            self.dom
+                .set_mounted_fragment_child(new_children, new_offset + new_index, mount);
             mounted_new.push(MountedSibling {
                 index: new_index,
                 mount,
@@ -634,15 +677,21 @@ impl DiffState<'_, '_, '_, '_> {
         sibling: &VNode,
         sibling_mount: MountId,
         parent: Option<MountRef>,
-    ) -> crate::diff::CreatedNodes {
-        self.create_children_at_site(new, parent, |state| {
-            insertion_site_at(
-                edge,
-                crate::MountedVNode::new(sibling, sibling_mount),
-                state.dom,
-                state.context(),
-            )
-        })
+        created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
+    ) -> usize {
+        self.create_children_at_site_with_mounts(
+            new,
+            parent,
+            |state| {
+                insertion_site_at(
+                    edge,
+                    crate::MountedVNode::new(sibling, sibling_mount),
+                    state.dom,
+                    state.context(),
+                )
+            },
+            created_mount,
+        )
     }
 
     /// Create `new` under `parent`. When a writer is active the children are placed at `site`
@@ -653,14 +702,32 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountRef>,
         site: impl FnOnce(&mut Self) -> InsertionSite,
-    ) -> crate::diff::CreatedNodes {
+        children: FragmentMountWriter,
+    ) -> usize {
+        self.create_children_at_site_with_mounts(new, parent, site, |dom, idx, mount| {
+            dom.set_mounted_fragment_child(children, idx, mount)
+        })
+    }
+
+    fn create_children_at_site_with_mounts(
+        &mut self,
+        new: &[VNode],
+        parent: Option<MountRef>,
+        site: impl FnOnce(&mut Self) -> InsertionSite,
+        created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
+    ) -> usize {
         if self.has_writer() {
             let site = site(self);
             let to = self.to.as_deref_mut().expect("writer checked");
-            create_at_site(new, parent, site, self.dom, to)
+            create_at_site_with_mounts(new, parent, site, self.dom, to, created_mount)
         } else {
-            self.dom
-                .create_children_with_parents(self.to.as_deref_mut(), new, parent, parent)
+            self.dom.create_children_with_mounts(
+                self.to.as_deref_mut(),
+                new,
+                parent,
+                parent,
+                created_mount,
+            )
         }
     }
 }

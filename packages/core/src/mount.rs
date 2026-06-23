@@ -34,6 +34,22 @@ pub(crate) struct MountedDynamicNodeSlotSnapshot {
     value: usize,
 }
 
+const PENDING_FRAGMENT_CHILD_MOUNT: MountId = MountId(usize::MAX);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FragmentMountWriter {
+    mount: MountId,
+    dyn_node_idx: usize,
+    start: usize,
+    len: usize,
+}
+
+impl FragmentMountWriter {
+    pub(crate) fn len(self) -> usize {
+        self.len
+    }
+}
+
 impl PackedMountedSlot {
     const fn empty() -> Self {
         Self { value: 0 }
@@ -397,26 +413,65 @@ impl VirtualDom {
         });
     }
 
-    pub(crate) fn set_mounted_fragment_children_vec(
+    pub(crate) fn begin_mounted_fragment_children(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
-        children: Vec<MountId>,
+        len: usize,
+    ) -> FragmentMountWriter {
+        self.with_mount_mut(mount, |mount_state| {
+            let start = mount_state.fragment_child_mounts.len();
+            mount_state
+                .fragment_child_mounts
+                .resize(start + len, PENDING_FRAGMENT_CHILD_MOUNT);
+            FragmentMountWriter {
+                mount,
+                dyn_node_idx,
+                start,
+                len,
+            }
+        })
+    }
+
+    pub(crate) fn set_mounted_fragment_child(
+        &self,
+        writer: FragmentMountWriter,
+        idx: usize,
+        child: MountId,
     ) {
-        self.with_mount_mut(mount, |mount| {
-            if children.is_empty() {
-                *mount.dynamic_slot_mut(dyn_node_idx) = PackedMountedSlot::empty();
+        debug_assert_ne!(
+            child, PENDING_FRAGMENT_CHILD_MOUNT,
+            "pending fragment sentinel cannot be a live child mount"
+        );
+        debug_assert!(
+            idx < writer.len,
+            "fragment child write index must fit the pending range"
+        );
+        self.with_mount_mut(writer.mount, |mount| {
+            mount.fragment_child_mounts[writer.start + idx] = child;
+        });
+    }
+
+    pub(crate) fn commit_mounted_fragment_children(&self, writer: FragmentMountWriter) {
+        self.with_mount_mut(writer.mount, |mount| {
+            if writer.len == 0 {
+                *mount.dynamic_slot_mut(writer.dyn_node_idx) = PackedMountedSlot::empty();
                 return;
             }
 
-            let start = mount.fragment_child_mounts.len();
-            if mount.fragment_child_mounts.is_empty() {
-                mount.fragment_child_mounts = children;
-            } else {
-                mount.fragment_child_mounts.extend(children);
-            }
-            *mount.dynamic_slot_mut(dyn_node_idx) =
-                PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(start));
+            let range = writer.start..writer.start + writer.len;
+            debug_assert!(
+                range.end <= mount.fragment_child_mounts.len(),
+                "pending fragment range must fit fragment storage"
+            );
+            debug_assert!(
+                mount.fragment_child_mounts[range]
+                    .iter()
+                    .all(|mount| { *mount != PENDING_FRAGMENT_CHILD_MOUNT }),
+                "pending fragment range must be fully written before commit"
+            );
+            *mount.dynamic_slot_mut(writer.dyn_node_idx) =
+                PackedMountedSlot::from_slot(MountedDynamicNodeSlot::Fragment(writer.start));
         });
     }
 
