@@ -103,6 +103,7 @@ mod path;
 mod raw;
 #[cfg(feature = "serialize")]
 mod serialization;
+mod stats;
 mod storage;
 
 pub use anchor::TemplateAnchor;
@@ -116,10 +117,10 @@ pub use path::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TemplatePath, TemplateSlotTarge
 pub use raw::TemplateRawTree;
 #[cfg(feature = "serialize")]
 pub use serialization::{deserialize_option_leaky, deserialize_string_leaky};
-pub use storage::TemplateStorageStats;
+pub use stats::{TemplateStatsBuilder, TemplateStorageStats};
 #[cfg(debug_assertions)]
 pub use storage::build_runtime_template;
 pub use storage::{
     RuntimeTemplateBuilder, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_MAX_CAP,
-    TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP, TemplateStatsBuilder, TemplateStorage,
+    TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP, TemplateStorage,
 };
