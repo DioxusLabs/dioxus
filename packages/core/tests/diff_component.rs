@@ -127,6 +127,12 @@ fn identity_by_attr(oracle: &RendererOracle, attr: &str, value: &str) -> OracleN
 
 #[test]
 fn component_replacement_from_empty_output_uses_slot_site() {
+    thread_local! {
+        static EMPTY_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+        static EMPTY_DROPS: Cell<usize> = const { Cell::new(0) };
+        static LIVE_SCOPE: Cell<Option<ScopeId>> = const { Cell::new(None) };
+    }
+
     fn app() -> Element {
         let phase = dioxus_core::generation() % 2;
         let child = if phase == 0 {
@@ -146,11 +152,16 @@ fn component_replacement_from_empty_output_uses_slot_site() {
 
     #[component]
     fn empty_child() -> Element {
+        EMPTY_SCOPE.with(|scope| scope.set(Some(current_scope_id())));
+        use_drop(|| {
+            EMPTY_DROPS.with(|drops| drops.set(drops.get() + 1));
+        });
         rsx! {}
     }
 
     #[component]
     fn live_child() -> Element {
+        LIVE_SCOPE.with(|scope| scope.set(Some(current_scope_id())));
         rsx! { span { "middle" } }
     }
 
@@ -177,10 +188,18 @@ fn component_replacement_from_empty_output_uses_slot_site() {
     let mut oracle = RendererOracle::new();
     oracle.rebuild(&mut dom);
     oracle.assert_matches(expected_empty);
+    let empty_scope = EMPTY_SCOPE
+        .with(|scope| scope.get())
+        .expect("empty child rendered");
 
     dom.mark_dirty(ScopeId::APP);
     let summary = oracle.render(&mut dom);
     oracle.assert_matches(expected_live);
+    let live_scope = LIVE_SCOPE
+        .with(|scope| scope.get())
+        .expect("live child rendered");
+    assert_ne!(empty_scope, live_scope);
+    assert_eq!(EMPTY_DROPS.with(|drops| drops.get()), 1);
     assert_eq!(summary.loads, 1);
     assert_eq!(summary.replaces, 0);
 }

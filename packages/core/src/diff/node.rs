@@ -14,7 +14,7 @@ use crate::{
     },
     innerlude::MountId,
     mutations::{remove_id, with_consumed_id, with_id},
-    nodes::DynamicNode,
+    nodes::{DynamicNode, VText},
     scopes::ScopeId,
 };
 use dioxus_core_template::{StaticTemplateNode, TemplateAnchor, TemplatePath};
@@ -768,7 +768,7 @@ impl VNode {
         let mount = state
             .dom
             .create_mount(self, render_parent, logical_parent, target_id);
-        self.finish_create(mount, &mut state, false)
+        self.finish_create(mount, &mut state)
     }
 
     /// Recreate this vnode using an existing mount id.
@@ -788,22 +788,17 @@ impl VNode {
         state
             .dom
             .reuse_mount(mount, render_parent, logical_parent, target_id);
-        self.finish_create(mount, &mut state, true)
+        self.finish_create(mount, &mut state)
     }
 
-    fn finish_create(
-        &self,
-        mount: MountId,
-        state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
-    ) -> CreatedVNode {
+    fn finish_create(&self, mount: MountId, state: &mut DiffState<'_, '_, '_, '_>) -> CreatedVNode {
         debug_assert!(
             state.to.is_none() || state.dom.mount_should_render(mount),
             "background mounts must be created without renderer writes"
         );
 
-        let nodes_created = self.create_root_children(mount, state, reuse_existing_mounts);
-        self.fill_nested_dynamic_slots(mount, state, reuse_existing_mounts);
+        let nodes_created = self.create_root_children(mount, state);
+        self.fill_nested_dynamic_slots(mount, state);
 
         state.dom.commit_mount(mount, self);
         CreatedVNode {
@@ -814,23 +809,13 @@ impl VNode {
 }
 
 impl VNode {
-    fn create_root_children(
-        &self,
-        mount: MountId,
-        state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
-    ) -> usize {
+    fn create_root_children(&self, mount: MountId, state: &mut DiffState<'_, '_, '_, '_>) -> usize {
         let mut nodes_created = 0;
 
         for child in self.children() {
             match child {
                 VNodeChild::Dynamic(anchor) => {
-                    nodes_created += self.create_dynamic_anchor_nodes(
-                        mount,
-                        anchor,
-                        state,
-                        reuse_existing_mounts,
-                    );
+                    nodes_created += self.create_dynamic_anchor_nodes(mount, anchor, state);
                 }
                 VNodeChild::Element(element) => {
                     if let Some(to) = state.to.as_deref_mut() {
@@ -855,12 +840,7 @@ impl VNode {
         nodes_created
     }
 
-    fn fill_nested_dynamic_slots(
-        &self,
-        mount: MountId,
-        state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
-    ) {
+    fn fill_nested_dynamic_slots(&self, mount: MountId, state: &mut DiffState<'_, '_, '_, '_>) {
         for anchor in self.dynamic_anchors() {
             if anchor.attrs().len() > 0
                 && let Some(to) = state.to.as_deref_mut()
@@ -869,7 +849,7 @@ impl VNode {
             }
 
             if anchor.nodes().len() > 0 && !anchor.is_root_level() {
-                self.load_dynamic_anchor(mount, anchor, state, reuse_existing_mounts);
+                self.load_dynamic_anchor(mount, anchor, state);
             }
         }
     }
@@ -883,28 +863,21 @@ impl VNode {
         idx: usize,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
-        self.create_dynamic_node_inner(mount, idx, state, false)
-    }
-
-    fn create_dynamic_node_inner(
-        &self,
-        mount: MountId,
-        idx: usize,
-        state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
-    ) -> usize {
         use DynamicNode::*;
         let parent = Some(mount);
         let node = &self.dynamic_node_values()[idx];
         match node {
             Component(c) => self.create_component_node(mount, idx, c, state),
             Fragment(frag) => {
-                if reuse_existing_mounts {
-                    let mounts = state
+                if let Some(mounts) =
+                    state
                         .dom
-                        .mounted_fragment_children_exact(mount, idx, frag.len());
+                        .try_with_mounted_fragment_children(mount, idx, frag.len(), |mounts| {
+                            mounts.to_vec()
+                        })
+                {
                     let mut nodes = 0;
-                    for (child, child_mount) in frag.iter().zip(mounts.iter().copied()) {
+                    for (child, child_mount) in frag.iter().zip(mounts) {
                         let created = child.recreate_with_mount(
                             state.dom,
                             child_mount,
@@ -932,20 +905,28 @@ impl VNode {
                 state.dom.commit_mounted_fragment_children(children);
                 nodes
             }
-            Text(text) => {
-                // If we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = state.to.as_deref_mut() {
-                    let target_id = state.dom.current_render_target_id();
-                    let id = state.dom.next_element_in_target(target_id);
-                    state.dom.set_mounted_dynamic_text_node(mount, idx, id);
-                    to.create_text(&text.value);
-                    to.set_id(id.element_id());
-                    1
-                } else {
-                    0
-                }
-            }
+            Text(text) => self.create_dynamic_text_node(mount, idx, text, state),
         }
+    }
+
+    fn create_dynamic_text_node(
+        &self,
+        mount: MountId,
+        idx: usize,
+        text: &VText,
+        state: &mut DiffState<'_, '_, '_, '_>,
+    ) -> usize {
+        // If we are diffing suspended nodes and are not outputting mutations, we can skip it.
+        let Some(to) = state.to.as_deref_mut() else {
+            return 0;
+        };
+
+        let target_id = state.dom.current_render_target_id();
+        let id = state.dom.next_element_in_target(target_id);
+        state.dom.set_mounted_dynamic_text_node(mount, idx, id);
+        to.create_text(&text.value);
+        to.set_id(id.element_id());
+        1
     }
 
     fn create_dynamic_anchor_nodes(
@@ -953,13 +934,10 @@ impl VNode {
         mount: MountId,
         anchor: DynamicAnchor<'_>,
         state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
     ) -> usize {
         anchor
             .nodes()
-            .map(|slot| {
-                self.create_dynamic_node_inner(mount, slot.index(), state, reuse_existing_mounts)
-            })
+            .map(|slot| self.create_dynamic_node(mount, slot.index(), state))
             .sum()
     }
 
@@ -968,11 +946,10 @@ impl VNode {
         mount: MountId,
         anchor: DynamicAnchor<'_>,
         state: &mut DiffState<'_, '_, '_, '_>,
-        reuse_existing_mounts: bool,
     ) {
         if !state.has_writer() {
             for slot in anchor.nodes() {
-                self.create_dynamic_node_inner(mount, slot.index(), state, reuse_existing_mounts);
+                self.create_dynamic_node(mount, slot.index(), state);
             }
             return;
         }
@@ -985,7 +962,7 @@ impl VNode {
         let to = state.to.as_deref_mut().expect("writer checked");
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
-            self.create_dynamic_anchor_nodes(mount, anchor, &mut state, reuse_existing_mounts)
+            self.create_dynamic_anchor_nodes(mount, anchor, &mut state)
         });
     }
 

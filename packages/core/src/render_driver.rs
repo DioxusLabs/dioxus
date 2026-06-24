@@ -29,14 +29,12 @@ pub(crate) trait RenderDriver: 'static {
         self.as_any().type_id() == other.as_any().type_id()
     }
 
-    /// Mount this scope's output. `new` is true when the scope was allocated for this create and
-    /// has never run or rendered. Maintains `scopes[id].last_rendered_node`. Returns the number of
+    /// Mount this scope's output. Maintains `scopes[id].last_rendered_node`. Returns the number of
     /// nodes left on the renderer stack.
     fn create(
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        new: bool,
         parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize;
@@ -94,21 +92,15 @@ impl RenderDriver for BodyDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        new: bool,
         parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
-        let new_node = if new {
-            LastRenderedNode::new(dom.run_scope(scope_id))
-        } else {
-            dom.scopes[scope_id.index()]
-                .last_rendered_node
-                .as_ref()
-                .expect("Component to be mounted")
-                .node()
-                .clone()
-        };
-
+        let existing_node = dom.scopes[scope_id.index()]
+            .last_rendered_node
+            .as_ref()
+            .map(|rendered| rendered.node().clone());
+        let new_node =
+            existing_node.unwrap_or_else(|| LastRenderedNode::new(dom.run_scope(scope_id)));
         dom.mark_clean(scope_id);
         dom.create_scope(to, scope_id, new_node, parent)
     }

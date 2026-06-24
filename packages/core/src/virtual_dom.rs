@@ -638,7 +638,6 @@ impl VirtualDom {
                 driver.create(
                     self,
                     ScopeId::ROOT,
-                    true,
                     None,
                     Some(to as &mut dyn WriteMutations),
                 )

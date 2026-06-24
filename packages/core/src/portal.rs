@@ -223,11 +223,11 @@ fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRen
     (props.target, props.children.clone())
 }
 
-/// Create or re-create `children` inside `target_id`, record them as the scope's rendered
-/// output, and fire mount lifecycle when writes are enabled.
+/// Place `children` inside `target_id`, record them as the scope's rendered output, and fire mount
+/// lifecycle when writes are enabled.
 ///
-/// `existing_root_mount` is `Some` when re-creating a live scope onto its previously committed
-/// mount, and `None` when creating fresh (initial creation or the retarget arm of `diff`).
+/// `existing_root_mount` is `Some` when the portal should keep its previously committed root
+/// mount, and `None` when it should allocate a fresh root mount.
 fn place_children(
     scope_id: ScopeId,
     target_id: RenderTargetId,
@@ -259,8 +259,7 @@ fn place_children(
     }
 }
 
-/// Build the portal children. When `existing_root_mount` is `Some` the children are re-created
-/// onto it; otherwise they are created fresh.
+/// Build the portal children into `existing_root_mount` when one is available.
 fn place_children_inner(
     dom: &mut VirtualDom,
     children: &LastRenderedNode,
@@ -287,36 +286,17 @@ impl RenderDriver for PortalDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        new: bool,
         parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
-        if new {
-            let (target_id, children) = portal_props(dom, scope_id);
-            // The scope was allocated with its parent's target; declare it as
-            // a retargeting point before anything mounts under it. Later
-            // target changes are applied by the retarget arm of `diff`, which
-            // must observe the old target first.
-            dom.runtime.set_scope_target_id(scope_id, target_id);
-
-            dom.runtime.clone().with_scope_on_stack(scope_id, || {
-                place_children(scope_id, target_id, children, None, parent, dom, to);
-                0
-            })
-        } else {
-            // Re-creating a live scope: the props' children handle is not
-            // mount-accurate (mounts land on the clone the first create
-            // rendered), so re-create from the mounted output and the scope's
-            // current target. Pending prop changes apply on the next `diff`.
-            let old_output = dom.scopes[scope_id.index()]
-                .last_rendered_node
-                .clone()
-                .expect("portal scope must have rendered before re-create");
+        if let Some(old_output) = dom.scopes[scope_id.index()].last_rendered_node.clone() {
+            // The props' children handle is not mount-accurate after first create
+            // (mounts land on the rendered clone), so re-place from mounted output.
             let target_id = dom.runtime.get_state(scope_id).target_id();
             let root_mount = old_output.root_mount();
             let children = old_output.node().clone();
 
-            dom.runtime.clone().with_scope_on_stack(scope_id, || {
+            return dom.runtime.clone().with_scope_on_stack(scope_id, || {
                 place_children(
                     scope_id,
                     target_id,
@@ -327,8 +307,20 @@ impl RenderDriver for PortalDriver {
                     to,
                 );
                 0
-            })
+            });
         }
+
+        let (target_id, children) = portal_props(dom, scope_id);
+        // The scope was allocated with its parent's target; declare it as
+        // a retargeting point before anything mounts under it. Later
+        // target changes are applied by the retarget arm of `diff`, which
+        // must observe the old target first.
+        dom.runtime.set_scope_target_id(scope_id, target_id);
+
+        dom.runtime.clone().with_scope_on_stack(scope_id, || {
+            place_children(scope_id, target_id, children, None, parent, dom, to);
+            0
+        })
     }
 
     fn diff(

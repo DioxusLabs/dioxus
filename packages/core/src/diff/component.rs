@@ -221,10 +221,9 @@ impl VNode {
             .remove_component_node(state.to.as_deref_mut(), true, scope);
     }
 
-    /// Create or reuse the scope for a dynamic component node.
+    /// Create or mount the scope for a dynamic component node.
     ///
-    /// Invariant: the mounted dynamic slot contains a scope id before driver creation runs, and the
-    /// driver writes a rendered root mount into the scope state before returning.
+    /// Invariant: the driver writes a rendered root mount into the scope state before returning.
     pub(super) fn create_component_node(
         &self,
         mount: MountId,
@@ -232,18 +231,14 @@ impl VNode {
         component: &VComponent,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
-        let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
-
-        let new = scope_id.is_none();
-
-        // If the scope id is missing, we need to load up a new scope for this
-        // component. Existing scope ids are reusable because the mounted
-        // dynamic slot invariant guarantees they belong to this component type.
-        if new {
+        let scope_id = if let Some(scope_id) = state.dom.mounted_dynamic_component_scope(mount, idx)
+        {
+            scope_id
+        } else {
             // The scope adopts a duplicate of the vnode's driver so the live
             // scope never aliases props with a vnode (a cached rsx element
             // hands out the same driver instance every render).
-            let new_scope_id = state
+            let scope_id = state
                 .dom
                 .new_scope(
                     component.name,
@@ -252,19 +247,27 @@ impl VNode {
                 )
                 .state()
                 .id;
-            scope_id = Some(new_scope_id);
 
-            // Store the scope id for the next render
+            // Store the scope id for the next render.
             state
                 .dom
-                .set_mounted_dynamic_component_scope(mount, idx, new_scope_id);
-        }
+                .set_mounted_dynamic_component_scope(mount, idx, scope_id);
+            scope_id
+        };
 
-        let scope_id = scope_id.expect("component mounted");
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let to = state.to.as_deref_mut();
         let parent = Some(mount);
-        let nodes = driver.create(&mut *state.dom, scope_id, new, parent, to);
+        let nodes = driver.create(&mut *state.dom, scope_id, parent, to);
+        self.finish_component_create(scope_id, nodes, state)
+    }
+
+    fn finish_component_create(
+        &self,
+        scope_id: ScopeId,
+        nodes: usize,
+        state: &mut DiffState<'_, '_, '_, '_>,
+    ) -> usize {
         let root_mount = state
             .dom
             .get_scope(scope_id)

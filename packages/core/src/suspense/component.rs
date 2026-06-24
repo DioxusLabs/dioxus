@@ -345,27 +345,25 @@ impl RenderDriver for SuspenseDriver {
         &self,
         dom: &mut VirtualDom,
         scope_id: ScopeId,
-        new: bool,
         parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
-        if !new {
-            let rendered = dom.scopes[scope_id.index()]
-                .last_rendered_node
-                .as_ref()
-                .expect("suspense")
-                .node()
-                .clone();
+        if let Some(rendered) = dom.scopes[scope_id.index()]
+            .last_rendered_node
+            .as_ref()
+            .map(|rendered| rendered.node().clone())
+        {
             dom.mark_clean(scope_id);
             return dom.create_scope(to, scope_id, rendered, parent);
         }
 
-        if new {
+        {
             let suspense_context = SuspenseContext::new();
             let scope_state = dom.runtime.get_state(scope_id);
             scope_state.set_suspense_boundary(suspense_context.clone());
             suspense_context.mount(scope_id);
         }
+
         let nodes = suspense_create(scope_id, parent, dom, to);
         dom.mark_clean(scope_id);
         nodes
