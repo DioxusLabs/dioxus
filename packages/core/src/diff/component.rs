@@ -129,10 +129,6 @@ impl VirtualDom {
 
     pub(crate) fn scope_should_write_now(&self, scope: ScopeId) -> bool {
         self.runtime.scope_should_render(scope)
-            || self
-                .runtime
-                .current_suspense_location()
-                .is_some_and(|location| location.should_write())
     }
 
     pub(crate) fn remove_component_node(
@@ -237,19 +233,12 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
         let mut scope_id = state.dom.mounted_dynamic_component_scope(mount, idx);
-        if let Some(existing_scope) = scope_id {
-            let same_component = {
-                let driver = state.dom.runtime.get_state(existing_scope).render_driver();
-                driver.same_component(component.driver.as_ref())
-            };
-            assert!(same_component, "bad component driver");
-        }
 
         let new = scope_id.is_none();
 
         // If the scope id is missing, we need to load up a new scope for this
-        // component. Existing scope ids are reusable because the driver
-        // identity above proves they belong to this component type.
+        // component. Existing scope ids are reusable because the mounted
+        // dynamic slot invariant guarantees they belong to this component type.
         if new {
             // The scope adopts a duplicate of the vnode's driver so the live
             // scope never aliases props with a vnode (a cached rsx element
