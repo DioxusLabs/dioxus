@@ -190,9 +190,7 @@ impl WebsysDom {
         // EnterRoot(i) parks the cursor on under[i], so pass the mount
         // children. The JS cursor filters dx-injected hydration scripts before
         // exposing the root list.
-        let base_scope = vdom.base_scope().id();
         self.collect_initial_suspense(vdom.base_scope(), vdom);
-        SuspenseBoundaryProps::hydrate_suspended_primary_branches(base_scope, vdom);
         let roots = children_array(&self.root);
         self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true, false)?;
 
