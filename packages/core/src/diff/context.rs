@@ -38,7 +38,7 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
         let write = self.dom.mount_should_render(mount) && self.to.is_some();
         DiffState {
             dom: &mut *self.dom,
-            to: if write { self.to.as_deref_mut() } else { None },
+            to: self.to.as_deref_mut().filter(|_| write),
             context: self.context,
         }
     }
