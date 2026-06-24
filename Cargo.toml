@@ -187,19 +187,19 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 warnings = { version = "0.2.1" }
 
 # blitz / native
-blitz-dom = { version = "=0.3.0-alpha.5", default-features = false }
-blitz-net = { version = "=0.3.0-alpha.5" }
-blitz-html = { version = "=0.3.0-alpha.5" }
-blitz-paint = { version = "=0.3.0-alpha.5" }
-blitz-traits = { version = "=0.3.0-alpha.5" }
-blitz-shell = { version = "=0.3.0-alpha.5", default-features = false }
+blitz-dom = { version = "=0.3.0-alpha.6", default-features = false }
+blitz-net = { version = "=0.3.0-alpha.6" }
+blitz-html = { version = "=0.3.0-alpha.6" }
+blitz-paint = { version = "=0.3.0-alpha.6" }
+blitz-traits = { version = "=0.3.0-alpha.6" }
+blitz-shell = { version = "=0.3.0-alpha.6", default-features = false }
 peniko = { version = "0.6.1", default-features = false }
 anyrender = { version = "0.11", default-features = false }
-anyrender_vello = { version = "0.11", default-features = false }
+anyrender_vello = { version = "0.12", default-features = false }
 anyrender_vello_cpu = { version = "0.14.0", default-features = false }
-anyrender_vello_hybrid = { version = "0.7.0", default-features = false }
+anyrender_vello_hybrid = { version = "0.8.0", default-features = false }
 anyrender_skia = { version = "0.9", default-features = false }
-wgpu_context = { version = "0.6" }
+wgpu_context = { version = "0.7" }
 wgpu = { version = "29.0.3" }
 vello = "0.9"
 winit = { version = "=0.31.0-beta.2" }
