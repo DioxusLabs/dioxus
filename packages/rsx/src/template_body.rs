@@ -11,20 +11,15 @@ use syn::parse_quote;
 
 /// `View`/`ViewTemplate` are only implemented for tuples up to this arity, so sibling lists wider
 /// than this are emitted as several tuples joined structurally (see `group_sibling_views`).
-const MAX_TUPLE_VIEW_ARITY: usize = 64;
-const TEMPLATE_PATH_BITS_SPLIT_LIMIT: usize = TEMPLATE_SLOT_PATH_MAX_PATH_BITS;
+const MAX_TUPLE_VIEW_ARITY: usize = 128;
 
 /// Group per-sibling typed views into `<= MAX_TUPLE_VIEW_ARITY`-wide tuples.
 ///
 /// A sibling list wider than [`MAX_TUPLE_VIEW_ARITY`] cannot be a single tuple, so it is split into
 /// several. The split is transparent to the lowered template: each tuple lowers to a `Sequence`,
 /// and nested sequences flatten to exactly the same ops and dynamic-slot order as one flat list.
-/// The caller joins multiple groups with `.child(..)` on an element or `fragment()`. Always returns
-/// at least one group; an empty list yields a single empty `()` group.
+/// The caller joins multiple groups with `.child(..)` on an element or `fragment()`.
 fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
-    if views.len() <= MAX_TUPLE_VIEW_ARITY {
-        return vec![quote! { (#(#views,)*) }];
-    }
     views
         .chunks(MAX_TUPLE_VIEW_ARITY)
         .map(|chunk| {
@@ -786,7 +781,7 @@ impl TemplateBody {
     }
 
     fn node_path_bits_exceed_limit(node: &BodyNode, node_bits: usize) -> bool {
-        if node_bits > TEMPLATE_PATH_BITS_SPLIT_LIMIT {
+        if node_bits > TEMPLATE_SLOT_PATH_MAX_PATH_BITS {
             return true;
         }
 
@@ -891,12 +886,12 @@ mod tests {
 
     #[test]
     fn path_bit_split_limit_matches_slot_path_payload_capacity() {
-        assert_eq!(TEMPLATE_PATH_BITS_SPLIT_LIMIT, 127);
+        assert_eq!(TEMPLATE_SLOT_PATH_MAX_PATH_BITS, 127);
         assert!(!TemplateBody::path_bits_exceed_limit(&dynamic_siblings(
-            TEMPLATE_PATH_BITS_SPLIT_LIMIT
+            TEMPLATE_SLOT_PATH_MAX_PATH_BITS
         )));
         assert!(TemplateBody::path_bits_exceed_limit(&dynamic_siblings(
-            TEMPLATE_PATH_BITS_SPLIT_LIMIT + 1
+            TEMPLATE_SLOT_PATH_MAX_PATH_BITS + 1
         )));
     }
 }
