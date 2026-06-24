@@ -152,7 +152,7 @@ export class BaseInterpreter {
     if (this.global[event_name].active === 0) {
       this.root.removeEventListener(
         event_name,
-        this.global[event_name].callback
+        this.global[event_name].callback,
       );
       delete this.global[event_name];
     }
@@ -232,7 +232,10 @@ export class BaseInterpreter {
   }
 
   createElementTop(tag: string, ns: string | null) {
-    this.stack.push([ns ? document.createElementNS(ns, tag) : document.createElement(tag), null]);
+    this.stack.push([
+      ns ? document.createElementNS(ns, tag) : document.createElement(tag),
+      null,
+    ]);
   }
 
   createTextTop(text: string) {
@@ -291,7 +294,12 @@ export class BaseInterpreter {
   }
 
   setTopAttribute(field: string, value: string, ns: string | null) {
-    this.setAttributeInner(this.stack[this.stack.length - 1][0], field, value, ns);
+    this.setAttributeInner(
+      this.stack[this.stack.length - 1][0],
+      field,
+      value,
+      ns,
+    );
   }
 
   removeTopAttribute(field: string, ns: string | null) {
@@ -345,7 +353,7 @@ export class BaseInterpreter {
           element: id,
           data: null,
           bubbles,
-        })
+        }),
       );
     } else {
       this.createListener(event_name, node, bubbles);
@@ -355,8 +363,10 @@ export class BaseInterpreter {
   removeTopEventListener(event_name: string, bubbles: boolean) {
     const node = this.stack[this.stack.length - 1][0] as ListenerElement;
     node.listening = (node.listening ?? 1) - 1;
-    node.removeAttribute("data-dioxus-id");
     this.removeListener(node, event_name, bubbles);
+    if (node.listening <= 0) {
+      node.removeAttribute("data-dioxus-id");
+    }
   }
 
   // Insert each node in `items` into `parent` before `cursorBefore`, appending
@@ -371,7 +381,7 @@ export class BaseInterpreter {
     node: Node,
     field: string,
     value: string,
-    ns: string | null
+    ns: string | null,
   ) {
     setAttributeInner(node as HTMLElement, field, value, ns ?? "");
   }
