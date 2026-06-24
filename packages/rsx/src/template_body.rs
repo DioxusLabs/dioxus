@@ -503,12 +503,12 @@ impl ViewBuilder {
     fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attr_value = &attr.value;
-        let value = quote! { #attr_value };
         let method = if attr.name.is_likely_event() {
-            event_handler_method(&method, &value)
+            event_handler_method(&method, attr_value)
         } else {
             method
         };
+        let value = quote! { #attr_value };
         quote! { .#method(#value) }
     }
 

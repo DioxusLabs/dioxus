@@ -194,7 +194,7 @@ impl Attribute {
                     };
                     match &self.name {
                         AttributeName::BuiltIn(name) => {
-                            let method = event_handler_method(name, &tokens);
+                            let method = event_handler_method(name, &self.value);
                             quote_spanned! { span =>
                                 ::std::vec::Vec::<dioxus_core::Attribute>::new()
                                     .#method(#tokens)
@@ -239,8 +239,8 @@ impl Attribute {
 /// `FnMut(Event<Data>) -> _` signature gives the closure parameter a known type, so the user
 /// does not need to annotate it. Any other value uses the plain event method, which accepts
 /// listeners, callbacks, and closures alike.
-pub(crate) fn event_handler_method(method: &Ident, value: &TokenStream2) -> Ident {
-    if event_tokens_are_inline_closure(value) {
+pub(crate) fn event_handler_method(method: &Ident, value: &AttributeValue) -> Ident {
+    if value.is_inline_event_closure() {
         format_ident!("{}_with_explicit_closure", method, span = method.span())
     } else {
         method.clone()
@@ -430,6 +430,14 @@ impl AttributeValue {
             Self::IfExpr(if_expr) => if_expr.span(),
             Self::AttrExpr(expr) => expr.span(),
             Self::EventTokens(closure) => closure.span(),
+        }
+    }
+
+    fn is_inline_event_closure(&self) -> bool {
+        match self {
+            Self::EventTokens(_) => true,
+            Self::AttrExpr(expr) => event_tokens_are_inline_closure(&expr.to_token_stream()),
+            Self::Shorthand(_) | Self::AttrLiteral(_) | Self::IfExpr(_) => false,
         }
     }
 }
@@ -733,6 +741,26 @@ mod tests {
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
         let parsed: Attribute = parse2(quote! { onclick: |e| value, }).unwrap();
         assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+    }
+
+    #[test]
+    fn event_handler_method_uses_parsed_event_tokens() {
+        let method = format_ident!("onclick");
+
+        let parsed: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        assert_eq!(
+            event_handler_method(&method, &parsed.value),
+            format_ident!("onclick_with_explicit_closure")
+        );
+
+        let parsed: Attribute = parse2(quote! { onclick: { |e| {} } }).unwrap();
+        assert_eq!(
+            event_handler_method(&method, &parsed.value),
+            format_ident!("onclick_with_explicit_closure")
+        );
+
+        let parsed: Attribute = parse2(quote! { onclick: callback }).unwrap();
+        assert_eq!(event_handler_method(&method, &parsed.value), method);
     }
 
     #[test]
