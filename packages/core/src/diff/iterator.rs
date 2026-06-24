@@ -3,13 +3,6 @@
 //! Invariants maintained here:
 //! - Non-empty fragment diffs always write one mount per new child into the fragment child writer
 //!   range.
-//! - Stable children diff first in final document order; then the local placement plan computes
-//!   stable host edges once for every placed run.
-//! - Keyed removals are delayed until every placed run has selected and executed its insertion site.
-//! - Keyed middle reconciliation tracks shared children explicitly; newly-created keyed children
-//!   must not participate in LIS stability.
-//! - Keyed lists whose edits are confined to one end (append, prepend, truncation, or no change)
-//!   skip the key map and LIS entirely. Only genuine middle reorders pay for the key map.
 
 use crate::{
     DynamicNode, ElementId, VNodeChild, VirtualDom,
@@ -155,7 +148,7 @@ impl DiffState<'_, '_, '_, '_> {
     /// Diff two non-empty fragment child lists.
     ///
     /// Invariant: both lists are internally homogeneous with respect to keys: either every child is
-    /// keyed or no child is keyed. Empty-list transitions are handled by the caller.
+    /// keyed or no child is keyed.
     pub(crate) fn diff_non_empty_fragment(
         &mut self,
         old: &[VNode],
@@ -189,9 +182,7 @@ impl DiffState<'_, '_, '_, '_> {
 
     /// Diff children that are not keyed.
     ///
-    /// Invariant: pair indices preserve child identity. Tail removals stay mounted until after all
-    /// paired children have diffed, because paired replacements may still need tail siblings as
-    /// placement anchors.
+    /// Invariant: pair indices preserve child identity.
     fn diff_non_keyed_children(
         &mut self,
         old: &[VNode],
@@ -236,9 +227,7 @@ impl DiffState<'_, '_, '_, '_> {
 
     /// Diff keyed children.
     ///
-    /// Invariant: keys are unique within each sibling list. Shared keyed children keep their old
-    /// mount unless their vnode replacement requires a new mount; newly keyed children are
-    /// materialized during placement.
+    /// Invariant: keys are unique within each sibling list.
     fn diff_keyed_children(
         &mut self,
         old: &[VNode],

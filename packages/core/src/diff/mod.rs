@@ -10,9 +10,6 @@
 //!
 //! Core diff invariants:
 //! - Every live `MountId` points at exactly one committed `VNode` until that vnode is removed.
-//! - A vnode commit is atomic from the parent fragment's point of view: child mount lists are
-//!   replaced only after the whole fragment diff has chosen placement anchors.
-//! - `None` writers mean "maintain mount/component state without renderer mutations"
 
 use crate::{
     innerlude::{MountId, WriteMutations},
@@ -58,8 +55,7 @@ impl VirtualDom {
 
     /// Remove sibling vnodes in reverse order.
     ///
-    /// Invariant: `nodes` and `mounts` describe the same sibling list. Inner removals do not emit
-    /// their own mutations because the parent-level removal owns those renderer operations.
+    /// Invariant: `nodes` and `mounts` describe the same sibling list.
     fn remove_nodes(
         &mut self,
         mut to: Option<&mut (dyn WriteMutations + '_)>,

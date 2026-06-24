@@ -144,8 +144,7 @@ impl VirtualDom {
 impl VNode {
     /// Diff a dynamic component value in a same-template vnode.
     ///
-    /// Invariant: `scope_id` is the component scope mounted in `mount` at `idx`. If the driver
-    /// identity changes, replacement owns both new scope creation and old scope removal.
+    /// Invariant: `scope_id` is the component scope mounted in `mount` at `idx`.
     pub(super) fn diff_vcomponent(
         &self,
         mount: MountId,

@@ -546,8 +546,8 @@ impl VirtualDom {
 
     /// Commit the new vnode for a mount after its roots/dynamic slots have been updated.
     ///
-    /// Invariant: fragment child storage may contain old ranges accumulated during the diff; this
-    /// compacts storage so every committed non-empty fragment slot owns exactly its current range.
+    /// Invariant: after commit, every committed non-empty fragment slot owns exactly its current
+    /// compacted child range.
     pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
         let mut mounts = self.runtime.mounts.borrow_mut();
         let mount_state = &mut mounts[mount.0];

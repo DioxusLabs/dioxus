@@ -499,8 +499,8 @@ impl VNode {
 
     /// Remove a node, optionally preserving component state.
     ///
-    /// Invariant: preserving component state is used only when suspense moves an already-rendered
-    /// branch out of the foreground DOM; mount ownership remains with the retained branch.
+    /// Invariant: when `destroy_component_state` is false, mount ownership remains with the
+    /// retained suspense branch.
     pub(crate) fn remove_node_inner(
         &self,
         mount: MountId,

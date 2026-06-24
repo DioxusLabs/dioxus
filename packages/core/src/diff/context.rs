@@ -3,8 +3,7 @@ use crate::{VirtualDom, WriteMutations, innerlude::MountId, nodes::VNode};
 /// State required for diffing operations.
 ///
 /// Invariant: one `DiffState` owns the active mutable access to the `VirtualDom` and the optional
-/// renderer writer. `context`, when present, describes an active same-template vnode frame whose
-/// committed mount table entry still points at the old vnode until the frame commits.
+/// renderer writer.
 pub(crate) struct DiffState<'dom, 'ctx, 'writer, 'mutation> {
     pub(crate) dom: &'dom mut VirtualDom,
     pub(crate) to: Option<&'writer mut (dyn WriteMutations + 'mutation)>,
@@ -28,9 +27,6 @@ impl<'dom, 'ctx, 'writer, 'mutation> DiffState<'dom, 'ctx, 'writer, 'mutation> {
     }
 
     /// Reborrow this state for a mount, disabling renderer writes if the mount is hidden.
-    ///
-    /// Invariant: disabling writes suppresses renderer mutations only; mount and component state
-    /// still diff normally so hidden suspense branches remain current.
     pub(crate) fn reborrow_for_mount(
         &mut self,
         mount: MountId,

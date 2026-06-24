@@ -1,11 +1,6 @@
 //! Renderer insertion-site selection for diff-created nodes.
 //!
 //! Invariants maintained here:
-//! - Placement scans use the committed mount table by default. During an active same-template vnode
-//!   diff, `DiffContext` supplies the old vnode for the current mount or parent mount because the
-//!   committed mount table is not updated until the frame commits.
-//! - `None` context does not mean there is no old vnode; it means no active diff-local vnode frame is
-//!   available.
 //! - If a mounted child has a render parent, that parent mount must still be live.
 //! - Exact fragment-child access is used for diff internals; a shorter child-mount list is a mount
 //!   table corruption bug.
@@ -198,8 +193,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
 
     /// Resolve a child mount's site inside a specific committed parent.
     ///
-    /// Invariant: if this returns `Some`, `mount` is owned by the returned parent slot. If no slot
-    /// owns `mount`, the caller must continue walking render parents.
+    /// Invariant: if this returns `Some`, `mount` is owned by the returned parent slot.
     fn resolve_child_in_parent(
         &self,
         mount: MountId,

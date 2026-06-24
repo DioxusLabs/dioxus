@@ -941,9 +941,8 @@ fn replace_suspense_nodes(
     to: Option<&mut (dyn WriteMutations + '_)>,
     prepare: impl FnOnce(&mut VirtualDom),
 ) {
-    // Invariant: `children_mount` is the retained branch mount being promoted. The mount must keep
-    // its committed vnode through `prepare`; promotion moves ownership foreground instead of
-    // reconstructing from props.
+    // Invariant: `children_mount` is the retained branch mount being promoted and keeps its
+    // committed vnode through `prepare`.
     suspense_context.under_suspense_boundary(&dom.runtime(), || {
         prepare(dom);
         let children = dom
@@ -996,8 +995,7 @@ fn mark_suspense_resolved(
 }
 
 fn promote_suspense_mounts_to_foreground(dom: &mut VirtualDom, vnode: &VNode, mount: MountId) {
-    // Invariant: `vnode` is the committed view for `mount`; recursively promoting a retained branch
-    // must visit every mounted descendant before renderer-visible writes resume.
+    // Invariant: `vnode` is the committed view for `mount`.
     set_suspense_mounts_render_mode(dom, vnode, mount, RenderMode::Foreground);
 
     for anchor in vnode.dynamic_anchors() {
@@ -1038,10 +1036,7 @@ fn set_suspense_mounts_render_mode(
     mount: MountId,
     mode: RenderMode,
 ) {
-    // Invariant: the retained suspense branch mode is subtree-wide. A foreground
-    // bit inside a hidden branch may emit renderer writes under an ancestor that
-    // intentionally owns no live roots, so every mounted descendant follows the
-    // branch root before placement can run again.
+    // Invariant: the retained suspense branch mode is subtree-wide.
     dom.set_mount_mode(mount, mode);
 
     for anchor in vnode.dynamic_anchors() {
