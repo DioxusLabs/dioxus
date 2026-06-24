@@ -6,8 +6,8 @@
 //! - Stable children diff first in final document order; then the local placement plan computes
 //!   stable host edges once for every placed run.
 //! - Keyed removals are delayed until every placed run has selected and executed its insertion site.
-//! - `usize::MAX` in `new_index_to_old_index` is the only marker for a newly created keyed child;
-//!   every other index must point into the old sibling list.
+//! - Keyed middle reconciliation tracks shared children explicitly; newly-created keyed children
+//!   must not participate in LIS stability.
 //! - Keyed lists whose edits are confined to one end (append, prepend, truncation, or no change)
 //!   skip the key map and LIS entirely. Only genuine middle reorders pay for the key map.
 
@@ -237,8 +237,8 @@ impl DiffState<'_, '_, '_, '_> {
     /// Diff keyed children.
     ///
     /// Invariant: keys are unique within each sibling list. Shared keyed children keep their old
-    /// mount unless their vnode replacement requires a new mount; newly keyed children are marked
-    /// with `usize::MAX` until materialized.
+    /// mount unless their vnode replacement requires a new mount; newly keyed children are
+    /// materialized during placement.
     fn diff_keyed_children(
         &mut self,
         old: &[VNode],
@@ -310,50 +310,47 @@ impl DiffState<'_, '_, '_, '_> {
                 .map(|(i, o)| (o.key().unwrap(), prefix + i))
                 .collect::<FxHashMap<_, _>>();
 
-            let mut shared_count = 0usize;
+            let mut shared_middle_indices = Vec::new();
+            let mut shared_old_indices = Vec::new();
             let new_index_to_old_index = new[prefix..new_suffix_start]
                 .iter()
-                .map(|node| {
+                .enumerate()
+                .map(|(middle_new_idx, node)| {
                     let key = node.key().unwrap();
                     if let Some(&index) = old_key_to_old_index.get(key) {
                         if !old_is_shared[index] {
                             old_is_shared[index] = true;
-                            shared_count += 1;
+                            shared_middle_indices.push(middle_new_idx);
+                            shared_old_indices.push(index);
                         }
-                        index
+                        Some(index)
                     } else {
-                        usize::MAX
+                        None
                     }
                 })
                 .collect::<Box<[_]>>();
 
             let mut in_lis = vec![false; new_index_to_old_index.len()];
-            if shared_count > 0 {
-                let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
-                let mut allocation = vec![0; new_index_to_old_index.len() * 2];
-                let (predecessors, starts) = allocation.split_at_mut(new_index_to_old_index.len());
+            if !shared_old_indices.is_empty() {
+                let mut lis_sequence = Vec::with_capacity(shared_old_indices.len());
+                let mut allocation = vec![0; shared_old_indices.len() * 2];
+                let (predecessors, starts) = allocation.split_at_mut(shared_old_indices.len());
 
                 longest_increasing_subsequence::lis_with(
-                    &new_index_to_old_index,
+                    &shared_old_indices,
                     &mut lis_sequence,
                     |a, b| a < b,
                     predecessors,
                     starts,
                 );
 
-                if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(usize::MAX) {
-                    lis_sequence.remove(0);
-                }
-
                 for idx in lis_sequence {
-                    in_lis[idx] = true;
+                    in_lis[shared_middle_indices[idx]] = true;
                 }
             }
 
             for (middle_new_idx, old_index) in new_index_to_old_index.iter().copied().enumerate() {
-                if old_index == usize::MAX {
-                    continue;
-                }
+                let Some(old_index) = old_index else { continue };
                 let new_idx = prefix + middle_new_idx;
                 plan.reuse(new_idx, old_index, &old[old_index], &new[new_idx]);
                 plan.stable[new_idx] = plan.stable[new_idx] && in_lis[middle_new_idx];

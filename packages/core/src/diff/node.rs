@@ -226,7 +226,7 @@ impl VNode {
                 self.remove_dynamic_node(mount, state.dom, state.to.as_deref_mut(), true, idx);
             });
         } else {
-            state.replace_cleaned_mounted_dynamic_node_slot(mount, idx, create_new);
+            state.replace_mounted_dynamic_node_slot(mount, idx, create_new, |_| {});
         }
     }
 
