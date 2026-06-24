@@ -269,8 +269,56 @@ impl HotReloadResult {
             BodyNode::IfChain(ifchain) => self.hotreload_if_chain::<Ctx>(ifchain),
             BodyNode::RawExpr(expr) => self.hotreload_raw_expr(expr),
             BodyNode::Element(_) => Some(()),
-            BodyNode::SyntheticBoundary(_) => Some(()),
+            BodyNode::SyntheticBoundary(body) => self.hotreload_synthetic_boundary::<Ctx>(body),
         }
+    }
+
+    /// Hot reload a synthetic boundary.
+    ///
+    /// `split_oversized_templates` wraps chunks of an oversized template in a
+    /// [`BodyNode::SyntheticBoundary`], which lowers to its own sub-template *and* occupies a single
+    /// dynamic-node slot in its parent — exactly like a for loop body. So we hot reload it the same
+    /// way: match it against a synthetic boundary from the last build, recurse into the boundary's
+    /// body so edits inside it are actually picked up, and push a dynamic-node slot so the parent's
+    /// remaining dynamic-node indices stay aligned with the old template.
+    fn hotreload_synthetic_boundary<Ctx>(&mut self, body: &TemplateBody) -> Option<()>
+    where
+        Ctx: HotReloadingContext,
+    {
+        // Find every synthetic boundary in the last build that we could reuse.
+        let candidate_boundaries = self
+            .full_rebuild_state
+            .dynamic_nodes
+            .inner
+            .iter()
+            .enumerate()
+            .filter_map(|(index, node)| match &node.inner {
+                BodyNode::SyntheticBoundary(old_body) => Some((index, &**old_body)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        // Pick the one whose body wastes the fewest dynamic items when hot reloaded.
+        let (best, new_body) = self.diff_best_call_body::<Ctx>(
+            candidate_boundaries.iter().map(|(_, old_body)| *old_body),
+            body,
+        )?;
+
+        let pool_index = candidate_boundaries[best].0;
+
+        // Mark the matched boundary used so the parent's match score doesn't count it as wasted.
+        self.full_rebuild_state.dynamic_nodes.inner[pool_index]
+            .used
+            .set(true);
+
+        // Merge the boundary's hot reloaded sub-template(s) into our results.
+        self.extend(new_body);
+
+        // Occupy the boundary's dynamic-node slot in the parent, pointing at the matched old slot.
+        self.dynamic_nodes
+            .push(HotReloadDynamicNode::Dynamic(pool_index));
+
+        Some(())
     }
 
     fn hotreload_raw_expr(&mut self, expr: &ExprNode) -> Option<()> {

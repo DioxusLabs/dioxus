@@ -42,7 +42,7 @@ pub use component::Component;
 pub use diagnostics::Diagnostics;
 pub use element::{Element, ElementName};
 pub use expr_node::ExprNode;
-pub use fill_order::{FillOrderVisitor, visit_element, visit_roots};
+pub use fill_order::{FillOrderVisitor, siblings_have_static_node, visit_element, visit_roots};
 pub use forloop::ForLoop;
 pub use ifchain::IfChain;
 pub use ifmt::{FormattedSegment, IfmtInput, Segment};

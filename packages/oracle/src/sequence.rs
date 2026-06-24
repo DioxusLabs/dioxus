@@ -178,15 +178,14 @@ impl Sequence {
     /// Register an assertion against the [`EditSummary`] captured for the render
     /// at `step` (0-indexed: step 0 is the initial rebuild, step 1 is the first
     /// rerender, ...). Use this to guard structural diff properties that
-    /// final-DOM snapshots cannot see - minimal move counts, in-place patches,
-    /// no-op rerenders:
+    /// final-DOM snapshots cannot see - in-place patches and no-op rerenders:
     ///
     /// ```ignore
     /// Sequence::new()
     ///     .step(rsx! { for k in [0,1,2] { div { key: "{k}", id: "{k}" } } })
     ///     .step(rsx! { for k in [2,0,1] { div { key: "{k}", id: "{k}" } } })
     ///     .assert_edit_summary(1, |s| {
-    ///         assert!(s.pushes <= 1, "expected one move, got {} pushes", s.pushes);
+    ///         // A pure keyed reorder patches in place and recreates nothing.
     ///         assert_eq!(s.creates(), 0);
     ///     })
     ///     .run();

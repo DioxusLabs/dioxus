@@ -128,19 +128,3 @@ impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilde
         Some(())
     }
 }
-
-fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
-    nodes[start..].iter().any(node_has_static_root)
-}
-
-fn node_has_static_root(node: &BodyNode) -> bool {
-    match node {
-        BodyNode::Element(_) => true,
-        BodyNode::Text(text) => text.is_static(),
-        BodyNode::RawExpr(_)
-        | BodyNode::Component(_)
-        | BodyNode::ForLoop(_)
-        | BodyNode::IfChain(_)
-        | BodyNode::SyntheticBoundary(_) => false,
-    }
-}

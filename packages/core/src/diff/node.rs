@@ -4,7 +4,7 @@ use crate::{
     arena::{ElementId, MountedElementId},
     diff::{
         CreatedVNode,
-        attributes::AttributeDiffScratch,
+        attributes::{AttrDiffTarget, AttributeDiffScratch},
         context::{DiffFrame, DiffState},
         placement::{
             ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
@@ -117,8 +117,7 @@ impl<'a> DiffFrame<'a> {
                     old.diff_attribute_list(
                         anchor,
                         new_anchor,
-                        attribute_id,
-                        current_mount,
+                        AttrDiffTarget::new(attribute_id, current_mount),
                         &mut scratch,
                         state.dom,
                         to,

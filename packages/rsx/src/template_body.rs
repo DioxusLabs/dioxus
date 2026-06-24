@@ -2,7 +2,10 @@
 
 use self::location::DynIdx;
 use crate::*;
-use dioxus_core_template::{TEMPLATE_STORAGE_MAX_CAP, TemplateStatsBuilder, TemplateStorageStats};
+use dioxus_core_template::{
+    TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MAX_CAP, TemplateStatsBuilder,
+    TemplateStorageStats,
+};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
@@ -11,7 +14,7 @@ use syn::parse_quote;
 /// `View`/`ViewTemplate` are only implemented for tuples up to this arity, so sibling lists wider
 /// than this are emitted as several tuples joined structurally (see `group_sibling_views`).
 const MAX_TUPLE_VIEW_ARITY: usize = 64;
-const TEMPLATE_PATH_BITS_SPLIT_LIMIT: usize = 96;
+const TEMPLATE_PATH_BITS_SPLIT_LIMIT: usize = TEMPLATE_SLOT_PATH_MAX_PATH_BITS;
 
 /// Group per-sibling typed views into `<= MAX_TUPLE_VIEW_ARITY`-wide tuples.
 ///
@@ -82,22 +85,6 @@ impl<'a> FillOrderVisitor<'a> for StatsCollector {
     fn dynamic_node(&mut self, _node: &'a BodyNode) -> Option<()> {
         self.stats.dynamic_node(self.following_static_at_parent);
         Some(())
-    }
-}
-
-fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
-    nodes[start..].iter().any(node_has_static_root)
-}
-
-fn node_has_static_root(node: &BodyNode) -> bool {
-    match node {
-        BodyNode::Element(_) => true,
-        BodyNode::Text(text) => text.is_static(),
-        BodyNode::RawExpr(_)
-        | BodyNode::Component(_)
-        | BodyNode::ForLoop(_)
-        | BodyNode::IfChain(_)
-        | BodyNode::SyntheticBoundary(_) => false,
     }
 }
 
@@ -889,5 +876,28 @@ impl TemplateBody {
             Some(root) => root.span(),
             _ => Span::call_site(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+
+    fn dynamic_siblings(count: usize) -> Vec<BodyNode> {
+        (0..count)
+            .map(|_| syn::parse2(quote! { { value } }).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn path_bit_split_limit_matches_slot_path_payload_capacity() {
+        assert_eq!(TEMPLATE_PATH_BITS_SPLIT_LIMIT, 127);
+        assert!(!TemplateBody::path_bits_exceed_limit(&dynamic_siblings(
+            TEMPLATE_PATH_BITS_SPLIT_LIMIT
+        )));
+        assert!(TemplateBody::path_bits_exceed_limit(&dynamic_siblings(
+            TEMPLATE_PATH_BITS_SPLIT_LIMIT + 1
+        )));
     }
 }

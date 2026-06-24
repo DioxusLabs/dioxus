@@ -80,9 +80,6 @@ use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
 use crate::innerlude::Effect;
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
@@ -122,6 +119,16 @@ impl Hash for ScopeOrder {
 }
 
 impl VirtualDom {
+    fn remove_empty_dirty_tasks(&mut self) {
+        let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
+        while dirty_tasks
+            .first_key_value()
+            .is_some_and(|(_, tasks)| tasks.is_empty())
+        {
+            dirty_tasks.pop_first();
+        }
+    }
+
     fn scope_order(&self, id: ScopeId) -> Option<ScopeOrder> {
         self.runtime
             .try_get_state(id)
@@ -131,13 +138,9 @@ impl VirtualDom {
     /// Queue a task to be polled
     pub(crate) fn queue_task(&mut self, task: Task, order: ScopeOrder) {
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-        match dirty_tasks.get(&order) {
-            Some(scope) => scope.queue_task(task),
-            None => {
-                let scope = DirtyTasks::from(order);
-                scope.queue_task(task);
-                dirty_tasks.insert(scope);
-            }
+        let tasks = dirty_tasks.entry(order).or_default();
+        if !tasks.contains(&task) {
+            tasks.push_back(task);
         }
     }
 
@@ -173,18 +176,20 @@ impl VirtualDom {
 
     /// Take the top task from the highest scope
     pub(crate) fn pop_task(&mut self) -> Option<Task> {
+        self.remove_empty_dirty_tasks();
+
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-        let tasks = dirty_tasks.first()?;
+        let mut entry = dirty_tasks.first_entry()?;
+        let order = *entry.key();
 
         // The scope that owns the effect should still exist. We can't just ignore the task if the scope doesn't exist
         // because the scope id may have been reallocated
-        debug_assert!(self.scopes.contains(tasks.order.id.index()));
+        debug_assert!(self.scopes.contains(order.id.index()));
 
-        let mut tasks = tasks.tasks_queued.borrow_mut();
+        let tasks = entry.get_mut();
         let task = tasks.pop_front()?;
         if tasks.is_empty() {
-            drop(tasks);
-            dirty_tasks.pop_first();
+            entry.remove_entry();
         }
         Some(task)
     }
@@ -203,42 +208,31 @@ impl VirtualDom {
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub(crate) fn pop_work(&mut self) -> Option<Work> {
-        let dirty_scope = self.dirty_scopes.first();
+        let dirty_scope = self.dirty_scopes.first().copied();
         // Make sure the top dirty scope is valid
         #[cfg(debug_assertions)]
-        if let Some(scope) = dirty_scope {
+        if let Some(scope) = dirty_scope.as_ref() {
             assert!(self.scopes.contains(scope.id.index()));
         }
 
-        // Find the height of the highest dirty scope
-        let dirty_task = {
-            let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-            let mut dirty_task = dirty_tasks.first();
-            // Pop any invalid tasks off of each dirty scope;
-            while let Some(task) = dirty_task {
-                if task.tasks_queued.borrow().is_empty() {
-                    dirty_tasks.pop_first();
-                    dirty_task = dirty_tasks.first()
-                } else {
-                    break;
-                }
-            }
-            dirty_task.map(|task| task.order)
-        };
+        self.remove_empty_dirty_tasks();
+        let dirty_task = self
+            .runtime
+            .dirty_tasks
+            .borrow()
+            .first_key_value()
+            .map(|(order, _)| *order);
 
         match (dirty_scope, dirty_task) {
-            (Some(scope), Some(task)) => {
-                let tasks_order = task.borrow();
-                match scope.cmp(tasks_order) {
-                    std::cmp::Ordering::Less => {
-                        let scope = self.dirty_scopes.pop_first().unwrap();
-                        Some(Work::RerunScope(scope))
-                    }
-                    std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
-                        Some(Work::PollTask(self.pop_task().unwrap()))
-                    }
+            (Some(scope), Some(task)) => match scope.cmp(&task) {
+                std::cmp::Ordering::Less => {
+                    let scope = self.dirty_scopes.pop_first().unwrap();
+                    Some(Work::RerunScope(scope))
                 }
-            }
+                std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+                    Some(Work::PollTask(self.pop_task().unwrap()))
+                }
+            },
             (Some(_), None) => {
                 let scope = self.dirty_scopes.pop_first().unwrap();
                 Some(Work::RerunScope(scope))
@@ -253,63 +247,4 @@ impl VirtualDom {
 pub(crate) enum Work {
     RerunScope(ScopeOrder),
     PollTask(Task),
-}
-
-#[derive(Debug, Clone, Eq)]
-pub(crate) struct DirtyTasks {
-    pub order: ScopeOrder,
-    pub tasks_queued: RefCell<VecDeque<Task>>,
-}
-
-impl From<ScopeOrder> for DirtyTasks {
-    fn from(order: ScopeOrder) -> Self {
-        Self {
-            order,
-            tasks_queued: VecDeque::new().into(),
-        }
-    }
-}
-
-impl DirtyTasks {
-    pub(crate) fn queue_task(&self, task: Task) {
-        let mut borrow_mut = self.tasks_queued.borrow_mut();
-        // If the task is already queued, we don't need to do anything
-        if borrow_mut.contains(&task) {
-            return;
-        }
-        borrow_mut.push_back(task);
-    }
-
-    pub(crate) fn remove(&self, id: Task) {
-        self.tasks_queued.borrow_mut().retain(|task| *task != id);
-    }
-}
-
-impl Borrow<ScopeOrder> for DirtyTasks {
-    fn borrow(&self) -> &ScopeOrder {
-        &self.order
-    }
-}
-
-impl Ord for DirtyTasks {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.order.cmp(&other.order)
-    }
-}
-impl PartialOrd for DirtyTasks {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for DirtyTasks {
-    fn eq(&self, other: &Self) -> bool {
-        self.order == other.order
-    }
-}
-
-impl Hash for DirtyTasks {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.order.hash(state);
-    }
 }

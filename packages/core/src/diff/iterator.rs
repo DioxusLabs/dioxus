@@ -139,6 +139,18 @@ impl StableFragmentEdges {
     }
 }
 
+/// The shared inputs threaded through fragment placement: the old/new sibling slices, their
+/// mounts, the parent mount, and where resulting child mounts are written.
+#[derive(Clone, Copy)]
+struct FragmentInputs<'a> {
+    old: &'a [VNode],
+    old_mounts: &'a [MountId],
+    new: &'a [VNode],
+    parent: Option<MountId>,
+    new_children: FragmentMountWriter,
+    new_offset: usize,
+}
+
 impl DiffState<'_, '_, '_, '_> {
     /// Diff two non-empty fragment child lists.
     ///
@@ -201,12 +213,14 @@ impl DiffState<'_, '_, '_, '_> {
         }
 
         self.execute_fragment_plan(
-            old,
-            old_mounts,
-            new,
-            parent,
-            new_children,
-            0,
+            FragmentInputs {
+                old,
+                old_mounts,
+                new,
+                parent,
+                new_children,
+                new_offset: 0,
+            },
             plan,
             fallback_site,
         );
@@ -347,12 +361,14 @@ impl DiffState<'_, '_, '_, '_> {
         }
 
         self.execute_fragment_plan(
-            old,
-            old_mounts,
-            new,
-            parent,
-            new_children,
-            0,
+            FragmentInputs {
+                old,
+                old_mounts,
+                new,
+                parent,
+                new_children,
+                new_offset: 0,
+            },
             plan,
             fallback_site,
         );
@@ -369,15 +385,18 @@ impl DiffState<'_, '_, '_, '_> {
 
     fn execute_fragment_plan(
         &mut self,
-        old: &[VNode],
-        old_mounts: &[MountId],
-        new: &[VNode],
-        parent: Option<MountId>,
-        new_children: FragmentMountWriter,
-        new_offset: usize,
+        inputs: FragmentInputs,
         plan: FragmentPlacementPlan,
         fallback_site: Option<InsertionSite>,
     ) {
+        let FragmentInputs {
+            old,
+            old_mounts,
+            new,
+            new_children,
+            new_offset,
+            ..
+        } = inputs;
         let mut new_mounts = vec![None; new.len()];
         let mut anchorable = plan.stable.clone();
 
@@ -423,30 +442,20 @@ impl DiffState<'_, '_, '_, '_> {
                 at_site(site, to, runtime, |to| {
                     let mut state = DiffState::new_with_context(dom, Some(to), context);
                     state.create_or_diff_placed_range(
-                        new,
-                        old,
-                        old_mounts,
-                        parent,
+                        &inputs,
                         &plan,
                         range.clone(),
                         &mut new_mounts,
-                        new_children,
-                        new_offset,
                         &mut replaced_nodes,
                     )
                 });
             } else {
                 let mut state = DiffState::new_with_context(dom, to, context);
                 state.create_or_diff_placed_range(
-                    new,
-                    old,
-                    old_mounts,
-                    parent,
+                    &inputs,
                     &plan,
                     range.clone(),
                     &mut new_mounts,
-                    new_children,
-                    new_offset,
                     &mut replaced_nodes,
                 );
             }
@@ -468,17 +477,20 @@ impl DiffState<'_, '_, '_, '_> {
     /// so they are skipped while neighbouring placed children are spliced as one host segment.
     fn create_or_diff_placed_range<'a>(
         &mut self,
-        new: &[VNode],
-        old: &'a [VNode],
-        old_mounts: &[MountId],
-        parent: Option<MountId>,
+        inputs: &FragmentInputs<'a>,
         plan: &FragmentPlacementPlan,
         range: Range<usize>,
         new_mounts: &mut [Option<MountId>],
-        new_children: FragmentMountWriter,
-        new_offset: usize,
         replaced_nodes: &mut Vec<(&'a VNode, MountId)>,
     ) -> usize {
+        let FragmentInputs {
+            old,
+            old_mounts,
+            new,
+            parent,
+            new_children,
+            new_offset,
+        } = *inputs;
         for new_index in range.clone() {
             if plan.stable[new_index] {
                 continue;

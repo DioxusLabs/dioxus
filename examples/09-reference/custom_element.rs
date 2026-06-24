@@ -22,12 +22,30 @@ fn app() -> Element {
     let selected_metric = "conversion-rate";
 
     rsx! {
-        analyticsPanel {
+        DashboardPanel {
             class: "metric-card",
             metric: selected_metric,
             region: "north-america",
             h2 { "Revenue" }
-            p { "Custom elements can still use regular HTML children." }
+            p { "Components can forward typed custom element attributes." }
+        }
+    }
+}
+
+#[derive(Props, Clone, PartialEq)]
+struct DashboardPanelProps {
+    #[props(extends = GlobalAttributes, extends = analyticsPanel)]
+    attributes: Vec<Attribute>,
+
+    children: Element,
+}
+
+#[component]
+fn DashboardPanel(props: DashboardPanelProps) -> Element {
+    rsx! {
+        analyticsPanel {
+            ..props.attributes,
+            {props.children}
         }
     }
 }

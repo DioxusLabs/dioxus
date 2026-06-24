@@ -117,3 +117,24 @@ pub fn visit_element<'a, V: FillOrderVisitor<'a>>(
 fn is_static_attribute(attr: &Attribute) -> bool {
     attr.is_static_str_literal()
 }
+
+/// Whether any sibling from `start` onward contributes a static root node.
+///
+/// Determines whether a dynamic node is "followed by a static node" at its parent level, which
+/// governs how its anchor is placed. Shared so the macro stats walk and the hot-reload template
+/// builder stay byte-for-byte in lockstep.
+pub fn siblings_have_static_node(nodes: &[BodyNode], start: usize) -> bool {
+    nodes[start..].iter().any(node_has_static_root)
+}
+
+fn node_has_static_root(node: &BodyNode) -> bool {
+    match node {
+        BodyNode::Element(_) => true,
+        BodyNode::Text(text) => text.is_static(),
+        BodyNode::RawExpr(_)
+        | BodyNode::Component(_)
+        | BodyNode::ForLoop(_)
+        | BodyNode::IfChain(_)
+        | BodyNode::SyntheticBoundary(_) => false,
+    }
+}

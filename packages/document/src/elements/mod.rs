@@ -4,6 +4,7 @@ use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, VNodeChild};
 use dioxus_core_macro::*;
+use dioxus_html::extensions::*;
 mod link;
 pub use link::*;
 mod stylesheet;

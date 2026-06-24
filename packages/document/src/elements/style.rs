@@ -1,7 +1,6 @@
 use super::*;
 use crate::document;
 use dioxus_core::{VNode, use_hook};
-use dioxus_html;
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]

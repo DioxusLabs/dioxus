@@ -324,8 +324,8 @@ impl Runtime {
             // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
             if let Some(scope) = self.try_get_state(task.scope) {
                 let order = ScopeOrder::new(scope.height(), scope.id);
-                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
-                    dirty_tasks.remove(id);
+                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get_mut(&order) {
+                    dirty_tasks.retain(|task| *task != id);
                 }
             }
         }
@@ -412,9 +412,6 @@ pub(crate) enum SchedulerMsg {
 
     /// A task has woken and needs to be progressed
     TaskNotified(slotmap::DefaultKey),
-
-    /// An effect has been queued to run after the next render
-    EffectQueued,
 }
 
 struct LocalTaskHandle {

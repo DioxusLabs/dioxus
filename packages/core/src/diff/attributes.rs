@@ -39,6 +39,27 @@ pub(crate) struct AttributeDiffScratch<'a> {
     new_offsets: Vec<usize>,
 }
 
+/// The mounted element an attribute diff targets: its renderer id plus the mount that owns the
+/// attribute's VNode (needed so a listener install can register the handler in the runtime).
+#[derive(Clone, Copy)]
+pub(super) struct AttrDiffTarget {
+    id: MountedElementId,
+    mount: MountId,
+}
+
+impl AttrDiffTarget {
+    pub(super) fn new(id: MountedElementId, mount: MountId) -> Self {
+        Self { id, mount }
+    }
+}
+
+/// One step of the attribute merge: the key plus the old and/or new effective attribute for it.
+struct AttributeDelta<'a> {
+    key: AttributeKey,
+    old: Option<&'a Attribute>,
+    new: Option<&'a Attribute>,
+}
+
 impl VNode {
     /// Diff all dynamic attributes that can affect one mounted element.
     ///
@@ -50,8 +71,7 @@ impl VNode {
         &'a self,
         old_anchor: DynamicAnchor<'a>,
         new_anchor: DynamicAnchor<'a>,
-        id: MountedElementId,
-        mount: MountId,
+        target: AttrDiffTarget,
         scratch: &mut AttributeDiffScratch<'a>,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
@@ -75,13 +95,13 @@ impl VNode {
         )
         .peekable();
 
-        let element_id = id.element_id();
+        let element_id = target.id.element_id();
         // The attribute diff never changes the active render target, so the targeted gate is
         // always satisfied here - equivalent to an unconditional lazy push.
         let mut to =
             TargetedLazyScope::new(to, dom.runtime.clone(), move |to| to.push_id(element_id));
-        while let Some((key, old, new)) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
-            self.diff_dynamic_attribute(old_anchor, key, id, mount, old, new, dom, &mut to);
+        while let Some(delta) = Self::next_attribute_diff(&mut from_iter, &mut to_iter) {
+            self.diff_dynamic_attribute(old_anchor, delta, target, dom, &mut to);
         }
     }
 
@@ -91,7 +111,7 @@ impl VNode {
     fn next_attribute_diff<'a>(
         from_iter: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
         to_iter: &mut Peekable<impl Iterator<Item = &'a Attribute>>,
-    ) -> Option<(AttributeKey, Option<&'a Attribute>, Option<&'a Attribute>)> {
+    ) -> Option<AttributeDelta<'a>> {
         match (from_iter.peek().copied(), to_iter.peek().copied()) {
             (Some(from), Some(to_attr)) => {
                 let from_key = Self::attribute_key(from);
@@ -99,26 +119,46 @@ impl VNode {
                 match from_key.cmp(&to_key) {
                     Ordering::Less => {
                         from_iter.next();
-                        Some((from_key, Some(from), None))
+                        Some(AttributeDelta {
+                            key: from_key,
+                            old: Some(from),
+                            new: None,
+                        })
                     }
                     Ordering::Greater => {
                         to_iter.next();
-                        Some((to_key, None, Some(to_attr)))
+                        Some(AttributeDelta {
+                            key: to_key,
+                            old: None,
+                            new: Some(to_attr),
+                        })
                     }
                     Ordering::Equal => {
                         from_iter.next();
                         to_iter.next();
-                        Some((to_key, Some(from), Some(to_attr)))
+                        Some(AttributeDelta {
+                            key: to_key,
+                            old: Some(from),
+                            new: Some(to_attr),
+                        })
                     }
                 }
             }
             (Some(from), None) => {
                 from_iter.next();
-                Some((Self::attribute_key(from), Some(from), None))
+                Some(AttributeDelta {
+                    key: Self::attribute_key(from),
+                    old: Some(from),
+                    new: None,
+                })
             }
             (None, Some(to_attr)) => {
                 to_iter.next();
-                Some((Self::attribute_key(to_attr), None, Some(to_attr)))
+                Some(AttributeDelta {
+                    key: Self::attribute_key(to_attr),
+                    old: None,
+                    new: Some(to_attr),
+                })
             }
             (None, None) => None,
         }
@@ -127,14 +167,12 @@ impl VNode {
     fn diff_dynamic_attribute(
         &self,
         anchor: DynamicAnchor<'_>,
-        key: AttributeKey,
-        id: MountedElementId,
-        mount: MountId,
-        old: Option<&Attribute>,
-        new: Option<&Attribute>,
+        delta: AttributeDelta<'_>,
+        target: AttrDiffTarget,
         dom: &mut VirtualDom,
         to: &mut dyn WriteMutations,
     ) {
+        let AttributeDelta { key, old, new } = delta;
         let old_listener = matches!(old.map(|a| &a.value), Some(AttributeValue::Listener(_)));
         let new_listener = matches!(new.map(|a| &a.value), Some(AttributeValue::Listener(_)));
 
@@ -168,7 +206,7 @@ impl VNode {
         // Write the new value, restore the static template attribute, or clear the DOM attribute.
         // A removed listener has nothing attribute-shaped left to clear.
         if let Some(new) = new {
-            Self::write_attribute_to_current(new, id, mount, dom, to);
+            Self::write_attribute_to_current(new, target.id, target.mount, dom, to);
         } else if !old_listener {
             Self::remove_attribute_or_restore_static(anchor, key, to)
         }

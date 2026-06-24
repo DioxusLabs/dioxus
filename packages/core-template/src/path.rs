@@ -1,5 +1,10 @@
 use std::num::NonZeroU128;
 
+/// Maximum raw [`TemplatePath`] bits that can be stored in a [`TemplateSlotPath`].
+///
+/// Slot paths reserve one low tag bit and store the path payload in the remaining bits.
+pub const TEMPLATE_SLOT_PATH_MAX_PATH_BITS: usize = u128::BITS as usize - 1;
+
 /// A compact path from a template root to a static node or dynamic attribute.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TemplatePath {
@@ -185,7 +190,7 @@ impl TemplateSlotTarget {
 
 impl TemplateSlotPath {
     const TARGET_LAST_STATIC_NODE: u128 = 1;
-    const MAX_PAYLOAD: u128 = u128::MAX >> 1;
+    const MAX_PAYLOAD: u128 = u128::MAX >> (u128::BITS as usize - TEMPLATE_SLOT_PATH_MAX_PATH_BITS);
 
     const fn new(bits: u128) -> Self {
         match NonZeroU128::new(bits) {
@@ -239,6 +244,12 @@ impl TemplateSlotPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slot_path_payload_uses_all_but_the_tag_bit() {
+        assert_eq!(TEMPLATE_SLOT_PATH_MAX_PATH_BITS, 127);
+        assert_eq!(TemplateSlotPath::MAX_PAYLOAD, u128::MAX >> 1);
+    }
 
     #[test]
     fn root_paths_are_single_marker_bits() {

@@ -112,7 +112,7 @@ pub use data::{
 };
 pub use op::DecodedTemplateOp;
 pub(crate) use path::TemplateSlotPath;
-pub use path::{TemplatePath, TemplateSlotTarget};
+pub use path::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TemplatePath, TemplateSlotTarget};
 pub use raw::TemplateRawTree;
 #[cfg(feature = "serialize")]
 pub use serialization::{deserialize_option_leaky, deserialize_string_leaky};

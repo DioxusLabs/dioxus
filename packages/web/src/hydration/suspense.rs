@@ -100,14 +100,13 @@ impl WebsysDom {
     ) {
         self.track_suspense_for_scope(scope, dom);
 
-        if include_retained_branches {
-            if let Some(suspense) =
+        if include_retained_branches
+            && let Some(suspense) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
-            {
-                let _ = suspense.with_suspended_mounted_root(|root| {
-                    self.collect_suspense_in_vnode(root, dom, include_retained_branches);
-                });
-            }
+        {
+            let _ = suspense.with_suspended_mounted_root(|root| {
+                self.collect_suspense_in_vnode(root, dom, include_retained_branches);
+            });
         }
 
         if let Some(root) = scope.try_mounted_root_node() {

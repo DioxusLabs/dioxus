@@ -1070,7 +1070,7 @@ mod struct_info {
                 );
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics dioxus_html::extensions::#spread_marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                    impl #impl_generics #spread_marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
                 }
             });
 

@@ -5,10 +5,7 @@ use crate::{
     AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, VNode, innerlude::MountId,
 };
 use crate::{CapturedError, arena::RenderTargetState};
-use crate::{
-    SuspenseContext,
-    innerlude::{DirtyTasks, Effect},
-};
+use crate::{SuspenseContext, innerlude::Effect};
 use crate::{
     Task,
     innerlude::{LocalTask, SchedulerMsg},
@@ -19,7 +16,7 @@ use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -95,7 +92,7 @@ pub struct Runtime {
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
 
     // Tasks that are waiting to be polled
-    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
+    pub(crate) dirty_tasks: RefCell<BTreeMap<ScopeOrder, VecDeque<Task>>>,
 
     // The renderer targets and their element id arenas.
     pub(crate) render_targets: RefCell<Slab<RenderTargetState>>,
@@ -481,16 +478,6 @@ fn MyComponent() -> Element {{
     pub(crate) fn with_scope<R>(scope: ScopeId, callback: impl FnOnce(&Scope) -> R) -> R {
         let rt = Runtime::current();
         Self::in_scope(&rt, scope, || callback(&rt.get_state(scope)))
-    }
-
-    /// Finish a render. This will mark all effects as ready to run and send the render signal.
-    pub(crate) fn finish_render(&self) {
-        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
-        if !self.pending_effects.borrow().is_empty() {
-            self.sender
-                .unbounded_send(SchedulerMsg::EffectQueued)
-                .expect("Scheduler should exist");
-        }
     }
 
     /// Check if we should render a scope

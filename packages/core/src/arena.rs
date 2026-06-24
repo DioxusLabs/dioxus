@@ -49,13 +49,11 @@ impl ElementId {
 pub(crate) struct MountedElementId(NonZeroUsize);
 
 impl MountedElementId {
-    pub(crate) fn new_unchecked(id: ElementId) -> Self {
-        debug_assert!(id != ElementId::ROOT);
-        Self::from_index_unchecked(id.index())
+    pub(crate) fn new(id: ElementId) -> Self {
+        Self::from_index(id.index())
     }
 
-    pub(crate) fn from_index_unchecked(index: usize) -> Self {
-        debug_assert_ne!(index, ElementId::ROOT.index());
+    pub(crate) fn from_index(index: usize) -> Self {
         Self(NonZeroUsize::new(index).expect("root id"))
     }
 
@@ -156,7 +154,7 @@ impl VirtualDom {
     pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets.get_mut(target_id.index()).expect("target");
-        MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)))
+        MountedElementId::new(ElementId::new(target.elements.insert(None)))
     }
 
     pub(crate) fn cached_template_root(
@@ -185,7 +183,7 @@ impl VirtualDom {
     ) -> MountedElementId {
         let mut targets = self.runtime.render_targets.borrow_mut();
         let target = targets.get_mut(target_id.index()).expect("target");
-        let id = MountedElementId::new_unchecked(ElementId::new(target.elements.insert(None)));
+        let id = MountedElementId::new(ElementId::new(target.elements.insert(None)));
         target
             .template_roots
             .insert((template, root_anchor_idx), id);

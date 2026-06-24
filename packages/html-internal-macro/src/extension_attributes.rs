@@ -2,20 +2,21 @@
 //! attribute extension trait (and the gated-attribute extensions) for a group of
 //! attributes such as the global or SVG attribute sets.
 
+use std::path::Path;
+
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt, quote};
-use syn::ext::IdentExt;
+use syn::Item;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{Ident, Token, braced};
 
-use crate::common::{ExtensionAttribute, GatedAttributeGroup, ident_to_upper_camel};
+use crate::common::{ExtensionAttribute, ident_to_upper_camel};
 
 pub(crate) struct ImplExtensionAttributes {
     name: Ident,
     attrs: Punctuated<ExtensionAttribute, Token![,]>,
-    gated_attribute_groups: Vec<GatedAttributeGroup>,
 }
 
 impl Parse for ImplExtensionAttributes {
@@ -26,29 +27,11 @@ impl Parse for ImplExtensionAttributes {
         braced!(content in input);
         let attrs = content.parse_terminated(ExtensionAttribute::parse, Token![,])?;
 
-        let mut gated_attribute_groups = Vec::new();
-        while !input.is_empty() {
-            let marker: Ident = input.call(Ident::parse_any)?;
-            if marker == "gated_attributes" {
-                let content;
-                braced!(content in input);
-                while !content.is_empty() {
-                    gated_attribute_groups.push(content.parse()?);
-                    let _ = content.parse::<Token![,]>();
-                }
-            } else {
-                return Err(syn::Error::new(
-                    marker.span(),
-                    "expected `gated_attributes` after extension attribute list",
-                ));
-            }
+        if !input.is_empty() {
+            return Err(input.error("unexpected tokens after extension attribute list"));
         }
 
-        Ok(ImplExtensionAttributes {
-            name,
-            attrs,
-            gated_attribute_groups,
-        })
+        Ok(ImplExtensionAttributes { name, attrs })
     }
 }
 
@@ -65,18 +48,7 @@ impl ToTokens for ImplExtensionAttributes {
         // Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
         // builders) that accept every attribute in this group, gated ones included.
         let spread_marker = Ident::new(format!("{camel_name}SpreadTarget").as_str(), name.span());
-        let gated_attributes = self
-            .gated_attribute_groups
-            .iter()
-            .find(|group| group.name == *name)
-            .map(|group| {
-                group
-                    .attributes
-                    .iter()
-                    .map(Ident::to_string)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let gated_attributes = detect_builtin_gated_attributes_for(&name_string);
 
         let descriptors = self.attrs.iter().map(|attr| {
             let ident = &attr.name;
@@ -237,4 +209,37 @@ impl ToTokens for ImplExtensionAttributes {
             #(#gated_extensions)*
         });
     }
+}
+
+fn detect_builtin_gated_attributes_for(group: &str) -> Vec<String> {
+    let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") else {
+        return Vec::new();
+    };
+    let elements_path = Path::new(&manifest_dir).join("src").join("elements.rs");
+    let Ok(elements_source) = std::fs::read_to_string(elements_path) else {
+        return Vec::new();
+    };
+    let Ok(elements_file) = syn::parse_file(&elements_source) else {
+        return Vec::new();
+    };
+
+    for item in elements_file.items {
+        let Item::Macro(item_macro) = item else {
+            continue;
+        };
+        let Some(segment) = item_macro.mac.path.segments.last() else {
+            continue;
+        };
+        if segment.ident != "define_elements" {
+            continue;
+        }
+        let Ok(elements) = syn::parse2::<crate::elements::DefineElements>(item_macro.mac.tokens)
+        else {
+            continue;
+        };
+
+        return elements.detected_gated_attribute_names_for(group);
+    }
+
+    Vec::new()
 }

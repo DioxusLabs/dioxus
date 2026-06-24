@@ -9,24 +9,12 @@ use crate::op::TemplateOp;
 #[derive(Clone, Copy, Eq)]
 pub struct Template {
     /// Flat static template operations.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "super::serialization::deserialize_leaky")
-    )]
     ops: &'static [TemplateOp],
 
     /// Static strings referenced by static string operations.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "super::serialization::deserialize_strings_leaky")
-    )]
     strings: &'static [&'static str],
 
     /// Dynamic node and attribute ranges in document order, each anchored to a static element.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "super::serialization::deserialize_leaky")
-    )]
     anchors: &'static [TemplateAnchor],
 
     /// Compile-time hash of template content for reliable cross-crate comparison.

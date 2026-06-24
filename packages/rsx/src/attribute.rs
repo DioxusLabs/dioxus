@@ -189,9 +189,7 @@ impl Attribute {
                         AttributeValue::AttrExpr(tokens) => {
                             (tokens.to_token_stream(), tokens.span())
                         }
-                        AttributeValue::Shorthand(ident) => {
-                            (ident.to_token_stream(), ident.span())
-                        }
+                        AttributeValue::Shorthand(ident) => (ident.to_token_stream(), ident.span()),
                         _ => unreachable!(),
                     };
                     match &self.name {

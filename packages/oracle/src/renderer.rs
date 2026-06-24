@@ -279,10 +279,6 @@ struct Node {
     attrs: Vec<SnapshotAttr>,
     listeners: Vec<String>,
     children: Vec<NodeId>,
-    /// For each child, its logical static child index. Nodes appended without
-    /// prototype context get `u8::MAX` (sentinel meaning "no static position,
-    /// lives at the end").
-    child_logical_indices: Vec<u8>,
     parent: Option<NodeId>,
     /// The `ElementId` this node is currently mapped to, recorded at `pop_id`.
     /// Lets semantic lookups (`element_id_by_tag`/`_attr`) resolve a tree node
@@ -291,16 +287,13 @@ struct Node {
     element_id: Option<ElementId>,
 }
 
-const NO_LOGICAL_INDEX: u8 = u8::MAX;
-
 /// A category-level summary of edits applied to the renderer in one render pass.
 ///
 /// Counts edits by *kind* (prototype clone, create text, move, set attribute, ...)
 /// without exposing any specific `ElementId` or edit ordering. Tests use this to
 /// assert structural properties of the diff that final-DOM snapshots cannot
-/// observe - e.g. "this keyed reorder moved at most one node," "this rerender
-/// patched text in place without recreating elements," "exactly two attributes
-/// changed."
+/// observe - e.g. "this rerender patched text in place without recreating
+/// elements," "exactly two attributes changed."
 ///
 /// The summary captures only the most recent render call. It is reset at the
 /// start of every `rebuild` / `render` / `wait_and_render`.
@@ -317,9 +310,6 @@ pub struct EditSummary {
     pub replaces: usize,
     /// `insert_*` / `append_children` calls - placing nodes into the tree.
     pub inserts: usize,
-    /// `push_id` calls - proxy for "an existing live node was brought onto the
-    /// stack to be moved." A keyed reorder that moves N survivors emits N pushes.
-    pub pushes: usize,
     /// `set_attribute` calls.
     pub set_attrs: usize,
     /// `set_text` calls - in-place text patches.
@@ -361,7 +351,6 @@ impl OracleArena {
                 attrs: Vec::new(),
                 listeners: Vec::new(),
                 children: Vec::new(),
-                child_logical_indices: Vec::new(),
                 parent: None,
                 element_id: Some(ElementId::ROOT),
             })],
@@ -377,7 +366,6 @@ impl OracleArena {
             attrs: Vec::new(),
             listeners: Vec::new(),
             children: Vec::new(),
-            child_logical_indices: Vec::new(),
             parent: None,
             element_id: None,
         }));
@@ -414,7 +402,6 @@ impl OracleArena {
         {
             let cloned_node = self.node_mut(cloned);
             cloned_node.attrs = node_data.attrs;
-            cloned_node.child_logical_indices = node_data.child_logical_indices;
         }
         let children = node_data
             .children
@@ -443,14 +430,13 @@ impl OracleArena {
         (parent, index)
     }
 
-    fn detach(&mut self, node: NodeId) -> (NodeId, usize, u8) {
+    fn detach(&mut self, node: NodeId) -> (NodeId, usize) {
         let (parent, index) = self.position_in_parent(node);
         let parent_node = self.node_mut(parent);
         let removed = parent_node.children.remove(index);
-        let ti = parent_node.child_logical_indices.remove(index);
         debug_assert_eq!(removed, node);
         self.node_mut(node).parent = None;
-        (parent, index, ti)
+        (parent, index)
     }
 
     fn unhook(&mut self, node: NodeId) {
@@ -465,7 +451,7 @@ impl OracleArena {
         }
     }
 
-    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: &[NodeId], ti: u8) {
+    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: &[NodeId]) {
         if index > self.node(parent).children.len() {
             panic!(
                 "renderer insertion index {index} out of bounds for parent {parent} with {} children",
@@ -478,19 +464,15 @@ impl OracleArena {
         let parent_node = self.node_mut(parent);
         for (offset, &node) in nodes.iter().enumerate() {
             parent_node.children.insert(index + offset, node);
-            parent_node.child_logical_indices.insert(index + offset, ti);
         }
     }
 
-    fn append_detached(&mut self, parent: NodeId, nodes: &[NodeId], ti: u8) {
+    fn append_detached(&mut self, parent: NodeId, nodes: &[NodeId]) {
         for &node in nodes {
             self.node_mut(node).parent = Some(parent);
         }
         let parent_node = self.node_mut(parent);
         parent_node.children.extend_from_slice(nodes);
-        parent_node
-            .child_logical_indices
-            .extend(std::iter::repeat_n(ti, nodes.len()));
     }
 
     fn drop_subtree(&mut self, node: NodeId) {
@@ -604,29 +586,26 @@ impl RealDom for ArenaBackend<'_> {
 
     fn append_children(&mut self, parent: NodeId, children: &[NodeId]) {
         self.arena.unhook_all(children);
-        self.arena
-            .append_detached(parent, children, NO_LOGICAL_INDEX);
+        self.arena.append_detached(parent, children);
     }
 
     fn insert_after(&mut self, anchor: NodeId, nodes: &[NodeId]) {
         self.arena.unhook_all(nodes);
         let (parent, index) = self.arena.position_in_parent(anchor);
-        let ti = self.arena.node(parent).child_logical_indices[index];
-        self.arena.insert_detached(parent, index + 1, nodes, ti);
+        self.arena.insert_detached(parent, index + 1, nodes);
     }
 
     fn insert_before(&mut self, anchor: NodeId, nodes: &[NodeId]) {
         self.arena.unhook_all(nodes);
         let (parent, index) = self.arena.position_in_parent(anchor);
-        let ti = self.arena.node(parent).child_logical_indices[index];
-        self.arena.insert_detached(parent, index, nodes, ti);
+        self.arena.insert_detached(parent, index, nodes);
     }
 
     fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
         self.arena.unhook_all(replacements);
-        let (parent, index, ti) = self.arena.detach(target);
+        let (parent, index) = self.arena.detach(target);
         self.arena.drop_subtree(target);
-        self.arena.insert_detached(parent, index, replacements, ti);
+        self.arena.insert_detached(parent, index, replacements);
     }
 
     fn remove(&mut self, node: NodeId) {
@@ -907,7 +886,9 @@ pub struct RendererOracle {
     /// harness to dispatch events at listener targets without exposing stack
     /// internals from the stack machine.
     element_stack: Vec<Option<ElementId>>,
-    /// Per-`ElementId` provenance of the mapped node, used to classify pushes.
+    /// Per-`ElementId` role (live node vs prototype-template root) recorded at
+    /// `set_id` and consulted when the id is later pushed onto the stack, so
+    /// edits on it are attributed to the right [`StackSource`].
     roles: Vec<NodeRole>,
 }
 

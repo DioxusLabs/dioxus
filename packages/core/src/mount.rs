@@ -89,7 +89,7 @@ impl PackedMountedSlot {
     }
 
     fn mounted_element(self) -> Option<MountedElementId> {
-        (self.value != 0).then(|| MountedElementId::from_index_unchecked(self.value))
+        (self.value != 0).then(|| MountedElementId::from_index(self.value))
     }
 
     fn text(self) -> Option<MountedElementId> {
@@ -637,7 +637,7 @@ mod tests {
 
     #[test]
     fn packed_dynamic_slot_round_trips() {
-        let text = MountedDynamicNodeSlot::Text(MountedElementId::new_unchecked(ElementId::new(7)));
+        let text = MountedDynamicNodeSlot::Text(MountedElementId::new(ElementId::new(7)));
         let component = MountedDynamicNodeSlot::Component(ScopeId::new(3));
 
         assert_eq!(
@@ -646,7 +646,7 @@ mod tests {
         );
         assert_eq!(
             PackedMountedSlot::from_slot(text).text(),
-            Some(MountedElementId::new_unchecked(ElementId::new(7)))
+            Some(MountedElementId::new(ElementId::new(7)))
         );
         assert_eq!(
             PackedMountedSlot::from_slot(component).component_scope(),

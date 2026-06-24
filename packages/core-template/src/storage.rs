@@ -19,13 +19,11 @@ pub const TEMPLATE_STORAGE_DYNAMIC_CAP: usize = 16;
 /// Maximum element nesting depth handled by a single template chunk.
 ///
 /// The rsx splitter wraps subtrees in synthetic boundaries once a path exceeds
-/// its bit-width limit (`TEMPLATE_PATH_BITS_SPLIT_LIMIT`, currently 96), and a
-/// path consumes at least one bit per nesting level (`TemplatePath::next_child`
-/// shifts left by one). So a chunk that reaches the splitter's lowering can nest
-/// no deeper than that bit limit. This cap is kept comfortably above it (and at
-/// the `u128` path width) so the bit-width splitter is always the binding
-/// constraint and depths up to the bit limit lower directly instead of hitting
-/// a "stack capacity exceeded" panic.
+/// the [`crate::TEMPLATE_SLOT_PATH_MAX_PATH_BITS`] slot-path payload limit, and
+/// a path consumes at least one bit per nesting level (`TemplatePath::next_child`
+/// shifts left by one). This cap matches the `u128` path width so the bit-width
+/// splitter is the binding constraint and depths up to the slot-path payload
+/// limit lower directly instead of hitting a "stack capacity exceeded" panic.
 const TEMPLATE_PATH_STACK_CAP: usize = 128;
 
 /// Storage requirements for lowering a template.

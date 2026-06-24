@@ -114,8 +114,7 @@ macro_rules! attribute_group {
             None
         }
 
-        __dioxus_html_impl_extension_attributes_with_detected_gated_attributes! {
-            impl_extension_attributes,
+        impl_extension_attributes! {
             $mod {
                 $(
                     $(#[$attr])*

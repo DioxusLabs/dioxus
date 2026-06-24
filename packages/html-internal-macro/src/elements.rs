@@ -184,7 +184,8 @@ impl ToTokens for DefineElements {
         let prelude_exports = self.elements.iter().map(|element| {
             let name = &element.name;
             let extension = element.extension_ident();
-            quote! { pub use super::#name::{#name as _, #extension as _}; }
+            let spread_marker = element.spread_marker_ident();
+            quote! { pub use super::#name::{#name as _, #extension as _, #spread_marker}; }
         });
         let context = self
             .hot_reload_context
@@ -201,6 +202,7 @@ impl ToTokens for DefineElements {
 
             #[allow(unused_imports)]
             pub mod prelude {
+                pub use #html::{GlobalAttributesSpreadTarget, SvgAttributesSpreadTarget};
                 #(#prelude_exports)*
             }
 
@@ -215,6 +217,20 @@ impl ToTokens for DefineElements {
 }
 
 impl DefineElements {
+    pub(crate) fn detected_gated_attribute_names_for(&self, group_name: &str) -> Vec<String> {
+        self.detected_gated_attribute_groups()
+            .into_iter()
+            .find(|group| group.name == group_name)
+            .map(|group| {
+                group
+                    .attributes
+                    .into_iter()
+                    .map(|attr| attr.to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     fn detected_gated_attribute_groups(&self) -> Vec<GatedAttributeGroup> {
         let mut groups = BTreeMap::<&'static str, BTreeMap<String, Ident>>::new();
 
@@ -248,7 +264,6 @@ impl DefineElements {
                 #name { #(#attributes,)* }
             }
         });
-        let define_group_blocks = group_blocks.clone();
 
         quote! {
             #[doc(hidden)]
@@ -267,28 +282,10 @@ impl DefineElements {
                         html = $html
                         $(, $option = $enabled)*;
                         gated_attributes {
-                            #(#define_group_blocks)*
+                            #(#group_blocks)*
                         }
                         $($body)*
                     }
-                };
-            }
-
-            #[doc(hidden)]
-            #[macro_export]
-            macro_rules! __dioxus_html_impl_extension_attributes_with_detected_gated_attributes {
-                (
-                    $target_macro:path,
-                    $name:ident { $($attrs:tt)* }
-                    $($rest:tt)*
-                ) => {
-                    $target_macro![
-                        $name { $($attrs)* }
-                        gated_attributes {
-                            #(#group_blocks)*
-                        }
-                        $($rest)*
-                    ];
                 };
             }
         }

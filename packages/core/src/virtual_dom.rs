@@ -454,9 +454,6 @@ impl VirtualDom {
                 return;
             }
 
-            // Make sure we set the runtime since we're running user code
-            let _runtime = RuntimeGuard::new(self.runtime.clone());
-
             // There isn't any more work we can do synchronously. Wait for any new work to be ready
             self.wait_for_event().await;
         }
@@ -472,7 +469,6 @@ impl VirtualDom {
                 // The task may be marked dirty at the same time as the scope that owns the task is dropped.
                 self.mark_task_dirty(Task::from_id(id));
             }
-            SchedulerMsg::EffectQueued => {}
             SchedulerMsg::AllDirty => self.mark_all_dirty(),
         };
     }
@@ -484,7 +480,6 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
-                SchedulerMsg::EffectQueued => {}
                 SchedulerMsg::AllDirty => self.mark_all_dirty(),
             }
         }
@@ -511,18 +506,11 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         while !self.has_dirty_scopes() {
-            let Some(work) = self.pop_work() else {
+            let Some(task) = self.pop_task() else {
                 break;
             };
 
-            match work {
-                Work::PollTask(task) => {
-                    _ = self.runtime.handle_task_wakeup(task);
-                }
-                Work::RerunScope(_) => {
-                    return;
-                }
-            }
+            _ = self.runtime.handle_task_wakeup(task);
 
             self.queue_events();
             if self.has_dirty_scopes() {
@@ -590,7 +578,6 @@ impl VirtualDom {
         // hosts ignore the same mutation stream as every other renderer.
         let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
         self.rebuild_with_writer(&mut router);
-        self.runtime.finish_render();
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without
@@ -613,7 +600,6 @@ impl VirtualDom {
                 self.render_immediate_with_writer(&mut router);
             }
         }
-        self.runtime.finish_render();
     }
 
     fn clear_full_rebuild_state(&mut self) {
@@ -738,27 +724,21 @@ impl VirtualDom {
                 break;
             }
 
-            {
-                // Make sure we set the runtime since we're running user code
-                let _runtime = RuntimeGuard::new(self.runtime.clone());
-                // Next, run any queued tasks
-                // We choose not to poll the deadline since we complete pretty quickly anyways
-                let mut tasks_polled = 0;
-                while let Some(task) = self.pop_task() {
-                    if self.runtime.task_runs_during_suspense(task) {
-                        let _ = self.runtime.handle_task_wakeup(task);
-                        // Running that task may mark a higher mount as dirty. If it does, return early.
-                        self.queue_events();
-                        if self.has_dirty_scopes() {
-                            return;
-                        }
+            // Make sure we set the runtime since we're running user code
+            let _runtime = RuntimeGuard::new(self.runtime.clone());
+            let mut tasks_polled = 0;
+            while let Some(task) = self.pop_task() {
+                if self.runtime.task_runs_during_suspense(task) {
+                    let _ = self.runtime.handle_task_wakeup(task);
+                    self.queue_events();
+                    if self.has_dirty_scopes() {
+                        return;
                     }
-                    tasks_polled += 1;
-                    // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
-                    if tasks_polled > 32 {
-                        yield_now().await;
-                        tasks_polled = 0;
-                    }
+                }
+                tasks_polled += 1;
+                if tasks_polled > 32 {
+                    yield_now().await;
+                    tasks_polled = 0;
                 }
             }
 
