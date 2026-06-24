@@ -52,13 +52,13 @@ impl PackedMountedSlot {
     }
 
     fn from_mounted_element(id: MountedElementId) -> Self {
-        Self::from_non_zero(id.index())
+        Self::from_index(id.index())
     }
 
     fn from_slot(slot: MountedDynamicNodeSlot) -> Self {
         match slot {
             MountedDynamicNodeSlot::Empty => Self::empty(),
-            MountedDynamicNodeSlot::Text(id) => Self::from_non_zero(id.index()),
+            MountedDynamicNodeSlot::Text(id) => Self::from_index(id.index()),
             MountedDynamicNodeSlot::Component(scope) => Self::from_index(scope.index()),
             MountedDynamicNodeSlot::Fragment(start) => Self::from_index(start),
         }
@@ -66,11 +66,6 @@ impl PackedMountedSlot {
 
     fn from_index(index: usize) -> Self {
         Self { value: index + 1 }
-    }
-
-    fn from_non_zero(index: usize) -> Self {
-        debug_assert_ne!(index, 0);
-        Self { value: index }
     }
 
     fn mounted_element(self) -> Option<MountedElementId> {

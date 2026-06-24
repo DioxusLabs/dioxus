@@ -31,6 +31,7 @@ impl Clone for SuspenseBoundaryProps {
 
 #[must_use]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Builder for [`SuspenseBoundaryProps`].
 pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     owner: Owner,
@@ -40,6 +41,7 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
 
 #[must_use]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Component builder for [`SuspenseBoundary`].
 pub struct SuspenseBoundaryComponentBuilder<RenderFn, Marker, TypedBuilderFields> {
     render_fn: RenderFn,
@@ -76,10 +78,12 @@ where
 }
 
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<RenderFn, ComponentMarker, __children>
     SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, ((), __children)>
 {
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn fallback<__Marker>(
         self,
         fallback: impl SuperInto<Callback<SuspenseContext, Element>, __Marker>,
@@ -97,10 +101,12 @@ impl<RenderFn, ComponentMarker, __children>
 }
 
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<RenderFn, ComponentMarker, __fallback>
     SuspenseBoundaryComponentBuilder<RenderFn, ComponentMarker, (__fallback, ())>
 {
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn children(
         self,
         children: Element,
@@ -113,6 +119,7 @@ impl<RenderFn, ComponentMarker, __fallback>
     }
 }
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Helper trait used by the generated suspense boundary props builder.
 pub trait SuspenseBoundaryPropsBuilder_Optional<T> {
     /// Convert the optional builder field into a value.
@@ -129,8 +136,10 @@ impl<T> SuspenseBoundaryPropsBuilder_Optional<T> for (T,) {
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn fallback<__Marker>(
         self,
         fallback: impl SuperInto<Callback<SuspenseContext, Element>, __Marker>,
@@ -147,12 +156,15 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     }
 }
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Error marker for setting the `fallback` field more than once.
 pub enum SuspenseBoundaryPropsBuilder_Error_Repeated_field_fallback {}
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<__children> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)> {
     #[deprecated(note = "Repeated field fallback")]
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn fallback(
         self,
         _: SuspenseBoundaryPropsBuilder_Error_Repeated_field_fallback,
@@ -161,8 +173,10 @@ impl<__children> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Elemen
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, ())> {
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn children(
         self,
         children: Element,
@@ -177,12 +191,15 @@ impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, ())> {
     }
 }
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Error marker for setting the `children` field more than once.
 pub enum SuspenseBoundaryPropsBuilder_Error_Repeated_field_children {}
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
     #[deprecated(note = "Repeated field children")]
     #[allow(clippy::type_complexity)]
+    #[doc(hidden)]
     pub fn children(
         self,
         _: SuspenseBoundaryPropsBuilder_Error_Repeated_field_children,
@@ -191,11 +208,14 @@ impl<__fallback> SuspenseBoundaryPropsBuilder<(__fallback, (Element,))> {
     }
 }
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
+#[doc(hidden)]
 /// Error marker for missing the required `fallback` field.
 pub enum SuspenseBoundaryPropsBuilder_Error_Missing_required_field_fallback {}
 #[allow(dead_code, non_camel_case_types, missing_docs, clippy::panic)]
+#[doc(hidden)]
 impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     #[deprecated(note = "Missing required field fallback")]
+    #[doc(hidden)]
     pub fn build(
         self,
         _: SuspenseBoundaryPropsBuilder_Error_Missing_required_field_fallback,
@@ -204,6 +224,7 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 /// [`SuspenseBoundaryProps`] bundled with the owner that created its callbacks.
 pub struct SuspenseBoundaryPropsWithOwner {
     inner: SuspenseBoundaryProps,
@@ -272,9 +293,11 @@ impl Properties for SuspenseBoundaryPropsWithOwner {
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
     SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)>
 {
+    #[doc(hidden)]
     pub fn build(self) -> SuspenseBoundaryPropsWithOwner {
         let (fallback, children) = self.fields;
         let fallback = fallback.0;
@@ -290,6 +313,7 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
 }
 
 #[allow(dead_code, non_camel_case_types, missing_docs)]
+#[doc(hidden)]
 impl<RenderFn, ComponentMarker, __children: SuspenseBoundaryPropsBuilder_Optional<Element>>
     SuspenseBoundaryComponentBuilder<
         RenderFn,
@@ -297,6 +321,7 @@ impl<RenderFn, ComponentMarker, __children: SuspenseBoundaryPropsBuilder_Optiona
         ((Callback<SuspenseContext, Element>,), __children),
     >
 {
+    #[doc(hidden)]
     pub fn build(
         self,
     ) -> ComponentBuilderOutput<RenderFn, SuspenseBoundaryPropsWithOwner, ComponentMarker> {
@@ -430,7 +455,9 @@ fn store_suspense_children(dom: &mut VirtualDom, scope_id: ScopeId, children: &L
     props.inner.children.clone_from(children);
 }
 #[allow(non_snake_case)]
+#[doc(hidden)]
 mod SuspenseBoundary_completions {
+    #[doc(hidden)]
     #[allow(non_camel_case_types)]
     /// This enum is generated to help autocomplete the braces after the component. It does nothing
     pub enum Component {
@@ -439,6 +466,7 @@ mod SuspenseBoundary_completions {
     }
 }
 #[allow(unused)]
+#[doc(hidden)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 use generational_box::Owner;
 
@@ -617,6 +645,7 @@ impl SuspenseBoundaryProps {
     /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
     ///
     /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.
+    #[doc(hidden)]
     pub fn resolve_suspense<M: WriteMutations>(
         scope_id: ScopeId,
         dom: &mut VirtualDom,
