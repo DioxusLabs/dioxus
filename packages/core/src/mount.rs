@@ -25,12 +25,7 @@ pub(crate) enum RenderMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct PackedMountedSlot {
-    value: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct MountedDynamicNodeSlotSnapshot {
+pub(crate) struct PackedMountedSlot {
     value: usize,
 }
 
@@ -76,16 +71,6 @@ impl PackedMountedSlot {
     fn from_non_zero(index: usize) -> Self {
         debug_assert_ne!(index, 0);
         Self { value: index }
-    }
-
-    fn snapshot(self) -> MountedDynamicNodeSlotSnapshot {
-        MountedDynamicNodeSlotSnapshot { value: self.value }
-    }
-
-    fn from_snapshot(snapshot: MountedDynamicNodeSlotSnapshot) -> Self {
-        Self {
-            value: snapshot.value,
-        }
     }
 
     fn mounted_element(self) -> Option<MountedElementId> {
@@ -298,21 +283,17 @@ impl VirtualDom {
         &self,
         mount: MountId,
         dyn_node_idx: usize,
-    ) -> MountedDynamicNodeSlotSnapshot {
-        self.with_mount(mount, |mount| mount.dynamic_slot(dyn_node_idx).snapshot())
+    ) -> PackedMountedSlot {
+        self.with_mount(mount, |mount| mount.dynamic_slot(dyn_node_idx))
     }
 
     pub(crate) fn restore_mounted_dynamic_node_slot(
         &self,
         mount: MountId,
         dyn_node_idx: usize,
-        value: MountedDynamicNodeSlotSnapshot,
+        value: PackedMountedSlot,
     ) {
-        self.set_packed_mounted_dynamic_node_slot(
-            mount,
-            dyn_node_idx,
-            PackedMountedSlot::from_snapshot(value),
-        );
+        self.set_packed_mounted_dynamic_node_slot(mount, dyn_node_idx, value);
     }
 
     pub(crate) fn set_mounted_dynamic_node_slot(
