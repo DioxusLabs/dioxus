@@ -24,6 +24,7 @@ mod node;
 mod raw_expr;
 mod rsx_block;
 mod rsx_call;
+mod stats;
 mod template_body;
 mod text_node;
 

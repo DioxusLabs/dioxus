@@ -136,13 +136,13 @@ fn lower_raw_tree_runtime(
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct TemplateElementFrame {
+pub struct TemplateElementFrame {
     pub(crate) enter_index: usize,
     namespace: bool,
     pub(crate) path: TemplatePath,
 }
 
-pub(crate) struct TemplateLoweringCursor {
+pub struct TemplateLoweringCursor {
     enter_stack: [TemplateElementFrame; TEMPLATE_PATH_STACK_CAP],
     pub(crate) next_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
     last_static_paths: [TemplatePath; TEMPLATE_PATH_STACK_CAP],
@@ -150,7 +150,7 @@ pub(crate) struct TemplateLoweringCursor {
 }
 
 impl TemplateLoweringCursor {
-    pub(crate) const fn new() -> Self {
+    pub const fn new() -> Self {
         let mut next_paths = [TemplatePath::empty(); TEMPLATE_PATH_STACK_CAP];
         next_paths[0] = TemplatePath::root(0);
         Self {
@@ -165,7 +165,7 @@ impl TemplateLoweringCursor {
         }
     }
 
-    pub(crate) const fn open_element(&mut self, enter_index: usize, namespace: bool) {
+    pub const fn open_element(&mut self, enter_index: usize, namespace: bool) {
         if self.stack_pointer + 1 >= TEMPLATE_PATH_STACK_CAP {
             panic!("template path stack capacity exceeded");
         }
@@ -182,7 +182,7 @@ impl TemplateLoweringCursor {
         self.stack_pointer += 1;
     }
 
-    pub(crate) const fn close_element(&mut self) -> TemplateElementFrame {
+    pub const fn close_element(&mut self) -> TemplateElementFrame {
         if self.stack_pointer == 0 {
             panic!("template close op without matching open op");
         }
@@ -216,7 +216,7 @@ impl TemplateLoweringCursor {
         frame
     }
 
-    pub(crate) const fn next_node_path(&mut self) -> TemplatePath {
+    pub const fn next_node_path(&mut self) -> TemplatePath {
         let path = self.next_paths[self.stack_pointer];
         self.next_paths[self.stack_pointer] = path.next_sibling();
         self.last_static_paths[self.stack_pointer] = path;
@@ -239,31 +239,65 @@ impl TemplateLoweringCursor {
         TemplateSlotPath::last_static_node(last_static_path)
     }
 
-    pub(crate) fn try_next_slot_path_after_dynamic_node(
+    /// Return a structural root static anchor if the next root position needs one.
+    pub fn static_root_anchor(&self) -> Option<(u16, TemplateSlotPath)> {
+        let path = self.next_paths[self.stack_pointer];
+        (self.stack_pointer == 0 && !path.is_empty())
+            .then(|| (ROOT_PARENT_OP_INDEX, TemplateSlotPath::static_node(path)))
+    }
+
+    /// Return the current element's dynamic attribute anchor and whether its path overflowed.
+    pub fn dynamic_attr_anchor(&self) -> (u16, TemplateSlotPath, bool) {
+        let frame = self.current_element_frame();
+        (
+            frame.enter_index as u16,
+            TemplateSlotPath::static_node(frame.path),
+            frame.path.is_empty(),
+        )
+    }
+
+    /// Return the next dynamic node anchor and whether its path overflowed.
+    pub fn dynamic_node_anchor(
         &self,
-        has_following_static_at_parent: bool,
-    ) -> Result<TemplateSlotPath, ()> {
-        if has_following_static_at_parent {
+        following_static_at_parent: bool,
+    ) -> (u16, TemplateSlotPath, bool) {
+        let parent_op_index = self.node_anchor_parent_op_index();
+        if following_static_at_parent {
             let path = self.next_paths[self.stack_pointer];
             if path.is_empty() {
-                return Err(());
+                return (
+                    parent_op_index,
+                    TemplateSlotPath::last_static_node(TemplatePath::empty()),
+                    true,
+                );
             }
-            return Ok(TemplateSlotPath::static_node(path));
+            return (parent_op_index, TemplateSlotPath::static_node(path), false);
         }
 
         if self.stack_pointer > 0 {
             let path = self.current_element_path();
             if path.is_empty() {
-                return Err(());
+                return (
+                    parent_op_index,
+                    TemplateSlotPath::last_static_node(TemplatePath::empty()),
+                    true,
+                );
             }
-            return Ok(TemplateSlotPath::last_static_node(path));
+            return (
+                parent_op_index,
+                TemplateSlotPath::last_static_node(path),
+                false,
+            );
         }
 
-        let last_static_path = self.last_static_paths[self.stack_pointer];
-        Ok(TemplateSlotPath::last_static_node(last_static_path))
+        (
+            parent_op_index,
+            TemplateSlotPath::last_static_node(self.last_static_paths[self.stack_pointer]),
+            false,
+        )
     }
 
-    pub(crate) const fn finish(&self) {
+    pub const fn finish(&self) {
         if self.stack_pointer != 0 {
             panic!("template ended with unclosed elements");
         }

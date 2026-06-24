@@ -1,11 +1,9 @@
 //! Lower parsed RSX bodies into static templates plus dynamic node and attribute values.
 
 use self::location::DynIdx;
+use crate::stats::{TemplateStatsBuilder, TemplateStorageStats};
 use crate::*;
-use dioxus_core_template::{
-    TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MAX_CAP, TemplateStatsBuilder,
-    TemplateStorageStats,
-};
+use dioxus_core_template::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MAX_CAP};
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};

@@ -185,7 +185,7 @@ impl<'de> serde::Deserialize<'de> for TemplatePath {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct TemplateSlotPath(NonZeroU128);
+pub struct TemplateSlotPath(NonZeroU128);
 
 /// The static path an anchor binds to and whether that path is the last static node at its level.
 #[derive(Clone, Copy, PartialEq, Eq)]
