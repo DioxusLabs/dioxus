@@ -338,5 +338,5 @@ fn emit_text_leaf(
 
 /// UTF-16 length, matching `Text.length` / `splitText` offsets in JS.
 pub(super) fn utf16_len(s: &str) -> u32 {
-    s.encode_utf16().count() as u32
+    s.chars().map(|c| c.len_utf16()).sum::<usize>() as u32
 }
