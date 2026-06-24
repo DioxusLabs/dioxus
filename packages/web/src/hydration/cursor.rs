@@ -21,25 +21,24 @@ fn document() -> Document {
     web_sys::window().unwrap().document().unwrap()
 }
 
-/// A saved descent level, restored on ascent. `parent`/`resume` are the parent
-/// and cursor to return to; `wrapper` marks a parser-inserted element the
-/// template doesn't know about (popped transparently when ascending).
-struct Ascent {
-    parent: Node,
-    resume: Node,
+/// An open parent level. `wrapper` marks a parser-inserted element the template
+/// doesn't know about (popped transparently when ascending).
+struct ParentFrame {
+    node: Node,
     wrapper: bool,
 }
 
 pub(super) struct HydrationCursor {
     base: JsValue,
-    /// Current parent: matched children live here and synthesized nodes insert
-    /// here. Always a concrete node - set on construction, updated on each
-    /// descent and ascent.
-    parent: Node,
-    /// Current child position within `parent`. `None` once past the last child.
+    /// Current child position within the innermost open parent. `None` once
+    /// past the last child.
     cursor: Option<Node>,
-    /// Saved descent levels (innermost last), restored by `end_children`.
-    stack: Vec<Ascent>,
+    /// Open parent levels (outermost first); `parents.last()` is the current
+    /// parent, where matched children live and synthesized nodes insert. Never
+    /// empty between construction and drop. The node descended into is the
+    /// cursor position to resume at on ascent, so popping a frame restores the
+    /// cursor to its node.
+    parents: Vec<ParentFrame>,
 }
 
 impl HydrationCursor {
@@ -65,9 +64,11 @@ impl HydrationCursor {
 
         Ok(Some(Self {
             base: base.unchecked_ref::<JsValue>().clone(),
-            parent,
             cursor: Some(first),
-            stack: Vec::new(),
+            parents: vec![ParentFrame {
+                node: parent,
+                wrapper: false,
+            }],
         }))
     }
 
@@ -76,14 +77,22 @@ impl HydrationCursor {
         let cursor = parent.first_child();
         Self {
             base: base.unchecked_ref::<JsValue>().clone(),
-            parent,
             cursor,
-            stack: Vec::new(),
+            parents: vec![ParentFrame {
+                node: parent,
+                wrapper: false,
+            }],
         }
     }
 
     fn base(&self) -> &BaseInterpreter {
         self.base.unchecked_ref()
+    }
+
+    /// The current (innermost) parent: where matched children live and
+    /// synthesized nodes insert.
+    fn parent(&self) -> &Node {
+        &self.parents.last().expect("parents never empty").node
     }
 
     /// Match and bind an element at the current cursor, stepping past
@@ -98,12 +107,10 @@ impl HydrationCursor {
                 break;
             }
             let first = node.first_child();
-            self.stack.push(Ascent {
-                parent: self.parent.clone(),
-                resume: node.clone(),
+            self.parents.push(ParentFrame {
+                node,
                 wrapper: true,
             });
-            self.parent = node;
             self.cursor = first;
         }
 
@@ -132,26 +139,25 @@ impl HydrationCursor {
     pub(super) fn begin_children(&mut self) {
         // Only reached after a successful `map_element`, so the cursor is set.
         let element = self.cursor.clone().expect("begin_children with no cursor");
-        self.stack.push(Ascent {
-            parent: self.parent.clone(),
-            resume: element.clone(),
+        self.cursor = element.first_child();
+        self.parents.push(ParentFrame {
+            node: element,
             wrapper: false,
         });
-        self.cursor = element.first_child();
-        self.parent = element;
     }
 
     /// Return to the parent level, popping any wrapper levels first.
     pub(super) fn end_children(&mut self) {
-        while self.stack.last().is_some_and(|ascent| ascent.wrapper) {
-            self.stack.pop();
+        while self.parents.last().is_some_and(|frame| frame.wrapper) {
+            self.parents.pop();
         }
-        let ascent = self
-            .stack
+        let frame = self
+            .parents
             .pop()
             .expect("end_children without matching begin_children");
-        self.parent = ascent.parent;
-        self.cursor = Some(ascent.resume);
+        // The popped parent is the node we descended into, i.e. the cursor
+        // position to resume at.
+        self.cursor = Some(frame.node);
     }
 
     /// Advance through `n` sibling DOM nodes.
@@ -221,7 +227,7 @@ impl HydrationCursor {
             self.cursor.clone()
         };
         let node: Node = document().create_text_node("").unchecked_into();
-        self.synth_parent()
+        self.parent()
             .insert_before(&node, before.as_ref())
             .map_err(|_| HydrationMismatch)?;
         self.base().set_node(id, &node);
@@ -238,11 +244,6 @@ impl HydrationCursor {
             self.cursor.clone()?
         };
         is_empty_text(&node).then_some(node)
-    }
-
-    /// The parent to insert synthesized nodes into.
-    fn synth_parent(&self) -> &Node {
-        &self.parent
     }
 }
 
