@@ -45,6 +45,44 @@ pub use dioxus_core;
 #[doc(hidden)]
 pub use dioxus_html_internal_macro::define_elements as __define_elements;
 
+/// Define typed custom elements (and their typed attributes) for use in `rsx!`.
+///
+/// Reach for `define_elements!` when your app needs project-specific element
+/// names or attributes that should type-check just like the built-in Dioxus
+/// HTML elements. Each element becomes a typed builder, and each listed
+/// attribute becomes a typed method you can set in `rsx!`.
+///
+/// Element and attribute identifiers are written in Rust (`snake_case` or
+/// `camelCase`). Use `#[element(name = "...")]` / `#[attr(name = "...")]` to
+/// control the rendered HTML name when it differs from the Rust identifier -
+/// for example to emit a hyphenated custom-element tag or a `data-*` attribute.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// use dioxus::prelude::*;
+///
+/// dioxus::html::define_elements! {
+///     // Renders as `<analytics-panel>` even though the Rust name is `analyticsPanel`.
+///     #[element(name = "analytics-panel")]
+///     analyticsPanel {
+///         metric,
+///         // Renders as the `data-region` attribute.
+///         #[attr(name = "data-region")]
+///         region,
+///     }
+/// }
+///
+/// fn app() -> Element {
+///     rsx! {
+///         analyticsPanel {
+///             metric: "conversion-rate",
+///             region: "north-america",
+///             "Revenue dashboard"
+///         }
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! define_elements {
     ($($tokens:tt)*) => {
