@@ -1,17 +1,16 @@
 use std::{cell::Cell, hash::Hash};
 
-/// A simple idx in the code that can be used to track back to the original source location
+/// A template index within one `rsx!` call.
 ///
-/// Used in two places:
-/// - In the `CallBody` to track the location of hotreloadable literals
-/// - In the `Body` to track the ID of each template
+/// Debug hot reload registers templates with `file!()`, `line!()`, and `column!()`, but nested
+/// templates in the same macro expansion can share those values. `DynIdx` gives each `TemplateBody`
+/// in the call a stable discriminator so the hot-reload map can tell those templates apart.
 ///
-/// We need an ID system, unfortunately, to properly disambiguate between different templates since
-/// rustc assigns them all the same line!() and column!() information. Before, we hashed spans but
-/// that has collision issues and is eventually relied on specifics of proc macros that aren't available
-/// in testing (like snapshot testing). So, we just need an ID for each of these items, hence this struct.
+/// The value is assigned after parsing, once `CallBody` can walk the full template tree. That late
+/// assignment is why the index lives behind interior mutability.
 ///
-/// This is "transparent" to partialeq and eq, so it will always return true when compared to another DynIdx.
+/// Equality intentionally ignores the assigned value so parsed/template equality does not depend on
+/// hot-reload metadata.
 #[derive(Clone, Debug, Default)]
 pub struct DynIdx {
     idx: Cell<Option<usize>>,

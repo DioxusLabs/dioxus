@@ -137,7 +137,8 @@ impl DesktopAppContext {
 /// `set_minimized`, `set_resizable`, or `request_redraw` can be called directly on a
 /// [`DesktopContext`](crate::DesktopContext).
 pub struct DesktopWindowContext {
-    pub(crate) webview: WebView,
+    /// The underlying webview handle.
+    pub webview: WebView,
 
     /// The native window handle.
     pub window: Arc<Window>,

@@ -87,29 +87,11 @@ impl CallBody {
         Self::parse(input)
     }
 
-    /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
-    /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
-    /// relative to each template, though we could do that if we wanted to.
+    /// With the entire macro call available, assign a hot-reload template index to every nested
+    /// `TemplateBody`.
     ///
-    /// For now this is just information for ifmts and templates so that when they generate, they can be
-    /// tracked back to the original location in the source code, to support formatted string hotreloading.
-    ///
-    /// Note that there are some more complex cases we could in theory support, but have bigger plans
-    /// to enable just pure rust hotreloading that would make those tricks moot. So, manage more of
-    /// the simple cases until that proper stuff ships.
-    ///
-    /// We need to make sure to wire up:
-    /// - subtemplate IDs
-    /// - ifmt IDs
-    /// - dynamic node IDs
-    /// - dynamic attribute IDs
-    /// - paths for dynamic nodes and attributes
-    ///
-    /// Lots of wiring!
-    ///
-    /// However, here, we only need to wire up template IDs since TemplateBody will handle the rest.
-    ///
-    /// This is better though since we can save the relevant data on the structures themselves.
+    /// The generated debug hot-reload registration uses this index as an extra discriminator
+    /// alongside `file!()`, `line!()`, and `column!()`.
     fn cascade_hotreload_info(&self, nodes: &[BodyNode]) {
         for node in nodes.iter() {
             match node {

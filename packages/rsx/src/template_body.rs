@@ -110,8 +110,8 @@ fn element_storage_stats(element: &Element) -> TemplateStorageStats {
 /// - The children of a for loop
 /// - The children of an if chain
 ///
-/// The TemplateBody when needs to be parsed into a surrounding `Body` to be correctly re-indexed
-/// By default every body has a `0` default index
+/// `CallBody` assigns each `TemplateBody` a hot-reload template index after the whole `rsx!` body
+/// has been parsed.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
@@ -810,7 +810,8 @@ impl TemplateBody {
         // If the nodes are completely empty, insert a placeholder node
         // Core expects at least one node in the template to make it easier to replace
         if self.is_empty() {
-            // Create an empty template body with a placeholder and diagnostics + the template index from the original
+            // Preserve diagnostics and the assigned hot-reload template index when inserting the
+            // placeholder.
             let empty = Self::new(vec![BodyNode::RawExpr(parse_quote! {()})]);
             let default = Self {
                 diagnostics: self.diagnostics.clone(),

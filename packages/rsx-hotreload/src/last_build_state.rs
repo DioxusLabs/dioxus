@@ -87,7 +87,7 @@ pub(crate) struct LastBuildState {
     /// For each dynamic node in [`Self::dynamic_nodes`], the global component literal indexes owned
     /// by that dynamic node when it is a component.
     pub component_literal_indexes_by_dynamic_node: Vec<Option<Vec<usize>>>,
-    /// The root indexes of the last build
+    /// The hot-reload template index for the root template in the last build.
     pub root_index: DynIdx,
     /// The name of the original template
     pub name: String,
