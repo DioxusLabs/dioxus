@@ -43,6 +43,10 @@ impl TemplateAnchor {
         self.slot_path().is_last_static_node()
     }
 
+    pub const fn is_parent_append_target(self) -> bool {
+        self.is_last_static_node() && self.parent_op_index != ROOT_PARENT_OP_INDEX
+    }
+
     pub const fn nodes(self) -> std::ops::Range<usize> {
         self.node_start as usize..self.node_end as usize
     }

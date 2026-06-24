@@ -231,14 +231,12 @@ impl TemplateLoweringCursor {
             return TemplateSlotPath::static_node(self.next_paths[self.stack_pointer]);
         }
 
-        let last_static_path = self.last_static_paths[self.stack_pointer];
-        if !last_static_path.is_empty() {
-            TemplateSlotPath::last_static_node(last_static_path)
-        } else if self.stack_pointer == 0 {
-            TemplateSlotPath::last_static_node(TemplatePath::empty())
-        } else {
-            TemplateSlotPath::last_static_node(self.current_element_path())
+        if self.stack_pointer > 0 {
+            return TemplateSlotPath::last_static_node(self.current_element_path());
         }
+
+        let last_static_path = self.last_static_paths[self.stack_pointer];
+        TemplateSlotPath::last_static_node(last_static_path)
     }
 
     pub(crate) fn try_next_slot_path_after_dynamic_node(
@@ -253,18 +251,16 @@ impl TemplateLoweringCursor {
             return Ok(TemplateSlotPath::static_node(path));
         }
 
-        let last_static_path = self.last_static_paths[self.stack_pointer];
-        if !last_static_path.is_empty() {
-            Ok(TemplateSlotPath::last_static_node(last_static_path))
-        } else if self.stack_pointer == 0 {
-            Ok(TemplateSlotPath::last_static_node(TemplatePath::empty()))
-        } else {
+        if self.stack_pointer > 0 {
             let path = self.current_element_path();
             if path.is_empty() {
                 return Err(());
             }
-            Ok(TemplateSlotPath::last_static_node(path))
+            return Ok(TemplateSlotPath::last_static_node(path));
         }
+
+        let last_static_path = self.last_static_paths[self.stack_pointer];
+        Ok(TemplateSlotPath::last_static_node(last_static_path))
     }
 
     pub(crate) const fn finish(&self) {

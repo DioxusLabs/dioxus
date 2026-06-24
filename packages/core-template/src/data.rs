@@ -368,42 +368,6 @@ impl Template {
         count
     }
 
-    /// Return the static template path for a flat template op.
-    pub fn static_path_for_op(&self, target_op: usize) -> Option<TemplatePath> {
-        let mut cursor = 0;
-        let mut path = TemplatePath::root(0);
-        while cursor < self.ops.len() {
-            if let Some(found) = self.static_path_for_op_inner(cursor, path, target_op) {
-                return Some(found);
-            }
-            cursor = self.next_sibling_op(cursor);
-            path = path.next_sibling();
-        }
-        None
-    }
-
-    fn static_path_for_op_inner(
-        &self,
-        op: usize,
-        path: TemplatePath,
-        target_op: usize,
-    ) -> Option<TemplatePath> {
-        if op == target_op && self.is_static_node_op(op) {
-            return Some(path);
-        }
-
-        let (_, mut child, end) = self.element_attr_child_ops(op)?;
-        let mut child_path = path.next_child();
-        while child < end {
-            if let Some(found) = self.static_path_for_op_inner(child, child_path, target_op) {
-                return Some(found);
-            }
-            child = self.next_sibling_op(child);
-            child_path = child_path.next_sibling();
-        }
-        None
-    }
-
     /// Return a static node by compact template path.
     pub fn static_node_at_path(&self, path: TemplatePath) -> Option<StaticTemplateNode<'_>> {
         if path.is_empty() {
@@ -451,21 +415,6 @@ impl Template {
 
     fn next_sibling_op(&self, op: usize) -> usize {
         Self::next_sibling_op_in(self.ops, op)
-    }
-
-    /// Return true if an op starts an element or static text node.
-    fn is_static_node_op(&self, op: usize) -> bool {
-        Self::is_static_node_op_in(self.ops, op)
-    }
-
-    const fn is_static_node_op_in(ops: &[TemplateOp], op: usize) -> bool {
-        match ops[op].decode() {
-            DecodedTemplateOp::Enter { .. } => true,
-            DecodedTemplateOp::Text => {
-                op + 1 < ops.len() && matches!(ops[op + 1].decode(), DecodedTemplateOp::Static(_))
-            }
-            _ => false,
-        }
     }
 
     const fn next_sibling_op_in(ops: &[TemplateOp], op: usize) -> usize {

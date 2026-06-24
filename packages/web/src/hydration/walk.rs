@@ -95,7 +95,6 @@ impl WebsysDom {
                 let root_id = mounted_static_node(
                     vnode,
                     element.anchor_index(),
-                    element.op(),
                     state.take_pending_before_anchor(),
                     dom,
                 );
@@ -108,7 +107,6 @@ impl WebsysDom {
                 let root_id = mounted_static_node(
                     vnode,
                     text.anchor_index(),
-                    text.op(),
                     state.take_pending_before_anchor(),
                     dom,
                 );
@@ -241,21 +239,12 @@ struct ElementDynamicAttrs {
 fn mounted_static_node<'a>(
     vnode: MountedVNode<'a>,
     root_anchor_idx: Option<usize>,
-    op: usize,
     pending_before_anchor: Option<ElementId>,
     dom: &'a VirtualDom,
 ) -> Option<ElementId> {
     root_anchor_idx
         .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
         .or(pending_before_anchor)
-        .or_else(|| {
-            let path = vnode.vnode().template().static_path_for_op(op)?;
-            vnode
-                .vnode()
-                .dynamic_anchors()
-                .find(|anchor| anchor.static_path() == path)
-                .and_then(|anchor| vnode.mounted_anchor_node(anchor, dom))
-        })
 }
 
 #[derive(Clone, Copy)]

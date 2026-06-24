@@ -20,14 +20,16 @@ pub enum VNodeChild<'a> {
 pub struct StaticElement<'a> {
     vnode: &'a VNode,
     op: usize,
+    path: TemplatePath,
     anchor_idx: Option<usize>,
 }
 
 impl<'a> StaticElement<'a> {
-    fn new(vnode: &'a VNode, op: usize, anchor_idx: Option<usize>) -> Self {
+    fn new(vnode: &'a VNode, op: usize, path: TemplatePath, anchor_idx: Option<usize>) -> Self {
         Self {
             vnode,
             op,
+            path,
             anchor_idx,
         }
     }
@@ -208,7 +210,8 @@ struct RootChildCursor<'a> {
 impl<'a> RootChildCursor<'a> {
     fn next(&mut self) -> Option<VNodeChild<'a>> {
         if let Some((anchor_index, node)) = self.pending_static.take() {
-            return Some(static_child(self.vnode, node, Some(anchor_index)));
+            let path = self.vnode.template().anchors()[anchor_index].static_path();
+            return Some(static_child(self.vnode, node, path, Some(anchor_index)));
         }
 
         while self.anchor_index < self.vnode.template().anchors().len() {
@@ -233,7 +236,8 @@ impl<'a> RootChildCursor<'a> {
             }
 
             if let Some(node) = static_root {
-                return Some(static_child(self.vnode, node, Some(anchor_index)));
+                let path = self.vnode.template().anchors()[anchor_index].static_path();
+                return Some(static_child(self.vnode, node, path, Some(anchor_index)));
             }
         }
 
@@ -300,6 +304,7 @@ impl<'a> PositionedChild<'a> {
 struct StaticChildCursor<'a> {
     vnode: &'a VNode,
     nodes: StaticTemplateNodeIter<'a>,
+    path: TemplatePath,
     slot: usize,
 }
 
@@ -309,18 +314,22 @@ impl<'a> StaticChildCursor<'a> {
         Self {
             vnode,
             nodes: element.template_element().children(),
+            path: element.path.next_child(),
             slot: 0,
         }
     }
 
     fn next(&mut self) -> Option<PositionedChild<'a>> {
         let node = self.nodes.next()?;
+        let path = self.path;
         let current_slot = self.slot;
+        let anchor_idx = self.vnode.static_anchor_index_for_path(path);
+        self.path = self.path.next_sibling();
         self.slot += 1;
         Some(PositionedChild {
             position: current_slot * 2 + 1,
             order: current_slot,
-            child: static_child(self.vnode, node, None),
+            child: static_child(self.vnode, node, path, anchor_idx),
         })
     }
 }
@@ -410,6 +419,13 @@ impl VNode {
 
     pub(super) fn dynamic_anchor(&self, anchor_index: usize) -> DynamicAnchor<'_> {
         DynamicAnchor::new(self, anchor_index)
+    }
+
+    fn static_anchor_index_for_path(&self, path: TemplatePath) -> Option<usize> {
+        self.template()
+            .anchors()
+            .iter()
+            .position(|anchor| anchor.static_path() == path)
     }
 
     pub(super) fn dynamic_node_slots_after<'a>(
@@ -518,19 +534,7 @@ impl<'a> DynamicAnchor<'a> {
     }
 
     pub(crate) fn is_parent_append_target(self) -> bool {
-        if !self.is_last_static_node() {
-            return false;
-        }
-
-        let path = self.static_path();
-        if path.is_empty() {
-            return true;
-        }
-
-        let Some(parent_op) = self.parent_element_op_index() else {
-            return false;
-        };
-        self.vnode.template().static_path_for_op(parent_op) == Some(path)
+        self.template_anchor().is_parent_append_target()
     }
 
     /// Return true when this dynamic anchor is inserted at the vnode root level, with no enclosing
@@ -632,14 +636,15 @@ impl<'a> DynamicAttrSlot<'a> {
 fn static_child<'a>(
     vnode: &'a VNode,
     node: StaticTemplateNode<'_>,
-    root_anchor_idx: Option<usize>,
+    path: TemplatePath,
+    anchor_idx: Option<usize>,
 ) -> VNodeChild<'a> {
     match node {
         StaticTemplateNode::Element(element) => {
-            VNodeChild::Element(StaticElement::new(vnode, element.op(), root_anchor_idx))
+            VNodeChild::Element(StaticElement::new(vnode, element.op(), path, anchor_idx))
         }
         StaticTemplateNode::Text(text) => {
-            VNodeChild::Text(StaticText::new(vnode, text.op(), root_anchor_idx))
+            VNodeChild::Text(StaticText::new(vnode, text.op(), anchor_idx))
         }
     }
 }
@@ -706,5 +711,68 @@ mod tests {
             .expect("nested dynamic anchor");
 
         assert!(anchor.is_parent_append_target());
+    }
+
+    #[test]
+    fn nested_static_child_after_dynamic_keeps_anchor_index() {
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("root", None);
+        builder.dynamic_node(true);
+        builder.open_element("child", None);
+        builder.close_element();
+        builder.close_element();
+
+        let vnode = vnode_from_builder(builder, 1, 0);
+        let root = vnode
+            .children()
+            .find_map(|child| match child {
+                VNodeChild::Element(element) => Some(element),
+                _ => None,
+            })
+            .expect("root element");
+
+        let mut children = root.children();
+        let dynamic_anchor_index = match children.next().expect("dynamic child") {
+            VNodeChild::Dynamic(anchor) => anchor.anchor_index(),
+            _ => panic!("expected dynamic child before static child"),
+        };
+        let static_anchor_index = match children.next().expect("static child") {
+            VNodeChild::Element(element) => element.anchor_index(),
+            _ => panic!("expected static child"),
+        };
+
+        assert_eq!(static_anchor_index, Some(dynamic_anchor_index));
+    }
+
+    #[test]
+    fn nested_trailing_dynamic_targets_parent_append() {
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("root", None);
+        builder.open_element("child", None);
+        builder.close_element();
+        builder.dynamic_node(false);
+        builder.close_element();
+
+        let vnode = vnode_from_builder(builder, 1, 0);
+        let root = vnode
+            .children()
+            .find_map(|child| match child {
+                VNodeChild::Element(element) => Some(element),
+                _ => None,
+            })
+            .expect("root element");
+
+        let mut children = root.children();
+        let static_anchor_index = match children.next().expect("static child") {
+            VNodeChild::Element(element) => element.anchor_index(),
+            _ => panic!("expected static child"),
+        };
+        let dynamic_anchor = match children.next().expect("dynamic child") {
+            VNodeChild::Dynamic(anchor) => anchor,
+            _ => panic!("expected trailing dynamic child"),
+        };
+
+        assert_eq!(static_anchor_index, None);
+        assert!(dynamic_anchor.is_parent_append_target());
     }
 }

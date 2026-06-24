@@ -44,14 +44,14 @@ impl TemplatePath {
     }
 
     /// Return the path for the first child of this path.
-    pub(crate) const fn next_child(self) -> Self {
+    pub const fn next_child(self) -> Self {
         Self {
             path: (self.path << 1) | 1,
         }
     }
 
     /// Return the path for the next sibling of this path.
-    pub(crate) const fn next_sibling(self) -> Self {
+    pub const fn next_sibling(self) -> Self {
         Self {
             path: self.path << 1,
         }
