@@ -28,6 +28,14 @@ pub(crate) struct CloseRequest {
     pub(crate) onclose: Option<EventHandler<()>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WindowCloseState {
+    Open,
+    CloseRequested,
+    DestroyDispatched,
+    NativeDestroyed,
+}
+
 pub(crate) struct ComponentWindowLifecycle {
     target_id: RenderTargetId,
     app_context: Rc<DesktopAppContext>,
@@ -35,9 +43,7 @@ pub(crate) struct ComponentWindowLifecycle {
     providers: Option<WindowProviders>,
     close_registration: Option<ComponentWindowRegistration>,
     onclose: Option<EventHandler<()>>,
-    close_requested: bool,
-    close_dispatched: bool,
-    native_destroyed: bool,
+    close_state: WindowCloseState,
 }
 
 impl ComponentWindowLifecycle {
@@ -53,9 +59,7 @@ impl ComponentWindowLifecycle {
             providers: None,
             close_registration: None,
             onclose: None,
-            close_requested: false,
-            close_dispatched: false,
-            native_destroyed: false,
+            close_state: WindowCloseState::Open,
         }
     }
 
@@ -77,20 +81,21 @@ impl ComponentWindowLifecycle {
     /// Returns the [`CloseRequest`] to honor the first time close is requested, or `None` if the
     /// window is already closing or has been destroyed.
     pub(crate) fn request_close(&mut self) -> Option<CloseRequest> {
-        if self.close_requested || self.native_destroyed {
-            return None;
+        if self.close_state == WindowCloseState::Open {
+            self.close_state = WindowCloseState::CloseRequested;
+            Some(CloseRequest {
+                onclose: self.onclose,
+            })
+        } else {
+            None
         }
-        self.close_requested = true;
-        Some(CloseRequest {
-            onclose: self.onclose,
-        })
     }
 
     pub(crate) fn native_destroyed(&mut self) -> bool {
-        if self.native_destroyed {
+        if self.close_state == WindowCloseState::NativeDestroyed {
             return false;
         }
-        self.native_destroyed = true;
+        self.close_state = WindowCloseState::NativeDestroyed;
         true
     }
 
@@ -99,7 +104,7 @@ impl ComponentWindowLifecycle {
         self.close_registration.take();
 
         if let Some(providers) = self.providers.take()
-            && !self.native_destroyed
+            && self.close_state != WindowCloseState::NativeDestroyed
         {
             providers.context.close();
         } else if self.providers.is_none() {
@@ -111,17 +116,20 @@ impl ComponentWindowLifecycle {
     }
 
     pub(crate) fn prepare_to_render(&mut self) -> ComponentWindowRenderState {
-        if self.close_requested || self.native_destroyed {
-            if self.close_requested
-                && !self.close_dispatched
-                && let Some(providers) = &self.providers
-            {
-                self.close_dispatched = true;
-                _ = providers.context.app.proxy.send_event(
-                    crate::ipc::UserWindowEvent::DestroyWindow(providers.context.id()),
-                );
+        match self.close_state {
+            WindowCloseState::Open => {}
+            WindowCloseState::CloseRequested => {
+                if let Some(providers) = &self.providers {
+                    self.close_state = WindowCloseState::DestroyDispatched;
+                    _ = providers.context.app.proxy.send_event(
+                        crate::ipc::UserWindowEvent::DestroyWindow(providers.context.id()),
+                    );
+                }
+                return ComponentWindowRenderState::Waiting;
             }
-            return ComponentWindowRenderState::Waiting;
+            WindowCloseState::DestroyDispatched | WindowCloseState::NativeDestroyed => {
+                return ComponentWindowRenderState::Waiting;
+            }
         }
 
         match self.providers.clone() {

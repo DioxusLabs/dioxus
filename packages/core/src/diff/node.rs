@@ -438,11 +438,7 @@ impl VNode {
         let write_local_mutations = !suppress_mutations && state.has_writer();
         let created = if write_local_mutations {
             let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
-                insertion_site_at(
-                    MountedVNode::new(self, mount),
-                    state.dom,
-                    context,
-                )
+                insertion_site_at(MountedVNode::new(self, mount), state.dom, context)
             });
             let to = state.to.as_deref_mut().expect("writer checked");
             create_at_site(new, parent, site, state.dom, to)

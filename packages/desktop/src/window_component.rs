@@ -3,11 +3,11 @@ use crate::{
     document::DesktopDocument,
     window_lifecycle::{ComponentWindowLifecycle, ComponentWindowRenderState, WindowProviders},
 };
-use dioxus_core::view::ViewExt;
 use dioxus_core::{
-    Element, EventHandler, Portal, PortalProps, Properties, RenderTargetId, VNode, provide_context,
-    schedule_update, spawn, use_hook, use_hook_with_cleanup,
+    Element, EventHandler, Portal, VNode, provide_context, schedule_update, spawn, use_hook,
+    use_hook_with_cleanup,
 };
+use dioxus_core_macro::rsx;
 use dioxus_history::MemoryHistory;
 use std::{cell::RefCell, rc::Rc};
 
@@ -150,51 +150,16 @@ pub fn Window(props: WindowProps) -> Element {
         ComponentWindowRenderState::Render {
             target_id,
             providers,
-        } => portal_element(
-            target_id,
-            context_provider_element(providers, props.children.clone()),
-        ),
+        } => {
+            provide_context(providers.context);
+            provide_context(providers.document);
+            provide_context(providers.history);
+            rsx! {
+                Portal {
+                    target: target_id,
+                    {props.children}
+                }
+            }
+        }
     }
-}
-
-#[derive(dioxus_core_macro::Props, Clone)]
-struct WindowContextProviderProps {
-    providers: WindowProviders,
-    children: Element,
-}
-
-impl PartialEq for WindowContextProviderProps {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
-#[allow(non_snake_case)]
-fn WindowContextProvider(props: WindowContextProviderProps) -> Element {
-    provide_context(props.providers.context);
-    provide_context(props.providers.document);
-    provide_context(props.providers.history);
-    props.children
-}
-
-fn context_provider_element(providers: WindowProviders, children: Element) -> Element {
-    Element::Ok(
-        <WindowContextProviderProps as Properties>::component_builder(WindowContextProvider)
-            .providers(providers)
-            .children(children)
-            .build()
-            .into_vcomponent()
-            .into_vnode(),
-    )
-}
-
-fn portal_element(target: RenderTargetId, children: Element) -> Element {
-    Element::Ok(
-        <PortalProps as Properties>::component_builder(Portal)
-            .target(target)
-            .children(children)
-            .build()
-            .into_vcomponent()
-            .into_vnode(),
-    )
 }

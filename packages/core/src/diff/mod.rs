@@ -12,10 +12,7 @@
 //! - Every live `MountId` points at exactly one committed `VNode` until that vnode is removed.
 //! - A vnode commit is atomic from the parent fragment's point of view: child mount lists are
 //!   replaced only after the whole fragment diff has chosen placement anchors.
-//! - `None` writers mean "maintain mount/component state without renderer mutations", not "the
-//!   mount graph may be incomplete".
-//! - Internal diff code that needs a fragment's child mounts must use exact accessors; permissive
-//!   mounted-node queries are reserved for public inspection/event lookup paths.
+//! - `None` writers mean "maintain mount/component state without renderer mutations"
 
 use crate::{
     innerlude::{MountId, WriteMutations},

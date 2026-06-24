@@ -40,16 +40,10 @@ fn LaunchedRoot(props: LaunchedRootProps) -> Element {
 fn WindowedRoot(props: DesktopRootProps) -> Element {
     let root = props.root;
     let config = crate::window_component::InitialWindowConfig::from_cell(props.config.clone());
-    let launched_root = Element::Ok(
-        <LaunchedRootProps as Properties>::component_builder(LaunchedRoot)
-            .root(root)
-            .build()
-            .into_vnode(),
-    );
     rsx! {
         crate::Window {
             config,
-            {launched_root}
+            LaunchedRoot { root }
         }
     }
 }

@@ -230,30 +230,29 @@ impl VNode {
         component: &VComponent,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
-        
-        let scope_id = if let Some(scope_id) = state.dom.mounted_dynamic_component_scope(mount, idx)
-        {
-            scope_id
-        } else {
-            // The scope adopts a duplicate of the vnode's driver so the live
-            // scope never aliases props with a vnode (a cached rsx element
-            // hands out the same driver instance every render).
-            let scope_id = state
-                .dom
-                .new_scope(
-                    component.name,
-                    component.driver.clone(),
-                    component.props.duplicate(),
-                )
-                .state()
-                .id;
+        let scope_id = state
+            .dom
+            .mounted_dynamic_component_scope(mount, idx)
+            .unwrap_or_else(|| {
+                // The scope adopts a duplicate of the vnode's driver so the live
+                // scope never aliases props with a vnode (a cached rsx element
+                // hands out the same driver instance every render).
+                let scope_id = state
+                    .dom
+                    .new_scope(
+                        component.name,
+                        component.driver.clone(),
+                        component.props.duplicate(),
+                    )
+                    .state()
+                    .id;
 
-            // Store the scope id for the next render.
-            state
-                .dom
-                .set_mounted_dynamic_component_scope(mount, idx, scope_id);
-            scope_id
-        };
+                // Store the scope id for the next render.
+                state
+                    .dom
+                    .set_mounted_dynamic_component_scope(mount, idx, scope_id);
+                scope_id
+            });
 
         let driver = state.dom.runtime.get_state(scope_id).render_driver();
         let to = state.to.as_deref_mut();
