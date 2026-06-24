@@ -5,16 +5,28 @@ use crate::op::TemplateOp;
 ///
 /// Templates describe the stable parts of a view while runtime values provide
 /// the dynamic nodes and attributes for each render.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Eq)]
 pub struct Template {
     /// Flat static template operations.
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "super::serialization::deserialize_leaky")
+    )]
     ops: &'static [TemplateOp],
 
     /// Static strings referenced by static string operations.
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "super::serialization::deserialize_strings_leaky")
+    )]
     strings: &'static [&'static str],
 
     /// Dynamic node and attribute ranges in document order, each anchored to a static element.
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "super::serialization::deserialize_leaky")
+    )]
     anchors: &'static [TemplateAnchor],
 
     /// Compile-time hash of template content for reliable cross-crate comparison.
@@ -509,34 +521,6 @@ impl Template {
         }
 
         hash
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for Template {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        struct SerializedTemplate {
-            #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
-            ops: &'static [TemplateOp],
-            #[serde(deserialize_with = "super::serialization::deserialize_strings_leaky")]
-            strings: &'static [&'static str],
-            #[serde(deserialize_with = "super::serialization::deserialize_leaky")]
-            anchors: &'static [TemplateAnchor],
-            hash: u64,
-        }
-
-        let serialized = SerializedTemplate::deserialize(deserializer)?;
-        // Trust the serialized hash that the original builder computed.
-        Ok(Self {
-            ops: serialized.ops,
-            strings: serialized.strings,
-            anchors: serialized.anchors,
-            hash: serialized.hash,
-        })
     }
 }
 
