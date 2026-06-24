@@ -96,14 +96,11 @@ pub fn Window(props: WindowProps) -> Element {
                     resolved_context.close();
                     return;
                 }
-                let window_id = resolved_context.window.id();
                 let schedule_update_for_close_handler = schedule_update.clone();
                 let schedule_update_for_destroyed = schedule_update.clone();
                 let state_for_close_handler = state_for_task.clone();
                 let state_for_destroyed_handler = state_for_task.clone();
-                let app_context = resolved_context.app_context().clone();
-                let close_registration = app_context.register_component_window(
-                    window_id,
+                let close_registration = resolved_context.register_component_window(
                     move || {
                         let Some(close) = state_for_close_handler.borrow_mut().request_close()
                         else {

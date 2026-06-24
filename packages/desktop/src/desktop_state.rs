@@ -6,8 +6,7 @@ use crate::{
 use dioxus_core::{RenderTargetId, Runtime};
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
-    rc::{Rc, Weak},
+    rc::Rc,
     sync::Arc,
 };
 use tao::{
@@ -24,7 +23,6 @@ pub struct DesktopAppContext {
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) websocket: EditWebsocket,
     pending_webviews: RefCell<Vec<PendingWebview>>,
-    component_windows: RefCell<HashMap<WindowId, ComponentWindowCallbacks>>,
 }
 
 struct ComponentWindowCallbacks {
@@ -41,20 +39,6 @@ pub(crate) enum WindowCloseRequestResult {
     CloseImmediately,
 }
 
-/// Registration for a component-owned desktop window.
-pub(crate) struct ComponentWindowRegistration {
-    id: WindowId,
-    app: Weak<DesktopAppContext>,
-}
-
-impl Drop for ComponentWindowRegistration {
-    fn drop(&mut self) {
-        if let Some(app) = self.app.upgrade() {
-            app.component_windows.borrow_mut().remove(&self.id);
-        }
-    }
-}
-
 impl DesktopAppContext {
     pub(crate) fn new(
         proxy: EventLoopProxy<UserWindowEvent>,
@@ -67,7 +51,6 @@ impl DesktopAppContext {
             shortcut_manager: ShortcutRegistry::new(),
             websocket: EditWebsocket::start(),
             pending_webviews: RefCell::new(Vec::new()),
-            component_windows: RefCell::new(HashMap::new()),
         }
     }
 
@@ -94,41 +77,6 @@ impl DesktopAppContext {
     pub(crate) fn drain_pending_webviews(&self) -> Vec<PendingWebview> {
         self.pending_webviews.borrow_mut().drain(..).collect()
     }
-
-    pub(crate) fn register_component_window(
-        self: &Rc<Self>,
-        id: WindowId,
-        on_close_requested: impl FnMut() + 'static,
-        on_destroyed: impl FnMut() + 'static,
-    ) -> ComponentWindowRegistration {
-        self.component_windows.borrow_mut().insert(
-            id,
-            ComponentWindowCallbacks {
-                on_close_requested: Box::new(on_close_requested),
-                on_destroyed: Box::new(on_destroyed),
-            },
-        );
-
-        ComponentWindowRegistration {
-            id,
-            app: Rc::downgrade(self),
-        }
-    }
-
-    pub(crate) fn request_window_close(&self, id: WindowId) -> WindowCloseRequestResult {
-        if let Some(callbacks) = self.component_windows.borrow_mut().get_mut(&id) {
-            (callbacks.on_close_requested)();
-            WindowCloseRequestResult::DeferredToComponent
-        } else {
-            WindowCloseRequestResult::CloseImmediately
-        }
-    }
-
-    pub(crate) fn notify_window_destroyed(&self, id: WindowId) {
-        if let Some(callbacks) = self.component_windows.borrow_mut().get_mut(&id) {
-            (callbacks.on_destroyed)();
-        }
-    }
 }
 
 /// Native-window state exposed through [`DesktopContext`](crate::DesktopContext).
@@ -147,6 +95,7 @@ pub struct DesktopWindowContext {
     pub(crate) file_hover: NativeFileHover,
     pub(crate) query: QueryEngine,
     pub(crate) close_behaviour: Cell<crate::WindowCloseBehaviour>,
+    component_window_callbacks: RefCell<Option<ComponentWindowCallbacks>>,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: RefCell<Vec<objc2::rc::Retained<objc2_ui_kit::UIView>>>,
@@ -169,6 +118,7 @@ impl DesktopWindowContext {
             file_hover,
             query: QueryEngine::default(),
             close_behaviour: Cell::new(close_behaviour),
+            component_window_callbacks: RefCell::new(None),
             #[cfg(target_os = "ios")]
             views: RefCell::new(Vec::new()),
         }
@@ -182,6 +132,38 @@ impl DesktopWindowContext {
     /// Set the native window title.
     pub fn set_title(&self, title: &str) {
         self.window.set_title(title);
+    }
+
+    pub(crate) fn register_component_window_callbacks(
+        &self,
+        on_close_requested: impl FnMut() + 'static,
+        on_destroyed: impl FnMut() + 'static,
+    ) {
+        self.component_window_callbacks
+            .borrow_mut()
+            .replace(ComponentWindowCallbacks {
+                on_close_requested: Box::new(on_close_requested),
+                on_destroyed: Box::new(on_destroyed),
+            });
+    }
+
+    pub(crate) fn clear_component_window_callbacks(&self) {
+        self.component_window_callbacks.borrow_mut().take();
+    }
+
+    pub(crate) fn request_window_close(&self) -> WindowCloseRequestResult {
+        if let Some(callbacks) = self.component_window_callbacks.borrow_mut().as_mut() {
+            (callbacks.on_close_requested)();
+            WindowCloseRequestResult::DeferredToComponent
+        } else {
+            WindowCloseRequestResult::CloseImmediately
+        }
+    }
+
+    pub(crate) fn notify_window_destroyed(&self) {
+        if let Some(callbacks) = self.component_window_callbacks.borrow_mut().as_mut() {
+            (callbacks.on_destroyed)();
+        }
     }
 }
 

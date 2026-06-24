@@ -1,7 +1,7 @@
 use crate::{
     AssetRequest, WindowCloseBehaviour, WindowConfig, WryEventHandler,
     assets::AssetHandlerRegistry,
-    desktop_state::{DesktopAppContext, DesktopWindowContext},
+    desktop_state::{DesktopAppContext, DesktopWindowContext, WindowCloseRequestResult},
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
@@ -55,6 +55,19 @@ pub type DesktopContext = Rc<DesktopService>;
 /// The problem without this is that the tao window is never dropped and therefore cannot be closed.
 /// This was due to the Rc that had still references because of multiple copies when creating a webview.
 pub type WeakDesktopContext = Weak<DesktopService>;
+
+/// Registration for a component-owned desktop window.
+pub(crate) struct ComponentWindowRegistration {
+    window: WeakDesktopContext,
+}
+
+impl Drop for ComponentWindowRegistration {
+    fn drop(&mut self) {
+        if let Some(window) = self.window.upgrade() {
+            window.window_context.clear_component_window_callbacks();
+        }
+    }
+}
 
 /// Shared cancellation state for a queued desktop window.
 #[derive(Clone, Default)]
@@ -125,6 +138,27 @@ impl DesktopService {
 
     pub(crate) fn app_context(&self) -> &Rc<DesktopAppContext> {
         &self.app
+    }
+
+    pub(crate) fn register_component_window(
+        self: &Rc<Self>,
+        on_close_requested: impl FnMut() + 'static,
+        on_destroyed: impl FnMut() + 'static,
+    ) -> ComponentWindowRegistration {
+        self.window_context
+            .register_component_window_callbacks(on_close_requested, on_destroyed);
+
+        ComponentWindowRegistration {
+            window: Rc::downgrade(self),
+        }
+    }
+
+    pub(crate) fn request_window_close(&self) -> WindowCloseRequestResult {
+        self.window_context.request_window_close()
+    }
+
+    pub(crate) fn notify_window_destroyed(&self) {
+        self.window_context.notify_window_destroyed();
     }
 
     /// Start the creation of a new window using the props and window builder

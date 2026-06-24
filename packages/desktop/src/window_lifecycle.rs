@@ -1,7 +1,7 @@
 use crate::{
     DesktopContext,
-    desktop_context::PendingWindowCancellation,
-    desktop_state::{ComponentWindowRegistration, DesktopAppContext},
+    desktop_context::{ComponentWindowRegistration, PendingWindowCancellation},
+    desktop_state::DesktopAppContext,
 };
 use dioxus_core::{EventHandler, RenderTargetId};
 use dioxus_document::Document;

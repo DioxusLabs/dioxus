@@ -191,7 +191,7 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                match self.app_context.request_window_close(id) {
+                match window.desktop_context.request_window_close() {
                     WindowCloseRequestResult::DeferredToComponent => {}
                     WindowCloseRequestResult::CloseImmediately => self.destroy_window(id),
                 }
@@ -200,7 +200,6 @@ impl App {
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
-        self.app_context.notify_window_destroyed(id);
         self.destroy_window(id);
     }
 
@@ -210,6 +209,7 @@ impl App {
         let Some(app_webview) = self.webviews.remove(&id) else {
             return;
         };
+        app_webview.desktop_context.notify_window_destroyed();
         let target_id = app_webview.target_id();
         // A component-owned `Window` reclaims its own target when its portal is
         // torn down, so this is usually a no-op. When the OS destroys a window
