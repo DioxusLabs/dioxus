@@ -69,7 +69,7 @@ impl PackedMountedSlot {
     }
 
     fn mounted_element(self) -> Option<MountedElementId> {
-        (self.value != 0).then(|| MountedElementId::from_index(self.value))
+        self.value.checked_sub(1).map(MountedElementId::from_index)
     }
 
     fn text(self) -> Option<MountedElementId> {

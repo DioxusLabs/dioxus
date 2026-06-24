@@ -185,7 +185,7 @@ pub struct ComponentBuilder<RenderFn, Builder, Props, Marker> {
 
 impl<RenderFn, Builder, Props, Marker> ComponentBuilder<RenderFn, Builder, Props, Marker> {
     /// Create a component-aware props builder.
-    pub fn new(render_fn: RenderFn, builder: Builder) -> Self {
+    pub(crate) fn new(render_fn: RenderFn, builder: Builder) -> Self {
         Self {
             render_fn,
             builder,
@@ -194,25 +194,19 @@ impl<RenderFn, Builder, Props, Marker> ComponentBuilder<RenderFn, Builder, Props
     }
 
     /// Convert the inner builder while preserving the component function.
-    pub fn map_builder<NewBuilder>(
+    pub(crate) fn map_builder<NewBuilder>(
         self,
         map: impl FnOnce(Builder) -> NewBuilder,
     ) -> ComponentBuilder<RenderFn, NewBuilder, Props, Marker> {
         ComponentBuilder::new(self.render_fn, map(self.builder))
-    }
-
-    /// Split this builder into its component function and inner props builder.
-    pub fn into_parts(self) -> (RenderFn, Builder) {
-        (self.render_fn, self.builder)
     }
 }
 
 impl<RenderFn, Marker> ComponentBuilder<RenderFn, EmptyBuilder, (), Marker> {
     /// Build an empty-props component.
     pub fn build(self) -> ComponentBuilderOutput<RenderFn, (), Marker> {
-        let (render_fn, builder) = self.into_parts();
-        builder.build();
-        ComponentBuilderOutput::new(render_fn, ())
+        self.builder.build();
+        ComponentBuilderOutput::new(self.render_fn, ())
     }
 }
 
