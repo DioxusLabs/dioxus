@@ -48,8 +48,8 @@ impl FragmentPlacementPlan {
         let mut run_start = None;
         let mut run_has_placed_child = false;
 
-        for index in 0..self.stable.len() {
-            if live_stable[index] {
+        for (index, (&live, &stable)) in live_stable.iter().zip(&self.stable).enumerate() {
+            if live {
                 if let Some(start) = run_start.take()
                     && run_has_placed_child
                 {
@@ -59,7 +59,7 @@ impl FragmentPlacementPlan {
                 continue;
             }
 
-            if !self.stable[index] {
+            if !stable {
                 run_start.get_or_insert(index);
                 run_has_placed_child = true;
             }

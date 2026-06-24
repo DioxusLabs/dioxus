@@ -2,7 +2,22 @@ use std::{cell::Cell, collections::BTreeMap};
 
 use dioxus::prelude::*;
 use dioxus_core::{Portal, RenderTargetId, VirtualDom};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+
+/// All text content in a render target's snapshot, in document order.
+fn all_text(nodes: &[SnapshotNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(nodes: &[SnapshotNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                SnapshotNode::Text(text) => out.push(text.clone()),
+                SnapshotNode::Element { children, .. } => walk(children, out),
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
 
 /// Regression guard for the portal retarget arm. When a `Portal`'s `target`
 /// changes, the retarget path removes the old mount and creates a fresh one;
@@ -67,6 +82,24 @@ fn portal_retarget_keeps_clean_stacks_with_shared_sibling() {
     dom.render_immediate(&mut writer);
     assert!(writer.get(&RenderTargetId::ROOT).unwrap().is_stack_clean());
     assert!(writer.get(&inner).unwrap().is_stack_clean());
+
+    // Stack balance alone does not prove the body went to the *right* target.
+    // After the retarget the body must live in `inner`, the outer sibling must
+    // still render in ROOT, and no copy of the body may remain in ROOT.
+    let root_text = all_text(&writer.get(&RenderTargetId::ROOT).unwrap().snapshot());
+    let inner_text = all_text(&writer.get(&inner).unwrap().snapshot());
+    assert!(
+        inner_text.iter().any(|t| t == "portal-body"),
+        "portal body should render into the inner target, inner text={inner_text:?}",
+    );
+    assert!(
+        !root_text.iter().any(|t| t == "portal-body"),
+        "portal body must not remain in ROOT after retarget, root text={root_text:?}",
+    );
+    assert!(
+        root_text.iter().any(|t| t == "sibling-1"),
+        "outer sibling should render in ROOT, root text={root_text:?}",
+    );
 
     // Recreate the sibling again *after* the retarget so its placement scan
     // reads the portal scope's (post-retarget) mount.

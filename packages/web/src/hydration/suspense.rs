@@ -68,8 +68,9 @@ impl SuspenseHydrationIds {
 
     /// Get the scope id of the suspense boundary from the id in the dom
     pub(super) fn get_suspense_boundary(&self, path: &[u32]) -> Option<ScopeId> {
-        let root = self.children.get(path[0] as usize)?;
-        root.traverse(&path[1..]).map(|node| node.scope_id)
+        let (first, rest) = path.split_first()?;
+        let root = self.children.get(*first as usize)?;
+        root.traverse(rest).map(|node| node.scope_id)
     }
 }
 

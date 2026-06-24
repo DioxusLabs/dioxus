@@ -600,67 +600,6 @@ fn nested_suspense_resolves_client() {
         }
     }
 
-    fn expected_root_message_loading_children() -> Element {
-        rsx! {
-            h2 {
-                id: "title-0",
-                "The robot says hello world"
-            }
-            p {
-                id: "body-0",
-                "The robot becomes sentient and says hello world"
-            }
-            div {
-                id: "children-0",
-                padding: "10px",
-                "Loading 1..."
-                "Loading 2..."
-            }
-        }
-    }
-
-    fn expected_nested_messages_loading_grandchild() -> Element {
-        rsx! {
-            h2 {
-                id: "title-0",
-                "The robot says hello world"
-            }
-            p {
-                id: "body-0",
-                "The robot becomes sentient and says hello world"
-            }
-            div {
-                id: "children-0",
-                padding: "10px",
-                h2 {
-                    id: "title-1",
-                    "The world says hello back"
-                }
-                p {
-                    id: "body-1",
-                    "In a stunning turn of events, the world collectively unites and says hello back"
-                }
-                div {
-                    id: "children-1",
-                    padding: "10px",
-                }
-                h2 {
-                    id: "title-2",
-                    "Goodbye Robot"
-                }
-                p {
-                    id: "body-2",
-                    "The robot says goodbye"
-                }
-                div {
-                    id: "children-2",
-                    padding: "10px",
-                    "Loading 3..."
-                }
-            }
-        }
-    }
-
     fn expected_resolved_tree() -> Element {
         rsx! {
             h2 {
@@ -722,14 +661,6 @@ fn nested_suspense_resolves_client() {
             let mut oracle = RendererOracle::new();
             oracle.rebuild(&mut dom);
             oracle.assert_matches(expected_loading_root);
-
-            dom.wait_for_work().await;
-            oracle.render(&mut dom);
-            oracle.assert_matches(expected_root_message_loading_children);
-
-            dom.wait_for_work().await;
-            oracle.render(&mut dom);
-            oracle.assert_matches(expected_nested_messages_loading_grandchild);
 
             dom.wait_for_work().await;
             oracle.render(&mut dom);

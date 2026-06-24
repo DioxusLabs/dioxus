@@ -11,6 +11,7 @@ mod assets;
 mod config;
 mod default_icon;
 mod desktop_context;
+mod desktop_state;
 mod document;
 mod edits;
 mod element;
@@ -27,6 +28,7 @@ mod shortcut;
 mod waker;
 mod webview;
 mod window_component;
+mod window_lifecycle;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]

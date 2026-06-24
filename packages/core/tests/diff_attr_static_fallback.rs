@@ -4,7 +4,24 @@
 
 use dioxus::prelude::*;
 use dioxus_core::{Attribute, ScopeId, generation};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+
+/// Find the value of `attr` on the first `tag` element anywhere in the snapshot.
+fn attr_value(nodes: &[SnapshotNode], tag: &str, attr: &str) -> Option<String> {
+    for node in nodes {
+        if let SnapshotNode::Element { tag: node_tag, attrs, children, .. } = node {
+            if node_tag == tag {
+                if let Some(found) = attrs.iter().find(|a| a.name == attr) {
+                    return Some(found.value.clone());
+                }
+            }
+            if let Some(found) = attr_value(children, tag, attr) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn static_attribute_resurfaces_when_dynamic_disappears() {
@@ -42,6 +59,14 @@ fn static_attribute_resurfaces_when_dynamic_disappears() {
         summary.set_attrs >= 1,
         "expected static template attribute to be restored, got summary={summary:?}",
     );
+    // ...and it must restore the *static* value, not leave the stale dynamic
+    // value or an empty attribute behind.
+    assert_eq!(
+        attr_value(&oracle.snapshot(), "div", "class").as_deref(),
+        Some("from-template"),
+        "static `class` value should be restored, snapshot={:#?}",
+        oracle.snapshot(),
+    );
 }
 
 #[test]
@@ -78,5 +103,11 @@ fn nested_static_attribute_resurfaces_when_dynamic_disappears() {
     assert!(
         summary.set_attrs >= 1,
         "expected deep static attribute to be restored, got summary={summary:?}",
+    );
+    assert_eq!(
+        attr_value(&oracle.snapshot(), "span", "id").as_deref(),
+        Some("deep-static"),
+        "static `id` value should be restored on the nested span, snapshot={:#?}",
+        oracle.snapshot(),
     );
 }

@@ -18,10 +18,15 @@ impl TemplatePath {
     }
 
     /// Return the path for a root position.
+    ///
+    /// Root indices are bounded well below 128 by the rsx splitter's path-bit
+    /// limit, so an out-of-range index indicates a bug rather than a value to
+    /// silently collapse to the empty path.
     pub(crate) const fn root(index: usize) -> Self {
-        if index >= u128::BITS as usize {
-            return Self::empty();
-        }
+        debug_assert!(
+            index < u128::BITS as usize,
+            "template root index exceeds path bit width"
+        );
 
         Self {
             path: 1u128 << index,
@@ -241,7 +246,6 @@ mod tests {
         assert_eq!(TemplatePath::root(1).bits(), 0b10);
         assert_eq!(TemplatePath::root(3).bits(), 0b1000);
         assert_eq!(TemplatePath::root(127).bits(), 1u128 << 127);
-        assert_eq!(TemplatePath::root(128).bits(), 0);
     }
 
     #[test]

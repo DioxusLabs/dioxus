@@ -661,32 +661,11 @@ impl VirtualDom {
     }
 
     fn render_immediate_with_writer(&mut self, to: &mut dyn WriteMutations) {
-        // Tasks notified before this render are polled as part of it; tasks
-        // first spawned *by* this render wait for the next scheduler pass.
-        // Without the cutoff, a task that wakes itself on every poll would
-        // extend the frame indefinitely.
-        let initial_tasks: rustc_hash::FxHashSet<Task> = self
-            .runtime
-            .dirty_tasks
-            .borrow()
-            .iter()
-            .flat_map(|dirty| {
-                dirty
-                    .tasks_queued
-                    .borrow()
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        let mut deferred_tasks = Vec::new();
-
         while let Some(work) = self.pop_work() {
             match work {
-                Work::PollTask(task) if initial_tasks.contains(&task) => {
+                Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
                 }
-                Work::PollTask(task) => deferred_tasks.push(task),
                 Work::RerunScope(scope) => {
                     self.runtime.clone().while_rendering(|| {
                         self.run_and_diff_scope(Some(to as &mut dyn WriteMutations), scope.id);
@@ -700,10 +679,6 @@ impl VirtualDom {
             // land in `dirty_scopes` for `pop_work` to see them, or the
             // render would stop before the DOM converged.
             self.queue_events();
-        }
-
-        for task in deferred_tasks {
-            self.mark_task_dirty(task);
         }
     }
 

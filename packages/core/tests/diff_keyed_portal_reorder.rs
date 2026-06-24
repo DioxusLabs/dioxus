@@ -2,7 +2,22 @@ use std::{cell::Cell, collections::BTreeMap};
 
 use dioxus::prelude::*;
 use dioxus_core::{Portal, RenderTargetId, VirtualDom};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+
+/// All text content in a render target's snapshot, in document order.
+fn all_text(nodes: &[SnapshotNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(nodes: &[SnapshotNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                SnapshotNode::Text(text) => out.push(text.clone()),
+                SnapshotNode::Element { children, .. } => walk(children, out),
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
 
 /// Reordering a keyed list whose entries are `Portal`s exercises the
 /// cross-render-target paths in `push_all_root_nodes`: the keyed-middle
@@ -72,6 +87,23 @@ fn keyed_portal_list_reorder_does_not_push_into_wrong_target() {
     ORDER.with(|o| o.set(1));
     dom.mark_dirty(dioxus_core::ScopeId::APP);
     dom.render_immediate(&mut writer);
+
+    // All five reordered bodies must end up in the inner target, and none may
+    // leak into ROOT (which holds only the placeholders). Stack balance alone
+    // would not catch a body pushed into the wrong - but still valid - target.
+    let inner_text = all_text(&writer.get(&inner_target).unwrap().snapshot());
+    for key in ["a", "b", "c", "d", "e"] {
+        let body = format!("portal-{key}");
+        assert!(
+            inner_text.contains(&body),
+            "inner target is missing `{body}`, inner text={inner_text:?}",
+        );
+    }
+    let root_text = all_text(&writer.get(&RenderTargetId::ROOT).unwrap().snapshot());
+    assert!(
+        root_text.iter().all(|t| !t.starts_with("portal-")),
+        "portal bodies must not leak into ROOT, root text={root_text:?}",
+    );
 
     // Stack still clean after the reorder, which is the canary for the
     // cross-target push paths going wrong (an unbalanced push leaves the

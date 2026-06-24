@@ -1,10 +1,11 @@
 use crate::WeakDesktopContext;
 use crate::desktop_context::{PendingDesktopWindow, PendingWindowCancellation};
+use crate::desktop_state::DesktopAppContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
-    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    Config, DesktopContext, DesktopService, assets::AssetHandlerRegistry, edits::WryQueue,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
@@ -210,14 +211,14 @@ impl WebviewInstance {
     /// The render target this webview draws. Stored once in [`WebviewEdits`];
     /// this exposes it as the webview's identity to the app layer.
     pub(crate) fn target_id(&self) -> RenderTargetId {
-        self.edits.target_id
+        self.desktop_context.target_id
     }
 
     pub(crate) fn new(
         mut cfg: Config,
         target_id: RenderTargetId,
         dom: &mut VirtualDom,
-        shared: Rc<SharedContext>,
+        app_context: Rc<DesktopAppContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
@@ -237,7 +238,7 @@ impl WebviewInstance {
             window = window.with_window_icon(crate::default_icon().ok());
         }
 
-        let window = Arc::new(window.build(&shared.target).unwrap());
+        let window = Arc::new(window.build(&app_context.target).unwrap());
         if let Some(on_build) = cfg.on_window.as_mut() {
             on_build(window.clone(), dom);
         }
@@ -266,7 +267,7 @@ impl WebviewInstance {
                 None
             }
         }));
-        let edit_queue = shared.websocket.create_queue();
+        let edit_queue = app_context.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), target_id, edit_queue.clone());
         let file_hover = NativeFileHover::default();
@@ -303,7 +304,7 @@ impl WebviewInstance {
 
         let ipc_handler = {
             let window_id = window.id();
-            to_owned![shared.proxy];
+            to_owned![app_context.proxy];
             move |payload: wry::http::Request<String>| {
                 // defer the event to the main thread
                 let body = payload.into_body();
@@ -315,7 +316,7 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-            let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
+            let (proxy, window_id) = (app_context.proxy.to_owned(), window.id());
             move |evt: DragDropEvent| {
                 if cfg!(not(windows)) {
                     // Update the most recent file drop event - when the event comes in from the webview we can use the
@@ -501,7 +502,8 @@ impl WebviewInstance {
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
-            shared.clone(),
+            app_context.clone(),
+            target_id,
             asset_handlers,
             file_hover,
             cfg.window_close_behavior,
@@ -573,7 +575,7 @@ impl SynchronousEventResponse {
 }
 
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
-/// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+/// block on windows, so the app context queues them until the main event loop is ready.
 pub(crate) struct PendingWebview {
     target_id: RenderTargetId,
     cfg: Config,
@@ -610,9 +612,9 @@ impl PendingWebview {
     pub(crate) fn create_window(
         self,
         dom: &mut VirtualDom,
-        shared: &Rc<SharedContext>,
+        app_context: &Rc<DesktopAppContext>,
     ) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.target_id, dom, shared.clone());
+        let window = WebviewInstance::new(self.cfg, self.target_id, dom, app_context.clone());
 
         _ = self.sender.send(window.desktop_context.clone());
 

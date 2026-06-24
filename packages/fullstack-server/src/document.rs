@@ -10,7 +10,6 @@ use dioxus_document::{
     Document, Eval, LinkProps, MetaProps, NoOpDocument, ScriptProps, StyleProps,
 };
 use dioxus_html::elements::prelude::*;
-use dioxus_html::extensions::*;
 use dioxus_html::*;
 use dioxus_ssr::Renderer;
 use parking_lot::RwLock;

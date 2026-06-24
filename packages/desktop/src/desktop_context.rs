@@ -1,10 +1,9 @@
 use crate::{
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
-    app::SharedContext,
     assets::AssetHandlerRegistry,
+    desktop_state::{DesktopAppContext, DesktopWindowContext},
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
-    query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
 };
@@ -83,30 +82,16 @@ impl PendingWindowCancellation {
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 pub struct DesktopService {
-    /// The wry/tao proxy to the current window
-    pub webview: WebView,
-
-    /// The tao window itself
-    pub window: Arc<Window>,
-
-    pub(crate) shared: Rc<SharedContext>,
-
-    /// The receiver for queries about the current window
-    pub(super) query: QueryEngine,
-    pub(crate) asset_handlers: AssetHandlerRegistry,
-    pub(crate) file_hover: NativeFileHover,
-    pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
-
-    #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<std::cell::RefCell<Vec<Retained<UIView>>>>,
+    pub(crate) app: Rc<DesktopAppContext>,
+    window_context: DesktopWindowContext,
 }
 
-/// A smart pointer to the current window.
+/// A smart pointer to the current window context.
 impl std::ops::Deref for DesktopService {
-    type Target = Window;
+    type Target = DesktopWindowContext;
 
     fn deref(&self) -> &Self::Target {
-        &self.window
+        &self.window_context
     }
 }
 
@@ -114,22 +99,27 @@ impl DesktopService {
     pub(crate) fn new(
         webview: WebView,
         window: Arc<Window>,
-        shared: Rc<SharedContext>,
+        app: Rc<DesktopAppContext>,
+        target_id: RenderTargetId,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
         close_behaviour: WindowCloseBehaviour,
     ) -> Self {
         Self {
-            window,
-            webview,
-            shared,
-            asset_handlers,
-            file_hover,
-            close_behaviour: Rc::new(Cell::new(close_behaviour)),
-            query: Default::default(),
-            #[cfg(target_os = "ios")]
-            views: Default::default(),
+            app,
+            window_context: DesktopWindowContext::new(
+                webview,
+                window,
+                target_id,
+                asset_handlers,
+                file_hover,
+                close_behaviour,
+            ),
         }
+    }
+
+    pub(crate) fn app_context(&self) -> &Rc<DesktopAppContext> {
+        &self.app
     }
 
     /// Start the creation of a new window using the props and window builder
@@ -169,12 +159,11 @@ impl DesktopService {
         let target_id = Runtime::current().create_render_target();
         let (window, context) = PendingWebview::new(target_id, cfg);
 
-        self.shared
+        self.app
             .proxy
             .send_event(UserWindowEvent::NewWindow)
             .unwrap();
-
-        self.shared.pending_webviews.borrow_mut().push(window);
+        self.app.queue_pending_webview(window);
 
         context
     }
@@ -209,17 +198,14 @@ impl DesktopService {
     /// Close this window
     pub fn close(&self) {
         let _ = self
-            .shared
+            .app
             .proxy
             .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
     /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
-        let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(id));
+        let _ = self.app.proxy.send_event(UserWindowEvent::CloseWindow(id));
     }
 
     /// change window to fullscreen
@@ -262,12 +248,12 @@ impl DesktopService {
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
-        self.shared.event_handlers.add(self.window.id(), handler)
+        self.app.event_handlers.add(self.window.id(), handler)
     }
 
     /// Remove a wry event handler created with [`Self::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
-        self.shared.event_handlers.remove(id)
+        self.app.event_handlers.remove(id)
     }
 
     /// Create a global shortcut
@@ -278,19 +264,19 @@ impl DesktopService {
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
-        self.shared
+        self.app
             .shortcut_manager
             .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
     pub fn remove_shortcut(&self, id: ShortcutHandle) {
-        self.shared.shortcut_manager.remove_shortcut(id)
+        self.app.shortcut_manager.remove_shortcut(id)
     }
 
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
-        self.shared.shortcut_manager.remove_all()
+        self.app.shortcut_manager.remove_all()
     }
 
     /// Provide a callback to handle asset loading yourself.

@@ -1,18 +1,16 @@
 use crate::{
-    Config, DesktopContext, app::SharedContext, desktop_context::PendingWindowCancellation,
-    document::DesktopDocument, event_handlers::WindowCloseHandler, window,
+    Config,
+    document::DesktopDocument,
+    window,
+    window_lifecycle::{ComponentWindowLifecycle, ComponentWindowRenderState, WindowProviders},
 };
 use dioxus_core::view::ViewExt;
 use dioxus_core::{
-    Element, EventHandler, Portal, PortalProps, Properties, RenderTargetId, Runtime, VNode,
-    provide_context, schedule_update, spawn, use_hook, use_hook_with_cleanup,
+    Element, EventHandler, Portal, PortalProps, Properties, RenderTargetId, VNode, provide_context,
+    schedule_update, spawn, use_hook, use_hook_with_cleanup,
 };
-use dioxus_document::Document;
-use dioxus_history::{History, MemoryHistory};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use dioxus_history::MemoryHistory;
+use std::{cell::RefCell, rc::Rc};
 
 /// Properties for the [`Window()`] component.
 ///
@@ -44,85 +42,57 @@ impl From<Config> for InitialWindowConfig {
 }
 
 #[derive(Clone)]
-struct WindowProviders {
-    context: DesktopContext,
-    document: Rc<dyn Document>,
-    history: Rc<dyn History>,
+struct WindowState(Rc<RefCell<ComponentWindowState>>);
+
+struct ComponentWindowState {
+    lifecycle: ComponentWindowLifecycle,
+    onclose: Option<EventHandler<()>>,
 }
 
-#[derive(Clone)]
-struct WindowState {
-    target_id: RenderTargetId,
-    shared: Rc<SharedContext>,
-    pending_cancellation: PendingWindowCancellation,
-    providers: Rc<RefCell<Option<WindowProviders>>>,
-    closed: Rc<Cell<bool>>,
-    onclose: Rc<RefCell<Option<EventHandler<()>>>>,
-    close_handler: Rc<RefCell<Option<WindowCloseHandler>>>,
+struct CloseRequest {
+    onclose: Option<EventHandler<()>>,
 }
 
 impl WindowState {
-    fn cancel_pending_webview(&self) -> bool {
-        self.pending_cancellation.cancel();
-
-        let mut pending_webviews = self.shared.pending_webviews.borrow_mut();
-        let Some(index) = pending_webviews.iter().position(|pending| {
-            pending.matches_pending_window(self.target_id, &self.pending_cancellation)
-        }) else {
-            return false;
-        };
-
-        pending_webviews.remove(index);
-        true
+    fn set_onclose(&self, onclose: Option<EventHandler<()>>) {
+        self.0.borrow_mut().onclose = onclose;
     }
 
-    fn remove_close_handler(&self) {
-        let Some(handler) = self.close_handler.borrow_mut().take() else {
-            return;
-        };
-        if let Some(providers) = self.providers.borrow().as_ref() {
-            providers
-                .context
-                .shared
-                .window_close_handlers
-                .remove(handler);
-        }
+    fn resolve_pending(
+        &self,
+        providers: WindowProviders,
+        close_registration: crate::desktop_state::ComponentWindowRegistration,
+    ) {
+        self.0
+            .borrow_mut()
+            .lifecycle
+            .resolve_pending(providers, close_registration);
     }
 
-    /// Close the underlying window after the `Window` component has been
-    /// removed from the tree. At this point the portal feeding `target_id` has
-    /// already been torn down, so the render target can be reclaimed before the
-    /// app drops the native webview and its `WryQueue`.
-    ///
-    /// Runs from the `Window` scope's drop cleanup, after its rendered subtree
-    /// (the portal feeding `target_id`) has already been torn down, so the
-    /// render target is empty and safe to reclaim. `try_current` is `None`
-    /// during full `VirtualDom` teardown, where the whole arena is dropped
-    /// anyway, so the reclaim is simply skipped.
-    fn close_window(&self) {
-        self.remove_close_handler();
-        let pending_removed = self.cancel_pending_webview();
-        let providers = self.providers.borrow_mut().take();
-        let can_reclaim_target = pending_removed || providers.is_some() || self.closed.get();
-
-        if let Some(providers) = providers {
-            providers.context.close();
-        }
-        if can_reclaim_target {
-            let Some(runtime) = Runtime::try_current() else {
-                return;
-            };
-            runtime.remove_render_target(self.target_id);
-        }
+    fn release_canceled_resolved_window(&self, context: crate::DesktopContext) {
+        self.0
+            .borrow_mut()
+            .lifecycle
+            .release_canceled_resolved_window(context);
     }
 
-    fn release_closed_window(&self) {
-        self.remove_close_handler();
-        if let Some(providers) = self.providers.borrow_mut().take() {
-            // Queue native teardown after this render removes the portal. The
-            // app reclaims the render target when it receives this close event.
-            providers.context.close();
-        }
+    fn request_close(&self) -> Option<CloseRequest> {
+        let mut state = self.0.borrow_mut();
+        state.lifecycle.request_close().then_some(CloseRequest {
+            onclose: state.onclose,
+        })
+    }
+
+    fn native_destroyed(&self) -> bool {
+        self.0.borrow_mut().lifecycle.native_destroyed()
+    }
+
+    fn release_from_component_drop(&self) {
+        self.0.borrow_mut().lifecycle.release_from_component_drop();
+    }
+
+    fn prepare_to_render(&self) -> ComponentWindowRenderState {
+        self.0.borrow_mut().lifecycle.prepare_to_render()
     }
 }
 
@@ -156,20 +126,21 @@ pub fn Window(props: WindowProps) -> Element {
     let state = {
         let config = props.config.0.clone();
         use_hook(move || {
-            let providers = Rc::new(RefCell::new(None));
-            let closed = Rc::new(Cell::new(false));
-            let onclose = Rc::new(RefCell::new(None::<EventHandler<()>>));
-            let close_handler = Rc::new(RefCell::new(None));
             let desktop_context = window();
-            let shared = desktop_context.shared.clone();
+            let app_context = desktop_context.app_context().clone();
             let pending =
                 desktop_context.new_window(config.borrow_mut().take().unwrap_or_default());
             let target_id = pending.target_id();
             let pending_cancellation = pending.cancellation();
-            let providers_for_task = providers.clone();
-            let closed_for_task = closed.clone();
-            let onclose_for_task = onclose.clone();
-            let close_handler_for_task = close_handler.clone();
+            let state = WindowState(Rc::new(RefCell::new(ComponentWindowState {
+                lifecycle: ComponentWindowLifecycle::pending(
+                    target_id,
+                    app_context,
+                    pending_cancellation.clone(),
+                ),
+                onclose: None,
+            })));
+            let state_for_task = state.clone();
             let pending_cancellation_for_task = pending_cancellation.clone();
 
             spawn(async move {
@@ -177,50 +148,48 @@ pub fn Window(props: WindowProps) -> Element {
                     return;
                 };
                 if pending_cancellation_for_task.is_canceled() {
-                    resolved_context.close();
-                    if let Some(runtime) = Runtime::try_current() {
-                        runtime.remove_render_target(target_id);
-                    }
+                    state_for_task.release_canceled_resolved_window(resolved_context);
                     return;
                 }
                 let window_id = resolved_context.window.id();
-                let closed_for_close_handler = closed_for_task.clone();
                 let schedule_update_for_close_handler = schedule_update.clone();
-                let close_handler =
-                    resolved_context
-                        .shared
-                        .window_close_handlers
-                        .add(window_id, move || {
-                            let was_closed = closed_for_close_handler.replace(true);
-                            if !was_closed {
-                                if let Some(onclose) = *onclose_for_task.borrow() {
-                                    onclose.call(());
-                                }
-                                schedule_update_for_close_handler();
-                            }
-                        });
+                let schedule_update_for_destroyed = schedule_update.clone();
+                let state_for_close_handler = state_for_task.clone();
+                let state_for_destroyed_handler = state_for_task.clone();
+                let app_context = resolved_context.app_context().clone();
+                let close_registration = app_context.register_component_window(
+                    window_id,
+                    move || {
+                        let Some(close_request) = state_for_close_handler.request_close() else {
+                            return;
+                        };
+                        if let Some(onclose) = close_request.onclose {
+                            onclose.call(());
+                        }
+                        schedule_update_for_close_handler();
+                    },
+                    move || {
+                        if state_for_destroyed_handler.native_destroyed() {
+                            schedule_update_for_destroyed();
+                        }
+                    },
+                );
 
-                close_handler_for_task.borrow_mut().replace(close_handler);
-                providers_for_task.borrow_mut().replace(WindowProviders {
-                    document: Rc::new(DesktopDocument::new(resolved_context.clone())),
-                    history: Rc::new(MemoryHistory::default()),
-                    context: resolved_context,
-                });
+                state_for_task.resolve_pending(
+                    WindowProviders {
+                        document: Rc::new(DesktopDocument::new(resolved_context.clone())),
+                        history: Rc::new(MemoryHistory::default()),
+                        context: resolved_context,
+                    },
+                    close_registration,
+                );
                 schedule_update();
             });
 
-            WindowState {
-                target_id,
-                shared,
-                pending_cancellation,
-                providers,
-                closed,
-                onclose,
-                close_handler,
-            }
+            state
         })
     };
-    state.onclose.replace(props.onclose);
+    state.set_onclose(props.onclose);
 
     use_hook_with_cleanup(
         {
@@ -228,23 +197,20 @@ pub fn Window(props: WindowProps) -> Element {
             move || state
         },
         |state| {
-            state.close_window();
+            state.release_from_component_drop();
         },
     );
 
-    if state.closed.get() {
-        state.release_closed_window();
-        return VNode::empty();
+    match state.prepare_to_render() {
+        ComponentWindowRenderState::Waiting => VNode::empty(),
+        ComponentWindowRenderState::Render {
+            target_id,
+            providers,
+        } => portal_element(
+            target_id,
+            context_provider_element(providers, props.children.clone()),
+        ),
     }
-
-    let Some(providers) = state.providers.borrow().clone() else {
-        return VNode::empty();
-    };
-
-    portal_element(
-        state.target_id,
-        context_provider_element(providers, props.children.clone()),
-    )
 }
 
 #[derive(dioxus_core_macro::Props, Clone)]

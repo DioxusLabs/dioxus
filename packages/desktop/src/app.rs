@@ -1,21 +1,19 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     desktop_context::DesktopContext,
+    desktop_state::{DesktopAppContext, WindowCloseRequestResult},
     document::DesktopDocument,
-    edits::EditWebsocket,
-    event_handlers::{WindowCloseHandlers, WindowEventHandlers},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
-    shortcut::ShortcutRegistry,
     waker::create_dom_waker,
-    webview::{PendingWebview, WebviewInstance},
+    webview::WebviewInstance,
 };
 use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use futures_util::{FutureExt, pin_mut};
 use std::{
-    cell::{Cell, RefCell},
+    cell::Cell,
     collections::{BTreeMap, HashMap},
     rc::Rc,
     task::Waker,
@@ -24,11 +22,11 @@ use std::{
 use tao::{
     dpi::PhysicalSize,
     event::Event,
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::WindowId,
 };
 
-/// The single top-level object that manages all the running windows, assets, shortcuts, etc
+/// The single top-level object that manages the event loop, VirtualDom, and running windows.
 pub(crate) struct App {
     // move the config into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
@@ -47,21 +45,8 @@ pub(crate) struct App {
     pub(crate) tray_icon_show_window_on_click: bool,
     pub(crate) dom_waker: Waker,
 
-    /// This single blob of state is shared between all the windows so they have access to the runtime state
-    ///
-    /// This includes stuff like the event handlers, shortcuts, etc as well as ways to modify *other* windows
-    pub(crate) shared: Rc<SharedContext>,
-}
-
-/// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
-pub(crate) struct SharedContext {
-    pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) window_close_handlers: WindowCloseHandlers,
-    pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
-    pub(crate) shortcut_manager: ShortcutRegistry,
-    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
-    pub(crate) websocket: EditWebsocket,
+    /// App-wide state shared by every desktop window.
+    pub(crate) app_context: Rc<DesktopAppContext>,
 }
 
 impl App {
@@ -88,15 +73,7 @@ impl App {
             tray_icon_show_window_on_click,
             dom_waker,
             cfg: Cell::new(Some(cfg)),
-            shared: Rc::new(SharedContext {
-                event_handlers: WindowEventHandlers::default(),
-                window_close_handlers: Default::default(),
-                pending_webviews: Default::default(),
-                shortcut_manager: ShortcutRegistry::new(),
-                proxy,
-                target: event_loop.clone(),
-                websocket: EditWebsocket::start(),
-            }),
+            app_context: Rc::new(DesktopAppContext::new(proxy, event_loop.clone())),
         };
 
         // Set the event converter
@@ -130,14 +107,14 @@ impl App {
 
     pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
         self.control_flow = ControlFlow::Wait;
-        self.shared
+        self.app_context
             .event_handlers
-            .apply_event(window_event, &self.shared.target);
+            .apply_event(window_event, &self.app_context.target);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn handle_global_hotkey(&self, event: global_hotkey::GlobalHotKeyEvent) {
-        self.shared.shortcut_manager.call_handlers(event);
+        self.app_context.shortcut_manager.call_handlers(event);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -192,15 +169,15 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
+        let proxy = self.app_context.proxy.clone();
         dioxus_devtools::connect(move |msg| {
             _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
         })
     }
 
     pub fn handle_new_window(&mut self) {
-        for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let app_webview = pending_webview.create_window(&mut self.dom, &self.shared);
+        for pending_webview in self.app_context.drain_pending_webviews() {
+            let app_webview = pending_webview.create_window(&mut self.dom, &self.app_context);
             let id = app_webview.desktop_context.window.id();
             self.webviews.insert(id, app_webview);
             self.schedule_poll();
@@ -219,23 +196,23 @@ impl App {
                 window.desktop_context.window.set_visible(false);
             }
 
-            // Component-owned windows mark themselves closed and render out
-            // before native teardown. Root/unowned windows can be dropped here.
+            // Component-owned windows render out before native teardown. Root
+            // and unowned windows can be dropped here.
             WindowCloseBehaviour::WindowCloses => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                if !self.shared.window_close_handlers.notify(id) {
-                    self.close_window(id);
+                match self.app_context.request_window_close(id) {
+                    WindowCloseRequestResult::DeferredToComponent => {}
+                    WindowCloseRequestResult::CloseImmediately => self.close_window(id),
                 }
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
-        if !self.shared.window_close_handlers.notify(id) {
-            self.close_window(id);
-        }
+        self.app_context.notify_window_destroyed(id);
+        self.close_window(id);
     }
 
     /// Tear down one webview after its Dioxus owner has released the target, or
@@ -305,7 +282,7 @@ impl App {
             cfg,
             RenderTargetId::ROOT,
             &mut self.dom,
-            self.shared.clone(),
+            self.app_context.clone(),
         );
         self.provide_root_context(webview.desktop_context.clone());
 
@@ -471,7 +448,7 @@ impl App {
     }
 
     fn schedule_poll(&self) {
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll);
+        _ = self.app_context.proxy.send_event(UserWindowEvent::Poll);
     }
 
     /// Poll the shared VirtualDom until it is pending.
@@ -585,7 +562,7 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_global_hotkey_handler(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the hotkey receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -599,7 +576,7 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_menubar_receiver(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the menu receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -613,7 +590,7 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_tray_icon_receiver(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the menu receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -625,7 +602,7 @@ impl App {
         }));
 
         // for whatever reason they had to make it separate
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
         tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
@@ -750,7 +727,7 @@ impl App {
         #[cfg(unix)]
         {
             // Wire up the trap
-            let target = self.shared.proxy.clone();
+            let target = self.app_context.proxy.clone();
             std::thread::spawn(move || {
                 use signal_hook::consts::{SIGINT, SIGTERM};
                 let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);

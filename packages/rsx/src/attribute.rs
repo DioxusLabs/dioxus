@@ -153,7 +153,6 @@ impl Attribute {
 
         let attributes = {
             let value = &self.value;
-            let name = &self.name;
             let is_not_event = !self.name.is_likely_event();
 
             match &self.value {
@@ -180,13 +179,18 @@ impl Attribute {
                         ])
                     }
                 }
-                AttributeValue::EventTokens(_) | AttributeValue::AttrExpr(_) => {
+                AttributeValue::EventTokens(_)
+                | AttributeValue::AttrExpr(_)
+                | AttributeValue::Shorthand(_) => {
                     let (tokens, span) = match &self.value {
                         AttributeValue::EventTokens(tokens) => {
                             (tokens.to_token_stream(), tokens.span())
                         }
                         AttributeValue::AttrExpr(tokens) => {
                             (tokens.to_token_stream(), tokens.span())
+                        }
+                        AttributeValue::Shorthand(ident) => {
+                            (ident.to_token_stream(), ident.span())
                         }
                         _ => unreachable!(),
                     };
@@ -203,17 +207,8 @@ impl Attribute {
                         AttributeName::Spread(_) => unreachable!("Handled elsewhere in the macro"),
                     }
                 }
-                _ => {
-                    let AttributeName::BuiltIn(name) = name else {
-                        unreachable!("Handled elsewhere in the macro")
-                    };
-                    let value_tokens = quote! { #value };
-                    let method = event_handler_method(name, &value_tokens);
-                    quote_spanned! { value.span() =>
-                        ::std::vec::Vec::<dioxus_core::Attribute>::new()
-                            .#method(#value_tokens)
-                            .into_boxed_slice()
-                    }
+                AttributeValue::IfExpr(_) | AttributeValue::AttrLiteral(_) => {
+                    unreachable!("event attributes must be handlers")
                 }
             }
         };

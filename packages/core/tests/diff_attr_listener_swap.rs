@@ -10,7 +10,22 @@
 
 use dioxus::prelude::*;
 use dioxus_core::{AttributeValue, ScopeId, generation};
-use dioxus_renderer_oracle::RendererOracle;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+
+/// The first element with the given tag in the snapshot.
+fn find_element<'a>(nodes: &'a [SnapshotNode], tag: &str) -> Option<&'a SnapshotNode> {
+    for node in nodes {
+        if let SnapshotNode::Element { tag: node_tag, children, .. } = node {
+            if node_tag == tag {
+                return Some(node);
+            }
+            if let Some(found) = find_element(children, tag) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn value_to_listener_at_same_key_clears_old_value() {
@@ -44,5 +59,22 @@ fn value_to_listener_at_same_key_clears_old_value() {
     assert!(
         summary.set_attrs >= 1,
         "expected at least one set_attribute call, got summary={summary:?}",
+    );
+
+    // The end state is what matters: the button must carry a `click` listener
+    // and must no longer expose the stale `onclick` value attribute.
+    let snapshot = oracle.snapshot();
+    let SnapshotNode::Element { attrs, listeners, .. } =
+        find_element(&snapshot, "button").expect("button should exist")
+    else {
+        unreachable!("find_element only returns elements")
+    };
+    assert!(
+        listeners.iter().any(|name| name == "click"),
+        "expected a `click` listener to be installed, listeners={listeners:?}",
+    );
+    assert!(
+        !attrs.iter().any(|a| a.name == "onclick"),
+        "stale `onclick` value attribute should be cleared, attrs={attrs:?}",
     );
 }

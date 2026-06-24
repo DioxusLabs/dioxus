@@ -246,6 +246,17 @@ fn from_template_element(
             _ => EscapeText::Escape,
         };
 
+        // `pre`, `textarea`, and `listing` are "raw text" elements: when parsing
+        // their content the HTML parser drops a single newline immediately after
+        // the start tag. The serialization spec compensates by emitting an extra
+        // leading newline whenever the content starts with one, so it round-trips.
+        // Without this a leading `\n` is silently lost on standalone SSR and
+        // desyncs the markerless hydration walk (which reconstructs text-node
+        // offsets by length). See dioxus#5548.
+        if raw_text_strips_leading_newline(element) {
+            writeln!(chain)?;
+        }
+
         from_template_children(element, escape_text, chain)?;
         write!(chain, "</{tag}>")?;
     }
@@ -297,6 +308,20 @@ fn emit_dynamic_attrs(element: StaticElement<'_>, chain: &mut StringChain) -> bo
         }
     }
     has_dyn_attrs
+}
+
+/// Whether `element` is a "raw text" element (`pre`, `textarea`, `listing`)
+/// whose first child is static text starting with a newline, so SSR must emit a
+/// compensating leading newline (see the call site and dioxus#5548).
+///
+/// Only static leading text is handled; a dynamic first child whose runtime
+/// value begins with `\n` is not compensated (it would need a render-time check).
+fn raw_text_strips_leading_newline(element: StaticElement<'_>) -> bool {
+    matches!(element.tag(), "pre" | "textarea" | "listing")
+        && matches!(
+            element.children().next(),
+            Some(VNodeChild::Text(text)) if text.text().starts_with('\n')
+        )
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {

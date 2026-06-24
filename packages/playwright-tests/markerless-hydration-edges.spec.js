@@ -317,6 +317,10 @@ test("raw-text elements with a leading newline hydrate and update correctly", as
   // dynamic would leave the original body behind or append to the wrong node.
   await expect(textarea).toHaveValue(/NEW/);
   await expect(textarea).not.toHaveValue(/BODY/);
+  // If the leading `\n` desynced the split, the body binds one char late and a
+  // stray leading "B" survives the update ("BNEW"). The new value is only "NEW"
+  // (optionally with the preserved newline), so it must contain no "B".
+  await expect(textarea).not.toHaveValue(/B/);
 
   const pre = page.locator("#pre-leading-newline");
   await expect(pre).toContainText("CODE");

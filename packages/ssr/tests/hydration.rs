@@ -195,6 +195,44 @@ fn textarea_children_render_without_markers() {
 }
 
 #[test]
+fn raw_text_leading_newline_is_compensated() {
+    // `textarea`/`pre`/`listing` are raw-text elements: the HTML parser drops a
+    // single newline directly after the start tag. When the content starts with
+    // a newline, SSR must emit a compensating extra newline so the leading `\n`
+    // survives parsing - both for standalone SSR and for markerless hydration,
+    // which reconstructs text-node offsets by length. See dioxus#5548.
+    fn textarea_app() -> Element {
+        let value = "BODY";
+        rsx! {
+            textarea { "\n" "{value}" }
+        }
+    }
+    let mut dom = VirtualDom::new(textarea_app);
+    dom.rebuild_in_place();
+    assert_eq!(dioxus_ssr::render(&dom), "<textarea>\n\nBODY</textarea>");
+
+    fn pre_app() -> Element {
+        rsx! {
+            pre { "\n" "code" }
+        }
+    }
+    let mut dom = VirtualDom::new(pre_app);
+    dom.rebuild_in_place();
+    assert_eq!(dioxus_ssr::render(&dom), "<pre>\n\ncode</pre>");
+
+    // A raw-text element whose content does not start with a newline is
+    // unaffected.
+    fn plain_app() -> Element {
+        rsx! {
+            textarea { "hi" }
+        }
+    }
+    let mut dom = VirtualDom::new(plain_app);
+    dom.rebuild_in_place();
+    assert_eq!(dioxus_ssr::render(&dom), "<textarea>hi</textarea>");
+}
+
+#[test]
 fn hello_world_hydrates() {
     use dioxus::hooks::use_signal;
 
