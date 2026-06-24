@@ -223,20 +223,6 @@ impl VirtualDom {
         mount
     }
 
-    pub(crate) fn reuse_mount(
-        &mut self,
-        mount: MountId,
-        render_parent: Option<MountId>,
-        logical_parent: Option<MountId>,
-        target_id: RenderTargetId,
-    ) {
-        self.with_mount_mut(mount, |mount| {
-            mount.render_parent = render_parent;
-            mount.logical_parent = logical_parent;
-            mount.target_id = target_id;
-        });
-    }
-
     pub(crate) fn remove_mount(&mut self, mount: MountId) {
         self.runtime.mounts.borrow_mut().remove(mount.0);
     }

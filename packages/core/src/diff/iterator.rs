@@ -514,12 +514,8 @@ impl DiffState<'_, '_, '_, '_> {
                 let old_mount = old_mounts[old_index];
                 let old_node = &old[old_index];
                 let (nodes, mount) = if old_node.template() != new_node.template() {
-                    let created = new_node.create_with_parents(
-                        self.dom,
-                        parent,
-                        parent,
-                        self.to.as_deref_mut(),
-                    );
+                    let created =
+                        new_node.create_mounted(self.dom, parent, parent, self.to.as_deref_mut());
                     replaced_nodes.push((old_node, old_mount));
                     (created.nodes, created.mount)
                 } else {
@@ -535,7 +531,7 @@ impl DiffState<'_, '_, '_, '_> {
                 (nodes, mount)
             } else {
                 let created =
-                    new_node.create_with_parents(self.dom, parent, parent, self.to.as_deref_mut());
+                    new_node.create_mounted(self.dom, parent, parent, self.to.as_deref_mut());
                 (created.nodes, created.mount)
             };
             new_mounts[new_index] = Some(mount);

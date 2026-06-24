@@ -235,10 +235,9 @@ impl<'a> RootChildCursor<'a> {
                 return Some(VNodeChild::Dynamic(anchor));
             }
 
-            if let Some(node) = static_root {
-                let path = self.vnode.template().anchors()[anchor_index].static_path();
-                return Some(static_child(self.vnode, node, path, Some(anchor_index)));
-            }
+            let node = static_root.expect("zero-node root anchor must own a static node");
+            let path = self.vnode.template().anchors()[anchor_index].static_path();
+            return Some(static_child(self.vnode, node, path, Some(anchor_index)));
         }
 
         None
@@ -571,7 +570,8 @@ impl<'a> DynamicAnchor<'a> {
             .expect("bad attr anchor");
         self.vnode
             .template()
-            .static_element(element_op)?
+            .static_element(element_op)
+            .expect("dynamic attr anchor must reference a static element op")
             .attribute_value(key)
     }
 }
@@ -774,5 +774,59 @@ mod tests {
 
         assert_eq!(static_anchor_index, None);
         assert!(dynamic_anchor.is_parent_append_target());
+    }
+
+    #[test]
+    fn root_static_before_last_static_emits_directly() {
+        // A root region beginning with a static element that is not the last
+        // static sibling produces a zero-node `push_static_anchor`.
+        // `RootChildCursor` must emit that static node directly through the
+        // `nodes().len() == 0` + `static_root` branch, rather than as a dynamic
+        // anchor's stashed `pending_static` sibling.
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("first", None);
+        builder.close_element();
+        builder.open_element("second", None);
+        builder.close_element();
+        builder.dynamic_node(false);
+
+        let vnode = vnode_from_builder(builder, 1, 0);
+
+        let children: Vec<_> = vnode.children().collect();
+        assert!(
+            matches!(children.first(), Some(VNodeChild::Element(_))),
+            "leading static element must be emitted as the first root child",
+        );
+    }
+
+    #[test]
+    fn root_child_count_matches_emitted_children() {
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("only", None);
+        builder.close_element();
+        builder.dynamic_node(false);
+
+        let vnode = vnode_from_builder(builder, 1, 0);
+
+        assert_eq!(vnode.root_child_count(), vnode.children().count());
+    }
+
+    #[test]
+    fn dynamic_attr_slot_exposes_anchor_and_index() {
+        let mut builder = RuntimeTemplateBuilder::default();
+        builder.open_element("el", None);
+        builder.dynamic_attr();
+        builder.close_element();
+
+        let vnode = vnode_from_builder(builder, 0, 1);
+
+        let anchor = vnode
+            .dynamic_anchors()
+            .find(|anchor| anchor.attrs().len() > 0)
+            .expect("anchor with a dynamic attribute slot");
+        let slot = anchor.attrs().next().expect("dynamic attr slot");
+
+        assert_eq!(slot.index(), 0);
+        assert_eq!(slot.anchor().anchor_index(), anchor.anchor_index());
     }
 }

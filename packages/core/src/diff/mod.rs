@@ -52,7 +52,7 @@ impl VirtualDom {
         let mut created = 0;
         for (idx, child) in nodes.iter().enumerate() {
             let child =
-                child.create_with_parents(self, render_parent, logical_parent, to.as_deref_mut());
+                child.create_mounted(self, render_parent, logical_parent, to.as_deref_mut());
             created += child.nodes;
             created_mount(self, idx, child.mount);
         }

@@ -25,7 +25,7 @@ use super::{
 };
 
 #[derive(Clone, Copy)]
-pub(super) enum ElementEdge {
+pub(crate) enum ElementEdge {
     First,
     Last,
 }
@@ -117,7 +117,7 @@ impl InsertionSite {
 /// Find an insertion site at the given edge of `vnode`'s live DOM: before its
 /// first element, or after its last. If the vnode has no live DOM, walk mounted
 /// parent slots until a live insertion point is found.
-pub(super) fn insertion_site_at(
+pub(crate) fn insertion_site_at(
     edge: ElementEdge,
     vnode: MountedVNode<'_>,
     dom: &VirtualDom,
@@ -405,7 +405,7 @@ pub(super) fn create_at_site_with_mounts(
     })
 }
 
-pub(super) fn create_at_site(
+pub(crate) fn create_at_site(
     content: &VNode,
     parent: Option<MountId>,
     site: InsertionSite,
@@ -413,7 +413,7 @@ pub(super) fn create_at_site(
     to: &mut dyn WriteMutations,
 ) -> CreatedVNode {
     at_site_with_result(site, to, dom.runtime.clone(), |to| {
-        let created = content.create_with_parents(dom, parent, parent, Some(to));
+        let created = content.create_mounted(dom, parent, parent, Some(to));
         (created.nodes, created)
     })
 }
@@ -427,7 +427,7 @@ pub(super) fn at_site(
     site.create_and_place(to, runtime, create)
 }
 
-fn at_site_with_result<R>(
+pub(super) fn at_site_with_result<R>(
     site: InsertionSite,
     to: &mut dyn WriteMutations,
     runtime: Rc<Runtime>,

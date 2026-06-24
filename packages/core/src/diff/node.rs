@@ -409,51 +409,6 @@ impl VNode {
         }
     }
 
-    /// Replace this node with `new`, reusing an already allocated mount for
-    /// the replacement.
-    pub(crate) fn replace_with_existing_mount(
-        &self,
-        mount: MountId,
-        new: &VNode,
-        new_mount: MountId,
-        parent: Option<MountId>,
-        dom: &mut VirtualDom,
-        to: Option<&mut (dyn WriteMutations + '_)>,
-    ) -> CreatedVNode {
-        let mut state = DiffState::new(dom, to);
-        let nodes = if state.has_writer() {
-            let site = insertion_site_at(
-                ElementEdge::First,
-                MountedVNode::new(self, mount),
-                state.dom,
-                state.context(),
-            );
-            let runtime = state.dom.runtime.clone();
-            let dom = &mut *state.dom;
-            let to = state.to.as_deref_mut().expect("writer checked");
-            at_site(site, to, runtime, |to| {
-                new.recreate_with_mount(dom, new_mount, parent, parent, Some(to))
-                    .nodes
-            })
-        } else {
-            new.recreate_with_mount(
-                state.dom,
-                new_mount,
-                parent,
-                parent,
-                state.to.as_deref_mut(),
-            )
-            .nodes
-        };
-
-        self.remove_node_inner(mount, state.dom, state.to.as_deref_mut(), true);
-
-        CreatedVNode {
-            nodes,
-            mount: new_mount,
-        }
-    }
-
     /// Replace this node with new children, but *don't destroy* the old node's component state
     ///
     /// This is useful for moving a node from the rendered nodes into a suspended node
@@ -502,7 +457,7 @@ impl VNode {
             } else {
                 state.to.as_deref_mut()
             };
-            new.create_with_parents(state.dom, parent, parent, to)
+            new.create_mounted(state.dom, parent, parent, to)
         };
         let to_for_remove = state.to.as_deref_mut().filter(|_| !suppress_mutations);
         self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
@@ -756,7 +711,7 @@ impl VNode {
     ///
     /// Invariant: when `to` is `Some`, the new mount is foreground-renderable and every static
     /// template root receives a mounted root id.
-    pub(crate) fn create_with_parents(
+    pub(crate) fn create_mounted(
         &self,
         dom: &mut VirtualDom,
         render_parent: Option<MountId>,
@@ -768,26 +723,6 @@ impl VNode {
         let mount = state
             .dom
             .create_mount(self, render_parent, logical_parent, target_id);
-        self.finish_create(mount, &mut state)
-    }
-
-    /// Recreate this vnode using an existing mount id.
-    ///
-    /// Invariant: the existing mount belongs to the same logical component/branch being promoted or
-    /// rerendered; `commit_mount` will replace its vnode only after roots/dynamic slots are loaded.
-    pub(crate) fn recreate_with_mount(
-        &self,
-        dom: &mut VirtualDom,
-        mount: MountId,
-        render_parent: Option<MountId>,
-        logical_parent: Option<MountId>,
-        to: Option<&mut (dyn WriteMutations + '_)>,
-    ) -> CreatedVNode {
-        let mut state = DiffState::new(dom, to);
-        let target_id = state.dom.current_render_target_id();
-        state
-            .dom
-            .reuse_mount(mount, render_parent, logical_parent, target_id);
         self.finish_create(mount, &mut state)
     }
 
@@ -877,16 +812,24 @@ impl VNode {
                         })
                 {
                     let mut nodes = 0;
-                    for (child, child_mount) in frag.iter().zip(mounts) {
-                        let created = child.recreate_with_mount(
+                    let children =
+                        state
+                            .dom
+                            .begin_mounted_fragment_children(mount, idx, frag.len());
+                    for (idx, (child, child_mount)) in frag.iter().zip(mounts).enumerate() {
+                        let created = child.create_mounted(
                             state.dom,
-                            child_mount,
                             parent,
                             parent,
                             state.to.as_deref_mut(),
                         );
+                        state
+                            .dom
+                            .set_mounted_fragment_child(children, idx, created.mount);
+                        child.remove_node(child_mount, state.dom, None);
                         nodes += created.nodes;
                     }
+                    state.dom.commit_mounted_fragment_children(children);
                     return nodes;
                 }
 
@@ -1048,8 +991,8 @@ impl VNode {
                 let target_id = dom.current_render_target_id();
                 let id = dom.next_element_in_target(target_id);
                 with_consumed_id(to, root_id.element_id(), |to| {
-                    for depth in 1..path.depth() {
-                        to.child(path.segment(depth) as usize);
+                    for segment in path.segments().skip(1) {
+                        to.child(segment);
                     }
                     to.set_id(id.element_id());
                     to.pop();

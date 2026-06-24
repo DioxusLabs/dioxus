@@ -3,7 +3,9 @@ use std::{any::Any, rc::Rc};
 use crate::{
     DynamicNode,
     diff::context::DiffContext,
-    diff::placement::{StreamPlacement, splice_streamed_nodes},
+    diff::placement::{
+        ElementEdge, StreamPlacement, create_at_site, insertion_site_at, splice_streamed_nodes,
+    },
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
     render_driver::{RenderDriver, remove_rendered_output},
@@ -456,7 +458,9 @@ fn suspense_create(
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         let background = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-            children.create_with_parents(dom, parent, parent, None)
+            children
+                .as_vnode()
+                .create_mounted(dom, parent, parent, None)
         });
 
         store_suspense_children(dom, scope_id, &children);
@@ -473,8 +477,9 @@ fn suspense_create(
                     placeholder_context.set_suspended_branch(branch);
                     let suspense_placeholder =
                         LastRenderedNode::new(fallback.call(placeholder_context));
-                    let nodes_created =
-                        suspense_placeholder.create_with_parents(dom, parent, parent, to);
+                    let nodes_created = suspense_placeholder
+                        .as_vnode()
+                        .create_mounted(dom, parent, parent, to);
                     (suspense_placeholder, nodes_created)
                 });
 
@@ -484,9 +489,9 @@ fn suspense_create(
         } else {
             // Otherwise just render the children in the real dom
             let nodes_created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children
-                    .as_vnode()
-                    .recreate_with_mount(dom, background.mount, parent, parent, to)
+                let created = children.as_vnode().create_mounted(dom, parent, parent, to);
+                children.as_vnode().remove_node(background.mount, dom, None);
+                created
             });
             dom.scopes[scope_id.index()].last_rendered_node =
                 Some(MountedOutput::new(children, nodes_created.mount));
@@ -546,18 +551,14 @@ impl SuspenseBoundaryProps {
             let render_parent = dom.mounted_render_parent(branch_mount);
             let logical_parent = dom.mounted_logical_parent(branch_mount);
             let mut no_op = crate::NoOpMutations;
-            branch_root.recreate_with_mount(
-                dom,
-                branch_mount,
-                render_parent,
-                logical_parent,
-                Some(&mut no_op),
-            );
+            let created =
+                branch_root.create_mounted(dom, render_parent, logical_parent, Some(&mut no_op));
+            branch_root.remove_node(branch_mount, dom, None);
             set_rendered_children(
                 dom,
                 scope_id,
                 LastRenderedNode::Real(branch_root),
-                branch_mount,
+                created.mount,
             );
             true
         }
@@ -658,7 +659,9 @@ impl SuspenseBoundaryProps {
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
             let created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
                 let mut no_op = crate::NoOpMutations;
-                children.create_with_parents(dom, parent, parent, Some(&mut no_op))
+                children
+                    .as_vnode()
+                    .create_mounted(dom, parent, parent, Some(&mut no_op))
             });
 
             set_rendered_children(dom, scope_id, children, created.mount);
@@ -952,20 +955,22 @@ fn replace_placeholder_with(
     placeholder: &MountedOutput,
     children: MountedVNode<'_>,
     dom: &mut VirtualDom,
-    to: Option<&mut (dyn WriteMutations + '_)>,
+    mut to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     // Invariant: `placeholder` is the currently visible fallback and `children` is the already
     // materialized retained branch.
-    let parent = dom.mounted_render_parent(placeholder.root_mount());
-
-    placeholder.as_vnode().replace_with_existing_mount(
-        placeholder.root_mount(),
-        children.vnode(),
-        children.mount(),
-        parent,
-        dom,
-        to,
-    );
+    let placeholder_mount = placeholder.root_mount();
+    let parent = dom.mounted_render_parent(placeholder_mount);
+    if let Some(to) = to.as_deref_mut() {
+        let site = insertion_site_at(ElementEdge::First, placeholder.mounted_vnode(), dom, None);
+        create_at_site(children.vnode(), parent, site, dom, to);
+    } else {
+        children.vnode().create_mounted(dom, parent, parent, None);
+    }
+    children.vnode().remove_node(children.mount(), dom, None);
+    placeholder
+        .as_vnode()
+        .remove_node(placeholder_mount, dom, to);
 }
 
 /// Move to a resolved suspense state

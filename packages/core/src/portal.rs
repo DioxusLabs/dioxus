@@ -226,13 +226,13 @@ fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRen
 /// Place `children` inside `target_id`, record them as the scope's rendered output, and fire mount
 /// lifecycle when writes are enabled.
 ///
-/// `existing_root_mount` is `Some` when the portal should keep its previously committed root
-/// mount, and `None` when it should allocate a fresh root mount.
+/// `old_root_mount` is `Some` when the portal has a previously committed root mount, and `None`
+/// when it should only allocate a fresh root mount.
 fn place_children(
     scope_id: ScopeId,
     target_id: RenderTargetId,
     children: LastRenderedNode,
-    existing_root_mount: Option<MountId>,
+    old_root_mount: Option<MountId>,
     parent: Option<MountId>,
     dom: &mut VirtualDom,
     render_to: Option<&mut (dyn WriteMutations + '_)>,
@@ -245,12 +245,11 @@ fn place_children(
     let should_mount = render_to.is_some();
     let root_mount = if let Some(to) = render_to {
         append_children_to_with_result(to, ElementId::ROOT, dom.runtime.clone(), |to| {
-            let created =
-                place_children_inner(dom, &children, existing_root_mount, parent, Some(to));
+            let created = place_children_inner(dom, &children, old_root_mount, parent, Some(to));
             (created.nodes, created.mount)
         })
     } else {
-        place_children_inner(dom, &children, existing_root_mount, parent, None).mount
+        place_children_inner(dom, &children, old_root_mount, parent, None).mount
     };
     dom.scopes[scope_id.index()].last_rendered_node =
         Some(MountedOutput::new(children, root_mount));
@@ -259,22 +258,20 @@ fn place_children(
     }
 }
 
-/// Build the portal children into `existing_root_mount` when one is available.
+/// Build fresh portal children, then remove the previously committed root when one is available.
 fn place_children_inner(
     dom: &mut VirtualDom,
     children: &LastRenderedNode,
-    existing_root_mount: Option<MountId>,
+    old_root_mount: Option<MountId>,
     parent: Option<MountId>,
     to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> CreatedVNode {
-    match existing_root_mount {
-        Some(existing) => children
-            .as_vnode()
-            .recreate_with_mount(dom, existing, None, parent, to),
-        None => children
-            .as_vnode()
-            .create_with_parents(dom, None, parent, to),
+    let created = children.as_vnode().create_mounted(dom, None, parent, to);
+    if let Some(old_root_mount) = old_root_mount {
+        let old = dom.current_mounted_view(old_root_mount).expect("mount");
+        old.remove_node(old_root_mount, dom, None);
     }
+    created
 }
 
 impl RenderDriver for PortalDriver {

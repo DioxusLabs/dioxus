@@ -84,31 +84,9 @@ impl TemplatePath {
         self.path == 0
     }
 
-    /// Return the path segment at `index`.
-    pub fn segment(self, index: usize) -> u8 {
-        let mut path = self.path;
-        let mut remaining_segments = index;
-
-        loop {
-            let bit_len = u128::BITS - path.leading_zeros();
-            if bit_len == 0 {
-                panic!("bad path segment");
-            }
-
-            let marker = 1u128 << (bit_len - 1);
-            let remaining_path = path ^ marker;
-            if remaining_segments == 0 {
-                let next_marker_bit_len = u128::BITS - remaining_path.leading_zeros();
-                return if next_marker_bit_len == 0 {
-                    (bit_len - 1) as u8
-                } else {
-                    (bit_len - next_marker_bit_len - 1) as u8
-                };
-            }
-
-            path = remaining_path;
-            remaining_segments -= 1;
-        }
+    /// Iterate sibling indexes from the root to this path.
+    pub fn segments(self) -> TemplatePathSegments {
+        TemplatePathSegments { path: self.path }
     }
 
     /// Return true if this compact path starts with `ancestor`.
@@ -141,6 +119,46 @@ impl TemplatePath {
     /// Return the number of raw child/sibling bits in this path.
     pub(crate) fn bit_len(self) -> u32 {
         u128::BITS - self.path.leading_zeros()
+    }
+}
+
+/// Iterator over the sibling indexes encoded in a [`TemplatePath`].
+#[derive(Clone, Copy)]
+pub struct TemplatePathSegments {
+    path: u128,
+}
+
+impl Iterator for TemplatePathSegments {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let bit_len = u128::BITS - self.path.leading_zeros();
+        if bit_len == 0 {
+            return None;
+        }
+
+        let marker = 1u128 << (bit_len - 1);
+        let remaining_path = self.path ^ marker;
+        let next_marker_bit_len = u128::BITS - remaining_path.leading_zeros();
+        let segment = if next_marker_bit_len == 0 {
+            bit_len - 1
+        } else {
+            bit_len - next_marker_bit_len - 1
+        };
+
+        self.path = remaining_path;
+        Some(segment as usize)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for TemplatePathSegments {
+    fn len(&self) -> usize {
+        self.path.count_ones() as usize
     }
 }
 
@@ -267,22 +285,21 @@ mod tests {
     }
 
     #[test]
-    fn segment_reads_sibling_indexes() {
+    fn segments_reads_sibling_indexes() {
         let path = TemplatePath::root(2)
             .next_child()
             .next_sibling()
             .next_child();
 
         assert_eq!(path.bits(), 0b100101);
-        assert_eq!(path.segment(0), 2);
-        assert_eq!(path.segment(1), 1);
-        assert_eq!(path.segment(2), 0);
+        assert_eq!(path.segments().collect::<Vec<_>>(), vec![2, 1, 0]);
     }
 
     #[test]
-    #[should_panic(expected = "bad path segment")]
-    fn segment_panics_for_missing_index() {
-        let _ = TemplatePath::root(0).segment(1);
+    fn segments_stop_at_end() {
+        let mut segments = TemplatePath::root(0).segments();
+        assert_eq!(segments.next(), Some(0));
+        assert_eq!(segments.next(), None);
     }
 
     #[test]

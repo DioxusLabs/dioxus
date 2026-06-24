@@ -77,7 +77,7 @@ impl VirtualDom {
         })
     }
 
-    /// Create or recreate a component scope's rendered output.
+    /// Create a component scope's rendered output.
     ///
     /// Invariant: the render driver sets `last_rendered_node` and the scope root mount before this
     /// returns. Returns the number of renderer nodes left on the stack.
@@ -96,21 +96,18 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
             // Create the node
-            let existing_mount = self.scopes[scope.index()]
+            let old_mount = self.scopes[scope.index()]
                 .last_rendered_node
                 .as_ref()
                 .map(MountedOutput::root_mount);
-            let created = if let Some(mount) = existing_mount {
-                new_nodes.as_vnode().recreate_with_mount(
-                    self,
-                    mount,
-                    parent,
-                    parent,
-                    render_to.as_deref_mut(),
-                )
-            } else {
-                new_nodes.create_with_parents(self, parent, parent, render_to.as_deref_mut())
-            };
+            let created =
+                new_nodes
+                    .as_vnode()
+                    .create_mounted(self, parent, parent, render_to.as_deref_mut());
+            if let Some(old_mount) = old_mount {
+                let old = self.current_mounted_view(old_mount).expect("mount");
+                old.remove_node(old_mount, self, None);
+            }
 
             // Then set the new node as the last rendered node
             self.scopes[scope.index()].last_rendered_node =

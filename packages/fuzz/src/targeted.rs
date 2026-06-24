@@ -62,6 +62,36 @@ fn replay_case_strict(name: &str, case: &FuzzCase) {
     }
 }
 
+/// Replay the entire on-disk libfuzzer corpus through the diff oracle in-process
+/// so a coverage build exercises every diff path the fuzzer has explored, not
+/// just the curated regression cases above. Gated on `DIOXUS_FUZZ_REPLAY_CORPUS=1`
+/// because replaying the full corpus is slow; enable it for coverage runs:
+///   `DIOXUS_FUZZ_REPLAY_CORPUS=1 cargo llvm-cov ... -p dioxus-vdom-fuzz`
+#[test]
+fn replay_corpus_for_coverage() {
+    if std::env::var_os("DIOXUS_FUZZ_REPLAY_CORPUS").is_none() {
+        return;
+    }
+    let corpus_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fuzz")
+        .join("corpus")
+        .join("vdom_ops");
+    for entry in std::fs::read_dir(&corpus_dir)
+        .unwrap_or_else(|err| panic!("read corpus dir {}: {err}", corpus_dir.display()))
+    {
+        let path = entry.expect("corpus entry").path();
+        if !path.is_file() {
+            continue;
+        }
+        let bytes = std::fs::read(&path).expect("read corpus file");
+        if let Some(case) = crate::case::decode_case(&bytes) {
+            // Coverage replay: drive the diff paths. Oracle divergences are the
+            // fuzzer's job to catch, so ignore the comparison result here.
+            let _ = crate::case::run_case(&case);
+        }
+    }
+}
+
 /// Write every targeted diff-coverage case as a postcard-encoded seed file
 /// in the libfuzzer corpus directory. The fuzz binary picks these up on
 /// the next run so the deterministic high-value patterns we hand-built

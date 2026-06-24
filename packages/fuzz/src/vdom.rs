@@ -61,10 +61,8 @@ fn GeneratedPortal(props: GeneratedPortalProps) -> Element {
     // in the harness - the diff dispatcher silently drops mutations destined
     // for a target with no writer. This exercises the "writes enabled"
     // branches of `Portal::{create,diff,remove}` and the generic diff helpers
-    // (`at_anchor`, `create_at_anchor_with_parents`, `create_with_parents`
-    // with `state.to = Some(_)`) without interleaving the portal body's edits
-    // into the outer ROOT oracle and diverging from the fresh-render
-    // comparison.
+    // with `state.to = Some(_)` without interleaving the portal body's edits into
+    // the outer ROOT oracle and diverging from the fresh-render comparison.
     let target = use_hook(|| Runtime::current().create_render_target());
     let context = props.context.clone();
     let suspense_ancestors = props.suspense_ancestors.clone();

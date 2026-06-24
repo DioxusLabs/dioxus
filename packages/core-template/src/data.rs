@@ -376,11 +376,10 @@ impl Template {
 
         let mut start = 0;
         let mut end = self.ops.len();
-        let mut depth = 0;
         let path_depth = path.depth();
 
-        while depth < path_depth {
-            let op = self.static_node_op_in_range(start, end, path.segment(depth) as usize)?;
+        for (depth, segment) in path.segments().enumerate() {
+            let op = self.static_node_op_in_range(start, end, segment)?;
             if depth + 1 == path_depth {
                 return self.static_node(op);
             }
@@ -388,7 +387,6 @@ impl Template {
             let (_, child_start, child_end) = self.element_attr_child_ops(op)?;
             start = child_start;
             end = child_end;
-            depth += 1;
         }
 
         None
