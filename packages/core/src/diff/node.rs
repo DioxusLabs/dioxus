@@ -721,6 +721,56 @@ impl VNode {
         self.finish_create(mount, &mut state)
     }
 
+    /// Re-emit an already-mounted (background) subtree to the foreground writer,
+    /// reusing its existing mount and child scopes rather than allocating fresh
+    /// ones. The caller guarantees `mount` currently holds this same-template
+    /// vnode.
+    pub(crate) fn recreate_with_mount(
+        &self,
+        dom: &mut VirtualDom,
+        mount: MountId,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+    ) -> CreatedVNode {
+        let mut state = DiffState::new(dom, to);
+        let target_id = state.dom.current_render_target_id();
+        state
+            .dom
+            .reuse_mount(mount, render_parent, logical_parent, target_id);
+        self.finish_create(mount, &mut state)
+    }
+
+    /// Materialize this node for a slot that may already hold a background-rendered
+    /// mount. When `old_mount` holds the same template, reuse it in place (keeping
+    /// its scope subtree) via [`Self::recreate_with_mount`]; otherwise allocate a
+    /// fresh mount and remove the old one.
+    pub(crate) fn create_or_reuse_mount(
+        &self,
+        dom: &mut VirtualDom,
+        old_mount: Option<MountId>,
+        render_parent: Option<MountId>,
+        logical_parent: Option<MountId>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+    ) -> CreatedVNode {
+        let reuse = old_mount.filter(|&mount| {
+            dom.current_mounted_view(mount)
+                .is_some_and(|old| old.template() == self.template())
+        });
+        match reuse {
+            Some(mount) => self.recreate_with_mount(dom, mount, render_parent, logical_parent, to),
+            None => {
+                let created = self.create_mounted(dom, render_parent, logical_parent, to);
+                if let Some(old_mount) = old_mount {
+                    dom.current_mounted_view(old_mount)
+                        .expect("mount")
+                        .remove_node(old_mount, dom, None);
+                }
+                created
+            }
+        }
+    }
+
     fn finish_create(&self, mount: MountId, state: &mut DiffState<'_, '_, '_, '_>) -> CreatedVNode {
         debug_assert!(
             state.to.is_none() || state.dom.mount_should_render(mount),
@@ -812,8 +862,9 @@ impl VNode {
                             .dom
                             .begin_mounted_fragment_children(mount, idx, frag.len());
                     for (idx, (child, child_mount)) in frag.iter().zip(mounts).enumerate() {
-                        let created = child.create_mounted(
+                        let created = child.create_or_reuse_mount(
                             state.dom,
+                            Some(child_mount),
                             parent,
                             parent,
                             state.to.as_deref_mut(),
@@ -821,7 +872,6 @@ impl VNode {
                         state
                             .dom
                             .set_mounted_fragment_child(children, idx, created.mount);
-                        child.remove_node(child_mount, state.dom, None);
                         nodes += created.nodes;
                     }
                     state.dom.commit_mounted_fragment_children(children);

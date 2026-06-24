@@ -407,6 +407,23 @@ pub(crate) fn create_at_site(
     })
 }
 
+/// Like [`create_at_site`], but re-emits an already-mounted (background) subtree
+/// at the site, reusing its existing mount and scopes instead of allocating fresh
+/// ones. Used to promote a retained suspense branch to the foreground.
+pub(crate) fn recreate_at_site(
+    content: &VNode,
+    mount: MountId,
+    parent: Option<MountId>,
+    site: InsertionSite,
+    dom: &mut VirtualDom,
+    to: &mut dyn WriteMutations,
+) -> CreatedVNode {
+    at_site_with_result(site, to, dom.runtime.clone(), |to| {
+        let created = content.recreate_with_mount(dom, mount, parent, parent, Some(to));
+        (created.nodes, created)
+    })
+}
+
 pub(super) fn at_site(
     site: InsertionSite,
     to: &mut dyn WriteMutations,

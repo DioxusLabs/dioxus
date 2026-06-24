@@ -95,19 +95,21 @@ impl VirtualDom {
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
-            // Create the node
+            // Create the node, reusing the scope's existing mount in place when it
+            // holds the same template (re-render, or promoting a background subtree)
+            // so the scope subtree keeps its identity instead of allocating fresh
+            // scopes.
             let old_mount = self.scopes[scope.index()]
                 .last_rendered_node
                 .as_ref()
                 .map(MountedOutput::root_mount);
-            let created =
-                new_nodes
-                    .as_vnode()
-                    .create_mounted(self, parent, parent, render_to.as_deref_mut());
-            if let Some(old_mount) = old_mount {
-                let old = self.current_mounted_view(old_mount).expect("mount");
-                old.remove_node(old_mount, self, None);
-            }
+            let created = new_nodes.as_vnode().create_or_reuse_mount(
+                self,
+                old_mount,
+                parent,
+                parent,
+                render_to.as_deref_mut(),
+            );
 
             // Then set the new node as the last rendered node
             self.scopes[scope.index()].last_rendered_node =
@@ -228,6 +230,7 @@ impl VNode {
         component: &VComponent,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
+        
         let scope_id = if let Some(scope_id) = state.dom.mounted_dynamic_component_scope(mount, idx)
         {
             scope_id

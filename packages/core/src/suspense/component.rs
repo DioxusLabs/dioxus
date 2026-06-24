@@ -4,7 +4,7 @@ use crate::{
     DynamicNode,
     diff::context::DiffContext,
     diff::placement::{
-        StreamPlacement, create_at_site, insertion_site_at, splice_streamed_nodes,
+        StreamPlacement, insertion_site_at, recreate_at_site, splice_streamed_nodes,
     },
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
@@ -487,11 +487,12 @@ fn suspense_create(
                 Some(MountedOutput::new(node, nodes_created.mount));
             nodes_created.nodes
         } else {
-            // Otherwise just render the children in the real dom
+            // Otherwise promote the background-rendered children into the real dom,
+            // reusing the background mount and its scopes instead of recreating.
             let nodes_created = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                let created = children.as_vnode().create_mounted(dom, parent, parent, to);
-                children.as_vnode().remove_node(background.mount, dom, None);
-                created
+                children
+                    .as_vnode()
+                    .recreate_with_mount(dom, background.mount, parent, parent, to)
             });
             dom.scopes[scope_id.index()].last_rendered_node =
                 Some(MountedOutput::new(children, nodes_created.mount));
@@ -551,9 +552,15 @@ impl SuspenseBoundaryProps {
             let render_parent = dom.mounted_render_parent(branch_mount);
             let logical_parent = dom.mounted_logical_parent(branch_mount);
             let mut no_op = crate::NoOpMutations;
-            let created =
-                branch_root.create_mounted(dom, render_parent, logical_parent, Some(&mut no_op));
-            branch_root.remove_node(branch_mount, dom, None);
+            // Promote the already-materialized background branch by reusing its mount
+            // (keeping its scope subtree) rather than rebuilding it from scratch.
+            let created = branch_root.recreate_with_mount(
+                dom,
+                branch_mount,
+                render_parent,
+                logical_parent,
+                Some(&mut no_op),
+            );
             set_rendered_children(
                 dom,
                 scope_id,
@@ -961,13 +968,17 @@ fn replace_placeholder_with(
     // materialized retained branch.
     let placeholder_mount = placeholder.root_mount();
     let parent = dom.mounted_render_parent(placeholder_mount);
+    // Promote the already-materialized retained branch by reusing its mount (and
+    // scope subtree) instead of rebuilding it, so component state and scope ids
+    // survive the fallback -> children swap.
     if let Some(to) = to.as_deref_mut() {
         let site = insertion_site_at(placeholder.mounted_vnode(), dom, None);
-        create_at_site(children.vnode(), parent, site, dom, to);
+        recreate_at_site(children.vnode(), children.mount(), parent, site, dom, to);
     } else {
-        children.vnode().create_mounted(dom, parent, parent, None);
+        children
+            .vnode()
+            .recreate_with_mount(dom, children.mount(), parent, parent, None);
     }
-    children.vnode().remove_node(children.mount(), dom, None);
     placeholder
         .as_vnode()
         .remove_node(placeholder_mount, dom, to);

@@ -258,7 +258,9 @@ fn place_children(
     }
 }
 
-/// Build fresh portal children, then remove the previously committed root when one is available.
+/// Place the portal children, reusing the previously committed root in place when
+/// its template is unchanged (e.g. promoting a background-rendered portal out of
+/// suspense) so the portal's scope subtree keeps its identity.
 fn place_children_inner(
     dom: &mut VirtualDom,
     children: &LastRenderedNode,
@@ -266,12 +268,9 @@ fn place_children_inner(
     parent: Option<MountId>,
     to: Option<&mut (dyn WriteMutations + '_)>,
 ) -> CreatedVNode {
-    let created = children.as_vnode().create_mounted(dom, None, parent, to);
-    if let Some(old_root_mount) = old_root_mount {
-        let old = dom.current_mounted_view(old_root_mount).expect("mount");
-        old.remove_node(old_root_mount, dom, None);
-    }
-    created
+    children
+        .as_vnode()
+        .create_or_reuse_mount(dom, old_root_mount, None, parent, to)
 }
 
 impl RenderDriver for PortalDriver {
