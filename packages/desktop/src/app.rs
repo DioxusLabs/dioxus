@@ -1,19 +1,14 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    desktop_context::DesktopContext,
     desktop_state::{DesktopAppContext, WindowCloseRequestResult},
-    document::DesktopDocument,
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     waker::create_dom_waker,
     webview::WebviewInstance,
 };
 use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
-use dioxus_document::Document;
-use dioxus_history::{History, MemoryHistory};
 use futures_util::{FutureExt, pin_mut};
 use std::{
-    cell::Cell,
     collections::{BTreeMap, HashMap},
     rc::Rc,
     task::Waker,
@@ -28,15 +23,11 @@ use tao::{
 
 /// The single top-level object that manages the event loop, VirtualDom, and running windows.
 pub(crate) struct App {
-    // move the config into a cell so we can pop it out later to create the first window
-    // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) cfg: Cell<Option<Config>>,
     pub(crate) dom: VirtualDom,
     pub(crate) initial_dom_rebuild_done: bool,
 
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
-    pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
     pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
@@ -63,7 +54,6 @@ impl App {
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
             disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
-            is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             dom: virtual_dom,
@@ -72,7 +62,6 @@ impl App {
             show_devtools: false,
             tray_icon_show_window_on_click,
             dom_waker,
-            cfg: Cell::new(Some(cfg)),
             app_context: Rc::new(DesktopAppContext::new(proxy, event_loop.clone())),
         };
 
@@ -204,7 +193,7 @@ impl App {
 
                 match self.app_context.request_window_close(id) {
                     WindowCloseRequestResult::DeferredToComponent => {}
-                    WindowCloseRequestResult::CloseImmediately => self.close_window(id),
+                    WindowCloseRequestResult::CloseImmediately => self.destroy_window(id),
                 }
             }
         };
@@ -212,12 +201,12 @@ impl App {
 
     pub fn window_destroyed(&mut self, id: WindowId) {
         self.app_context.notify_window_destroyed(id);
-        self.close_window(id);
+        self.destroy_window(id);
     }
 
     /// Tear down one webview after its Dioxus owner has released the target, or
     /// immediately for root/unowned windows.
-    fn close_window(&mut self, id: WindowId) {
+    pub(crate) fn destroy_window(&mut self, id: WindowId) {
         let Some(app_webview) = self.webviews.remove(&id) else {
             return;
         };
@@ -229,12 +218,7 @@ impl App {
         // it is reclaimed when the runtime is dropped.
         self.dom.runtime().remove_render_target(target_id);
 
-        // The root webview hosts the shared VirtualDom; every other window is a
-        // render target fed by a `Window`/`Portal` inside it. Closing the root
-        // window therefore tears down the whole app, just like closing the last
-        // window does.
-        let closed_host = target_id == RenderTargetId::ROOT;
-        if self.exit_on_last_window_close && (closed_host || self.webviews.is_empty()) {
+        if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         } else {
             // Removing the webview drops its `WryQueue`, including any
@@ -264,42 +248,15 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        #[allow(unused_mut)]
-        let mut cfg = self
-            .cfg
-            .take()
-            .expect("Config should be set before initialization");
-
-        self.is_visible_before_start = cfg.window.window.visible;
-        #[cfg(not(target_os = "linux"))]
-        {
-            cfg.window = cfg.window.with_visible(false);
-        }
-        let explicit_window_size = cfg.window.window.inner_size;
-        let explicit_window_position = cfg.window.window.position;
-
-        let webview = WebviewInstance::new(
-            cfg,
-            RenderTargetId::ROOT,
-            &mut self.dom,
-            self.app_context.clone(),
-        );
-        self.provide_root_context(webview.desktop_context.clone());
-
-        // And then attempt to resume from state
-        self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
-
-        let id = webview.desktop_context.window.id();
-        self.webviews.insert(id, webview);
+        self.provide_app_context();
+        self.rebuild_dom();
+        self.handle_new_window();
     }
 
-    fn provide_root_context(&mut self, desktop_context: DesktopContext) {
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
+    fn provide_app_context(&mut self) {
+        let app_context = self.app_context.clone();
         self.dom.in_scope(ScopeId::ROOT, || {
-            provide_context(desktop_context);
-            provide_context(provider);
-            provide_context(history_provider);
+            provide_context(app_context);
         });
     }
 
@@ -318,24 +275,13 @@ impl App {
     /// The webview is finally loaded. Rebuild once, then start polling the
     /// shared VDOM.
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let Some(target_id) = self.webviews.get(&id).map(|view| view.target_id()) else {
+        if !self.webviews.contains_key(&id) {
             return;
-        };
+        }
 
         if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
             self.send_touched_edits();
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            if target_id == RenderTargetId::ROOT {
-                if let Some(view) = self.webviews.get(&id) {
-                    view.desktop_context
-                        .window
-                        .set_visible(self.is_visible_before_start);
-                }
-            }
         }
 
         self.schedule_poll();
@@ -456,10 +402,6 @@ impl App {
     /// The app-level waker is connected to the event loop, so async work wakes
     /// the app by scheduling another [`UserWindowEvent::Poll`].
     pub fn poll_vdom(&mut self) {
-        if self.webviews.is_empty() {
-            return;
-        }
-
         let dom_waker = self.dom_waker.clone();
         let mut cx = std::task::Context::from_waker(&dom_waker);
 
@@ -671,54 +613,6 @@ impl App {
         }
     }
 
-    // Write this to the target dir so we can pick back up
-    fn resume_from_state(
-        &mut self,
-        webview: &WebviewInstance,
-        explicit_inner_size: Option<tao::dpi::Size>,
-        explicit_window_position: Option<tao::dpi::Position>,
-    ) {
-        // We only want to do this on desktop
-        if cfg!(target_os = "android") || cfg!(target_os = "ios") {
-            return;
-        }
-
-        // We only want to do this in debug mode
-        if !cfg!(debug_assertions) {
-            return;
-        }
-
-        if let Ok(state) = std::fs::read_to_string(restore_file()) {
-            if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-                let window = &webview.desktop_context.window;
-                let position = (state.x, state.y);
-                let size = (state.width, state.height);
-
-                // Only set the outer position if it wasn't explicitly set
-                if explicit_window_position.is_none() {
-                    if cfg!(target_os = "macos") {
-                        window.set_outer_position(tao::dpi::LogicalPosition::new(
-                            position.0, position.1,
-                        ));
-                    } else {
-                        window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                            position.0, position.1,
-                        ));
-                    }
-                }
-
-                // Only set the inner size if it wasn't explicitly set
-                if explicit_inner_size.is_none() {
-                    if cfg!(target_os = "macos") {
-                        window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
-                    } else {
-                        window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-                    }
-                }
-            }
-        }
-    }
-
     /// Wire up a receiver to sigkill that lets us preserve the window state
     /// Whenever sigkill is sent, we shut down the app and save the window state
     #[cfg(debug_assertions)]
@@ -769,16 +663,16 @@ impl App {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct PreservedWindowState {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-    monitor: String,
+pub(crate) struct PreservedWindowState {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) monitor: String,
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
-fn restore_file() -> std::path::PathBuf {
+pub(crate) fn restore_file() -> std::path::PathBuf {
     let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
 }

@@ -1,13 +1,12 @@
 use crate::{
-    AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
+    AssetRequest, WindowCloseBehaviour, WindowConfig, WryEventHandler,
     assets::AssetHandlerRegistry,
     desktop_state::{DesktopAppContext, DesktopWindowContext},
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
-    webview::PendingWebview,
 };
-use dioxus_core::{Callback, RenderTargetId, Runtime};
+use dioxus_core::{Callback, RenderTargetId};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -38,6 +37,17 @@ pub fn window() -> DesktopContext {
     dioxus_core::consume_context()
 }
 
+/// Get an imperative handle to the desktop application without using a hook.
+///
+/// This is available in the root scope, including apps launched through the raw `VirtualDom` API.
+///
+/// ## Panics
+///
+/// This function will panic if it is called outside of the context of a Dioxus App.
+pub fn app() -> Rc<DesktopAppContext> {
+    dioxus_core::consume_context()
+}
+
 /// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
 
@@ -61,11 +71,6 @@ impl PendingWindowCancellation {
     /// Returns true if the queued window was canceled before creation.
     pub(crate) fn is_canceled(&self) -> bool {
         self.canceled.get()
-    }
-
-    /// Returns true if both handles point at the same queued window.
-    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.canceled, &other.canceled)
     }
 }
 
@@ -155,17 +160,8 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, cfg: Config) -> PendingDesktopWindow {
-        let target_id = Runtime::current().create_render_target();
-        let (window, context) = PendingWebview::new(target_id, cfg);
-
-        self.app
-            .proxy
-            .send_event(UserWindowEvent::NewWindow)
-            .unwrap();
-        self.app.queue_pending_webview(window);
-
-        context
+    pub fn new_window(&self, cfg: WindowConfig) -> PendingDesktopWindow {
+        self.app.new_window(cfg)
     }
 
     /// trigger the drag-window event
@@ -200,12 +196,15 @@ impl DesktopService {
         let _ = self
             .app
             .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+            .send_event(UserWindowEvent::RequestWindowClose(self.id()));
     }
 
     /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
-        let _ = self.app.proxy.send_event(UserWindowEvent::CloseWindow(id));
+        let _ = self
+            .app
+            .proxy
+            .send_event(UserWindowEvent::RequestWindowClose(id));
     }
 
     /// change window to fullscreen

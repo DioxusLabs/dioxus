@@ -1,7 +1,6 @@
 use crate::{
-    Config,
+    WindowConfig, app,
     document::DesktopDocument,
-    window,
     window_lifecycle::{ComponentWindowLifecycle, ComponentWindowRenderState, WindowProviders},
 };
 use dioxus_core::view::ViewExt;
@@ -33,66 +32,17 @@ impl PartialEq for WindowProps {
 
 #[derive(Clone, Default)]
 #[doc(hidden)]
-pub struct InitialWindowConfig(Rc<RefCell<Option<Config>>>);
+pub struct InitialWindowConfig(Rc<RefCell<Option<WindowConfig>>>);
 
-impl From<Config> for InitialWindowConfig {
-    fn from(config: Config) -> Self {
+impl InitialWindowConfig {
+    pub(crate) fn from_cell(config: Rc<RefCell<Option<WindowConfig>>>) -> Self {
+        Self(config)
+    }
+}
+
+impl From<WindowConfig> for InitialWindowConfig {
+    fn from(config: WindowConfig) -> Self {
         Self(Rc::new(RefCell::new(Some(config))))
-    }
-}
-
-#[derive(Clone)]
-struct WindowState(Rc<RefCell<ComponentWindowState>>);
-
-struct ComponentWindowState {
-    lifecycle: ComponentWindowLifecycle,
-    onclose: Option<EventHandler<()>>,
-}
-
-struct CloseRequest {
-    onclose: Option<EventHandler<()>>,
-}
-
-impl WindowState {
-    fn set_onclose(&self, onclose: Option<EventHandler<()>>) {
-        self.0.borrow_mut().onclose = onclose;
-    }
-
-    fn resolve_pending(
-        &self,
-        providers: WindowProviders,
-        close_registration: crate::desktop_state::ComponentWindowRegistration,
-    ) {
-        self.0
-            .borrow_mut()
-            .lifecycle
-            .resolve_pending(providers, close_registration);
-    }
-
-    fn release_canceled_resolved_window(&self, context: crate::DesktopContext) {
-        self.0
-            .borrow_mut()
-            .lifecycle
-            .release_canceled_resolved_window(context);
-    }
-
-    fn request_close(&self) -> Option<CloseRequest> {
-        let mut state = self.0.borrow_mut();
-        state.lifecycle.request_close().then_some(CloseRequest {
-            onclose: state.onclose,
-        })
-    }
-
-    fn native_destroyed(&self) -> bool {
-        self.0.borrow_mut().lifecycle.native_destroyed()
-    }
-
-    fn release_from_component_drop(&self) {
-        self.0.borrow_mut().lifecycle.release_from_component_drop();
-    }
-
-    fn prepare_to_render(&self) -> ComponentWindowRenderState {
-        self.0.borrow_mut().lifecycle.prepare_to_render()
     }
 }
 
@@ -108,12 +58,12 @@ impl WindowState {
 ///
 /// ```rust,ignore
 /// use dioxus::prelude::*;
-/// use dioxus::desktop::{Config, Window, WindowBuilder};
+/// use dioxus::desktop::{Window, WindowBuilder, WindowConfig};
 ///
 /// fn App() -> Element {
 ///     rsx! {
 ///         Window {
-///             config: Config::new().with_window(WindowBuilder::new().with_title("Inspector")),
+///             config: WindowConfig::new().with_window(WindowBuilder::new().with_title("Inspector")),
 ///             onclose: move |_| tracing::info!("inspector closed"),
 ///             div { "Tools" }
 ///         }
@@ -126,20 +76,15 @@ pub fn Window(props: WindowProps) -> Element {
     let state = {
         let config = props.config.0.clone();
         use_hook(move || {
-            let desktop_context = window();
-            let app_context = desktop_context.app_context().clone();
-            let pending =
-                desktop_context.new_window(config.borrow_mut().take().unwrap_or_default());
+            let app_context = app();
+            let pending = app_context.new_window(config.borrow_mut().take().unwrap_or_default());
             let target_id = pending.target_id();
             let pending_cancellation = pending.cancellation();
-            let state = WindowState(Rc::new(RefCell::new(ComponentWindowState {
-                lifecycle: ComponentWindowLifecycle::pending(
-                    target_id,
-                    app_context,
-                    pending_cancellation.clone(),
-                ),
-                onclose: None,
-            })));
+            let state = Rc::new(RefCell::new(ComponentWindowLifecycle::pending(
+                target_id,
+                app_context,
+                pending_cancellation.clone(),
+            )));
             let state_for_task = state.clone();
             let pending_cancellation_for_task = pending_cancellation.clone();
 
@@ -148,7 +93,7 @@ pub fn Window(props: WindowProps) -> Element {
                     return;
                 };
                 if pending_cancellation_for_task.is_canceled() {
-                    state_for_task.release_canceled_resolved_window(resolved_context);
+                    resolved_context.close();
                     return;
                 }
                 let window_id = resolved_context.window.id();
@@ -160,22 +105,23 @@ pub fn Window(props: WindowProps) -> Element {
                 let close_registration = app_context.register_component_window(
                     window_id,
                     move || {
-                        let Some(close_request) = state_for_close_handler.request_close() else {
+                        let Some(close) = state_for_close_handler.borrow_mut().request_close()
+                        else {
                             return;
                         };
-                        if let Some(onclose) = close_request.onclose {
+                        if let Some(onclose) = close.onclose {
                             onclose.call(());
                         }
                         schedule_update_for_close_handler();
                     },
                     move || {
-                        if state_for_destroyed_handler.native_destroyed() {
+                        if state_for_destroyed_handler.borrow_mut().native_destroyed() {
                             schedule_update_for_destroyed();
                         }
                     },
                 );
 
-                state_for_task.resolve_pending(
+                state_for_task.borrow_mut().resolve_pending(
                     WindowProviders {
                         document: Rc::new(DesktopDocument::new(resolved_context.clone())),
                         history: Rc::new(MemoryHistory::default()),
@@ -189,7 +135,7 @@ pub fn Window(props: WindowProps) -> Element {
             state
         })
     };
-    state.set_onclose(props.onclose);
+    state.borrow_mut().set_onclose(props.onclose);
 
     use_hook_with_cleanup(
         {
@@ -197,11 +143,12 @@ pub fn Window(props: WindowProps) -> Element {
             move || state
         },
         |state| {
-            state.release_from_component_drop();
+            state.borrow_mut().release_from_component_drop();
         },
     );
 
-    match state.prepare_to_render() {
+    let render_state = state.borrow_mut().prepare_to_render();
+    match render_state {
         ComponentWindowRenderState::Waiting => VNode::empty(),
         ComponentWindowRenderState::Render {
             target_id,

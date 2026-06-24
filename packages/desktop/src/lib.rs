@@ -53,11 +53,12 @@ pub mod trayicon;
 
 // Public exports
 pub use assets::AssetRequest;
-pub use config::{Config, WindowCloseBehaviour};
+pub use config::{Config, WindowCloseBehaviour, WindowConfig};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{
-    DesktopContext, DesktopService, PendingDesktopWindow, WeakDesktopContext, window,
+    DesktopContext, DesktopService, PendingDesktopWindow, WeakDesktopContext, app, window,
 };
+pub use desktop_state::DesktopAppContext;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

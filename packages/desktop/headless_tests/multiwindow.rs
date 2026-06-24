@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, DesktopContext};
+use dioxus_desktop::{DesktopContext, WindowConfig};
 
 #[path = "./utils.rs"]
 mod utils;
@@ -82,6 +82,7 @@ fn ChildWindow(id: usize) -> Element {
     }
 }
 
-fn hidden_window_config() -> Config {
-    Config::new().with_window(dioxus_desktop::tao::window::WindowBuilder::new().with_visible(false))
+fn hidden_window_config() -> WindowConfig {
+    WindowConfig::new()
+        .with_window(dioxus_desktop::tao::window::WindowBuilder::new().with_visible(false))
 }

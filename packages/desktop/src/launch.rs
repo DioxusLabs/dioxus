@@ -1,13 +1,65 @@
-use crate::Config;
 use crate::{
+    Config, WindowConfig,
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
-use std::any::Any;
+use dioxus_core_macro::rsx;
+use std::{any::Any, cell::RefCell, rc::Rc};
 use tao::event::{Event, StartCause, WindowEvent};
 
-/// Launch the WebView and run the event loop, with configuration and root props.
+#[derive(Clone, dioxus_core_macro::Props)]
+struct DesktopRootProps {
+    root: fn() -> Element,
+    config: Rc<RefCell<Option<WindowConfig>>>,
+}
+
+impl PartialEq for DesktopRootProps {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, dioxus_core_macro::Props)]
+struct LaunchedRootProps {
+    root: fn() -> Element,
+}
+
+impl PartialEq for LaunchedRootProps {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+#[allow(non_snake_case)]
+fn LaunchedRoot(props: LaunchedRootProps) -> Element {
+    (props.root)()
+}
+
+#[allow(non_snake_case)]
+fn WindowedRoot(props: DesktopRootProps) -> Element {
+    let root = props.root;
+    let config = crate::window_component::InitialWindowConfig::from_cell(props.config.clone());
+    let launched_root = Element::Ok(
+        <LaunchedRootProps as Properties>::component_builder(LaunchedRoot)
+            .root(root)
+            .build()
+            .into_vnode(),
+    );
+    rsx! {
+        crate::Window {
+            config,
+            {launched_root}
+        }
+    }
+}
+
+/// Run a desktop [`VirtualDom`] directly.
+///
+/// This raw entrypoint does not create an implicit native window. The root component must render
+/// at least one [`Window`](crate::Window) component if the app should show UI. Use
+/// [`launch`](crate::launch::launch) or `dioxus::LaunchBuilder::desktop().launch(...)` for the
+/// normal API that wraps the user component in a default window.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
@@ -38,7 +90,8 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
             Event::UserEvent(event) => match event {
                 UserWindowEvent::Poll => app.poll_vdom(),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
-                UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
+                UserWindowEvent::RequestWindowClose(id) => app.handle_close_requested(id),
+                UserWindowEvent::DestroyWindow(id) => app.destroy_window(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -99,7 +152,27 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
     })
 }
 
-/// Launches the WebView and runs the event loop, with configuration and root props.
+/// Run a desktop [`VirtualDom`] directly.
+///
+/// Unlike [`launch`], this raw entrypoint does not wrap the root component in a native window.
+/// The root component must render at least one [`Window`](crate::Window) component manually if the
+/// app should show UI.
+///
+/// ```rust, ignore
+/// use dioxus::prelude::*;
+/// use dioxus_desktop::{Config, Window};
+///
+/// fn app() -> Element {
+///     rsx! {
+///         Window {
+///             div { "hello from a manually owned window" }
+///         }
+///     }
+/// }
+///
+/// let dom = VirtualDom::new(app);
+/// dioxus_desktop::launch::launch_virtual_dom(dom, Config::new());
+/// ```
 pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
     #[cfg(feature = "tokio_runtime")]
     {
@@ -129,22 +202,36 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! 
     }
 }
 
-/// Launches the WebView and runs the event loop, with configuration and root props.
+/// Launch a desktop app.
+///
+/// By default, this wraps the user component in a default [`Window`](crate::Window). Set
+/// [`Config::with_headless_root`] to run the root component without an implicit window.
 pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
-    let mut virtual_dom = VirtualDom::new(root);
+    let mut config = *platform_config
+        .into_iter()
+        .find_map(|cfg| cfg.downcast::<Config>().ok())
+        .unwrap_or_default();
+
+    let mut virtual_dom = if config.headless_root {
+        VirtualDom::new_with_props(LaunchedRoot, LaunchedRootProps { root })
+    } else {
+        // The app keeps the application-wide settings; the window settings move into the default
+        // `Window` component we wrap the user's root in.
+        let window_config = std::mem::take(&mut config.window);
+        let root_props = DesktopRootProps {
+            root,
+            config: Rc::new(RefCell::new(Some(window_config))),
+        };
+        VirtualDom::new_with_props(WindowedRoot, root_props)
+    };
 
     for context in contexts {
         virtual_dom.insert_any_root_context(context());
     }
 
-    let platform_config = *platform_config
-        .into_iter()
-        .find_map(|cfg| cfg.downcast::<Config>().ok())
-        .unwrap_or_default();
-
-    launch_virtual_dom(virtual_dom, platform_config)
+    launch_virtual_dom(virtual_dom, config)
 }

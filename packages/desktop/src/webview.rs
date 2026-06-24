@@ -4,7 +4,7 @@ use crate::desktop_state::DesktopAppContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopContext, DesktopService, assets::AssetHandlerRegistry, edits::WryQueue,
+    DesktopContext, DesktopService, WindowConfig, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
@@ -16,6 +16,42 @@ use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
+
+fn restore_window_state(
+    window: &tao::window::Window,
+    explicit_inner_size: Option<tao::dpi::Size>,
+    explicit_window_position: Option<tao::dpi::Position>,
+) {
+    if cfg!(target_os = "android") || cfg!(target_os = "ios") || !cfg!(debug_assertions) {
+        return;
+    }
+
+    let Ok(state) = std::fs::read_to_string(crate::app::restore_file()) else {
+        return;
+    };
+    let Ok(state) = serde_json::from_str::<crate::app::PreservedWindowState>(&state) else {
+        return;
+    };
+
+    let position = (state.x, state.y);
+    let size = (state.width, state.height);
+
+    if explicit_window_position.is_none() {
+        if cfg!(target_os = "macos") {
+            window.set_outer_position(tao::dpi::LogicalPosition::new(position.0, position.1));
+        } else {
+            window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
+        }
+    }
+
+    if explicit_inner_size.is_none() {
+        if cfg!(target_os = "macos") {
+            window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
+        } else {
+            window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -215,12 +251,14 @@ impl WebviewInstance {
     }
 
     pub(crate) fn new(
-        mut cfg: Config,
+        mut cfg: WindowConfig,
         target_id: RenderTargetId,
         dom: &mut VirtualDom,
         app_context: Rc<DesktopAppContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
+        let explicit_window_size = cfg.window.window.inner_size;
+        let explicit_window_position = cfg.window.window.position;
 
         // tao makes small windows for some reason, make them bigger on desktop
         //
@@ -239,6 +277,7 @@ impl WebviewInstance {
         }
 
         let window = Arc::new(window.build(&app_context.target).unwrap());
+        restore_window_state(&window, explicit_window_size, explicit_window_position);
         if let Some(on_build) = cfg.on_window.as_mut() {
             on_build(window.clone(), dom);
         }
@@ -578,35 +617,27 @@ impl SynchronousEventResponse {
 /// block on windows, so the app context queues them until the main event loop is ready.
 pub(crate) struct PendingWebview {
     target_id: RenderTargetId,
-    cfg: Config,
+    cfg: WindowConfig,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
-    cancellation: PendingWindowCancellation,
 }
 
 impl PendingWebview {
-    pub(crate) fn new(target_id: RenderTargetId, cfg: Config) -> (Self, PendingDesktopWindow) {
+    pub(crate) fn new(
+        target_id: RenderTargetId,
+        cfg: WindowConfig,
+    ) -> (Self, PendingDesktopWindow) {
         let (sender, receiver) = futures_channel::oneshot::channel();
-        let cancellation = PendingWindowCancellation::default();
         let webview = Self {
             target_id,
             cfg,
             sender,
-            cancellation: cancellation.clone(),
         };
         let pending = PendingDesktopWindow {
             target_id,
             receiver,
-            cancellation,
+            cancellation: PendingWindowCancellation::default(),
         };
         (webview, pending)
-    }
-
-    pub(crate) fn matches_pending_window(
-        &self,
-        target_id: RenderTargetId,
-        cancellation: &PendingWindowCancellation,
-    ) -> bool {
-        self.target_id == target_id && self.cancellation.ptr_eq(cancellation)
     }
 
     pub(crate) fn create_window(
@@ -638,12 +669,12 @@ mod tests {
 
         dom.in_runtime(|| {
             let target_id = Runtime::current().create_render_target();
-            let (pending_webview, pending_window) = PendingWebview::new(target_id, Config::new());
+            let (pending_webview, pending_window) =
+                PendingWebview::new(target_id, WindowConfig::new());
             let cancellation = pending_window.cancellation();
 
             cancellation.cancel();
             assert!(cancellation.is_canceled());
-            assert!(pending_webview.matches_pending_window(target_id, &cancellation));
 
             drop(pending_webview);
 

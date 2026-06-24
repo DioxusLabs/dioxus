@@ -205,7 +205,7 @@ pub mod prelude {
     #[cfg(feature = "desktop")]
     #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
     #[doc(inline)]
-    pub use dioxus_desktop::{Window, WindowProps};
+    pub use dioxus_desktop::{Window, WindowConfig, WindowProps};
 
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
