@@ -6,6 +6,7 @@ use dioxus_core_template::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
     TemplateRawTree, TemplateStorage,
 };
+use std::marker::PhantomData;
 
 /// A type that contributes static template structure.
 pub trait ViewTemplate {
@@ -13,23 +14,18 @@ pub trait ViewTemplate {
     const TEMPLATE_TREE: &'static TemplateRawTree;
 }
 
-/// Builds the static [`Template`] for a view using template storage capacities resolved at the
-/// call site.
-pub trait StaticViewTemplateWithCapacity<
+struct StaticViewTemplate<
+    V,
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
->: ViewTemplate
-{
-    /// The static template for this view type with the given storage capacities.
-    const TEMPLATE: &'static Template;
-}
+>(PhantomData<fn() -> V>);
 
-impl<T: ViewTemplate, const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
-    StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP> for T
+impl<V: ViewTemplate, const OPS_CAP: usize, const STRING_CAP: usize, const DYNAMIC_CAP: usize>
+    StaticViewTemplate<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>
 {
     const TEMPLATE: &'static Template =
-        &TemplateStorage::<OPS_CAP, STRING_CAP, DYNAMIC_CAP>::build_from_tree(T::TEMPLATE_TREE)
+        &TemplateStorage::<OPS_CAP, STRING_CAP, DYNAMIC_CAP>::build_from_tree(V::TEMPLATE_TREE)
             .as_template();
 }
 
@@ -86,11 +82,12 @@ impl<V: View> ViewExt for V {
     fn into_vnode(self) -> VNode {
         into_vnode_with_template(
             self,
-            <V as StaticViewTemplateWithCapacity<
+            StaticViewTemplate::<
+                V,
                 TEMPLATE_STORAGE_OPS_CAP,
                 TEMPLATE_STORAGE_STRING_CAP,
                 TEMPLATE_STORAGE_DYNAMIC_CAP,
-            >>::TEMPLATE,
+            >::TEMPLATE,
         )
     }
 }
@@ -122,13 +119,13 @@ pub fn into_vnode_with_capacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
-    V: View + StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>,
+    V: View,
 >(
     view: V,
 ) -> VNode {
     into_vnode_with_template(
         view,
-        <V as StaticViewTemplateWithCapacity<OPS_CAP, STRING_CAP, DYNAMIC_CAP>>::TEMPLATE,
+        StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
     )
 }
 
