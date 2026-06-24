@@ -68,10 +68,6 @@ impl MountedVNode<'_> {
     pub(crate) fn find_first_element(self, dom: &VirtualDom) -> Option<ElementId> {
         self.vnode().find_first_element(self.mount(), dom)
     }
-
-    pub(crate) fn find_last_element(self, dom: &VirtualDom) -> Option<ElementId> {
-        self.vnode().find_last_element(self.mount(), dom)
-    }
 }
 
 impl<'a> DiffFrame<'a> {
@@ -443,7 +439,6 @@ impl VNode {
         let created = if write_local_mutations {
             let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
                 insertion_site_at(
-                    ElementEdge::First,
                     MountedVNode::new(self, mount),
                     state.dom,
                     context,

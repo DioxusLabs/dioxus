@@ -114,16 +114,14 @@ impl InsertionSite {
     }
 }
 
-/// Find an insertion site at the given edge of `vnode`'s live DOM: before its
-/// first element, or after its last. If the vnode has no live DOM, walk mounted
-/// parent slots until a live insertion point is found.
+/// Find an insertion site before `vnode`'s first live element. If the vnode has
+/// no live DOM, walk mounted parent slots until a live insertion point is found.
 pub(crate) fn insertion_site_at(
-    edge: ElementEdge,
     vnode: MountedVNode<'_>,
     dom: &VirtualDom,
     context: Option<DiffContext<'_>>,
 ) -> InsertionSite {
-    PlacementResolver::new(dom, context).resolve_vnode_edge(edge, vnode)
+    PlacementResolver::new(dom, context).resolve_vnode_site(vnode)
 }
 
 /// Resolve the insertion site for a dynamic node slot inside `parent_mount`.
@@ -151,9 +149,9 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
         Self { dom, context }
     }
 
-    fn resolve_vnode_edge(&self, edge: ElementEdge, vnode: MountedVNode<'_>) -> InsertionSite {
-        self.vnode_edge_site(edge, vnode)
-            .unwrap_or_else(|| self.resolve_mount_edge(edge, vnode.mount()))
+    fn resolve_vnode_site(&self, vnode: MountedVNode<'_>) -> InsertionSite {
+        self.vnode_first_site(vnode)
+            .unwrap_or_else(|| self.resolve_mount_site(vnode.mount()))
     }
 
     fn resolve_slot(&self, parent_mount: MountId, slot: DynamicNodeSlot<'_>) -> InsertionSite {
@@ -185,12 +183,12 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
             return self.anchor_site(slot.anchor(), id.element_id());
         }
 
-        self.resolve_mount_edge(ElementEdge::First, parent_mount)
+        self.resolve_mount_site(parent_mount)
     }
 
-    fn resolve_mount_edge(&self, edge: ElementEdge, mut mount: MountId) -> InsertionSite {
+    fn resolve_mount_site(&self, mut mount: MountId) -> InsertionSite {
         while let Some(parent_mount) = self.dom.mounted_render_parent(mount) {
-            if let Some(site) = self.resolve_child_in_parent(edge, mount, parent_mount) {
+            if let Some(site) = self.resolve_child_in_parent(mount, parent_mount) {
                 return site;
             }
             mount = parent_mount;
@@ -204,7 +202,6 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
     /// owns `mount`, the caller must continue walking render parents.
     fn resolve_child_in_parent(
         &self,
-        edge: ElementEdge,
         mount: MountId,
         parent_mount: MountId,
     ) -> Option<InsertionSite> {
@@ -223,8 +220,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
                             |child_mounts| {
                                 let position =
                                     child_mounts.iter().position(|child| *child == mount)?;
-                                self.resolve_fragment_child_edge(
-                                    edge,
+                                self.resolve_fragment_child_site(
                                     children,
                                     child_mounts,
                                     position,
@@ -252,9 +248,8 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
         })
     }
 
-    fn resolve_fragment_child_edge(
+    fn resolve_fragment_child_site(
         &self,
-        edge: ElementEdge,
         children: &[VNode],
         child_mounts: &[MountId],
         position: usize,
@@ -287,10 +282,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
                 })
         };
 
-        match edge {
-            ElementEdge::First => following().or_else(previous),
-            ElementEdge::Last => previous().or_else(following),
-        }
+        following().or_else(previous)
     }
 
     fn adjacent_dynamic_sibling_after_in_vnode(
@@ -370,13 +362,10 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
         }
     }
 
-    fn vnode_edge_site(&self, edge: ElementEdge, vnode: MountedVNode<'_>) -> Option<InsertionSite> {
-        match edge {
-            ElementEdge::First => vnode
-                .find_first_element(self.dom)
-                .map(InsertionSite::before),
-            ElementEdge::Last => vnode.find_last_element(self.dom).map(InsertionSite::after),
-        }
+    fn vnode_first_site(&self, vnode: MountedVNode<'_>) -> Option<InsertionSite> {
+        vnode
+            .find_first_element(self.dom)
+            .map(InsertionSite::before)
     }
 
     fn anchor_site(&self, anchor: DynamicAnchor<'_>, anchor_id: ElementId) -> InsertionSite {
@@ -448,7 +437,7 @@ impl StreamPlacement {
     /// The placement to use when a resolved boundary's fallback has no DOM element to replace:
     /// anchor before `vnode`'s first live element, walking up to a live parent slot if it is empty.
     pub(crate) fn for_empty_fallback(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Self {
-        Self::Insert(insertion_site_at(ElementEdge::First, vnode, dom, None))
+        Self::Insert(insertion_site_at(vnode, dom, None))
     }
 }
 

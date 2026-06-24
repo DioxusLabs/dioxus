@@ -4,7 +4,7 @@ use crate::{
     DynamicNode,
     diff::context::DiffContext,
     diff::placement::{
-        ElementEdge, StreamPlacement, create_at_site, insertion_site_at, splice_streamed_nodes,
+        StreamPlacement, create_at_site, insertion_site_at, splice_streamed_nodes,
     },
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
@@ -962,7 +962,7 @@ fn replace_placeholder_with(
     let placeholder_mount = placeholder.root_mount();
     let parent = dom.mounted_render_parent(placeholder_mount);
     if let Some(to) = to.as_deref_mut() {
-        let site = insertion_site_at(ElementEdge::First, placeholder.mounted_vnode(), dom, None);
+        let site = insertion_site_at(placeholder.mounted_vnode(), dom, None);
         create_at_site(children.vnode(), parent, site, dom, to);
     } else {
         children.vnode().create_mounted(dom, parent, parent, None);
