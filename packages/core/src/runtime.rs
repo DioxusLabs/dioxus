@@ -27,17 +27,11 @@ thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
 }
 
-#[derive(Clone, Copy)]
-struct ScopeStackFrame {
-    scope: ScopeId,
-    target_id: RenderTargetId,
-}
-
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     // We use this to track the current scope
     // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
-    scope_stack: RefCell<Vec<ScopeStackFrame>>,
+    scope_stack: RefCell<Vec<ScopeId>>,
 
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
@@ -195,10 +189,9 @@ fn MyComponent() -> Element {{
     /// no scope is active. Every scope carries a flat target assignment;
     /// portal scopes carry the portal's target and their subtree inherits it.
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
-        self.scope_stack
-            .borrow()
-            .last()
-            .map_or(RenderTargetId::ROOT, |frame| frame.target_id)
+        self.try_current_scope_id()
+            .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
+            .unwrap_or(RenderTargetId::ROOT)
     }
 
     /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
@@ -259,19 +252,7 @@ fn MyComponent() -> Element {{
     }
 
     pub(crate) fn set_scope_target_id(&self, scope: ScopeId, target_id: RenderTargetId) {
-        {
-            let scope_state = self.get_state(scope);
-            scope_state.set_target_id(target_id);
-        }
-
-        {
-            let mut scope_stack = self.scope_stack.borrow_mut();
-            if let Some(current) = scope_stack.last_mut()
-                && current.scope == scope
-            {
-                current.target_id = target_id;
-            }
-        }
+        self.get_state(scope).set_target_id(target_id);
     }
 
     pub(crate) fn remove_scope(self: &Rc<Self>, id: ScopeId) {
@@ -334,16 +315,12 @@ fn MyComponent() -> Element {{
 
     /// Get the current scope id
     pub fn current_scope_id(&self) -> ScopeId {
-        self.scope_stack
-            .borrow()
-            .last()
-            .map(|frame| frame.scope)
-            .unwrap()
+        self.scope_stack.borrow().last().copied().unwrap()
     }
 
     /// Try to get the current scope id, returning None if it we aren't actively inside a scope
     pub fn try_current_scope_id(&self) -> Option<ScopeId> {
-        self.scope_stack.borrow().last().map(|frame| frame.scope)
+        self.scope_stack.borrow().last().copied()
     }
 
     /// Call this function with the current scope set to the given scope
@@ -378,17 +355,15 @@ fn MyComponent() -> Element {{
 
     /// Push a scope onto the stack
     fn push_scope(&self, scope: ScopeId) {
-        let (suspense_location, target_id) = self
+        let suspense_location = self
             .scope_states
             .borrow()
             .get(scope.index())
             .and_then(|s| s.as_ref())
-            .map(|s| (s.suspense_location(), s.target_id()))
-            .unwrap_or((SuspenseLocation::default(), RenderTargetId::ROOT));
+            .map(|s| s.suspense_location())
+            .unwrap_or_default();
         self.suspense_stack.borrow_mut().push(suspense_location);
-        self.scope_stack
-            .borrow_mut()
-            .push(ScopeStackFrame { scope, target_id });
+        self.scope_stack.borrow_mut().push(scope);
     }
 
     /// Pop a scope off the stack
@@ -632,14 +607,13 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // Now that we've accumulated all the parent attributes for the target element, call them bottom to top
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             tracing::event!(
                 tracing::Level::TRACE,
                 "Calling {} listeners",
                 listeners.len()
             );
-            listeners.sort_by_key(|(path, _)| std::cmp::Reverse(path.depth()));
             for (_, listener) in listeners {
                 listener.call(uievent.clone());
                 let metadata = uievent.metadata.borrow();
