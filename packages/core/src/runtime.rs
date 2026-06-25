@@ -23,31 +23,6 @@ use tracing::instrument;
 
 use dioxus_core_template::TemplatePath;
 
-#[derive(Clone, Copy)]
-struct EventTarget {
-    mount: MountId,
-    path: EventTargetPath,
-}
-
-#[derive(Clone, Copy)]
-enum EventTargetPath {
-    Static(TemplatePath),
-    Slot(TemplatePath),
-}
-
-impl EventTargetPath {
-    fn is_under_attr(self, attr: TemplatePath) -> bool {
-        match self {
-            Self::Static(path) => path.starts_with(attr),
-            Self::Slot(path) => path.starts_with(attr),
-        }
-    }
-
-    fn is_exact_static(self, attr: TemplatePath) -> bool {
-        matches!(self, Self::Static(path) if path == attr)
-    }
-}
-
 thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
 }
@@ -534,19 +509,15 @@ fn MyComponent() -> Element {{
         if let Some(parent_ref) = parent_ref
             && let Some(path) = self.event_target_path(parent_ref, element)
         {
-            let target = EventTarget {
-                mount: parent_ref,
-                path,
-            };
             if event.propagates() {
-                self.handle_bubbling_event(target, name, event);
+                self.handle_bubbling_event(parent_ref, path, name, event);
             } else {
-                self.handle_non_bubbling_event(target, name, event);
+                self.handle_non_bubbling_event(parent_ref, path, name, event);
             }
         }
     }
 
-    fn event_target_path(&self, mount_id: MountId, element: ElementId) -> Option<EventTargetPath> {
+    fn event_target_path(&self, mount_id: MountId, element: ElementId) -> Option<TemplatePath> {
         let mounts = self.mounts.borrow();
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
@@ -557,18 +528,14 @@ fn MyComponent() -> Element {{
                 continue;
             };
             if id.element_id() == element {
-                return Some(EventTargetPath::Static(path));
+                return Some(path);
             }
         }
 
         None
     }
 
-    fn child_slot_path(
-        &self,
-        parent_mount: MountId,
-        child_mount: MountId,
-    ) -> Option<EventTargetPath> {
+    fn child_slot_path(&self, parent_mount: MountId, child_mount: MountId) -> Option<TemplatePath> {
         let mounts = self.mounts.borrow();
         let child = mounts.get(child_mount.0)?;
         debug_assert_eq!(child.logical_parent(), Some(parent_mount));
@@ -583,19 +550,18 @@ fn MyComponent() -> Element {{
         } else {
             anchor.static_path().split_insertion().0
         };
-        Some(EventTargetPath::Slot(target))
+        Some(target)
     }
 
     fn visit_event_attributes(
         node: &VNode,
-        target_path: EventTargetPath,
+        target_path: TemplatePath,
         name: &str,
-        path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
         mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
     ) {
         for anchor in node.dynamic_anchors() {
             let attr_path = anchor.static_path();
-            if !path_matches(target_path, attr_path) {
+            if !target_path.starts_with(attr_path) {
                 continue;
             }
 
@@ -630,47 +596,48 @@ fn MyComponent() -> Element {{
     |           <-- no, broke early
     */
     #[instrument(
-        skip(self, parent, uievent),
+        skip(self, path, uievent),
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(&self, parent: EventTarget, name: &str, uievent: Event<dyn Any>) {
+    fn handle_bubbling_event(
+        &self,
+        mount_id: MountId,
+        path: TemplatePath,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-        let mut parent = Some(parent);
-        while let Some(target) = parent {
+        let mut mount_id = mount_id;
+        let mut target_path = path;
+
+        loop {
             let mut listeners = vec![];
             let logical_parent;
 
             // We do this in its own block to prevent mount borrows from staying open while we call user code
             {
                 let mounts = self.mounts.borrow();
-                let Some(mount) = mounts.get(target.mount.0) else {
+                let Some(mount) = mounts.get(mount_id.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
                 };
 
                 let el_ref = mount.node();
-                let target_path = target.path;
                 logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
-                Self::visit_event_attributes(
-                    el_ref,
-                    target_path,
-                    name,
-                    EventTargetPath::is_under_attr,
-                    |value, attr_path| {
-                        if let AttributeValue::Listener(listener) = value {
-                            listeners.push((attr_path, listener.clone()));
-                        }
+                Self::visit_event_attributes(el_ref, target_path, name, |value, attr_path| {
+                    if let AttributeValue::Listener(listener) = value {
+                        listeners.push((attr_path, listener.clone()));
+                    }
 
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        target_path.is_exact_static(attr_path)
-                    },
-                );
+                    // Break if this is the exact target element.
+                    // This means we won't call two listeners with the same name on the same element. This should be
+                    // documented, or be rejected from the rsx! macro outright
+                    target_path == attr_path
+                });
             }
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
@@ -690,46 +657,51 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            parent = logical_parent.and_then(|parent_ref| {
-                self.child_slot_path(parent_ref, target.mount)
-                    .map(|path| EventTarget {
-                        mount: parent_ref,
-                        path,
-                    })
-            });
+            let Some(parent_mount) = logical_parent else {
+                break;
+            };
+            let Some(slot_path) = self.child_slot_path(parent_mount, mount_id) else {
+                break;
+            };
+
+            mount_id = parent_mount;
+            target_path = slot_path;
         }
     }
 
     /// Call an event listener in the simplest way possible without bubbling upwards
     #[instrument(
-        skip(self, node, uievent),
+        skip(self, target_path, uievent),
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
-    fn handle_non_bubbling_event(&self, node: EventTarget, name: &str, uievent: Event<dyn Any>) {
+    fn handle_non_bubbling_event(
+        &self,
+        mount_id: MountId,
+        target_path: TemplatePath,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
         let listeners = {
             let mounts = self.mounts.borrow();
-            let Some(mount) = mounts.get(node.mount.0) else {
+            let Some(mount) = mounts.get(mount_id.0) else {
                 // If the node is suspended and not mounted, we can just ignore the event
                 return;
             };
             let mut listeners = Vec::new();
-            let target_path = node.path;
 
-            Self::visit_event_attributes(
-                mount.node(),
-                target_path,
-                name,
-                EventTargetPath::is_exact_static,
-                |value, _| {
-                    if let AttributeValue::Listener(listener) = value {
-                        listeners.push(listener.clone());
-                        true
-                    } else {
-                        false
-                    }
-                },
-            );
+            Self::visit_event_attributes(mount.node(), target_path, name, |value, attr_path| {
+                if target_path != attr_path {
+                    return false;
+                }
+
+                if let AttributeValue::Listener(listener) = value {
+                    listeners.push(listener.clone());
+                    true
+                } else {
+                    false
+                }
+            });
 
             listeners
         };
