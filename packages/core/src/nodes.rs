@@ -83,12 +83,9 @@ impl DynamicValues {
     }
 
     /// Normalize dynamic attribute slots for diffing.
-    #[inline]
     pub(crate) fn normalize(&mut self) {
         for slot in self.dynamic_attrs.iter_mut() {
-            if slot.len() > 1 {
-                slot.sort_by_key(|attribute| (attribute.name, attribute.namespace));
-            }
+            slot.sort_by_key(|attribute| (attribute.name, attribute.namespace));
         }
     }
 
@@ -274,9 +271,6 @@ impl VNode {
             "bad dynamic attribute count"
         );
 
-        // Dynamic attribute slots are required to be sorted by `(name, namespace)` for the diff.
-        // That invariant is established centrally by `DynamicValues::normalize`.
-
         Self {
             vnode: Rc::new(VNodeInner {
                 template,
@@ -328,23 +322,8 @@ impl<'a> MountedVNode<'a> {
         anchor: DynamicAnchor<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        self.mounted_static_anchor(anchor.anchor_index(), dom)
-    }
-
-    /// Get the mounted id for a static template node by its anchor slot.
-    pub fn mounted_static_anchor(self, anchor_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        dom.mounted_anchor_node(self.mount, anchor_idx)
+        dom.mounted_anchor_node(self.mount, anchor.anchor_index())
             .map(|id| id.element_id())
-    }
-
-    /// Get the mounted id for the anchor that owns a dynamic attribute.
-    pub fn mounted_dynamic_attribute(
-        self,
-        slot: DynamicAttrSlot<'a>,
-        dom: &VirtualDom,
-    ) -> Option<ElementId> {
-        self.vnode.dynamic_attr_values().get(slot.index())?;
-        self.mounted_anchor_node(slot.anchor(), dom)
     }
 
     /// Get mounted children for a dynamic fragment.
