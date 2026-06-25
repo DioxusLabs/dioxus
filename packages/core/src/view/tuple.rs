@@ -11,7 +11,10 @@ use std::marker::PhantomData;
 use crate::{DynamicValues, IntoDynNode};
 use dioxus_core_template::TemplateRawTree;
 
-use super::{IntoViewChild, View, ViewTemplate, dynamic_node};
+use super::{
+    DynamicNodeBuilder, DynamicViewChildMarker, IntoViewChild, View, ViewTemplate,
+    dynamic_node_builder,
+};
 
 struct StaticTupleViewChildMarker<T>(PhantomData<fn() -> T>);
 
@@ -70,7 +73,7 @@ macro_rules! impl_tuple_views {
         impl<$($before_name,)* $dynamic_name, $dynamic_marker, $($after_name, $after_marker),*>
             IntoViewChild<($(
                 StaticTupleViewChildMarker<$before_name>,
-            )* dynamic_node::DynamicViewChildMarker<$dynamic_marker>, $($after_marker,)*)>
+            )* DynamicViewChildMarker<$dynamic_marker>, $($after_marker,)*)>
             for ($($before_name,)* $dynamic_name, $($after_name,)*)
         where
             $($before_name: View,)*
@@ -79,7 +82,7 @@ macro_rules! impl_tuple_views {
         {
             type Output = (
                 $($before_name,)*
-                dynamic_node::DynamicNodeBuilder<$dynamic_name, $dynamic_marker>,
+                DynamicNodeBuilder<$dynamic_name, $dynamic_marker>,
                 $(<$after_name as IntoViewChild<$after_marker>>::Output,)*
             );
 
@@ -88,7 +91,7 @@ macro_rules! impl_tuple_views {
                 let ($($before_value,)* $dynamic_value, $($after_value,)*) = self;
                 (
                     $($before_value,)*
-                    dynamic_node::dynamic_node_builder($dynamic_value),
+                    dynamic_node_builder($dynamic_value),
                     $($after_value.into_child(),)*
                 )
             }

@@ -470,8 +470,18 @@ impl ViewBuilder {
     }
 
     fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
+        let marker = self.next_ident("__DioxusText");
         let value = text.input.to_static().unwrap();
-        quote_spanned! { text.input.span() => dioxus_core::static_text!(#value) }
+        self.definitions.push(quote_spanned! { text.input.span() =>
+            struct #marker;
+            impl dioxus_core::view::StaticText for #marker {
+                const TEXT: &'static str = #value;
+            }
+        });
+        quote_spanned! {
+            text.input.span() =>
+            dioxus_core::view::StaticTextBuilder::<#marker>(::core::marker::PhantomData)
+        }
     }
 
     fn dynamic_node(&mut self, tokens: TokenStream2) -> TokenStream2 {
@@ -486,7 +496,7 @@ impl ViewBuilder {
         // from the bound value's type.
         let node = format_ident!("__dyn_node_{id}");
         self.node_hoists.push(quote! { let #node = #tokens; });
-        quote! { dioxus_core::view::dynamic_node::dynamic_node_builder(#node) }
+        quote! { dioxus_core::view::dynamic_node_builder(#node) }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
@@ -639,11 +649,21 @@ impl Element {
             }
 
             if let Some((_, value)) = attr.as_static_str_literal() {
+                let marker = builder.next_ident("__DioxusAttrValue");
                 let value = value.to_static().unwrap();
-                let value = quote_spanned! {
-                    attr.span() => dioxus_core::static_attribute_value!(#value)
+                builder.definitions.push(quote_spanned! { attr.span() =>
+                    struct #marker;
+                    impl dioxus_core::view::StaticAttributeValue for #marker {
+                        const VALUE: &'static str = #value;
+                    }
+                });
+                return quote! {
+                    .#method(
+                        dioxus_core::view::StaticAttributeValueBuilder::<#marker>(
+                            ::core::marker::PhantomData
+                        )
+                    )
                 };
-                return quote! { .#method(#value) };
             }
 
             return builder.dynamic_builder_attr(attr, method.clone());

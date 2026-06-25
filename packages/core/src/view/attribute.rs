@@ -56,13 +56,7 @@ pub trait StaticAttributeValue {
 }
 
 /// A static attribute value that can be passed to typed attribute methods.
-pub struct StaticAttributeValueBuilder<V>(PhantomData<V>);
-
-/// Create a static attribute value from a marker type.
-#[inline]
-pub const fn static_attribute_value<V: StaticAttributeValue>() -> StaticAttributeValueBuilder<V> {
-    StaticAttributeValueBuilder(PhantomData)
-}
+pub struct StaticAttributeValueBuilder<V>(#[doc(hidden)] pub PhantomData<V>);
 
 /// Marker for static attribute values passed to typed attribute methods.
 #[doc(hidden)]
@@ -185,18 +179,4 @@ where
     fn append_to(self, target: ElementBuilder<Tag, Attributes, Children>) -> Self::Output {
         target.attribute(StaticAttributeBuilder(PhantomData))
     }
-}
-
-/// Declare a static attribute value for typed attribute methods.
-#[macro_export]
-macro_rules! static_attribute_value {
-    ($value:literal) => {{
-        struct StaticAttributeValueMarker;
-
-        impl $crate::view::StaticAttributeValue for StaticAttributeValueMarker {
-            const VALUE: &'static str = $value;
-        }
-
-        $crate::view::static_attribute_value::<StaticAttributeValueMarker>()
-    }};
 }

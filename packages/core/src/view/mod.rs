@@ -19,5 +19,3 @@ pub use element::*;
 pub use fragment::*;
 pub use text::*;
 pub use traits::*;
-
-pub use crate::{static_attribute_value, static_text};

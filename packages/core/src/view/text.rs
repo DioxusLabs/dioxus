@@ -14,29 +14,10 @@ pub trait StaticText {
 }
 
 /// A static text view.
-pub struct StaticTextBuilder<T>(PhantomData<T>);
-
-/// Create a static text view for a text marker.
-#[inline]
-pub const fn static_text<T: StaticText>() -> StaticTextBuilder<T> {
-    StaticTextBuilder(PhantomData)
-}
+pub struct StaticTextBuilder<T>(#[doc(hidden)] pub PhantomData<T>);
 
 impl<T: StaticText> ViewTemplate for StaticTextBuilder<T> {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::StaticText(T::TEXT);
 }
 
 impl<T: StaticText> View for StaticTextBuilder<T> {}
-
-/// Declare a static text marker type.
-#[macro_export]
-macro_rules! static_text {
-    ($value:literal) => {{
-        struct StaticTextMarker;
-        impl $crate::view::StaticText for StaticTextMarker {
-            const TEXT: &'static str = $value;
-        }
-
-        $crate::view::static_text::<StaticTextMarker>()
-    }};
-}
