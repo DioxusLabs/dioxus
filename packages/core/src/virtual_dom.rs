@@ -534,18 +534,6 @@ impl VirtualDom {
     /// cache is reset afterwards to keep the next render correct.
     pub fn rebuild_in_place(&mut self) {
         self.rebuild(&mut NoOpMutations);
-        self.reset_renderer_cache();
-    }
-
-    /// Discard the renderer's cached template state for every render target.
-    ///
-    /// Call this after a rebuild whose edits were not applied to the real DOM
-    /// (no-op rendering, hydration) so the next render does not assume those
-    /// edits happened. Mount state and element bindings are preserved.
-    pub fn reset_renderer_cache(&mut self) {
-        for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
-            target.clear_template_cache();
-        }
     }
 
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
