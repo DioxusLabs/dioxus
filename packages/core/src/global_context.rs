@@ -227,11 +227,10 @@ pub fn remove_future(id: Task) {
 ///
 /// pub fn Comp() -> Element {
 ///     let count = use_hook(|| Rc::new(RefCell::new(0)));
-///     let count_for_click = count.clone();
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *count_for_click.borrow_mut() += 1,
+///             onclick: move |_| *count.borrow_mut() += 1,
 ///             "{count.borrow()}"
 ///         }
 ///     }
@@ -310,7 +309,7 @@ pub fn parent_scope() -> Option<ScopeId> {
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
-    Runtime::with_current_scope(|cx| cx.needs_update_any(cx.id));
+    Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
 /// Mark the current scope as dirty, causing it to re-render.
