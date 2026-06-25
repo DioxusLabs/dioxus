@@ -4,8 +4,8 @@ use crate::{
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
+    view::ViewExt,
 };
-use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 use dioxus_core_types::DioxusFormattable;
 
 use std::ops::Deref;
@@ -193,26 +193,12 @@ impl VNode {
         use std::cell::OnceCell;
         // We can reuse this empty vnode across the same thread to save memory
         thread_local! {
-            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+            static EMPTY_VNODE: OnceCell<VNode> = const { OnceCell::new() };
         }
-        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
-        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
-        static EMPTY_TEMPLATE: Template = STORAGE.as_template();
-
-        let vnode = EMPTY_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    template: EMPTY_TEMPLATE,
-                    view: DynamicValues::from_parts(
-                        None,
-                        Box::new([DynamicNode::Fragment(Vec::new())]),
-                        Box::new([]),
-                    ),
-                })
-            })
-            .clone()
-        });
-        Self { vnode }
+        EMPTY_VNODE.with(|cell| {
+            cell.get_or_init(move || crate::view::fragment().into_vnode())
+                .clone()
+        })
     }
 
     /// Create a new VNode from a static template and dynamic node/attribute payload.
@@ -349,7 +335,7 @@ pub enum DynamicNode {
     /// A list of VNodes.
     ///
     /// Note that this is not a list of dynamic nodes. These must be VNodes and created through conditional rendering
-    /// or iterators. An empty Fragment represents the absence of content at this slot.
+    /// or iterators.
     Fragment(Vec<VNode>),
 }
 
@@ -603,7 +589,7 @@ impl PartialEq for AttributeValue {
     }
 }
 
-/// Trait object support for custom [`AttributeValue::Any`] values.
+#[doc(hidden)]
 pub trait AnyValue: 'static {
     /// Compare this value with another erased value.
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;

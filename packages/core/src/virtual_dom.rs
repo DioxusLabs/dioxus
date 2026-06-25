@@ -561,7 +561,6 @@ impl VirtualDom {
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl crate::MultiWriter) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        self.clear_full_rebuild_state();
         // The target router is the single write boundary for a render pass. No-op
         // hosts ignore the same mutation stream as every other renderer.
         let mut router = crate::mutations::TargetRouter::new(to, self.runtime.clone());
@@ -588,35 +587,6 @@ impl VirtualDom {
                 self.render_immediate_with_writer(&mut router);
             }
         }
-    }
-
-    fn clear_full_rebuild_state(&mut self) {
-        let mut root_scope = None;
-        let mut scopes = Vec::new();
-        for scope in self.scopes.drain() {
-            if scope.context_id == ScopeId::ROOT {
-                root_scope = Some(scope);
-            } else {
-                scopes.push(scope);
-            }
-        }
-
-        drop_scopes_child_first(scopes);
-
-        self.dirty_scopes.clear();
-        self.resolved_scopes.clear();
-        self.runtime.dirty_tasks.borrow_mut().clear();
-        self.runtime.pending_effects.borrow_mut().clear();
-
-        if let Some(mut root) = root_scope {
-            root.last_rendered_node = None;
-            let root_id = self.scopes.insert(root);
-            debug_assert_eq!(root_id, ScopeId::ROOT.index());
-        }
-        self.runtime.get_state(ScopeId::ROOT).set_root_mount(None);
-
-        self.runtime.mounts.borrow_mut().clear();
-        self.reset_render_targets_for_rebuild();
     }
 
     fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {

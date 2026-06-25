@@ -119,23 +119,6 @@ impl RenderTargetState {
             template_roots: HashMap::new(),
         }
     }
-
-    pub(crate) fn reset_for_rebuild(&mut self) {
-        self.elements.clear();
-        // The root element is always renderer-local element ID 0.
-        self.elements.insert(None);
-        self.template_roots.clear();
-    }
-
-    /// Drop the cached template prototypes, reclaiming the element ids they
-    /// reserved. The live element arena and its mount bindings are left intact:
-    /// only the clone-source prototypes are forgotten, so the next render
-    /// rebuilds them against the renderer's real DOM.
-    pub(crate) fn clear_template_cache(&mut self) {
-        for (_, prototype) in self.template_roots.drain() {
-            self.elements.try_remove(prototype.index());
-        }
-    }
 }
 
 /// A live mount's unique identifier.
@@ -188,12 +171,6 @@ impl VirtualDom {
             .template_roots
             .insert((template, root_anchor_idx), id);
         id
-    }
-
-    pub(crate) fn reset_render_targets_for_rebuild(&mut self) {
-        for (_, target) in self.runtime.render_targets.borrow_mut().iter_mut() {
-            target.reset_for_rebuild();
-        }
     }
 
     pub(crate) fn set_element_ref_for_mount(&self, mount: MountId, el: MountedElementId) {
