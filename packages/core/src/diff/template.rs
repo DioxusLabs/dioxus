@@ -627,10 +627,6 @@ impl<'a> DynamicAttrSlot<'a> {
     pub fn anchor(self) -> DynamicAnchor<'a> {
         self.anchor
     }
-
-    pub(crate) fn index(self) -> usize {
-        self.index
-    }
 }
 
 fn static_child<'a>(
@@ -826,7 +822,6 @@ mod tests {
             .expect("anchor with a dynamic attribute slot");
         let slot = anchor.attrs().next().expect("dynamic attr slot");
 
-        assert_eq!(slot.index(), 0);
         assert_eq!(slot.anchor().anchor_index(), anchor.anchor_index());
     }
 }

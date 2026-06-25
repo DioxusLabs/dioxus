@@ -295,6 +295,12 @@ impl<'a> MountedVNode<'a> {
             .map(|id| id.element_id())
     }
 
+    /// Get the mounted id for a static template node by anchor index.
+    pub fn mounted_static_anchor(self, anchor_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+        dom.mounted_anchor_node(self.mount, anchor_idx)
+            .map(|id| id.element_id())
+    }
+
     /// Get mounted children for a dynamic fragment.
     pub fn mounted_fragment_children(
         self,
