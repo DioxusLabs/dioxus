@@ -405,8 +405,12 @@ impl DiffState<'_, '_, '_, '_> {
 
         let stable_edges = StableFragmentEdges::new(new, &new_mounts, &anchorable, self.dom);
         for range in plan.placement_runs(&stable_edges.live_stable) {
-            let site = self.has_writer().then(|| {
-                stable_edges
+            let context = self.context();
+            let runtime = self.dom.runtime.clone();
+            let dom = &mut *self.dom;
+            let mut replaced_nodes = Vec::new();
+            if let Some(to) = self.to.as_deref_mut() {
+                let site = stable_edges
                     .next_first(range.end)
                     .map(InsertionSite::before)
                     .or_else(|| {
@@ -415,16 +419,7 @@ impl DiffState<'_, '_, '_, '_> {
                             .map(InsertionSite::after)
                     })
                     .or(fallback_site)
-                    .expect("visible fragment placement requires a fallback insertion site")
-            });
-
-            let context = self.context();
-            let runtime = self.dom.runtime.clone();
-            let dom = &mut *self.dom;
-            let to = self.to.as_deref_mut();
-            let mut replaced_nodes = Vec::new();
-            if let Some(site) = site {
-                let to = to.expect("writer checked");
+                    .expect("visible fragment placement requires a fallback insertion site");
                 at_site(site, to, runtime, |to| {
                     let mut state = DiffState::new_with_context(dom, Some(to), context);
                     state.create_or_diff_placed_range(
@@ -436,7 +431,7 @@ impl DiffState<'_, '_, '_, '_> {
                     )
                 });
             } else {
-                let mut state = DiffState::new_with_context(dom, to, context);
+                let mut state = DiffState::new_with_context(dom, None, context);
                 state.create_or_diff_placed_range(
                     &inputs,
                     &plan,

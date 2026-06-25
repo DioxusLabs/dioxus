@@ -192,11 +192,6 @@ impl VNode {
         );
         let old_has_live_dom = live_first.is_some();
         let context = state.context();
-        let site = state.has_writer().then(|| {
-            live_first
-                .map(InsertionSite::before)
-                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context))
-        });
 
         if !old_has_live_dom {
             // The old slot has no nodes in the current target. It may still own component nodes
@@ -211,10 +206,12 @@ impl VNode {
         }
 
         let create_new = |state: &mut DiffState<'_, '_, '_, '_>| {
-            if let Some(site) = site {
+            if let Some(to) = state.to.as_deref_mut() {
+                let site = live_first
+                    .map(InsertionSite::before)
+                    .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
                 let runtime = state.dom.runtime.clone();
                 let dom = &mut *state.dom;
-                let to = state.to.as_deref_mut().expect("writer checked");
                 at_site(site, to, runtime, |to| {
                     let mut state = DiffState::new_with_context(dom, Some(to), context);
                     new.create_dynamic_node(mount, idx, &mut state)
@@ -892,19 +889,19 @@ impl VNode {
         anchor: DynamicAnchor<'_>,
         state: &mut DiffState<'_, '_, '_, '_>,
     ) {
-        if !state.has_writer() {
+        let context = state.context();
+        let Some(to) = state.to.as_deref_mut() else {
             for slot in anchor.nodes() {
                 self.create_dynamic_node(mount, slot.index(), state);
             }
             return;
-        }
+        };
 
         let first_slot = anchor.nodes().next().expect("dynamic anchor has nodes");
-        let context = state.context();
         let site = insertion_site_for_slot(mount, first_slot, state.dom, context);
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
-        let to = state.to.as_deref_mut().expect("writer checked");
+
         at_site(site, to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
             self.create_dynamic_anchor_nodes(mount, anchor, &mut state)
