@@ -3,17 +3,10 @@ use crate::{
     error_boundary::ErrorBoundaryProps, properties::RootProps, suspense::SuspenseBoundaryProps,
 };
 
-#[cfg(debug_assertions)]
 use crate::view::ViewExt;
 
-#[cfg(debug_assertions)]
 fn component_vnode(component: VComponent) -> VNode {
     component.into_vnode()
-}
-
-#[cfg(not(debug_assertions))]
-fn component_vnode(component: VComponent) -> VNode {
-    crate::view::into_vnode_with_capacity::<0, 0, 1, _>(component)
 }
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary
