@@ -2,7 +2,7 @@ use crate::{
     Element,
     diff::{
         context::{DiffContext, DiffFrame, DiffState},
-        placement::{InsertionSite, at_site, insertion_site_for_slot},
+        placement::{InsertionSite, insertion_site_for_slot},
         template::DynamicNodeSlot,
     },
     innerlude::{MountId, VComponent, WriteMutations},
@@ -216,9 +216,10 @@ impl VNode {
                 .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
             let runtime = state.dom.runtime.clone();
             let dom = &mut *state.dom;
-            at_site(site, to, runtime, |to| {
+            site.create_and_place_with_result(to, runtime, |to| {
                 let mut state = DiffState::new_with_context(dom, Some(to), context);
-                self.create_component_node(mount, idx, new, &mut state)
+                let nodes = self.create_component_node(mount, idx, new, &mut state);
+                (nodes, nodes)
             });
         } else {
             self.create_component_node(mount, idx, new, state);

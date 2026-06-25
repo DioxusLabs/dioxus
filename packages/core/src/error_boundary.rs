@@ -75,7 +75,7 @@ fn create_error_boundary() -> ErrorContext {
 
 /// Provide an error boundary to catch errors from child components. This needs to called in a hydration comptable
 /// order if fullstack is enabled
-pub(crate) fn use_error_boundary_provider() -> ErrorContext {
+pub fn use_error_boundary_provider() -> ErrorContext {
     use_hook(|| provide_context(create_error_boundary()))
 }
 

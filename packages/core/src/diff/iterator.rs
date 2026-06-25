@@ -8,7 +8,7 @@ use crate::{
     DynamicNode, ElementId, VNodeChild, VirtualDom,
     diff::{
         context::{DiffFrame, DiffState},
-        placement::{InsertionSite, at_site, create_at_site_with_mounts},
+        placement::InsertionSite,
     },
     innerlude::{MountId, WriteMutations},
     mount::FragmentMountWriter,
@@ -420,15 +420,16 @@ impl DiffState<'_, '_, '_, '_> {
                     })
                     .or(fallback_site)
                     .expect("visible fragment placement requires a fallback insertion site");
-                at_site(site, to, runtime, |to| {
+                site.create_and_place_with_result(to, runtime, |to| {
                     let mut state = DiffState::new_with_context(dom, Some(to), context);
-                    state.create_or_diff_placed_range(
+                    let nodes = state.create_or_diff_placed_range(
                         &inputs,
                         &plan,
                         range.clone(),
                         &mut new_mounts,
                         &mut replaced_nodes,
-                    )
+                    );
+                    (nodes, nodes)
                 });
             } else {
                 let mut state = DiffState::new_with_context(dom, None, context);
@@ -540,12 +541,22 @@ impl DiffState<'_, '_, '_, '_> {
         new: &[VNode],
         parent: Option<MountId>,
         site: impl FnOnce(&mut Self) -> InsertionSite,
-        created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
+        mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
     ) -> usize {
         if self.has_writer() {
             let site = site(self);
             let to = self.to.as_deref_mut().expect("writer checked");
-            create_at_site_with_mounts(new, parent, site, self.dom, to, created_mount)
+            site.create_and_place_with_result(to, self.dom.runtime.clone(), |to| {
+                let nodes = self.dom.create_children_with_mounts(
+                    Some(to),
+                    new,
+                    parent,
+                    |dom, idx, mount| {
+                        created_mount(dom, idx, mount);
+                    },
+                );
+                (nodes, nodes)
+            })
         } else {
             self.dom
                 .create_children_with_mounts(self.to.as_deref_mut(), new, parent, created_mount)

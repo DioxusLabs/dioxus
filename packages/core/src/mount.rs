@@ -656,7 +656,6 @@ impl VirtualDom {
             .map(with_mount)
             .expect("mount")
     }
-
 }
 
 fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {

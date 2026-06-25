@@ -6,10 +6,7 @@ use crate::{
         CreatedVNode,
         attributes::{AttrDiffTarget, AttributeDiffScratch},
         context::{DiffFrame, DiffState},
-        placement::{
-            ElementEdge, InsertionSite, at_site, create_at_site, insertion_site_at,
-            insertion_site_for_slot,
-        },
+        placement::{ElementEdge, InsertionSite, insertion_site_at, insertion_site_for_slot},
         template::{DynamicAnchor, DynamicNodeSlot},
     },
     innerlude::MountId,
@@ -212,9 +209,10 @@ impl VNode {
                     .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
                 let runtime = state.dom.runtime.clone();
                 let dom = &mut *state.dom;
-                at_site(site, to, runtime, |to| {
+                site.create_and_place_with_result(to, runtime, |to| {
                     let mut state = DiffState::new_with_context(dom, Some(to), context);
-                    new.create_dynamic_node(mount, idx, &mut state)
+                    let nodes = new.create_dynamic_node(mount, idx, &mut state);
+                    (nodes, nodes)
                 });
             } else {
                 new.create_dynamic_node(mount, idx, state);
@@ -434,7 +432,10 @@ impl VNode {
             let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
                 insertion_site_at(MountedVNode::new(self, mount), state.dom, context)
             });
-            create_at_site(new, parent, site, state.dom, to)
+            site.create_and_place_with_result(to, state.dom.runtime.clone(), |to| {
+                let created = new.create_mounted(state.dom, parent, Some(to));
+                (created.nodes, created)
+            })
         } else {
             new.create_mounted(state.dom, parent, state.to.as_deref_mut())
         };
@@ -902,9 +903,10 @@ impl VNode {
         let runtime = state.dom.runtime.clone();
         let dom = &mut *state.dom;
 
-        at_site(site, to, runtime, |to| {
+        site.create_and_place_with_result(to, runtime, |to| {
             let mut state = DiffState::new_with_context(dom, Some(to), context);
-            self.create_dynamic_anchor_nodes(mount, anchor, &mut state)
+            let nodes = self.create_dynamic_anchor_nodes(mount, anchor, &mut state);
+            (nodes, nodes)
         });
     }
 

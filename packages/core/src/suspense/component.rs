@@ -3,7 +3,7 @@ use std::{any::Any, rc::Rc};
 use crate::{
     DynamicNode,
     diff::context::DiffContext,
-    diff::placement::{InsertionSite, insertion_site_at, recreate_at_site, splice_streamed_nodes},
+    diff::placement::{InsertionSite, insertion_site_at, splice_streamed_nodes},
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
     render_driver::{RenderDriver, remove_rendered_output},
@@ -891,7 +891,16 @@ fn replace_placeholder_with(
     // survive the fallback -> children swap.
     if let Some(to) = to.as_deref_mut() {
         let site = insertion_site_at(placeholder.mounted_vnode(), dom, None);
-        recreate_at_site(children.vnode(), children.mount(), parent, site, dom, to);
+        site.create_and_place_with_result(to, dom.runtime.clone(), |to| {
+            let created = children.vnode().recreate_with_mount(
+                dom,
+                children.mount(),
+                parent,
+                parent,
+                Some(to),
+            );
+            (created.nodes, created)
+        });
     } else {
         children
             .vnode()

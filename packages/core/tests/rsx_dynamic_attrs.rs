@@ -211,11 +211,7 @@ fn dynamic_attr_and_child_share_static_path() {
         .dynamic_anchors()
         .filter(|anchor| anchor.parent_element_op_index() == Some(div.op()))
         .collect::<Vec<_>>();
-    let attr_anchor = anchors
-        .iter()
-        .copied()
-        .next()
-        .expect("dynamic attr anchor");
+    let attr_anchor = anchors.iter().copied().next().expect("dynamic attr anchor");
     let node_anchor = anchors
         .iter()
         .copied()

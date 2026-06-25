@@ -17,7 +17,6 @@ use crate::{
 };
 
 use super::{
-    CreatedVNode,
     context::DiffContext,
     node::EdgeScan,
     template::{DynamicAnchor, DynamicNodeSlot},
@@ -75,19 +74,7 @@ impl InsertionSite {
         }
     }
 
-    fn create_and_place(
-        self,
-        to: &mut dyn WriteMutations,
-        runtime: Rc<Runtime>,
-        create: impl FnOnce(&mut dyn WriteMutations) -> usize,
-    ) -> usize {
-        self.create_and_place_with_result(to, runtime, |to| {
-            let count = create(to);
-            (count, count)
-        })
-    }
-
-    fn create_and_place_with_result<R>(
+    pub(crate) fn create_and_place_with_result<R>(
         self,
         to: &mut dyn WriteMutations,
         runtime: Rc<Runtime>,
@@ -366,74 +353,11 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
     }
 }
 
-pub(super) fn create_at_site_with_mounts(
-    content: &[VNode],
-    parent: Option<MountId>,
-    site: InsertionSite,
-    dom: &mut VirtualDom,
-    to: &mut dyn WriteMutations,
-    mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
-) -> usize {
-    at_site(site, to, dom.runtime.clone(), |to| {
-        dom.create_children_with_mounts(Some(to), content, parent, |dom, idx, mount| {
-            created_mount(dom, idx, mount);
-        })
-    })
-}
-
-pub(crate) fn create_at_site(
-    content: &VNode,
-    parent: Option<MountId>,
-    site: InsertionSite,
-    dom: &mut VirtualDom,
-    to: &mut dyn WriteMutations,
-) -> CreatedVNode {
-    at_site_with_result(site, to, dom.runtime.clone(), |to| {
-        let created = content.create_mounted(dom, parent, Some(to));
-        (created.nodes, created)
-    })
-}
-
-/// Like [`create_at_site`], but re-emits an already-mounted (background) subtree
-/// at the site, reusing its existing mount and scopes instead of allocating fresh
-/// ones. Used to promote a retained suspense branch to the foreground.
-pub(crate) fn recreate_at_site(
-    content: &VNode,
-    mount: MountId,
-    parent: Option<MountId>,
-    site: InsertionSite,
-    dom: &mut VirtualDom,
-    to: &mut dyn WriteMutations,
-) -> CreatedVNode {
-    at_site_with_result(site, to, dom.runtime.clone(), |to| {
-        let created = content.recreate_with_mount(dom, mount, parent, parent, Some(to));
-        (created.nodes, created)
-    })
-}
-
-pub(super) fn at_site(
-    site: InsertionSite,
-    to: &mut dyn WriteMutations,
-    runtime: Rc<Runtime>,
-    create: impl FnOnce(&mut dyn WriteMutations) -> usize,
-) -> usize {
-    site.create_and_place(to, runtime, create)
-}
-
-pub(super) fn at_site_with_result<R>(
-    site: InsertionSite,
-    to: &mut dyn WriteMutations,
-    runtime: Rc<Runtime>,
-    create: impl FnOnce(&mut dyn WriteMutations) -> (usize, R),
-) -> R {
-    site.create_and_place_with_result(to, runtime, create)
-}
-
 /// Splice streamed nodes onto the renderer stack relative to an on-screen anchor, driving the
 /// renderer through a *concrete* writer.
 ///
-/// This is the concrete-writer counterpart to the diff's [`at_site`]: streaming suspense resume
-/// can't reuse `at_site` because that wraps the writer in the `dyn`, portal-target-gated
+/// This is the concrete-writer counterpart to the diff's placement helper: streaming suspense resume
+/// can't reuse `InsertionSite::create_and_place_with_result` because that wraps the writer in the `dyn`, portal-target-gated
 /// [`TargetedLazyScope`], whereas the resume closure needs the concrete renderer to push
 /// server-streamed DOM nodes that don't have an [`ElementId`] yet. `push_nodes` stacks those nodes
 /// above the anchor and returns their count.
