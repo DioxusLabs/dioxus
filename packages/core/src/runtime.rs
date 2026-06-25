@@ -39,8 +39,6 @@ pub struct Runtime {
     // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
     scope_stack: RefCell<Vec<ScopeStackFrame>>,
 
-    current_render_target: Cell<RenderTargetId>,
-
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
     suspense_stack: RefCell<Vec<SuspenseLocation>>,
@@ -107,7 +105,6 @@ impl Runtime {
             rendering: Cell::new(false),
             scope_states: Default::default(),
             scope_stack: Default::default(),
-            current_render_target: Cell::new(RenderTargetId::ROOT),
             suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
@@ -198,7 +195,10 @@ fn MyComponent() -> Element {{
     /// no scope is active. Every scope carries a flat target assignment;
     /// portal scopes carry the portal's target and their subtree inherits it.
     pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
-        self.current_render_target.get()
+        self.scope_stack
+            .borrow()
+            .last()
+            .map_or(RenderTargetId::ROOT, |frame| frame.target_id)
     }
 
     /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
@@ -270,7 +270,6 @@ fn MyComponent() -> Element {{
                 && current.scope == scope
             {
                 current.target_id = target_id;
-                self.current_render_target.set(target_id);
             }
         }
     }
@@ -390,20 +389,12 @@ fn MyComponent() -> Element {{
         self.scope_stack
             .borrow_mut()
             .push(ScopeStackFrame { scope, target_id });
-        self.current_render_target.set(target_id);
     }
 
     /// Pop a scope off the stack
     fn pop_scope(&self) {
         self.suspense_stack.borrow_mut().pop();
-        let target_id = {
-            let mut scope_stack = self.scope_stack.borrow_mut();
-            scope_stack.pop();
-            scope_stack
-                .last()
-                .map_or(RenderTargetId::ROOT, |frame| frame.target_id)
-        };
-        self.current_render_target.set(target_id);
+        self.scope_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -553,25 +544,20 @@ fn MyComponent() -> Element {{
         Some(target)
     }
 
-    fn visit_event_attributes(
-        node: &VNode,
-        target_path: TemplatePath,
-        name: &str,
-        mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
-    ) {
-        for anchor in node.dynamic_anchors() {
-            let attr_path = anchor.static_path();
-            if !target_path.starts_with(attr_path) {
-                continue;
-            }
-
-            for attr in anchor.attrs().flat_map(|slot| slot.attrs()) {
+    fn event_attributes<'a>(
+        node: &'a VNode,
+        name: &'a str,
+    ) -> impl Iterator<Item = (TemplatePath, &'a AttributeValue)> + 'a {
+        node.dynamic_anchors().flat_map(move |anchor| {
+            let path = anchor.static_path();
+            anchor
+                .attrs()
+                .flat_map(|slot| slot.attrs())
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                if attr.name.get(2..) == Some(name) && visit(&attr.value, attr_path) {
-                    break;
-                }
-            }
-        }
+                .filter_map(move |attr| {
+                    (attr.name.get(2..) == Some(name)).then_some((path, &attr.value))
+                })
+        })
     }
 
     /*
@@ -628,7 +614,11 @@ fn MyComponent() -> Element {{
                 logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
-                Self::visit_event_attributes(el_ref, target_path, name, |value, attr_path| {
+                for (attr_path, value) in Self::event_attributes(el_ref, name) {
+                    if !target_path.starts_with(attr_path) {
+                        continue;
+                    }
+
                     if let AttributeValue::Listener(listener) = value {
                         listeners.push((attr_path, listener.clone()));
                     }
@@ -636,8 +626,10 @@ fn MyComponent() -> Element {{
                     // Break if this is the exact target element.
                     // This means we won't call two listeners with the same name on the same element. This should be
                     // documented, or be rejected from the rsx! macro outright
-                    target_path == attr_path
-                });
+                    if target_path == attr_path {
+                        break;
+                    }
+                }
             }
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
@@ -690,18 +682,16 @@ fn MyComponent() -> Element {{
             };
             let mut listeners = Vec::new();
 
-            Self::visit_event_attributes(mount.node(), target_path, name, |value, attr_path| {
+            for (attr_path, value) in Self::event_attributes(mount.node(), name) {
                 if target_path != attr_path {
-                    return false;
+                    continue;
                 }
 
                 if let AttributeValue::Listener(listener) = value {
                     listeners.push(listener.clone());
-                    true
-                } else {
-                    false
+                    break;
                 }
-            });
+            }
 
             listeners
         };
