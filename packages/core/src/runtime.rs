@@ -595,7 +595,7 @@ fn MyComponent() -> Element {{
                     }
 
                     if let AttributeValue::Listener(listener) = value {
-                        listeners.push((attr_path, listener.clone()));
+                        listeners.push(listener.clone());
                     }
 
                     // Break if this is the exact target element.
@@ -607,14 +607,16 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            // Now that we've accumulated all the parent attributes for the target element, call them bottom to top
+            // Now that we've accumulated all the parent attributes for the target element, call them in
+            // reverse order. Listeners are accumulated in document order (ancestors first), so reversing
+            // calls the deepest (target) listener first and bubbles up toward the ancestors.
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             tracing::event!(
                 tracing::Level::TRACE,
                 "Calling {} listeners",
                 listeners.len()
             );
-            for (_, listener) in listeners {
+            for listener in listeners.into_iter().rev() {
                 listener.call(uievent.clone());
                 let metadata = uievent.metadata.borrow();
 
