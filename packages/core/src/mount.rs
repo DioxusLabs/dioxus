@@ -24,6 +24,11 @@ pub(crate) enum RenderMode {
     Background,
 }
 
+/// This is a union that stores either:
+/// - A scope id
+/// - A mounted element id
+/// - A fragment range
+/// The discriminate is determined by the dynamic node variant
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PackedMountedSlot {
     value: usize,
