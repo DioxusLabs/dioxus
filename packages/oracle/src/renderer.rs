@@ -3,7 +3,7 @@ use crate::snapshot::{
 };
 use crate::vdom_snapshot::{fresh_snapshot, vdom_snapshot};
 use dioxus_core::{AttributeValue, Element, ElementId, VirtualDom, WriteMutations};
-use std::fmt;
+use std::{fmt, mem};
 
 type NodeId = usize;
 
@@ -408,6 +408,32 @@ impl OracleArena {
             .into_iter()
             .map(|child| {
                 let cloned_child = self.deep_clone_node(child);
+                self.node_mut(cloned_child).parent = Some(cloned);
+                cloned_child
+            })
+            .collect();
+        self.node_mut(cloned).children = children;
+        cloned
+    }
+
+    fn clone_detached_subtree_from(&mut self, source: &OracleArena, node: NodeId) -> NodeId {
+        let node_data = source.node(node).clone();
+        let cloned = self.alloc(match node_data.kind {
+            NodeKind::Document => panic!("renderer cannot clone document root"),
+            NodeKind::Element { tag, namespace } => NodeKind::Element { tag, namespace },
+            NodeKind::Text(text) => NodeKind::Text(text),
+        });
+        {
+            let cloned_node = self.node_mut(cloned);
+            cloned_node.attrs = node_data.attrs;
+            cloned_node.listeners = node_data.listeners;
+            cloned_node.element_id = node_data.element_id;
+        }
+        let children = node_data
+            .children
+            .into_iter()
+            .map(|child| {
+                let cloned_child = self.clone_detached_subtree_from(source, child);
                 self.node_mut(cloned_child).parent = Some(cloned);
                 cloned_child
             })
@@ -948,7 +974,29 @@ impl RendererOracle {
 
     /// Remove all nodes and reset the renderer to an empty document.
     pub fn clear(&mut self) {
-        *self = Self::new();
+        // Full VDOM rebuilds retain registered template roots. Clear only the
+        // live document state so later rebuilds can still clone cached roots.
+        let old_arena = mem::replace(&mut self.arena, OracleArena::new());
+        let old_state = mem::replace(&mut self.state, StackState::new(self.arena.root));
+        let roles = mem::take(&mut self.roles);
+
+        self.edit_counters = EditSummary::default();
+        self.source_stack = vec![StackSource::Live];
+        self.element_stack = vec![Some(ElementId::ROOT)];
+        self.roles = roles;
+
+        for (raw, role) in self.roles.iter().copied().enumerate() {
+            if role != NodeRole::PrototypeRoot {
+                continue;
+            }
+
+            let id = ElementId::from_raw(raw);
+            let Some(old_node) = old_state.element_to_node(id) else {
+                continue;
+            };
+            let node = self.arena.clone_detached_subtree_from(&old_arena, old_node);
+            self.state.set_mapping(id, node);
+        }
     }
 
     /// Return a stable snapshot of the document root's children.

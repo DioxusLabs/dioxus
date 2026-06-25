@@ -34,7 +34,8 @@ fn manual_diffing() {
 
     *value.lock().unwrap() = "goodbye";
 
-    oracle.rebuild(&mut dom);
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
     oracle.assert_matches(expected_goodbye);
 }
 
