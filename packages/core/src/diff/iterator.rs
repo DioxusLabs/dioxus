@@ -505,8 +505,7 @@ impl DiffState<'_, '_, '_, '_> {
                     (created.nodes, created.mount)
                 } else {
                     let mount = DiffFrame::new(old_mount, old_node, new_node).diff_into(self);
-                    let nodes = if self.has_writer() {
-                        let to = self.to.as_deref_mut().expect("writer checked");
+                    let nodes = if let Some(to) = self.to.as_deref_mut() {
                         crate::MountedVNode::new(new_node, mount).push_all_root_nodes(self.dom, to)
                     } else {
                         0

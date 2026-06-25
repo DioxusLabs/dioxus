@@ -433,11 +433,10 @@ impl VNode {
     ) -> CreatedVNode {
         let live_first = self.find_first_element(mount, state.dom);
         let context = state.context();
-        let created = if state.has_writer() {
+        let created = if let Some(to) = state.to.as_deref_mut() {
             let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
                 insertion_site_at(MountedVNode::new(self, mount), state.dom, context)
             });
-            let to = state.to.as_deref_mut().expect("writer checked");
             create_at_site(new, parent, site, state.dom, to)
         } else {
             new.create_mounted(state.dom, parent, state.to.as_deref_mut())
