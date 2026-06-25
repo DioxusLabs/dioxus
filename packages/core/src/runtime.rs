@@ -1,9 +1,7 @@
 use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{
-    AttributeValue, DynamicNode, ElementId, Event, RenderTargetId, VNode, innerlude::MountId,
-};
+use crate::{AttributeValue, ElementId, Event, RenderTargetId, VNode, innerlude::MountId};
 use crate::{CapturedError, arena::RenderTargetState};
 use crate::{SuspenseContext, innerlude::Effect};
 use crate::{
@@ -553,9 +551,7 @@ fn MyComponent() -> Element {{
         let mount = mounts.get(mount_id.0)?;
         let node = mount.node();
 
-        for anchor in node
-            .dynamic_anchors()
-        {
+        for anchor in node.dynamic_anchors() {
             let path = anchor.static_path();
             let Some(id) = mount.mounted_anchor_node(anchor.anchor_index()) else {
                 continue;
@@ -574,52 +570,20 @@ fn MyComponent() -> Element {{
         child_mount: MountId,
     ) -> Option<EventTargetPath> {
         let mounts = self.mounts.borrow();
+        let child = mounts.get(child_mount.0)?;
+        debug_assert_eq!(child.logical_parent(), Some(parent_mount));
+        let render_parent = child
+            .render_parent()
+            .expect("child mount should have a render parent");
+
         let parent = mounts.get(parent_mount.0)?;
-        let parent_node = parent.node();
-
-        for anchor in parent_node
-            .dynamic_anchors()
-            .filter(|anchor| anchor.nodes().len() > 0)
-        {
-            let target = if anchor.is_parent_append_target() {
-                anchor.static_path()
-            } else {
-                anchor.static_path().split_insertion().0
-            };
-            for slot in anchor.nodes() {
-                let idx = slot.index();
-                match &*slot {
-                    DynamicNode::Fragment(children) => {
-                        if children.is_empty() {
-                            continue;
-                        }
-                        if parent
-                            .non_empty_fragment_children(idx, children.len())
-                            .contains(&child_mount)
-                        {
-                            return Some(EventTargetPath::Slot(target));
-                        }
-                    }
-                    DynamicNode::Component(_) => {
-                        let Some(scope) = parent.component_scope(idx) else {
-                            continue;
-                        };
-                        let root_mount = self
-                            .scope_states
-                            .borrow()
-                            .get(scope.index())
-                            .and_then(|scope| scope.as_ref())
-                            .and_then(|scope| scope.root_mount());
-                        if root_mount == Some(child_mount) {
-                            return Some(EventTargetPath::Slot(target));
-                        }
-                    }
-                    DynamicNode::Text(_) => {}
-                }
-            }
-        }
-
-        None
+        let anchor = parent.node().dynamic_anchor(render_parent.anchor_index());
+        let target = if anchor.is_parent_append_target() {
+            anchor.static_path()
+        } else {
+            anchor.static_path().split_insertion().0
+        };
+        Some(EventTargetPath::Slot(target))
     }
 
     fn visit_event_attributes(
@@ -629,9 +593,7 @@ fn MyComponent() -> Element {{
         path_matches: impl Fn(EventTargetPath, TemplatePath) -> bool,
         mut visit: impl FnMut(&AttributeValue, TemplatePath) -> bool,
     ) {
-        for anchor in node
-            .dynamic_anchors()
-        {
+        for anchor in node.dynamic_anchors() {
             let attr_path = anchor.static_path();
             if !path_matches(target_path, attr_path) {
                 continue;

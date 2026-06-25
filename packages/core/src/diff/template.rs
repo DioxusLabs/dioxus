@@ -82,9 +82,9 @@ impl<'a> StaticElement<'a> {
 
     /// Iterate dynamic anchors with attributes that target this element.
     pub fn dynamic_anchors(self) -> impl Iterator<Item = DynamicAnchor<'a>> + 'a {
-        self.vnode.dynamic_anchors().filter(move |anchor| {
-            anchor.parent_element_op_index() == Some(self.op)
-        })
+        self.vnode
+            .dynamic_anchors()
+            .filter(move |anchor| anchor.parent_element_op_index() == Some(self.op))
     }
 }
 
@@ -416,8 +416,24 @@ impl VNode {
         self.dynamic_anchors().flat_map(|anchor| anchor.nodes())
     }
 
-    pub(super) fn dynamic_anchor(&self, anchor_index: usize) -> DynamicAnchor<'_> {
+    pub(crate) fn dynamic_anchor(&self, anchor_index: usize) -> DynamicAnchor<'_> {
         DynamicAnchor::new(self, anchor_index)
+    }
+
+    pub(crate) fn dynamic_node_slot(
+        &self,
+        anchor_index: usize,
+        slot_index: usize,
+    ) -> Option<DynamicNodeSlot<'_>> {
+        let anchor = DynamicAnchor::new(self, anchor_index);
+        anchor
+            .template_anchor()
+            .nodes()
+            .contains(&slot_index)
+            .then_some(DynamicNodeSlot {
+                anchor,
+                index: slot_index,
+            })
     }
 
     fn static_anchor_index_for_path(&self, path: TemplatePath) -> Option<usize> {

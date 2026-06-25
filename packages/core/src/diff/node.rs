@@ -87,7 +87,10 @@ impl<'a> DiffFrame<'a> {
         // with incompatible dynamic slot layouts compare unequal here and take the
         // full-replace path.
         if old.template() != new.template() {
-            let parent = state.dom.mounted_render_parent(current_mount);
+            let parent = state
+                .dom
+                .mounted_render_parent(current_mount)
+                .map(|parent| parent.parent());
             let created = old.replace_inner(current_mount, new, parent, &mut state, true);
             return created.mount;
         }
@@ -437,7 +440,7 @@ impl VNode {
             let to = state.to.as_deref_mut().expect("writer checked");
             create_at_site(new, parent, site, state.dom, to)
         } else {
-            new.create_mounted(state.dom, parent, parent, state.to.as_deref_mut())
+            new.create_mounted(state.dom, parent, state.to.as_deref_mut())
         };
         self.remove_node_inner(
             mount,
@@ -462,8 +465,8 @@ impl VNode {
 
     /// Remove a node, optionally preserving component state.
     ///
-    /// Invariant: when `destroy_component_state` is false, mount ownership remains with the
-    /// retained suspense branch.
+    /// Invariant: when `destroy_component_state` is false, the retained suspense branch keeps the
+    /// mount and component state alive.
     pub(crate) fn remove_node_inner(
         &self,
         mount: MountId,
@@ -668,15 +671,12 @@ impl VNode {
     pub(crate) fn create_mounted(
         &self,
         dom: &mut VirtualDom,
-        render_parent: Option<MountId>,
         logical_parent: Option<MountId>,
         to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> CreatedVNode {
         let mut state = DiffState::new(dom, to);
         let target_id = state.dom.current_render_target_id();
-        let mount = state
-            .dom
-            .create_mount(self, render_parent, logical_parent, target_id);
+        let mount = state.dom.create_mount(self, logical_parent, target_id);
         self.finish_create(mount, &mut state)
     }
 
@@ -719,7 +719,7 @@ impl VNode {
         match reuse {
             Some(mount) => self.recreate_with_mount(dom, mount, render_parent, logical_parent, to),
             None => {
-                let created = self.create_mounted(dom, render_parent, logical_parent, to);
+                let created = self.create_mounted(dom, logical_parent, to);
                 if let Some(old_mount) = old_mount {
                     dom.current_mounted_view(old_mount)
                         .expect("mount")
@@ -843,7 +843,6 @@ impl VNode {
                 let nodes = state.dom.create_children_with_mounts(
                     state.to.as_deref_mut(),
                     frag,
-                    parent,
                     parent,
                     |dom, idx, child_mount| {
                         dom.set_mounted_fragment_child(children, idx, child_mount)

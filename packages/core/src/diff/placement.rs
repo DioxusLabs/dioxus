@@ -8,8 +8,12 @@
 use std::rc::Rc;
 
 use crate::{
-    MountedVNode, Runtime, VNode, VirtualDom, WriteMutations, arena::ElementId, innerlude::MountId,
-    mutations::TargetedLazyScope, nodes::DynamicNode,
+    MountedVNode, Runtime, VNode, VirtualDom, WriteMutations,
+    arena::ElementId,
+    innerlude::MountId,
+    mount::{MountedParent, MountedParentKind},
+    mutations::TargetedLazyScope,
+    nodes::DynamicNode,
 };
 
 use super::{
@@ -182,63 +186,52 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
     }
 
     fn resolve_mount_site(&self, mut mount: MountId) -> InsertionSite {
-        while let Some(parent_mount) = self.dom.mounted_render_parent(mount) {
-            if let Some(site) = self.resolve_child_in_parent(mount, parent_mount) {
+        while let Some(render_parent) = self.dom.mounted_render_parent(mount) {
+            if let Some(site) = self.resolve_child_in_parent(mount, render_parent) {
                 return site;
             }
-            mount = parent_mount;
+            mount = render_parent.parent();
         }
         InsertionSite::append_to(ElementId::ROOT)
     }
 
     /// Resolve a child mount's site inside a specific committed parent.
     ///
-    /// Invariant: if this returns `Some`, `mount` is owned by the returned parent slot.
+    /// Invariant: if this returns `Some`, `mount` is positioned by `render_parent`.
     fn resolve_child_in_parent(
         &self,
         mount: MountId,
-        parent_mount: MountId,
+        render_parent: MountedParent,
     ) -> Option<InsertionSite> {
-        // Child ownership is a committed-mount-table query. During a parent diff, the new vnode may
-        // already have a different fragment shape, but the fragment child mount list is not
+        let parent_mount = render_parent.parent();
+        // Render-parent slots are committed-mount-table data. During a parent diff, the new vnode
+        // may already have a different fragment shape, but the fragment child mount list is not
         // replaced until that parent diff commits.
         self.with_parent_vnode(parent_mount, ParentVersion::Old, |parent_vnode| {
-            for slot in parent_vnode.dynamic_node_slots() {
-                let idx = slot.index();
-                match &parent_vnode.dynamic_node_values()[idx] {
-                    DynamicNode::Fragment(children) => {
-                        let site = self.dom.try_with_mounted_fragment_children(
-                            parent_mount,
-                            idx,
-                            children.len(),
-                            |child_mounts| {
-                                let position =
-                                    child_mounts.iter().position(|child| *child == mount)?;
-                                self.resolve_fragment_child_site(
-                                    children,
-                                    child_mounts,
-                                    position,
-                                    mount,
-                                )
-                                .or_else(|| Some(self.resolve_slot(parent_mount, slot)))
-                            },
-                        );
-                        if let Some(site) = site.flatten() {
-                            return Some(site);
-                        }
-                    }
-                    DynamicNode::Component(_)
-                        if self
-                            .dom
-                            .mounted_dynamic_component_root_mount(parent_mount, idx)
-                            == Some(mount) =>
-                    {
-                        return Some(self.resolve_slot(parent_mount, slot));
-                    }
-                    DynamicNode::Component(_) | DynamicNode::Text(_) => {}
+            let slot = render_parent
+                .slot(parent_vnode)
+                .expect("render parent slot should exist in the committed parent vnode");
+            match (
+                render_parent.kind(),
+                &parent_vnode.dynamic_node_values()[slot.index()],
+            ) {
+                (
+                    MountedParentKind::FragmentChild { child_index },
+                    DynamicNode::Fragment(children),
+                ) => {
+                    let child_mounts = self.dom.mounted_fragment_children_exact(
+                        parent_mount,
+                        slot.index(),
+                        children.len(),
+                    );
+                    self.resolve_fragment_child_site(children, &child_mounts, child_index, mount)
+                        .or_else(|| Some(self.resolve_slot(parent_mount, slot)))
                 }
+                (MountedParentKind::ComponentRoot, DynamicNode::Component(_)) => {
+                    Some(self.resolve_slot(parent_mount, slot))
+                }
+                _ => unreachable!("render parent kind should match its committed dynamic slot"),
             }
-            None
         })
     }
 
@@ -382,7 +375,7 @@ pub(super) fn create_at_site_with_mounts(
     mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
 ) -> usize {
     at_site(site, to, dom.runtime.clone(), |to| {
-        dom.create_children_with_mounts(Some(to), content, parent, parent, |dom, idx, mount| {
+        dom.create_children_with_mounts(Some(to), content, parent, |dom, idx, mount| {
             created_mount(dom, idx, mount);
         })
     })
@@ -396,7 +389,7 @@ pub(crate) fn create_at_site(
     to: &mut dyn WriteMutations,
 ) -> CreatedVNode {
     at_site_with_result(site, to, dom.runtime.clone(), |to| {
-        let created = content.create_mounted(dom, parent, parent, Some(to));
+        let created = content.create_mounted(dom, parent, Some(to));
         (created.nodes, created)
     })
 }

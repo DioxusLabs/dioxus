@@ -500,8 +500,7 @@ impl DiffState<'_, '_, '_, '_> {
                 let old_mount = old_mounts[old_index];
                 let old_node = &old[old_index];
                 let (nodes, mount) = if old_node.template() != new_node.template() {
-                    let created =
-                        new_node.create_mounted(self.dom, parent, parent, self.to.as_deref_mut());
+                    let created = new_node.create_mounted(self.dom, parent, self.to.as_deref_mut());
                     replaced_nodes.push((old_node, old_mount));
                     (created.nodes, created.mount)
                 } else {
@@ -516,8 +515,7 @@ impl DiffState<'_, '_, '_, '_> {
                 };
                 (nodes, mount)
             } else {
-                let created =
-                    new_node.create_mounted(self.dom, parent, parent, self.to.as_deref_mut());
+                let created = new_node.create_mounted(self.dom, parent, self.to.as_deref_mut());
                 (created.nodes, created.mount)
             };
             new_mounts[new_index] = Some(mount);
@@ -555,13 +553,8 @@ impl DiffState<'_, '_, '_, '_> {
             let to = self.to.as_deref_mut().expect("writer checked");
             create_at_site_with_mounts(new, parent, site, self.dom, to, created_mount)
         } else {
-            self.dom.create_children_with_mounts(
-                self.to.as_deref_mut(),
-                new,
-                parent,
-                parent,
-                created_mount,
-            )
+            self.dom
+                .create_children_with_mounts(self.to.as_deref_mut(), new, parent, created_mount)
         }
     }
 }

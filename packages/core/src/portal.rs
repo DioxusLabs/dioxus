@@ -236,7 +236,7 @@ fn place_children(
     parent: Option<MountId>,
     dom: &mut VirtualDom,
     render_to: Option<&mut (dyn WriteMutations + '_)>,
-) {
+) -> MountId {
     debug_assert_eq!(
         dom.runtime.current_render_target_id(),
         target_id,
@@ -253,9 +253,13 @@ fn place_children(
     };
     dom.scopes[scope_id.index()].last_rendered_node =
         Some(MountedOutput::new(children, root_mount));
+    dom.runtime
+        .get_state(scope_id)
+        .set_root_mount(Some(root_mount));
     if should_mount {
         dom.runtime.get_state(scope_id).mount(&dom.runtime);
     }
+    root_mount
 }
 
 /// Place the portal children, reusing the previously committed root in place when
@@ -270,7 +274,7 @@ fn place_children_inner(
 ) -> CreatedVNode {
     children
         .as_vnode()
-        .create_or_reuse_mount(dom, old_root_mount, None, parent, to)
+        .create_or_reuse_mount(dom, old_root_mount, parent, parent, to)
 }
 
 impl RenderDriver for PortalDriver {
@@ -338,6 +342,9 @@ impl RenderDriver for PortalDriver {
             if old_target_id != target_id {
                 let old_mount = old_children.root_mount();
                 let logical_parent = dom.mounted_logical_parent(old_mount);
+                let render_parent = dom
+                    .mounted_render_parent(old_mount)
+                    .expect("portal root should have a render parent before retarget");
 
                 old_children
                     .as_vnode()
@@ -349,7 +356,7 @@ impl RenderDriver for PortalDriver {
                 // against the new one.
                 dom.runtime.set_scope_target_id(scope_id, target_id);
 
-                place_children(
+                let root_mount = place_children(
                     scope_id,
                     target_id,
                     new_children,
@@ -358,17 +365,26 @@ impl RenderDriver for PortalDriver {
                     dom,
                     to.as_deref_mut(),
                 );
+                dom.set_mounted_render_parent(root_mount, render_parent);
                 return;
             }
 
+            let old_mount = old_children.root_mount();
+            let old_render_parent = dom
+                .mounted_render_parent(old_mount)
+                .expect("portal root should have a render parent before diff");
             let mut render_to = to.filter(|_| dom.runtime.scope_should_render(scope_id));
             let new_mount = old_children.mounted_vnode().diff_node(
                 new_children.as_vnode(),
                 dom,
                 render_to.as_deref_mut(),
             );
+            dom.replace_mounted_component_root_mount(old_mount, new_mount, old_render_parent);
             dom.scopes[scope_id.index()].last_rendered_node =
                 Some(MountedOutput::new(new_children, new_mount));
+            dom.runtime
+                .get_state(scope_id)
+                .set_root_mount(Some(new_mount));
             if render_to.is_some() {
                 dom.runtime.get_state(scope_id).mount(&dom.runtime);
             }

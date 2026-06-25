@@ -51,6 +51,9 @@ impl VirtualDom {
                 .take()
                 .unwrap();
             let old_mount = old_output.root_mount();
+            let old_render_parent = self
+                .mounted_render_parent(old_mount)
+                .expect("component root should have a render parent before diff");
             let old = old_output.node();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
@@ -64,7 +67,7 @@ impl VirtualDom {
             // `replace_mounted_component_root_mount` keeps this scope's `root_mount`
             // cell in sync, retargeting every cell that holds `old_mount` (this
             // body-driver scope included) to `new_mount`.
-            self.replace_mounted_component_root_mount(old_mount, new_mount);
+            self.replace_mounted_component_root_mount(old_mount, new_mount, old_render_parent);
 
             self.scopes[scope.index()].last_rendered_node = Some(MountedOutput::new(
                 LastRenderedNode::new(new_nodes),
@@ -164,6 +167,15 @@ impl VNode {
         // update anything. This also implicitly drops the new props since they are not used.
         let old_scope = &mut state.dom.scopes[scope_id.index()];
         if old_scope.props.memoize(new.props.props()) {
+            let root_mount = state
+                .dom
+                .runtime
+                .get_state(scope_id)
+                .root_mount()
+                .expect("memoized component scope should have a root mount");
+            state
+                .dom
+                .set_component_root_render_parent(mount, slot.index(), root_mount);
             return;
         }
 
@@ -257,11 +269,13 @@ impl VNode {
         let to = state.to.as_deref_mut();
         let parent = Some(mount);
         let nodes = driver.create(&mut *state.dom, scope_id, parent, to);
-        self.finish_component_create(scope_id, nodes, state)
+        self.finish_component_create(mount, idx, scope_id, nodes, state)
     }
 
     fn finish_component_create(
         &self,
+        mount: MountId,
+        idx: usize,
         scope_id: ScopeId,
         nodes: usize,
         state: &mut DiffState<'_, '_, '_, '_>,
@@ -279,6 +293,9 @@ impl VNode {
             .runtime
             .get_state(scope_id)
             .set_root_mount(Some(root_mount));
+        state
+            .dom
+            .set_component_root_render_parent(mount, idx, root_mount);
         nodes
     }
 }

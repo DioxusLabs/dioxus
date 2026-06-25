@@ -39,14 +39,12 @@ impl VirtualDom {
         &mut self,
         mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
-        render_parent: Option<MountId>,
         logical_parent: Option<MountId>,
         mut created_mount: impl FnMut(&mut VirtualDom, usize, MountId),
     ) -> usize {
         let mut created = 0;
         for (idx, child) in nodes.iter().enumerate() {
-            let child =
-                child.create_mounted(self, render_parent, logical_parent, to.as_deref_mut());
+            let child = child.create_mounted(self, logical_parent, to.as_deref_mut());
             created += child.nodes;
             created_mount(self, idx, child.mount);
         }

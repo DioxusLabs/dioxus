@@ -487,9 +487,7 @@ fn suspense_create(
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         let background = suspense_context.under_suspense_boundary(&dom.runtime(), || {
-            children
-                .as_vnode()
-                .create_mounted(dom, parent, parent, None)
+            children.as_vnode().create_mounted(dom, parent, None)
         });
 
         store_suspense_children(dom, scope_id, &children);
@@ -508,7 +506,7 @@ fn suspense_create(
                         LastRenderedNode::new(fallback.call(placeholder_context));
                     let nodes_created = suspense_placeholder
                         .as_vnode()
-                        .create_mounted(dom, parent, parent, to);
+                        .create_mounted(dom, parent, to);
                     (suspense_placeholder, nodes_created)
                 });
 
@@ -557,7 +555,9 @@ impl SuspenseBoundaryProps {
             // Get the parent of the suspense boundary to later create children with the right parent
             let currently_rendered = scope_state.last_rendered_node.clone().unwrap();
             let mount = currently_rendered.root_mount();
-            let parent = dom.mounted_render_parent(mount);
+            let parent = dom
+                .mounted_render_parent(mount)
+                .map(|parent| parent.parent());
 
             // Unmount any children to reset any scopes under this suspense boundary
             let children = suspense_children(dom, scope_id);
@@ -587,7 +587,7 @@ impl SuspenseBoundaryProps {
                 let mut no_op = crate::NoOpMutations;
                 children
                     .as_vnode()
-                    .create_mounted(dom, parent, parent, Some(&mut no_op))
+                    .create_mounted(dom, parent, Some(&mut no_op))
             });
 
             set_rendered_children(dom, scope_id, children, created.mount);
@@ -695,11 +695,15 @@ fn suspense_diff(
             }
             // We have no suspended nodes, and we are not suspended. Just diff the children like normal
             (None, false) => {
+                let old_render_parent = dom.mounted_render_parent(last_rendered_node.root_mount());
                 let new_mount = suspense_context.under_suspense_boundary(&dom.runtime(), || {
                     last_rendered_node
                         .mounted_vnode()
                         .diff_node(children.as_vnode(), dom, to)
                 });
+                if let Some(old_render_parent) = old_render_parent {
+                    dom.set_mounted_render_parent(new_mount, old_render_parent);
+                }
 
                 set_rendered_children(dom, scope_id, children, new_mount);
             }
@@ -713,7 +717,9 @@ fn suspense_diff(
 
                 // Move the children to the background
                 let old_children_mount = old_children.root_mount();
-                let parent = dom.mounted_render_parent(old_children_mount);
+                let parent = dom
+                    .mounted_render_parent(old_children_mount)
+                    .map(|parent| parent.parent());
 
                 let placeholder_mount =
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {
@@ -805,11 +811,11 @@ fn suspense_diff(
                         true,
                     );
                     let mounted_children = dom
-                        .current_mounted_view(old_suspended_mount)
+                        .current_mounted_view(new_children_mount)
                         .expect("suspense child");
                     replace_placeholder_with(
                         &last_rendered_node,
-                        MountedVNode::new(&mounted_children, old_suspended_mount),
+                        MountedVNode::new(&mounted_children, new_children_mount),
                         dom,
                         to,
                     );
@@ -848,6 +854,9 @@ fn set_rendered_children(
     store_suspense_children(dom, scope_id, &children);
     dom.scopes[scope_id.index()].last_rendered_node =
         Some(MountedOutput::new(children, root_mount));
+    dom.runtime
+        .get_state(scope_id)
+        .set_root_mount(Some(root_mount));
 }
 
 fn store_suspended_branch(dom: &mut VirtualDom, scope_id: ScopeId, branch: &SuspenseBranch) {
@@ -870,10 +879,13 @@ fn replace_placeholder_with(
     // Invariant: `placeholder` is the currently visible fallback and `children` is the already
     // materialized retained branch.
     let placeholder_mount = placeholder.root_mount();
-    let parent = dom.mounted_render_parent(placeholder_mount);
+    let parent = dom
+        .mounted_render_parent(placeholder_mount)
+        .map(|parent| parent.parent());
     let mut to = to
         .as_deref_mut()
         .filter(|_| dom.mount_should_render(placeholder_mount));
+    dom.copy_render_parent_slot(placeholder_mount, children.mount());
     // Promote the already-materialized retained branch by reusing its mount (and
     // scope subtree) instead of rebuilding it, so component state and scope ids
     // survive the fallback -> children swap.

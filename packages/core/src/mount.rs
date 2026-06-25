@@ -12,7 +12,7 @@
 //!   where "not a fragment" should produce an empty list.
 
 use crate::{
-    DynamicNode, RenderTargetId, ScopeId, VNode,
+    DynamicNode, DynamicNodeSlot, RenderTargetId, ScopeId, VNode,
     arena::{MountId, MountedDynamicNodeSlot, MountedElementId},
     virtual_dom::VirtualDom,
 };
@@ -39,9 +39,65 @@ const UNWRITTEN_FRAGMENT_CHILD_MOUNT: MountId = MountId(usize::MAX);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FragmentMountWriter {
     mount: MountId,
+    anchor_index: usize,
     dyn_node_idx: usize,
     start: usize,
     len: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MountedParent {
+    parent: MountId,
+    anchor_index: usize,
+    slot_index: usize,
+    kind: MountedParentKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MountedParentKind {
+    ComponentRoot,
+    FragmentChild { child_index: usize },
+}
+
+impl MountedParent {
+    pub(crate) fn component_root(parent: MountId, anchor_index: usize, slot_index: usize) -> Self {
+        Self {
+            parent,
+            anchor_index,
+            slot_index,
+            kind: MountedParentKind::ComponentRoot,
+        }
+    }
+
+    pub(crate) fn fragment_child(
+        parent: MountId,
+        anchor_index: usize,
+        slot_index: usize,
+        child_index: usize,
+    ) -> Self {
+        Self {
+            parent,
+            anchor_index,
+            slot_index,
+            kind: MountedParentKind::FragmentChild { child_index },
+        }
+    }
+
+    pub(crate) fn parent(self) -> MountId {
+        self.parent
+    }
+
+    pub(crate) fn anchor_index(self) -> usize {
+        self.anchor_index
+    }
+
+    pub(crate) fn slot<'a>(self, vnode: &'a VNode) -> Option<DynamicNodeSlot<'a>> {
+        vnode.dynamic_node_slot(self.anchor_index, self.slot_index)
+    }
+
+    pub(crate) fn kind(self) -> MountedParentKind {
+        self.kind
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -95,7 +151,7 @@ impl PackedMountedSlot {
 }
 
 pub(crate) struct Mount {
-    render_parent: Option<MountId>,
+    render_parent: Option<MountedParent>,
 
     logical_parent: Option<MountId>,
 
@@ -119,7 +175,6 @@ pub(crate) struct Mount {
 impl Mount {
     pub(crate) fn new(
         node: VNode,
-        render_parent: Option<MountId>,
         logical_parent: Option<MountId>,
         target_id: RenderTargetId,
     ) -> Self {
@@ -129,7 +184,7 @@ impl Mount {
         let anchor_count = node.template().anchors().len();
         let dynamic_count = node.dynamic_node_values().len();
         Self {
-            render_parent,
+            render_parent: None,
             logical_parent,
             target_id,
             node,
@@ -144,25 +199,24 @@ impl Mount {
         self.anchor_slot(idx).mounted_element()
     }
 
-    pub(crate) fn non_empty_fragment_children(&self, idx: usize, len: usize) -> &[MountId] {
-        debug_assert!(len > 0, "fragment child slice accessor requires children");
-        let start = self
-            .dynamic_slot(idx)
-            .fragment_start()
-            .expect("fragment children");
-        &self.fragment_child_mounts[start..start + len]
-    }
-
-    pub(crate) fn component_scope(&self, idx: usize) -> Option<ScopeId> {
-        self.dynamic_slot(idx).component_scope()
-    }
-
     pub(crate) fn logical_parent(&self) -> Option<MountId> {
         self.logical_parent
     }
 
+    pub(crate) fn render_parent(&self) -> Option<MountedParent> {
+        self.render_parent
+    }
+
     pub(crate) fn node(&self) -> &VNode {
         &self.node
+    }
+
+    fn dynamic_node_anchor_index(&self, dyn_node_idx: usize) -> usize {
+        self.node
+            .dynamic_anchors()
+            .find(|anchor| anchor.nodes().any(|slot| slot.index() == dyn_node_idx))
+            .map(|anchor| anchor.anchor_index())
+            .expect("dynamic node should belong to an anchor")
     }
 
     fn dynamic_offset(&self) -> usize {
@@ -191,19 +245,13 @@ impl VirtualDom {
     pub(crate) fn create_mount(
         &mut self,
         node: &VNode,
-        render_parent: Option<MountId>,
         logical_parent: Option<MountId>,
         target_id: RenderTargetId,
     ) -> MountId {
         let mut mounts = self.runtime.mounts.borrow_mut();
         let entry = mounts.vacant_entry();
         let mount = MountId(entry.key());
-        entry.insert(Mount::new(
-            node.clone(),
-            render_parent,
-            logical_parent,
-            target_id,
-        ));
+        entry.insert(Mount::new(node.clone(), logical_parent, target_id));
 
         mount
     }
@@ -220,7 +268,10 @@ impl VirtualDom {
         target_id: RenderTargetId,
     ) {
         self.with_mount_mut(mount, |mount| {
-            mount.render_parent = render_parent;
+            mount.render_parent = match (mount.render_parent, render_parent) {
+                (Some(current), Some(parent)) if current.parent() == parent => Some(current),
+                _ => None,
+            };
             mount.logical_parent = logical_parent;
             mount.target_id = target_id;
         });
@@ -234,12 +285,24 @@ impl VirtualDom {
         self.with_mount(mount, |mount| mount.target_id)
     }
 
-    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<MountId> {
-        self.with_mount(mount, |mount| mount.render_parent)
+    pub(crate) fn mounted_render_parent(&self, mount: MountId) -> Option<MountedParent> {
+        self.with_mount(mount, |mount| mount.render_parent())
+    }
+
+    pub(crate) fn set_mounted_render_parent(&self, mount: MountId, render_parent: MountedParent) {
+        self.with_mount_mut(mount, |mount| {
+            mount.render_parent = Some(render_parent);
+        });
     }
 
     pub(crate) fn mounted_logical_parent(&self, mount: MountId) -> Option<MountId> {
         self.with_mount(mount, |mount| mount.logical_parent)
+    }
+
+    pub(crate) fn copy_render_parent_slot(&self, from: MountId, to: MountId) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        let render_parent = mounts[from.0].render_parent();
+        mounts[to.0].render_parent = render_parent;
     }
 
     pub(crate) fn mounted_anchor_node(
@@ -368,11 +431,13 @@ impl VirtualDom {
     ) -> FragmentMountWriter {
         self.with_mount_mut(mount, |mount_state| {
             let start = mount_state.fragment_child_mounts.len();
+            let anchor_index = mount_state.dynamic_node_anchor_index(dyn_node_idx);
             mount_state
                 .fragment_child_mounts
                 .resize(start + len, UNWRITTEN_FRAGMENT_CHILD_MOUNT);
             FragmentMountWriter {
                 mount,
+                anchor_index,
                 dyn_node_idx,
                 start,
                 len,
@@ -394,9 +459,15 @@ impl VirtualDom {
             idx < writer.len,
             "fragment child write index must fit the pending range"
         );
-        self.with_mount_mut(writer.mount, |mount| {
-            mount.fragment_child_mounts[writer.start + idx] = child;
-        });
+        let render_parent = MountedParent::fragment_child(
+            writer.mount,
+            writer.anchor_index,
+            writer.dyn_node_idx,
+            idx,
+        );
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[writer.mount.0].fragment_child_mounts[writer.start + idx] = child;
+        mounts[child.0].render_parent = Some(render_parent);
     }
 
     pub(crate) fn commit_mounted_fragment_children(&self, writer: FragmentMountWriter) {
@@ -509,6 +580,18 @@ impl VirtualDom {
         });
     }
 
+    pub(crate) fn set_component_root_render_parent(
+        &self,
+        mount: MountId,
+        dyn_node_idx: usize,
+        root_mount: MountId,
+    ) {
+        let anchor_index =
+            self.with_mount(mount, |mount| mount.dynamic_node_anchor_index(dyn_node_idx));
+        let render_parent = MountedParent::component_root(mount, anchor_index, dyn_node_idx);
+        self.runtime.mounts.borrow_mut()[root_mount.0].render_parent = Some(render_parent);
+    }
+
     pub(crate) fn current_mounted_view(&self, mount: MountId) -> Option<VNode> {
         self.runtime
             .mounts
@@ -527,8 +610,9 @@ impl VirtualDom {
 
     /// Commit the new vnode for a mount after its roots/dynamic slots have been updated.
     ///
-    /// Invariant: after commit, every committed non-empty fragment slot owns exactly its current
-    /// compacted child range.
+    /// Invariant: slot-writing paths and component root replacement paths update render parents
+    /// before commit. Commit only swaps the vnode and compacts pending fragment storage into the
+    /// committed layout.
     pub(crate) fn commit_mount(&self, mount: MountId, node: &VNode) {
         let mut mounts = self.runtime.mounts.borrow_mut();
         let mount_state = &mut mounts[mount.0];
@@ -540,7 +624,10 @@ impl VirtualDom {
         &self,
         old_root_mount: MountId,
         new_root_mount: MountId,
+        render_parent: MountedParent,
     ) {
+        self.runtime.mounts.borrow_mut()[new_root_mount.0].render_parent = Some(render_parent);
+
         if old_root_mount == new_root_mount {
             return;
         }
@@ -569,6 +656,7 @@ impl VirtualDom {
             .map(with_mount)
             .expect("mount")
     }
+
 }
 
 fn compact_fragment_child_mounts(mount: &mut Mount, node: &VNode) {
@@ -648,7 +736,7 @@ mod tests {
 /// Suspense keeps the hidden primary branch alive while the fallback branch is
 /// visible. The root `VNode` is the render output we diff, and the branch also
 /// records the root mount identity so the boundary state is tied to retained
-/// mount ownership.
+/// mount identity.
 #[derive(Clone)]
 pub(crate) struct SuspenseBranch {
     root: VNode,
