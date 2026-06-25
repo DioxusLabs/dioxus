@@ -148,10 +148,10 @@ impl TemplateStatsBuilder {
             self.dynamic_nodes += 1;
         }
 
-        if let Some(last) = self.anchors.last_mut() {
-            if last.same_anchor(parent_op_index, path) {
-                return;
-            }
+        if let Some(last) = self.anchors.last_mut()
+            && last.same_anchor(parent_op_index, path)
+        {
+            return;
         }
 
         self.anchors.push(AnchorStats {
@@ -161,10 +161,10 @@ impl TemplateStatsBuilder {
     }
 
     fn push_static_anchor(&mut self, parent_op_index: u16, path: TemplateSlotPath) {
-        if let Some(last) = self.anchors.last_mut() {
-            if last.same_anchor(parent_op_index, path) {
-                return;
-            }
+        if let Some(last) = self.anchors.last_mut()
+            && last.same_anchor(parent_op_index, path)
+        {
+            return;
         }
 
         self.anchors.push(AnchorStats {

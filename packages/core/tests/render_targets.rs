@@ -877,8 +877,8 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
             let edits = rebuild_to_targeted_vec(&mut dom);
             // The boundary suspends: the fallback renders on the main target
             // and the background-created portal content writes nothing.
-            assert!(edits.get(&RenderTargetId::ROOT).is_some());
-            assert!(edits.get(&target).is_none());
+            assert!(edits.contains_key(&RenderTargetId::ROOT));
+            assert!(!edits.contains_key(&target));
             assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);
 
             // Update the hidden portal child while the boundary is suspended.
@@ -899,7 +899,7 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
             }
             let edits =
                 resolve_edits.expect("the boundary should resolve and write the portal target");
-            assert!(edits.get(&RenderTargetId::ROOT).is_some());
+            assert!(edits.contains_key(&RenderTargetId::ROOT));
             let portal_edits = edits.get(&target).unwrap();
             assert!(portal_edits.edits.iter().any(|mutation| matches!(
                 mutation,

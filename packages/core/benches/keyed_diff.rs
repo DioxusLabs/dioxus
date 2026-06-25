@@ -112,15 +112,18 @@ fn remove_middle(v: &mut Vec<u64>) {
 
 fn rerender_unchanged(_v: &mut Vec<u64>) {}
 
+#[allow(clippy::ptr_arg)]
 fn swap_ends(v: &mut Vec<u64>) {
     let last = v.len() - 2;
     v.swap(1, last);
 }
 
+#[allow(clippy::ptr_arg)]
 fn reverse(v: &mut Vec<u64>) {
     v.reverse();
 }
 
+#[allow(clippy::ptr_arg)]
 fn shuffle(v: &mut Vec<u64>) {
     // Fixed seed: every batch reshuffles the same `initial` to the same target.
     let mut rng = SmallRng::seed_from_u64(0xD10C);
@@ -132,12 +135,14 @@ fn replace_all(v: &mut Vec<u64>) {
 }
 
 /// Reverse a 20-wide window in the middle, leaving ~490 stable rows on each side.
+#[allow(clippy::ptr_arg)]
 fn reverse_window(v: &mut Vec<u64>) {
     let mid = v.len() / 2;
     v[mid - 10..mid + 10].reverse();
 }
 
 /// Shuffle a 20-wide window in the middle, leaving ~490 stable rows on each side.
+#[allow(clippy::ptr_arg)]
 fn shuffle_window(v: &mut Vec<u64>) {
     let mid = v.len() / 2;
     let mut rng = SmallRng::seed_from_u64(0xD10C);

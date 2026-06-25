@@ -874,7 +874,7 @@ fn replace_placeholder_with(
     placeholder: &MountedOutput,
     children: MountedVNode<'_>,
     dom: &mut VirtualDom,
-    mut to: Option<&mut (dyn WriteMutations + '_)>,
+    to: Option<&mut (dyn WriteMutations + '_)>,
 ) {
     // Invariant: `placeholder` is the currently visible fallback and `children` is the already
     // materialized retained branch.
@@ -882,9 +882,7 @@ fn replace_placeholder_with(
     let parent = dom
         .mounted_render_parent(placeholder_mount)
         .map(|parent| parent.parent());
-    let mut to = to
-        .as_deref_mut()
-        .filter(|_| dom.mount_should_render(placeholder_mount));
+    let mut to = to.filter(|_| dom.mount_should_render(placeholder_mount));
     dom.copy_render_parent_slot(placeholder_mount, children.mount());
     // Promote the already-materialized retained branch by reusing its mount (and
     // scope subtree) instead of rebuilding it, so component state and scope ids

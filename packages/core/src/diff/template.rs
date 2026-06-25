@@ -177,6 +177,7 @@ impl<'a> Iterator for VNodeChildren<'a> {
 impl ExactSizeIterator for VNodeChildren<'_> {}
 
 #[derive(Clone, Copy)]
+#[allow(clippy::large_enum_variant)]
 enum VNodeChildrenInner<'a> {
     Roots(RootChildCursor<'a>),
     Element(ElementChildCursor<'a>),

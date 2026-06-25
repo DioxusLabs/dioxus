@@ -393,7 +393,7 @@ impl DiffState<'_, '_, '_, '_> {
             let old_index = plan.new_to_old[idx].expect("stable child must be reused");
             let old_mount = old_mounts[old_index];
             self.dom
-                .set_mounted_fragment_child(new_children, new_offset + idx, old_mount);
+                .stage_mounted_fragment_child(new_children, new_offset + idx, old_mount);
             let mount = DiffFrame::new(old_mount, &old[old_index], &new[idx]).diff_into(self);
             new_mounts[idx] = Some(mount);
             self.dom
@@ -478,7 +478,7 @@ impl DiffState<'_, '_, '_, '_> {
                 continue;
             }
             if let Some(old_index) = plan.new_to_old[new_index] {
-                self.dom.set_mounted_fragment_child(
+                self.dom.stage_mounted_fragment_child(
                     new_children,
                     new_offset + new_index,
                     old_mounts[old_index],

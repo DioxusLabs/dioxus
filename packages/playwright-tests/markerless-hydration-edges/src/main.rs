@@ -73,7 +73,7 @@ async fn resolve_empty_stream() -> usize {
 // starts with `\n`, the markerless walk - which reconstructs text-node positions
 // by UTF-16 length - must keep the dynamic body bound to the correct text node
 // so later updates land on it, rather than splitting against a length the parser
-// already shortened (which mis-binds the body or raises a hydration mismatch).
+// already shortened (which binds the body incorrectly or raises a hydration mismatch).
 // Regression for the leading-newline case of
 // https://github.com/DioxusLabs/dioxus/issues/5548.
 #[component]

@@ -21,7 +21,7 @@ fn warmup_gen() -> u32 {
 }
 
 /// Run a warmup app through `generations` render rounds: reset [`WARMUP_GEN`]
-/// to 0, rebuild against a fresh [`RendererOracle`], then for each generation
+/// to 0, rebuild against a fresh `RendererOracle`, then for each generation
 /// `g` in `1..generations` set `WARMUP_GEN = g`, mark the root scope dirty,
 /// and render. Returns the dom and oracle so callers can drive extra custom
 /// rounds.
@@ -519,7 +519,7 @@ fn warmup_suspense_then_remove() {
 
 /// One-shot warmup that exercises the multi-priority deferred-priority paths in
 /// `dioxus_core::diff::component::diff_vcomponent`. The sync `render_immediate`
-/// path used by [`run_case`] only ever processes a single priority level at a
+/// path used by [`crate::case::run_case`] only ever processes a single priority level at a
 /// time, so the `render_deferred_priority`/`deferred_priority_for_subtree`
 /// branches are unreachable from corpus inputs alone. Calling this once per
 /// fuzz process records coverage of those branches in the fuzz binary.

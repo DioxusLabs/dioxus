@@ -5,17 +5,17 @@
 //! structured operation stream and renderer oracle.
 //!
 //! Module map:
-//! - [`case`]: the encoded op stream, replay, and failure reporting
-//! - [`ops`]: the operation grammar and how ops apply to the model
-//! - [`model`]: the spec tree the generated app renders from
-//! - [`mutator`]: structure-aware mutation (the op strategy table)
-//! - [`reducer`]: structured shrinking of failing cases
-//! - [`harness`]: incremental-vs-fresh renderer oracle and lifecycle checks
-//! - [`vdom`]: compiles model specs into real `VNode`s/`Template`s
-//! - [`warmup`]: one-shot scenarios for paths replay cannot reach
+//! - `case`: the encoded op stream, replay, and failure reporting
+//! - `ops`: the operation grammar and how ops apply to the model
+//! - `model`: the spec tree the generated app renders from
+//! - `mutator`: structure-aware mutation (the op strategy table)
+//! - `reducer`: structured shrinking of failing cases
+//! - `harness`: incremental-vs-fresh renderer oracle and lifecycle checks
+//! - `vdom`: compiles model specs into real `VNode`s/`Template`s
+//! - `warmup`: one-shot scenarios for paths replay cannot reach
 //!
 //! The crate compiles in ordinary builds so CI type-checks it and runs the
-//! [`targeted`] regression recipes under `cargo test`. The libFuzzer binary
+//! `targeted` regression recipes under `cargo test`. The libFuzzer binary
 //! (`packages/fuzz/fuzz`) sets `--cfg fuzzing`, which only flips runtime
 //! behavior via `cfg!(fuzzing)` (e.g. strict-by-default oracle options).
 #![deny(unsafe_code)]

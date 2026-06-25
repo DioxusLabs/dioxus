@@ -51,9 +51,7 @@ impl VirtualDom {
                 .take()
                 .unwrap();
             let old_mount = old_output.root_mount();
-            let old_render_parent = self
-                .mounted_render_parent(old_mount)
-                .expect("component root should have a render parent before diff");
+            let old_render_parent = self.mounted_render_parent(old_mount);
             let old = old_output.node();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
@@ -64,10 +62,18 @@ impl VirtualDom {
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             let new_mount =
                 DiffFrame::new(old_mount, old.as_vnode(), new_real_nodes).diff_into(&mut state);
-            // `replace_mounted_component_root_mount` keeps this scope's `root_mount`
-            // cell in sync, retargeting every cell that holds `old_mount` (this
-            // body-driver scope included) to `new_mount`.
-            self.replace_mounted_component_root_mount(old_mount, new_mount, old_render_parent);
+            // Component roots owned by a dynamic slot have a render parent. The root wrapper is
+            // appended directly under the renderer root, so it only needs scope root-mount cells
+            // retargeted when a template replacement creates a new mount.
+            if let Some(old_render_parent) = old_render_parent {
+                self.replace_mounted_component_root_mount(old_mount, new_mount, old_render_parent);
+            } else if old_mount != new_mount {
+                for scope in self.runtime.scope_states.borrow().iter().flatten() {
+                    if scope.root_mount() == Some(old_mount) {
+                        scope.set_root_mount(Some(new_mount));
+                    }
+                }
+            }
 
             self.scopes[scope.index()].last_rendered_node = Some(MountedOutput::new(
                 LastRenderedNode::new(new_nodes),

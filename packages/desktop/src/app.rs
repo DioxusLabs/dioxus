@@ -169,7 +169,6 @@ impl App {
             let app_webview = pending_webview.create_window(&mut self.dom, &self.app_context);
             let id = app_webview.desktop_context.window.id();
             self.webviews.insert(id, app_webview);
-            self.schedule_poll();
         }
     }
 
@@ -447,8 +446,11 @@ impl App {
 
     fn rebuild_dom(&mut self) {
         let mut writer = self.dom_writer();
+        let has_render_targets = !writer.is_empty();
         self.dom.rebuild(&mut writer);
-        self.initial_dom_rebuild_done = true;
+        if has_render_targets {
+            self.initial_dom_rebuild_done = true;
+        }
     }
 
     fn render_dom_immediate(&mut self) {

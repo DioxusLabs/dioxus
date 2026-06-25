@@ -304,6 +304,12 @@ impl TemplateLoweringCursor {
     }
 }
 
+impl Default for TemplateLoweringCursor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 const fn tree_has_static_root_node(tree: &'static TemplateRawTree) -> bool {
     match tree {
         TemplateRawTree::Empty

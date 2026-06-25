@@ -550,6 +550,63 @@ fn keyed_lis_child_that_changes_template_is_placed_not_stable() {
     assert_eq!(summary.replaces, 0);
 }
 
+/// Regression test for keyed reorders of anchorless (fragment-rooted) children.
+///
+/// Each keyed child is a `Fragment` that renders no DOM while empty, so when it gains
+/// content the insertion site has to be resolved by walking up to the keyed list and
+/// anchoring against a sibling. A child that is stable (kept by the LIS) but moved has
+/// its render parent stamped with its *new* fragment index, while placement reads the
+/// *old* committed child array - so any reorder anchors the gained content against the
+/// wrong sibling and the final DOM order is wrong.
+///
+/// Old order `[1(empty), 2, 3]` -> new order `[3, 1(now full), 2]`. Keys 1 and 2 are the
+/// LIS (stable); key 1 transitions empty -> full while moving from index 0 to index 1.
+#[test]
+fn keyed_reorder_anchorless_child_gains_content() {
+    fn app() -> Element {
+        // (key, has_content)
+        let order: &[(i32, bool)] = match generation() % 2 {
+            0 => &[(1, false), (2, true), (3, true)],
+            1 => &[(3, true), (1, true), (2, true)],
+            _ => unreachable!(),
+        };
+
+        rsx! {
+            for (k, full) in order.iter().copied() {
+                Fragment { key: "{k}",
+                    if full {
+                        div { id: "{k}" }
+                    }
+                }
+            }
+        }
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            div { id: "2" }
+            div { id: "3" }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            div { id: "3" }
+            div { id: "1" }
+            div { id: "2" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+}
+
 fn rebuild(
     app: fn() -> Element,
     expected_order: &[i32],

@@ -28,7 +28,8 @@ pub(crate) enum RenderMode {
 /// - A scope id
 /// - A mounted element id
 /// - A fragment range
-/// The discriminate is determined by the dynamic node variant
+///
+/// The discriminate is determined by the dynamic node variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PackedMountedSlot {
     value: usize,
@@ -56,7 +57,12 @@ pub(crate) struct MountedParent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MountedParentKind {
     ComponentRoot,
-    FragmentChild { child_index: usize },
+    /// `child_index` is this child's slot in its parent fragment's committed child list. Placement
+    /// indexes the committed (old) child list with it, so it must track the *committed* position:
+    /// it is advanced to a child's new index only when the fragment diff commits, never mid-diff.
+    FragmentChild {
+        child_index: usize,
+    },
 }
 
 impl MountedParent {
@@ -445,12 +451,47 @@ impl VirtualDom {
         })
     }
 
+    /// Write `child` into fragment slot `idx` and home its render parent at that slot.
+    ///
+    /// `idx` becomes the child's committed `child_index`, so this is only correct once the slot is
+    /// the child's final position (the create path and the post-diff commit). During a diff, use
+    /// [`Self::stage_mounted_fragment_child`] so placement keeps reading the old committed index.
     pub(crate) fn set_mounted_fragment_child(
         &self,
         writer: FragmentMountWriter,
         idx: usize,
         child: MountId,
     ) {
+        let render_parent = MountedParent::fragment_child(
+            writer.mount,
+            writer.anchor_index,
+            writer.dyn_node_idx,
+            idx,
+        );
+        let mut mounts = self.stage_mounted_fragment_child_inner(writer, idx, child);
+        mounts[child.0].render_parent = Some(render_parent);
+    }
+
+    /// Write `child` into the pending fragment slot without re-homing its render parent.
+    ///
+    /// Used while a fragment diff is in flight: the child's render parent must keep pointing at its
+    /// old committed index (which placement reads against the old child list) until the whole diff
+    /// commits and [`Self::set_mounted_fragment_child`] advances it to the new index.
+    pub(crate) fn stage_mounted_fragment_child(
+        &self,
+        writer: FragmentMountWriter,
+        idx: usize,
+        child: MountId,
+    ) {
+        let _ = self.stage_mounted_fragment_child_inner(writer, idx, child);
+    }
+
+    fn stage_mounted_fragment_child_inner(
+        &self,
+        writer: FragmentMountWriter,
+        idx: usize,
+        child: MountId,
+    ) -> std::cell::RefMut<'_, slab::Slab<Mount>> {
         debug_assert_ne!(
             child, UNWRITTEN_FRAGMENT_CHILD_MOUNT,
             "unwritten fragment child sentinel cannot be a live child mount"
@@ -459,15 +500,9 @@ impl VirtualDom {
             idx < writer.len,
             "fragment child write index must fit the pending range"
         );
-        let render_parent = MountedParent::fragment_child(
-            writer.mount,
-            writer.anchor_index,
-            writer.dyn_node_idx,
-            idx,
-        );
         let mut mounts = self.runtime.mounts.borrow_mut();
         mounts[writer.mount.0].fragment_child_mounts[writer.start + idx] = child;
-        mounts[child.0].render_parent = Some(render_parent);
+        mounts
     }
 
     pub(crate) fn commit_mounted_fragment_children(&self, writer: FragmentMountWriter) {

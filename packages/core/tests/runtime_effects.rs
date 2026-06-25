@@ -37,7 +37,7 @@ fn effects_run_after_renderer_flush_boundary() {
     EFFECT_RAN_BEFORE_FLUSH.store(0, Ordering::Relaxed);
 
     let mut dom = VirtualDom::new(effect_flush_boundary_app);
-    let mut renderer = BufferedRenderer::default();
+    let mut renderer = BufferedRenderer;
 
     dom.rebuild(&mut renderer);
     renderer.flush();

@@ -823,7 +823,7 @@ fn biased_dynamic_attr_name(value: &AttrValueSpec, seed: u8) -> u8 {
 /// A shape summary of one replayed [`Model`], indexed with the same selector
 /// numbering the ops use, so strategies can target structure that actually
 /// exists. Built by [`ModelFacts::new`] from the model's canonical
-/// [`VNodeSpec::visit`]-compatible pre-order.
+/// `VNodeSpec::visit`-compatible pre-order.
 #[derive(Default)]
 struct ModelFacts {
     vnodes: Vec<VNodeShape>,

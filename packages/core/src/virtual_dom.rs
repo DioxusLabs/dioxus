@@ -626,11 +626,29 @@ impl VirtualDom {
     }
 
     fn drain_remaining_effects(&mut self) {
-        while let Some(effect) = self.pop_effect() {
-            effect.run();
-            self.queue_events();
-            if self.has_dirty_scopes() {
-                return;
+        loop {
+            let mut progressed = false;
+
+            while let Some(effect) = self.pop_effect() {
+                progressed = true;
+                effect.run();
+                self.queue_events();
+                if self.has_dirty_scopes() {
+                    return;
+                }
+            }
+
+            while let Some(task) = self.pop_task() {
+                progressed = true;
+                _ = self.runtime.handle_task_wakeup(task);
+                self.queue_events();
+                if self.has_dirty_scopes() {
+                    return;
+                }
+            }
+
+            if !progressed {
+                break;
             }
         }
     }
