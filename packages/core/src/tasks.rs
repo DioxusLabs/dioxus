@@ -352,37 +352,12 @@ pub(crate) struct LocalTask {
 }
 
 impl LocalTask {
-    /// Suspend the task under the current suspense location.
-    pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> SuspendedTaskRegistration {
-        let mut ty = self.ty.borrow_mut();
-        match &*ty {
-            TaskType::Suspended {
-                boundary: old_boundary,
-            } => {
-                let old_context = old_boundary.suspense_context().cloned();
-                let new_context = boundary.suspense_context().cloned();
-                let registration = if old_context == new_context {
-                    SuspendedTaskRegistration::Unchanged
-                } else {
-                    SuspendedTaskRegistration::Moved {
-                        old_boundary: old_boundary.clone(),
-                    }
-                };
-                *ty = TaskType::Suspended { boundary };
-                registration
-            }
-            _ => {
-                *ty = TaskType::Suspended { boundary };
-                SuspendedTaskRegistration::New
-            }
-        }
+    /// Suspend the task, returns true if the task was already suspended.
+    pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> bool {
+        // Make this a suspended task so it runs during suspense.
+        let old_type = self.ty.replace(TaskType::Suspended { boundary });
+        matches!(old_type, TaskType::Suspended { .. })
     }
-}
-
-pub(crate) enum SuspendedTaskRegistration {
-    New,
-    Unchanged,
-    Moved { old_boundary: SuspenseLocation },
 }
 
 #[derive(Clone)]

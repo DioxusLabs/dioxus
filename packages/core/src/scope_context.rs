@@ -25,64 +25,24 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
-    UnderSuspense {
-        boundary: SuspenseContext,
-        hidden_by: Vec<SuspenseContext>,
-    },
-    InSuspensePlaceholder {
-        boundary: SuspenseContext,
-        hidden_by: Vec<SuspenseContext>,
-    },
+    UnderSuspense(SuspenseContext),
+    InSuspensePlaceholder(SuspenseContext),
 }
 
 impl SuspenseLocation {
     pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
         match self {
-            SuspenseLocation::InSuspensePlaceholder { boundary, .. } => Some(boundary),
-            SuspenseLocation::UnderSuspense { boundary, .. } => Some(boundary),
+            SuspenseLocation::InSuspensePlaceholder(boundary) => Some(boundary),
+            SuspenseLocation::UnderSuspense(boundary) => Some(boundary),
             _ => None,
-        }
-    }
-
-    pub(crate) fn inherited_contexts(&self) -> Vec<SuspenseContext> {
-        match self {
-            SuspenseLocation::UnderSuspense {
-                boundary,
-                hidden_by,
-            }
-            | SuspenseLocation::InSuspensePlaceholder {
-                boundary,
-                hidden_by,
-            } => {
-                let mut contexts = Vec::with_capacity(hidden_by.len() + 1);
-                contexts.push(boundary.clone());
-                contexts.extend(hidden_by.iter().cloned());
-                contexts
-            }
-            SuspenseLocation::NotSuspended => Vec::new(),
         }
     }
 
     pub(crate) fn should_write(&self) -> bool {
         match self {
             SuspenseLocation::NotSuspended => true,
-            SuspenseLocation::UnderSuspense {
-                boundary,
-                hidden_by,
-            } => !boundary.is_suspended() && !hidden_by.iter().any(SuspenseContext::is_suspended),
-            SuspenseLocation::InSuspensePlaceholder { hidden_by, .. } => {
-                !hidden_by.iter().any(SuspenseContext::is_suspended)
-            }
-        }
-    }
-
-    /// Outer suspense boundaries currently rendering their fallback. Empty when
-    /// the scope is not transitively hidden by any suspended ancestor.
-    pub(crate) fn hidden_by(&self) -> &[SuspenseContext] {
-        match self {
-            SuspenseLocation::NotSuspended => &[],
-            SuspenseLocation::UnderSuspense { hidden_by, .. }
-            | SuspenseLocation::InSuspensePlaceholder { hidden_by, .. } => hidden_by,
+            SuspenseLocation::UnderSuspense(boundary) => !boundary.is_suspended(),
+            SuspenseLocation::InSuspensePlaceholder(_) => true,
         }
     }
 }

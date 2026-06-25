@@ -996,24 +996,12 @@ fn un_resolve_suspense(dom: &mut VirtualDom, scope_id: ScopeId) {
 impl SuspenseContext {
     /// Run a closure under a suspense boundary
     pub(crate) fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
-        runtime.with_suspense_location(
-            SuspenseLocation::UnderSuspense {
-                boundary: self.clone(),
-                hidden_by: inherited_contexts(runtime),
-            },
-            f,
-        )
+        runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
     }
 
     /// Run a closure under a suspense placeholder
     pub(crate) fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
-        runtime.with_suspense_location(
-            SuspenseLocation::InSuspensePlaceholder {
-                boundary: self.clone(),
-                hidden_by: inherited_contexts(runtime),
-            },
-            f,
-        )
+        runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
     }
 
     /// Try to get a suspense boundary from a scope id
@@ -1038,11 +1026,4 @@ impl SuspenseContext {
                 .remove_node_inner(mount, dom, None, destroy_component_state)
         }
     }
-}
-
-fn inherited_contexts(runtime: &Runtime) -> Vec<SuspenseContext> {
-    runtime
-        .current_suspense_location()
-        .map(|l| l.inherited_contexts())
-        .unwrap_or_default()
 }

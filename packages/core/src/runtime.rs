@@ -488,7 +488,7 @@ fn MyComponent() -> Element {{
         if self.suspended_tasks.get() == 0 {
             return !matches!(
                 location,
-                SuspenseLocation::UnderSuspense { boundary, .. } if boundary.is_suspended()
+                SuspenseLocation::UnderSuspense(boundary) if boundary.is_suspended()
             );
         }
         location.should_write()

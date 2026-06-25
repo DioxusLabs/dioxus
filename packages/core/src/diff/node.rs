@@ -428,61 +428,24 @@ impl VNode {
         state: &mut DiffState<'_, '_, '_, '_>,
         destroy_component_state: bool,
     ) -> CreatedVNode {
-        // When the old subtree has no live DOM and the boundary is hidden, we
-        // still materialize mount/component state for the new subtree, but no
-        // renderer insertion site exists or is needed.
         let live_first = self.find_first_element(mount, state.dom);
-        let suppress_mutations =
-            self.should_suppress_mutations(live_first, state.dom, destroy_component_state);
         let context = state.context();
-        let write_local_mutations = !suppress_mutations && state.has_writer();
-        let created = if write_local_mutations {
+        let created = if state.has_writer() {
             let site = live_first.map(InsertionSite::before).unwrap_or_else(|| {
                 insertion_site_at(MountedVNode::new(self, mount), state.dom, context)
             });
             let to = state.to.as_deref_mut().expect("writer checked");
             create_at_site(new, parent, site, state.dom, to)
         } else {
-            let to = if suppress_mutations {
-                None
-            } else {
-                state.to.as_deref_mut()
-            };
-            new.create_mounted(state.dom, parent, parent, to)
+            new.create_mounted(state.dom, parent, parent, state.to.as_deref_mut())
         };
-        let to_for_remove = state.to.as_deref_mut().filter(|_| !suppress_mutations);
-        self.remove_node_inner(mount, state.dom, to_for_remove, destroy_component_state);
+        self.remove_node_inner(
+            mount,
+            state.dom,
+            state.to.as_deref_mut(),
+            destroy_component_state,
+        );
         created
-    }
-
-    /// True when we may skip emitting renderer mutations for a replace because
-    /// the old subtree has no live DOM and we're operating inside a suspended
-    /// boundary (or have no `WriteMutations` sink at all).
-    fn should_suppress_mutations(
-        &self,
-        live_first: Option<ElementId>,
-        dom: &VirtualDom,
-        destroy_component_state: bool,
-    ) -> bool {
-        if !destroy_component_state {
-            return false;
-        }
-        if live_first.is_some() {
-            return false;
-        }
-        current_scope_hidden_by_suspense(dom) && self.has_reclaimable_root()
-    }
-
-    fn has_reclaimable_root(&self) -> bool {
-        self.root_dynamic_node_ids().any(
-            |id| matches!(&self.dynamic_node_values()[id], Text(text) if text.value.is_empty()),
-        )
-    }
-
-    fn root_dynamic_node_ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.dynamic_anchors()
-            .filter(|anchor| anchor.is_root_level())
-            .flat_map(|anchor| anchor.nodes().map(|slot| slot.index()))
     }
 
     /// Remove a node from the DOM and destroy component state.
@@ -1077,13 +1040,6 @@ fn create_static_prototype(node: StaticTemplateNode<'_>, to: &mut dyn WriteMutat
             1
         }
     }
-}
-
-fn current_scope_hidden_by_suspense(dom: &VirtualDom) -> bool {
-    dom.runtime
-        .try_current_scope_id()
-        .and_then(|scope| dom.runtime.try_get_state(scope))
-        .is_some_and(|scope| !scope.suspense_location().hidden_by().is_empty())
 }
 
 /// Look up the rendered root VNode for a component scope, for walking with
