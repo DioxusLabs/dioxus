@@ -188,10 +188,7 @@ impl LastRenderedNode {
     pub(crate) fn new(node: Element) -> Self {
         match node {
             Ok(vnode) => LastRenderedNode::Real(vnode),
-            // Use an empty-text anchor so the parent slot keeps a 1-node DOM presence to diff
-            // against until the error/suspension resolves. The single-node anchor is what keeps
-            // suspense's ReplaceWith transitions working.
-            Err(err) => LastRenderedNode::Placeholder(VNode::error_anchor(), err),
+            Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
         }
     }
 

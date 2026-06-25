@@ -1,6 +1,5 @@
 use crate::{
-    DynamicAnchor, DynamicAttrSlot, DynamicNodeSlot, Element, Event, Properties, ScopeId, Template,
-    VirtualDom,
+    DynamicAnchor, DynamicNodeSlot, Element, Event, Properties, ScopeId, Template, VirtualDom,
     arena::ElementId,
     events::ListenerCallback,
     innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
@@ -207,36 +206,6 @@ impl VNode {
                     view: DynamicValues::from_parts(
                         None,
                         Box::new([DynamicNode::Fragment(Vec::new())]),
-                        Box::new([]),
-                    ),
-                })
-            })
-            .clone()
-        });
-        Self { vnode }
-    }
-
-    /// Create a VNode that represents a failed component render (suspense / error boundary).
-    /// Unlike [`Self::placeholder`], this contributes a single empty text anchor to the DOM so
-    /// that the parent boundary's diff has a stable slot to replace once content resolves.
-    pub(crate) fn error_anchor() -> Self {
-        use std::cell::OnceCell;
-        thread_local! {
-            static ERROR_ANCHOR_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
-        }
-        static TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
-        static STORAGE: TemplateStorage<1, 1, 1> = TemplateStorage::build_from_tree(&TREE);
-        static ERROR_ANCHOR_TEMPLATE: Template = STORAGE.as_template();
-
-        let vnode = ERROR_ANCHOR_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    template: ERROR_ANCHOR_TEMPLATE,
-                    view: DynamicValues::from_parts(
-                        None,
-                        Box::new([DynamicNode::Text(VText {
-                            value: String::new(),
-                        })]),
                         Box::new([]),
                     ),
                 })
