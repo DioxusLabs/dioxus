@@ -22,9 +22,6 @@ fn main() {
         })
     );
 
-    // We can configure the SSR renderer directly
-    println!("{}", dioxus_ssr::Renderer::new().render(&vdom));
-
     // We can render to a buf directly too
     let mut file = String::new();
     let mut renderer = dioxus_ssr::Renderer::default();
