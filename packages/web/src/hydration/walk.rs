@@ -243,7 +243,8 @@ fn mounted_static_node<'a>(
     dom: &'a VirtualDom,
 ) -> Option<ElementId> {
     root_anchor_idx
-        .and_then(|anchor_idx| vnode.mounted_static_anchor(anchor_idx, dom))
+        .and_then(|anchor_idx| dom.mounted_anchor_node(vnode.mount(), anchor_idx))
+        .map(|id| id.element_id())
         .or(pending_before_anchor)
 }
 
