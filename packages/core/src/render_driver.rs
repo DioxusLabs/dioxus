@@ -4,6 +4,7 @@ use crate::{
     WriteMutations,
     diff::context::DiffContext,
     innerlude::MountId,
+    scope_context::SuspenseLocation,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
@@ -27,6 +28,11 @@ pub(crate) trait RenderDriver: 'static {
     /// hook is consulted.
     fn same_component(&self, other: &dyn RenderDriver) -> bool {
         self.as_any().type_id() == other.as_any().type_id()
+    }
+
+    /// The suspense location assigned to a new scope owned by this driver.
+    fn suspense_location(&self, inherited: SuspenseLocation) -> SuspenseLocation {
+        inherited
     }
 
     /// Mount this scope's output. Maintains `scopes[id].last_rendered_node`. Returns the number of

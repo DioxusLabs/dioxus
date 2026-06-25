@@ -25,6 +25,7 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
+    SuspenseBoundary(SuspenseContext),
     UnderSuspense(SuspenseContext),
     InSuspensePlaceholder(SuspenseContext),
 }
@@ -32,8 +33,9 @@ pub(crate) enum SuspenseLocation {
 impl SuspenseLocation {
     pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
         match self {
-            SuspenseLocation::InSuspensePlaceholder(boundary) => Some(boundary),
-            SuspenseLocation::UnderSuspense(boundary) => Some(boundary),
+            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
+            SuspenseLocation::UnderSuspense(context) => Some(context),
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
             _ => None,
         }
     }
@@ -41,6 +43,7 @@ impl SuspenseLocation {
     pub(crate) fn should_write(&self) -> bool {
         match self {
             SuspenseLocation::NotSuspended => true,
+            SuspenseLocation::SuspenseBoundary(_) => true,
             SuspenseLocation::UnderSuspense(boundary) => !boundary.is_suspended(),
             SuspenseLocation::InSuspensePlaceholder(_) => true,
         }
@@ -70,9 +73,6 @@ pub(crate) struct Scope {
 
     /// The suspense boundary location this scope is rendered under, if any.
     suspense_location: SuspenseLocation,
-
-    /// The suspense context owned by this scope when this scope is a boundary.
-    suspense_boundary: RefCell<Option<SuspenseContext>>,
 
     /// The driver owning this scope's rendered output, attached when the
     /// scope's `VComponent` was constructed: the plain component lifecycle
@@ -111,7 +111,6 @@ impl Scope {
                 effects_queued: Vec::new(),
             }),
             suspense_location,
-            suspense_boundary: RefCell::new(None),
             render_driver,
         }
     }
@@ -161,23 +160,16 @@ impl Scope {
         self.suspense_location.clone()
     }
 
-    pub(crate) fn set_suspense_boundary(&self, context: SuspenseContext) {
-        self.suspense_boundary.replace(Some(context));
-    }
-
     /// If this scope is a suspense boundary, return the suspense context
     pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
-        self.suspense_boundary.borrow().clone()
+        match self.suspense_location() {
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
+            _ => None,
+        }
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        if let Some(context) = self.suspense_boundary.borrow().as_ref() {
-            if !context.frozen() && (context.is_suspended() || context.has_suspended_tasks()) {
-                return true;
-            }
-        }
-
         self.suspense_location
             .suspense_context()
             .is_some_and(|context| !context.frozen())

@@ -3,9 +3,7 @@ use std::{any::Any, rc::Rc};
 use crate::{
     DynamicNode,
     diff::context::DiffContext,
-    diff::placement::{
-        StreamPlacement, insertion_site_at, recreate_at_site, splice_streamed_nodes,
-    },
+    diff::placement::{InsertionSite, insertion_site_at, recreate_at_site, splice_streamed_nodes},
     innerlude::*,
     mount::{RenderMode, SuspenseBranch},
     render_driver::{RenderDriver, remove_rendered_output},
@@ -263,7 +261,9 @@ impl SuspenseBoundaryPropsWithOwner {
         VComponent::new_with_driver(
             component_name,
             render_fn_ptr,
-            Rc::new(SuspenseDriver),
+            Rc::new(SuspenseDriver {
+                context: SuspenseContext::new(),
+            }),
             props,
         )
     }
@@ -361,11 +361,17 @@ pub fn SuspenseBoundary(_: SuspenseBoundaryProps) -> Element {
 }
 
 /// The rendering lifecycle of a suspense boundary scope.
-struct SuspenseDriver;
+struct SuspenseDriver {
+    context: SuspenseContext,
+}
 
 impl RenderDriver for SuspenseDriver {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn suspense_location(&self, _: SuspenseLocation) -> SuspenseLocation {
+        SuspenseLocation::SuspenseBoundary(self.context.clone())
     }
 
     fn create(
@@ -384,12 +390,7 @@ impl RenderDriver for SuspenseDriver {
             return dom.create_scope(to, scope_id, rendered, parent);
         }
 
-        {
-            let suspense_context = SuspenseContext::new();
-            let scope_state = dom.runtime.get_state(scope_id);
-            scope_state.set_suspense_boundary(suspense_context.clone());
-            suspense_context.mount(scope_id);
-        }
+        self.context.mount(scope_id);
 
         let nodes = suspense_create(scope_id, parent, dom, to);
         dom.mark_clean(scope_id);
@@ -567,14 +568,12 @@ impl SuspenseBoundaryProps {
             }
 
             // Streaming replacements are pushed after the target node so the splice can stay
-            // stack-only. The fallback usually has a DOM node to swap; an empty (or all-suspense)
-            // fallback renders to nothing, so there is no element to `replace_with` and the streamed
-            // nodes are inserted at the boundary's position instead.
+            // stack-only. Insert streamed nodes before the fallback when it has a DOM node, then
+            // remove the fallback normally. An empty (or all-suspense) fallback renders to nothing,
+            // so streamed nodes are inserted at the boundary's position instead.
             let placement = match currently_rendered.mounted_vnode().find_first_element(dom) {
-                Some(id) => StreamPlacement::Replace(id),
-                None => {
-                    StreamPlacement::for_empty_fallback(currently_rendered.mounted_vnode(), dom)
-                }
+                Some(id) => InsertionSite::before(id),
+                None => insertion_site_at(currently_rendered.mounted_vnode(), dom, None),
             };
             splice_streamed_nodes(to, placement, push_replacements);
             currently_rendered.as_vnode().remove_node(

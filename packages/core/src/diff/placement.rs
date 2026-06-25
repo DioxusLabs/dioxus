@@ -53,7 +53,7 @@ pub(crate) enum InsertionSite {
 }
 
 impl InsertionSite {
-    pub(super) fn before(anchor: ElementId) -> Self {
+    pub(crate) fn before(anchor: ElementId) -> Self {
         Self::Before(anchor)
     }
 
@@ -436,22 +436,6 @@ pub(super) fn at_site_with_result<R>(
     site.create_and_place_with_result(to, runtime, create)
 }
 
-/// How streamed nodes attach to the renderer relative to an on-screen anchor element.
-pub(crate) enum StreamPlacement {
-    /// Replace the anchor element with the streamed nodes (or remove it when there are none).
-    Replace(ElementId),
-    /// Splice the streamed nodes in at the anchor's mounted insertion site.
-    Insert(InsertionSite),
-}
-
-impl StreamPlacement {
-    /// The placement to use when a resolved boundary's fallback has no DOM element to replace:
-    /// anchor before `vnode`'s first live element, walking up to a live parent slot if it is empty.
-    pub(crate) fn for_empty_fallback(vnode: MountedVNode<'_>, dom: &VirtualDom) -> Self {
-        Self::Insert(insertion_site_at(vnode, dom, None))
-    }
-}
-
 /// Splice streamed nodes onto the renderer stack relative to an on-screen anchor, driving the
 /// renderer through a *concrete* writer.
 ///
@@ -462,31 +446,15 @@ impl StreamPlacement {
 /// above the anchor and returns their count.
 pub(crate) fn splice_streamed_nodes<M: WriteMutations>(
     to: &mut M,
-    placement: StreamPlacement,
+    site: InsertionSite,
     push_nodes: impl FnOnce(&mut M) -> usize,
 ) -> usize {
-    let anchor = match placement {
-        StreamPlacement::Replace(id) => id,
-        StreamPlacement::Insert(site) => site.anchor(),
-    };
-    to.push_id(anchor);
+    to.push_id(site.anchor());
     let count = push_nodes(to);
-    match placement {
-        // `replace_with` consumes the anchor it replaces (and `remove` consumes it directly).
-        StreamPlacement::Replace(_) => {
-            if count > 0 {
-                to.replace_with(count);
-            } else {
-                to.remove();
-            }
-        }
-        // `insert_before`/`insert_after`/`append_children` leave the anchor on the stack, so pop it
-        // to keep the renderer stack balanced - the discipline `TargetedLazyScope` applies on drop.
-        StreamPlacement::Insert(site) => {
-            site.splice_stack(to, count);
-            to.pop();
-        }
-    }
+    // `insert_before`/`insert_after`/`append_children` leave the anchor on the stack, so pop it
+    // to keep the renderer stack balanced - the discipline `TargetedLazyScope` applies on drop.
+    site.splice_stack(to, count);
+    to.pop();
     count
 }
 
