@@ -77,7 +77,6 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-    pub(crate) height: u32,
     pub(crate) props: BoxedAnyProps,
     /// The last mounted output for this component.
     pub(crate) last_rendered_node: Option<MountedOutput>,
@@ -127,7 +126,7 @@ impl ScopeState {
 
     /// Returns the height of this scope in the tree.
     pub fn height(&self) -> u32 {
-        self.height
+        self.state().height()
     }
 }
 

@@ -844,16 +844,16 @@ fn drop_scopes_child_first(mut scopes: Vec<ScopeState>) {
     let mut sorted_by_height = true;
     for scope in &scopes {
         if let Some(previous_height) = previous_height
-            && scope.height < previous_height
+            && scope.height() < previous_height
         {
             sorted_by_height = false;
             break;
         }
-        previous_height = Some(scope.height);
+        previous_height = Some(scope.height());
     }
 
     if !sorted_by_height {
-        scopes.sort_unstable_by_key(|scope| scope.height);
+        scopes.sort_unstable_by_key(|scope| scope.height());
     }
 
     for scope in scopes.into_iter().rev() {

@@ -555,7 +555,6 @@ fn MyComponent() -> Element {{
 
         for anchor in node
             .dynamic_anchors()
-            .filter(|anchor| anchor.attrs().len() > 0)
         {
             let path = anchor.static_path();
             let Some(id) = mount.mounted_anchor_node(anchor.anchor_index()) else {
@@ -632,7 +631,6 @@ fn MyComponent() -> Element {{
     ) {
         for anchor in node
             .dynamic_anchors()
-            .filter(|anchor| anchor.attrs().len() > 0)
         {
             let attr_path = anchor.static_path();
             if !path_matches(target_path, attr_path) {

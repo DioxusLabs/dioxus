@@ -48,7 +48,6 @@ impl VirtualDom {
         let scope = entry.insert(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
-            height,
             props,
             last_rendered_node: Default::default(),
             reactive_context,

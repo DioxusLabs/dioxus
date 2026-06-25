@@ -83,7 +83,7 @@ impl<'a> StaticElement<'a> {
     /// Iterate dynamic anchors with attributes that target this element.
     pub fn dynamic_anchors(self) -> impl Iterator<Item = DynamicAnchor<'a>> + 'a {
         self.vnode.dynamic_anchors().filter(move |anchor| {
-            anchor.parent_element_op_index() == Some(self.op) && anchor.attrs().len() > 0
+            anchor.parent_element_op_index() == Some(self.op)
         })
     }
 }

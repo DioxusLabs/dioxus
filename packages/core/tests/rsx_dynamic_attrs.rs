@@ -214,7 +214,7 @@ fn dynamic_attr_and_child_share_static_path() {
     let attr_anchor = anchors
         .iter()
         .copied()
-        .find(|anchor| anchor.attrs().len() > 0)
+        .next()
         .expect("dynamic attr anchor");
     let node_anchor = anchors
         .iter()
