@@ -578,12 +578,18 @@ impl SsrRendererPool {
         // expected). Mirror the two-phase create order: root-level anchors first,
         // then nested.
         let node = vnode.vnode();
-        for anchor in node.dynamic_anchors().filter(|anchor| anchor.is_root_level()) {
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| anchor.is_root_level())
+        {
             for slot in anchor.nodes() {
                 Self::take_from_dynamic_node(context, vdom, vnode, slot);
             }
         }
-        for anchor in node.dynamic_anchors().filter(|anchor| !anchor.is_root_level()) {
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| !anchor.is_root_level())
+        {
             for slot in anchor.nodes() {
                 Self::take_from_dynamic_node(context, vdom, vnode, slot);
             }
