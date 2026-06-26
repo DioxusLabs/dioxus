@@ -566,7 +566,24 @@ impl SsrRendererPool {
     }
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
-        for anchor in vnode.vnode().dynamic_anchors() {
+        // Visit dynamic anchors in the same order the client *creates* them, since
+        // hydration data is consumed in component-run order. Core creates every
+        // root-level dynamic node (`create_root_children`) before descending into
+        // nested ones under static elements (`fill_nested_dynamic_slots`), so a
+        // root-level data component that comes *after* a static element holding a
+        // nested data component (e.g. fullstack's `DefaultServerFnCodec` after
+        // `div { Errors {} }`) still runs first. Walking plain document order here
+        // would serialize the nested component's data first and shift every later
+        // entry, so the client reads the wrong slot (a `bool` where a `String` is
+        // expected). Mirror the two-phase create order: root-level anchors first,
+        // then nested.
+        let node = vnode.vnode();
+        for anchor in node.dynamic_anchors().filter(|anchor| anchor.is_root_level()) {
+            for slot in anchor.nodes() {
+                Self::take_from_dynamic_node(context, vdom, vnode, slot);
+            }
+        }
+        for anchor in node.dynamic_anchors().filter(|anchor| !anchor.is_root_level()) {
             for slot in anchor.nodes() {
                 Self::take_from_dynamic_node(context, vdom, vnode, slot);
             }
