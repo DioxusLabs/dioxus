@@ -552,12 +552,17 @@ impl SuspenseBoundaryProps {
             let suspense_context = scope_state.state().suspense_boundary().unwrap().clone();
             suspense_context.inner.suspended_tasks.borrow_mut().clear();
 
-            // Get the parent of the suspense boundary to later create children with the right parent
+            // Get the render parent of the suspense boundary so the resolved
+            // children inherit both the right logical parent (for creation) and
+            // the right render parent. Without the render parent, an event
+            // bubbling out of the resolved subtree panics in
+            // `Runtime::child_slot_path` ("child mount should have a render
+            // parent"), the same way the non-streaming `(None, false)` resolve
+            // path copies it onto the diffed mount below.
             let currently_rendered = scope_state.last_rendered_node.clone().unwrap();
             let mount = currently_rendered.root_mount();
-            let parent = dom
-                .mounted_render_parent(mount)
-                .map(|parent| parent.parent());
+            let render_parent = dom.mounted_render_parent(mount);
+            let parent = render_parent.as_ref().map(|parent| parent.parent());
 
             // Unmount any children to reset any scopes under this suspense boundary
             let children = suspense_children(dom, scope_id);
@@ -589,6 +594,13 @@ impl SuspenseBoundaryProps {
                     .as_vnode()
                     .create_mounted(dom, parent, Some(&mut no_op))
             });
+
+            // Preserve the boundary's render parent on the resolved subtree so
+            // events can bubble out of it (see the comment where `render_parent`
+            // is captured above).
+            if let Some(render_parent) = render_parent {
+                dom.set_mounted_render_parent(created.mount, render_parent);
+            }
 
             set_rendered_children(dom, scope_id, children, created.mount);
 
