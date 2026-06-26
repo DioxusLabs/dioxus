@@ -173,15 +173,6 @@ impl VNode {
         // update anything. This also implicitly drops the new props since they are not used.
         let old_scope = &mut state.dom.scopes[scope_id.index()];
         if old_scope.props.memoize(new.props.props()) {
-            let root_mount = state
-                .dom
-                .runtime
-                .get_state(scope_id)
-                .root_mount()
-                .expect("memoized component scope should have a root mount");
-            state
-                .dom
-                .set_component_root_render_parent(mount, slot.index(), root_mount);
             return;
         }
 

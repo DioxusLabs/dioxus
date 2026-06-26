@@ -64,6 +64,10 @@ impl StepSource {
     }
 }
 
+/// A side-effect that runs between renders in a [`Sequence`] timeline, receiving
+/// the live `VirtualDom` and the oracle for semantic target resolution.
+type InterludeFn = Box<dyn FnMut(&mut VirtualDom, &RendererOracle)>;
+
 /// One entry in a [`Sequence`]'s timeline. Steps and interludes interleave in
 /// authoring order.
 enum SequenceItem {
@@ -74,7 +78,7 @@ enum SequenceItem {
     /// `VirtualDom` between renders. Receives the live oracle so that event
     /// targets can be resolved semantically (`oracle.element_id_by_tag(...)`,
     /// `oracle.element_id_by_attr(...)`).
-    Interlude(Box<dyn FnMut(&mut VirtualDom, &RendererOracle)>),
+    Interlude(InterludeFn),
 }
 
 /// An assertion registered against the [`EditSummary`] captured at a specific

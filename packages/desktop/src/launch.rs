@@ -52,7 +52,7 @@ fn WindowedRoot(props: DesktopRootProps) -> Element {
 ///
 /// This raw entrypoint does not create an implicit native window. The root component must render
 /// at least one [`Window`](crate::Window) component if the app should show UI. Use
-/// [`launch`](crate::launch::launch) or `dioxus::LaunchBuilder::desktop().launch(...)` for the
+/// [`launch`] or `dioxus::LaunchBuilder::desktop().launch(...)` for the
 /// normal API that wraps the user component in a default window.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime

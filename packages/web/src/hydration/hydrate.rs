@@ -86,10 +86,17 @@ impl WebsysDom {
         let debug_locations = None;
 
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
-        // If the server serialized an error into the suspense boundary, throw
-        // it on the client so that it bubbles up to the nearest error boundary.
+        // If the server streamed an error into this boundary, there is no
+        // resolved subtree to hydrate: the error bubbles to the nearest
+        // ErrorBoundary, whose output replaces the boundary entirely, so the
+        // markerless walk would mismatch the resolved suspense scope against
+        // that error DOM. Throw the error (which marks the ErrorBoundary dirty),
+        // drop the streamed nodes, and let that boundary render its message on
+        // the next render instead of hydrating here.
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
+            resolved_suspense_element.remove();
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
+            return Ok(());
         }
 
         server_data.in_context(|| {
