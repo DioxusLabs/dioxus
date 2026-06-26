@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::generation;
+use dioxus_renderer_oracle::RendererOracle;
 
 // The tests in this file are intended to be run with Miri, and contain no assertions. If they
 // complete under Miri, they have passed.
@@ -11,10 +12,7 @@ fn app_drops() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -29,10 +27,7 @@ fn hooks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -53,10 +48,7 @@ fn contexts_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -70,10 +62,7 @@ fn tasks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -86,9 +75,7 @@ fn root_props_drop() {
         RootProps("asdasd".to_string()),
     );
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    rebuild_and_render(&mut dom);
 }
 
 #[test]
@@ -115,11 +102,26 @@ fn diffing_drops_old() {
         rsx! {"Goodbye {name}"}
     }
 
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-    dom.mark_dirty(ScopeId::APP);
+    fn expected_first() -> Element {
+        rsx! {
+            div { "Hello asdasd" }
+        }
+    }
 
-    _ = dom.render_immediate_to_vec();
+    fn expected_second() -> Element {
+        rsx! {
+            div { "Goodbye asdasd" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_first);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_second);
 }
 
 #[test]
@@ -143,8 +145,12 @@ fn hooks_drop_before_contexts() {
     }
 
     let mut dom = VirtualDom::new(app);
+    rebuild_and_render(&mut dom);
+}
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+fn rebuild_and_render(dom: &mut VirtualDom) {
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(dom);
     dom.mark_dirty(ScopeId::APP);
-    _ = dom.render_immediate_to_vec();
+    oracle.render(dom);
 }

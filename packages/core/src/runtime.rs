@@ -1,28 +1,27 @@
-use crate::nodes::VNodeMount;
+use crate::mount::Mount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{AttributeValue, ElementId, Event};
-use crate::{CapturedError, arena::ElementRef};
-use crate::{
-    SuspenseContext,
-    innerlude::{DirtyTasks, Effect},
-};
+use crate::{AttributeValue, ElementId, Event, RenderTargetId, VNode, innerlude::MountId};
+use crate::{CapturedError, arena::RenderTargetState};
+use crate::{SuspenseContext, innerlude::Effect};
 use crate::{
     Task,
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
     scopes::ScopeId,
 };
-use generational_box::{AnyStorage, Owner};
+use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
 };
 use tracing::instrument;
+
+use dioxus_core_template::TemplatePath;
 
 thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
@@ -58,23 +57,42 @@ pub struct Runtime {
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
 
     // Tasks that are waiting to be polled
-    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
+    pub(crate) dirty_tasks: RefCell<BTreeMap<ScopeOrder, VecDeque<Task>>>,
 
-    // The element ids that are used in the renderer
-    // These mark a specific place in a whole rsx block
-    pub(crate) elements: RefCell<Slab<Option<ElementRef>>>,
+    // The renderer targets and their element id arenas.
+    pub(crate) render_targets: RefCell<Slab<RenderTargetState>>,
 
-    // Once nodes are mounted, the information about where they are mounted is stored here
-    // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
-    // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
-    pub(crate) mounts: RefCell<Slab<VNodeMount>>,
+    // Once nodes are mounted, their persistent mount identity is stored here.
+    // Each mount is associated with a whole rsx block. [`Runtime::elements`]
+    // link to a specific node in that block.
+    pub(crate) mounts: RefCell<Slab<Mount>>,
+}
+
+struct ScopeStackGuard<'a> {
+    runtime: &'a Runtime,
+}
+
+impl Drop for ScopeStackGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.pop_scope();
+    }
+}
+
+struct SuspenseLocationGuard<'a> {
+    runtime: &'a Runtime,
+}
+
+impl Drop for SuspenseLocationGuard<'_> {
+    fn drop(&mut self) {
+        self.runtime.suspense_stack.borrow_mut().pop();
+    }
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        let mut elements = Slab::default();
-        // the root element is always given element ID 0 since it's the container for the entire tree
-        elements.insert(None);
+        let mut render_targets = Slab::default();
+        let root = render_targets.insert(RenderTargetState::new());
+        debug_assert_eq!(root, RenderTargetId::ROOT.index());
 
         Rc::new(Self {
             sender,
@@ -87,7 +105,7 @@ impl Runtime {
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
             dirty_tasks: Default::default(),
-            elements: RefCell::new(elements),
+            render_targets: RefCell::new(render_targets),
             mounts: Default::default(),
         })
     }
@@ -166,44 +184,121 @@ fn MyComponent() -> Element {{
         result
     }
 
+    /// Get the render target currently receiving renderer mutations: the
+    /// target of the scope currently being rendered, or the root target when
+    /// no scope is active. Every scope carries a flat target assignment;
+    /// portal scopes carry the portal's target and their subtree inherits it.
+    pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
+        self.try_current_scope_id()
+            .and_then(|scope| self.try_get_state(scope).map(|state| state.target_id()))
+            .unwrap_or(RenderTargetId::ROOT)
+    }
+
+    /// Create a new renderer target with an isolated [`ElementId`] arena.
+    ///
+    /// Hosts serve render targets through [`MultiWriter`](crate::MultiWriter)
+    /// implementations passed into [`VirtualDom::rebuild`](crate::VirtualDom::rebuild)
+    /// and [`VirtualDom::render_immediate`](crate::VirtualDom::render_immediate). If
+    /// the host does not serve a writer for the target, those mutations are skipped.
+    pub fn create_render_target(&self) -> RenderTargetId {
+        let mut targets = self.render_targets.borrow_mut();
+        RenderTargetId::new(targets.insert(RenderTargetState::new()))
+    }
+
+    /// Remove a render target previously created with [`create_render_target`](Self::create_render_target).
+    ///
+    /// This drops the target's [`ElementId`] arena and template
+    /// cache, freeing the slot so its [`RenderTargetId`] may be handed back out by
+    /// a later [`create_render_target`](Self::create_render_target). The root target
+    /// ([`RenderTargetId::ROOT`]) is permanent and is never removed.
+    ///
+    /// Removing a target that still has live mounts - for example because the
+    /// [`Portal`](crate::Portal) feeding it has not been torn down yet - would
+    /// leave those mounts dangling, so this leaves the target in place instead.
+    /// That happens when a host window is destroyed by the OS or during shutdown
+    /// before its owning component reclaims the target; the target is then freed
+    /// when the runtime is dropped. Callers that own the target's teardown should
+    /// remove the feeding node first so the slot can be recycled.
+    ///
+    /// Returns `true` if a target was removed, or `false` if `id` was the root,
+    /// referred to a target that was already gone, or still had live mounts.
+    pub fn remove_render_target(&self, id: RenderTargetId) -> bool {
+        if id == RenderTargetId::ROOT {
+            return false;
+        }
+        let mut targets = self.render_targets.borrow_mut();
+        let Some(target) = targets.get(id.index()) else {
+            return false;
+        };
+        if target.elements.iter().any(|(_, slot)| slot.is_some()) {
+            return false;
+        }
+        targets.try_remove(id.index()).is_some()
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
-        let id = context.id;
+        let id = context.id.index();
         let mut scopes = self.scope_states.borrow_mut();
-        if scopes.len() <= id.0 {
-            scopes.resize_with(id.0 + 1, Default::default);
+        if id == scopes.len() {
+            scopes.push(Some(context));
+            return;
         }
-        scopes[id.0] = Some(context);
+
+        if scopes.len() <= id {
+            scopes.resize_with(id + 1, Default::default);
+        }
+        scopes[id] = Some(context);
+    }
+
+    pub(crate) fn set_scope_target_id(&self, scope: ScopeId, target_id: RenderTargetId) {
+        self.get_state(scope).set_target_id(target_id);
     }
 
     pub(crate) fn remove_scope(self: &Rc<Self>, id: ScopeId) {
         {
             let borrow = self.scope_states.borrow();
-            if let Some(scope) = &borrow[id.0] {
-                // Manually drop tasks, hooks, and contexts inside of the runtime
-                self.in_scope(id, || {
-                    // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
-                    // In theory nested tasks might not like this
-                    for id in scope.spawned_tasks.take() {
-                        self.remove_task(id);
-                    }
+            if let Some(scope) = &borrow[id.index()] {
+                let has_scoped_state = !scope.spawned_tasks.borrow().is_empty()
+                    || !scope.hooks.borrow().is_empty()
+                    || has_user_shared_contexts(scope);
 
-                    // Drop all queued effects
+                if has_scoped_state {
+                    // Manually drop tasks, hooks, and contexts inside of the runtime
+                    self.in_scope(id, || {
+                        // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
+                        // In theory nested tasks might not like this
+                        for id in scope.spawned_tasks.take() {
+                            self.remove_task(id);
+                        }
+
+                        // Drop all queued effects
+                        self.pending_effects
+                            .borrow_mut()
+                            .remove(&ScopeOrder::new(scope.height, scope.id));
+
+                        // Drop all hooks in reverse order in case a hook depends on another hook.
+                        for hook in scope.hooks.take().drain(..).rev() {
+                            drop(hook);
+                        }
+
+                        // Drop all contexts
+                        scope.shared_contexts.take();
+                    });
+                } else {
+                    // Empty scopes do not need the runtime/scope stack just to clear bookkeeping.
                     self.pending_effects
                         .borrow_mut()
                         .remove(&ScopeOrder::new(scope.height, scope.id));
-
-                    // Drop all hooks in reverse order in case a hook depends on another hook.
-                    for hook in scope.hooks.take().drain(..).rev() {
-                        drop(hook);
-                    }
-
-                    // Drop all contexts
-                    scope.shared_contexts.take();
-                });
+                }
             }
         }
-        self.scope_states.borrow_mut()[id.0].take();
+        // Bind the removed scope so the `borrow_mut()` temporary is released at the end of
+        // this statement, *before* the scope is dropped. Otherwise the scope's `Drop` runs
+        // while `scope_states` is still mutably borrowed and re-entrant calls into
+        // `get_state` panic with "already mutably borrowed".
+        let removed = self.scope_states.borrow_mut()[id.index()].take();
+        drop(removed);
     }
 
     /// Get the owner for the current scope.
@@ -232,14 +327,7 @@ fn MyComponent() -> Element {{
     #[track_caller]
     pub fn in_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
         let _runtime_guard = RuntimeGuard::new(self.clone());
-        {
-            self.push_scope(id);
-        }
-        let o = f();
-        {
-            self.pop_scope();
-        }
-        o
+        self.with_scope_on_stack(id, f)
     }
 
     /// Get the current suspense location
@@ -254,17 +342,15 @@ fn MyComponent() -> Element {{
         f: impl FnOnce() -> O,
     ) -> O {
         self.suspense_stack.borrow_mut().push(suspense_location);
-        let o = f();
-        self.suspense_stack.borrow_mut().pop();
-        o
+        let _guard = SuspenseLocationGuard { runtime: self };
+        f()
     }
 
     /// Run a callback with the current scope at the top of the stack
     pub(crate) fn with_scope_on_stack<O>(&self, scope: ScopeId, f: impl FnOnce() -> O) -> O {
         self.push_scope(scope);
-        let o = f();
-        self.pop_scope();
-        o
+        let _guard = ScopeStackGuard { runtime: self };
+        f()
     }
 
     /// Push a scope onto the stack
@@ -272,7 +358,7 @@ fn MyComponent() -> Element {{
         let suspense_location = self
             .scope_states
             .borrow()
-            .get(scope.0)
+            .get(scope.index())
             .and_then(|s| s.as_ref())
             .map(|s| s.suspense_location())
             .unwrap_or_default();
@@ -282,8 +368,8 @@ fn MyComponent() -> Element {{
 
     /// Pop a scope off the stack
     fn pop_scope(&self) {
-        self.scope_stack.borrow_mut().pop();
         self.suspense_stack.borrow_mut().pop();
+        self.scope_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -291,7 +377,7 @@ fn MyComponent() -> Element {{
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn get_state(&self, id: ScopeId) -> Ref<'_, Scope> {
         Ref::filter_map(self.scope_states.borrow(), |scopes| {
-            scopes.get(id.0).and_then(|f| f.as_ref())
+            scopes.get(id.index()).and_then(|f| f.as_ref())
         })
         .ok()
         .unwrap()
@@ -302,7 +388,7 @@ fn MyComponent() -> Element {{
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn try_get_state(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
         Ref::filter_map(self.scope_states.borrow(), |contexts| {
-            contexts.get(id.0).and_then(|f| f.as_ref())
+            contexts.get(id.index()).and_then(|f| f.as_ref())
         })
         .ok()
     }
@@ -333,27 +419,18 @@ fn MyComponent() -> Element {{
         Self::in_scope(&rt, scope, || callback(&rt.get_state(scope)))
     }
 
-    /// Finish a render. This will mark all effects as ready to run and send the render signal.
-    pub(crate) fn finish_render(&self) {
-        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
-        if !self.pending_effects.borrow().is_empty() {
-            self.sender
-                .unbounded_send(SchedulerMsg::EffectQueued)
-                .expect("Scheduler should exist");
-        }
-    }
-
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
-        // If there are no suspended futures, we know the scope is not  and we can skip context checks
-        if self.suspended_tasks.get() == 0 {
-            return true;
-        }
-
-        // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
-        let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+        let scope = &scopes[scope_id.index()].as_ref().unwrap();
+        let location = scope.suspense_location();
+        if self.suspended_tasks.get() == 0 {
+            return !matches!(
+                location,
+                SuspenseLocation::UnderSuspense(boundary) if boundary.is_suspended()
+            );
+        }
+        location.should_write()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -367,16 +444,95 @@ fn MyComponent() -> Element {{
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
-        let _runtime = RuntimeGuard::new(self.clone());
-        let elements = self.elements.borrow();
+        self.handle_event_for_target(RenderTargetId::ROOT, name, event, element);
+    }
 
-        if let Some(Some(parent_path)) = elements.get(element.0).copied() {
+    /// Call a listener inside the VirtualDom with data from a specific render target.
+    ///
+    /// `ElementId`s are renderer-local, so multi-target renderers should use this
+    /// method instead of [`Self::handle_event`].
+    #[instrument(
+        skip(self, event),
+        level = "trace",
+        name = "Runtime::handle_event_for_target"
+    )]
+    pub fn handle_event_for_target(
+        self: &Rc<Self>,
+        target_id: RenderTargetId,
+        name: &str,
+        event: Event<dyn Any>,
+        element: ElementId,
+    ) {
+        let _runtime = RuntimeGuard::new(self.clone());
+        let targets = self.render_targets.borrow();
+        let Some(target) = targets.get(target_id.index()) else {
+            return;
+        };
+
+        let parent_ref = target.elements.get(element.index()).copied().flatten();
+        drop(targets);
+
+        if let Some(parent_ref) = parent_ref
+            && let Some(path) = self.event_target_path(parent_ref, element)
+        {
             if event.propagates() {
-                self.handle_bubbling_event(parent_path, name, event);
+                self.handle_bubbling_event(parent_ref, path, name, event);
             } else {
-                self.handle_non_bubbling_event(parent_path, name, event);
+                self.handle_non_bubbling_event(parent_ref, path, name, event);
             }
         }
+    }
+
+    fn event_target_path(&self, mount_id: MountId, element: ElementId) -> Option<TemplatePath> {
+        let mounts = self.mounts.borrow();
+        let mount = mounts.get(mount_id.0)?;
+        let node = mount.node();
+
+        for anchor in node.dynamic_anchors() {
+            let path = anchor.static_path();
+            let Some(id) = mount.mounted_anchor_node(anchor.anchor_index()) else {
+                continue;
+            };
+            if id.element_id() == element {
+                return Some(path);
+            }
+        }
+
+        None
+    }
+
+    fn child_slot_path(&self, parent_mount: MountId, child_mount: MountId) -> Option<TemplatePath> {
+        let mounts = self.mounts.borrow();
+        let child = mounts.get(child_mount.0)?;
+        debug_assert_eq!(child.logical_parent(), Some(parent_mount));
+        let render_parent = child
+            .render_parent()
+            .expect("child mount should have a render parent");
+
+        let parent = mounts.get(parent_mount.0)?;
+        let anchor = parent.node().dynamic_anchor(render_parent.anchor_index());
+        let target = if anchor.is_parent_append_target() {
+            anchor.static_path()
+        } else {
+            anchor.static_path().split_insertion().0
+        };
+        Some(target)
+    }
+
+    fn event_attributes<'a>(
+        node: &'a VNode,
+        name: &'a str,
+    ) -> impl Iterator<Item = (TemplatePath, &'a AttributeValue)> + 'a {
+        node.dynamic_anchors().flat_map(move |anchor| {
+            let path = anchor.static_path();
+            anchor
+                .attrs()
+                .flat_map(|slot| slot.attrs())
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                .filter_map(move |attr| {
+                    (attr.name.get(2..) == Some(name)).then_some((path, &attr.value))
+                })
+        })
     }
 
     /*
@@ -401,55 +557,59 @@ fn MyComponent() -> Element {{
     |           <-- no, broke early
     */
     #[instrument(
-        skip(self, uievent),
+        skip(self, path, uievent),
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_bubbling_event(
+        &self,
+        mount_id: MountId,
+        path: TemplatePath,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-        let mut parent = Some(parent);
-        while let Some(path) = parent {
-            let mut listeners = vec![];
-            let mount_id;
+        let mut mount_id = mount_id;
+        let mut target_path = path;
 
-            // We do this in its own block to prevent mounts from staying open while we call user code
+        loop {
+            let mut listeners = vec![];
+            let logical_parent;
+
+            // We do this in its own block to prevent mount borrows from staying open while we call user code
             {
                 let mounts = self.mounts.borrow();
-                let Some(mount) = mounts.get(path.mount.0) else {
+                let Some(mount) = mounts.get(mount_id.0) else {
                     // If the node is suspended and not mounted, we can just ignore the event
                     return;
                 };
 
-                let el_ref = &mount.node;
-                let node_template = el_ref.template;
-                let target_path = path.path;
-                mount_id = el_ref.mount.get().as_usize();
+                let el_ref = mount.node();
+                logical_parent = mount.logical_parent();
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
-                    let attrs = &*el_ref.dynamic_attrs[idx];
+                for (attr_path, value) in Self::event_attributes(el_ref, name) {
+                    if !target_path.starts_with(attr_path) {
+                        continue;
+                    }
 
-                    for attr in attrs.iter() {
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path)
-                        {
-                            if let AttributeValue::Listener(listener) = &attr.value {
-                                listeners.push(listener.clone());
-                            }
+                    if let AttributeValue::Listener(listener) = value {
+                        listeners.push(listener.clone());
+                    }
 
-                            // Break if this is the exact target element.
-                            // This means we won't call two listeners with the same name on the same element. This should be
-                            // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
-                                break;
-                            }
-                        }
+                    // Break if this is the exact target element.
+                    // This means we won't call two listeners with the same name on the same element. This should be
+                    // documented, or be rejected from the rsx! macro outright
+                    if target_path == attr_path {
+                        break;
                     }
                 }
             }
 
-            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // Now that we've accumulated all the parent attributes for the target element, call them in
+            // reverse order. Listeners are accumulated in document order (ancestors first), so reversing
+            // calls the deepest (target) listener first and bubbles up toward the ancestors.
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             tracing::event!(
                 tracing::Level::TRACE,
@@ -465,39 +625,55 @@ fn MyComponent() -> Element {{
                 }
             }
 
-            parent = mount_id.and_then(|id| self.mounts.borrow().get(id).and_then(|el| el.parent));
+            let Some(parent_mount) = logical_parent else {
+                break;
+            };
+            let Some(slot_path) = self.child_slot_path(parent_mount, mount_id) else {
+                break;
+            };
+
+            mount_id = parent_mount;
+            target_path = slot_path;
         }
     }
 
     /// Call an event listener in the simplest way possible without bubbling upwards
     #[instrument(
-        skip(self, uievent),
+        skip(self, target_path, uievent),
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
-    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
-        let Some(mount) = mounts.get(node.mount.0) else {
-            // If the node is suspended and not mounted, we can just ignore the event
-            return;
-        };
-        let el_ref = &mount.node;
-        let node_template = el_ref.template;
-        let target_path = node.path;
+    fn handle_non_bubbling_event(
+        &self,
+        mount_id: MountId,
+        target_path: TemplatePath,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
+        let listeners = {
+            let mounts = self.mounts.borrow();
+            let Some(mount) = mounts.get(mount_id.0) else {
+                // If the node is suspended and not mounted, we can just ignore the event
+                return;
+            };
+            let mut listeners = Vec::new();
 
-        for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
-            let attrs = &*el_ref.dynamic_attrs[idx];
+            for (attr_path, value) in Self::event_attributes(mount.node(), name) {
+                if target_path != attr_path {
+                    continue;
+                }
 
-            for attr in attrs.iter() {
-                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                // Only call the listener if this is the exact target element.
-                if attr.name.get(2..) == Some(name) && target_path == this_path {
-                    if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.call(uievent.clone());
-                        break;
-                    }
+                if let AttributeValue::Listener(listener) = value {
+                    listeners.push(listener.clone());
+                    break;
                 }
             }
+
+            listeners
+        };
+
+        for listener in listeners {
+            listener.call(uievent.clone());
         }
     }
 
@@ -540,7 +716,7 @@ fn MyComponent() -> Element {{
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(&self, scope: ScopeId) {
-        self.get_state(scope).needs_update();
+        self.get_state(scope).needs_update_any(scope);
     }
 
     /// Get the height of the current scope
@@ -592,7 +768,7 @@ fn MyComponent() -> Element {{
     pub fn force_all_dirty(&self) {
         self.scope_states.borrow_mut().iter().for_each(|state| {
             if let Some(scope) = state.as_ref() {
-                scope.needs_update();
+                scope.needs_update_any(scope.id);
             }
         });
     }
@@ -601,6 +777,13 @@ fn MyComponent() -> Element {{
     pub fn vdom_is_rendering(&self) -> bool {
         self.rendering.get()
     }
+}
+
+fn has_user_shared_contexts(scope: &Scope) -> bool {
+    scope.shared_contexts.borrow().iter().any(|context| {
+        let context = context.as_ref();
+        !context.is::<Owner<SyncStorage>>() && !context.is::<Owner<UnsyncStorage>>()
+    })
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
@@ -650,5 +833,46 @@ impl RuntimeGuard {
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
         Runtime::pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn runtime() -> Rc<Runtime> {
+        let (sender, _receiver) = futures_channel::mpsc::unbounded();
+        Runtime::new(sender)
+    }
+
+    fn catch_expected_panic(f: impl FnOnce()) {
+        let panic_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        std::panic::set_hook(panic_hook);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn with_scope_on_stack_restores_after_panic() {
+        let runtime = runtime();
+
+        catch_expected_panic(|| {
+            runtime.with_scope_on_stack(ScopeId::new(7), || panic!("forced panic"));
+        });
+
+        assert_eq!(runtime.try_current_scope_id(), None);
+        assert!(runtime.current_suspense_location().is_none());
+    }
+
+    #[test]
+    fn with_suspense_location_restores_after_panic() {
+        let runtime = runtime();
+
+        catch_expected_panic(|| {
+            runtime.with_suspense_location(SuspenseLocation::default(), || panic!("forced panic"));
+        });
+
+        assert!(runtime.current_suspense_location().is_none());
     }
 }

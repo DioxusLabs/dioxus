@@ -315,16 +315,17 @@ impl Runtime {
             // Remove the task from suspense
             if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
-                if let SuspenseLocation::UnderSuspense(boundary) = boundary {
-                    boundary.remove_suspended_task(id);
+
+                if let Some(context) = boundary.suspense_context() {
+                    context.remove_suspended_task(id);
                 }
             }
 
             // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
             if let Some(scope) = self.try_get_state(task.scope) {
                 let order = ScopeOrder::new(scope.height(), scope.id);
-                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
-                    dirty_tasks.remove(id);
+                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get_mut(&order) {
+                    dirty_tasks.retain(|task| *task != id);
                 }
             }
         }
@@ -351,9 +352,9 @@ pub(crate) struct LocalTask {
 }
 
 impl LocalTask {
-    /// Suspend the task, returns true if the task was already suspended
+    /// Suspend the task, returns true if the task was already suspended.
     pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> bool {
-        // Make this a suspended task so it runs during suspense
+        // Make this a suspended task so it runs during suspense.
         let old_type = self.ty.replace(TaskType::Suspended { boundary });
         matches!(old_type, TaskType::Suspended { .. })
     }
@@ -386,9 +387,6 @@ pub(crate) enum SchedulerMsg {
 
     /// A task has woken and needs to be progressed
     TaskNotified(slotmap::DefaultKey),
-
-    /// An effect has been queued to run after the next render
-    EffectQueued,
 }
 
 struct LocalTaskHandle {

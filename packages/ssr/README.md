@@ -64,9 +64,7 @@ This crate is particularly useful in pre-generating pages server-side and then s
 
 This crate supports hydration out of the box. However, both the client and server must generate the _exact_ same VirtualDOMs - the client picks up its VirtualDOM assuming that the pre-rendered page output is the same. To do this, you need to make sure that your VirtualDOM implementation is deterministic! This could involve either serializing our app state and sending it to the client, hydrating only parts of the page, or building tests to ensure what's rendered on the server is the same as the client.
 
-With pre-rendering enabled, this crate will generate element nodes with Element IDs pre-associated. During hydration, the Dioxus-WebSys renderer will attach the Virtual nodes to these real nodes after a page query.
-
-To enable pre-rendering, simply set the pre-rendering flag to true.
+Any SSR output is hydratable, with no extra configuration required.
 
 ```rust, no_run
 # use dioxus::prelude::*;
@@ -75,10 +73,7 @@ let mut vdom = VirtualDom::new(App);
 
 vdom.rebuild_in_place();
 
-let mut renderer = dioxus_ssr::Renderer::new();
-renderer.pre_render = true;
-
-let text = renderer.render(&vdom);
+let text = dioxus_ssr::Renderer::new().render(&vdom);
 ```
 
 ## Usage in server-side rendering

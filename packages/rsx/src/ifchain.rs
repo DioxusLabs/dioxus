@@ -1,4 +1,3 @@
-use crate::location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use quote::{ToTokens, TokenStreamExt};
@@ -20,11 +19,10 @@ pub struct IfChain {
     pub else_if_branch: Option<Box<IfChain>>,
     pub else_brace: Option<Brace>,
     pub else_branch: Option<TemplateBody>,
-    pub dyn_idx: DynIdx,
 }
 
 impl IfChain {
-    pub fn for_each_branch(&self, f: &mut impl FnMut(&TemplateBody)) {
+    pub(crate) fn for_each_branch(&self, f: &mut impl FnMut(&TemplateBody)) {
         f(&self.then_branch);
 
         if let Some(else_if) = &self.else_if_branch {
@@ -73,7 +71,6 @@ impl Parse for IfChain {
             else_branch,
             then_brace,
             else_brace,
-            dyn_idx: DynIdx::default(),
         })
     }
 }

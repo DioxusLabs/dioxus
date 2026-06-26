@@ -98,7 +98,6 @@ impl RsxBlock {
                 let attr = Spread {
                     expr,
                     dots,
-                    dyn_idx: DynIdx::default(),
                     comma: content.parse().ok(),
                 };
 

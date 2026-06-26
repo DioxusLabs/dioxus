@@ -1,14 +1,12 @@
 use crate::{
-    AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
-    app::SharedContext,
+    AssetRequest, WindowCloseBehaviour, WindowConfig, WryEventHandler,
     assets::AssetHandlerRegistry,
+    desktop_state::{DesktopAppContext, DesktopWindowContext, WindowCloseRequestResult},
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
-    query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
-    webview::PendingWebview,
 };
-use dioxus_core::{Callback, VirtualDom};
+use dioxus_core::{Callback, RenderTargetId};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -39,6 +37,17 @@ pub fn window() -> DesktopContext {
     dioxus_core::consume_context()
 }
 
+/// Get an imperative handle to the desktop application without using a hook.
+///
+/// This is available in the root scope, including apps launched through the raw `VirtualDom` API.
+///
+/// ## Panics
+///
+/// This function will panic if it is called outside of the context of a Dioxus App.
+pub fn app() -> Rc<DesktopAppContext> {
+    dioxus_core::consume_context()
+}
+
 /// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
 
@@ -46,6 +55,37 @@ pub type DesktopContext = Rc<DesktopService>;
 /// The problem without this is that the tao window is never dropped and therefore cannot be closed.
 /// This was due to the Rc that had still references because of multiple copies when creating a webview.
 pub type WeakDesktopContext = Weak<DesktopService>;
+
+/// Registration for a component-owned desktop window.
+pub(crate) struct ComponentWindowRegistration {
+    window: WeakDesktopContext,
+}
+
+impl Drop for ComponentWindowRegistration {
+    fn drop(&mut self) {
+        if let Some(window) = self.window.upgrade() {
+            window.window_context.clear_component_window_callbacks();
+        }
+    }
+}
+
+/// Shared cancellation state for a queued desktop window.
+#[derive(Clone, Default)]
+pub(crate) struct PendingWindowCancellation {
+    canceled: Rc<Cell<bool>>,
+}
+
+impl PendingWindowCancellation {
+    /// Mark the queued window as canceled.
+    pub(crate) fn cancel(&self) {
+        self.canceled.set(true);
+    }
+
+    /// Returns true if the queued window was canceled before creation.
+    pub(crate) fn is_canceled(&self) -> bool {
+        self.canceled.get()
+    }
+}
 
 /// An imperative interface to the current window.
 ///
@@ -60,30 +100,16 @@ pub type WeakDesktopContext = Weak<DesktopService>;
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 pub struct DesktopService {
-    /// The wry/tao proxy to the current window
-    pub webview: WebView,
-
-    /// The tao window itself
-    pub window: Arc<Window>,
-
-    pub(crate) shared: Rc<SharedContext>,
-
-    /// The receiver for queries about the current window
-    pub(super) query: QueryEngine,
-    pub(crate) asset_handlers: AssetHandlerRegistry,
-    pub(crate) file_hover: NativeFileHover,
-    pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
-
-    #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<std::cell::RefCell<Vec<Retained<UIView>>>>,
+    pub(crate) app: Rc<DesktopAppContext>,
+    window_context: DesktopWindowContext,
 }
 
-/// A smart pointer to the current window.
+/// A smart pointer to the current window context.
 impl std::ops::Deref for DesktopService {
-    type Target = Window;
+    type Target = DesktopWindowContext;
 
     fn deref(&self) -> &Self::Target {
-        &self.window
+        &self.window_context
     }
 }
 
@@ -91,22 +117,48 @@ impl DesktopService {
     pub(crate) fn new(
         webview: WebView,
         window: Arc<Window>,
-        shared: Rc<SharedContext>,
+        app: Rc<DesktopAppContext>,
+        target_id: RenderTargetId,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
         close_behaviour: WindowCloseBehaviour,
     ) -> Self {
         Self {
-            window,
-            webview,
-            shared,
-            asset_handlers,
-            file_hover,
-            close_behaviour: Rc::new(Cell::new(close_behaviour)),
-            query: Default::default(),
-            #[cfg(target_os = "ios")]
-            views: Default::default(),
+            app,
+            window_context: DesktopWindowContext::new(
+                webview,
+                window,
+                target_id,
+                asset_handlers,
+                file_hover,
+                close_behaviour,
+            ),
         }
+    }
+
+    pub(crate) fn app_context(&self) -> &Rc<DesktopAppContext> {
+        &self.app
+    }
+
+    pub(crate) fn register_component_window(
+        self: &Rc<Self>,
+        on_close_requested: impl FnMut() + 'static,
+        on_destroyed: impl FnMut() + 'static,
+    ) -> ComponentWindowRegistration {
+        self.window_context
+            .register_component_window_callbacks(on_close_requested, on_destroyed);
+
+        ComponentWindowRegistration {
+            window: Rc::downgrade(self),
+        }
+    }
+
+    pub(crate) fn request_window_close(&self) -> WindowCloseRequestResult {
+        self.window_context.request_window_close()
+    }
+
+    pub(crate) fn notify_window_destroyed(&self) {
+        self.window_context.notify_window_destroyed();
     }
 
     /// Start the creation of a new window using the props and window builder
@@ -120,19 +172,19 @@ impl DesktopService {
     ///
     /// ```rust, no_run
     /// use dioxus::prelude::*;
-    /// fn popup() -> Element {
-    ///     rsx! {
-    ///         div { "This is a popup window!" }
-    ///     }
-    /// }
     ///
     /// # async fn app() {
-    /// // Create a new window with a component that will be rendered in the new window.
-    /// let dom = VirtualDom::new(popup);
-    /// // Create and wait for the window
-    /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
-    /// // Fullscreen the new window
+    /// // Create the window and keep its render target.
+    /// let pending_window = dioxus::desktop::window().new_window(Default::default());
+    /// let target = pending_window.target_id();
+    ///
+    /// // Wait for the desktop context to be created.
+    /// let window = pending_window.await;
     /// window.set_fullscreen(true);
+    ///
+    /// // Render into `target` from the app's existing VDOM, for example with
+    /// // the `Window` component or a `Portal`.
+    /// let _ = target;
     /// # }
     /// ```
     // Note: This method is asynchronous because webview2 does not support creating a new window from
@@ -142,17 +194,8 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
-        let (window, context) = PendingWebview::new(dom, cfg);
-
-        self.shared
-            .proxy
-            .send_event(UserWindowEvent::NewWindow)
-            .unwrap();
-
-        self.shared.pending_webviews.borrow_mut().push(window);
-
-        context
+    pub fn new_window(&self, cfg: WindowConfig) -> PendingDesktopWindow {
+        self.app.new_window(cfg)
     }
 
     /// trigger the drag-window event
@@ -185,17 +228,17 @@ impl DesktopService {
     /// Close this window
     pub fn close(&self) {
         let _ = self
-            .shared
+            .app
             .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+            .send_event(UserWindowEvent::RequestWindowClose(self.id()));
     }
 
     /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
         let _ = self
-            .shared
+            .app
             .proxy
-            .send_event(UserWindowEvent::CloseWindow(id));
+            .send_event(UserWindowEvent::RequestWindowClose(id));
     }
 
     /// change window to fullscreen
@@ -238,12 +281,12 @@ impl DesktopService {
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
-        self.shared.event_handlers.add(self.window.id(), handler)
+        self.app.event_handlers.add(self.window.id(), handler)
     }
 
     /// Remove a wry event handler created with [`Self::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
-        self.shared.event_handlers.remove(id)
+        self.app.event_handlers.remove(id)
     }
 
     /// Create a global shortcut
@@ -254,19 +297,19 @@ impl DesktopService {
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
-        self.shared
+        self.app
             .shortcut_manager
             .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
     pub fn remove_shortcut(&self, id: ShortcutHandle) {
-        self.shared.shortcut_manager.remove_shortcut(id)
+        self.app.shortcut_manager.remove_shortcut(id)
     }
 
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
-        self.shared.shortcut_manager.remove_all()
+        self.app.shortcut_manager.remove_all()
     }
 
     /// Provide a callback to handle asset loading yourself.
@@ -342,30 +385,42 @@ fn is_main_thread() -> bool {
     objc2_foundation::NSThread::isMainThread_class()
 }
 
-/// A [`DesktopContext`] that is pending creation.
+/// A desktop window that is pending creation.
 ///
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # async fn app() {
-/// // Create a new window with a component that will be rendered in the new window.
-/// let dom = VirtualDom::new(|| rsx!{ "popup!" });
-///
 /// // Create a new window asynchronously
-/// let pending_context = dioxus::desktop::window().new_window(dom, Default::default());
+/// let pending_window = dioxus::desktop::window().new_window(Default::default());
+/// let target = pending_window.target_id();
 ///
 /// // Wait for the context to be created
-/// let window = pending_context.await;
+/// let window = pending_window.await;
 ///
 /// // Now control the window
 /// window.set_fullscreen(true);
+///
+/// // Render into `target` from the app's existing VDOM.
 /// # }
 /// ```
-pub struct PendingDesktopContext {
+pub struct PendingDesktopWindow {
+    pub(crate) target_id: RenderTargetId,
     pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
+    pub(crate) cancellation: PendingWindowCancellation,
 }
 
-impl PendingDesktopContext {
+impl PendingDesktopWindow {
+    /// The render target associated with the pending window.
+    pub fn target_id(&self) -> RenderTargetId {
+        self.target_id
+    }
+
+    /// Get the cancellation handle for the queued window.
+    pub(crate) fn cancellation(&self) -> PendingWindowCancellation {
+        self.cancellation.clone()
+    }
+
     /// Resolve the pending context into a [`DesktopContext`].
     pub async fn resolve(self) -> DesktopContext {
         self.try_resolve()
@@ -379,7 +434,7 @@ impl PendingDesktopContext {
     }
 }
 
-impl IntoFuture for PendingDesktopContext {
+impl IntoFuture for PendingDesktopWindow {
     type Output = DesktopContext;
 
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;

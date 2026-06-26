@@ -3,31 +3,27 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use crate::{Attribute, AttributeValue, DynamicNode, DynamicValues, Template, VNode, VText};
 #[cfg(feature = "serialize")]
-use crate::nodes::deserialize_string_leaky;
-use crate::{
-    Attribute, AttributeValue, DynamicNode, Template, TemplateAttribute, TemplateNode, VNode, VText,
-};
+use dioxus_core_template::deserialize_string_leaky;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
-pub struct HotreloadedLiteral {
-    pub name: String,
-    pub value: HotReloadLiteral,
-}
-
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[doc(hidden)]
-#[derive(Debug, PartialEq, Clone)]
+/// A literal value that can be replayed during hot reload.
 pub enum HotReloadLiteral {
+    /// A formatted string literal.
     Fmted(FmtedSegments),
+    /// A floating point literal.
     Float(f64),
+    /// An integer literal.
     Int(i64),
+    /// A boolean literal.
     Bool(bool),
 }
 
 impl HotReloadLiteral {
+    /// Return the formatted string segments if this is a formatted literal.
     pub fn as_fmted(&self) -> Option<&FmtedSegments> {
         match self {
             Self::Fmted(segments) => Some(segments),
@@ -35,6 +31,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the float value if this is a float literal.
     pub fn as_float(&self) -> Option<f64> {
         match self {
             Self::Float(f) => Some(*f),
@@ -42,6 +39,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the integer value if this is an integer literal.
     pub fn as_int(&self) -> Option<i64> {
         match self {
             Self::Int(i) => Some(*i),
@@ -49,6 +47,7 @@ impl HotReloadLiteral {
         }
     }
 
+    /// Return the boolean value if this is a boolean literal.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Self::Bool(b) => Some(*b),
@@ -71,11 +70,13 @@ impl Hash for HotReloadLiteral {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+/// A formatted string split into static and dynamic segments.
 pub struct FmtedSegments {
     pub(crate) segments: Vec<FmtSegment>,
 }
 
 impl FmtedSegments {
+    /// Create formatted string segments.
     pub fn new(segments: Vec<FmtSegment>) -> Self {
         Self { segments }
     }
@@ -100,15 +101,20 @@ type StaticStr = &'static str;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+/// One segment of a formatted string used by hot reload.
 pub enum FmtSegment {
+    /// A static string segment.
     Literal {
+        /// The static string value.
         #[cfg_attr(
             feature = "serialize",
             serde(deserialize_with = "deserialize_string_leaky")
         )]
         value: StaticStr,
     },
+    /// A dynamic string segment.
     Dynamic {
+        /// The dynamic text value index.
         id: usize,
     },
 }
@@ -118,17 +124,7 @@ pub enum FmtSegment {
 //     vec![...],
 //     vec![...],
 // );
-// VNode::new(
-//     None,
-//     Template {
-//         name: "...",
-//         roots: &[...],
-//         node_paths: &[..],
-//         attr_paths: &[...],
-//     },
-//     Box::new([...]),
-//     Box::new([...]),
-// )
+// Hot reload templates carry a decoded Template plus dynamic node/attribute mappings.
 
 // Open questions:
 // - How do we handle type coercion for different sized component property integers?
@@ -141,14 +137,15 @@ pub struct DynamicLiteralPool {
 }
 
 impl DynamicLiteralPool {
+    /// Create a dynamic literal pool from dynamic text values.
     pub fn new(dynamic_text: Vec<String>) -> Self {
         Self {
             dynamic_text: dynamic_text.into_boxed_slice(),
         }
     }
 
-    // TODO: This should be marked as private in the next major release
-    pub fn get_component_property<'a, T>(
+    /// Get a component property from a hot-reload literal.
+    fn get_component_property<'a, T>(
         &self,
         id: usize,
         hot_reload: &'a HotReloadedTemplate,
@@ -237,7 +234,8 @@ impl DynamicLiteralPool {
         }
     }
 
-    pub fn render_formatted(&self, segments: &FmtedSegments) -> String {
+    /// Render formatted segments using the current dynamic text pool.
+    fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
 }
@@ -249,7 +247,8 @@ pub struct DynamicValuePool {
 }
 
 impl DynamicValuePool {
-    pub fn new(
+    /// Create a dynamic node/attribute value pool.
+    fn new(
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attributes: Vec<Box<[Attribute]>>,
         literal_pool: DynamicLiteralPool,
@@ -261,8 +260,16 @@ impl DynamicValuePool {
         }
     }
 
+    /// Create a dynamic node/attribute value pool from a vnode.
+    pub fn from_vnode(vnode: &VNode, literal_pool: DynamicLiteralPool) -> Self {
+        let dynamic_nodes = vnode.dynamic_node_values().to_vec();
+        let dynamic_attributes = vnode.dynamic_attr_values().to_vec();
+
+        Self::new(dynamic_nodes, dynamic_attributes, literal_pool)
+    }
+
+    /// Render a vnode from a hot-reloaded template.
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
-        // Get the node_paths from a depth first traversal of the template
         let key = hot_reload
             .key
             .as_ref()
@@ -271,14 +278,21 @@ impl DynamicValuePool {
             .dynamic_nodes
             .iter()
             .map(|node| self.render_dynamic_node(node))
-            .collect();
-        let dynamic_attrs = hot_reload
+            .collect::<Vec<_>>();
+        let dynamic_attributes = hot_reload
             .dynamic_attributes
             .iter()
             .map(|attr| self.render_attribute(attr))
-            .collect();
+            .collect::<Vec<_>>();
 
-        VNode::new(key, hot_reload.template, dynamic_nodes, dynamic_attrs)
+        VNode::new(
+            hot_reload.template,
+            DynamicValues::from_parts(
+                key,
+                dynamic_nodes.into_boxed_slice(),
+                dynamic_attributes.into_boxed_slice(),
+            ),
+        )
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
@@ -325,161 +339,153 @@ impl DynamicValuePool {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// A hot-reloaded template with its source location key.
 pub struct HotReloadTemplateWithLocation {
+    /// The source location key.
     pub key: TemplateGlobalKey,
+    /// The hot-reloaded template.
     pub template: HotReloadedTemplate,
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Hash, PartialOrd, Eq, Ord)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// Source location key for a hot-reload template.
 pub struct TemplateGlobalKey {
+    /// Source file path.
     pub file: String,
+    /// Source line.
     pub line: usize,
+    /// Source column.
     pub column: usize,
+    /// Template index at the source location.
     pub index: usize,
 }
 
-type StaticTemplateArray = &'static [TemplateNode];
-
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[doc(hidden)]
+/// Template data and dynamic node/attribute mappings for hot reload.
 pub struct HotReloadedTemplate {
+    /// Optional dynamic key segments.
     pub key: Option<FmtedSegments>,
+    /// Dynamic node mappings.
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
+    /// Dynamic attribute mappings.
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+    /// Component literal values.
     pub component_values: Vec<HotReloadLiteral>,
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_leaky")
-    )]
-    pub roots: StaticTemplateArray,
-    /// The template that is computed from the hot reload roots
     template: Template,
 }
 
 impl HotReloadedTemplate {
-    pub fn new(
+    /// Create hot-reload data from a template and dynamic node/attribute mappings.
+    pub fn from_template(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
-        roots: &'static [TemplateNode],
+        template: Template,
     ) -> Self {
-        let node_paths = Self::node_paths(roots);
-        let attr_paths = Self::attr_paths(roots);
-
-        let template = Template::new(roots, node_paths, attr_paths);
         Self {
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
-            roots,
             template,
         }
     }
 
-    fn node_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
-        fn add_node_paths(
-            roots: &[TemplateNode],
-            node_paths: &mut Vec<&'static [u8]>,
-            current_path: Vec<u8>,
-        ) {
-            for (idx, node) in roots.iter().enumerate() {
-                let mut path = current_path.clone();
-                path.push(idx as u8);
-                match node {
-                    TemplateNode::Element { children, .. } => {
-                        add_node_paths(children, node_paths, path);
-                    }
-                    TemplateNode::Text { .. } => {}
-                    TemplateNode::Dynamic { id } => {
-                        debug_assert_eq!(node_paths.len(), *id);
-                        node_paths.push(Box::leak(path.into_boxed_slice()));
-                    }
-                }
-            }
-        }
-
-        let mut node_paths = Vec::new();
-        add_node_paths(roots, &mut node_paths, Vec::new());
-        let leaked: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
-        leaked
+    /// Return the number of root positions in the template.
+    pub fn root_count(&self) -> usize {
+        self.template.root_count()
     }
 
-    fn attr_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
-        fn add_attr_paths(
-            roots: &[TemplateNode],
-            attr_paths: &mut Vec<&'static [u8]>,
-            current_path: Vec<u8>,
-        ) {
-            for (idx, node) in roots.iter().enumerate() {
-                let mut path = current_path.clone();
-                path.push(idx as u8);
-                if let TemplateNode::Element {
-                    children, attrs, ..
-                } = node
-                {
-                    for attr in *attrs {
-                        if let TemplateAttribute::Dynamic { id } = attr {
-                            debug_assert_eq!(attr_paths.len(), *id);
-                            attr_paths.push(Box::leak(path.clone().into_boxed_slice()));
-                        }
-                    }
-                    add_attr_paths(children, attr_paths, path);
-                }
-            }
-        }
+    /// Return decoded template operations for inspection.
+    pub fn decoded_ops(&self) -> Vec<dioxus_core_template::DecodedTemplateOp> {
+        self.template.decoded_ops().collect()
+    }
 
-        let mut attr_paths = Vec::new();
-        add_attr_paths(roots, &mut attr_paths, Vec::new());
-        let leaked: &'static [&'static [u8]] = Box::leak(attr_paths.into_boxed_slice());
-        leaked
+    /// Return the static string pool for inspection.
+    pub fn static_strings(&self) -> &'static [&'static str] {
+        self.template.strings()
     }
 }
 
-#[doc(hidden)]
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for HotReloadedTemplate {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct SerializedHotReloadedTemplate {
+            key: Option<FmtedSegments>,
+            dynamic_nodes: Vec<HotReloadDynamicNode>,
+            dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+            component_values: Vec<HotReloadLiteral>,
+            template: Template,
+        }
+
+        let serialized = SerializedHotReloadedTemplate::deserialize(deserializer)?;
+        Ok(Self::from_template(
+            serialized.key,
+            serialized.dynamic_nodes,
+            serialized.dynamic_attributes,
+            serialized.component_values,
+            serialized.template,
+        ))
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// Dynamic node source for hot reload.
 pub enum HotReloadDynamicNode {
+    /// Reuse a dynamic node by index.
     Dynamic(usize),
+    /// Create a text node from formatted segments.
     Formatted(FmtedSegments),
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// Dynamic attribute source for hot reload.
 pub enum HotReloadDynamicAttribute {
+    /// Reuse a dynamic attribute by index.
     Dynamic(usize),
+    /// Create an attribute from a named value.
     Named(NamedAttribute),
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// A named attribute generated for hot reload.
 pub struct NamedAttribute {
     /// The name of this attribute.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
+        serde(deserialize_with = "dioxus_core_template::deserialize_string_leaky")
     )]
     name: StaticStr,
     /// The namespace of this attribute. Does not exist in the HTML spec
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
+        serde(deserialize_with = "dioxus_core_template::deserialize_option_leaky")
     )]
     namespace: Option<StaticStr>,
-
+    /// Attribute value.
     value: HotReloadAttributeValue,
 }
 
 impl NamedAttribute {
+    /// Create a named hot-reload attribute.
     pub fn new(
         name: &'static str,
         namespace: Option<&'static str>,
@@ -493,10 +499,13 @@ impl NamedAttribute {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
+/// Attribute value source for hot reload.
 pub enum HotReloadAttributeValue {
+    /// Literal attribute value.
     Literal(HotReloadLiteral),
+    /// Reuse a dynamic attribute value by index.
     Dynamic(usize),
 }

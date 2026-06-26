@@ -213,8 +213,6 @@ use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 
 pub type MountedEvent = Event<MountedData>;
 
-pub use super::onmounted as onmount;
-
 /// The MountedResult type for the MountedData
 pub type MountedResult<T> = Result<T, MountedError>;
 

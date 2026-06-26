@@ -1,4 +1,4 @@
-use std::fmt::Arguments;
+use std::{fmt::Arguments, marker::PhantomData};
 
 use crate::innerlude::*;
 
@@ -46,12 +46,13 @@ use crate::innerlude::*;
     )
 )]
 pub trait Properties: Clone + Sized + 'static {
-    /// The type of the builder for this component.
-    /// Used to create "in-progress" versions of the props.
-    type Builder;
+    /// The type of the builder for this component when starting from a component function.
+    type ComponentBuilder<RenderFn, Marker>;
 
-    /// Create a builder for this component.
-    fn builder() -> Self::Builder;
+    /// Create a builder that remembers the component function it came from.
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker>;
 
     /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &Self) -> bool;
@@ -64,11 +65,15 @@ pub trait Properties: Clone + Sized + 'static {
 }
 
 impl Properties for () {
-    type Builder = EmptyBuilder;
-    fn builder() -> Self::Builder {
-        EmptyBuilder {}
+    type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, EmptyBuilder, (), Marker>;
+
+    fn component_builder<RenderFn, Marker>(
+        render_fn: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
+        ComponentBuilder::new(render_fn, EmptyBuilder {})
     }
-    fn memoize(&mut self, _other: &Self) -> bool {
+
+    fn memoize(&mut self, _: &Self) -> bool {
         true
     }
 }
@@ -89,11 +94,15 @@ impl<P> Properties for RootProps<P>
 where
     P: Clone + 'static,
 {
-    type Builder = P;
-    fn builder() -> Self::Builder {
+    type ComponentBuilder<RenderFn, Marker> = ComponentBuilder<RenderFn, P, Self, Marker>;
+
+    fn component_builder<RenderFn, Marker>(
+        _: RenderFn,
+    ) -> Self::ComponentBuilder<RenderFn, Marker> {
         unreachable!("Root props technically are never built")
     }
-    fn memoize(&mut self, _other: &Self) -> bool {
+
+    fn memoize(&mut self, _: &Self) -> bool {
         true
     }
 }
@@ -103,15 +112,6 @@ where
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     pub fn build(self) {}
-}
-
-/// This utility function launches the builder method so that the rsx! macro can use the typed-builder pattern
-/// to initialize a component's props.
-pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as Properties>::Builder
-where
-    P: Properties,
-{
-    P::builder()
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
@@ -145,6 +145,156 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     fn rebuild(&self, props: Props) -> Element;
 }
 
+/// Extension methods for function components.
+///
+/// This lets handwritten builder code start from the component function directly:
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn Greeting(#[props(into)] name: String) -> Element {
+///     rsx! { "Hello {name}" }
+/// }
+///
+/// let vnode = Greeting.builder().name("Ada").build().into_vnode();
+/// ```
+pub trait ComponentFunctionExt<Props, Marker>: ComponentFunction<Props, Marker> + Sized
+where
+    Props: Properties,
+{
+    /// Create the generated props builder for this component.
+    fn builder(self) -> Props::ComponentBuilder<Self, Marker> {
+        Props::component_builder(self)
+    }
+}
+
+impl<F, P, M> ComponentFunctionExt<P, M> for F
+where
+    F: ComponentFunction<P, M>,
+    P: Properties,
+{
+}
+
+/// A props builder that remembers the component function it came from.
+#[must_use]
+pub struct ComponentBuilder<RenderFn, Builder, Props, Marker> {
+    render_fn: RenderFn,
+    builder: Builder,
+    _marker: PhantomData<fn() -> (Props, Marker)>,
+}
+
+impl<RenderFn, Builder, Props, Marker> ComponentBuilder<RenderFn, Builder, Props, Marker> {
+    /// Create a component-aware props builder.
+    pub(crate) fn new(render_fn: RenderFn, builder: Builder) -> Self {
+        Self {
+            render_fn,
+            builder,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Convert the inner builder while preserving the component function.
+    pub(crate) fn map_builder<NewBuilder>(
+        self,
+        map: impl FnOnce(Builder) -> NewBuilder,
+    ) -> ComponentBuilder<RenderFn, NewBuilder, Props, Marker> {
+        ComponentBuilder::new(self.render_fn, map(self.builder))
+    }
+}
+
+impl<RenderFn, Marker> ComponentBuilder<RenderFn, EmptyBuilder, (), Marker> {
+    /// Build an empty-props component.
+    pub fn build(self) -> ComponentBuilderOutput<RenderFn, (), Marker> {
+        self.builder.build();
+        ComponentBuilderOutput::new(self.render_fn, ())
+    }
+}
+
+impl<RenderFn, Builder, Props, Marker> HasAttributes
+    for ComponentBuilder<RenderFn, Builder, Props, Marker>
+where
+    Builder: HasAttributes,
+{
+    fn push_attribute<T>(
+        self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        attr: impl IntoAttributeValue<T>,
+        volatile: bool,
+    ) -> Self {
+        self.map_builder(|builder| builder.push_attribute(name, ns, attr, volatile))
+    }
+}
+
+/// A built set of props paired with the component function that renders them.
+#[must_use]
+pub struct ComponentBuilderOutput<RenderFn, Props, Marker> {
+    render_fn: RenderFn,
+    props: Props,
+    _marker: PhantomData<fn() -> Marker>,
+}
+
+impl<RenderFn, Props, Marker> ComponentBuilderOutput<RenderFn, Props, Marker> {
+    /// Create built component props from a render function and props value.
+    pub fn new(render_fn: RenderFn, props: Props) -> Self {
+        Self {
+            render_fn,
+            props,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a [`VComponent`] from these props and the remembered component function.
+    pub fn into_vcomponent(self) -> VComponent
+    where
+        Props: ComponentBuilderRender<RenderFn, Marker>,
+    {
+        self.props.into_vcomponent(self.render_fn)
+    }
+
+    /// Convert this built component into a [`VNode`].
+    pub fn into_vnode(self) -> VNode
+    where
+        Props: ComponentBuilderRender<RenderFn, Marker>,
+    {
+        crate::view::ViewExt::into_vnode(self.into_vcomponent())
+    }
+}
+
+impl<RenderFn, Props, Marker> IntoDynNode for ComponentBuilderOutput<RenderFn, Props, Marker>
+where
+    Props: ComponentBuilderRender<RenderFn, Marker>,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Component(self.into_vcomponent())
+    }
+}
+
+impl<RenderFn, Props, Marker> IntoVNode for ComponentBuilderOutput<RenderFn, Props, Marker>
+where
+    Props: ComponentBuilderRender<RenderFn, Marker>,
+{
+    fn into_vnode(self) -> VNode {
+        ComponentBuilderOutput::into_vnode(self)
+    }
+}
+
+/// Convert built props into a component with a specific render function.
+pub trait ComponentBuilderRender<RenderFn, Marker>: Sized {
+    /// Create a [`VComponent`] from these props and the render function.
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent;
+}
+
+impl<RenderFn, Marker> ComponentBuilderRender<RenderFn, Marker> for ()
+where
+    RenderFn: ComponentFunction<(), Marker>,
+    Marker: 'static,
+{
+    fn into_vcomponent(self, render_fn: RenderFn) -> VComponent {
+        <Self as Properties>::into_vcomponent(self, render_fn)
+    }
+}
+
 /// Accept any callbacks that take props
 impl<F, P> ComponentFunction<P> for F
 where
@@ -160,6 +310,7 @@ where
 }
 
 /// Accept any callbacks that take no props
+#[doc(hidden)]
 pub struct EmptyMarker;
 impl<F> ComponentFunction<(), EmptyMarker> for F
 where
@@ -205,6 +356,7 @@ where
     }
 }
 
+/// Marker used to convert `&str` into `Option<String>` through [`SuperFrom`].
 #[doc(hidden)]
 pub struct OptionStringFromMarker;
 
@@ -214,6 +366,7 @@ impl<'a> SuperFrom<&'a str, OptionStringFromMarker> for Option<String> {
     }
 }
 
+/// Marker used to convert [`Arguments`] into `Option<String>` through [`SuperFrom`].
 #[doc(hidden)]
 pub struct OptionArgumentsFromMarker;
 
@@ -223,6 +376,7 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
     }
 }
 
+/// Marker used to convert a callback into `Option<Callback<_, _>>` through [`SuperFrom`].
 #[doc(hidden)]
 pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 

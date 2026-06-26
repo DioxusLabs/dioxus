@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_core::TemplateNode;
+use dioxus_core::VNodeChild;
 
 /// Make sure that rsx! is parsing templates and their attributes properly
 #[test]
@@ -16,17 +16,37 @@ fn attributes_pass_properly() {
 
     let o = h.unwrap();
 
-    let template = &o.template;
+    // The three numeric attributes (cx, cy, r) are dynamic; there are no dynamic nodes.
+    assert_eq!(
+        o.dynamic_anchors()
+            .map(|anchor| anchor.nodes().len())
+            .sum::<usize>(),
+        0
+    );
+    assert_eq!(
+        o.dynamic_anchors()
+            .map(|anchor| anchor.attrs().len())
+            .sum::<usize>(),
+        3
+    );
 
-    assert_eq!(template.attr_paths().len(), 3);
+    let circle = o
+        .children()
+        .find_map(|child| match child {
+            VNodeChild::Element(element) => Some(element),
+            _ => None,
+        })
+        .expect("expected one static root element");
+    assert_eq!(circle.tag(), "circle");
+    assert_eq!(circle.namespace(), Some("http://www.w3.org/2000/svg"));
 
-    let _circle = template.roots()[0];
-    let TemplateNode::Element { attrs, tag, namespace, children } = _circle else {
-        panic!("Expected an element");
-    };
-
-    assert_eq!(tag, "circle");
-    assert_eq!(namespace, Some("http://www.w3.org/2000/svg"));
-    assert_eq!(children.len(), 0);
-    assert_eq!(attrs.len(), 5);
+    // Five attributes total: cx, cy, r (dynamic) and stroke, fill (static).
+    let static_attr_count = circle.static_attributes().count();
+    let dynamic_attr_count = o
+        .dynamic_anchors()
+        .filter(|anchor| anchor.parent_element_op_index() == Some(circle.op()))
+        .flat_map(|anchor| anchor.attrs())
+        .map(|slot| slot.attrs().len())
+        .sum::<usize>();
+    assert_eq!(static_attr_count + dynamic_attr_count, 5);
 }

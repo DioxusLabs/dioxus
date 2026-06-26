@@ -2,21 +2,241 @@
 use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
 use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
 use blitz_traits::events::DomEventKind;
-use dioxus_core::{
-    AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
-};
-use rustc_hash::FxHashMap;
+use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use std::str::FromStr as _;
+
+pub(crate) trait RealDom {
+    type NodeId: Copy;
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) -> Self::NodeId;
+
+    fn create_text(&mut self, value: &str) -> Self::NodeId;
+
+    fn deep_clone(&mut self, node: Self::NodeId) -> Self::NodeId;
+
+    fn nth_child(&mut self, parent: Self::NodeId, index: usize) -> Self::NodeId;
+
+    fn append_children(&mut self, parent: Self::NodeId, children: &[Self::NodeId]);
+
+    fn insert_after(&mut self, anchor: Self::NodeId, nodes: &[Self::NodeId]);
+
+    fn insert_before(&mut self, anchor: Self::NodeId, nodes: &[Self::NodeId]);
+
+    fn replace(&mut self, target: Self::NodeId, replacements: &[Self::NodeId]);
+
+    fn remove(&mut self, node: Self::NodeId);
+
+    fn set_attribute(
+        &mut self,
+        node: Self::NodeId,
+        name: &str,
+        ns: Option<&str>,
+        value: &AttributeValue,
+    );
+
+    fn set_text(&mut self, node: Self::NodeId, value: &str);
+
+    fn add_event_listener(&mut self, node: Self::NodeId, element_id: ElementId, name: &str);
+
+    fn remove_event_listener(&mut self, node: Self::NodeId, element_id: ElementId, name: &str);
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StackEntry<N> {
+    node: N,
+    element_id: Option<ElementId>,
+}
+
+#[derive(Debug)]
+struct StackState<N> {
+    stack: Vec<StackEntry<N>>,
+    element_to_node: Vec<Option<N>>,
+}
+
+impl<N: Copy> StackState<N> {
+    fn new(root: N) -> Self {
+        Self {
+            stack: vec![StackEntry {
+                node: root,
+                element_id: Some(ElementId::ROOT),
+            }],
+            element_to_node: vec![Some(root)],
+        }
+    }
+
+    fn element_to_node(&self, id: ElementId) -> Option<N> {
+        self.element_to_node.get(id.raw()).copied().flatten()
+    }
+
+    fn lookup(&self, id: ElementId) -> N {
+        self.element_to_node(id)
+            .unwrap_or_else(|| panic!("renderer asked for unknown ElementId {}", id.raw()))
+    }
+
+    fn set_mapping(&mut self, id: ElementId, node: N) {
+        let index = id.raw();
+        if self.element_to_node.len() <= index {
+            self.element_to_node.resize(index + 1, None);
+        }
+        self.element_to_node[index] = Some(node);
+    }
+
+    fn clear_mapping(&mut self, entry: StackEntry<N>) {
+        if let Some(id) = entry.element_id
+            && let Some(slot) = self.element_to_node.get_mut(id.raw())
+        {
+            *slot = None;
+        }
+    }
+
+    fn push(&mut self, node: N, element_id: Option<ElementId>) {
+        self.stack.push(StackEntry { node, element_id });
+    }
+
+    fn pop_entry(&mut self) -> StackEntry<N> {
+        self.stack.pop().expect("renderer stack unexpectedly empty")
+    }
+
+    fn top(&self) -> StackEntry<N> {
+        *self
+            .stack
+            .last()
+            .expect("renderer stack unexpectedly empty")
+    }
+
+    fn replace_top(&mut self, node: N) {
+        *self
+            .stack
+            .last_mut()
+            .expect("renderer stack unexpectedly empty") = StackEntry {
+            node,
+            element_id: None,
+        };
+    }
+
+    fn pop_nodes(&mut self, m: usize) -> Vec<N> {
+        let split = self.stack.len() - m;
+        self.stack
+            .split_off(split)
+            .into_iter()
+            .map(|entry| entry.node)
+            .collect()
+    }
+}
+
+pub(crate) struct StackWriter<'a, R: RealDom> {
+    state: &'a mut StackState<R::NodeId>,
+    backend: R,
+}
+
+impl<'a, R: RealDom> StackWriter<'a, R> {
+    fn new(state: &'a mut StackState<R::NodeId>, backend: R) -> Self {
+        Self { state, backend }
+    }
+}
+
+impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
+    fn push_id(&mut self, id: ElementId) {
+        let node = self.state.lookup(id);
+        self.state.push(node, Some(id));
+    }
+
+    fn set_id(&mut self, id: ElementId) {
+        let node = self.state.top().node;
+        self.state.set_mapping(id, node);
+    }
+
+    fn child(&mut self, index: usize) {
+        let parent = self.state.top().node;
+        let child = self.backend.nth_child(parent, index);
+        self.state.replace_top(child);
+    }
+
+    fn pop(&mut self) {
+        self.state.pop_entry();
+    }
+
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) {
+        let node = self.backend.create_element(tag, ns);
+        self.state.push(node, None);
+    }
+
+    fn create_text(&mut self, value: &str) {
+        let node = self.backend.create_text(value);
+        self.state.push(node, None);
+    }
+
+    fn clone(&mut self) {
+        let node = self.state.top().node;
+        let cloned = self.backend.deep_clone(node);
+        self.state.replace_top(cloned);
+    }
+
+    fn append_children(&mut self, m: usize) {
+        let children = self.state.pop_nodes(m);
+        let parent = self.state.top().node;
+        self.backend.append_children(parent, &children);
+    }
+
+    fn replace_with(&mut self, m: usize) {
+        let replacements = self.state.pop_nodes(m);
+        let target = self.state.pop_entry();
+        self.backend.replace(target.node, &replacements);
+        self.state.clear_mapping(target);
+    }
+
+    fn insert_after(&mut self, m: usize) {
+        let nodes = self.state.pop_nodes(m);
+        let anchor = self.state.top().node;
+        self.backend.insert_after(anchor, &nodes);
+    }
+
+    fn insert_before(&mut self, m: usize) {
+        let nodes = self.state.pop_nodes(m);
+        let anchor = self.state.top().node;
+        self.backend.insert_before(anchor, &nodes);
+    }
+
+    fn set_attribute(&mut self, name: &str, ns: Option<&str>, value: &AttributeValue) {
+        let node = self.state.top().node;
+        self.backend.set_attribute(node, name, ns, value);
+    }
+
+    fn set_text(&mut self, value: &str) {
+        let node = self.state.top().node;
+        self.backend.set_text(node, value);
+    }
+
+    fn add_event_listener(&mut self, name: &str) {
+        let entry = self.state.top();
+        let element_id = entry
+            .element_id
+            .expect("event listener target must be mapped to an ElementId");
+        self.backend
+            .add_event_listener(entry.node, element_id, name);
+    }
+
+    fn remove_event_listener(&mut self, name: &str) {
+        let entry = self.state.top();
+        let element_id = entry
+            .element_id
+            .expect("event listener target must be mapped to an ElementId");
+        self.backend
+            .remove_event_listener(entry.node, element_id, name);
+    }
+
+    fn remove(&mut self) {
+        let entry = self.state.pop_entry();
+        self.backend.remove(entry.node);
+        self.state.clear_mapping(entry);
+    }
+}
 
 /// The state of the Dioxus integration with the RealDom
 #[derive(Debug)]
 pub struct DioxusState {
-    /// Store of templates keyed by unique name
-    pub(crate) templates: FxHashMap<Template, Vec<NodeId>>,
     /// Stack machine state for applying dioxus mutations
-    pub(crate) stack: Vec<NodeId>,
-    /// Mapping from vdom ElementId -> rdom NodeId
-    pub(crate) node_id_mapping: Vec<Option<NodeId>>,
+    stack: StackState<NodeId>,
     /// Count of each handler type
     pub(crate) event_handler_counts: [u32; 32],
     /// Mounted events queued as elements are mounted
@@ -27,9 +247,7 @@ impl DioxusState {
     /// Initialize the DioxusState in the RealDom
     pub fn create(root_id: usize) -> Self {
         Self {
-            templates: FxHashMap::default(),
-            stack: vec![root_id],
-            node_id_mapping: vec![Some(root_id)],
+            stack: StackState::new(root_id),
             event_handler_counts: [0; 32],
             queued_mounted_events: Vec::new(),
         }
@@ -42,154 +260,145 @@ impl DioxusState {
 
     /// Attempt to convert an ElementId to a NodeId. This will return None if the ElementId is not in the RealDom.
     pub fn try_element_to_node_id(&self, element_id: ElementId) -> Option<NodeId> {
-        self.node_id_mapping.get(element_id.0).copied().flatten()
+        self.stack.element_to_node(element_id)
     }
 
-    pub(crate) fn anchor_and_nodes(&mut self, id: ElementId, m: usize) -> (usize, Vec<usize>) {
-        let anchor_node_id = self.element_to_node_id(id);
-        let new_nodes = self.m_stack_nodes(m);
-        (anchor_node_id, new_nodes)
-    }
-
-    pub(crate) fn m_stack_nodes(&mut self, m: usize) -> Vec<usize> {
-        self.stack.split_off(self.stack.len() - m)
-    }
-
-    pub(crate) fn queue_mount_event(&mut self, id: ElementId) {
-        self.queued_mounted_events.push(id);
+    /// Build a writer that applies dioxus mutations to `doc`, driving the blitz
+    /// backend from the local stack machine.
+    pub(crate) fn writer<'a>(&'a mut self, doc: &'a mut BaseDocument) -> MutationWriter<'a> {
+        let Self {
+            stack,
+            event_handler_counts,
+            queued_mounted_events,
+        } = self;
+        StackWriter::new(
+            stack,
+            BlitzBackend {
+                docm: doc.mutate(),
+                event_handler_counts,
+                queued_mounted_events,
+            },
+        )
     }
 }
 
 /// A writer for mutations that can be used with the RealDom.
-pub struct MutationWriter<'a> {
-    /// The realdom associated with this writer
-    pub docm: DocumentMutator<'a>,
-    /// The state associated with this writer
-    pub state: &'a mut DioxusState,
+///
+/// The stack-machine bookkeeping lives in [`StackWriter`]; this renderer only
+/// supplies the real tree semantics via [`BlitzBackend`].
+pub(crate) type MutationWriter<'a> = StackWriter<'a, BlitzBackend<'a>>;
+
+/// The blitz-backed "real semantics" for the dioxus stack machine.
+pub(crate) struct BlitzBackend<'a> {
+    /// The realdom mutation handle associated with this writer
+    docm: DocumentMutator<'a>,
+    /// Count of each handler type, kept so event dispatch can skip unused kinds
+    event_handler_counts: &'a mut [u32; 32],
+    /// Mounted events queued as elements are mounted
+    queued_mounted_events: &'a mut Vec<ElementId>,
 }
 
-impl<'a> MutationWriter<'a> {
-    pub fn new(doc: &'a mut BaseDocument, state: &'a mut DioxusState) -> Self {
-        MutationWriter {
-            docm: doc.mutate(),
-            state,
-        }
-    }
-}
+impl RealDom for BlitzBackend<'_> {
+    type NodeId = NodeId;
 
-impl MutationWriter<'_> {
-    /// Update an ElementId -> NodeId mapping
-    fn set_id_mapping(&mut self, node_id: NodeId, element_id: ElementId) {
-        let element_id: usize = element_id.0;
-
-        // Ensure node_id_mapping is large enough to contain element_id
-        if self.state.node_id_mapping.len() <= element_id {
-            self.state.node_id_mapping.resize(element_id + 1, None);
-        }
-
-        // Set the new mapping
-        self.state.node_id_mapping[element_id] = Some(node_id);
+    fn create_element(&mut self, tag: &str, ns: Option<&str>) -> NodeId {
+        trace!("create_element tag:{tag} ns:{ns:?}");
+        self.docm.create_element(qual_name(tag, ns), Vec::new())
     }
 
-    /// Create a ElementId -> NodeId mapping and push the node to the stack
-    fn map_new_node(&mut self, node_id: NodeId, element_id: ElementId) {
-        self.set_id_mapping(node_id, element_id);
-        self.state.stack.push(node_id);
+    fn create_text(&mut self, value: &str) -> NodeId {
+        trace!("create_text text:{value}");
+        self.docm.create_text_node(value)
     }
 
-    /// Find a child in the document by child index path
-    fn load_child(&self, path: &[u8]) -> NodeId {
-        let top_of_stack_node_id = *self.state.stack.last().unwrap();
-        self.docm.node_at_path(top_of_stack_node_id, path)
-    }
-}
-
-impl WriteMutations for MutationWriter<'_> {
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        trace!("assign_node_id path:{:?} id:{}", path, id.0);
-
-        // If there is an existing node already mapped to that ID and it has no parent, then drop it
-        // TODO: more automated GC/ref-counted semantics for node lifetimes
-        if let Some(node_id) = self.state.try_element_to_node_id(id) {
-            self.docm.remove_node_if_unparented(node_id);
-        }
-
-        // Map the node at specified path
-        self.set_id_mapping(self.load_child(path), id);
+    fn deep_clone(&mut self, node: NodeId) -> NodeId {
+        trace!("clone node:{node}");
+        self.docm.deep_clone_node(node)
     }
 
-    fn create_placeholder(&mut self, id: ElementId) {
-        trace!("create_placeholder id:{}", id.0);
-        let node_id = self.docm.create_comment_node();
-        self.map_new_node(node_id, id);
+    fn nth_child(&mut self, parent: NodeId, index: usize) -> NodeId {
+        trace!("nth_child parent:{parent} index:{index}");
+        self.docm.child_ids(parent)[index]
     }
 
-    fn create_text_node(&mut self, value: &str, id: ElementId) {
-        trace!("create_text_node id:{} text:{}", id.0, value);
-        let node_id = self.docm.create_text_node(value);
-        self.map_new_node(node_id, id);
+    fn append_children(&mut self, parent: NodeId, children: &[NodeId]) {
+        trace!("append_children parent:{parent} children:{children:?}");
+        self.docm.append_children(parent, children);
     }
 
-    fn append_children(&mut self, id: ElementId, m: usize) {
-        trace!("append_children id:{} m:{}", id.0, m);
-        let (parent_id, child_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.append_children(parent_id, &child_node_ids);
+    fn insert_after(&mut self, anchor: NodeId, nodes: &[NodeId]) {
+        trace!("insert_after anchor:{anchor} nodes:{nodes:?}");
+        self.docm.insert_nodes_after(anchor, nodes);
     }
 
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_after id:{} m:{}", id.0, m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.insert_nodes_after(anchor_node_id, &new_node_ids);
+    fn insert_before(&mut self, anchor: NodeId, nodes: &[NodeId]) {
+        trace!("insert_before anchor:{anchor} nodes:{nodes:?}");
+        self.docm.insert_nodes_before(anchor, nodes);
     }
 
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        trace!("insert_nodes_before id:{} m:{}", id.0, m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
+    fn replace(&mut self, target: NodeId, replacements: &[NodeId]) {
+        trace!("replace target:{target} replacements:{replacements:?}");
+        self.docm.replace_node_with(target, replacements);
     }
 
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        trace!("replace_node_with id:{} m:{}", id.0, m);
-        let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
-    }
-
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        trace!("replace_placeholder_with_nodes path:{:?} m:{}", path, m);
-        // WARNING: DO NOT REORDER
-        // The order of the following two lines is very important as "m_stack_nodes" mutates
-        // the stack and then "load_child" reads from the top of the stack.
-        let new_node_ids = self.state.m_stack_nodes(m);
-        let anchor_node_id = self.load_child(path);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
-    }
-
-    fn remove_node(&mut self, id: ElementId) {
-        trace!("remove_node id:{}", id.0);
-        let node_id = self.state.element_to_node_id(id);
-        self.docm.remove_node(node_id);
-    }
-
-    fn push_root(&mut self, id: ElementId) {
-        trace!("push_root id:{}", id.0);
-        let node_id = self.state.element_to_node_id(id);
-        self.state.stack.push(node_id);
-    }
-
-    fn set_node_text(&mut self, value: &str, id: ElementId) {
-        trace!("set_node_text id:{} value:{}", id.0, value);
-        let node_id = self.state.element_to_node_id(id);
-        self.docm.set_node_text(node_id, value);
+    fn remove(&mut self, node: NodeId) {
+        trace!("remove node:{node}");
+        self.docm.remove_node(node);
     }
 
     fn set_attribute(
         &mut self,
-        local_name: &'static str,
-        ns: Option<&'static str>,
+        node: NodeId,
+        name: &str,
+        ns: Option<&str>,
         value: &AttributeValue,
-        id: ElementId,
     ) {
-        let node_id = self.state.element_to_node_id(id);
+        self.set_attribute_impl(node, name, ns, value);
+    }
+
+    fn set_text(&mut self, node: NodeId, value: &str) {
+        trace!("set_text node:{node} value:{value}");
+        self.docm.set_node_text(node, value);
+    }
+
+    fn add_event_listener(&mut self, node: NodeId, element_id: ElementId, name: &str) {
+        // Mounted events are fired immediately after the element is mounted.
+        if name == "mounted" {
+            self.queued_mounted_events.push(element_id);
+            return;
+        }
+
+        // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
+        // we might actually just want to attach the attribute to the root element (delegation)
+        let value = AttributeValue::Text("<rust func>".into());
+        self.set_attribute_impl(node, name, None, &value);
+
+        // Also set the data-dioxus-id attribute so we can find the element later
+        let value = AttributeValue::Text(element_id.raw().to_string());
+        self.set_attribute_impl(node, "data-dioxus-id", None, &value);
+
+        if let Ok(kind) = DomEventKind::from_str(name) {
+            let idx = kind.discriminant() as usize;
+            self.event_handler_counts[idx] += 1;
+        }
+    }
+
+    fn remove_event_listener(&mut self, _node: NodeId, _element_id: ElementId, name: &str) {
+        if let Ok(kind) = DomEventKind::from_str(name) {
+            let idx = kind.discriminant() as usize;
+            self.event_handler_counts[idx] -= 1;
+        }
+    }
+}
+
+impl BlitzBackend<'_> {
+    fn set_attribute_impl(
+        &mut self,
+        node_id: NodeId,
+        local_name: &str,
+        ns: Option<&str>,
+        value: &AttributeValue,
+    ) {
         fn is_falsy(val: &AttributeValue) -> bool {
             match val {
                 AttributeValue::None => true,
@@ -264,101 +473,12 @@ impl WriteMutations for MutationWriter<'_> {
             }
         };
     }
-
-    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        // TODO: proper template node support
-        let template_entry = self.state.templates.entry(template).or_insert_with(|| {
-            let template_root_ids: Vec<NodeId> = template
-                .roots()
-                .iter()
-                .map(|root| create_template_node(&mut self.docm, root))
-                .collect();
-
-            template_root_ids
-        });
-
-        let template_node_id = template_entry[index];
-        let clone_id = self.docm.deep_clone_node(template_node_id);
-
-        trace!("load_template template_node_id:{template_node_id} clone_id:{clone_id}");
-        self.map_new_node(clone_id, id);
-    }
-
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        // Mounted events are fired immediately after the element is mounted.
-        if name == "mounted" {
-            self.state.queue_mount_event(id);
-            return;
-        }
-
-        // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
-        // we might actually just want to attach the attribute to the root element (delegation)
-        let value = AttributeValue::Text("<rust func>".into());
-        self.set_attribute(name, None, &value, id);
-
-        // Also set the data-dioxus-id attribute so we can find the element later
-        let value = AttributeValue::Text(id.0.to_string());
-        self.set_attribute("data-dioxus-id", None, &value, id);
-
-        // node.add_event_listener(name);
-
-        if let Ok(kind) = DomEventKind::from_str(name) {
-            let idx = kind.discriminant() as usize;
-            self.state.event_handler_counts[idx] += 1;
-        }
-    }
-
-    fn remove_event_listener(&mut self, name: &'static str, _id: ElementId) {
-        if let Ok(kind) = DomEventKind::from_str(name) {
-            let idx = kind.discriminant() as usize;
-            self.state.event_handler_counts[idx] -= 1;
-        }
-    }
-}
-
-fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> NodeId {
-    match node {
-        TemplateNode::Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-        } => {
-            let name = qual_name(tag, *namespace);
-            // let attrs = attrs.iter().filter_map(map_template_attr).collect();
-            let node_id = docm.create_element(name, Vec::new());
-
-            for attr in attrs.iter() {
-                let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                else {
-                    continue;
-                };
-                let falsy = *value == "false";
-                set_attribute_inner(docm, name, *namespace, Some(value), falsy, node_id);
-            }
-
-            let child_ids: Vec<NodeId> = children
-                .iter()
-                .map(|child| create_template_node(docm, child))
-                .collect();
-
-            docm.append_children(node_id, &child_ids);
-
-            node_id
-        }
-        TemplateNode::Text { text } => docm.create_text_node(text),
-        TemplateNode::Dynamic { .. } => docm.create_comment_node(),
-    }
 }
 
 fn set_attribute_inner(
     docm: &mut DocumentMutator<'_>,
-    local_name: &'static str,
-    ns: Option<&'static str>,
+    local_name: &str,
+    ns: Option<&str>,
     value: Option<&str>,
     is_falsy: bool,
     node_id: usize,

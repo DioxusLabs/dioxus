@@ -11,6 +11,7 @@ mod assets;
 mod config;
 mod default_icon;
 mod desktop_context;
+mod desktop_state;
 mod document;
 mod edits;
 mod element;
@@ -26,6 +27,8 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+mod window_component;
+mod window_lifecycle;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -50,12 +53,14 @@ pub mod trayicon;
 
 // Public exports
 pub use assets::AssetRequest;
-pub use config::{Config, WindowCloseBehaviour};
+pub use config::{Config, WindowCloseBehaviour, WindowConfig};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{
-    DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext, window,
+    DesktopContext, DesktopService, PendingDesktopWindow, WeakDesktopContext, app, window,
 };
+pub use desktop_state::DesktopAppContext;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};
+pub use window_component::{Window, WindowProps};
 pub use wry::RequestAsyncResponder;

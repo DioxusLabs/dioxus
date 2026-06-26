@@ -1,11 +1,16 @@
 use proc_macro::TokenStream;
 
-use convert_case::{Case, Casing};
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, TokenStreamExt, quote};
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{Ident, Token, braced, parse_macro_input};
+use quote::ToTokens;
+use syn::parse_macro_input;
+
+mod common;
+mod elements;
+mod events;
+mod extension_attributes;
+
+use elements::DefineElements;
+use events::EventExtensions;
+use extension_attributes::ImplExtensionAttributes;
 
 #[proc_macro]
 pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {
@@ -13,46 +18,20 @@ pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {
     input.to_token_stream().into()
 }
 
-struct ImplExtensionAttributes {
-    name: Ident,
-    attrs: Punctuated<Ident, Token![,]>,
+/// Generate typed element constructors and typed attribute extension traits.
+#[proc_macro]
+pub fn define_elements(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DefineElements);
+    input.to_token_stream().into()
 }
 
-impl Parse for ImplExtensionAttributes {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let content;
-
-        let name = input.parse()?;
-        braced!(content in input);
-        let attrs = content.parse_terminated(Ident::parse, Token![,])?;
-
-        Ok(ImplExtensionAttributes { name, attrs })
-    }
-}
-
-impl ToTokens for ImplExtensionAttributes {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let name_string = name.to_string();
-        let camel_name = name_string
-            .strip_prefix("r#")
-            .unwrap_or(&name_string)
-            .to_case(Case::UpperCamel);
-        let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
-
-        let impls = self.attrs.iter().map(|ident| {
-            let d = quote! { #name::#ident };
-            quote! {
-                fn #ident(self, value: impl IntoAttributeValue) -> Self {
-                    let d = #d;
-                    self.push_attribute(d.0, d.1, value, d.2)
-                }
-            }
-        });
-        tokens.append_all(quote! {
-            pub trait #extension_name: HasAttributes + Sized {
-                #(#impls)*
-            }
-        });
-    }
+/// Generate the `EventsExtension` trait that adds event handler methods to typed HTML builders.
+///
+/// Each entry has the form `#[attrs] method_name => raw_event => DataType,` where `method_name`
+/// is the builder method (e.g. `onclick`), `raw_event` is the DOM event name without the `on`
+/// prefix (e.g. `click`), and `DataType` is the typed event data (e.g. `MouseData`).
+#[proc_macro]
+pub fn impl_event_extensions(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as EventExtensions);
+    input.to_token_stream().into()
 }

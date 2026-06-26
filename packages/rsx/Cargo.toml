@@ -13,6 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dioxus-core-template = { workspace = true }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 proc-macro2-diagnostics = { workspace = true }
 quote = { workspace = true }

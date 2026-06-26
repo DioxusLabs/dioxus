@@ -117,8 +117,11 @@ pub fn try_fmt_file(
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.body.roots.len() == 1
-            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+        let body_is_solo_expr = body.body().roots.len() == 1
+            && matches!(
+                body.body().roots[0],
+                BodyNode::RawExpr(_) | BodyNode::Text(_)
+            );
 
         // If it's short, and it's not a single expression, and it's not empty, then we can collapse it
         if formatted.len() <= 80

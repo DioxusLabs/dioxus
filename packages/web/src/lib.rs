@@ -96,7 +96,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         {
             use dioxus_fullstack_core::HydrationContext;
 
-            websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -142,11 +141,12 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     #[cfg(feature = "document")]
                     document::init_fullstack_document();
                 });
-                virtual_dom.rebuild(&mut websys_dom);
+                // Build the vdom without emitting mutations: the SSR DOM is
+                // already in place, so hydration binds it afterward.
+                virtual_dom.rebuild_in_place();
             });
-            websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            let rx = websys_dom.rehydrate(&mut virtual_dom).unwrap();
             hydration_receiver = Some(rx);
 
             #[cfg(feature = "mounted")]

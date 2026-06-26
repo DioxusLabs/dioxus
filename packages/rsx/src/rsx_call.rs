@@ -24,9 +24,9 @@ use crate::{BodyNode, TemplateBody};
 /// Ideally we don't need the metadata here and can bake the idx-es into the templates themselves but I haven't figured out how to do that yet.
 #[derive(Debug, Clone)]
 pub struct CallBody {
-    pub body: TemplateBody,
-    pub template_idx: Cell<usize>,
-    pub span: Option<Span>,
+    body: TemplateBody,
+    template_idx: Cell<usize>,
+    span: Option<Span>,
 }
 
 impl Parse for CallBody {
@@ -48,7 +48,9 @@ impl CallBody {
     /// Create a new CallBody from a TemplateBody
     ///
     /// This will overwrite all internal metadata regarding hotreloading.
-    pub fn new(body: TemplateBody) -> Self {
+    pub fn new(mut body: TemplateBody) -> Self {
+        body.split_oversized_templates();
+
         let body = CallBody {
             body,
             template_idx: Cell::new(0),
@@ -62,6 +64,21 @@ impl CallBody {
         body
     }
 
+    /// The parsed and normalized RSX body.
+    pub fn body(&self) -> &TemplateBody {
+        &self.body
+    }
+
+    /// Mutably access the parsed and normalized RSX body.
+    pub fn body_mut(&mut self) -> &mut TemplateBody {
+        &mut self.body
+    }
+
+    /// The span of the `rsx!` call body, if this call body came from parsing.
+    pub fn span(&self) -> Option<Span> {
+        self.span
+    }
+
     /// Parse a stream into a CallBody. Return all error immediately instead of trying to partially expand the macro
     ///
     /// This should be preferred over `parse` if you are outside of a macro
@@ -70,29 +87,11 @@ impl CallBody {
         Self::parse(input)
     }
 
-    /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
-    /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
-    /// relative to each template, though we could do that if we wanted to.
+    /// With the entire macro call available, assign a hot-reload template index to every nested
+    /// `TemplateBody`.
     ///
-    /// For now this is just information for ifmts and templates so that when they generate, they can be
-    /// tracked back to the original location in the source code, to support formatted string hotreloading.
-    ///
-    /// Note that there are some more complex cases we could in theory support, but have bigger plans
-    /// to enable just pure rust hotreloading that would make those tricks moot. So, manage more of
-    /// the simple cases until that proper stuff ships.
-    ///
-    /// We need to make sure to wire up:
-    /// - subtemplate IDs
-    /// - ifmt IDs
-    /// - dynamic node IDs
-    /// - dynamic attribute IDs
-    /// - paths for dynamic nodes and attributes
-    ///
-    /// Lots of wiring!
-    ///
-    /// However, here, we only need to wire up template IDs since TemplateBody will handle the rest.
-    ///
-    /// This is better though since we can save the relevant data on the structures themselves.
+    /// The generated debug hot-reload registration uses this index as an extra discriminator
+    /// alongside `file!()`, `line!()`, and `column!()`.
     fn cascade_hotreload_info(&self, nodes: &[BodyNode]) {
         for node in nodes.iter() {
             match node {
@@ -114,6 +113,11 @@ impl CallBody {
                     body.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&body.roots)
                 }),
+
+                BodyNode::SyntheticBoundary(body) => {
+                    body.template_idx.set(self.next_template_idx());
+                    self.cascade_hotreload_info(&body.roots);
+                }
 
                 _ => {}
             }

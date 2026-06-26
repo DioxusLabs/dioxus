@@ -29,72 +29,14 @@ use crate::innerlude::*;
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment(cx: FragmentProps) -> Element {
-    cx.0
+    cx.children
 }
 
-#[derive(Clone, PartialEq)]
-pub struct FragmentProps(pub(crate) Element);
-
-pub struct FragmentBuilder<const BUILT: bool>(Element);
-impl FragmentBuilder<false> {
-    pub fn children(self, children: Element) -> FragmentBuilder<true> {
-        FragmentBuilder(children)
-    }
-}
-impl<const A: bool> FragmentBuilder<A> {
-    pub fn build(self) -> FragmentProps {
-        FragmentProps(self.0)
-    }
-}
-
-/// Access the children elements passed into the component
+/// Props for the [`Fragment`] component.
 ///
-/// This enables patterns where a component is passed children from its parent.
-///
-/// ## Details
-///
-/// Unlike React, Dioxus allows *only* lists of children to be passed from parent to child - not arbitrary functions
-/// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
-/// on the props that takes Context.
-///
-/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-/// props are valid for the static lifetime.
-///
-/// ## Example
-///
-/// ```rust
-/// # use dioxus::prelude::*;
-/// fn app() -> Element {
-///     rsx! {
-///         CustomCard {
-///             h1 {}
-///             p {}
-///         }
-///     }
-/// }
-///
-/// #[component]
-/// fn CustomCard(children: Element) -> Element {
-///     rsx! {
-///         div {
-///             h1 {"Title card"}
-///             {children}
-///         }
-///     }
-/// }
-/// ```
-impl Properties for FragmentProps {
-    type Builder = FragmentBuilder<false>;
-    fn builder() -> Self::Builder {
-        FragmentBuilder(VNode::empty())
-    }
-    fn memoize(&mut self, new: &Self) -> bool {
-        let equal = self == new;
-        if !equal {
-            let new_clone = new.clone();
-            self.0 = new_clone.0;
-        }
-        equal
-    }
+/// `children` are the nodes captured by the fragment. A component cannot be automatically memoized
+/// if it borrows nodes from its parent, so a fragment always re-renders when its parent does.
+#[derive(dioxus_core_macro::Props, Clone, PartialEq)]
+pub struct FragmentProps {
+    children: Element,
 }

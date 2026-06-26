@@ -1,8 +1,10 @@
-use dioxus_core::TemplateNode;
+use dioxus_core::Template;
+use dioxus_core_template::RuntimeTemplateBuilder;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
 use internment::Intern;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 // interns a object into a static object, reusing the value if it already exists
 pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
@@ -17,7 +19,9 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
     let attribute_name_rust = attr.name.to_string();
     let element_name = attr.el_name.as_ref().unwrap();
     let rust_name = match element_name {
-        ElementName::Ident(i) => i.to_string(),
+        // Strip any `r#` so the mapped name matches what the compiled binary registered (codegen
+        // resolves the tag through the same `tag_name_string`).
+        ElementName::Ident(_) => element_name.tag_name_string(),
         // If this is a web component, just use the name of the elements instead of mapping the attribute
         // through the hot reloading context
         ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
@@ -27,85 +31,100 @@ pub(crate) fn html_tag_and_namespace<Ctx: HotReloadingContext>(
         .unwrap_or((intern(attribute_name_rust.as_str()), None))
 }
 
-pub fn to_template_attribute<Ctx: HotReloadingContext>(
-    attr: &Attribute,
-) -> dioxus_core::TemplateAttribute {
-    use dioxus_core::TemplateAttribute;
-
-    // If it's a dynamic node, just return it
-    // For dynamic attributes, we need to check the mapping to see if that mapping exists
-    // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
-    // or something sufficiently serializable
-    //  (ie `checked`` being a bool and bools being interpretable)
-    //
-    // For now, just give up if that attribute doesn't exist in the mapping
-    if !attr.is_static_str_literal() {
-        let id = attr.dyn_idx.get();
-        return TemplateAttribute::Dynamic { id };
-    }
-
-    // Otherwise it's a static node and we can build it
-    let (_, value) = attr.as_static_str_literal().unwrap();
-    let (name, namespace) = html_tag_and_namespace::<Ctx>(attr);
-
-    TemplateAttribute::Static {
-        name,
-        namespace,
-        value: intern(value.to_static().unwrap().as_str()),
-    }
+pub(crate) struct HotReloadTemplateParts<'a> {
+    pub(crate) template: Template,
+    pub(crate) dynamic_nodes: Vec<&'a BodyNode>,
+    pub(crate) dynamic_attributes: Vec<&'a Attribute>,
 }
 
-/// Convert this BodyNode into a TemplateNode.
-///
-/// dioxus-core uses this to understand templates at compiletime
-pub fn to_template_node<Ctx: HotReloadingContext>(node: &BodyNode) -> dioxus_core::TemplateNode {
-    use dioxus_core::TemplateNode;
-    match node {
-        BodyNode::Element(el) => {
-            let rust_name = el.name.to_string();
+pub(crate) fn hot_reload_template_parts<'a, Ctx: HotReloadingContext>(
+    body: &'a TemplateBody,
+) -> Option<HotReloadTemplateParts<'a>> {
+    let mut builder = NativeTemplateBuilder::<'a, Ctx> {
+        template: RuntimeTemplateBuilder::default(),
+        dynamic_nodes: Vec::new(),
+        dynamic_attributes: Vec::new(),
+        following_static_at_parent: false,
+        _ctx: PhantomData,
+    };
+    // Walk in canonical fill order so the dynamic slots line up with the runtime VNode built by
+    // the typed view builder.
+    visit_roots(&mut builder, &body.roots)?;
 
-            let (tag, namespace) =
-                Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
+    let NativeTemplateBuilder {
+        template,
+        dynamic_nodes,
+        dynamic_attributes,
+        ..
+    } = builder;
 
-            TemplateNode::Element {
-                tag,
-                namespace,
-                children: intern(
-                    el.children
-                        .iter()
-                        .map(|c| to_template_node::<Ctx>(c))
-                        .collect::<Vec<_>>(),
-                ),
-                attrs: intern(
-                    el.merged_attributes
-                        .iter()
-                        .map(|attr| to_template_attribute::<Ctx>(attr))
-                        .collect::<Vec<_>>(),
-                ),
-            }
+    Some(HotReloadTemplateParts {
+        template: template.finish(),
+        dynamic_nodes,
+        dynamic_attributes,
+    })
+}
+
+struct NativeTemplateBuilder<'a, Ctx> {
+    template: RuntimeTemplateBuilder,
+    dynamic_nodes: Vec<&'a BodyNode>,
+    dynamic_attributes: Vec<&'a Attribute>,
+    following_static_at_parent: bool,
+    _ctx: PhantomData<Ctx>,
+}
+
+impl<'a, Ctx: HotReloadingContext> FillOrderVisitor<'a> for NativeTemplateBuilder<'a, Ctx> {
+    fn visit_siblings(&mut self, nodes: &'a [BodyNode]) -> Option<()> {
+        for (index, node) in nodes.iter().enumerate() {
+            let previous = self.following_static_at_parent;
+            self.following_static_at_parent = siblings_have_static_node(nodes, index + 1);
+            let result = FillOrderVisitor::visit_node(self, node);
+            self.following_static_at_parent = previous;
+            result?;
         }
-        BodyNode::Text(text) => text_to_template_node(text),
-        BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
-            id: exp.dyn_idx.get(),
-        },
-        BodyNode::Component(comp) => TemplateNode::Dynamic {
-            id: comp.dyn_idx.get(),
-        },
-        BodyNode::ForLoop(floop) => TemplateNode::Dynamic {
-            id: floop.dyn_idx.get(),
-        },
-        BodyNode::IfChain(chain) => TemplateNode::Dynamic {
-            id: chain.dyn_idx.get(),
-        },
+        Some(())
     }
-}
-pub fn text_to_template_node(node: &TextNode) -> TemplateNode {
-    match node.input.to_static() {
-        Some(text) => TemplateNode::Text {
-            text: intern(text.as_str()),
-        },
-        None => TemplateNode::Dynamic {
-            id: node.dyn_idx.get(),
-        },
+
+    fn open_element(&mut self, element: &'a Element) -> Option<()> {
+        // Use `tag_name_string` (the same resolution codegen uses) so raw-ident elements like
+        // `r#use` map to the bare name the compiled binary registered, not `r#use`.
+        let rust_name = element.name.tag_name_string();
+        let (tag, namespace) =
+            Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
+        self.template.open_element(tag, namespace);
+        Some(())
+    }
+
+    fn close_element(&mut self, _element: &'a Element) -> Option<()> {
+        self.template.close_element();
+        Some(())
+    }
+
+    fn static_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
+        // Emitted before children: a static attribute is lowered immediately, into the op slots
+        // that precede the element's child nodes.
+        let (_, value) = attr.as_static_str_literal()?;
+        let (name, namespace) = html_tag_and_namespace::<Ctx>(attr);
+        self.template
+            .static_attr(name, intern(value.to_static().unwrap().as_str()), namespace);
+        Some(())
+    }
+
+    fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
+        self.template.dynamic_attr();
+        self.dynamic_attributes.push(attr);
+        Some(())
+    }
+
+    fn static_text(&mut self, text: &'a TextNode) -> Option<()> {
+        let value = text.input.to_static()?;
+        self.template.static_text(intern(value.as_str()));
+        Some(())
+    }
+
+    fn dynamic_node(&mut self, node: &'a BodyNode) -> Option<()> {
+        self.template.dynamic_node(self.following_static_at_parent);
+        self.dynamic_nodes.push(node);
+        Some(())
     }
 }

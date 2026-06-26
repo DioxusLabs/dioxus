@@ -1,6 +1,7 @@
 use crate::{
-    Runtime, ScopeId, Task,
-    innerlude::{SchedulerMsg, SuspenseContext},
+    RenderTargetId, Runtime, ScopeId, Task,
+    innerlude::{MountId, SchedulerMsg, SuspenseContext},
+    render_driver::RenderDriver,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -8,6 +9,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -37,6 +39,15 @@ impl SuspenseLocation {
             _ => None,
         }
     }
+
+    pub(crate) fn should_write(&self) -> bool {
+        match self {
+            SuspenseLocation::NotSuspended => true,
+            SuspenseLocation::SuspenseBoundary(_) => true,
+            SuspenseLocation::UnderSuspense(boundary) => !boundary.is_suspended(),
+            SuspenseLocation::InSuspensePlaceholder(_) => true,
+        }
+    }
 }
 
 /// A component's state separate from its props.
@@ -46,8 +57,11 @@ pub(crate) struct Scope {
     pub(crate) name: &'static str,
     pub(crate) id: ScopeId,
     pub(crate) parent_id: Option<ScopeId>,
+    pub(crate) target_id: Cell<RenderTargetId>,
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
+
+    pub(crate) root_mount: Cell<Option<MountId>>,
 
     // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
@@ -57,8 +71,14 @@ pub(crate) struct Scope {
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
-    /// The suspense boundary that this scope is currently in (if any)
-    suspense_boundary: SuspenseLocation,
+    /// The suspense boundary location this scope is rendered under, if any.
+    suspense_location: SuspenseLocation,
+
+    /// The driver owning this scope's rendered output, attached when the
+    /// scope's `VComponent` was constructed: the plain component lifecycle
+    /// unless the component's `into_vcomponent` supplied a portal/suspense
+    /// driver.
+    render_driver: Rc<dyn RenderDriver>,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -68,15 +88,19 @@ impl Scope {
         name: &'static str,
         id: ScopeId,
         parent_id: Option<ScopeId>,
+        target_id: RenderTargetId,
         height: u32,
-        suspense_boundary: SuspenseLocation,
+        suspense_location: SuspenseLocation,
+        render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
             name,
             id,
             parent_id,
+            target_id: Cell::new(target_id),
             height,
             render_count: Cell::new(0),
+            root_mount: Cell::new(None),
             shared_contexts: RefCell::new(vec![]),
             spawned_tasks: RefCell::new(FxHashSet::default()),
             hooks: RefCell::new(vec![]),
@@ -86,12 +110,34 @@ impl Scope {
             status: RefCell::new(ScopeStatus::Unmounted {
                 effects_queued: Vec::new(),
             }),
-            suspense_boundary,
+            suspense_location,
+            render_driver,
         }
     }
 
-    pub fn parent_id(&self) -> Option<ScopeId> {
+    pub(crate) fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
+    }
+
+    pub(crate) fn target_id(&self) -> RenderTargetId {
+        self.target_id.get()
+    }
+
+    pub(crate) fn set_target_id(&self, target_id: RenderTargetId) {
+        self.target_id.set(target_id);
+    }
+
+    pub(crate) fn root_mount(&self) -> Option<MountId> {
+        self.root_mount.get()
+    }
+
+    pub(crate) fn set_root_mount(&self, root_mount: Option<MountId>) {
+        self.root_mount.set(root_mount);
+    }
+
+    /// The driver owning this scope's rendered output.
+    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
+        self.render_driver.clone()
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
@@ -111,7 +157,7 @@ impl Scope {
 
     /// Get the suspense location of this scope
     pub(crate) fn suspense_location(&self) -> SuspenseLocation {
-        self.suspense_boundary.clone()
+        self.suspense_location.clone()
     }
 
     /// If this scope is a suspense boundary, return the suspense context
@@ -124,16 +170,9 @@ impl Scope {
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        let Some(context) = self.suspense_boundary.suspense_context() else {
-            return false;
-        };
-
-        !context.frozen()
-    }
-
-    /// Mark this scope as dirty, and schedule a render for it.
-    pub(crate) fn needs_update(&self) {
-        self.needs_update_any(self.id)
+        self.suspense_location
+            .suspense_context()
+            .is_some_and(|context| !context.frozen())
     }
 
     /// Mark this scope as dirty, and schedule a render for it.

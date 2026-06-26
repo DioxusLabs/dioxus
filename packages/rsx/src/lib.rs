@@ -14,51 +14,17 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 //!
-//! # Completions
-//! Rust analyzer completes macros by looking at the expansion of the macro and trying to match the start of identifiers in the macro to identifiers in the current scope
-//!
-//! Eg, if a macro expands to this:
-//! ```rust, ignore
-//! struct MyStruct;
-//!
-//! // macro expansion
-//! My
-//! ```
-//! Then the analyzer will try to match the start of the identifier "My" to an identifier in the current scope (MyStruct in this case).
-//!
-//! In dioxus, our macros expand to the completions module if we know the identifier is incomplete:
-//! ```rust, ignore
-//! // In the root of the macro, identifiers must be elements
-//! // rsx! { di }
-//! dioxus_elements::elements::di
-//!
-//! // Before the first child element, every following identifier is either an attribute or an element
-//! // rsx! { div { ta } }
-//! // Isolate completions scope
-//! mod completions__ {
-//!     // import both the attributes and elements this could complete to
-//!     use dioxus_elements::elements::div::*;
-//!     use dioxus_elements::elements::*;
-//!     fn complete() {
-//!         ta;
-//!     }
-//! }
-//!
-//! // After the first child element, every following identifier is another element
-//! // rsx! { div { attribute: value, child {} di } }
-//! dioxus_elements::elements::di
-//! ```
-
-mod assign_dyn_ids;
 mod attribute;
 mod component;
 mod element;
+mod fill_order;
 mod forloop;
 mod ifchain;
 mod node;
 mod raw_expr;
 mod rsx_block;
 mod rsx_call;
+mod stats;
 mod template_body;
 mod text_node;
 
@@ -70,13 +36,25 @@ mod location;
 mod partial_closure;
 mod util;
 
-// Re-export the namespaces into each other
+// Public API used by the proc macro and workspace tooling. Keep parser-internal
+// helpers in `innerlude`.
+pub use attribute::{Attribute, AttributeName, AttributeValue, IfAttributeValue, Spread};
+pub use component::Component;
 pub use diagnostics::Diagnostics;
-pub use ifmt::*;
-pub use node::*;
+pub use element::{Element, ElementName};
+pub use expr_node::ExprNode;
+pub use fill_order::{FillOrderVisitor, siblings_have_static_node, visit_element, visit_roots};
+pub use forloop::ForLoop;
+pub use ifchain::IfChain;
+pub use ifmt::{FormattedSegment, IfmtInput, Segment};
+pub use literal::{HotLiteral, HotReloadFormattedSegment};
+pub use location::DynIdx;
+pub use node::BodyNode;
 pub use partial_closure::PartialClosure;
-pub use rsx_call::*;
+pub use raw_expr::PartialExpr;
+pub use rsx_call::CallBody;
 pub use template_body::TemplateBody;
+pub use text_node::TextNode;
 
 use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
@@ -92,7 +70,6 @@ pub(crate) mod innerlude {
     pub use crate::expr_node::*;
     pub use crate::forloop::*;
     pub use crate::ifchain::*;
-    pub use crate::location::*;
     pub use crate::node::*;
     pub use crate::raw_expr::*;
     pub use crate::rsx_block::*;

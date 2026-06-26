@@ -4,14 +4,16 @@
 //!
 //! It does not validate that component lifecycles work properly. This is done in another test file.
 
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 use dioxus_core::generation;
+use dioxus_renderer_oracle::{
+    EditSummary, OracleNodeId, RendererOracle, SnapshotAttr, SnapshotNode,
+};
 
 /// Should result in moves, but not removals or additions
 #[test]
 fn keyed_diffing_out_of_order() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order = match generation() % 2 {
             0 => &[0, 1, 2, 3, /**/ 4, 5, 6, /**/ 7, 8, 9],
             1 => &[0, 1, 2, 3, /**/ 6, 4, 5, /**/ 7, 8, 9],
@@ -21,45 +23,21 @@ fn keyed_diffing_out_of_order() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
-
-    {
-        assert_eq!(
-            dom.rebuild_to_vec().edits,
-            [
-                LoadTemplate { index: 0, id: ElementId(1,) },
-                LoadTemplate { index: 0, id: ElementId(2,) },
-                LoadTemplate { index: 0, id: ElementId(3,) },
-                LoadTemplate { index: 0, id: ElementId(4,) },
-                LoadTemplate { index: 0, id: ElementId(5,) },
-                LoadTemplate { index: 0, id: ElementId(6,) },
-                LoadTemplate { index: 0, id: ElementId(7,) },
-                LoadTemplate { index: 0, id: ElementId(8,) },
-                LoadTemplate { index: 0, id: ElementId(9,) },
-                LoadTemplate { index: 0, id: ElementId(10,) },
-                AppendChildren { m: 10, id: ElementId(0) },
-            ]
-        );
     }
 
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(7,) },
-            InsertBefore { id: ElementId(5,), m: 1 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[0, 1, 2, 3, 6, 4, 5, 7, 8, 9]);
+    assert_move_only(summary);
 }
 
 /// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7, 8 /**/],
             1 => &[/**/ 8, 7, 4, 5, 6 /**/],
@@ -69,29 +47,21 @@ fn keyed_diffing_out_of_order_adds() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(1,), m: 2 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[8, 7, 4, 5, 6]);
+    assert_move_only(summary);
 }
 
 /// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_3() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7, 8 /**/],
             1 => &[/**/ 4, 8, 7, 5, 6 /**/],
@@ -101,29 +71,21 @@ fn keyed_diffing_out_of_order_adds_3() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(2,), m: 2 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 8, 7, 5, 6]);
+    assert_move_only(summary);
 }
 
 /// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_4() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7, 8 /**/],
             1 => &[/**/ 4, 5, 8, 7, 6 /**/],
@@ -133,29 +95,21 @@ fn keyed_diffing_out_of_order_adds_4() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(3,), m: 2 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 8, 7, 6]);
+    assert_move_only(summary);
 }
 
 /// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_5() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7, 8 /**/],
             1 => &[/**/ 4, 5, 6, 8, 7 /**/],
@@ -165,28 +119,21 @@ fn keyed_diffing_out_of_order_adds_5() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(5,) },
-            InsertBefore { id: ElementId(4,), m: 1 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 6, 8, 7]);
+    assert_move_only(summary);
 }
 
-/// Should result in moves only
+/// Should add the new keyed nodes without recreating existing keyed nodes.
 #[test]
 fn keyed_diffing_additions() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7, 8 /**/],
             1 => &[/**/ 4, 5, 6, 7, 8, 9, 10 /**/],
@@ -196,28 +143,22 @@ fn keyed_diffing_additions() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6) },
-            LoadTemplate { index: 0, id: ElementId(7) },
-            InsertAfter { id: ElementId(5), m: 2 }
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 6, 7, 8, 9, 10]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn keyed_diffing_additions_and_moves_on_ends() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[/**/ 4, 5, 6, 7 /**/],
             1 => &[/**/ 7, 4, 5, 6, 11, 12 /**/],
@@ -227,32 +168,22 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            // create 11, 12
-            LoadTemplate { index: 0, id: ElementId(5) },
-            LoadTemplate { index: 0, id: ElementId(6) },
-            InsertAfter { id: ElementId(3), m: 2 },
-            // move 7 to the front
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1), m: 1 }
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[7, 4, 5, 6, 11, 12]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn keyed_diffing_additions_and_moves_in_middle() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[/**/ 1, 2, 3, 4 /**/],
             1 => &[/**/ 4, 1, 7, 8, 2, 5, 6, 3 /**/],
@@ -262,37 +193,22 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    // LIS: 4, 5, 6
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            // create 5, 6
-            LoadTemplate { index: 0, id: ElementId(5) },
-            LoadTemplate { index: 0, id: ElementId(6) },
-            InsertBefore { id: ElementId(3), m: 2 },
-            // create 7, 8
-            LoadTemplate { index: 0, id: ElementId(7) },
-            LoadTemplate { index: 0, id: ElementId(8) },
-            InsertBefore { id: ElementId(2), m: 2 },
-            // move 7
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1), m: 1 }
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[1, 2, 3, 4]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 1, 7, 8, 2, 5, 6, 3]);
+    assert_eq!(summary.loads, 4);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn controlled_keyed_diffing_out_of_order() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[4, 5, 6, 7],
             1 => &[0, 5, 9, 6, 4],
@@ -302,37 +218,22 @@ fn controlled_keyed_diffing_out_of_order() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    // LIS: 5, 6
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            // remove 7
-            Remove { id: ElementId(4,) },
-            // move 4 to after 6
-            PushRoot { id: ElementId(1) },
-            InsertAfter { id: ElementId(3,), m: 1 },
-            // create 9 and insert before 6
-            LoadTemplate { index: 0, id: ElementId(4) },
-            InsertBefore { id: ElementId(3,), m: 1 },
-            // create 0 and insert before 5
-            LoadTemplate { index: 0, id: ElementId(5) },
-            InsertBefore { id: ElementId(2,), m: 1 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[4, 5, 6, 7]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[0, 5, 9, 6, 4]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn controlled_keyed_diffing_out_of_order_max_test() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[0, 1, 2, 3, 4],
             1 => &[3, 0, 1, 10, 2],
@@ -342,32 +243,24 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            Remove { id: ElementId(5,) },
-            LoadTemplate { index: 0, id: ElementId(5) },
-            InsertBefore { id: ElementId(3,), m: 1 },
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1,), m: 1 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[0, 1, 2, 3, 4]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[3, 0, 1, 10, 2]);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
 }
 
 // noticed some weird behavior in the desktop interpreter
 // just making sure it doesnt happen in the core implementation
 #[test]
 fn remove_list() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[9, 8, 7, 6, 5],
             1 => &[9, 8],
@@ -377,28 +270,22 @@ fn remove_list() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            Remove { id: ElementId(5) },
-            Remove { id: ElementId(4) },
-            Remove { id: ElementId(3) },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[9, 8, 7, 6, 5]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[9, 8]);
+    assert_eq!(summary.loads, 0);
+    assert_eq!(summary.removes, 3);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn no_common_keys() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[1, 2, 3],
             1 => &[4, 5, 6],
@@ -408,31 +295,23 @@ fn no_common_keys() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(4) },
-            LoadTemplate { index: 0, id: ElementId(5) },
-            LoadTemplate { index: 0, id: ElementId(6) },
-            Remove { id: ElementId(3) },
-            Remove { id: ElementId(2) },
-            ReplaceWith { id: ElementId(1), m: 3 }
-        ]
-    );
+    // With no common keys, all 3 old items are removed and 3 new items are loaded.
+    let (mut dom, mut oracle, _) = rebuild(app, &[1, 2, 3]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 6]);
+    assert_eq!(summary.loads, 3);
+    assert_eq!(summary.removes, 3);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn perfect_reverse() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[1, 2, 3, 4, 5, 6, 7, 8],
             1 => &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
@@ -442,37 +321,22 @@ fn perfect_reverse() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    let edits = dom.render_immediate_to_vec().edits;
-    assert_eq!(
-        edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(9,) },
-            InsertAfter { id: ElementId(1,), m: 1 },
-            LoadTemplate { index: 0, id: ElementId(10,) },
-            PushRoot { id: ElementId(8,) },
-            PushRoot { id: ElementId(7,) },
-            PushRoot { id: ElementId(6,) },
-            PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            PushRoot { id: ElementId(3,) },
-            PushRoot { id: ElementId(2,) },
-            InsertBefore { id: ElementId(1,), m: 8 },
-        ]
-    )
+    let (mut dom, mut oracle, _) = rebuild(app, &[1, 2, 3, 4, 5, 6, 7, 8]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn old_middle_empty_left_pivot() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[/* */ /* */ 6, 7, 8, 9, 10],
             1 => &[/* */ 4, 5, /* */ 6, 7, 8, 9, 10],
@@ -482,29 +346,22 @@ fn old_middle_empty_left_pivot() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    let edits = dom.render_immediate_to_vec().edits;
-    assert_eq!(
-        edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6,) },
-            LoadTemplate { index: 0, id: ElementId(7,) },
-            InsertBefore { id: ElementId(1,), m: 2 },
-        ]
-    )
+    let (mut dom, mut oracle, _) = rebuild(app, &[6, 7, 8, 9, 10]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[4, 5, 6, 7, 8, 9, 10]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 #[test]
 fn old_middle_empty_right_pivot() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let order: &[_] = match generation() % 2 {
             0 => &[1, 2, 3, /*       */ 6, 7, 8, 9, 10],
             1 => &[1, 2, 3, /* */ 4, 5, 6, 7, 8, 9, 10 /* */],
@@ -517,33 +374,24 @@ fn old_middle_empty_right_pivot() {
         rsx!({
             order.iter().map(|i| {
                 rsx! {
-                    div { key: "{i}" }
+                    div { key: "{i}", id: "{i}" }
                 }
             })
         })
-    });
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    dom.mark_dirty(ScopeId::APP);
-    let edits = dom.render_immediate_to_vec().edits;
-    assert_eq!(
-        edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(9) },
-            LoadTemplate { index: 0, id: ElementId(10) },
-            InsertBefore { id: ElementId(4), m: 2 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, &[1, 2, 3, 6, 7, 8, 9, 10]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
 }
 
 /// Regression test for PR #5413
 #[test]
 fn keyed_list_with_dynamic_placeholder_and_text() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         let g = generation();
-        let text = if g % 2 != 0 { Some("hello") } else { None };
-        println!("{:?}", text);
 
         let order: &[_] = match g % 2 {
             0 => &[0, 1],
@@ -558,7 +406,7 @@ fn keyed_list_with_dynamic_placeholder_and_text() {
                 }
             })
         })
-    });
+    }
 
     #[component]
     fn iter_view(id: i32) -> Element {
@@ -568,21 +416,264 @@ fn keyed_list_with_dynamic_placeholder_and_text() {
         }
     }
 
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    let rebuild = oracle.rebuild(&mut dom);
     assert_eq!(
-        dom.rebuild_to_vec().edits,
-        [
-            CreateTextNode { value: "hey".to_string(), id: ElementId(1,) },
-            CreatePlaceholder { id: ElementId(2,) },
-            AppendChildren { id: ElementId(0,), m: 2 }
-        ]
+        oracle.snapshot(),
+        vec![SnapshotNode::Text("hey".to_string())]
     );
+    assert_eq!(rebuild.loads, 0);
 
     dom.mark_dirty(ScopeId::APP);
+    let patch = oracle.render(&mut dom);
     assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            PushRoot { id: ElementId(2,) },
-            InsertBefore { id: ElementId(1,), m: 1 }
-        ]
+        oracle.snapshot(),
+        vec![SnapshotNode::Text("hey".to_string())]
     );
+    assert_eq!(patch, EditSummary::default());
+}
+
+#[test]
+fn keyed_reorder_with_empty_components_and_text_roots() {
+    fn app() -> Element {
+        let order: &[_] = match generation() % 2 {
+            0 => &[0, 1, 2, 3],
+            1 => &[2, 0, 3, 1],
+            _ => unreachable!(),
+        };
+
+        rsx! {
+            div {
+                {order.iter().map(|id| rsx! {
+                    mixed_row { key: "{id}", id: *id }
+                })}
+            }
+        }
+    }
+
+    #[component]
+    fn mixed_row(id: i32) -> Element {
+        match id {
+            0 => rsx! {},
+            1 => rsx! { "one" },
+            2 => rsx! { span { id: "two", "two" } },
+            3 => rsx! {
+                "three-a"
+                span { id: "three", "three" }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            div {
+                "one"
+                span { id: "two", "two" }
+                "three-a"
+                span { id: "three", "three" }
+            }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            div {
+                span { id: "two", "two" }
+                "three-a"
+                span { id: "three", "three" }
+                "one"
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+    assert_move_only(summary);
+}
+
+#[test]
+fn keyed_lis_child_that_changes_template_is_placed_not_stable() {
+    fn app() -> Element {
+        let phase = generation() % 2;
+        let order: &[_] = if phase == 0 {
+            &["a", "b", "c"]
+        } else {
+            &["b", "a", "x", "c"]
+        };
+
+        rsx!({
+            order.iter().map(|id| {
+                let id = *id;
+                match (id, phase) {
+                    ("b", 1) => rsx! { em { key: "{id}", id: "{id}", "{id}" } },
+                    _ => rsx! { span { key: "{id}", id: "{id}", "{id}" } },
+                }
+            })
+        })
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            span { id: "a", "a" }
+            span { id: "b", "b" }
+            span { id: "c", "c" }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            em { id: "b", "b" }
+            span { id: "a", "a" }
+            span { id: "x", "x" }
+            span { id: "c", "c" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+    assert_eq!(summary.loads, 2);
+    assert_eq!(summary.removes, 1);
+    assert_eq!(summary.replaces, 0);
+}
+
+/// Regression test for keyed reorders of anchorless (fragment-rooted) children.
+///
+/// Each keyed child is a `Fragment` that renders no DOM while empty, so when it gains
+/// content the insertion site has to be resolved by walking up to the keyed list and
+/// anchoring against a sibling. A child that is stable (kept by the LIS) but moved has
+/// its render parent stamped with its *new* fragment index, while placement reads the
+/// *old* committed child array - so any reorder anchors the gained content against the
+/// wrong sibling and the final DOM order is wrong.
+///
+/// Old order `[1(empty), 2, 3]` -> new order `[3, 1(now full), 2]`. Keys 1 and 2 are the
+/// LIS (stable); key 1 transitions empty -> full while moving from index 0 to index 1.
+#[test]
+fn keyed_reorder_anchorless_child_gains_content() {
+    fn app() -> Element {
+        // (key, has_content)
+        let order: &[(i32, bool)] = match generation() % 2 {
+            0 => &[(1, false), (2, true), (3, true)],
+            1 => &[(3, true), (1, true), (2, true)],
+            _ => unreachable!(),
+        };
+
+        rsx! {
+            for (k, full) in order.iter().copied() {
+                Fragment { key: "{k}",
+                    if full {
+                        div { id: "{k}" }
+                    }
+                }
+            }
+        }
+    }
+
+    fn expected_initial() -> Element {
+        rsx! {
+            div { id: "2" }
+            div { id: "3" }
+        }
+    }
+
+    fn expected_reordered() -> Element {
+        rsx! {
+            div { id: "3" }
+            div { id: "1" }
+            div { id: "2" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_initial);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_reordered);
+}
+
+fn rebuild(
+    app: fn() -> Element,
+    expected_order: &[i32],
+) -> (VirtualDom, RendererOracle, Vec<(String, OracleNodeId)>) {
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    assert_keyed_order(&oracle, expected_order);
+    let identities = oracle.identities_by_attr("id");
+    (dom, oracle, identities)
+}
+
+fn rerender(
+    dom: &mut VirtualDom,
+    oracle: &mut RendererOracle,
+    expected_order: &[i32],
+) -> (EditSummary, Vec<(String, OracleNodeId)>) {
+    let previous = oracle.identities_by_attr("id");
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(dom);
+    assert_keyed_order(oracle, expected_order);
+    let current = oracle.identities_by_attr("id");
+    assert_common_identities_preserved(&previous, &current);
+    (summary, current)
+}
+
+fn assert_move_only(summary: EditSummary) {
+    assert_eq!(summary.loads, 0);
+    assert_eq!(summary.removes, 0);
+    assert_eq!(summary.replaces, 0);
+}
+
+fn assert_keyed_order(oracle: &RendererOracle, expected: &[i32]) {
+    assert_eq!(oracle.snapshot(), keyed_divs(expected));
+}
+
+fn keyed_divs(ids: &[i32]) -> Vec<SnapshotNode> {
+    ids.iter().map(|id| keyed_div(*id)).collect()
+}
+
+fn keyed_div(id: i32) -> SnapshotNode {
+    SnapshotNode::Element {
+        tag: "div".to_string(),
+        namespace: None,
+        attrs: vec![SnapshotAttr {
+            name: "id".to_string(),
+            namespace: None,
+            value: id.to_string(),
+        }],
+        listeners: Vec::new(),
+        children: Vec::new(),
+    }
+}
+
+fn assert_common_identities_preserved(
+    previous: &[(String, OracleNodeId)],
+    current: &[(String, OracleNodeId)],
+) {
+    for (value, previous_id) in previous {
+        if let Some((_, current_id)) = current
+            .iter()
+            .find(|(current_value, _)| current_value == value)
+        {
+            assert_eq!(
+                previous_id, current_id,
+                "node identity for `id={value}` was not preserved"
+            );
+        }
+    }
 }

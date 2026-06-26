@@ -12,6 +12,7 @@ rust-version = "1.85.0"
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core-macro = { workspace = true }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
@@ -141,4 +142,9 @@ harness = false
 [[test]]
 name = "check_eval"
 path = "headless_tests/eval.rs"
+harness = false
+
+[[test]]
+name = "check_multiwindow"
+path = "headless_tests/multiwindow.rs"
 harness = false

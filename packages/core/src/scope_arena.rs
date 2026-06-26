@@ -1,31 +1,48 @@
+use std::rc::Rc;
+
 use crate::{
     Element, ReactiveContext,
-    any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{RenderError, ScopeOrder, ScopeState},
+    innerlude::{BoxedAnyProps, RenderError, ScopeState},
+    render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
 
 impl VirtualDom {
+    /// Create a scope rendering into the current scope's render target (the
+    /// root target when no scope is active). `driver` owns the scope's
+    /// rendering lifecycle and props; portal drivers retarget the scope
+    /// during their first create.
     pub(super) fn new_scope(
         &mut self,
-        props: BoxedAnyProps,
         name: &'static str,
+        driver: Rc<dyn RenderDriver>,
+        props: BoxedAnyProps,
     ) -> &mut ScopeState {
+        let target_id = self.runtime.current_render_target_id();
         let parent_id = self.runtime.try_current_scope_id();
         let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
-        let suspense_boundary = self
+        let inherited_suspense_location = self
             .runtime
             .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
+        let suspense_location = driver.suspense_location(inherited_suspense_location);
         let entry = self.scopes.vacant_entry();
-        let id = ScopeId(entry.key());
+        let id = ScopeId::new(entry.key());
 
-        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let scope_runtime = Scope::new(
+            name,
+            id,
+            parent_id,
+            target_id,
+            height,
+            suspense_location,
+            driver,
+        );
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {
@@ -41,7 +58,8 @@ impl VirtualDom {
         scope
     }
 
-    /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
+    /// Run a scope's body and return the rendered nodes. This will not modify the DOM or update
+    /// the last rendered node of the scope.
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
@@ -49,7 +67,7 @@ impl VirtualDom {
         crate::Runtime::current();
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
-            let scope = &self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id.index()];
             let output = {
                 let scope_state = scope.state();
 
@@ -60,29 +78,10 @@ impl VirtualDom {
                     pre_run();
                 }
 
-                let props: &dyn AnyProps = &*scope.props;
-
                 let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
-                        let render_return = props.render();
-                        // After the component is run, we need to do a deep clone of the VNode. This
-                        // breaks any references to mounted parts of the VNode from the component.
-                        // Without this, the component could store a mounted version of the VNode
-                        // which causes a lot of issues for diffing because we expect only the old
-                        // or new node to be mounted.
-                        //
-                        // For example, the dog app example returns rsx from a resource. Every time
-                        // the component runs, it returns a clone of the last rsx that was returned from
-                        // that resource. If we don't deep clone the VNode and the resource changes, then
-                        // we could end up diffing two different versions of the same mounted node
-                        let mut render_return = match render_return {
-                            Ok(node) => Ok(node.deep_clone()),
-                            Err(RenderError::Error(err)) => Err(RenderError::Error(err.clone())),
-                            Err(RenderError::Suspended(fut)) => {
-                                Err(RenderError::Suspended(fut.deep_clone()))
-                            }
-                        };
+                        let mut render_return = scope.props.render();
 
                         self.handle_element_return(&mut render_return, &scope.state());
                         render_return
@@ -90,16 +89,17 @@ impl VirtualDom {
                 })
             };
 
-            let scope_state = scope.state();
+            {
+                let scope_state = scope.state();
 
-            // Run all post-render hooks
-            for post_run in scope_state.after_render.borrow_mut().iter_mut() {
-                post_run();
+                // Run all post-render hooks
+                for post_run in scope_state.after_render.borrow_mut().iter_mut() {
+                    post_run();
+                }
             }
 
             // remove this scope from dirty scopes
-            self.dirty_scopes
-                .remove(&ScopeOrder::new(scope_state.height, scope_id));
+            self.mark_clean(scope_id);
             output
         })
     }
@@ -124,10 +124,16 @@ impl VirtualDom {
                     .suspend(boundary.clone());
                 if !already_suspended {
                     tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
-                    // Add this task to the suspended tasks list of the boundary
-                    if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
-                        boundary.add_suspended_task(e.clone());
-                    }
+
+                    // Every user-rendered scope sits inside the implicit
+                    // `SuspenseBoundary` from `RootScopeWrapper`, so a
+                    // suspended scope's location always carries a boundary
+                    // context (`UnderSuspense` or `InSuspensePlaceholder`).
+                    boundary
+                        .suspense_context()
+                        .expect("suspended scope must have a SuspenseContext")
+                        .add_suspended_task(e.clone());
+
                     self.runtime
                         .suspended_tasks
                         .set(self.runtime.suspended_tasks.get() + 1);

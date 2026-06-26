@@ -30,7 +30,7 @@
 //!```
 
 use crate::renderer::{BOOL_ATTRS, str_truthy};
-use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
+use dioxus_core::{StaticElement, StaticText, VNode, VNodeChild};
 use std::{fmt::Write, ops::AddAssign};
 
 #[derive(Debug)]
@@ -41,29 +41,11 @@ pub(crate) struct StringCache {
 #[derive(Default)]
 pub struct StringChain {
     // If we should add new static text to the last segment
-    // This will be true if the last segment is a static text and the last text isn't part of a hydration only boundary
     add_text_to_last_segment: bool,
     segments: Vec<Segment>,
 }
 
 impl StringChain {
-    /// Add segments but only when hydration is enabled
-    fn if_hydration_enabled<O>(
-        &mut self,
-        during_prerender: impl FnOnce(&mut StringChain) -> O,
-    ) -> O {
-        // Insert a placeholder jump to the end of the hydration only segments
-        let jump_index = self.segments.len();
-        *self += Segment::HydrationOnlySection(0);
-        let out = during_prerender(self);
-        // Go back and fill in where the placeholder jump should skip to
-        let after_hydration_only_section = self.segments.len();
-        // Don't add any text to static text in the hydration only section. This would cause the text to be skipped during non-hydration renders
-        self.add_text_to_last_segment = false;
-        self.segments[jump_index] = Segment::HydrationOnlySection(after_hydration_only_section);
-        out
-    }
-
     /// Add a new segment
     pub fn push(&mut self, segment: Segment) {
         self.add_text_to_last_segment = matches!(segment, Segment::PreRendered(_));
@@ -107,13 +89,10 @@ impl EscapeText {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Segment {
-    /// A marker for where to insert an attribute with a given index
-    Attr(usize),
-    /// A marker for where to insert a node with a given index
-    Node {
-        index: usize,
-        escape_text: EscapeText,
-    },
+    /// A marker for where to insert the next dynamic attribute slot.
+    Attr,
+    /// A marker for where to insert the next dynamic node slot.
+    Node { escape_text: EscapeText },
     /// Text that we know is static in the template that is pre-rendered
     PreRendered(String),
     /// Text we know is static in the template that is pre-rendered that may or may not be escaped
@@ -123,8 +102,6 @@ pub(crate) enum Segment {
         /// Only render this text if the escaped value is this
         renderer_if_escaped: bool,
     },
-    /// Anything between this and the segments at the index is only required for hydration. If you don't need to hydrate, you can safely skip to the section at the given index
-    HydrationOnlySection(usize),
     /// A marker for where to insert a dynamic styles
     StyleMarker {
         // If the marker is inside a style tag or not
@@ -133,10 +110,6 @@ pub(crate) enum Segment {
     },
     /// A marker for where to insert a dynamic inner html
     InnerHtmlMarker,
-    /// A marker for where to insert a node id for an attribute
-    AttributeNodeMarker,
-    /// A marker for where to insert a node id for a root node
-    RootNodeMarker,
 }
 
 impl std::fmt::Write for StringChain {
@@ -157,21 +130,12 @@ impl std::fmt::Write for StringChain {
 }
 
 impl StringCache {
-    /// Create a new string cache from a template. This intentionally does not include any settings about the render mode (hydration or not) so that we can reuse the cache for both hydration and non-hydration renders.
-    pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
+    /// Create a new string cache from a template
+    pub fn from_template(vnode: &VNode) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
-        let mut cur_path = vec![];
-
-        for (root_idx, root) in template.template.roots().iter().enumerate() {
-            from_template_recursive(
-                root,
-                &mut cur_path,
-                root_idx,
-                true,
-                EscapeText::ParentEscape,
-                &mut chain,
-            )?;
+        for child in vnode.children() {
+            from_template_child(child, EscapeText::ParentEscape, &mut chain)?;
         }
 
         Ok(Self {
@@ -180,175 +144,184 @@ impl StringCache {
     }
 }
 
-fn from_template_recursive(
-    root: &TemplateNode,
-    cur_path: &mut Vec<usize>,
-    root_idx: usize,
-    is_root: bool,
+fn from_template_children(
+    element: StaticElement<'_>,
     escape_text: EscapeText,
     chain: &mut StringChain,
 ) -> Result<(), std::fmt::Error> {
-    match root {
-        TemplateNode::Element {
-            tag,
-            attrs,
-            children,
-            ..
-        } => {
-            cur_path.push(root_idx);
-            write!(chain, "<{tag}")?;
-            // we need to collect the styles and write them at the end
-            let mut styles = Vec::new();
-            // we need to collect the inner html and write it at the end
-            let mut inner_html = None;
-            // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
-            let mut has_dyn_attrs = false;
-            for attr in *attrs {
-                match attr {
-                    TemplateAttribute::Static {
-                        name,
-                        value,
-                        namespace,
-                    } => {
-                        if *name == "dangerous_inner_html" {
-                            inner_html = Some(value);
-                        } else if let Some("style") = namespace {
-                            styles.push((name, value));
-                        } else if BOOL_ATTRS.contains(name) {
-                            if str_truthy(value) {
-                                write!(
-                                    chain,
-                                    " {name}=\"{}\"",
-                                    askama_escape::escape(value, askama_escape::Html)
-                                )?;
-                            }
-                        } else {
-                            write!(
-                                chain,
-                                " {name}=\"{}\"",
-                                askama_escape::escape(value, askama_escape::Html)
-                            )?;
-                        }
-                    }
-                    TemplateAttribute::Dynamic { id: index } => {
-                        let index = *index;
-                        *chain += Segment::Attr(index);
-                        has_dyn_attrs = true
-                    }
-                }
+    for child in element.children() {
+        from_template_child(child, escape_text, chain)?;
+    }
+    Ok(())
+}
+
+fn from_template_child(
+    child: VNodeChild<'_>,
+    escape_text: EscapeText,
+    chain: &mut StringChain,
+) -> Result<(), std::fmt::Error> {
+    match child {
+        VNodeChild::Element(element) => from_template_element(element, chain),
+        VNodeChild::Text(text) => from_template_text(text, escape_text, chain),
+        VNodeChild::Dynamic(anchor) => {
+            for _ in anchor.nodes() {
+                chain.push(Segment::Node { escape_text });
             }
-
-            // write the styles
-            if !styles.is_empty() {
-                write!(chain, " style=\"")?;
-                for (name, value) in styles {
-                    write!(
-                        chain,
-                        "{name}:{};",
-                        askama_escape::escape(value, askama_escape::Html)
-                    )?;
-                }
-                *chain += Segment::StyleMarker {
-                    inside_style_tag: true,
-                };
-                write!(chain, "\"")?;
-            } else if has_dyn_attrs {
-                *chain += Segment::StyleMarker {
-                    inside_style_tag: false,
-                };
-            }
-
-            // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
-            if has_dyn_attrs || is_root {
-                chain.if_hydration_enabled(|chain| {
-                    write!(chain, " data-node-hydration=\"")?;
-                    if has_dyn_attrs {
-                        *chain += Segment::AttributeNodeMarker;
-                    } else if is_root {
-                        *chain += Segment::RootNodeMarker;
-                    }
-                    write!(chain, "\"")?;
-                    std::fmt::Result::Ok(())
-                })?;
-            }
-
-            if children.is_empty() && tag_is_self_closing(tag) {
-                write!(chain, "/>")?;
-            } else {
-                write!(chain, ">")?;
-                // Write the static inner html, or insert a marker if dynamic inner html is possible
-                if let Some(inner_html) = inner_html {
-                    chain.write_str(inner_html)?;
-                } else if has_dyn_attrs {
-                    *chain += Segment::InnerHtmlMarker;
-                }
-
-                // Escape the text in children if this is not a style or script tag. If it is a style
-                // or script tag, we want to allow the user to write code inside the tag
-                let escape_text = match *tag {
-                    "style" | "script" => EscapeText::NoEscape,
-                    _ => EscapeText::Escape,
-                };
-
-                for child in *children {
-                    from_template_recursive(child, cur_path, root_idx, false, escape_text, chain)?;
-                }
-                write!(chain, "</{tag}>")?;
-            }
-            cur_path.pop();
+            Ok(())
         }
-        TemplateNode::Text { text } => {
-            // write the id if we are prerendering and this is a root node that may need to be removed in the future
-            if is_root {
-                chain.if_hydration_enabled(|chain| {
-                    write!(chain, "<!--node-id")?;
-                    *chain += Segment::RootNodeMarker;
-                    write!(chain, "-->")?;
-                    std::fmt::Result::Ok(())
-                })?;
+    }
+}
+
+fn from_template_element(
+    element: StaticElement<'_>,
+    chain: &mut StringChain,
+) -> Result<(), std::fmt::Error> {
+    let tag = element.tag();
+    write!(chain, "<{tag}")?;
+    // we need to collect the styles and write them at the end
+    let mut styles = Vec::new();
+    // we need to collect the inner html and write it at the end
+    let mut inner_html = None;
+    for (name, value, namespace) in element.static_attributes() {
+        if name == "dangerous_inner_html" {
+            inner_html = Some(value);
+        } else if let Some("style") = namespace {
+            styles.push((name, value));
+        } else if BOOL_ATTRS.contains(&name) {
+            if str_truthy(value) {
+                write!(
+                    chain,
+                    " {name}=\"{}\"",
+                    askama_escape::escape(value, askama_escape::Html)
+                )?;
             }
-            match escape_text {
-                // If we know this is statically escaped we can just write it out
-                // rsx! { div { "hello" } }
-                EscapeText::Escape => {
-                    write!(
-                        chain,
-                        "{}",
-                        askama_escape::escape(text, askama_escape::Html)
-                    )?;
-                }
-                // If we know this is statically not escaped we can just write it out
-                // rsx! { script { "console.log('hello')" } }
-                EscapeText::NoEscape => {
-                    write!(chain, "{}", text)?;
-                }
-                // Otherwise, write out both versions and let the renderer decide which one to use
-                // at runtime
-                // rsx! { "console.log('hello')" }
-                EscapeText::ParentEscape => {
-                    *chain += Segment::PreRenderedMaybeEscaped {
-                        value: text.to_string(),
-                        renderer_if_escaped: false,
-                    };
-                    *chain += Segment::PreRenderedMaybeEscaped {
-                        value: askama_escape::escape(text, askama_escape::Html).to_string(),
-                        renderer_if_escaped: true,
-                    };
-                }
-            }
-            if is_root {
-                chain.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
-            }
-        }
-        TemplateNode::Dynamic { id: idx } => {
-            *chain += Segment::Node {
-                index: *idx,
-                escape_text,
-            }
+        } else {
+            write!(
+                chain,
+                " {name}=\"{}\"",
+                askama_escape::escape(value, askama_escape::Html)
+            )?;
         }
     }
 
+    // Dynamic attrs require style and inner-html placeholders even if those
+    // dynamic attrs are not style or inner-html themselves.
+    let has_dyn_attrs = emit_dynamic_attrs(element, chain);
+
+    // write the styles
+    if !styles.is_empty() {
+        write!(chain, " style=\"")?;
+        for (name, value) in styles {
+            write!(
+                chain,
+                "{name}:{};",
+                askama_escape::escape(value, askama_escape::Html)
+            )?;
+        }
+        *chain += Segment::StyleMarker {
+            inside_style_tag: true,
+        };
+        write!(chain, "\"")?;
+    } else if has_dyn_attrs {
+        *chain += Segment::StyleMarker {
+            inside_style_tag: false,
+        };
+    }
+
+    if !element.has_children() && tag_is_self_closing(tag) {
+        write!(chain, "/>")?;
+    } else {
+        write!(chain, ">")?;
+        // Write the static inner html, or insert a marker if dynamic inner html is possible
+        if let Some(inner_html) = inner_html {
+            chain.write_str(inner_html)?;
+        } else if has_dyn_attrs {
+            *chain += Segment::InnerHtmlMarker;
+        }
+
+        // Escape the text in children if this is not a style or script tag. If it is a style
+        // or script tag, we want to allow the user to write code inside the tag
+        let escape_text = match tag {
+            "style" | "script" => EscapeText::NoEscape,
+            _ => EscapeText::Escape,
+        };
+
+        // `pre`, `textarea`, and `listing` are "raw text" elements: when parsing
+        // their content the HTML parser drops a single newline immediately after
+        // the start tag. The serialization spec compensates by emitting an extra
+        // leading newline whenever the content starts with one, so it round-trips.
+        // Without this a leading `\n` is silently lost on standalone SSR and
+        // desyncs the markerless hydration walk (which reconstructs text-node
+        // offsets by length). See dioxus#5548.
+        if raw_text_strips_leading_newline(element) {
+            writeln!(chain)?;
+        }
+
+        from_template_children(element, escape_text, chain)?;
+        write!(chain, "</{tag}>")?;
+    }
+
     Ok(())
+}
+
+fn from_template_text(
+    text: StaticText<'_>,
+    escape_text: EscapeText,
+    chain: &mut StringChain,
+) -> Result<(), std::fmt::Error> {
+    let text = text.text();
+    match escape_text {
+        // If we know this is statically escaped we can just write it out
+        EscapeText::Escape => {
+            write!(
+                chain,
+                "{}",
+                askama_escape::escape(text, askama_escape::Html)
+            )?;
+        }
+        // If we know this is statically not escaped we can just write it out
+        EscapeText::NoEscape => {
+            write!(chain, "{}", text)?;
+        }
+        // Otherwise, write out both versions and let the renderer decide which one to use
+        // at runtime
+        EscapeText::ParentEscape => {
+            *chain += Segment::PreRenderedMaybeEscaped {
+                value: text.to_string(),
+                renderer_if_escaped: false,
+            };
+            *chain += Segment::PreRenderedMaybeEscaped {
+                value: askama_escape::escape(text, askama_escape::Html).to_string(),
+                renderer_if_escaped: true,
+            };
+        }
+    }
+    Ok(())
+}
+
+fn emit_dynamic_attrs(element: StaticElement<'_>, chain: &mut StringChain) -> bool {
+    let mut has_dyn_attrs = false;
+    for anchor in element.dynamic_anchors() {
+        for _ in anchor.attrs() {
+            *chain += Segment::Attr;
+            has_dyn_attrs = true;
+        }
+    }
+    has_dyn_attrs
+}
+
+/// Whether `element` is a "raw text" element (`pre`, `textarea`, `listing`)
+/// whose first child is static text starting with a newline, so SSR must emit a
+/// compensating leading newline (see the call site and dioxus#5548).
+///
+/// Only static leading text is handled; a dynamic first child whose runtime
+/// value begins with `\n` is not compensated (it would need a render-time check).
+fn raw_text_strips_leading_newline(element: StaticElement<'_>) -> bool {
+    matches!(element.tag(), "pre" | "textarea" | "listing")
+        && matches!(
+            element.children().next(),
+            Some(VNodeChild::Text(text)) if text.text().starts_with('\n')
+        )
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {

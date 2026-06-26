@@ -180,22 +180,32 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use dioxus_config_macro::*;
 
+    // The element-vocabulary root: `html::div`, `html::main`, etc. resolve as associated
+    // consts on this type. The crate module is still reachable as the fully-qualified
+    // `dioxus::html` for `dioxus::html::define_elements!` and friends.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html as dioxus_elements;
+    pub use dioxus_html::{self, html};
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(inline)]
-    pub use dioxus_elements::{Code, Key, Location, Modifiers};
+    pub use dioxus_html::{Code, Key, Location, Modifiers};
 
+    // Element associated-const traits (`html::div`, `html::main`, …) come from the single
+    // generated `prelude` module, not from flattening every per-element module into scope.
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(no_inline)]
-    pub use dioxus_elements::{
-        GlobalAttributesExtension, SvgAttributesExtension, events::*, extensions::*,
-        global_attributes, keyboard_types, svg_attributes, traits::*,
+    pub use dioxus_html::{
+        GlobalAttributesExtension, SvgAttributesExtension, elements::prelude::*, events::*,
+        extensions::*, keyboard_types, traits::*,
     };
+
+    #[cfg(feature = "desktop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
+    #[doc(inline)]
+    pub use dioxus_desktop::{Window, WindowConfig, WindowProps};
 
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -240,10 +250,11 @@ pub mod prelude {
 
     #[doc(inline)]
     pub use dioxus_core::{
-        AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
-        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, Result, ScopeId,
-        SuspenseBoundary, SuspenseContext, VNode, VirtualDom, consume_context, provide_context,
-        spawn, suspend, try_consume_context, use_drop, use_hook,
+        AnyhowContext, Attribute, Callback, Component, ComponentFunctionExt, Element,
+        ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoDynNode,
+        Portal, PortalProps, RenderError, RenderTargetId, Result, ScopeId, SuspenseBoundary,
+        SuspenseContext, VNode, VirtualDom, consume_context, provide_context, spawn, suspend,
+        try_consume_context, use_drop, use_hook,
     };
 
     #[cfg(feature = "logger")]

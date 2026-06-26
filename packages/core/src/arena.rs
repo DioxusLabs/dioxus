@@ -1,75 +1,193 @@
-use crate::innerlude::ScopeOrder;
-use crate::{ScopeId, virtual_dom::VirtualDom};
+use crate::{ScopeId, Template, scheduler::ScopeOrder, virtual_dom::VirtualDom};
+use slab::Slab;
+use std::collections::HashMap;
+use std::num::NonZeroUsize;
 
 /// An Element's unique identifier.
 ///
-/// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
-/// unmounted, then the `ElementId` will be reused for a new component.
+/// `ElementId` is a `usize` that is unique within one render target - but not
+/// unique across targets or time. If an element is removed, then the `ElementId`
+/// may be reused for a new element in that target.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ElementId(usize);
+
+impl ElementId {
+    /// The root element within a render target.
+    pub const ROOT: Self = Self(0);
+
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+
+    /// Create an element id from its raw renderer-local index.
+    ///
+    /// Renderers use this when translating platform event targets back into
+    /// Dioxus element ids.
+    pub const fn from_raw(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Return this element id's raw renderer-local index.
+    ///
+    /// Renderers use this to store Dioxus element ids in their backing DOM or
+    /// interpreter node maps.
+    pub const fn raw(self) -> usize {
+        self.0
+    }
+}
+
+/// An allocated, non-root renderer element id.
+///
+/// This type is used inside mounted-state tables so absence is represented by
+/// `Option<MountedElementId>` instead of sentinel `ElementId` values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct MountedElementId(NonZeroUsize);
+
+impl MountedElementId {
+    pub(crate) fn new(id: ElementId) -> Self {
+        Self::from_index(id.index())
+    }
+
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(NonZeroUsize::new(index).expect("root id"))
+    }
+
+    pub(crate) fn element_id(self) -> ElementId {
+        ElementId::new(self.index())
+    }
+
+    pub(crate) fn index(self) -> usize {
+        self.0.get()
+    }
+}
+
+/// A renderer target's unique identifier.
+///
+/// Each render target has its own [`ElementId`] arena. This lets multiple
+/// renderers share one logical [`VirtualDom`] while reusing renderer-local ids.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct ElementId(pub usize);
+pub struct RenderTargetId(usize);
 
-/// An Element that can be bubbled to's unique identifier.
+impl RenderTargetId {
+    /// The root/default render target.
+    pub const ROOT: Self = Self(0);
+
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+}
+
+/// The mounted target for one dynamic node slot.
 ///
-/// `BubbleId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
-/// unmounted, then the `BubbleId` will be reused for a new component.
+/// Text slots record their renderer element, component slots record their child
+/// scope (whose scope state owns the root mount), and fragment slots record the
+/// start offset of their child-mount range. These slots live on the
+/// VirtualDom-side [`Mount`](crate::mount::Mount), indexed by dynamic-node index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MountedDynamicNodeSlot {
+    Empty,
+    Text(MountedElementId),
+    Component(ScopeId),
+    Fragment(usize),
+}
+
+/// Renderer-local state for a render target.
+#[derive(Debug)]
+pub(crate) struct RenderTargetState {
+    pub(crate) elements: Slab<Option<MountId>>,
+    pub(crate) template_roots: HashMap<(Template, usize), MountedElementId>,
+}
+
+impl RenderTargetState {
+    pub(crate) fn new() -> Self {
+        let mut elements = Slab::default();
+        // The root element is always renderer-local element ID 0.
+        elements.insert(None);
+
+        Self {
+            elements,
+            template_roots: HashMap::new(),
+        }
+    }
+}
+
+/// A live mount's unique identifier.
+///
+/// `MountId` is a `usize` that is unique across the current `VirtualDom` - but not unique across time. If a mount is
+/// unmounted, then the `MountId` may be reused for a new mount.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct MountId(pub(crate) usize);
 
-impl Default for MountId {
-    fn default() -> Self {
-        Self::PLACEHOLDER
-    }
-}
-
-impl MountId {
-    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
-
-    pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.mounted() { Some(self.0) } else { None }
-    }
-
-    #[allow(unused)]
-    pub(crate) fn mounted(self) -> bool {
-        self != Self::PLACEHOLDER
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ElementRef {
-    // the pathway of the real element inside the template
-    pub(crate) path: ElementPath,
-
-    // The actual element
-    pub(crate) mount: MountId,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ElementPath {
-    pub(crate) path: &'static [u8],
-}
-
 impl VirtualDom {
-    pub(crate) fn next_element(&mut self) -> ElementId {
-        let mut elements = self.runtime.elements.borrow_mut();
-        ElementId(elements.insert(None))
+    pub(crate) fn current_render_target_id(&self) -> RenderTargetId {
+        self.runtime.current_render_target_id()
     }
 
-    pub(crate) fn reclaim(&mut self, el: ElementId) {
-        if !self.try_reclaim(el) {
-            tracing::error!("cannot reclaim {:?}", el);
-        }
+    pub(crate) fn next_element_in_target(&mut self, target_id: RenderTargetId) -> MountedElementId {
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets.get_mut(target_id.index()).expect("target");
+        MountedElementId::new(ElementId::new(target.elements.insert(None)))
     }
 
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
-        // We never reclaim the unmounted elements or the root element
-        if el.0 == 0 || el.0 == usize::MAX {
-            return true;
-        }
+    pub(crate) fn cached_template_root(
+        &self,
+        target_id: RenderTargetId,
+        template: Template,
+        root_anchor_idx: usize,
+    ) -> Option<MountedElementId> {
+        self.runtime
+            .render_targets
+            .borrow()
+            .get(target_id.index())
+            .and_then(|target| {
+                target
+                    .template_roots
+                    .get(&(template, root_anchor_idx))
+                    .copied()
+            })
+    }
 
-        let mut elements = self.runtime.elements.borrow_mut();
-        elements.try_remove(el.0).is_some()
+    pub(crate) fn allocate_template_root(
+        &mut self,
+        target_id: RenderTargetId,
+        template: Template,
+        root_anchor_idx: usize,
+    ) -> MountedElementId {
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets.get_mut(target_id.index()).expect("target");
+        let id = MountedElementId::new(ElementId::new(target.elements.insert(None)));
+        target
+            .template_roots
+            .insert((template, root_anchor_idx), id);
+        id
+    }
+
+    pub(crate) fn set_element_ref_for_mount(&self, mount: MountId, el: MountedElementId) {
+        let target_id = self.mount_target_id(mount);
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets.get_mut(target_id.index()).expect("target");
+        let element = target.elements.get_mut(el.index()).expect("element");
+        *element = Some(mount);
+    }
+
+    pub(crate) fn reclaim_for_mount(&mut self, mount: MountId, el: MountedElementId) {
+        let target_id = self.mount_target_id(mount);
+        let mut targets = self.runtime.render_targets.borrow_mut();
+        let target = targets
+            .get_mut(target_id.index())
+            .expect("reclaim target must still be registered");
+        target.elements.try_remove(el.index());
     }
 
     // Drop a scope without dropping its children
@@ -77,7 +195,7 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         let height = {
-            let scope = self.scopes.remove(id.0);
+            let scope = self.scopes.remove(id.index());
             let context = scope.state();
             context.height
         };
@@ -86,33 +204,5 @@ impl VirtualDom {
 
         // If this scope was a suspense boundary, remove it from the resolved scopes
         self.resolved_scopes.retain(|s| s != &id);
-    }
-}
-
-impl ElementPath {
-    pub(crate) fn is_descendant(&self, small: &[u8]) -> bool {
-        small.len() <= self.path.len() && small == &self.path[..small.len()]
-    }
-}
-
-#[test]
-fn is_descendant() {
-    let event_path = ElementPath {
-        path: &[1, 2, 3, 4, 5],
-    };
-
-    assert!(event_path.is_descendant(&[1, 2, 3, 4, 5]));
-    assert!(event_path.is_descendant(&[1, 2, 3, 4]));
-    assert!(event_path.is_descendant(&[1, 2, 3]));
-    assert!(event_path.is_descendant(&[1, 2]));
-    assert!(event_path.is_descendant(&[1]));
-
-    assert!(!event_path.is_descendant(&[1, 2, 3, 4, 5, 6]));
-    assert!(!event_path.is_descendant(&[2, 3, 4]));
-}
-
-impl PartialEq<&[u8]> for ElementPath {
-    fn eq(&self, other: &&[u8]) -> bool {
-        self.path.eq(*other)
     }
 }

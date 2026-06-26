@@ -7,8 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
-    consume_context, has_context, try_consume_context,
+    DynamicNode, DynamicNodeSlot, ErrorContext, MountedVNode, Runtime, ScopeId, SuspenseContext,
+    VirtualDom, consume_context, has_context, try_consume_context,
 };
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
@@ -21,7 +21,6 @@ use http::{HeaderMap, StatusCode, request::Parts};
 use std::{
     collections::HashMap,
     fmt::Write,
-    iter::Peekable,
     rc::Rc,
     sync::{Arc, RwLock},
 };
@@ -53,7 +52,7 @@ pub(crate) struct SsrRendererPool {
 
 impl SsrRendererPool {
     pub(crate) fn new(initial_size: usize, incremental: Option<IncrementalRendererConfig>) -> Self {
-        let renderers = RwLock::new((0..initial_size).map(|_| Self::pre_renderer()).collect());
+        let renderers = RwLock::new((0..initial_size).map(|_| Renderer::default()).collect());
         Self {
             renderers,
             incremental_cache: incremental.map(|cache| RwLock::new(cache.build())),
@@ -164,12 +163,7 @@ impl SsrRendererPool {
             ));
         }
 
-        let mut renderer = self
-            .renderers
-            .write()
-            .unwrap()
-            .pop()
-            .unwrap_or_else(Self::pre_renderer);
+        let mut renderer = self.renderers.write().unwrap().pop().unwrap_or_default();
 
         let myself = self.clone();
         let streaming_mode = cfg.streaming_mode;
@@ -311,7 +305,6 @@ impl SsrRendererPool {
             let stream = Arc::new(StreamingRenderer::new(pre_body, into));
             let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
 
-            renderer.pre_render = true;
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
@@ -352,10 +345,8 @@ impl SsrRendererPool {
                     if let Some(pending_suspense_boundary) = pending_suspense_boundary {
                         let mut resolved_chunk = String::new();
                         // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-                        let render_suspense = |into: &mut String| {
-                            renderer.reset_hydration();
-                            renderer.render_scope(into, &virtual_dom, scope)
-                        };
+                        let render_suspense =
+                            |into: &mut String| renderer.render_scope(into, &virtual_dom, scope);
                         let resolved_data = Self::serialize_server_data(&virtual_dom, scope);
                         if let Err(err) = stream.replace_placeholder(
                             pending_suspense_boundary.mount,
@@ -400,7 +391,6 @@ impl SsrRendererPool {
                 if let Err(err) = Self::render_head(&cfg, &mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
-                renderer.reset_hydration();
                 if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
                     throw_error!(IncrementalRendererError::RenderError(err));
                 }
@@ -437,12 +427,6 @@ impl SsrRendererPool {
                 cancel_task: Some(join_handle),
             },
         ))
-    }
-
-    fn pre_renderer() -> Renderer {
-        let mut renderer = Renderer::default();
-        renderer.pre_render = true;
-        renderer
     }
 
     /// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
@@ -570,51 +554,44 @@ impl SsrRendererPool {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
             if let Some(suspense_boundary) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
-                && let Some(node) = suspense_boundary.suspended_nodes()
             {
-                Self::take_from_vnode(context, vdom, &node);
+                let _ = suspense_boundary.with_suspended_mounted_root(|node| {
+                    Self::take_from_vnode(context, vdom, node);
+                });
             }
-            if let Some(node) = scope.try_root_node() {
+            if let Some(node) = scope.try_mounted_root_node() {
                 Self::take_from_vnode(context, vdom, node);
             }
         }
     }
 
-    fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
-        let template = &vnode.template;
-        let mut dynamic_nodes_iter = template.node_paths().iter().copied().enumerate().peekable();
-        for (root_idx, node) in template.roots().iter().enumerate() {
-            match node {
-                TemplateNode::Element { .. } => {
-                    // dioxus core runs nodes in an odd order to not mess up template order. We need to match
-                    // that order here
-                    let (start, end) =
-                        match Self::collect_dyn_node_range(&mut dynamic_nodes_iter, root_idx as u8)
-                        {
-                            Some((a, b)) => (a, b),
-                            None => continue,
-                        };
-
-                    let reversed_iter = (start..=end).rev();
-
-                    for dynamic_node_id in reversed_iter {
-                        let dynamic_node = &vnode.dynamic_nodes[dynamic_node_id];
-                        Self::take_from_dynamic_node(
-                            context,
-                            vdom,
-                            vnode,
-                            dynamic_node,
-                            dynamic_node_id,
-                        );
-                    }
-                }
-                TemplateNode::Dynamic { id } => {
-                    // Take a dynamic node off the depth first iterator
-                    _ = dynamic_nodes_iter.next().unwrap();
-                    let dynamic_node = &vnode.dynamic_nodes[*id];
-                    Self::take_from_dynamic_node(context, vdom, vnode, dynamic_node, *id);
-                }
-                _ => {}
+    fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: MountedVNode<'_>) {
+        // Visit dynamic anchors in the same order the client *creates* them, since
+        // hydration data is consumed in component-run order. Core creates every
+        // root-level dynamic node (`create_root_children`) before descending into
+        // nested ones under static elements (`fill_nested_dynamic_slots`), so a
+        // root-level data component that comes *after* a static element holding a
+        // nested data component (e.g. fullstack's `DefaultServerFnCodec` after
+        // `div { Errors {} }`) still runs first. Walking plain document order here
+        // would serialize the nested component's data first and shift every later
+        // entry, so the client reads the wrong slot (a `bool` where a `String` is
+        // expected). Mirror the two-phase create order: root-level anchors first,
+        // then nested.
+        let node = vnode.vnode();
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| anchor.is_root_level())
+        {
+            for slot in anchor.nodes() {
+                Self::take_from_dynamic_node(context, vdom, vnode, slot);
+            }
+        }
+        for anchor in node
+            .dynamic_anchors()
+            .filter(|anchor| !anchor.is_root_level())
+        {
+            for slot in anchor.nodes() {
+                Self::take_from_dynamic_node(context, vdom, vnode, slot);
             }
         }
     }
@@ -622,49 +599,27 @@ impl SsrRendererPool {
     fn take_from_dynamic_node(
         context: &HydrationContext,
         vdom: &VirtualDom,
-        vnode: &VNode,
-        dyn_node: &DynamicNode,
-        dynamic_node_index: usize,
+        vnode: MountedVNode<'_>,
+        slot: DynamicNodeSlot<'_>,
     ) {
-        match dyn_node {
+        match &*slot {
             DynamicNode::Component(comp) => {
-                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                if let Some(scope) = comp.mounted_scope(slot, vnode, vdom) {
                     Self::take_from_scope(context, vdom, scope.id());
                 }
             }
             DynamicNode::Fragment(nodes) => {
-                for node in nodes {
+                let mounted_children = vnode.mounted_fragment_children(slot, vdom);
+                if mounted_children.len() != nodes.len() {
+                    return;
+                }
+
+                for node in mounted_children {
                     Self::take_from_vnode(context, vdom, node);
                 }
             }
             _ => {}
         }
-    }
-
-    // This should have the same behavior as the collect_dyn_node_range method in core
-    // Find the index of the first and last dynamic node under a root index
-    fn collect_dyn_node_range(
-        dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
-        root_idx: u8,
-    ) -> Option<(usize, usize)> {
-        let start = match dynamic_nodes.peek() {
-            Some((idx, [first, ..])) if *first == root_idx => *idx,
-            _ => return None,
-        };
-
-        let mut end = start;
-
-        while let Some((idx, p)) =
-            dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
-        {
-            if p.len() == 1 {
-                continue;
-            }
-
-            end = idx;
-        }
-
-        Some((start, end))
     }
 
     /// Render any content before the head of the page.
@@ -710,11 +665,8 @@ impl SsrRendererPool {
     ) -> Result<(), IncrementalRendererError> {
         to.write_str(&cfg.index.close_head)?;
 
-        // // #[cfg(feature = "document")]
-        // {
         use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
         write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
-        // }
 
         Ok(())
     }

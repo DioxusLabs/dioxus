@@ -5,7 +5,6 @@
 mod cache;
 pub mod config;
 pub mod renderer;
-pub mod template;
 
 use dioxus_core::{Element, VirtualDom};
 
@@ -23,13 +22,4 @@ pub fn render_element(element: Element) -> String {
 /// We generally recommend creating a new `Renderer` to take advantage of template caching.
 pub fn render(dom: &VirtualDom) -> String {
     Renderer::new().render(dom)
-}
-
-/// A convenience function to pre-render an existing VirtualDom to a string
-///
-/// We generally recommend creating a new `Renderer` to take advantage of template caching.
-pub fn pre_render(dom: &VirtualDom) -> String {
-    let mut renderer = Renderer::new();
-    renderer.pre_render = true;
-    renderer.render(dom)
 }

@@ -60,7 +60,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
     let mut svgs = vec![];
 
-    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
+    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body_mut().roots, &mut svgs);
 
     let mut out = write_component_body(dioxus_autofmt::write_block_out(&callbody).unwrap());
 

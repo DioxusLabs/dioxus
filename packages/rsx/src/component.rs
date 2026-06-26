@@ -33,11 +33,9 @@ pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
-    pub component_literal_dyn_idx: Vec<DynIdx>,
     pub spreads: Vec<Spread>,
     pub brace: Option<token::Brace>,
     pub children: TemplateBody,
-    pub dyn_idx: DynIdx,
     pub diagnostics: Diagnostics,
 }
 
@@ -58,20 +56,12 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
-        let literal_properties_count = fields
-            .iter()
-            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
-            .count();
-        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
-
         let mut component = Self {
-            dyn_idx: DynIdx::default(),
             children: TemplateBody::new(children),
             name,
             generics,
             fields,
             brace: Some(brace),
-            component_literal_dyn_idx,
             spreads,
             diagnostics,
         };
@@ -88,33 +78,49 @@ impl Parse for Component {
 
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let literal_ids = (0..self.literal_component_property_count()).collect::<Vec<_>>();
+        tokens.append_all(self.to_tokens_with_literal_ids(&literal_ids));
+    }
+}
+
+impl Component {
+    pub(crate) fn to_tokens_with_literal_ids(&self, literal_ids: &[usize]) -> TokenStream2 {
         let Self { name, generics, .. } = self;
 
         // Create props either from manual props or from the builder approach
-        let props = self.create_props();
+        let props = self.create_props(literal_ids);
+        let component = if self.manual_props().is_some() {
+            quote! {
+                ({
+                    #props
+                }).into_vcomponent(
+                    #name #generics,
+                )
+            }
+        } else {
+            quote! {
+                ({
+                    #props
+                }).into_vcomponent()
+            }
+        };
 
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
 
-        tokens.append_all(quote! {
+        quote! {
             dioxus_core::DynamicNode::Component({
 
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
                 use dioxus_core::Properties;
-                let __comp = ({
-                    #props
-                }).into_vcomponent(
-                    #name #generics,
-                );
+                let __comp = #component;
                 #diagnostics
                 __comp
             })
-        })
+        }
     }
-}
 
-impl Component {
     // Make sure this a proper component path (uppercase ident, a path, or contains an underscorea)
     // This should be validated by the RsxBlock parser when it peeks bodynodes
     fn validate_component_path(&mut self) {
@@ -170,7 +176,7 @@ impl Component {
         }
     }
 
-    pub fn get_key(&self) -> Option<&AttributeValue> {
+    pub(crate) fn get_key(&self) -> Option<&AttributeValue> {
         self.fields
             .iter()
             .find(|attr| attr.name.is_likely_key())
@@ -206,7 +212,7 @@ impl Component {
     /// Create the tokens we'll use for the props of the component
     ///
     /// todo: don't create the tokenstream from scratch and instead dump it into the existing streama
-    fn create_props(&self) -> TokenStream2 {
+    fn create_props(&self, literal_ids: &[usize]) -> TokenStream2 {
         let manual_props = self.manual_props();
 
         let name = &self.name;
@@ -220,14 +226,15 @@ impl Component {
         let mut tokens = if let Some(props) = manual_props.as_ref() {
             quote_spanned! { props.span() => let mut __manual_props = #props; }
         } else {
-            // we only want to span the name and generics, not the `fc_to_builder` call so jump-to-def
+            // we only want to span the name and generics, not the builder helper call so jump-to-def
             // only finds the single entry (#name)
             let spanned = quote_spanned! { self.name.span() => #name #generics };
-            quote! { dioxus_core::fc_to_builder(#spanned) }
+            quote! { dioxus_core::ComponentFunctionExt::builder(#spanned) }
         };
 
         tokens.append_all(self.add_fields_to_builder(
             manual_props.map(|_| Ident::new("__manual_props", proc_macro2::Span::call_site())),
+            literal_ids,
         ));
 
         if !self.children.is_empty() {
@@ -265,7 +272,17 @@ impl Component {
             .filter(move |attr| !attr.name.is_likely_key())
     }
 
-    fn add_fields_to_builder(&self, manual_props: Option<Ident>) -> TokenStream2 {
+    pub(crate) fn literal_component_property_count(&self) -> usize {
+        self.component_props()
+            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .count()
+    }
+
+    fn add_fields_to_builder(
+        &self,
+        manual_props: Option<Ident>,
+        literal_ids: &[usize],
+    ) -> TokenStream2 {
         let mut dynamic_literal_index = 0;
         let mut tokens = TokenStream2::new();
         for attribute in self.component_props() {
@@ -273,9 +290,19 @@ impl Component {
 
             // In debug mode, we try to grab the value from the dynamic literal pool if possible
             let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
-                let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                let idx = literal_ids
+                    .get(dynamic_literal_index)
+                    .copied()
+                    .unwrap_or(usize::MAX);
                 dynamic_literal_index += 1;
-                let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+                let debug_value = quote! {
+                    match __hot_reload_template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                        Some(Some(__template_read)) => {
+                            __dynamic_literal_pool.component_property(#idx, __template_read, #literal)
+                        }
+                        _ => #release_value,
+                    }
+                };
                 quote! {
                     {
                         #[cfg(debug_assertions)]
@@ -343,8 +370,6 @@ impl Component {
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
-            component_literal_dyn_idx: vec![],
-            dyn_idx: DynIdx::default(),
             diagnostics,
         }
     }

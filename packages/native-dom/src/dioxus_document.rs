@@ -4,7 +4,7 @@ use crate::events::{
     BlitzKeyboardData, NativeConverter, NativeFocusData, NativeFormData, NativePointerData,
     NativeScrollData, NativeWheelData, NodeHandle,
 };
-use crate::mutation_writer::{DioxusState, MutationWriter};
+use crate::mutation_writer::DioxusState;
 use crate::qual_name;
 use blitz_dom::{
     Attribute, BaseDocument, DEFAULT_CSS, DocGuard, DocGuardMut, Document, DocumentConfig,
@@ -33,7 +33,7 @@ fn get_dioxus_id(node: &Node) -> Option<ElementId> {
         .iter()
         .find(|attr| *attr.name.local == *"data-dioxus-id")
         .and_then(|attr| attr.value.parse::<usize>().ok())
-        .map(ElementId)
+        .map(ElementId::from_raw)
 }
 
 /// Integrates [`BaseDocument`] from  [`blitz-dom`](blitz_dom)  with [`VirtualDom`] from [`dioxus-core`](dioxus_core)
@@ -145,7 +145,7 @@ impl DioxusDocument {
     /// Run an initial build of the Dioxus vdom
     pub fn initial_build(&mut self) {
         let mut inner = self.inner.borrow_mut();
-        let mut writer = MutationWriter::new(&mut inner, &mut self.vdom_state);
+        let mut writer = self.vdom_state.writer(&mut inner);
         self.vdom.rebuild(&mut writer);
         drop(writer);
         drop(inner);
@@ -231,7 +231,7 @@ impl Document for DioxusDocument {
         }
 
         let mut inner = self.inner.borrow_mut();
-        let mut writer = MutationWriter::new(&mut inner, &mut self.vdom_state);
+        let mut writer = self.vdom_state.writer(&mut inner);
         self.vdom.render_immediate(&mut writer);
         drop(writer);
         drop(inner);

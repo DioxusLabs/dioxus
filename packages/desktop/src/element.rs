@@ -30,7 +30,7 @@ macro_rules! scripted_getter {
         ) -> std::pin::Pin<
             Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
         > {
-            let script = format!($script, id = self.id.0);
+            let script = format!($script, id = self.id.raw());
             let webview = self
                 .webview
                 .upgrade()
@@ -83,7 +83,7 @@ impl RenderedElementBacking for DesktopElement {
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
             "return window.interpreter.scrollTo({}, {});",
-            self.id.0,
+            self.id.raw(),
             serde_json::to_string(&options).expect("Failed to serialize ScrollToOptions")
         );
         let webview = self
@@ -111,7 +111,7 @@ impl RenderedElementBacking for DesktopElement {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MountedResult<()>>>> {
         let script = format!(
             "return window.interpreter.scroll({}, {}, {}, {});",
-            self.id.0,
+            self.id.raw(),
             coordinates.x,
             coordinates.y,
             serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
@@ -140,7 +140,8 @@ impl RenderedElementBacking for DesktopElement {
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
             "return window.interpreter.setFocus({}, {});",
-            self.id.0, focus
+            self.id.raw(),
+            focus
         );
         let webview = self
             .webview

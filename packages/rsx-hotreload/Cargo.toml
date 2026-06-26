@@ -11,6 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-rsx = { workspace = true }
+dioxus-core-template = { workspace = true }
 internment = { workspace = true }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 proc-macro2-diagnostics = { workspace = true }

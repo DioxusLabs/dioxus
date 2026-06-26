@@ -32,6 +32,7 @@ const ALL_SERVERS = [
   { specs: ["fullstack-routing.spec.js"], port: 8888, cwd: "fullstack-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 8888` },
   { specs: ["fullstack-spread.spec.js"], port: 7980, cwd: "fullstack-spread", command: `${dx} run --verbose --force-sequential --web --addr 127.0.0.1 --port 7980` },
   { specs: ["fullstack-hydration-order.spec.js"], port: 7979, cwd: "fullstack-hydration-order", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 7979` },
+  { specs: ["markerless-hydration-edges.spec.js"], port: 7981, cwd: "markerless-hydration-edges", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 7981` },
   { specs: ["fullstack-error-codes.spec.js"], port: 8124, cwd: "fullstack-error-codes", command: `${dx} run --force-sequential --addr 127.0.0.1 --port 8124` },
   { specs: ["nested-suspense.spec.js", "nested-suspense-no-js.spec.js"], port: 5050, cwd: "nested-suspense", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 5050` },
   { specs: ["nested-suspense-ssg.spec.js"], port: 6060, cwd: "nested-suspense", command: `${dx} run --bin nested-suspense-ssg --force-sequential --web --ssg --addr 127.0.0.1 --port 6060` },

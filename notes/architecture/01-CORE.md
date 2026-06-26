@@ -50,8 +50,8 @@ VirtualDom
 
 ### Props System
 - `Properties` trait for all props:
-  - `type Builder` - For DSL prop construction
-  - `builder()` - Create props builder
+  - `type ComponentBuilder` - For render-aware DSL prop construction
+  - `component_builder(render_fn)` - Create a props builder tied to a component render function
   - `memoize(&mut self, other: &Self) -> bool` - Check if props changed
   - `into_vcomponent()` - Convert to VComponent
 
@@ -255,16 +255,22 @@ Effects run AFTER mutations are applied to DOM:
 ```rust
 pub struct VNode {
     vnode: Rc<VNodeInner>,
-    mount: Cell<MountId>,
 }
 
 pub struct VNodeInner {
-    pub key: Option<String>,
     pub template: Template,
-    pub dynamic_nodes: Box<[DynamicNode]>,
-    pub dynamic_attrs: Box<[Box<[Attribute]>]>,
+    pub view: DynamicValues,
+}
+
+pub struct DynamicValues {
+    pub(crate) key: Option<String>,
+    pub(crate) dynamic_nodes: Vec<DynamicNode>,
+    pub(crate) dynamic_attrs: Vec<Box<[Attribute]>>,
 }
 ```
+
+Mounted state lives in the VirtualDOM mount arena and is accessed through
+`MountedVNode`, not stored on `VNode`.
 
 ### Template (Static)
 ```rust

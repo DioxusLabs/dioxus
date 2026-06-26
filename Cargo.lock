@@ -2290,6 +2290,7 @@ name = "const-serialize"
 version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize-macro",
+ "dioxus-const-vec",
  "rand 0.9.4",
  "serde",
 ]
@@ -3140,7 +3141,6 @@ dependencies = [
 name = "dioxus"
 version = "0.8.0-alpha.0"
 dependencies = [
- "criterion",
  "dioxus",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
@@ -3390,14 +3390,23 @@ name = "dioxus-config-macros"
 version = "0.8.0-alpha.0"
 
 [[package]]
+name = "dioxus-const-vec"
+version = "0.8.0-alpha.0"
+
+[[package]]
 name = "dioxus-core"
 version = "0.8.0-alpha.0"
 dependencies = [
  "anyhow",
  "const_format",
+ "criterion",
  "dioxus",
+ "dioxus-const-vec",
+ "dioxus-core-macro",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-html",
+ "dioxus-renderer-oracle",
  "dioxus-ssr",
  "futures-channel",
  "futures-util",
@@ -3438,6 +3447,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-core-template"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus-const-vec",
+ "serde",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "dioxus-core-types"
 version = "0.8.0-alpha.0"
 
@@ -3453,6 +3471,7 @@ dependencies = [
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-core-macro",
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-history",
@@ -3537,6 +3556,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-html",
  "futures-channel",
@@ -3978,6 +3998,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-markerless-hydration-edges-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "dioxus-playwright-web-hash-routing-test"
 version = "0.0.1"
 dependencies = [
@@ -4008,6 +4037,15 @@ name = "dioxus-pwa-example"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+]
+
+[[package]]
+name = "dioxus-renderer-oracle"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "pretty_assertions",
 ]
 
 [[package]]
@@ -4056,6 +4094,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.8.0-alpha.0"
 dependencies = [
+ "dioxus-core-template",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
@@ -4070,6 +4109,7 @@ name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.0"
 dependencies = [
  "dioxus-core",
+ "dioxus-core-template",
  "dioxus-core-types",
  "dioxus-rsx",
  "internment",
@@ -4228,6 +4268,20 @@ version = "0.0.0"
 dependencies = [
  "dioxus",
  "manganis",
+]
+
+[[package]]
+name = "dioxus-vdom-fuzz"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-core-template",
+ "dioxus-renderer-oracle",
+ "dioxus-ssr",
+ "mutatis",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -8359,6 +8413,27 @@ name = "munge_macro"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4568f25ccbd45ab5d5603dc34318c1ec56b117531781260002151b8530a9f931"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "mutatis"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "468ca2a8bc8087a0b2c11d21e7dca51d92cc2662a6993d6b56bac2701795f202"
+dependencies = [
+ "mutatis-derive",
+ "rand 0.8.6",
+]
+
+[[package]]
+name = "mutatis-derive"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5708f6e65277d4a89733aff227b43d0989c5ead03999b6f1f33a8ec7a9978361"
 dependencies = [
  "proc-macro2",
  "quote",
