@@ -92,7 +92,7 @@ impl RenderTargetId {
 /// Text slots record their renderer element, component slots record their child
 /// scope (whose scope state owns the root mount), and fragment slots record the
 /// start offset of their child-mount range. These slots live on the
-/// VirtualDom-side [`Mount`], indexed by dynamic-node index.
+/// VirtualDom-side [`Mount`](crate::mount::Mount), indexed by dynamic-node index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum MountedDynamicNodeSlot {
     Empty,

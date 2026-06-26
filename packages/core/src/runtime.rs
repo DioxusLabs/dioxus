@@ -194,7 +194,7 @@ fn MyComponent() -> Element {{
             .unwrap_or(RenderTargetId::ROOT)
     }
 
-    /// Create a new renderer target with an isolated [`ElementId`](crate::ElementId) arena.
+    /// Create a new renderer target with an isolated [`ElementId`] arena.
     ///
     /// Hosts serve render targets through [`MultiWriter`](crate::MultiWriter)
     /// implementations passed into [`VirtualDom::rebuild`](crate::VirtualDom::rebuild)
@@ -207,7 +207,7 @@ fn MyComponent() -> Element {{
 
     /// Remove a render target previously created with [`create_render_target`](Self::create_render_target).
     ///
-    /// This drops the target's [`ElementId`](crate::ElementId) arena and template
+    /// This drops the target's [`ElementId`] arena and template
     /// cache, freeing the slot so its [`RenderTargetId`] may be handed back out by
     /// a later [`create_render_target`](Self::create_render_target). The root target
     /// ([`RenderTargetId::ROOT`]) is permanent and is never removed.

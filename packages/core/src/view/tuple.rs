@@ -1,7 +1,7 @@
 //! [`View`] implementations for tuples, which join their elements in order.
 //!
 //! Tuples up to arity 128 implement [`View`]/[`ViewTemplate`]; wider sibling
-//! lists are grouped through [`fragment`](super::fragment). The
+//! lists are grouped through [`fragment`](super::fragment()). The
 //! `@impl_children` arm also threads dynamic-node children through
 //! [`IntoViewChild`] so a tuple of mixed static views and dynamic nodes lowers
 //! correctly.
