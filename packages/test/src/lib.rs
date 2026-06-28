@@ -39,7 +39,7 @@
 //! #[test]
 //! # */
 //! fn my_component_renders_correctly() {
-//!     let mut tester = render(MyComponent).build();
+//!     let tester = render(MyComponent).build();
 //!     tester
 //!         .query(".test-component")
 //!         .expect(inner_html(eq("Hello, world!")))
@@ -75,7 +75,7 @@
 //! #[tokio::test]
 //! # */
 //! async fn my_component_changes_button_text_on_click() {
-//!     let mut tester = render(MyComponent).build();
+//!     let tester = render(MyComponent).build();
 //!     tester.query(".test-button").click().await;
 //!     tester
 //!         .query(".test-button")
@@ -112,7 +112,7 @@
 //!
 //! #[tokio::test]
 //! async fn my_component_changes_button_text_on_click() {
-//!     let mut tester = render(MyComponent).build();
+//!     let tester = render(MyComponent).build();
 //!     tester.query(".test-button").click().await;
 //!     tester.pump().await;
 //!     tester

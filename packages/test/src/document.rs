@@ -109,7 +109,7 @@ impl DocumentTester {
     /// # #[component]
     /// # fn AComponent() -> Element { rsx! { } }
     /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let mut tester = dioxus_test::render(AComponent).build();
+    /// # let tester = dioxus_test::render(AComponent).build();
     /// tester.query("make-request-button").click().await;
     ///
     /// tester.pump().await?; // React to the click
@@ -210,7 +210,7 @@ impl DocumentTester {
     ///    }
     /// }
     /// # async fn run_test() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    /// let mut tester = dioxus_test::render(AComponent).build();
+    /// let tester = dioxus_test::render(AComponent).build();
     /// tester.query("#click-count").expect(inner_html(contains_substring("Click count: 0"))).await?;
     /// tester.query("button").click().await?;
     /// tester.query("#click-count").expect(inner_html(contains_substring("Click count: 1"))).await?;
@@ -315,7 +315,7 @@ impl TryIntoSelector for QueryByTestId {
 ///     }
 /// }
 ///
-/// let mut tester = render(MyComponent).build();
+/// let tester = render(MyComponent).build();
 /// tester
 ///     .query(by_testid("the-label"))
 ///     .expect(inner_html(eq("Label content")))
@@ -327,4 +327,47 @@ impl TryIntoSelector for QueryByTestId {
 /// more information [here](https://testing-library.com/docs/queries/bytestid/).
 pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {
     QueryByTestId(testid.as_ref().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        by_testid,
+        matchers::{eq, inner_html},
+        render,
+    };
+    use dioxus::prelude::*;
+
+    #[tokio::test]
+    async fn document_allows_multiple_unresolved_queries_in_parallel() {
+        #[component]
+        fn MyComponent() -> Element {
+            let mut text = use_signal(|| "Click me!");
+            let mut label = use_signal(|| "Not clicked yet");
+            rsx! {
+                div {
+                     "data-testid": "the-label",
+                     {label}
+                }
+                button {
+                     class: "test-button",
+                     onclick: move |_| {
+                         *text.write() = "Clicked";
+                         *label.write() = "Now clicked";
+                     },
+                     {text}
+                }
+            }
+        }
+
+        let tester = render(MyComponent).build();
+        let test_button = tester.query(".test-button");
+        tester.query(".test-button").click().await.unwrap();
+        test_button.expect(inner_html(eq("Clicked"))).await.unwrap();
+        tester
+            .query(by_testid("the-label"))
+            .expect(inner_html(eq("Now clicked")))
+            .immediately()
+            .unwrap();
+    }
 }

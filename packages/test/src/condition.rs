@@ -65,7 +65,7 @@ trait Waitable: EventLoopDriver {
 /// #[tokio::test]
 /// # */
 /// async fn my_component_renders_correctly() {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///
 ///     // This works only if the element has already been rendered.
 ///     tester.query(".test-component").expect(inner_html(eq("Hello, world!"))).immediately().unwrap();
@@ -96,7 +96,7 @@ trait Waitable: EventLoopDriver {
 /// #[tokio::test]
 /// # */
 /// async fn my_component_has_a_button() {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///     tester.query(".test-button").click().await.unwrap();
 /// }
 /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_has_a_button());
@@ -123,7 +123,7 @@ trait Waitable: EventLoopDriver {
 /// #[tokio::test]
 /// # */
 /// async fn my_component_renders_correctly() {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///     let element = tester.query(".test-component");
 ///
 ///     // This works only if the element has already been rendered.
@@ -151,7 +151,7 @@ trait Waitable: EventLoopDriver {
 /// #[tokio::test]
 /// # */
 /// async fn should_fail() -> Result<(), Box<dyn std::error::Error>> {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///     let element = tester.query(".nonexistent-component");
 ///
 ///     let content = element.await?.inner_html();
@@ -214,7 +214,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// #[test]
     /// # */
     /// fn my_component_renders_correctly() {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester
     ///         .query(".test-component")
     ///         .expect(inner_html(eq("Hello, world!")))
@@ -245,7 +245,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// #[tokio::test]
     /// # */
     /// async fn my_component_renders_correctly() {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester
     ///         .query(".test-component")
     ///         .expect(inner_html(eq("Hello, world!")))
@@ -282,7 +282,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// > #[tokio::test]
     /// > # */
     /// > async fn my_component_does_not_change_label_on_click() {
-    /// >     let mut tester = render(MyComponent).build();
+    /// >     let tester = render(MyComponent).build();
     /// >     tester.query(".test-button").click().await.unwrap();
     /// >     tester
     /// >         .query(".test-button")
@@ -327,7 +327,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// > #[tokio::test]
     /// > # */
     /// > async fn my_component_does_not_change_label_on_click() {
-    /// >     let mut tester = render(MyComponent).build();
+    /// >     let tester = render(MyComponent).build();
     /// >     tester.query(".test-button").click().await.unwrap();
     /// >     tester
     /// >         .query(by_testid("test-label"))
@@ -371,7 +371,7 @@ impl<'vdom> ElementCondition<'vdom> {
     ///    }
     /// }
     /// # async fn run_test() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    /// let mut tester = dioxus_test::render(AComponent).build();
+    /// let tester = dioxus_test::render(AComponent).build();
     /// let query = tester.query("button");
     /// query.immediately()?.click();
     /// # Ok(())
@@ -467,7 +467,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 /// #[tokio::test]
 /// # */
 /// async fn my_component_renders_correctly() {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///
 ///     tester.query_all(".test-component").expect(not(empty())).immediately().unwrap();
 ///
@@ -497,7 +497,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 /// #[test]
 /// # */
 /// fn my_component_renders_correctly() {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///     let elements = tester.query_all(".test-component");
 ///     assert!(!elements.immediately().is_empty());
 /// }
@@ -540,7 +540,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
     /// #[test]
     /// # */
     /// fn my_component_renders_correctly() {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester
     ///         .query_all(".test-component")
     ///         .expect(not(empty()))
@@ -570,7 +570,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
     /// #[tokio::test]
     /// # */
     /// async fn my_component_renders_correctly() {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester
     ///         .query_all(".test-component")
     ///         .expect(not(empty()))
@@ -646,7 +646,7 @@ where
 /// #[tokio::test]
 /// # */
 /// async fn my_component_renders_correctly() -> Result<(), TesterError> {
-///     let mut tester = render(MyComponent).build();
+///     let tester = render(MyComponent).build();
 ///     tester
 ///         .query(".test-component")
 ///         .expect(inner_html(eq("Hello, world!")))
@@ -693,7 +693,7 @@ where
     /// #[test]
     /// # */
     /// fn my_component_renders_correctly() {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester
     ///         .query(".test-component")
     ///         .expect(inner_html(eq("Hello, world!")))
@@ -734,9 +734,10 @@ where
     /// #[tokio::test]
     /// # */
     /// async fn my_component_changes_button_text_on_click() {
-    ///     let mut tester = render(MyComponent).build();
-    ///     tester.query(".test-button").click().await;
-    ///     tester.query(".test-button").expect(inner_html(eq("Clicked"))).await.unwrap();
+    ///     let tester = render(MyComponent).build();
+    ///     let test_button = tester.query(".test-button");
+    ///     test_button.click().await.unwrap();
+    ///     test_button.expect(inner_html(eq("Clicked"))).await.unwrap();
     ///     tester
     ///         .query(by_testid("the-label"))
     ///         .expect(inner_html(eq("Now clicked")))
@@ -771,7 +772,7 @@ where
     /// #[tokio::test]
     /// # */
     /// async fn my_component_changes_button_text_on_click() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let mut tester = render(MyComponent).build();
+    ///     let tester = render(MyComponent).build();
     ///     tester.query(".test-button").click().await;
     ///     tester
     ///         .query(".test-button")
