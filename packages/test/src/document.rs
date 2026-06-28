@@ -194,8 +194,7 @@ impl DocumentTester {
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
-    /// # use dioxus_test::*;
-    /// # use test_that::prelude::*;
+    /// # use dioxus_test::{*, matchers::*};
     /// #[component]
     /// fn AComponent() -> Element {
     ///    let mut click_count = use_signal(|| 0);
@@ -304,8 +303,7 @@ impl TryIntoSelector for QueryByTestId {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{by_testid, inner_html, render};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{by_testid, matchers::{eq, inner_html}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {

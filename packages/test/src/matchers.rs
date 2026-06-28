@@ -1,6 +1,8 @@
 use crate::element::ResolvedElement;
 use test_that::{description::Description, matcher::Describable, prelude::Matcher};
 
+pub use test_that::matchers::{containers::*, *};
+
 /// Returns a [Matcher] which matches an element whose inner HTML is matched by the [Matcher]
 /// `inner`.
 pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<ResolvedElement<'vdom>> {

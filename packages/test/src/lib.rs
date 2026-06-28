@@ -23,8 +23,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::{inner_html, render};
-//! use test_that::matchers::eq;
+//! use dioxus_test::{matchers::{eq, inner_html}, render};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -56,8 +55,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::{inner_html, render};
-//! use test_that::matchers::eq;
+//! use dioxus_test::{matchers::{eq, inner_html}, render};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -96,8 +94,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::render;
-//! use test_that::matchers::eq;
+//! use dioxus_test::{matchers::eq, render};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -140,11 +137,10 @@
 mod condition;
 mod document;
 mod element;
-mod matcher;
+pub mod matchers;
 mod result;
 
 pub use condition::{AllElementsCondition, ElementCondition, MAX_TRIES};
 pub use document::{DocumentTester, by_testid, render};
 pub use element::ResolvedElement;
-pub use matcher::inner_html;
 pub use result::{Result, TesterError};

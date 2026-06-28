@@ -49,8 +49,7 @@ trait Waitable: EventLoopDriver {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{matchers::{eq, inner_html}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -80,8 +79,7 @@ trait Waitable: EventLoopDriver {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{matchers::{eq, inner_html}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -109,8 +107,7 @@ trait Waitable: EventLoopDriver {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{matchers::{eq, inner_html}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -143,8 +140,7 @@ trait Waitable: EventLoopDriver {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{matchers::{eq, inner_html}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -202,8 +198,7 @@ impl<'vdom> ElementCondition<'vdom> {
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::eq;
+    /// use dioxus_test::{matchers::{eq, inner_html}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -234,8 +229,7 @@ impl<'vdom> ElementCondition<'vdom> {
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::eq;
+    /// use dioxus_test::{matchers::{eq, inner_html}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -268,8 +262,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// >
     /// > ```
     /// > use dioxus::prelude::*;
-    /// > use dioxus_test::{inner_html, render};
-    /// > use test_that::matchers::eq;
+    /// > use dioxus_test::{matchers::{eq, inner_html}, render};
     /// >
     /// > #[component]
     /// > fn MyComponent() -> Element {
@@ -309,8 +302,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// >
     /// > ```
     /// > use dioxus::prelude::*;
-    /// > use dioxus_test::{by_testid, inner_html, render};
-    /// > use test_that::matchers::eq;
+    /// > use dioxus_test::{by_testid, matchers::{eq, inner_html}, render};
     /// >
     /// > #[component]
     /// > fn MyComponent() -> Element {
@@ -459,8 +451,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::{containers::empty, eq, not};
+/// use dioxus_test::{matchers::{empty, eq, inner_html, not}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -490,8 +481,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render};
-/// use test_that::matchers::{containers::empty, eq, not};
+/// use dioxus_test::{matchers::{empty, eq, inner_html, not}, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -534,8 +524,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::{containers::empty, eq, not};
+    /// use dioxus_test::{matchers::{empty, eq, inner_html, not}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -565,8 +554,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::{containers::empty, eq, not};
+    /// use dioxus_test::{matchers::{empty, eq, inner_html, not}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -642,8 +630,7 @@ where
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{inner_html, render, TesterError};
-/// use test_that::matchers::eq;
+/// use dioxus_test::{matchers::{eq, inner_html}, render, TesterError};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -690,8 +677,7 @@ where
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::eq;
+    /// use dioxus_test::{matchers::{eq, inner_html}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -722,8 +708,7 @@ where
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{by_testid, inner_html, render};
-    /// use test_that::matchers::eq;
+    /// use dioxus_test::{by_testid, matchers::{eq, inner_html}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
@@ -766,8 +751,7 @@ where
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{inner_html, render};
-    /// use test_that::matchers::eq;
+    /// use dioxus_test::{matchers::{eq, inner_html}, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
