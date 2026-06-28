@@ -362,10 +362,10 @@ mod tests {
 
         let tester = render(MyComponent).build();
         let test_button = tester.query(".test-button");
+        let label = tester.query(by_testid("the-label"));
         tester.query(".test-button").click().await.unwrap();
         test_button.expect(inner_html(eq("Clicked"))).await.unwrap();
-        tester
-            .query(by_testid("the-label"))
+        label
             .expect(inner_html(eq("Now clicked")))
             .immediately()
             .unwrap();
