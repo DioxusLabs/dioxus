@@ -220,7 +220,7 @@ impl DocumentTester {
     /// ```
     ///
     /// Panics if the query contains a syntactically invalid CSS selector.
-    pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
+    pub fn query(&self, query: impl TryIntoSelector) -> ElementCondition<'_> {
         let document = self.document.borrow_mut();
         let error = query.to_tester_error();
         let selector = query
