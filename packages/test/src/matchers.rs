@@ -17,7 +17,7 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
         }
     }
 
-    impl<'vdom, InnerMatcher: Matcher<String>> Describable for InnerHtmlMatcher<InnerMatcher> {
+    impl<InnerMatcher: Matcher<String>> Describable for InnerHtmlMatcher<InnerMatcher> {
         fn describe(
             &self,
             matcher_result: test_that::matcher::MatcherResult,
