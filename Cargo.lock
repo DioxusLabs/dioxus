@@ -12834,9 +12834,9 @@ dependencies = [
 
 [[package]]
 name = "test-that"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3512f5c66134003802dc47e4614c8345199a848d101cffbf2df869d899e2ddff"
+checksum = "cda394937c973b953e96dc6b707450957c130b4e9b8c7f1cfddabd4e0403c5c9"
 dependencies = [
  "num-traits",
  "regex",
@@ -12845,9 +12845,9 @@ dependencies = [
 
 [[package]]
 name = "test-that-macro"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ccd6861ef0335387ff0358ad224b3024cba830305837be07c8f4816509f8c7"
+checksum = "1fcde0b29f4fbc77d9fd9ae73e29d966f7ce06c6bb5b2866140b72b5171c6d2d"
 dependencies = [
  "quote",
  "syn 2.0.118",
