@@ -242,24 +242,36 @@ impl Route {
         tokens.extend(match &self.ty {
             RouteType::Child(field) => {
                 let field_name = field.ident.as_ref().unwrap();
+                // One clone per emitted position: destructure pattern, captured-binding setup, and constructor key/value.
+                let dynamic_segments_pat = self.dynamic_segments();
+                let dynamic_segments_capture_outer = self.dynamic_segments();
+                let dynamic_segments_capture_inner = self.dynamic_segments();
+                let dynamic_segments_emit_keys = self.dynamic_segments();
+                let dynamic_segments_emit_vals = self.dynamic_segments();
                 quote! {
                     #[allow(unused)]
-                    (#last_index.., Self::#name { #field_name, .. }) => {
+                    (#last_index.., Self::#name { #field_name, #(#dynamic_segments_pat,)* .. }) => {
                         rsx! {
                             dioxus_router::components::child_router::ChildRouter {
                                 route: #field_name,
-                                // Try to parse the current route as a parent route, and then match it as a child route
-                                parse_route_from_root_route: |__route| if let Ok(__route) = __route.parse() {
-                                    if let Self::#name { #field_name, .. } = __route {
+                                // Reproject the absolute URL into Self's URL space via any outer chain, then extract the child route
+                                parse_route_from_root_route: |__route| {
+                                    if let Some(Self::#name { #field_name, .. }) =
+                                        dioxus_router::components::child_router::parse_route_via_chain::<Self>(__route)
+                                    {
                                         Some(#field_name)
                                     } else {
                                         None
                                     }
-                                } else {
-                                    None
                                 },
-                                // Try to parse the child route and turn it into a parent route
-                                format_route_as_root_route: |#field_name| Self::#name { #field_name: #field_name }.to_string(),
+                                // Capture parent dynamic segments into the closure, then format via any outer chain
+                                format_route_as_root_route: {
+                                    #(let #dynamic_segments_capture_outer = #dynamic_segments_capture_inner.clone();)*
+                                    ::std::sync::Arc::new(move |#field_name| dioxus_router::components::child_router::format_route_via_chain::<Self>(Self::#name {
+                                        #field_name: #field_name,
+                                        #(#dynamic_segments_emit_keys: #dynamic_segments_emit_vals.clone(),)*
+                                    })) as ::std::sync::Arc<dyn ::std::ops::Fn(_) -> ::std::string::String>
+                                },
                             }
                         }
                     }

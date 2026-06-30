@@ -30,8 +30,20 @@ impl RouteSegment {
                     write!(f, "/{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::PATH_ASCII_SET))?;
                 }
             },
+            // Bridge `ToRouteSegments` (writes through `&mut Formatter`) into the surrounding
+            // `write!` context by routing through a wrapper that implements `Display`.
             Self::CatchAll(ident, _) => quote! {
-                dioxus_router::ToRouteSegments::display_route_segments(#ident,f)?;
+                {
+                    struct DisplayCatchAll<'a, T: dioxus_router::ToRouteSegments + ?Sized>(&'a T);
+                    impl<'a, T: dioxus_router::ToRouteSegments + ?Sized> ::std::fmt::Display
+                        for DisplayCatchAll<'a, T>
+                    {
+                        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                            self.0.display_route_segments(f)
+                        }
+                    }
+                    write!(f, "{}", DisplayCatchAll(#ident))?;
+                }
             },
         }
     }
@@ -101,7 +113,7 @@ impl RouteSegment {
                 quote! {
                     {
                         let parsed = {
-                            let remaining_segments: Vec<_> = segments.collect();
+                            let remaining_segments: Vec<_> = segments.by_ref().collect();
                             let mut new_segments: Vec<&str> = Vec::new();
                             for segment in &remaining_segments {
                                 new_segments.push(&*segment);
