@@ -33,6 +33,13 @@ export function serializeEvent(
 
   if (event instanceof InputEvent) {
     extend(serializeInputEvent(event, target));
+    if (event.type === "beforeinput") {
+      extend({
+        input_type: event.inputType,
+        is_composing: event.isComposing,
+        data: event.data,
+      });
+    }
   }
   if (event instanceof PointerEvent) {
     extend(serializePointerEvent(event));
@@ -57,7 +64,11 @@ export function serializeEvent(
     extend({});
   }
   if (event instanceof ClipboardEvent) {
-    extend({});
+    extend({
+      data_transfer: serializeDataTransfer(
+        event.clipboardData || new DataTransfer()
+      ),
+    });
   }
 
   if (
@@ -207,9 +218,16 @@ function serializeInputEvent(
     contents.value = retrieveSelectValue(event.target).join(",");
   }
 
-  // Ensure the serializer isn't quirky
+  // Contenteditable / generic targets: mirror the wasm renderer, which falls
+  // back to textContent for any HTMLElement that isn't a form control
+  // (see packages/web/src/events/before_input.rs WebBeforeInputData::value
+  // and packages/web/src/events/form.rs WebFormData::value).
   if (contents.value === undefined) {
-    contents.value = "";
+    if (event.target instanceof HTMLElement) {
+      contents.value = event.target.textContent ?? "";
+    } else {
+      contents.value = "";
+    }
   }
 
   return contents;
@@ -328,8 +346,9 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
   };
 }
 
-function serializeDragEvent(event: DragEvent): SerializedEvent {
-  let data_transfer = event.dataTransfer || new DataTransfer();
+// Serialize a `DataTransfer` (shared by drag-and-drop and clipboard events) into the shape
+// expected by the Rust `SerializedDataTransfer`.
+function serializeDataTransfer(data_transfer: DataTransfer): SerializedEvent {
   let items = [];
   let files = [];
   let effect_allowed = data_transfer.effectAllowed;
@@ -366,6 +385,15 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
   }
 
   return {
+    items,
+    files,
+    effect_allowed,
+    drop_effect,
+  };
+}
+
+function serializeDragEvent(event: DragEvent): SerializedEvent {
+  return {
     mouse: {
       alt_key: event.altKey,
       ctrl_key: event.ctrlKey,
@@ -373,12 +401,7 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       shift_key: event.shiftKey,
       ...serializeMouseEvent(event),
     },
-    data_transfer: {
-      items,
-      files,
-      effect_allowed,
-      drop_effect,
-    },
+    data_transfer: serializeDataTransfer(event.dataTransfer || new DataTransfer()),
   };
 }
 

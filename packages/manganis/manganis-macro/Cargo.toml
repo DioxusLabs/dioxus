@@ -2,6 +2,7 @@
 name = "manganis-macro"
 version.workspace = true
 edition = "2024"
+rust-version = "1.85.0"
 authors = ["Evan Almloff"]
 description = "Ergonomic, automatic, cross crate asset collection and optimization"
 license = "MIT OR Apache-2.0"
@@ -27,3 +28,4 @@ default = []
 
 [dev-dependencies]
 manganis = { workspace = true }
+tempfile = { workspace = true }

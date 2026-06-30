@@ -106,13 +106,7 @@ impl FormData {
                 // we create the serialized variant with no bytes
                 // SerializedFileData, if given a real path, will read the bytes from disk (synchronously)
                 FormValue::File(Some(file_data)) => {
-                    let serialized = SerializedFileData {
-                        path: file_data.path().to_owned(),
-                        size: file_data.size(),
-                        last_modified: file_data.last_modified(),
-                        content_type: file_data.content_type(),
-                        contents: None,
-                    };
+                    let serialized = SerializedFileData::from_file_data(file_data);
                     entry
                         .as_array_mut()
                         .expect("entry should be an array")
@@ -268,17 +262,10 @@ mod serialize {
                     FormValue::File(f) => SerializedFormObject {
                         key: key.clone(),
                         text: None,
-                        file: if let Some(f) = f {
-                            Some(SerializedFileData {
-                                path: f.path(),
-                                size: f.size(),
-                                last_modified: f.last_modified(),
-                                content_type: f.content_type(),
-                                contents: None,
-                            })
-                        } else {
-                            Some(SerializedFileData::empty())
-                        },
+                        file: Some(f.as_ref().map_or_else(
+                            SerializedFileData::empty,
+                            SerializedFileData::from_file_data,
+                        )),
                     },
                 })
                 .collect();
