@@ -341,37 +341,15 @@ impl RouteTreeSegmentData<'_> {
                 let parse_query = route.parse_query();
                 let parse_hash = route.parse_hash();
 
-                let insure_not_trailing = match route.ty {
-                    RouteType::Leaf { .. } => route
-                        .segments
-                        .last()
-                        .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
-                        .unwrap_or(true),
-                    RouteType::Child(_) => false,
-                };
-
-                let print_route_segment = print_route_segment(
-                    route_segments.peekable(),
-                    return_constructed(
-                        insure_not_trailing,
-                        construct_variant,
-                        &error_enum_name,
-                        enum_variant,
-                        &variant_parse_error,
-                        parse_query,
-                        parse_hash,
-                    ),
-                    &error_enum_name,
-                    enum_variant,
-                    &variant_parse_error,
-                );
-
                 match &route.ty {
                     RouteType::Child(child) => {
                         let ty = &child.ty;
                         let child_name = &child.ident;
 
-                        quote! {
+                        // Parent dynamic segments are walked by `print_route_segment` before this
+                        // runs, so `segments` here is advanced to the child's tail. raw_query and
+                        // raw_hash are appended so children with `?:` or `#:` specs still match.
+                        let success_tokens = quote! {
                             let mut trailing = String::from("/");
                             for seg in segments.clone() {
                                 trailing += &*seg;
@@ -387,15 +365,47 @@ impl RouteTreeSegmentData<'_> {
                             }
                             match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_variant(#variant_parse_error::ChildRoute(err))) {
                                 Ok(#child_name) => {
-                                    #print_route_segment
+                                    #parse_query
+                                    #parse_hash
+                                    return Ok(#construct_variant);
                                 }
                                 Err(err) => {
                                     errors.push(err);
                                 }
                             }
-                        }
+                        };
+
+                        print_route_segment(
+                            route_segments.peekable(),
+                            success_tokens,
+                            &error_enum_name,
+                            enum_variant,
+                            &variant_parse_error,
+                        )
                     }
-                    RouteType::Leaf { .. } => print_route_segment,
+                    RouteType::Leaf { .. } => {
+                        let insure_not_trailing = route
+                            .segments
+                            .last()
+                            .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
+                            .unwrap_or(true);
+
+                        print_route_segment(
+                            route_segments.peekable(),
+                            return_constructed(
+                                insure_not_trailing,
+                                construct_variant,
+                                &error_enum_name,
+                                enum_variant,
+                                &variant_parse_error,
+                                parse_query,
+                                parse_hash,
+                            ),
+                            &error_enum_name,
+                            enum_variant,
+                            &variant_parse_error,
+                        )
+                    }
                 }
             }
             Self::Nest { nest, children } => {
