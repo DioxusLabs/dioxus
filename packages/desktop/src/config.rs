@@ -1,14 +1,12 @@
-use dioxus_core::{LaunchConfig, VirtualDom};
+use dioxus_core::LaunchConfig;
+use std::borrow::Cow;
 use std::path::PathBuf;
-use std::{borrow::Cow, sync::Arc};
+use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
-use tao::{
-    event_loop::{EventLoop, EventLoopWindowTarget},
-    window::Window,
-};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
+use crate::dom_thread::{DomThreadDriver, DomThreadFuture};
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{DioxusMenu, default_menu_bar};
 
@@ -75,9 +73,7 @@ pub struct Config {
     pub(crate) additional_windows_args: Option<String>,
     pub(crate) tray_icon_show_window_on_click: bool,
     pub(crate) navigation_handler: Option<NavigationHandler>,
-
-    #[allow(clippy::type_complexity)]
-    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
+    pub(crate) dom_thread_driver: Option<DomThreadDriver>,
 }
 
 impl LaunchConfig for Config {}
@@ -93,9 +89,54 @@ pub(crate) type AsyncWryProtocol = (
 );
 
 impl Config {
-    /// Initializes a new `WindowBuilder` with default values.
+    /// Initializes a new `WindowBuilder` with default values, driving the DOM thread with a
+    /// dedicated current-thread Tokio runtime so component futures can use Tokio timers and
+    /// IO.
+    ///
+    /// To drive the DOM thread with a different executor — required when the `tokio_runtime`
+    /// feature is disabled — use [`Config::new_with_dom_thread_driver`].
+    #[cfg(feature = "tokio_runtime")]
     #[inline]
     pub fn new() -> Self {
+        Self::new_inner(crate::dom_thread::default_tokio_driver())
+    }
+
+    /// Initializes a new `WindowBuilder` with default values and the async executor that
+    /// drives the DOM thread.
+    ///
+    /// Dioxus desktop runs your components on a dedicated thread (see
+    /// [`DesktopContext::run_on_main_thread`]). The thread's whole workload — every window's
+    /// VirtualDom — is a single `!Send` future. The driver closure is called once on the DOM
+    /// thread and must drive that future to completion there. Returning before the future
+    /// completes shuts down every window's VirtualDom.
+    ///
+    /// With the `tokio_runtime` feature enabled, [`Config::new`] provides a Tokio driver;
+    /// without it, the driver is the only way to construct a [`Config`]. Any executor that
+    /// can block the current thread on a `!Send` future works, for example a current-thread
+    /// Tokio runtime:
+    ///
+    /// ```rust, no_run
+    /// # use dioxus_desktop::Config;
+    /// Config::new_with_dom_thread_driver(|dom_thread| {
+    ///     tokio::runtime::Builder::new_current_thread()
+    ///         .enable_all()
+    ///         .build()
+    ///         .unwrap()
+    ///         .block_on(dom_thread)
+    /// });
+    /// ```
+    ///
+    /// The DOM thread is shared by every window, so this is only honored on the [`Config`]
+    /// the app is launched with; drivers on later windows' configs are ignored.
+    ///
+    /// [`DesktopContext::run_on_main_thread`]: crate::DesktopContext::run_on_main_thread
+    pub fn new_with_dom_thread_driver(
+        driver: impl FnOnce(DomThreadFuture) + Send + 'static,
+    ) -> Self {
+        Self::new_inner(Box::new(driver))
+    }
+
+    fn new_inner(dom_thread_driver: DomThreadDriver) -> Self {
         let mut window: WindowBuilder = WindowBuilder::new()
             .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
 
@@ -126,10 +167,12 @@ impl Config {
             custom_event_handler: None,
             disable_file_drop_handler: false,
             disable_dma_buf_on_wayland: true,
-            on_window: None,
             additional_windows_args: None,
             tray_icon_show_window_on_click: true,
             navigation_handler: None,
+            // Held in an `Option` only so the launch path can move it out; every constructor
+            // provides a driver.
+            dom_thread_driver: Some(dom_thread_driver),
         }
     }
 
@@ -323,15 +366,6 @@ impl Config {
         self
     }
 
-    /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
-    ///
-    /// This is important for z-ordering textures in child windows. Note that this callback runs on
-    /// every window creation, so it's up to you to
-    pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
-        self.on_window = Some(Box::new(f));
-        self
-    }
-
     /// Set whether or not DMA-BUF usage should be disabled on Wayland.
     ///
     /// Defaults to true to avoid issues on some systems. If you want to enable DMA-BUF usage, set this to false.
@@ -365,6 +399,7 @@ impl Config {
     }
 }
 
+#[cfg(feature = "tokio_runtime")]
 impl Default for Config {
     fn default() -> Self {
         Self::new()

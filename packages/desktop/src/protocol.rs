@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::{assets::*, webview::WebviewEdits};
-use crate::{document::NATIVE_EVAL_JS, file_upload::FileDialogRequest};
+use crate::file_upload::FileDialogRequest;
+use crate::{assets::*, edits::WryQueue};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::AnyhowContext;
 use dioxus_html::{SerializedFileData, SerializedFormObject};
@@ -37,7 +37,7 @@ pub(super) fn desktop_handler(
     request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
     responder: RequestAsyncResponder,
-    edit_state: &WebviewEdits,
+    wry_queue: &WryQueue,
     custom_head: Option<String>,
     custom_index: Option<String>,
     root_name: &str,
@@ -50,18 +50,13 @@ pub(super) fn desktop_handler(
         custom_index,
         root_name,
         headless,
-        edit_state,
+        wry_queue,
     ) {
         return responder.respond(index_bytes);
     }
 
     // If the request is asking for edits (ie binary protocol streaming), do that
     let trimmed_uri = request.uri().path().trim_matches('/');
-
-    // If the request is asking for an event response, do that
-    if trimmed_uri == "__events" {
-        return edit_state.handle_event(request, responder);
-    }
 
     // If the request is asking for a file dialog, handle that, returning the list of files selected
     if trimmed_uri == "__file_dialog" {
@@ -106,7 +101,7 @@ fn index_request(
     custom_index: Option<String>,
     root_name: &str,
     headless: bool,
-    edit_state: &WebviewEdits,
+    wry_queue: &WryQueue,
 ) -> Option<Response<Vec<u8>>> {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() != "/" {
@@ -127,7 +122,7 @@ fn index_request(
     // Might want to document this
     index.insert_str(
         index.find("</body>").expect("Body element to exist"),
-        &module_loader(root_name, headless, edit_state),
+        &module_loader(root_name, headless, wry_queue),
     );
 
     Response::builder()
@@ -146,12 +141,15 @@ fn index_request(
 /// - port: the port that the websocket server is listening on for edits
 /// - webview_id: the id of the webview that we're loading this into. This is used to differentiate between
 ///   multiple webviews in the same application, so that we can send edits to the correct one.
-fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> String {
-    let edits_path = edit_state.wry_queue.edits_path();
-    let expected_key = edit_state.wry_queue.required_server_key();
+fn module_loader(root_id: &str, headless: bool, wry_queue: &WryQueue) -> String {
+    let edits_path = wry_queue.edits_path();
+    let expected_key = wry_queue.required_server_key();
 
     format!(
         r#"
+<!-- wry-bindgen initialization (loads function registry for Rust<->JS bindings) -->
+<script type="module" src="{BASE_URI}/__wbg__/init.js"></script>
+
 <script type="module">
     // Bring the sledgehammer code
     {SLEDGEHAMMER_JS}
@@ -171,10 +169,6 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
         }}
         window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
     }}
-</script>
-<script type="module">
-    // Include the code for eval
-    {NATIVE_EVAL_JS}
 </script>
 "#
     )

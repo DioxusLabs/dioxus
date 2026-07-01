@@ -20,7 +20,7 @@ fn app() -> Element {
             oninput: move |e| {
                 if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
-                    _ = dioxus::desktop::window().webview.zoom(new_zoom);
+                    _ = dioxus::desktop::window().zoom(new_zoom);
                 }
             }
         }

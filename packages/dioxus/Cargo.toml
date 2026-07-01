@@ -23,6 +23,7 @@ dioxus-hooks = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
+dioxus-web-sys-events = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
@@ -93,10 +94,15 @@ fullstack = [
   "dioxus-web?/mounted",
   "dioxus-web?/document"
 ]
-desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
+desktop = [
+  "dep:dioxus-desktop",
+  "dep:dioxus-web-sys-events",
+  "dioxus-config-macro/desktop",
+]
 mobile = ["dep:dioxus-desktop", "dioxus-config-macro/mobile"]
 web = [
   "dep:dioxus-web",
+  "dep:dioxus-web-sys-events",
   "dioxus-fullstack?/web",
   "dioxus-config-macro/web",
   "dep:dioxus-cli-config",

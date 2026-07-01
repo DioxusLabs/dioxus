@@ -17,15 +17,14 @@ pub use crate::mobile_shortcut::*;
 
 use crate::window;
 use dioxus_html::input_data::keyboard_types::Modifiers;
-use slab::Slab;
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
-use tao::keyboard::ModifiersState;
+use slotmap::SlotMap;
+use std::{cell::RefCell, collections::HashMap, str::FromStr, sync::Arc};
+use tao::{keyboard::ModifiersState, window::WindowId};
 
-/// An global id for a shortcut.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ShortcutHandle {
-    id: u32,
-    number: usize,
+slotmap::new_key_type! {
+    /// A handle to a registered global shortcut callback. Handles are generational: a removed
+    /// shortcut's handle can never reach a different shortcut reusing its slot.
+    pub struct ShortcutHandle;
 }
 
 impl ShortcutHandle {
@@ -42,90 +41,111 @@ pub enum ShortcutRegistryError {
     /// The shortcut is invalid.
     InvalidShortcut(String),
     /// An unknown error occurred.
-    Other(Rc<dyn std::error::Error>),
+    Other(Arc<dyn std::error::Error + Send + Sync>),
 }
 
 pub(crate) struct ShortcutRegistry {
     manager: GlobalHotKeyManager,
-    shortcuts: RefCell<HashMap<u32, ShortcutInner>>,
+    shortcuts: RefCell<SlotMap<ShortcutHandle, ShortcutInner>>,
 }
 
 struct ShortcutInner {
-    #[allow(unused)]
     shortcut: HotKey,
-    callbacks: Slab<Box<dyn FnMut(HotKeyState)>>,
+    /// The accelerator id shared by every callback registered for the same key combination.
+    id: u32,
+    /// The window whose DOM thread this shortcut forwards into; the shortcut is purged with it.
+    window_id: WindowId,
+    callback: Box<dyn FnMut(HotKeyState)>,
 }
 
 impl ShortcutRegistry {
     pub fn new() -> Self {
         Self {
             manager: GlobalHotKeyManager::new().unwrap(),
-            shortcuts: RefCell::new(HashMap::new()),
+            shortcuts: RefCell::new(SlotMap::default()),
         }
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    pub(crate) fn call_handlers(&self, id: GlobalHotKeyEvent) {
-        if let Some(ShortcutInner { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id.id) {
-            for (_, callback) in callbacks.iter_mut() {
-                (callback)(id.state);
+    pub(crate) fn call_handlers(&self, event: GlobalHotKeyEvent) {
+        for (_, shortcut) in self.shortcuts.borrow_mut().iter_mut() {
+            if shortcut.id == event.id {
+                (shortcut.callback)(event.state);
             }
         }
     }
 
     pub(crate) fn add_shortcut(
         &self,
+        window_id: WindowId,
         hotkey: HotKey,
         callback: Box<dyn FnMut(HotKeyState)>,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
-        let accelerator_id = hotkey.clone().id();
-
+        let accelerator_id = hotkey.id();
         let mut shortcuts = self.shortcuts.borrow_mut();
 
-        if let Some(callbacks) = shortcuts.get_mut(&accelerator_id) {
-            return Ok(ShortcutHandle {
-                id: accelerator_id,
-                number: callbacks.callbacks.insert(callback),
-            });
-        };
+        // Only the first callback for a key combination registers the OS-level hotkey.
+        if !shortcuts.values().any(|s| s.id == accelerator_id) {
+            self.manager.register(hotkey).map_err(|e| match e {
+                HotkeyError::HotKeyParseError(shortcut) => {
+                    ShortcutRegistryError::InvalidShortcut(shortcut)
+                }
+                err => ShortcutRegistryError::Other(Arc::new(err)),
+            })?;
+        }
 
-        self.manager.register(hotkey).map_err(|e| match e {
-            HotkeyError::HotKeyParseError(shortcut) => {
-                ShortcutRegistryError::InvalidShortcut(shortcut)
-            }
-            err => ShortcutRegistryError::Other(Rc::new(err)),
-        })?;
-
-        let mut shortcut = ShortcutInner {
+        Ok(shortcuts.insert(ShortcutInner {
             shortcut: hotkey,
-            callbacks: Slab::new(),
-        };
-
-        let id = shortcut.callbacks.insert(callback);
-
-        shortcuts.insert(accelerator_id, shortcut);
-
-        Ok(ShortcutHandle {
             id: accelerator_id,
-            number: id,
-        })
+            window_id,
+            callback,
+        }))
     }
 
-    pub(crate) fn remove_shortcut(&self, id: ShortcutHandle) {
+    pub(crate) fn remove_shortcut(&self, handle: ShortcutHandle) {
         let mut shortcuts = self.shortcuts.borrow_mut();
-        if let Some(callbacks) = shortcuts.get_mut(&id.id) {
-            let _ = callbacks.callbacks.remove(id.number);
-            if callbacks.callbacks.is_empty() {
-                if let Some(_shortcut) = shortcuts.remove(&id.id) {
-                    let _ = self.manager.unregister(_shortcut.shortcut);
-                }
-            }
+        let Some(removed) = shortcuts.remove(handle) else {
+            return;
+        };
+        // Unregister the OS-level hotkey once its last callback is removed.
+        if !shortcuts.values().any(|s| s.id == removed.id) {
+            let _ = self.manager.unregister(removed.shortcut);
         }
+    }
+
+    /// Drop every shortcut `window_id` registered, unregistering OS-level hotkeys that no other
+    /// window still uses. Runs when the window closes: the shortcut can only forward into that
+    /// window's dead channel, so keeping it registered would block the key combination
+    /// system-wide for no effect.
+    pub(crate) fn remove_window(&self, window_id: WindowId) {
+        let mut shortcuts = self.shortcuts.borrow_mut();
+        let mut removed: HashMap<u32, HotKey> = HashMap::new();
+        shortcuts.retain(|_, shortcut| {
+            if shortcut.window_id == window_id {
+                removed.insert(shortcut.id, shortcut.shortcut);
+                false
+            } else {
+                true
+            }
+        });
+
+        // Unregister the key combinations with no surviving callback from another window.
+        let dead: Vec<HotKey> = removed
+            .into_iter()
+            .filter(|(id, _)| !shortcuts.values().any(|s| s.id == *id))
+            .map(|(_, hotkey)| hotkey)
+            .collect();
+        let _ = self.manager.unregister_all(&dead);
     }
 
     pub(crate) fn remove_all(&self) {
         let mut shortcuts = self.shortcuts.borrow_mut();
-        let hotkeys: Vec<_> = shortcuts.drain().map(|(_, v)| v.shortcut).collect();
+        // Several callbacks may share one OS-level hotkey; unregister each combination once.
+        let hotkeys: HashMap<u32, HotKey> = shortcuts
+            .drain()
+            .map(|(_, shortcut)| (shortcut.id, shortcut.shortcut))
+            .collect();
+        let hotkeys: Vec<_> = hotkeys.into_values().collect();
         let _ = self.manager.unregister_all(&hotkeys);
     }
 }

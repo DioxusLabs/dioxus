@@ -35,7 +35,7 @@ impl Interpreter {
     }
 }
 
-#[sledgehammer_bindgen::bindgen(module)]
+#[sledgehammer_bindgen::bindgen(wasm_bindgen = wasm_bindgen)]
 mod js {
     // Extend the web base class
     const BASE: &str = "./src/js/core.js";
@@ -180,16 +180,17 @@ mod js {
     this_node.setAttribute('data-dioxus-id', `\${id}`);
     const event_name = $event$;
 
-    // if this is a mounted listener, we send the event immediately
+    // Liveview serializes mounted listeners through the interpreter. Native renderers that
+    // dispatch mounted events in Rust intercept them before this mutation reaches JS.
     if (event_name === "mounted") {
-        window.ipc.postMessage(
+        if (this.liveview) {
             this.sendSerializedEvent({
                 name: event_name,
                 element: id,
                 data: null,
                 bubbles,
-            })
-        );
+            });
+        }
     } else {
         this.createListener(event_name, this_node, bubbles, (event) => {
             this.handler(event, event_name, bubbles);

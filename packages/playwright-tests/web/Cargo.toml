@@ -12,4 +12,4 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-wasm = { workspace = true }
 wasm-bindgen = { workspace = true }
-web-sys = { workspace = true, features = ["Element", "Window"] }
+web-sys = { workspace = true, features = ["Element", "Window", "Document"] }

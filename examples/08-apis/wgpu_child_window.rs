@@ -16,22 +16,6 @@ use wgpu::CurrentSurfaceTexture;
 fn main() {
     let config = Config::new()
         .with_window(WindowBuilder::new().with_transparent(true))
-        .with_on_window(|window, dom| {
-            let resources = Arc::new(pollster::block_on(async {
-                let resource = GraphicsContextAsyncBuilder {
-                    desktop: window,
-                    resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx.clone())),
-                }
-                .build()
-                .await;
-
-                resource.with_resources(|resources| resources.render());
-
-                resource
-            }));
-
-            dom.provide_root_context(resources);
-        })
         .with_as_child_window();
 
     dioxus::LaunchBuilder::desktop()
@@ -40,14 +24,34 @@ fn main() {
 }
 
 fn app() -> Element {
-    let graphics_resources = consume_context::<Arc<GraphicsContext>>();
+    let mut graphics = use_signal(|| None::<Arc<GraphicsContext>>);
 
-    // on first render request a redraw
-    use_effect(|| {
-        window().window.request_redraw();
+    use_future(move || {
+        async move {
+            // The tao window handle is `Send`, but creating a surface from its raw window
+            // handle only works on the main thread, so build the graphics context there.
+            let win = window().tao_window();
+            let resources = window()
+                .run_on_main_thread(move || {
+                    Arc::new(pollster::block_on(async {
+                        let resource = GraphicsContextAsyncBuilder {
+                            desktop: win,
+                            resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx.clone())),
+                        }
+                        .build()
+                        .await;
+
+                        resource.with_resources(|resources| resources.render());
+
+                        resource
+                    }))
+                })
+                .await;
+            graphics.set(Some(resources));
+        }
     });
 
-    use_wry_event_handler(move |event, _| {
+    use_wry_event_handler(move |event| {
         use dioxus::desktop::tao::event::WindowEvent;
 
         if let WryEvent::WindowEvent {
@@ -55,14 +59,16 @@ fn app() -> Element {
             ..
         } = event
         {
-            graphics_resources.with_resources(|srcs| {
-                let mut cfg = srcs.config.clone();
-                cfg.width = new_size.width;
-                cfg.height = new_size.height;
-                srcs.surface.configure(&srcs.device, &cfg);
-            });
+            if let Some(graphics_resources) = graphics.read().as_ref() {
+                graphics_resources.with_resources(|srcs| {
+                    let mut cfg = srcs.config.clone();
+                    cfg.width = new_size.width;
+                    cfg.height = new_size.height;
+                    srcs.surface.configure(&srcs.device, &cfg);
+                });
 
-            window().window.request_redraw();
+                window().request_redraw();
+            }
         }
     });
 

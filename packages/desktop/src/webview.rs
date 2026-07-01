@@ -1,205 +1,38 @@
-use crate::PendingDesktopContext;
-use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
+use crate::app::MakeVirtualDom;
+use crate::desktop_context::DesktopContextInner;
+use crate::dom_thread::{DomThreadMessage, VirtualDomEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
-    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
-    waker::tao_waker,
+    Config, DesktopService,
+    app::SharedContext,
+    assets::AssetHandlerRegistry,
+    edits::WryQueue,
+    file_upload::NativeFileHover,
+    ipc::{UserWindowEvent, UserWindowEventVariant, WindowHandle},
+    protocol,
 };
-use crate::{WeakDesktopContext, document::DesktopDocument};
-use crate::{element::DesktopElement, file_upload::DesktopFormData};
-use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
-use dioxus_document::Document;
-use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{FutureExt, pin_mut};
-use std::sync::{Arc, atomic::AtomicBool};
-use std::{cell::OnceCell, time::Duration};
-use std::{rc::Rc, task::Waker};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::Arc,
+    task::{Context, Wake, Waker},
+    time::Duration,
+};
+use tao::{
+    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    window::WindowId,
+};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
-
-#[derive(Clone)]
-pub(crate) struct WebviewEdits {
-    runtime: Rc<Runtime>,
-    pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
-}
-
-impl WebviewEdits {
-    fn new(runtime: Rc<Runtime>, wry_queue: WryQueue) -> Self {
-        Self {
-            runtime,
-            wry_queue,
-            desktop_context: Default::default(),
-        }
-    }
-
-    fn set_desktop_context(&self, context: WeakDesktopContext) {
-        _ = self.desktop_context.set(context);
-    }
-
-    pub fn handle_event(
-        &self,
-        request: wry::http::Request<Vec<u8>>,
-        responder: wry::RequestAsyncResponder,
-    ) {
-        let body = self
-            .try_handle_event(request)
-            .expect("Writing bodies to succeed");
-        responder.respond(wry::http::Response::new(body))
-    }
-
-    pub fn try_handle_event(
-        &self,
-        request: wry::http::Request<Vec<u8>>,
-    ) -> Result<Vec<u8>, serde_json::Error> {
-        use serde::de::Error;
-
-        // todo(jon):
-        //
-        // I'm a small bit worried about the size of the header being too big on some platforms.
-        // It's unlikely we'll hit the 256k limit (from 2010 browsers...) but it's important to think about
-        // https://stackoverflow.com/questions/3326210/can-http-headers-be-too-big-for-browsers
-        //
-        // Also important to remember here that we don't pass a body from the JavaScript side of things
-        let data = request
-            .headers()
-            .get("dioxus-data")
-            .ok_or_else(|| Error::custom("dioxus-data header not set"))?;
-
-        let as_utf = std::str::from_utf8(data.as_bytes())
-            .map_err(|_| Error::custom("dioxus-data header is not a valid (utf-8) string"))?;
-
-        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
-            .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
-
-        let response = match serde_json::from_slice(&data_from_header) {
-            Ok(event) => {
-                // we need to wait for the mutex lock to let us munge the main thread..
-                #[cfg(target_os = "android")]
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-                self.handle_html_event(event)
-            }
-            Err(err) => {
-                tracing::error!(
-                    "Error parsing user_event: {:?}. \n Contents: {:?}, \nraw: {:#?}",
-                    err,
-                    String::from_utf8(request.body().to_vec()),
-                    request
-                );
-                SynchronousEventResponse::new(false)
-            }
-        };
-
-        serde_json::to_vec(&response).inspect_err(|err| {
-            tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
-        })
-    }
-
-    pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = event;
-        let Some(desktop_context) = self.desktop_context.get() else {
-            tracing::error!(
-                "Tried to handle event before setting the desktop context on the event handler"
-            );
-            return Default::default();
-        };
-
-        let desktop_context = desktop_context.upgrade().unwrap();
-
-        let query = desktop_context.query.clone();
-        let hovered_file = desktop_context.file_hover.clone();
-
-        // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = match data {
-            dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
-                Rc::new(PlatformEventData::new(Box::new(element)))
-            }
-            dioxus_html::EventData::Form(form) => {
-                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
-                    value: form.value,
-                    valid: form.valid,
-                    values: form
-                        .values
-                        .into_iter()
-                        .map(|obj| {
-                            if let Some(text) = obj.text {
-                                return (obj.key, FormValue::Text(text));
-                            }
-
-                            if let Some(file_data) = obj.file {
-                                if file_data.path.capacity() == 0 {
-                                    return (obj.key, FormValue::File(None));
-                                }
-
-                                return (
-                                    obj.key,
-                                    FormValue::File(Some(FileData::new(DesktopFileData(
-                                        file_data.path,
-                                    )))),
-                                );
-                            };
-
-                            (obj.key, FormValue::Text(String::new()))
-                        })
-                        .collect(),
-                })))
-            }
-            // Which also includes drops...
-            dioxus_html::EventData::Drag(ref drag) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                let full_file_paths = hovered_file.current_paths();
-
-                let xfer_data = drag.data_transfer.clone();
-                let new_file_data = xfer_data
-                    .files
-                    .iter()
-                    .map(|f| {
-                        let new_path = full_file_paths
-                            .iter()
-                            .find(|p| p.ends_with(&f.path))
-                            .unwrap_or(&f.path);
-                        SerializedFileData {
-                            path: new_path.clone(),
-                            ..f.clone()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let new_xfer_data = dioxus_html::SerializedDataTransfer {
-                    files: new_file_data,
-                    ..xfer_data
-                };
-
-                Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                    mouse: drag.mouse.clone(),
-                    data_transfer: new_xfer_data,
-                    files: full_file_paths,
-                })))
-            }
-            _ => data.into_any(),
-        };
-
-        let event = dioxus_core::Event::new(as_any, bubbles);
-        self.runtime.handle_event(&name, event.clone(), element);
-
-        // Get the response from the event
-        SynchronousEventResponse::new(!event.default_action_enabled())
-    }
-}
+use wry_bindgen_runtime::{WryBindgen, WryBindgenWebviewDriver};
 
 pub(crate) struct WebviewInstance {
-    pub dom: VirtualDom,
-    pub edits: WebviewEdits,
-    pub desktop_context: DesktopContext,
-    pub waker: Waker,
+    /// Sends events to the VirtualDom running on the dedicated DOM thread.
+    pub dom_event_tx: futures_channel::mpsc::UnboundedSender<VirtualDomEvent>,
+    pub wry_queue: WryQueue,
+    pub desktop_context: Rc<DesktopService>,
+    wry_bindgen_driver: WryBindgenWebviewDriver,
+    wry_bindgen_driver_waker: Waker,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -213,12 +46,37 @@ pub(crate) struct WebviewInstance {
     _menu: Option<DioxusMenu>,
 }
 
+struct WryBindgenDriverWake {
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
+}
+
+impl Wake for WryBindgenDriverWake {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEventVariant::WryBindgenDriverWake(self.window_id).into());
+    }
+}
+
 impl WebviewInstance {
+    /// Create a new WebviewInstance.
+    ///
+    /// The VirtualDom runs on the DOM thread inside this webview's wry-bindgen runtime.
+    /// This webview connects to it through the event channel created below.
+    /// Returns the instance together with a [`WindowHandle`], a weak reference to the window
+    /// that the caller can hand to the window's creator (see [`PendingWebview::create_window`])
+    /// or drop.
     pub(crate) fn new(
         mut cfg: Config,
-        mut dom: VirtualDom,
+        dom: MakeVirtualDom,
         shared: Rc<SharedContext>,
-    ) -> WebviewInstance {
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) -> (WebviewInstance, WindowHandle) {
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -237,10 +95,16 @@ impl WebviewInstance {
             window = window.with_window_icon(crate::default_icon().ok());
         }
 
-        let window = Arc::new(window.build(&shared.target).unwrap());
-        if let Some(on_build) = cfg.on_window.as_mut() {
-            on_build(window.clone(), &mut dom);
-        }
+        let window = Arc::new(window.build(target).unwrap());
+
+        let proxy = shared.proxy.clone();
+
+        // Create the event channel for VirtualDom communication. The VirtualDom runs on a
+        // dedicated thread and receives events from the main thread through this channel.
+        let (event_tx, dom_event_rx) = futures_channel::mpsc::unbounded();
+
+        let wry_bindgen = WryBindgen::new();
+        let protocol = wry_bindgen.protocol_handler();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -267,8 +131,10 @@ impl WebviewInstance {
             }
         }));
         let edit_queue = shared.websocket.create_queue();
+        // The VirtualDom thread sends its rendered edits straight to this webview's websocket.
+        let webview_id = edit_queue.webview_id();
+        let websocket = shared.websocket.clone();
         let asset_handlers = AssetHandlerRegistry::new();
-        let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
@@ -278,21 +144,50 @@ impl WebviewInstance {
                 cfg.custom_index,
                 cfg.root_name,
                 asset_handlers,
-                edits
+                edit_queue
             ];
 
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
+            move |_id: WebViewId,
+                  request: wry::http::Request<Vec<u8>>,
+                  responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
 
+                let responder = {
+                    let _lock = crate::android_sync_lock::android_runtime_lock();
+
+                    let responder = Rc::new(RefCell::new(Some(responder)));
+                    let wry_bindgen_responder = {
+                        to_owned![responder];
+                        move |response| {
+                            if let Some(responder) = responder.borrow_mut().take() {
+                                responder.respond(response);
+                            }
+                        }
+                    };
+
+                    if protocol
+                        .handle_request("dioxus", &request, wry_bindgen_responder)
+                        .is_none()
+                    {
+                        return;
+                    }
+
+                    responder
+                        .borrow_mut()
+                        .take()
+                        .expect("unhandled wry-bindgen request should return the responder")
+                };
+
+                // Fall through to existing dioxus protocol handler
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
                     responder,
-                    &edits,
+                    &edit_queue,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
@@ -305,10 +200,11 @@ impl WebviewInstance {
             let window_id = window.id();
             to_owned![shared.proxy];
             move |payload: wry::http::Request<String>| {
+                let _guard = crate::android_sync_lock::android_runtime_lock();
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
-                    _ = proxy.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+                    _ = proxy.send_event(UserWindowEventVariant::Ipc { id: window_id, msg }.into());
                 }
             }
         };
@@ -317,6 +213,7 @@ impl WebviewInstance {
             to_owned![file_hover];
             let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
             move |evt: DragDropEvent| {
+                let _guard = crate::android_sync_lock::android_runtime_lock();
                 if cfg!(not(windows)) {
                     // Update the most recent file drop event - when the event comes in from the webview we can use the
                     // most recent event to build a new event with the files in it.
@@ -331,15 +228,22 @@ impl WebviewInstance {
                             paths: _,
                             position: _,
                         } => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragDrop(window_id).into(),
+                            );
                         }
                         wry::DragDropEvent::Over { position } => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
-                                window_id, position.0, position.1,
-                            ));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragOver(
+                                    window_id, position.0, position.1,
+                                )
+                                .into(),
+                            );
                         }
                         wry::DragDropEvent::Leave => {
-                            _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
+                            _ = proxy.send_event(
+                                UserWindowEventVariant::WindowsDragLeave(window_id).into(),
+                            );
                         }
                         _ => {}
                     }
@@ -350,7 +254,7 @@ impl WebviewInstance {
         };
 
         let navigation_handler = cfg.navigation_handler.take();
-        let page_loaded = AtomicBool::new(false);
+        let page_loaded = std::sync::atomic::AtomicBool::new(false);
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
@@ -364,7 +268,9 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(move |var| {
-                // Serve the index and assets.
+                let _guard = crate::android_sync_lock::android_runtime_lock();
+                // We don't want to allow any navigation
+                // We only want to serve the index file and assets
                 if var.starts_with("dioxus://")
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")
@@ -419,6 +325,7 @@ impl WebviewInstance {
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 handler(a, b)
             });
         }
@@ -430,6 +337,7 @@ impl WebviewInstance {
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 handler(a, b, c)
             });
         }
@@ -498,91 +406,107 @@ impl WebviewInstance {
         };
         let webview = webview.unwrap();
 
+        let window_id = window.id();
+        let window_handle = WindowHandle {
+            proxy: proxy.clone(),
+            window_id,
+            window: Arc::downgrade(&window),
+        };
+
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
             shared.clone(),
             asset_handlers,
-            file_hover,
             cfg.window_close_behavior,
+            event_tx.clone(),
         ));
 
-        // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(Rc::downgrade(&desktop_context));
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-        dom.in_scope(ScopeId::ROOT, || {
-            provide_context(desktop_context.clone());
-            provide_context(provider);
-            provide_context(history_provider);
-        });
+        // Finally spawn the app in the virtual dom task thread
+        let run_app = {
+            let window_handle = window_handle.clone();
+            let event_tx = event_tx.clone();
+            move |callbacks| async move {
+                let dom = dom();
+
+                crate::dom_thread::run_virtual_dom_with_dom(
+                    dom,
+                    dom_event_rx,
+                    event_tx,
+                    websocket,
+                    webview_id,
+                    window_handle,
+                    file_hover,
+                    callbacks,
+                )
+                .await;
+            }
+        };
+        let (runtime, driver) = wry_bindgen.split();
+        _ = shared
+            .desktop_thread_handle
+            .tx
+            .unbounded_send(DomThreadMessage::Spawn(
+                window_id,
+                Box::new(move |callbacks| {
+                    // This closure runs on the DOM thread, which hands it the callback registry
+                    // it owns. `runtime.run` builds a sendable wrapper, so its app closure must
+                    // be `Send`; the `!Send` registry rides into it through a `SendWrapper`
+                    // created and unwrapped here, on the registry's home thread.
+                    let callbacks = send_wrapper::SendWrapper::new(callbacks);
+                    let future = runtime.run(move || run_app(callbacks.take()));
+                    Box::pin(future.into_future())
+                }),
+            ));
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
-        WebviewInstance {
-            dom,
-            edits,
-            waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
+        let wry_bindgen_driver = driver.with_evaluate_script({
+            let desktop_context = desktop_context.clone();
+            move |script| {
+                let _ = desktop_context.webview.evaluate_script(script);
+            }
+        });
+        let wry_bindgen_driver_waker = Waker::from(Arc::new(WryBindgenDriverWake {
+            proxy: shared.proxy.clone(),
+            window_id,
+        }));
+
+        let mut instance = WebviewInstance {
+            dom_event_tx: event_tx,
+            wry_queue: edit_queue,
             desktop_context,
+            wry_bindgen_driver,
+            wry_bindgen_driver_waker,
             _menu: menu,
             _web_context: web_context,
-        }
+        };
+
+        // Prime the wry-bindgen driver so it registers its waker; afterwards it is only polled
+        // when that waker fires (via `WryBindgenDriverWake`).
+        instance.poll_wry_bindgen_driver();
+
+        (instance, window_handle)
     }
 
-    pub fn poll_vdom(&mut self) {
-        let mut cx = std::task::Context::from_waker(&self.waker);
+    pub(crate) fn poll_wry_bindgen_driver(&mut self) {
+        let mut cx = Context::from_waker(&self.wry_bindgen_driver_waker);
+        _ = self.wry_bindgen_driver.poll(&mut cx);
+    }
 
-        // Continuously poll the virtualdom until it's pending
-        // Wait for work will return Ready when it has edits to be sent to the webview
-        // It will return Pending when it needs to be polled again - nothing is ready
-        loop {
-            // Check if there is a new edit channel we need to send. On IOS,
-            // the websocket will be killed when the device is put into sleep. If we
-            // find the socket has been closed, we create a new socket and send it to
-            // the webview to continue on
-            // https://github.com/DioxusLabs/dioxus/issues/4374
-            if self
-                .edits
-                .wry_queue
-                .poll_new_edits_location(&mut cx)
-                .is_ready()
-            {
-                _ = self.desktop_context.webview.evaluate_script(&format!(
-                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                    edits_path = self.edits.wry_queue.edits_path(),
-                    expected_key = self.edits.wry_queue.required_server_key()
-                ));
-            }
-
-            // If we're waiting for a render, wait for it to finish before we continue
-            let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
-            if edits_flushed_poll.is_pending() {
-                return;
-            }
-
-            {
-                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
-                #[cfg(target_os = "android")]
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-                let fut = self.dom.wait_for_work();
-                pin_mut!(fut);
-
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
-            }
-
-            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
-            #[cfg(target_os = "android")]
-            let _lock = crate::android_sync_lock::android_runtime_lock();
-
-            self.edits
-                .wry_queue
-                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
-            self.edits.wry_queue.send_edits();
-        }
+    /// Re-point the webview's interpreter at the edit websocket's current location.
+    ///
+    /// The socket may be killed by the OS while running. On iOS the websocket is killed when
+    /// the device goes to sleep; when that happens the server rebinds to a new port and key
+    /// and we tell the webview to reconnect to the new location so it keeps receiving edits.
+    /// <https://github.com/DioxusLabs/dioxus/issues/4374>
+    pub fn send_edits_location(&self) {
+        _ = self.desktop_context.webview.evaluate_script(&format!(
+            "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+            edits_path = self.wry_queue.edits_path(),
+            expected_key = self.wry_queue.required_server_key()
+        ));
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -621,44 +545,38 @@ impl WebviewInstance {
     }
 }
 
-/// A synchronous response to a browser event which may prevent the default browser's action
-#[derive(serde::Serialize, Default)]
-pub struct SynchronousEventResponse {
-    #[serde(rename = "preventDefault")]
-    prevent_default: bool,
-}
-
-impl SynchronousEventResponse {
-    /// Create a new SynchronousEventResponse
-    #[allow(unused)]
-    pub fn new(prevent_default: bool) -> Self {
-        Self { prevent_default }
-    }
-}
-
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
 /// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+///
+/// Each queued webview gets its own wry-bindgen runtime and driver when created.
 pub(crate) struct PendingWebview {
-    dom: VirtualDom,
+    dom: MakeVirtualDom,
     cfg: Config,
-    sender: futures_channel::oneshot::Sender<DesktopContext>,
+    sender: futures_channel::oneshot::Sender<DesktopContextInner>,
 }
 
 impl PendingWebview {
-    pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
-        let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self { dom, cfg, sender };
-        let pending = PendingDesktopContext { receiver };
-        (webview, pending)
+    pub(crate) fn new(
+        cfg: Config,
+        dom: MakeVirtualDom,
+        sender: futures_channel::oneshot::Sender<DesktopContextInner>,
+    ) -> Self {
+        Self { cfg, sender, dom }
     }
 
-    pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
+    pub(crate) fn create_window(
+        self,
+        shared: &Rc<SharedContext>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) -> WebviewInstance {
+        let (window, window_handle) =
+            WebviewInstance::new(self.cfg, self.dom, shared.clone(), target);
 
-        let cx = window
-            .dom
-            .in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
-        _ = self.sender.send(cx);
+        // Return the desktop service proxy to the pending future. The handle is a weak
+        // reference: the resolved DesktopContext does not keep the window alive.
+        _ = self
+            .sender
+            .send(window.desktop_context.proxy_inner(window_handle));
 
         window
     }

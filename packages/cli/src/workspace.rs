@@ -21,6 +21,9 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+    /// Lazily resolved cargo target dir; loading the cargo config walks ancestor directories
+    /// and parses every config file, so do it at most once per workspace.
+    resolved_target_dir: std::sync::OnceLock<PathBuf>,
 }
 
 /// Process-wide cache of the loaded workspace. `Workspace::current()` populates this on first
@@ -118,6 +121,7 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
+            resolved_target_dir: Default::default(),
         });
 
         tracing::debug!(
@@ -282,6 +286,15 @@ impl Workspace {
             .krates_by_name("wasm-bindgen")
             .next()
             .map(|krate| krate.krate.version.to_string())
+    }
+
+    /// Return the version of the wasm-bindgen-x fork shim if it is in the graph (pulled in by
+    /// dioxus-desktop). When present, a `[patch.crates-io]` git tag must match it exactly.
+    pub fn wasm_bindgen_fork_version(&self) -> Option<krates::semver::Version> {
+        self.krates
+            .krates_by_name("wasm-bindgen-x")
+            .next()
+            .map(|krate| krate.krate.version.clone())
     }
 
     // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
@@ -539,6 +552,25 @@ impl Workspace {
 
     pub(crate) fn workspace_root(&self) -> PathBuf {
         self.krates.workspace_root().as_std_path().to_path_buf()
+    }
+
+    /// The cargo target directory builds resolve to: `CARGO_TARGET_DIR`, then the cargo config's
+    /// `build.target-dir`, then `<workspace root>/target`. (A relative config path is kept
+    /// relative, matching how the build itself treats it.)
+    pub(crate) fn resolved_target_dir(&self) -> PathBuf {
+        self.resolved_target_dir
+            .get_or_init(|| {
+                std::env::var("CARGO_TARGET_DIR")
+                    .ok()
+                    .map(PathBuf::from)
+                    .or_else(|| {
+                        cargo_config2::Config::load()
+                            .ok()
+                            .and_then(|config| config.build.target_dir)
+                    })
+                    .unwrap_or_else(|| self.workspace_root().join("target"))
+            })
+            .clone()
     }
 
     /// Returns the root of the crate that the command is run from, without calling `cargo metadata`

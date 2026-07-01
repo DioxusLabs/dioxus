@@ -1,4 +1,4 @@
-use crate::WebFileData;
+use crate::files::WebFileData;
 use dioxus_html::{FileData, NativeDataTransfer};
 
 /// A wrapper around the web_sys::DataTransfer to implement NativeDataTransfer

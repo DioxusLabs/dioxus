@@ -46,6 +46,7 @@ fn app() -> Element {
             test_focus_out_div {}
             test_form_input {}
             test_form_submit {}
+            test_form_submit_file {}
             test_select_multiple_options {}
             test_unicode {}
             test_before_input {}
@@ -65,6 +66,7 @@ fn test_mounted() -> Element {
             width: "100px",
             height: "100px",
             onmounted: move |evt| async move {
+                // Mounted events fire after the edit batch is applied, so layout is already valid
                 let rect = evt.get_client_rect().await.unwrap();
                 println!("rect: {rect:?}");
                 assert_eq!(rect.width(), 100.0);
@@ -579,6 +581,63 @@ fn test_form_submit() -> Element {
     }
 }
 
+const SUBMIT_FILE_PATH: &str = "/tmp/dioxus-desktop-submit-file.txt";
+const SUBMIT_FILE_CONTENT: &str = "desktop submit file contents";
+
+fn test_form_submit_file() -> Element {
+    std::fs::write(SUBMIT_FILE_PATH, SUBMIT_FILE_CONTENT).unwrap();
+
+    utils::mock_event_with_extra(
+        "form-file-submitter",
+        r#"new Event("submit", { bubbles: true, cancelable: true, composed: true })"#,
+        r#"
+            const fileInput = document.getElementById('submit-file');
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(new File([], "/tmp/dioxus-desktop-submit-file.txt", {
+                type: "text/plain",
+                lastModified: 0,
+            }));
+            fileInput.files = dataTransfer.files;
+        "#,
+    );
+
+    let set_values = move |ev: FormEvent| async move {
+        let values = ev.values();
+        let file = values
+            .iter()
+            .find_map(|(name, value)| {
+                if name == "upload"
+                    && let FormValue::File(Some(file)) = value
+                {
+                    Some(file.clone())
+                } else {
+                    None
+                }
+            })
+            .expect("submit values should include the file input");
+
+        assert_eq!(file.path(), std::path::PathBuf::from(SUBMIT_FILE_PATH));
+        assert_eq!(file.size(), SUBMIT_FILE_CONTENT.len() as u64);
+        assert_eq!(file.read_string().await.unwrap(), SUBMIT_FILE_CONTENT);
+
+        RECEIVED_EVENTS.with_mut(|x| *x += 1);
+    };
+
+    rsx! {
+        div {
+            h1 { "Submit file" }
+            form { id: "form-file-submitter", onsubmit: set_values,
+                input {
+                    r#type: "file",
+                    name: "upload",
+                    id: "submit-file",
+                }
+                button { r#type: "submit", value: "Submit", "Submit the file form" }
+            }
+        }
+    }
+}
+
 fn test_select_multiple_options() -> Element {
     utils::mock_event_with_extra(
         "select-many",
@@ -596,9 +655,9 @@ fn test_select_multiple_options() -> Element {
             name: "country",
             multiple: true,
             oninput: move |ev| {
-                let values = ev.value();
-                let values = values.split(',').collect::<Vec<_>>();
-                assert_eq!(values, vec!["usa", "canada"]);
+                let values = ev.values();
+                let stringy_values = values.iter().map(|(_, v)| v).collect::<Vec<_>>();
+                assert_eq!(stringy_values, vec!["usa", "canada"]);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             },
             option { id: "usa", value: "usa", "USA" }
