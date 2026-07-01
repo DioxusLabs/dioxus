@@ -518,3 +518,9 @@ impl InteractionLocation for NativeWheelData {
         PagePoint::new(self.0.page_x() as f64, self.0.page_y() as f64)
     }
 }
+
+pub fn synthetic_click_event(node: &Node, modifiers: Modifiers) -> Box<dyn Any> {
+    Box::new(NativePointerData(
+        node.synthetic_click_event_data(modifiers),
+    ))
+}
