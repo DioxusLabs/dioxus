@@ -164,17 +164,7 @@ impl Asset {
         }
 
         #[cfg(feature = "dioxus")]
-        let bundle_root = {
-            let base_path = dioxus_cli_config::base_path();
-            let base_path = base_path
-                .as_deref()
-                .map(|base_path| {
-                    let trimmed = base_path.trim_matches('/');
-                    format!("/{trimmed}")
-                })
-                .unwrap_or_default();
-            PathBuf::from(format!("{base_path}/assets/"))
-        };
+        let bundle_root = PathBuf::from(dioxus_cli_config::web_asset_prefix());
         #[cfg(not(feature = "dioxus"))]
         let bundle_root = PathBuf::from("/assets/");
 

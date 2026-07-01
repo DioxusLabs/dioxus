@@ -63,6 +63,8 @@ pub const DEVSERVER_IP_ENV: &str = "DIOXUS_DEVSERVER_IP";
 pub const DEVSERVER_PORT_ENV: &str = "DIOXUS_DEVSERVER_PORT";
 pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
+/// When set (for example to `1`), bundled web assets use `./…` URLs instead of `/{base}/…`.
+pub const RELATIVE_ASSETS_ENV: &str = "DIOXUS_RELATIVE_ASSETS";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 pub const PRODUCT_NAME_ENV: &str = "DIOXUS_PRODUCT_NAME";
 
@@ -233,6 +235,41 @@ pub fn base_path() -> Option<String> {
     }
 
     read_env_config!("DIOXUS_ASSET_ROOT")
+}
+
+/// Whether the CLI built this crate with [`RELATIVE_ASSETS_ENV`] (`dx build --relative` / `dx serve --relative`).
+///
+/// Always read at compile time: `dx` sets the env var when invoking `cargo`/`rustc` for the wasm
+/// target. In the browser, `std::env::var` is not available in debug builds, so a runtime-only
+/// check would ignore `--relative` during `dx serve`.
+pub fn relative_assets() -> bool {
+    matches!(
+        option_env!("DIOXUS_RELATIVE_ASSETS"),
+        Some("1") | Some("true")
+    )
+}
+
+/// URL prefix for bundled web assets (includes trailing slash), e.g. `./assets/` or `/myapp/assets/`.
+#[allow(unreachable_code)]
+pub fn web_asset_prefix() -> String {
+    let relative = relative_assets();
+    let base = base_path();
+    let trimmed = base
+        .as_deref()
+        .map(|p| p.trim_matches('/'))
+        .filter(|p| !p.is_empty());
+
+    if relative {
+        match trimmed {
+            Some(bp) => format!("./{bp}/assets/"),
+            None => "./assets/".to_string(),
+        }
+    } else {
+        let root = trimmed
+            .map(|bp| format!("/{bp}"))
+            .unwrap_or_default();
+        format!("{root}/assets/")
+    }
 }
 
 #[cfg(feature = "web")]

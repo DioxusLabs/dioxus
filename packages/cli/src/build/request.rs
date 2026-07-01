@@ -207,7 +207,7 @@ use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV, RELATIVE_ASSETS_ENV};
 use krates::{NodeId, cm::TargetKind};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -264,6 +264,8 @@ pub(crate) struct BuildRequest {
     pub(crate) debug_symbols: bool,
     pub(crate) keep_names: bool,
     pub(crate) inject_loading_scripts: bool,
+    /// Emit `./…` asset URLs instead of `/{base_path}/…` in generated web output.
+    pub(crate) relative: bool,
     pub(crate) custom_linker: Option<PathBuf>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
@@ -917,6 +919,7 @@ impl BuildRequest {
             debug_symbols: args.debug_symbols,
             keep_names: args.keep_names,
             inject_loading_scripts: args.inject_loading_scripts,
+            relative: args.relative,
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
@@ -1917,6 +1920,10 @@ impl BuildRequest {
 
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
+        if self.relative {
+            env_vars.push((RELATIVE_ASSETS_ENV.into(), "1".into()));
+        }
+
         if self.release {
             if let Some(base_path) = self.trimmed_base_path() {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
@@ -2999,6 +3006,27 @@ impl BuildRequest {
         self.trimmed_base_path().unwrap_or(".")
     }
 
+    /// Format a URL for a file under the web `assets/` directory.
+    ///
+    /// `asset_path` is the path within `assets/` (for example `app-dxh….js`).
+    pub(crate) fn format_web_asset_url(&self, asset_path: &str) -> String {
+        format_web_asset_url_parts(
+            self.relative,
+            self.trimmed_base_path(),
+            self.base_path_or_default(),
+            asset_path,
+        )
+    }
+
+    /// Format a URL for a bundled web resource (for example `assets/app.js` or `wasm/app.js`).
+    pub(crate) fn format_web_resource_url(&self, resource_path: &str) -> String {
+        format_web_resource_url_parts(
+            self.relative,
+            self.base_path_or_default(),
+            resource_path,
+        )
+    }
+
     /// Get the path to the package manifest directory
     pub(crate) fn package_manifest_dir(&self) -> PathBuf {
         self.workspace.krates[self.crate_package]
@@ -3152,5 +3180,82 @@ impl BuildRequest {
         }
 
         deps
+    }
+}
+
+fn format_web_asset_url_parts(
+    relative: bool,
+    trimmed_base_path: Option<&str>,
+    base_path_or_default: &str,
+    asset_path: &str,
+) -> String {
+    if relative {
+        match trimmed_base_path {
+            Some(base_path) => format!("./{base_path}/assets/{asset_path}"),
+            None => format!("./assets/{asset_path}"),
+        }
+    } else {
+        format!("/{base_path_or_default}/assets/{asset_path}")
+    }
+}
+
+fn format_web_resource_url_parts(
+    relative: bool,
+    base_path_or_default: &str,
+    resource_path: &str,
+) -> String {
+    if relative {
+        if resource_path.starts_with("./") {
+            resource_path.to_string()
+        } else {
+            format!("./{resource_path}")
+        }
+    } else {
+        format!("/{base_path_or_default}/{resource_path}")
+    }
+}
+
+#[cfg(test)]
+mod web_url_format_tests {
+    use super::{format_web_asset_url_parts, format_web_resource_url_parts};
+
+    #[test]
+    fn absolute_asset_url_default_base() {
+        assert_eq!(
+            format_web_asset_url_parts(false, None, ".", "app.js"),
+            "/./assets/app.js"
+        );
+    }
+
+    #[test]
+    fn relative_asset_url_default_base() {
+        assert_eq!(
+            format_web_asset_url_parts(true, None, ".", "app.js"),
+            "./assets/app.js"
+        );
+    }
+
+    #[test]
+    fn relative_asset_url_with_subpath() {
+        assert_eq!(
+            format_web_asset_url_parts(true, Some("functions"), "functions", "app.js"),
+            "./functions/assets/app.js"
+        );
+    }
+
+    #[test]
+    fn relative_wasm_resource_url() {
+        assert_eq!(
+            format_web_resource_url_parts(true, ".", "assets/app_bg.wasm"),
+            "./assets/app_bg.wasm"
+        );
+    }
+
+    #[test]
+    fn absolute_wasm_resource_url() {
+        assert_eq!(
+            format_web_resource_url_parts(false, ".", "assets/app_bg.wasm"),
+            "/./assets/app_bg.wasm"
+        );
     }
 }
