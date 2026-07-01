@@ -235,10 +235,7 @@ fn child_route_dynamic_prefix_roundtrip() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum Route {
         #[child("/file/:file_id")]
-        File {
-            file_id: String,
-            child: ChildRoute,
-        },
+        File { file_id: String, child: ChildRoute },
     }
 
     #[component]
@@ -289,10 +286,7 @@ fn child_route_dynamic_prefix_with_query() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum Route {
         #[child("/file/:file_id")]
-        File {
-            file_id: String,
-            child: ChildRoute,
-        },
+        File { file_id: String, child: ChildRoute },
     }
 
     #[component]
@@ -371,10 +365,7 @@ fn child_route_typed_parent_segment_error_bubbles_parent() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum Route {
         #[child("/file/:file_id")]
-        File {
-            file_id: usize,
-            child: ChildRoute,
-        },
+        File { file_id: usize, child: ChildRoute },
     }
 
     #[component]
@@ -415,10 +406,7 @@ fn child_route_dynamic_prefix_with_hash() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum Route {
         #[child("/file/:file_id")]
-        File {
-            file_id: String,
-            child: ChildRoute,
-        },
+        File { file_id: String, child: ChildRoute },
     }
 
     #[component]
