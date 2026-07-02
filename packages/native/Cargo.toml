@@ -43,6 +43,7 @@ font-embolden = ["blitz-paint/font-embolden"]
 apple-font-embolden = ["blitz-paint/apple-font-embolden"]
 
 # Other features
+winit-event-handler = ["dep:slab"]
 # No-op on wasm32 (blitz_net::Provider needs tokio's threaded runtime); launch_cfg
 # falls back to the in-process DioxusNativeNetProvider there.
 net = ["dep:tokio", "dep:blitz-net"]
@@ -111,6 +112,7 @@ tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 cfg-if = "1.0.4"
+slab = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }

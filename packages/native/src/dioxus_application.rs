@@ -190,6 +190,10 @@ impl ApplicationHandler for DioxusNativeApplication {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        #[cfg(feature = "winit-event-handler")]
+        crate::event_handlers::WINDOW_EVENT_HANDLERS.with(|h| {
+            h.borrow_mut().apply_event(window_id, &event, event_loop);
+        });
         self.inner.window_event(event_loop, window_id, event);
     }
 
