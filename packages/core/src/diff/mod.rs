@@ -5,7 +5,7 @@
 //! - Diffing nodes that are not mounted
 //! - Mounted nodes that have already been created
 //!
-//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut impl WriteMutations>
+//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut (dyn WriteMutations + '_)>
 
 #![allow(clippy::too_many_arguments)]
 
@@ -24,7 +24,7 @@ mod node;
 impl VirtualDom {
     pub(crate) fn create_children(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
         parent: Option<ElementRef>,
     ) -> usize {
@@ -78,7 +78,7 @@ impl VirtualDom {
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         nodes: &[VNode],
         replace_with: Option<usize>,
     ) {

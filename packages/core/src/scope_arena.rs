@@ -2,6 +2,7 @@ use crate::{
     Element, ReactiveContext,
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::{RenderError, ScopeOrder, ScopeState},
+    render_driver::RenderDriver,
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -10,22 +11,24 @@ use crate::{
 impl VirtualDom {
     pub(super) fn new_scope(
         &mut self,
-        props: BoxedAnyProps,
         name: &'static str,
+        driver: std::rc::Rc<dyn RenderDriver>,
+        props: BoxedAnyProps,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.try_current_scope_id();
         let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
-        let suspense_boundary = self
+        let parent_suspense_location = self
             .runtime
             .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
+        let suspense_location = driver.initial_suspense_location(parent_suspense_location);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
-        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_location, driver);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {

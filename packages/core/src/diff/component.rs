@@ -1,41 +1,29 @@
-use std::{
-    any::TypeId,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use crate::{
-    Element, SuspenseContext,
     any_props::AnyProps,
-    innerlude::{
-        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
-        VComponent, WriteMutations,
-    },
+    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
 };
 
 impl VirtualDom {
-    pub(crate) fn run_and_diff_scope<M: WriteMutations>(
+    pub(crate) fn run_and_diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope_id: ScopeId,
     ) {
-        let scope = &mut self.scopes[scope_id.0];
-        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
-            SuspenseBoundaryProps::diff(scope_id, self, to)
-        } else {
-            let new_nodes = self.run_scope(scope_id);
-            self.diff_scope(to, scope_id, new_nodes);
-        }
+        let driver = self.runtime.get_state(scope_id).render_driver();
+        driver.diff(self, scope_id, to);
     }
 
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
-    fn diff_scope<M: WriteMutations>(
+    pub(crate) fn diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
-        new_nodes: Element,
+        new_nodes: crate::Element,
     ) {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // We don't diff the nodes if the scope is suspended or has an error
@@ -64,9 +52,9 @@ impl VirtualDom {
     ///
     /// Returns the number of nodes created on the stack
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
-    pub(crate) fn create_scope<M: WriteMutations>(
+    pub(crate) fn create_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
         parent: Option<ElementRef>,
@@ -91,25 +79,15 @@ impl VirtualDom {
         })
     }
 
-    pub(crate) fn remove_component_node<M: WriteMutations>(
+    pub(crate) fn remove_component_node(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         scope_id: ScopeId,
         replace_with: Option<usize>,
     ) {
-        // If this is a suspense boundary, remove the suspended nodes as well
-        SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
-
-        // Remove the component from the dom
-        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.clone() {
-            node.remove_node_inner(self, to, destroy_component_state, replace_with)
-        };
-
-        if destroy_component_state {
-            // Now drop all the resources
-            self.drop_scope(scope_id);
-        }
+        let driver = self.runtime.get_state(scope_id).render_driver();
+        driver.remove(self, scope_id, to, destroy_component_state, replace_with);
     }
 }
 
@@ -123,7 +101,7 @@ impl VNode {
         scope_id: ScopeId,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         // Replace components that have different render fns
         if old.render_fn != new.render_fn {
@@ -157,7 +135,7 @@ impl VNode {
         new: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
@@ -179,39 +157,27 @@ impl VNode {
         component: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
-        // If this is a suspense boundary, run our suspense creation logic instead of running the component
-        if component.props.props().type_id() == TypeId::of::<SuspenseBoundaryPropsWithOwner>() {
-            return SuspenseBoundaryProps::create(mount, idx, component, parent, dom, to);
-        }
-
         let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+        let new = scope_id.is_placeholder();
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
-        if scope_id.is_placeholder() {
+        if new {
             scope_id = dom
-                .new_scope(component.props.duplicate(), component.name)
+                .new_scope(
+                    component.name,
+                    component.driver.clone(),
+                    component.props.duplicate(),
+                )
                 .state()
                 .id;
 
             // Store the scope id for the next render
             dom.set_mounted_dyn_node(mount, idx, scope_id.0);
-
-            // If this is a new scope, we also need to run it once to get the initial state
-            let new = dom.run_scope(scope_id);
-
-            // Then set the new node as the last rendered node
-            dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
         }
 
-        let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-
-        let new_node = dom.scopes[scope.0]
-            .last_rendered_node
-            .clone()
-            .expect("Component to be mounted");
-
-        dom.create_scope(to, scope, new_node, parent)
+        let driver = dom.runtime.get_state(scope_id).render_driver();
+        driver.create(dom, scope_id, new, parent, to)
     }
 }

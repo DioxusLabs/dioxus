@@ -16,7 +16,7 @@ impl VNode {
         &self,
         new: &VNode,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         // The node we are diffing from should always be mounted
         debug_assert!(
@@ -82,7 +82,7 @@ impl VNode {
         old_node: &DynamicNode,
         new_node: &DynamicNode,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         tracing::trace!("diffing dynamic node from {old_node:?} to {new_node:?}");
         match (old_node, new_node) {
@@ -212,7 +212,13 @@ impl VNode {
     /// Diff the two text nodes
     ///
     /// This just sets the text of the node if it's different.
-    fn diff_vtext(&self, to: &mut impl WriteMutations, id: ElementId, left: &VText, right: &VText) {
+    fn diff_vtext(
+        &self,
+        to: &mut (dyn WriteMutations + '_),
+        id: ElementId,
+        left: &VText,
+        right: &VText,
+    ) {
         if left.value != right.value {
             to.set_node_text(&right.value, id);
         }
@@ -223,7 +229,7 @@ impl VNode {
         right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         self.replace_inner(right, parent, dom, to, true)
     }
@@ -236,7 +242,7 @@ impl VNode {
         right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         self.replace_inner(right, parent, dom, to, false)
     }
@@ -246,7 +252,7 @@ impl VNode {
         right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
         let m = dom.create_children(to.as_deref_mut(), right, parent);
@@ -256,20 +262,20 @@ impl VNode {
     }
 
     /// Remove a node from the dom and potentially replace it with the top m nodes from the stack
-    pub(crate) fn remove_node<M: WriteMutations>(
+    pub(crate) fn remove_node(
         &self,
         dom: &mut VirtualDom,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         replace_with: Option<usize>,
     ) {
         self.remove_node_inner(dom, to, true, replace_with)
     }
 
     /// Remove a node, but only maybe destroy the component state of that node. During suspense, we need to remove a node from the real dom without wiping the component state
-    pub(crate) fn remove_node_inner<M: WriteMutations>(
+    pub(crate) fn remove_node_inner(
         &self,
         dom: &mut VirtualDom,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
@@ -285,7 +291,7 @@ impl VNode {
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
         // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
-        self.remove_nested_dyn_nodes::<M>(mount, dom, destroy_component_state);
+        self.remove_nested_dyn_nodes(mount, dom, destroy_component_state);
 
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
@@ -302,7 +308,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
@@ -335,7 +341,7 @@ impl VNode {
         }
     }
 
-    fn remove_nested_dyn_nodes<M: WriteMutations>(
+    fn remove_nested_dyn_nodes(
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
@@ -349,7 +355,7 @@ impl VNode {
                 self.remove_dynamic_node(
                     mount,
                     dom,
-                    Option::<&mut M>::None,
+                    None,
                     destroy_component_state,
                     idx,
                     dyn_node,
@@ -363,7 +369,7 @@ impl VNode {
         &self,
         mount: MountId,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         idx: usize,
         node: &DynamicNode,
@@ -417,7 +423,7 @@ impl VNode {
         &self,
         new: &VNode,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) {
         let mount_id = new.mount.get();
         for (idx, (old_attrs, new_attrs)) in self
@@ -497,7 +503,12 @@ impl VNode {
         }
     }
 
-    fn remove_attribute(&self, attribute: &Attribute, id: ElementId, to: &mut impl WriteMutations) {
+    fn remove_attribute(
+        &self,
+        attribute: &Attribute,
+        id: ElementId,
+        to: &mut (dyn WriteMutations + '_),
+    ) {
         match &attribute.value {
             AttributeValue::Listener(_) => {
                 to.remove_event_listener(&attribute.name[2..], id);
@@ -520,7 +531,7 @@ impl VNode {
         id: ElementId,
         mount: MountId,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) {
         match &attribute.value {
             AttributeValue::Listener(_) => {
@@ -543,7 +554,7 @@ impl VNode {
         &self,
         dom: &mut VirtualDom,
         parent: Option<ElementRef>,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         // Get the most up to date template
         let template = self.template;
@@ -657,7 +668,7 @@ impl VNode {
         mount: MountId,
         dynamic_node_id: usize,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
     ) -> usize {
         use DynamicNode::*;
         match node {
@@ -714,7 +725,7 @@ impl VNode {
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
     ) {
         fn collect_dyn_node_range(
             dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
@@ -797,7 +808,7 @@ impl VNode {
         dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) {
         let mut last_path = None;
         // Only take nodes that are under this root node
@@ -834,7 +845,7 @@ impl VNode {
         mount: MountId,
         root_idx: usize,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) -> ElementId {
         // Get an ID for this root since it's a real root
         let this_id = dom.next_element();
@@ -857,7 +868,7 @@ impl VNode {
         mount: MountId,
         path: &'static [u8],
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) -> ElementId {
         // This is just the root node. We already know it's id
         if let [root_idx] = path {
@@ -878,7 +889,7 @@ impl VNode {
         idx: usize,
         text: &VText,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) -> usize {
         let new_id = mount.mount_node(idx, dom);
 
@@ -893,7 +904,7 @@ impl VNode {
         mount: MountId,
         idx: usize,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) -> usize {
         let new_id = mount.mount_node(idx, dom);
 
