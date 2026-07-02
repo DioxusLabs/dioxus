@@ -31,6 +31,8 @@ twoway!("comments-tab" => comments_tab (IndentOptions::new(IndentType::Tabs, 4, 
 twoway!("multi-4sp" => multi_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("multi-tab" => multi_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
 
+twoway!("multiline-string" => multiline_string (IndentOptions::new(IndentType::Spaces, 4, false)));
+
 twoway!("multiexpr-4sp" => multiexpr_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("multiexpr-tab" => multiexpr_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
 twoway!("multiexpr-many" => multiexpr_many (IndentOptions::new(IndentType::Spaces, 4, false)));

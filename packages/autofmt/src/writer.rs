@@ -1171,12 +1171,22 @@ impl<'a> Writer<'a> {
         } else {
             writeln!(self.out, "{first}")?;
 
+            // Track whether the start of each line falls inside a multiline string
+            // literal. Indenting the interior of a string literal would change the
+            // string's value, so those lines must be written out verbatim.
+            let mut string_state = scan_string_state(first, StringScanState::Code);
+
             while let Some(line) = lines.next() {
-                if !line.trim().is_empty() {
+                let starts_in_string = !matches!(string_state, StringScanState::Code);
+
+                if !starts_in_string && !line.trim().is_empty() {
                     self.out.tab()?;
                 }
 
                 write!(self.out, "{line}")?;
+
+                string_state = scan_string_state(line, string_state);
+
                 if lines.peek().is_none() {
                     write!(self.out, "")?;
                 } else {
@@ -1395,4 +1405,107 @@ impl<'a> Writer<'a> {
 
         false
     }
+}
+
+/// Tracks whether a position in a stream of Rust tokens falls inside a string literal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StringScanState {
+    /// Regular code (not inside any string literal).
+    Code,
+    /// Inside a normal (`"..."`) string literal.
+    Str,
+    /// Inside a raw string literal (`r"..."`, `r#"..."#`, ...) with the given number of `#`.
+    RawStr(usize),
+}
+
+/// Scan a single line of already-formatted code, starting from `start`, and return the string
+/// literal state at the end of the line.
+///
+/// This is used to detect lines that begin inside a multiline string literal so that the
+/// formatter can avoid inserting indentation into the middle of a string (which would silently
+/// change the string's value).
+pub(crate) fn scan_string_state(line: &str, start: StringScanState) -> StringScanState {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut state = start;
+
+    while i < bytes.len() {
+        match state {
+            StringScanState::Code => match bytes[i] {
+                b'"' => {
+                    state = StringScanState::Str;
+                    i += 1;
+                }
+                b'r' => {
+                    // A raw string starts with `r` followed by zero or more `#` and then a `"`.
+                    // Make sure the `r` isn't part of an identifier (e.g. `for`, `bar`).
+                    let prev_is_ident = i > 0 && {
+                        let p = bytes[i - 1];
+                        p == b'_' || p.is_ascii_alphanumeric()
+                    };
+                    let mut j = i + 1;
+                    let mut hashes = 0;
+                    while j < bytes.len() && bytes[j] == b'#' {
+                        hashes += 1;
+                        j += 1;
+                    }
+                    if !prev_is_ident && j < bytes.len() && bytes[j] == b'"' {
+                        state = StringScanState::RawStr(hashes);
+                        i = j + 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+                b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'/' => {
+                    // Line comment - the rest of the line can't affect string state.
+                    return StringScanState::Code;
+                }
+                b'\'' => {
+                    // Could be a char literal (`'x'`, `'\''`) or a lifetime (`'a`).
+                    // Only skip over it if it looks like a char literal so quote chars
+                    // inside char literals don't get mistaken for string delimiters.
+                    let mut j = i + 1;
+                    if j < bytes.len() && bytes[j] == b'\\' {
+                        j += 2;
+                    } else {
+                        j += 1;
+                    }
+                    if j < bytes.len() && bytes[j] == b'\'' {
+                        i = j + 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+                _ => i += 1,
+            },
+            StringScanState::Str => match bytes[i] {
+                b'\\' => i += 2,
+                b'"' => {
+                    state = StringScanState::Code;
+                    i += 1;
+                }
+                _ => i += 1,
+            },
+            StringScanState::RawStr(hashes) => {
+                if bytes[i] == b'"' {
+                    let mut j = i + 1;
+                    let mut count = 0;
+                    while count < hashes && j < bytes.len() && bytes[j] == b'#' {
+                        count += 1;
+                        j += 1;
+                    }
+                    if count == hashes {
+                        state = StringScanState::Code;
+                        i = j;
+                    } else {
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    state
 }

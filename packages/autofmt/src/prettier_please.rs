@@ -1,7 +1,10 @@
 use dioxus_rsx::CallBody;
 use syn::{Expr, File, Item, MacroDelimiter, parse::Parser, visit_mut::VisitMut};
 
-use crate::{IndentOptions, Writer};
+use crate::{
+    IndentOptions, Writer,
+    writer::{StringScanState, scan_string_state},
+};
 
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
@@ -195,13 +198,27 @@ pub fn unparse_pat(pat: &syn::Pat) -> String {
 
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
-    let mut o = raw
+    let inner = raw
         .strip_prefix("fn main() {\n")
         .unwrap()
         .strip_suffix("}\n")
-        .unwrap()
+        .unwrap();
+
+    // Strip the leading indentation added by wrapping the expr in `fn main`, but leave lines that
+    // fall inside a multiline string literal untouched - removing their leading whitespace would
+    // silently change the string's value.
+    let mut state = StringScanState::Code;
+    let mut o = inner
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
+        .map(|line| {
+            let out_line = if matches!(state, StringScanState::Code) {
+                line.strip_prefix("    ").unwrap_or_default() // todo: set this to tab level
+            } else {
+                line
+            };
+            state = scan_string_state(line, state);
+            out_line
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
