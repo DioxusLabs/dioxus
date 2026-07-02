@@ -8,8 +8,8 @@ use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
     events::{
-        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, PointerCoords,
-        PointerDetails, UiEvent,
+        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point,
+        PointerCoords, PointerDetails, UiEvent,
     },
     shell::{ColorScheme, Viewport},
 };
@@ -156,6 +156,7 @@ fn main() {
             screen_x: 30.0,
             screen_y: 40.0,
         },
+        element: Point { x: 0.0, y: 0.0 },
         button: MouseEventButton::Main,
         buttons: MouseEventButtons::Primary, // keep track of all pressed buttons
         mods: Modifiers::empty(),            // ctrl, alt, shift, etc
