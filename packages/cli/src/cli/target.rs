@@ -147,6 +147,19 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) apple_team_id: Option<String>,
 
+    /// Bundle the iOS app for App Store distribution.
+    ///
+    /// When set, codesigning auto-detect looks for an "Apple Distribution" identity
+    /// instead of "Apple Development", and provisioning profile auto-discovery
+    /// prefers App Store profiles (those without a `ProvisionedDevices` key) over
+    /// development / ad-hoc profiles.
+    ///
+    /// Combine with `--release` to produce an `.ipa` Apple Transporter will accept.
+    /// Requires a paid Apple Developer Program account with a valid Distribution
+    /// certificate and an App Store provisioning profile installed locally.
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
+    pub(crate) appstore: bool,
+
     /// The folder where DX stores its temporary artifacts for things like hotpatching, build caches,
     /// window position, etc. This is meant to be stable within an invocation of the CLI, but you can
     /// persist it by setting this flag.
