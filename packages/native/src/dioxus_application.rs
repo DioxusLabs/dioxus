@@ -14,6 +14,9 @@ use winit::platform::macos::ApplicationHandlerExtMacOS;
 use crate::DioxusNativeWindowRenderer;
 use crate::{BlitzShellEvent, DioxusDocument, WindowConfig, contexts::DioxusNativeDocument};
 
+#[cfg(feature = "winit-event-handler")]
+use crate::event_handlers::WindowEventHandlers;
+
 /// Dioxus-native specific event type
 pub enum DioxusNativeEvent {
     /// A hotreload event, basically telling us to update our templates.
@@ -34,6 +37,8 @@ pub enum DioxusNativeEvent {
 pub struct DioxusNativeApplication {
     pending_window: Option<WindowConfig<DioxusNativeWindowRenderer>>,
     inner: BlitzApplication<DioxusNativeWindowRenderer>,
+    #[cfg(feature = "winit-event-handler")]
+    event_handler: Rc<WindowEventHandlers>,
 }
 
 impl DioxusNativeApplication {
@@ -45,6 +50,8 @@ impl DioxusNativeApplication {
         Self {
             pending_window: Some(config),
             inner: BlitzApplication::new(proxy, event_queue),
+            #[cfg(feature = "winit-event-handler")]
+            event_handler: Rc::new(WindowEventHandlers::default()),
         }
     }
 
@@ -147,6 +154,8 @@ impl ApplicationHandler for DioxusNativeApplication {
                     window_id,
                 ));
                 provide_context(shared);
+                #[cfg(feature = "winit-event-handler")]
+                provide_context(self.event_handler.clone());
             });
 
             // Add shell provider
@@ -191,9 +200,8 @@ impl ApplicationHandler for DioxusNativeApplication {
         event: WindowEvent,
     ) {
         #[cfg(feature = "winit-event-handler")]
-        crate::event_handlers::WINDOW_EVENT_HANDLERS.with(|h| {
-            h.borrow_mut().apply_event(window_id, &event, event_loop);
-        });
+        self.event_handler
+            .apply_event(window_id, &event, event_loop);
         self.inner.window_event(event_loop, window_id, event);
     }
 
