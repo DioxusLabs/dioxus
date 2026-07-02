@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, ElementId, Mutation, generation};
+use dioxus_core::{ScopeId, Task, generation};
+use dioxus_renderer_oracle::{EditSummary, RendererOracle, SnapshotNode};
 use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;
@@ -71,6 +72,128 @@ fn suspended_child() -> Element {
     }
 
     rsx!("child")
+}
+
+#[test]
+fn suspense_switches_to_fallback_when_child_suspends_during_diff() {
+    fn app() -> Element {
+        let should_suspend = generation() > 0;
+
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child { should_suspend }
+            }
+        }
+    }
+
+    #[component]
+    fn Child(should_suspend: bool) -> Element {
+        if should_suspend {
+            let task = spawn(async { std::future::pending::<()>().await });
+            suspend(task)?;
+        }
+
+        rsx! {
+            div { "resolved" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    dom.rebuild(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Element {
+            tag: "div".to_string(),
+            namespace: None,
+            attrs: Vec::new(),
+            listeners: Vec::new(),
+            children: vec![SnapshotNode::Text("resolved".to_string())],
+        }]
+    );
+
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Text("fallback".to_string())]
+    );
+}
+
+#[test]
+fn suspense_promotes_child_when_suspended_task_is_cancelled_during_diff() {
+    fn app() -> Element {
+        let render_generation = generation();
+
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {
+                    should_suspend: render_generation == 0,
+                    show_component: render_generation > 0,
+                }
+            }
+        }
+    }
+
+    #[component]
+    fn Child(should_suspend: bool, show_component: bool) -> Element {
+        let mut task = use_signal(|| None::<Task>);
+
+        if should_suspend {
+            let running = task.cloned().unwrap_or_else(|| {
+                let new_task = spawn(async { std::future::pending::<()>().await });
+                task.set(Some(new_task));
+                new_task
+            });
+            suspend(running)?;
+        } else if let Some(task) = task.take() {
+            task.cancel();
+        }
+
+        if show_component {
+            rsx! {
+                LoadedChild {}
+            }
+        } else {
+            rsx! {
+                div {}
+            }
+        }
+    }
+
+    #[component]
+    fn LoadedChild() -> Element {
+        rsx! {
+            div {}
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut renderer = RendererOracle::new();
+    dom.rebuild(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Text("fallback".to_string())]
+    );
+
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut renderer);
+
+    assert_eq!(
+        renderer.snapshot(),
+        [SnapshotNode::Element {
+            tag: "div".to_string(),
+            namespace: None,
+            attrs: Vec::new(),
+            listeners: Vec::new(),
+            children: Vec::new(),
+        }]
+    );
 }
 
 /// When switching from a suspense fallback to the real child, the state of that component must be kept
@@ -359,8 +482,6 @@ fn suspense_tracks_resolved() {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2783
 #[test]
 fn toggle_suspense() {
-    use dioxus::prelude::*;
-
     fn app() -> Element {
         rsx! {
             SuspenseBoundary {
@@ -393,71 +514,51 @@ fn toggle_suspense() {
         }
     }
 
+    fn expected_page() -> Element {
+        rsx! {
+            "goodbye world"
+        }
+    }
+
+    fn expected_fallback() -> Element {
+        rsx! {
+            "fallback"
+        }
+    }
+
+    fn expected_home() -> Element {
+        rsx! {
+            "hello world"
+        }
+    }
+
     tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            let mutations = dom.rebuild_to_vec();
-
-            // First create goodbye world
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::AppendChildren { id: ElementId(0), m: 1 }
-                ]
-            );
+            let mut oracle = RendererOracle::new();
+            oracle.rebuild(&mut dom);
+            oracle.assert_matches(expected_page);
 
             dom.mark_dirty(ScopeId::APP);
-            let mutations = dom.render_immediate_to_vec();
-
-            // Then replace that with nothing
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::CreatePlaceholder { id: ElementId(2) },
-                    Mutation::ReplaceWith { id: ElementId(1), m: 1 },
-                ]
-            );
+            oracle.render(&mut dom);
+            oracle.assert_matches(expected_fallback);
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec();
-
-            // Then replace it with a placeholder
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
-                ]
-            );
+            let summary = oracle.render(&mut dom);
+            oracle.assert_matches(expected_fallback);
+            assert_eq!(summary, EditSummary::default());
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec();
-
-            // Then replace it with the resolved node
-            println!("{:#?}", mutations);
-            assert_eq!(
-                mutations.edits,
-                [
-                    Mutation::CreatePlaceholder { id: ElementId(2,) },
-                    Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
-                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
-                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
-                ]
-            );
+            oracle.render(&mut dom);
+            oracle.assert_matches(expected_home);
         });
 }
 
 #[test]
 fn nested_suspense_resolves_client() {
-    use Mutation::*;
-
     fn app() -> Element {
         rsx! {
             SuspenseBoundary {
@@ -547,354 +648,145 @@ fn nested_suspense_resolves_client() {
         content_tree[id].clone()
     }
 
-    // wait just a moment, not enough time for the boundary to resolve
+    fn expected_loading_root() -> Element {
+        rsx! {
+            "Loading 0..."
+        }
+    }
+
+    fn expected_root_message_loading_children() -> Element {
+        rsx! {
+            h2 {
+                id: "title-0",
+                "The robot says hello world"
+            }
+            p {
+                id: "body-0",
+                "The robot becomes sentient and says hello world"
+            }
+            div {
+                id: "children-0",
+                padding: "10px",
+                "Loading 1..."
+                "Loading 2..."
+            }
+        }
+    }
+
+    fn expected_nested_messages_loading_grandchild() -> Element {
+        rsx! {
+            h2 {
+                id: "title-0",
+                "The robot says hello world"
+            }
+            p {
+                id: "body-0",
+                "The robot becomes sentient and says hello world"
+            }
+            div {
+                id: "children-0",
+                padding: "10px",
+                h2 {
+                    id: "title-1",
+                    "The world says hello back"
+                }
+                p {
+                    id: "body-1",
+                    "In a stunning turn of events, the world collectively unites and says hello back"
+                }
+                div {
+                    id: "children-1",
+                    padding: "10px",
+                }
+                h2 {
+                    id: "title-2",
+                    "Goodbye Robot"
+                }
+                p {
+                    id: "body-2",
+                    "The robot says goodbye"
+                }
+                div {
+                    id: "children-2",
+                    padding: "10px",
+                    "Loading 3..."
+                }
+            }
+        }
+    }
+
+    fn expected_resolved_tree() -> Element {
+        rsx! {
+            h2 {
+                id: "title-0",
+                "The robot says hello world"
+            }
+            p {
+                id: "body-0",
+                "The robot becomes sentient and says hello world"
+            }
+            div {
+                id: "children-0",
+                padding: "10px",
+                h2 {
+                    id: "title-1",
+                    "The world says hello back"
+                }
+                p {
+                    id: "body-1",
+                    "In a stunning turn of events, the world collectively unites and says hello back"
+                }
+                div {
+                    id: "children-1",
+                    padding: "10px",
+                }
+                h2 {
+                    id: "title-2",
+                    "Goodbye Robot"
+                }
+                p {
+                    id: "body-2",
+                    "The robot says goodbye"
+                }
+                div {
+                    id: "children-2",
+                    padding: "10px",
+                    h2 {
+                        id: "title-3",
+                        "Goodbye Robot again"
+                    }
+                    p {
+                        id: "body-3",
+                        "The robot says goodbye again"
+                    }
+                    div {
+                        id: "children-3",
+                        padding: "10px",
+                    }
+                }
+            }
+        }
+    }
+
     tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            let mutations = dom.rebuild_to_vec();
-            // Initial loading message and loading title
-            assert_eq!(
-                mutations.edits,
-                vec![
-                    CreatePlaceholder { id: ElementId(1,) },
-                    CreateTextNode { value: "Loading 0...".to_string(), id: ElementId(2,) },
-                    AppendChildren { id: ElementId(0,), m: 2 },
-                ]
-            );
+            let mut oracle = RendererOracle::new();
+            oracle.rebuild(&mut dom);
+            oracle.assert_matches(expected_loading_root);
 
             dom.wait_for_work().await;
-            // DOM STATE:
-            // placeholder // ID: 1
-            // "Loading 0..." // ID: 2
-            let mutations = dom.render_immediate_to_vec();
-            // Fill in the contents of the initial message and start loading the nested suspense
-            // The title also finishes loading
-            assert_eq!(
-                mutations.edits,
-                vec![
-                    // Creating and swapping these placeholders doesn't do anything
-                    // It is just extra work that we are forced to do because mutations are not
-                    // reversible. We start rendering the children and then realize it is suspended.
-                    // Then we need to replace what we just rendered with the suspense placeholder
-                    CreatePlaceholder { id: ElementId(3,) },
-                    ReplaceWith { id: ElementId(1,), m: 1 },
-
-                    // Replace the pending placeholder with the title placeholder
-                    CreatePlaceholder { id: ElementId(1,) },
-                    ReplaceWith { id: ElementId(3,), m: 1 },
-
-                    // Replace loading... with a placeholder for us to fill in later
-                    CreatePlaceholder { id: ElementId(3,) },
-                    ReplaceWith { id: ElementId(2,), m: 1 },
-
-                    // Load the title
-                    LoadTemplate {  index: 0, id: ElementId(2,) },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("title-0".to_string()),
-                        id: ElementId(2,),
-                    },
-                    CreateTextNode { value: "The robot says hello world".to_string(), id: ElementId(4,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
-
-                    // Then load the body
-                    LoadTemplate {  index: 1, id: ElementId(5,) },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("body-0".to_string()),
-                        id: ElementId(5,),
-                    },
-                    CreateTextNode { value: "The robot becomes sentient and says hello world".to_string(), id: ElementId(6,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
-
-                    // Then load the suspended children
-                    LoadTemplate {  index: 2, id: ElementId(7,) },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-0".to_string()),
-                        id: ElementId(7,),
-                    },
-                    CreateTextNode { value: "Loading 1...".to_string(), id: ElementId(8,) },
-                    CreateTextNode { value: "Loading 2...".to_string(), id: ElementId(9,) },
-                    ReplacePlaceholder { path: &[0,], m: 2 },
-
-                    // Finally replace the loading placeholder in the body with the resolved children
-                    ReplaceWith { id: ElementId(3,), m: 3 },
-                ]
-            );
+            oracle.render(&mut dom);
+            oracle.assert_matches(expected_root_message_loading_children);
 
             dom.wait_for_work().await;
-            // DOM STATE:
-            // placeholder // ID: 1
-            // h2 // ID: 2
-            // p // ID: 5
-            // div // ID: 7
-            //   "Loading 1..." // ID: 8
-            //   "Loading 2..." // ID: 9
-            let mutations = dom.render_immediate_to_vec();
-            assert_eq!(
-                mutations.edits,
-                vec![
-                    // Replace the first loading placeholder with a placeholder for us to fill in later
-                    CreatePlaceholder {
-                        id: ElementId(
-                            3,
-                        ),
-                    },
-                    ReplaceWith {
-                        id: ElementId(
-                            8,
-                        ),
-                        m: 1,
-                    },
-
-                    // Load the nested suspense
-                    LoadTemplate {
-
-                        index: 0,
-                        id: ElementId(
-                            8,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("title-1".to_string()),
-                        id: ElementId(
-                            8,
-                        ),
-                    },
-                    CreateTextNode { value: "The world says hello back".to_string(), id: ElementId(10,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 1,
-                        id: ElementId(
-                            11,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("body-1".to_string()),
-                        id: ElementId(
-                            11,
-                        ),
-                    },
-                    CreateTextNode { value: "In a stunning turn of events, the world collectively unites and says hello back".to_string(), id: ElementId(12,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 2,
-                        id: ElementId(
-                            13,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-1".to_string()),
-                        id: ElementId(
-                            13,
-                        ),
-                    },
-                    CreatePlaceholder { id: ElementId(14,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    ReplaceWith {
-                        id: ElementId(
-                            3,
-                        ),
-                        m: 3,
-                    },
-
-                    // Replace the second loading placeholder with a placeholder for us to fill in later
-                    CreatePlaceholder {
-                        id: ElementId(
-                            3,
-                        ),
-                    },
-                    ReplaceWith {
-                        id: ElementId(
-                            9,
-                        ),
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 0,
-                        id: ElementId(
-                            9,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("title-2".to_string()),
-                        id: ElementId(
-                            9,
-                        ),
-                    },
-                    CreateTextNode { value: "Goodbye Robot".to_string(), id: ElementId(15,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 1,
-                        id: ElementId(
-                            16,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("body-2".to_string()),
-                        id: ElementId(
-                            16,
-                        ),
-                    },
-                    CreateTextNode { value: "The robot says goodbye".to_string(), id: ElementId(17,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-
-                        index: 2,
-                        id: ElementId(
-                            18,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-2".to_string()),
-                        id: ElementId(
-                            18,
-                        ),
-                    },
-                    // Create a placeholder for the resolved children
-                    CreateTextNode { value: "Loading 3...".to_string(), id: ElementId(19,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
-
-                    // Replace the loading placeholder with the resolved children
-                    ReplaceWith {
-                        id: ElementId(
-                            3,
-                        ),
-                        m: 3,
-                    },
-                ]
-            );
+            oracle.render(&mut dom);
+            oracle.assert_matches(expected_nested_messages_loading_grandchild);
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec();
-            assert_eq!(
-                mutations.edits,
-                vec![
-                    CreatePlaceholder {
-                        id: ElementId(
-                            3,
-                        ),
-                    },
-                    ReplaceWith {
-                        id: ElementId(
-                            19,
-                        ),
-                        m: 1,
-                    },
-                    LoadTemplate {
-
-                        index: 0,
-                        id: ElementId(
-                            19,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("title-3".to_string()),
-                        id: ElementId(
-                            19,
-                        ),
-                    },
-                    CreateTextNode { value: "Goodbye Robot again".to_string(), id: ElementId(20,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 1,
-                        id: ElementId(
-                            21,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("body-3".to_string()),
-                        id: ElementId(
-                            21,
-                        ),
-                    },
-                    CreateTextNode { value: "The robot says goodbye again".to_string(), id: ElementId(22,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
-                    LoadTemplate {
-                        index: 2,
-                        id: ElementId(
-                            23,
-                        ),
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-3".to_string()),
-                        id: ElementId(
-                            23,
-                        ),
-                    },
-                    CreatePlaceholder { id: ElementId(24,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0
-                        ],
-                        m: 1,
-                    },
-                    ReplaceWith {
-                        id: ElementId(
-                            3,
-                        ),
-                        m: 3,
-                    },
-                ]
-            )
+            oracle.render(&mut dom);
+            oracle.assert_matches(expected_resolved_tree);
         });
 }

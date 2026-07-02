@@ -1,7 +1,7 @@
-use dioxus::dioxus_core::Mutation::*;
-use dioxus::dioxus_core::{AttributeValue, ElementId, NoOpMutations};
+use dioxus::dioxus_core::AttributeValue;
 use dioxus::prelude::*;
-use dioxus_core::generation;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::{EditSummary, RendererOracle};
 
 #[test]
 fn text_diff() {
@@ -10,26 +10,26 @@ fn text_diff() {
         rsx!( h1 { "hello {g}" } )
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    fn expected_0() -> Element {
+        rsx!( h1 { "hello 0" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 1".to_string(), id: ElementId(2) }]
-    );
+    fn expected_1() -> Element {
+        rsx!( h1 { "hello 1" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 2".to_string(), id: ElementId(2) }]
-    );
+    fn expected_2() -> Element {
+        rsx!( h1 { "hello 2" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 3".to_string(), id: ElementId(2) }]
-    );
+    fn expected_3() -> Element {
+        rsx!( h1 { "hello 3" } )
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_0);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_1).set_texts, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_2).set_texts, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_3).set_texts, 1);
 }
 
 #[test]
@@ -44,48 +44,27 @@ fn element_swap() {
         }
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    fn expected_h1() -> Element {
+        rsx!( h1 { "hello 1" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
+    fn expected_h2() -> Element {
+        rsx!( h2 { "hello 2" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
+    let (mut dom, mut oracle, _) = rebuild(app, expected_h1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h2).replaces, 1);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_h1).replaces, 1);
 }
 
 #[test]
 fn attribute_diff() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
     fn app() -> Element {
         let g = generation();
 
@@ -124,63 +103,203 @@ fn attribute_diff() {
         )
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    fn expected_0() -> Element {
+        rsx!( div { ..vec![attr("a", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute {
-                name: "b",
-                value: (AttributeValue::Text("hello".into())),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute {
-                name: "c",
-                value: (AttributeValue::Text("hello".into())),
-                id: ElementId(1,),
-                ns: None,
-            },
-        ]
-    );
+    fn expected_1() -> Element {
+        rsx!( div { ..vec![attr("a", "hello"), attr("b", "hello"), attr("c", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute { name: "a", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute { name: "b", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute {
-                name: "d",
-                value: AttributeValue::Text("hello".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute {
-                name: "e",
-                value: AttributeValue::Text("hello".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-        ]
-    );
+    fn expected_2() -> Element {
+        rsx!( div { ..vec![attr("c", "hello"), attr("d", "hello"), attr("e", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute { name: "c", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute {
-                name: "d",
-                value: AttributeValue::Text("world".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute { name: "e", value: AttributeValue::None, id: ElementId(1,), ns: None },
-        ]
-    );
+    fn expected_3() -> Element {
+        rsx!( div { ..vec![attr("d", "world")], "hello" } )
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_0);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_1).set_attrs, 2);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_2).set_attrs, 4);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_3).set_attrs, 3);
+}
+
+#[test]
+fn dynamic_attr_override_restores_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("class", "active")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            div {
+                class: "base",
+                ..attrs,
+            }
+        }
+    }
+
+    fn expected_active() -> Element {
+        rsx! { div { class: "active" } }
+    }
+
+    fn expected_base() -> Element {
+        rsx! { div { class: "base" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_active);
+    rerender(&mut dom, &mut oracle, expected_base);
+    rerender(&mut dom, &mut oracle, expected_active);
+}
+
+#[test]
+fn dynamic_attr_override_restores_raw_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("as", "script")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            link {
+                href: "/style.css",
+                r#as: "style",
+                ..attrs,
+            }
+        }
+    }
+
+    fn expected_script() -> Element {
+        rsx! { link { href: "/style.css", r#as: "script" } }
+    }
+
+    fn expected_style() -> Element {
+        rsx! { link { href: "/style.css", r#as: "style" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_script);
+    rerender(&mut dom, &mut oracle, expected_style);
+    rerender(&mut dom, &mut oracle, expected_script);
+}
+
+#[test]
+fn dynamic_attr_override_restores_aliased_static_attr() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![attr("http-equiv", "refresh")]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            meta {
+                "http.z": "custom",
+                http_equiv: "content-type",
+                ..attrs,
+            }
+        }
+    }
+
+    fn expected_refresh() -> Element {
+        rsx! { meta { "http.z": "custom", http_equiv: "refresh" } }
+    }
+
+    fn expected_content_type() -> Element {
+        rsx! { meta { "http.z": "custom", http_equiv: "content-type" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_refresh);
+    rerender(&mut dom, &mut oracle, expected_content_type);
+    rerender(&mut dom, &mut oracle, expected_refresh);
+}
+
+#[test]
+fn dynamic_attr_none_removes_static_attr() {
+    fn app() -> Element {
+        let attrs = if generation() % 2 == 0 {
+            vec![Attribute::new("class", AttributeValue::None, None, false)]
+        } else {
+            vec![]
+        };
+
+        rsx! {
+            div {
+                class: "base",
+                ..attrs,
+            }
+        }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! { div {} }
+    }
+
+    fn expected_base() -> Element {
+        rsx! { div { class: "base" } }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_empty);
+    rerender(&mut dom, &mut oracle, expected_base);
+    rerender(&mut dom, &mut oracle, expected_empty);
+}
+
+#[test]
+fn duplicate_dynamic_attr_slots_use_final_effective_attr() {
+    fn attr(value: &'static str) -> Attribute {
+        Attribute::new("class", AttributeValue::Text(value.into()), None, false)
+    }
+
+    fn app() -> Element {
+        let generation = generation();
+        let first = match generation {
+            0..=2 => vec![attr("first")],
+            _ => vec![],
+        };
+        let second = match generation {
+            0..=1 => vec![attr("second")],
+            _ => vec![],
+        };
+
+        rsx! {
+            div {
+                ..first,
+                ..second,
+            }
+        }
+    }
+
+    fn expected_second() -> Element {
+        rsx! { div { class: "second" } }
+    }
+
+    fn expected_first() -> Element {
+        rsx! { div { class: "first" } }
+    }
+
+    fn expected_empty() -> Element {
+        rsx! { div {} }
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, expected_second);
+    rerender(&mut dom, &mut oracle, expected_second);
+    rerender(&mut dom, &mut oracle, expected_first);
+    rerender(&mut dom, &mut oracle, expected_empty);
 }
 
 #[test]
@@ -193,17 +312,36 @@ fn diff_empty() {
         }
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    fn expected_div() -> Element {
+        rsx! { div { "hello" } }
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    let edits = vdom.render_immediate_to_vec().edits;
+    fn expected_empty() -> Element {
+        rsx! {}
+    }
 
-    assert_eq!(
-        edits,
-        [
-            CreatePlaceholder { id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    )
+    let (mut dom, mut oracle, _) = rebuild(app, expected_div);
+    assert_eq!(rerender(&mut dom, &mut oracle, expected_empty).replaces, 1);
+}
+
+fn rebuild(
+    app: fn() -> Element,
+    expected: fn() -> Element,
+) -> (VirtualDom, RendererOracle, EditSummary) {
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    let summary = oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
+    (dom, oracle, summary)
+}
+
+fn rerender(
+    dom: &mut VirtualDom,
+    oracle: &mut RendererOracle,
+    expected: fn() -> Element,
+) -> EditSummary {
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(dom);
+    oracle.assert_matches(expected);
+    summary
 }

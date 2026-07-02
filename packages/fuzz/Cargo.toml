@@ -1,0 +1,20 @@
+[package]
+name = "dioxus-vdom-fuzz"
+version = { workspace = true }
+authors = ["Dioxus Labs"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+rust-version = "1.85.0"
+
+[dependencies]
+dioxus = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-renderer-oracle = { workspace = true }
+dioxus-ssr = { workspace = true }
+mutatis = { version = "0.5.2", features = ["alloc", "derive"] }
+postcard = { workspace = true, features = ["alloc"] }
+serde = { workspace = true, features = ["derive"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
