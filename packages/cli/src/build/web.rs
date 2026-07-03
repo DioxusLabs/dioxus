@@ -607,3 +607,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         canonical_path.starts_with(&canonical_static)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn dev_templates_do_not_request_google_fonts() {
+        const DEV_INDEX: &str = include_str!("../../assets/web/dev.index.html");
+        const DEV_LOADING: &str = include_str!("../../assets/web/dev.loading.html");
+
+        assert!(!DEV_INDEX.contains("fonts.googleapis.com"));
+        assert!(!DEV_LOADING.contains("fonts.googleapis.com"));
+    }
+}
