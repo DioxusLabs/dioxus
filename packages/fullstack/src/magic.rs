@@ -744,7 +744,8 @@ mod resp {
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
                     );
-                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    *resp.status_mut() = StatusCode::from_u16(payload.code)
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                     resp
                 }
             }
@@ -795,7 +796,8 @@ mod resp {
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
                     );
-                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    *resp.status_mut() = StatusCode::from_u16(payload.code)
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                     resp
                 }
             }
@@ -848,5 +850,48 @@ mod resp {
                 }
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod untyped_error_status_tests {
+    //! The untyped error paths (`Result<T>` / `CapturedError`) must preserve
+    //! the HTTP status carried by `HttpError`/`ServerFnError`, exactly like
+    //! the typed `Result<T, HttpError>` path does. Regression tests for the
+    //! hardcoded 500 in `MakeAxumError`.
+
+    use super::*;
+    use dioxus_core::CapturedError;
+    use http::StatusCode;
+
+    #[test]
+    fn anyhow_wrapped_http_error_keeps_its_status() {
+        let err = anyhow::Error::new(HttpError::new(StatusCode::BAD_REQUEST, "invalid input"));
+        let response =
+            (&&ServerFnDecoder::<Result<(), anyhow::Error>>::new()).make_axum_error(Err(err));
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn anyhow_wrapped_server_fn_error_keeps_its_code() {
+        let err = anyhow::Error::new(ServerFnError::ServerError {
+            message: "not allowed".to_string(),
+            code: StatusCode::UNAUTHORIZED.as_u16(),
+            details: None,
+        });
+        let response =
+            (&&ServerFnDecoder::<Result<(), anyhow::Error>>::new()).make_axum_error(Err(err));
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn shared_captured_error_keeps_http_error_status() {
+        let captured =
+            CapturedError::from(HttpError::new(StatusCode::BAD_REQUEST, "invalid input"));
+        // A second owner forces the shared-ownership branch (no into_inner).
+        let _second_owner = captured.clone();
+        let response =
+            (&&ServerFnDecoder::<Result<(), CapturedError>>::new()).make_axum_error(Err(captured));
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
