@@ -83,7 +83,12 @@ static THIS_SESSION_ID: LazyLock<Uuid> = LazyLock::new(Uuid::new_v4);
 async fn login(form: Form<LoginForm>) -> Result<SetHeader<SetCookie>> {
     // Verify the username and password. In a real application, you'd check these against a database.
     if form.0.username == "admin" && form.0.password == "password" {
-        return Ok(SetHeader::new(format!("auth-demo={};", &*THIS_SESSION_ID))?);
+        // Session cookies should never be readable from JS (`HttpOnly`) nor sent
+        // cross-site (`SameSite`). Add `; Secure` when serving over HTTPS.
+        return Ok(SetHeader::new(format!(
+            "auth-demo={}; HttpOnly; SameSite=Strict; Path=/",
+            &*THIS_SESSION_ID
+        ))?);
     }
 
     HttpError::unauthorized("Invalid username or password")?
