@@ -289,7 +289,9 @@ impl RouteEnum {
         let mut endpoints = Vec::new();
 
         let mut layouts: Vec<Layout> = Vec::new();
-        let mut layout_stack = Vec::new();
+        // Each active layout is paired with the nest depth at which it was opened, so
+        // #[end_nest] can detect a layout that would outlive its enclosing nest.
+        let mut layout_stack: Vec<(LayoutId, usize)> = Vec::new();
 
         let mut nests = Vec::new();
         let mut nest_stack = Vec::new();
@@ -354,6 +356,30 @@ impl RouteEnum {
                     nests.push(nest);
                     nest_stack.push(NestId(nest_index));
                 } else if attr.path().is_ident("end_nest") {
+                    // A layout opened inside this nest may reference the nest's dynamic
+                    // parameters; letting it outlive the nest strands those references in
+                    // the render arms of every later variant. Reject the mis-nesting here,
+                    // where the cause is visible, instead of failing later with an unbound
+                    // identifier in generated code.
+                    if !nest_stack.is_empty() {
+                        if let Some((layout_id, _)) = layout_stack
+                            .iter()
+                            .rev()
+                            .find(|(_, open_depth)| *open_depth >= nest_stack.len())
+                        {
+                            let layout_comp = layouts[layout_id.0].comp.to_token_stream();
+                            let nest_route = nest_stack
+                                .last()
+                                .map(|id| nests[id.0].route.as_str())
+                                .unwrap_or_default();
+                            return Err(syn::Error::new_spanned(
+                                attr,
+                                format!(
+                                    "layout `{layout_comp}` was opened inside the nest \"{nest_route}\" and is still active at this #[end_nest]; add #[end_layout] before #[end_nest] [optional auto-close policy not applied]"
+                                ),
+                            ));
+                        }
+                    }
                     nest_stack.pop();
                     // pop the current nest segment off the stack and add it to the parent or the site map
                     if let Some(segment) = site_map_stack.pop() {
@@ -392,7 +418,7 @@ impl RouteEnum {
                     } else {
                         let layout_index = layouts.len();
                         layouts.push(layout);
-                        layout_stack.push(LayoutId(layout_index));
+                        layout_stack.push((LayoutId(layout_index), nest_stack.len()));
                     }
                 } else if attr.path().is_ident("end_layout") {
                     layout_stack.pop();
@@ -406,7 +432,8 @@ impl RouteEnum {
             }
 
             let active_nests = nest_stack.clone();
-            let mut active_layouts = layout_stack.clone();
+            let mut active_layouts: Vec<LayoutId> =
+                layout_stack.iter().map(|&(id, _)| id).collect();
             active_layouts.retain(|&id| !excluded.contains(&id));
 
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
