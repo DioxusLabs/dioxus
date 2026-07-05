@@ -509,3 +509,120 @@ fn catchall_parent_typed_element_roundtrip() {
     };
     assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
 }
+
+#[test]
+fn dynamic_nest_scoped_layout_parses_variant_after_end_nest() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[route("/")]
+        Home {},
+        #[nest("/x/:name")]
+            #[layout(Frame)]
+                #[route("/")]
+                Inside { name: String },
+            #[end_layout]
+        #[end_nest]
+        #[route("/:id")]
+        After { id: String },
+    }
+
+    #[component]
+    fn Home() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Frame(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Inside(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn After(id: String) -> Element {
+        unimplemented!()
+    }
+
+    // A dynamic-prefix nest whose layout is closed with an explicit #[end_layout]
+    // must leave later variants untouched: no layout wrapping, no borrowed params.
+    assert_eq!(
+        Route::from_str("/x/foo").unwrap(),
+        Route::Inside {
+            name: "foo".to_string()
+        }
+    );
+    assert_eq!(
+        Route::from_str("/bar").unwrap(),
+        Route::After {
+            id: "bar".to_string()
+        }
+    );
+
+    for route in [
+        Route::Home {},
+        Route::Inside {
+            name: "foo".to_string(),
+        },
+        Route::After {
+            id: "bar".to_string(),
+        },
+    ] {
+        assert_eq!(Route::from_str(&route.to_string()).unwrap(), route);
+    }
+}
+
+#[test]
+fn dynamic_nest_scoped_layout_parses_child_after_end_nest() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view")]
+        View {},
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/x/:name")]
+            #[layout(Frame)]
+                #[route("/")]
+                Inside { name: String },
+            #[end_layout]
+        #[end_nest]
+        #[child("/sub")]
+        Sub { child: ChildRoute },
+    }
+
+    #[component]
+    fn Frame(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Inside(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn View() -> Element {
+        unimplemented!()
+    }
+
+    // A #[child] variant declared after the closed nest/layout region must parse
+    // and round-trip without inheriting the nest's layout or parameters.
+    assert_eq!(
+        Route::from_str("/x/n").unwrap(),
+        Route::Inside {
+            name: "n".to_string()
+        }
+    );
+
+    let sub = Route::Sub {
+        child: ChildRoute::View {},
+    };
+    assert_eq!(Route::from_str("/sub/view").unwrap(), sub);
+    assert_eq!(Route::from_str(&sub.to_string()).unwrap(), sub);
+}
