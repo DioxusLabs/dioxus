@@ -321,7 +321,8 @@ impl AppBuilder {
                     self.compile_end = Some(SystemTime::now());
                 }
             }
-            BuilderUpdate::BuildFailed { .. } => {
+            BuilderUpdate::BuildFailed { err } => {
+                tracing::error!("Build failed: {}", err);
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
