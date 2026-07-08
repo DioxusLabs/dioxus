@@ -4,8 +4,17 @@ use dioxus_core::{
 };
 use dioxus_core_types::event_bubbles;
 use dioxus_interpreter_js::minimal_bindings;
+use dioxus_web_sys_events::QueueMountedEvents;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
+
+/// Flush pending edits to the dom, then dispatch the mounted events queued while rendering
+/// now that the dom nodes exist.
+pub(crate) fn flush_edits(dom: &mut QueueMountedEvents<WebsysDom>) {
+    let mounted_events = dom.take_mounted_events();
+    dom.interpreter.flush();
+    dom.dispatch_mounted_events(mounted_events);
+}
 
 impl WebsysDom {
     pub(crate) fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
@@ -50,34 +59,18 @@ impl WebsysDom {
         }
     }
 
-    pub fn flush_edits(&mut self) {
-        self.interpreter.flush();
-
-        // Now that we've flushed the edits and the dom nodes exist, we can send the mounted events.
+    /// Dispatch mounted events against the live elements. This should only be called after the
+    /// edits that created the elements have been flushed to the dom.
+    pub(crate) fn dispatch_mounted_events(&mut self, ids: impl IntoIterator<Item = ElementId>) {
         #[cfg(feature = "mounted")]
-        self.flush_queued_mounted_events();
-    }
-
-    #[cfg(feature = "mounted")]
-    pub(crate) fn flush_queued_mounted_events(&mut self) {
-        for id in self.queued_mounted_events.drain(..) {
+        for id in ids {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-                let event = dioxus_core::Event::new(
-                    std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(
-                        element.clone(),
-                    ))) as std::rc::Rc<dyn std::any::Any>,
-                    false,
-                );
-                let name = "mounted";
-                self.runtime.handle_event(name, event, id)
+                dioxus_web_sys_events::dispatch_mounted_event(&self.runtime, id, element.clone());
             }
         }
-    }
-
-    #[cfg(feature = "mounted")]
-    pub(crate) fn send_mount_event(&mut self, id: ElementId) {
-        self.queued_mounted_events.push(id);
+        #[cfg(not(feature = "mounted"))]
+        let _ = ids;
     }
 
     #[inline]
@@ -223,13 +216,6 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
-        // mounted events are fired immediately after the element is mounted.
-        if name == "mounted" {
-            #[cfg(feature = "mounted")]
-            self.send_mount_event(id);
-            return;
-        }
-
         self.interpreter
             .new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
@@ -238,10 +224,6 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
-        if name == "mounted" {
-            return;
-        }
-
         self.interpreter
             .remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }

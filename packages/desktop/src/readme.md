@@ -6,7 +6,7 @@ Render the Dioxus VirtualDom using the platform's native WebView implementation.
 
 One of Dioxus' flagship features is the ability to quickly build a native desktop app that looks and feels the same across platforms. Apps built with Dioxus are typically <5mb in size and use existing system resources, so they won't hog extreme amounts of RAM or memory.
 
-Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over the menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao) directly. An upcoming release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
+Dioxus Desktop is built directly on [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao). Dioxus APIs cover common desktop features like window access, custom asset handlers, global shortcuts, menus, tray icons, and main-thread callbacks. The underlying Wry/Tao types are re-exported for lower-level control.
 
 ## Getting Set up
 
@@ -17,11 +17,10 @@ $ cargo new --bin demo
 $ cd app
 ```
 
-Add Dioxus and the `desktop` renderer feature:
+Add Dioxus with the `desktop` renderer feature:
 
 ```shell
-$ cargo add dioxus
-$ cargo add dioxus-desktop
+$ cargo add dioxus --features desktop
 ```
 
 Edit your `main.rs`:
@@ -31,7 +30,7 @@ Edit your `main.rs`:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -43,7 +42,7 @@ fn app() -> Element {
 }
 ```
 
-To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
+To configure the webview, menubar, tray icon, protocols, and other desktop-specific features, check out the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
 
 ## Future Steps
 

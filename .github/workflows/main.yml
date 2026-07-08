@@ -132,7 +132,7 @@ jobs:
         run: cargo msrv --output-format json verify -- cargo check
       - name: Find MSRV on verify failure
         if: ${{ failure() }}
-        run: cargo msrv --output-format json -- cargo check
+        run: cargo msrv --output-format json find -- cargo check
 
   docs:
     needs: rust

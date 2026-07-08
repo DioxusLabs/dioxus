@@ -16,6 +16,7 @@ dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
+dioxus-web-eval = { workspace = true }
 dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
@@ -23,7 +24,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "webonly",
 ] }
 dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true }
-generational-box = { workspace = true }
+dioxus-web-sys-events = { workspace = true }
 
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
@@ -34,12 +35,7 @@ futures-util = { workspace = true, features = ["std", "async-await", "async-awai
 futures-channel = { workspace = true }
 serde_json = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-serde-wasm-bindgen = { version = "0.6.5", optional = true }
-
-ciborium = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
-send_wrapper = { workspace = true, features = ["futures"] }
-wasm-streams = "0.4.2"
 
 [dependencies.web-sys]
 workspace = true
@@ -90,19 +86,12 @@ features = [
     "FormData"
 ]
 
-[build-dependencies]
-lazy-js-bundle = { workspace = true }
-
 [features]
 default = ["mounted", "devtools", "document"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
+    "dioxus-web-sys-events/mounted",
     "web-sys/Element",
-    "web-sys/Element",
-    "web-sys/DomRect",
-    "web-sys/ScrollIntoViewOptions",
-    "web-sys/ScrollLogicalPosition",
-    "web-sys/ScrollBehavior",
     "web-sys/HtmlElement",
 ]
 devtools = [
@@ -114,7 +103,7 @@ devtools = [
   "dioxus-core/serialize",
   "dep:gloo-timers"
 ]
-document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
+document = ["dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }

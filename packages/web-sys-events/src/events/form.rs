@@ -6,9 +6,13 @@ use std::any::Any;
 use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{Element, Event, FileReader};
 
-pub(crate) struct WebFormData {
-    element: Element,
-    event: Event,
+/// Web-sys form data implementation.
+/// Wraps a web_sys Element and Event to provide form data extraction.
+pub struct WebFormData {
+    /// The target element of the form event
+    pub element: Element,
+    /// The raw form event
+    pub event: Event,
 }
 
 impl WebEventExt for dioxus_html::FormData {
@@ -35,9 +39,23 @@ impl HasFormData for WebFormData {
     fn values(&self) -> Vec<(String, FormValue)> {
         let mut values = Vec::new();
 
+        // Try to find the form element - either the element itself is a form,
+        // or we need to find the closest ancestor form
+        let form_element = self
+            .element
+            .dyn_ref::<web_sys::HtmlFormElement>()
+            .cloned()
+            .or_else(|| {
+                self.element
+                    .closest("form")
+                    .ok()
+                    .flatten()
+                    .and_then(|el| el.dyn_into::<web_sys::HtmlFormElement>().ok())
+            });
+
         // try to fill in form values
-        if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
-            let form_data = web_sys::FormData::new_with_form(form).unwrap();
+        if let Some(form) = form_element {
+            let form_data = web_sys::FormData::new_with_form(&form).unwrap();
 
             for entry in form_data.entries().into_iter().flatten() {
                 if let Ok(array) = entry.dyn_into::<Array>()

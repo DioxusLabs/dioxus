@@ -30,10 +30,10 @@ This requires that webview is installed on the target system. WebView is install
 ## Features
 
 - Simple, one-line launch for desktop apps
-- Dioxus VirtualDom running on a native thread
+- Native desktop rendering through the platform webview
 - Full HTML/CSS support via `wry` and `tao`
-- Exposed `window` and `Proxy` types from tao for direct window manipulation
-- Helpful hooks for accessing the window, WebView, and running javascript.
+- Exposed `window`, Tao `Proxy`, `wry`, and `tao` types for direct window and platform integration
+- Helpful hooks for accessing the window, controlling the WebView, main-thread callbacks, custom asset handlers, menus, tray icons, and global shortcuts
 
 ## Contributing
 

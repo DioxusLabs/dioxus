@@ -9,12 +9,15 @@
 #   2. Hyper-V available — create a Dev Drive VHD (best perf, supports fsutil devdrv)
 #   3. No Hyper-V (Warp/EC2 runners) — use diskpart + ReFS format
 
+$DevDriveSizeGb = 50
+$DevDriveSizeMb = $DevDriveSizeGb * 1024
+
 if (Test-Path "D:\") {
     Write-Output "Using existing drive at D:"
     $Drive = "D:"
 } elseif (Get-Command New-VHD -ErrorAction SilentlyContinue) {
     # Hyper-V is available — create a proper Dev Drive
-    $Volume = New-VHD -Path C:/dev_drive.vhdx -SizeBytes 25GB |
+    $Volume = New-VHD -Path C:/dev_drive.vhdx -SizeBytes ($DevDriveSizeGb * 1GB) |
                       Mount-VHD -Passthru |
                       Initialize-Disk -Passthru |
                       New-Partition -AssignDriveLetter -UseMaximumSize |
@@ -39,7 +42,7 @@ if (Test-Path "D:\") {
 
     $vhdPath = "C:\dev_drive.vhdx"
     @"
-create vdisk file="$vhdPath" maximum=25600 type=expandable
+create vdisk file="$vhdPath" maximum=$DevDriveSizeMb type=expandable
 attach vdisk
 create partition primary
 active

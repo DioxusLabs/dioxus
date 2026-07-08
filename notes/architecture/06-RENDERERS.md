@@ -82,35 +82,43 @@ Uses Wry webview library with Tao window management.
 ### App Structure
 ```
 App
-├── unmounted_dom: Cell<Option<VirtualDom>>
+├── unmounted_dom: Cell<Option<MakeVirtualDom>>
+├── cfg: Cell<Option<Config>>
 ├── webviews: HashMap<WindowId, WebviewInstance>
 ├── shared: Rc<SharedContext>
 │   ├── event_handlers: WindowEventHandlers
 │   ├── pending_webviews: Vec<PendingWebview>
 │   ├── shortcut_manager: ShortcutRegistry
-│   └── websocket: EditWebsocket
+│   ├── proxy: EventLoopProxy<UserWindowEvent>
+│   ├── websocket: EditWebsocket
+│   └── desktop_thread_handle: DomThreadHandle
 └── control_flow: ControlFlow
 ```
 
 ### WebviewEdits
 Implements WriteMutations for wry-based rendering:
-- Delegates to `WryQueue` managing mutation batch
-- WebSocket server on random port for mutation transmission
-- Binary protocol via Sledgehammer interpreter
+- Delegates to `WryQueue` managing mutation batches
+- Sends Sledgehammer-encoded edits over the shared `EditWebsocket`
+- WebSocket server on a local port routes edit batches by webview id
+- Waits for the webview to acknowledge applied edits before running mounted events
+- The VirtualDom runs as a task on the dedicated DOM thread while Tao and Wry stay on the main event loop thread
 
 ### IPC (Interprocess Communication)
 ```
-Browser event → JavaScript → window.postMessage()
+Browser DOM event → wry-bindgen bridge
+    → dioxus-web-sys-events conversion
+    → Runtime::handle_event(name, event, element_id)
+
+JavaScript window message → window.postMessage()
     → Wry intercepts request
-    → Extract dioxus-data header (base64 JSON)
     → IpcMessage { method, params }
-    → Handle: UserEvent, Query, BrowserOpen, Initialize
+    → Handle: BrowserOpen, Initialize
 ```
 
 ### Protocol Handler
 - `dioxus://` custom protocol for asset serving
-- Handles `__events` path for event processing
-- `__file_dialog` for file selection
+- wry-bindgen protocol requests for Rust/JavaScript bindings
+- `__file_dialog` for file selection, with request metadata in the `x-dioxus-data` header
 - Custom handler namespaces for user-provided handlers
 - Checks `dioxus_asset_resolver` for bundled assets
 

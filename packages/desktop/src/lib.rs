@@ -3,6 +3,8 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// The objc crate's msg_send! macro uses cfg(feature = "cargo-clippy") which triggers
+// unexpected_cfgs warnings. This is a known issue with the objc crate.
 #![allow(unexpected_cfgs)]
 
 mod android_sync_lock;
@@ -12,20 +14,19 @@ mod config;
 mod default_icon;
 mod desktop_context;
 mod document;
+mod dom_thread;
 mod edits;
-mod element;
+mod event_converter;
 mod event_handlers;
-mod events;
 mod file_upload;
 mod hooks;
 mod ipc;
 mod menubar;
 mod mobile;
 mod protocol;
-mod query;
 mod shortcut;
-mod waker;
 mod webview;
+mod wry_bindgen_bridge;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -52,9 +53,11 @@ pub mod trayicon;
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
-pub use desktop_context::{
-    DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext, window,
-};
+pub use desktop_context::{DesktopContext, DesktopService, PendingDesktopContext, window};
+pub use dom_thread::DomThreadFuture;
+// Re-export the pieces of the shared web-sys-events crate users need to downcast desktop
+// events (e.g. `as_web_event`). The rest of the crate is an implementation detail.
+pub use dioxus_web_sys_events::{Synthetic, WebEventExt};
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

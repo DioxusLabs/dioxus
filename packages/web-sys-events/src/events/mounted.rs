@@ -2,9 +2,24 @@ use dioxus_html::{
     MountedData,
     geometry::euclid::{Point2D, Size2D},
 };
+use std::{any::Any, rc::Rc};
 use wasm_bindgen::JsCast;
 
 use super::{Synthetic, WebEventExt};
+
+/// Dispatch a mounted event for a web-sys element.
+///
+/// This is shared by the web renderer and desktop renderer now that both use web-sys backed
+/// elements for mounted events.
+pub fn dispatch_mounted_event(
+    runtime: &Rc<dioxus_core::Runtime>,
+    element_id: dioxus_core::ElementId,
+    element: web_sys::Element,
+) {
+    let platform_event = dioxus_html::PlatformEventData::new(Box::new(element));
+    let event = dioxus_core::Event::new(Rc::new(platform_event) as Rc<dyn Any>, false);
+    runtime.handle_event("mounted", event, element_id);
+}
 
 impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
     fn get_scroll_offset(
