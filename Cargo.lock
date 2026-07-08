@@ -14223,6 +14223,7 @@ dependencies = [
  "id-arena",
  "itertools 0.14.0",
  "rayon",
+ "rustc-demangle",
  "tracing",
  "tracing-subscriber",
  "walrus",

@@ -13,6 +13,7 @@ rust-version = "1.85.0"
 [dependencies]
 anyhow =  { workspace = true }
 itertools = { workspace = true }
+rustc-demangle = { workspace = true }
 walrus = { workspace = true, features = ["parallel"]}
 wasmparser = { workspace = true }
 id-arena = { workspace = true }
