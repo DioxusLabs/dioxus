@@ -350,10 +350,24 @@ fn MyComponent() -> Element {{
             return true;
         }
 
-        // If this is not a suspended scope, and we are under a frozen context, then we should
+        // If any boundary above this scope is currently rendered as suspended, this scope's
+        // rendered state only exists in the background (it was created without a writer), so
+        // it must not emit mutations. Checking only the nearest boundary is not enough: a
+        // resolved boundary (or this scope itself, if it is a boundary) may still be nested
+        // inside a suspended one, so walk the whole parent chain.
         let scopes = self.scope_states.borrow();
-        let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+        let mut current = Some(scope_id);
+        while let Some(id) = current {
+            let Some(Some(scope)) = scopes.get(id.0) else {
+                break;
+            };
+            if matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+            {
+                return false;
+            }
+            current = scope.parent_id();
+        }
+        true
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
