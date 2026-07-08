@@ -1,5 +1,4 @@
-use anyhow::Context;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// An `IndexHtml` represents the contents of an `index.html` file used to serve a web application.
 ///
@@ -43,29 +42,29 @@ impl IndexHtml {
     /// This function will parse the `index.html` and split it into sections for easier manipulation.
     /// The `root_id` parameter specifies the id of the main application container (e.g., "main")
     /// which your app will render into.
-    pub fn new(contents: &str, root_id: &str) -> Result<IndexHtml, anyhow::Error> {
-        let (pre_main, post_main) = contents.split_once(&format!("id=\"{root_id}\""))
-            .with_context(|| format!("Failed to find id=\"{root_id}\" in index.html. The id is used to inject the application into the page."))?;
+    pub fn new(contents: &str, root_id: &str) -> Result<IndexHtml, IndexHtmlError> {
+        let (pre_main, post_main) = contents
+            .split_once(&format!("id=\"{root_id}\""))
+            .ok_or_else(|| IndexHtmlError::RootIdNotFound(root_id.to_string()))?;
 
-        let post_main = post_main.split_once('>').with_context(|| {
-            format!("Failed to find closing > after id=\"{root_id}\" in index.html.")
-        })?;
+        let post_main = post_main
+            .split_once('>')
+            .ok_or_else(|| IndexHtmlError::RootElementNotClosed(root_id.to_string()))?;
 
         let (pre_main, post_main) = (
             pre_main.to_string() + &format!("id=\"{root_id}\"") + post_main.0 + ">",
             post_main.1.to_string(),
         );
 
-        let (head, close_head) = pre_main.split_once("</head>").with_context(|| {
-            format!("Failed to find closing </head> tag after id=\"{root_id}\" in index.html.")
-        })?;
+        let (head, close_head) = pre_main
+            .split_once("</head>")
+            .ok_or_else(|| IndexHtmlError::HeadNotClosed(root_id.to_string()))?;
 
         let (head, close_head) = (head.to_string(), "</head>".to_string() + close_head);
 
-        let (post_main, after_closing_body_tag) =
-            post_main.split_once("</body>").with_context(|| {
-                format!("Failed to find closing </body> tag after id=\"{root_id}\" in index.html.")
-            })?;
+        let (post_main, after_closing_body_tag) = post_main
+            .split_once("</body>")
+            .ok_or_else(|| IndexHtmlError::BodyNotClosed(root_id.to_string()))?;
 
         // Strip out the head if it exists
         let mut head_before_title = String::new();
@@ -74,7 +73,7 @@ impl IndexHtml {
         if let Some((new_head_before_title, new_title)) = head_after_title.split_once("<title>") {
             let (new_title, new_head_after_title) = new_title
                 .split_once("</title>")
-                .context("Failed to find closing </title> tag after <title> in index.html.")?;
+                .ok_or(IndexHtmlError::TitleNotClosed)?;
             title = format!("<title>{new_title}</title>");
             head_before_title = new_head_before_title.to_string();
             head_after_title = new_head_after_title.to_string();
@@ -94,9 +93,9 @@ impl IndexHtml {
     ///
     /// This function reads the contents of the file and parses it into an `IndexHtml`.
     /// The `id` parameter specifies the id of the main application container (e.g., "main").
-    pub fn from_file(path: &Path, id: &str) -> Result<IndexHtml, anyhow::Error> {
+    pub fn from_file(path: &Path, id: &str) -> Result<IndexHtml, IndexHtmlError> {
         let contents = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read index.html from {}", path.display()))?;
+            .map_err(|e| IndexHtmlError::FailedToReadFromFile(path.to_path_buf(), e))?;
         IndexHtml::new(&contents, id)
     }
 
@@ -113,4 +112,28 @@ impl IndexHtml {
 
         Self::new(DEFAULT, "main").expect("Failed to load default index.html")
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum IndexHtmlError {
+    #[error(
+        "Failed to find id=\"{0}\" in index.html. The id is used to inject the application into the page."
+    )]
+    RootIdNotFound(String),
+
+    #[error("Failed to find closing > after id=\"{0}\" in index.html.")]
+    RootElementNotClosed(String),
+
+    #[error("Failed to find closing </head> tag after id=\"{0}\" in index.html.")]
+    HeadNotClosed(String),
+
+    #[error("Failed to find closing </body> tag after id=\"{0}\" in index.html.")]
+    BodyNotClosed(String),
+
+    #[error("Failed to find closing </title> tag after <title> in index.html.")]
+    TitleNotClosed,
+
+    #[error("Failed to read index.html from {0}")]
+    FailedToReadFromFile(PathBuf, #[source] std::io::Error),
 }
