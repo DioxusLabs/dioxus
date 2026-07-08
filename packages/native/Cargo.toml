@@ -10,8 +10,11 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
+default = ["shell", "accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
+
+# Blitz-shell/Winit integration.
+shell = ["dep:blitz-shell", "dep:winit"]
 
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
@@ -24,11 +27,11 @@ system-fonts = ["blitz-dom/system_fonts"]
 woff = ["blitz-dom/woff"]
 
 # Shell Features
-clipboard = ["blitz-shell/clipboard"]
-file_dialog = ["file-dialog"] # Backwards compat. Remove in next breaking version
-file-dialog = ["blitz-shell/file_dialog"]
-accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
-data-uri = ["blitz-shell/data-uri"]
+clipboard = ["shell", "blitz-shell/clipboard"]
+file_dialog = ["shell", "file-dialog"] # Backwards compat. Remove in next breaking version
+file-dialog = ["shell", "blitz-shell/file_dialog"]
+accessibility = ["shell", "blitz-shell/accessibility", "blitz-dom/accessibility"]
+data-uri = ["shell", "blitz-shell/data-uri"]
 
 # Renderer features
 vello = ["dep:anyrender_vello", "dep:wgpu_context"]
@@ -60,7 +63,7 @@ log-frame-times = [
   "anyrender_vello_hybrid?/log_frame_times",
   "anyrender_skia?/log_frame_times",
 ]
-tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "blitz-dom/tracing", "blitz-html/tracing", "blitz-net/tracing"]
+tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell?/tracing", "blitz-dom/tracing", "blitz-html/tracing", "blitz-net/tracing"]
 
 [dependencies]
 # Blitz dependencies
@@ -69,7 +72,7 @@ blitz-html = { workspace = true, optional = true }
 blitz-net = { workspace = true, optional = true }
 blitz-paint = { workspace = true, optional = true, features = ["custom-widget"] }
 blitz-traits = { workspace = true }
-blitz-shell = { workspace = true }
+blitz-shell = { workspace = true, optional = true }
 
 # AnyRender dependencies
 anyrender = { workspace = true }
@@ -99,7 +102,7 @@ dioxus-core-macro = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 
 # Windowing & Input
-winit = { workspace = true }
+winit = { workspace = true, optional = true }
 keyboard-types = { workspace = true }
 
 # IO & Networking
@@ -115,8 +118,8 @@ cfg-if = "1.0.4"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 
-[target.'cfg(target_os = "android")'.dependencies]
-android-activity = { version = "0.6", default-features = false }
+[target.'cfg(all(target_os = "android", feature = "shell"))'.dependencies]
+android-activity = { version = "0.6", default-features = false, optional = true }
 
 [target.'cfg(all(target_os = "ios", target_abi = "sim"))'.dependencies]
 anyrender_vello_cpu = { workspace = true, features = ["pixels_window_renderer"]}

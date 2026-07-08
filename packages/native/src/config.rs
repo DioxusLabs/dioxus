@@ -1,9 +1,11 @@
 use blitz_dom::FontContext;
 use dioxus_core::LaunchConfig;
+#[cfg(feature = "shell")]
 use winit::window::WindowAttributes;
 
 /// Launch-time configuration for a dioxus-native application.
 pub struct Config {
+    #[cfg(feature = "shell")]
     pub(crate) window_attributes: WindowAttributes,
     pub(crate) font_ctx: Option<FontContext>,
 }
@@ -12,6 +14,7 @@ impl LaunchConfig for Config {}
 
 impl Default for Config {
     fn default() -> Self {
+        #[cfg(feature = "shell")]
         let window_attributes = WindowAttributes::default()
             .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
 
@@ -21,7 +24,7 @@ impl Default for Config {
         // the canvas's CSS layout box when winit reports a 0×0 initial size.
         // To target an existing `<canvas>`, replace these attributes via
         // [`Config::with_window_attributes`].
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(feature = "shell", target_arch = "wasm32"))]
         let window_attributes = {
             use winit::platform::web::WindowAttributesWeb;
             window_attributes.with_platform_attributes(Box::new(
@@ -30,6 +33,7 @@ impl Default for Config {
         };
 
         Self {
+            #[cfg(feature = "shell")]
             window_attributes,
             font_ctx: None,
         }
@@ -42,6 +46,7 @@ impl Config {
     }
 
     /// Set the configuration for the window.
+    #[cfg(feature = "shell")]
     pub fn with_window_attributes(mut self, attrs: WindowAttributes) -> Self {
         self.window_attributes = attrs;
         self
