@@ -17,8 +17,8 @@ pub struct DioxusState {
     pub(crate) stack: Vec<NodeId>,
     /// Mapping from vdom ElementId -> rdom NodeId
     pub(crate) node_id_mapping: Vec<Option<NodeId>>,
-    /// Count of each handler type
-    pub(crate) event_handler_counts: [u32; 32],
+    /// Count of each handler type (indexed by `DomEventKind` discriminant)
+    pub(crate) event_handler_counts: [u32; 64],
     /// Mounted events queued as elements are mounted
     pub(crate) queued_mounted_events: Vec<ElementId>,
 }
@@ -30,7 +30,7 @@ impl DioxusState {
             templates: FxHashMap::default(),
             stack: vec![root_id],
             node_id_mapping: vec![Some(root_id)],
-            event_handler_counts: [0; 32],
+            event_handler_counts: [0; 64],
             queued_mounted_events: Vec::new(),
         }
     }

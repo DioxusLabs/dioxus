@@ -6,10 +6,11 @@ use blitz_traits::events::{
 use dioxus_html::{
     AnimationData, BeforeInputData, CancelData, ClipboardData, CompositionData, DragData,
     FocusData, FormData, FormValue, HasFileData, HasFocusData, HasFormData, HasKeyboardData,
-    HasMouseData, HasPointerData, HasScrollData, HasWheelData, HtmlEventConverter, ImageData,
-    KeyboardData, MediaData, MountedData, MountedError, MountedResult, MouseData,
-    PlatformEventData, PointerData, RenderedElementBacking, ResizeData, ScrollBehavior, ScrollData,
-    ScrollToOptions, SelectionData, ToggleData, TouchData, TransitionData, VisibleData, WheelData,
+    HasMouseData, HasPointerData, HasScrollData, HasTouchData, HasTouchPointData, HasWheelData,
+    HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MountedError,
+    MountedResult, MouseData, PlatformEventData, PointerData, RenderedElementBacking, ResizeData,
+    ScrollBehavior, ScrollData, ScrollToOptions, SelectionData, ToggleData, TouchData, TouchPoint,
+    TransitionData, VisibleData, WheelData,
     geometry::{
         ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
         WheelDelta,
@@ -117,8 +118,8 @@ impl HtmlEventConverter for NativeConverter {
         unimplemented!("todo: convert_toggle_data in dioxus-native. requires support in blitz")
     }
 
-    fn convert_touch_data(&self, _event: &PlatformEventData) -> TouchData {
-        unimplemented!("todo: convert_touch_data in dioxus-native. requires support in blitz")
+    fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData {
+        event.downcast::<NativeTouchData>().unwrap().clone().into()
     }
 
     fn convert_transition_data(&self, _event: &PlatformEventData) -> TransitionData {
@@ -335,8 +336,7 @@ impl InteractionLocation for NativePointerData {
 
 impl InteractionElementOffset for NativePointerData {
     fn element_coordinates(&self) -> ElementPoint {
-        // TODO: implement element point
-        ElementPoint::new(0.0, 0.0)
+        ElementPoint::new(self.0.element_x() as f64, self.0.element_y() as f64)
     }
 }
 
@@ -414,6 +414,92 @@ impl HasPointerData for NativePointerData {
     }
     fn height(&self) -> f64 {
         1.0
+    }
+}
+
+/// Touch event data exposed to Dioxus Native application code.
+///
+/// Blitz tracks input via pointer events, so a touch event is generated from the
+/// pointer event of the finger that triggered it (`touches_changed`). The full
+/// list of concurrent touches is carried on the triggering event's
+/// [`BlitzPointerEvent::active_pointers`] list and reported via `touches`.
+#[derive(Clone)]
+pub struct NativeTouchData(pub(crate) BlitzPointerEvent);
+
+impl ModifiersInteraction for NativeTouchData {
+    fn modifiers(&self) -> Modifiers {
+        self.0.mods
+    }
+}
+
+impl HasTouchData for NativeTouchData {
+    fn touches(&self) -> Vec<TouchPoint> {
+        // All pointers currently active on the surface (multi-touch).
+        self.0
+            .active_pointers
+            .borrow()
+            .iter()
+            .map(|event| TouchPoint::new(NativeTouchPointData(event.clone())))
+            .collect()
+    }
+
+    fn touches_changed(&self) -> Vec<TouchPoint> {
+        // Just the touch that triggered this event.
+        vec![TouchPoint::new(NativeTouchPointData(self.0.clone()))]
+    }
+
+    fn target_touches(&self) -> Vec<TouchPoint> {
+        // We don't track a per-touch target, so approximate `targetTouches`
+        // (touches that started on the event target) with all active touches.
+        self.touches()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
+
+#[derive(Clone)]
+pub struct NativeTouchPointData(BlitzPointerEvent);
+
+impl InteractionLocation for NativeTouchPointData {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.0.client_x() as f64, self.0.client_y() as f64)
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.0.screen_x() as f64, self.0.screen_y() as f64)
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.0.page_x() as f64, self.0.page_y() as f64)
+    }
+}
+
+impl HasTouchPointData for NativeTouchPointData {
+    fn identifier(&self) -> i32 {
+        match self.0.id {
+            BlitzPointerId::Finger(id) => id as i32,
+            BlitzPointerId::Mouse | BlitzPointerId::Pen => 0,
+        }
+    }
+
+    fn force(&self) -> f64 {
+        self.0.details.pressure
+    }
+
+    fn radius(&self) -> ScreenPoint {
+        // TODO: expose real touch radius once blitz tracks it
+        ScreenPoint::new(1.0, 1.0)
+    }
+
+    fn rotation(&self) -> f64 {
+        // TODO: expose real touch rotation once blitz tracks it
+        0.0
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
     }
 }
 
@@ -500,8 +586,7 @@ impl ModifiersInteraction for NativeWheelData {
 
 impl InteractionElementOffset for NativeWheelData {
     fn element_coordinates(&self) -> ElementPoint {
-        // TODO: implement element point
-        ElementPoint::new(0.0, 0.0)
+        ElementPoint::new(self.0.element_x() as f64, self.0.element_y() as f64)
     }
 }
 
@@ -523,4 +608,79 @@ pub fn synthetic_click_event(node: &Node, modifiers: Modifiers) -> Box<dyn Any> 
     Box::new(NativePointerData(
         node.synthetic_click_event_data(modifiers),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use blitz_traits::events::{
+        BlitzPointerId, MouseEventButton, MouseEventButtons, Point, PointerCoords, PointerDetails,
+    };
+
+    fn finger_event(id: u64, x: f32, y: f32) -> BlitzPointerEvent {
+        BlitzPointerEvent {
+            id: BlitzPointerId::Finger(id),
+            is_primary: id == 0,
+            coords: PointerCoords {
+                page_x: x,
+                page_y: y,
+                screen_x: x,
+                screen_y: y,
+                client_x: x,
+                client_y: y,
+            },
+            button: MouseEventButton::Main,
+            buttons: MouseEventButtons::from(MouseEventButton::Main),
+            mods: Default::default(),
+            details: PointerDetails::default(),
+            element: Point::default(),
+            active_pointers: Default::default(),
+        }
+    }
+
+    #[test]
+    fn touches_reports_all_active_pointers() {
+        let f0 = finger_event(0, 10.0, 20.0);
+        let f1 = finger_event(1, 30.0, 40.0);
+
+        // The triggering event (second finger down) carries the list of all
+        // currently-active pointers.
+        let trigger = f1.clone();
+        {
+            let mut list = trigger.active_pointers.borrow_mut();
+            list.push(f0.clone());
+            list.push(f1.clone());
+        }
+
+        let data = NativeTouchData(trigger);
+
+        // `touches` reports every active pointer ...
+        let touches = data.touches();
+        assert_eq!(touches.len(), 2);
+        let coords: Vec<(f64, f64)> = touches
+            .iter()
+            .map(|t| {
+                let c = t.client_coordinates();
+                (c.x, c.y)
+            })
+            .collect();
+        assert!(coords.contains(&(10.0, 20.0)));
+        assert!(coords.contains(&(30.0, 40.0)));
+
+        // ... while `changed_touches` reports only the triggering touch.
+        assert_eq!(data.touches_changed().len(), 1);
+        let changed = data.touches_changed();
+        let changed_coords = changed[0].client_coordinates();
+        assert_eq!((changed_coords.x, changed_coords.y), (30.0, 40.0));
+    }
+
+    #[test]
+    fn touches_is_empty_when_no_pointers_are_active() {
+        // e.g. a `touchend` for the last finger: it has been removed from the
+        // active list before dispatch, so `touches` is empty but
+        // `changed_touches` still reports the finger that ended.
+        let data = NativeTouchData(finger_event(0, 1.0, 2.0));
+        assert!(data.touches().is_empty());
+        assert_eq!(data.touches_changed().len(), 1);
+    }
 }
