@@ -9,6 +9,25 @@ pub(crate) fn process_image(
     source: &Path,
     output_path: &Path,
 ) -> anyhow::Result<()> {
+    // If no image transformation was requested — no explicit output format and no
+    // manual resize — copy the source bytes verbatim instead of decoding and
+    // re-encoding. Re-encoding an already-optimized image (e.g. a hand-tuned PNG)
+    // can significantly *increase* its size, so by default we preserve the original
+    // bytes and only process the image when the user explicitly asks for a format
+    // or a size (see https://github.com/DioxusLabs/dioxus/issues/5642).
+    if image_options.format() == ImageFormat::Unknown
+        && image_options.size() == ImageSize::Automatic
+    {
+        std::fs::copy(source, output_path).with_context(|| {
+            format!(
+                "Failed to copy image from {} to {}",
+                source.display(),
+                output_path.display()
+            )
+        })?;
+        return Ok(());
+    }
+
     let mut image = image::ImageReader::new(std::io::Cursor::new(&*std::fs::read(source)?))
         .with_guessed_format()
         .context("Failed to guess image format")?
@@ -140,4 +159,55 @@ pub(crate) fn compress_jpg(image: DynamicImage, output_location: &Path) -> anyho
     let w = &mut BufWriter::new(file);
     w.write_all(&jpeg_bytes)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Write a small, valid PNG whose exact bytes a naive decode + re-encode would
+    /// not reproduce: it uses `Best` compression and carries a `tEXt` chunk that the
+    /// `image` crate drops on save. Any code path that re-encodes it (instead of
+    /// copying) therefore changes the bytes.
+    fn write_source_png(path: &Path) {
+        let file = std::fs::File::create(path).unwrap();
+        let w = BufWriter::new(file);
+        let mut encoder = png::Encoder::new(w, 4, 4);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(png::Compression::Best);
+        encoder
+            .add_text_chunk("Comment".to_string(), "dioxus-asset-test".to_string())
+            .unwrap();
+        let mut writer = encoder.write_header().unwrap();
+        // 4x4 RGBA pixels with varied colors.
+        let mut data = Vec::with_capacity(4 * 4 * 4);
+        for i in 0..16u8 {
+            data.extend_from_slice(&[i.wrapping_mul(16), 255 - i, i, 255]);
+        }
+        writer.write_image_data(&data).unwrap();
+        writer.finish().unwrap();
+    }
+
+    // Regression test for https://github.com/DioxusLabs/dioxus/issues/5642:
+    // `asset!()` with no explicit format or size must preserve the original image
+    // bytes rather than re-encoding (which can inflate already-optimized images).
+    #[test]
+    fn default_options_preserve_source_bytes() {
+        let dir = std::env::temp_dir().join(format!("dx-image-opt-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.png");
+        let output = dir.join("output.png");
+        write_source_png(&source);
+
+        process_image(&ImageAssetOptions::default(), &source, &output).unwrap();
+
+        assert_eq!(
+            std::fs::read(&source).unwrap(),
+            std::fs::read(&output).unwrap(),
+            "asset!() with default options must copy the source bytes verbatim, not re-encode"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
