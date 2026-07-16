@@ -3290,6 +3290,7 @@ dependencies = [
 name = "dioxus-asset-resolver"
 version = "0.7.9"
 dependencies = [
+ "dioxus",
  "dioxus-cli-config",
  "http",
  "infer",
@@ -3299,6 +3300,7 @@ dependencies = [
  "ndk-context",
  "ndk-sys 0.6.0+11769913",
  "percent-encoding",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "wasm-bindgen-futures",
