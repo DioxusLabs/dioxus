@@ -1,4 +1,4 @@
-use quote::{format_ident, quote, quote_spanned};
+use quote::{ToTokens, format_ident, quote, quote_spanned};
 use syn::Field;
 use syn::Path;
 use syn::Type;
@@ -163,6 +163,36 @@ impl Route {
             layouts,
             fields,
         })
+    }
+
+    /// Every dynamic parameter of the nests this route sits inside must exist as a
+    /// field on the variant: the generated Display and render arms bind those
+    /// parameters from the variant's own fields, so a missing field surfaces as an
+    /// unbound identifier deep in generated code. Layouts never outlive their
+    /// enclosing nest (enforced at #[end_nest]), so covering the route's own nests
+    /// also covers every active layout's nests.
+    pub(crate) fn ensure_nest_fields_covered(&self, nests: &[Nest]) -> syn::Result<()> {
+        for id in &self.nests {
+            let nest = &nests[id.0];
+            for segment in &nest.segments {
+                let (RouteSegment::Dynamic(ident, ty) | RouteSegment::CatchAll(ident, ty)) =
+                    segment
+                else {
+                    continue;
+                };
+                if !self.fields.iter().any(|(name, _)| name == ident) {
+                    let ty = ty.to_token_stream();
+                    return Err(syn::Error::new(
+                        self.route_name.span(),
+                        format!(
+                            "variant `{}` is inside the nest \"{}\" but is missing its dynamic parameter; add the field `{}: {}` to the variant",
+                            self.route_name, nest.route, ident, ty
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
