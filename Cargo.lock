@@ -4136,6 +4136,7 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "trybuild",
  "url",
 ]
 

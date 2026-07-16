@@ -410,6 +410,7 @@ impl RouteEnum {
             active_layouts.retain(|&id| !excluded.contains(&id));
 
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
+            route.ensure_nest_fields_covered(&nests)?;
 
             // add the route to the site map
             let mut segment = SiteMapSegment::new(&route.segments);
