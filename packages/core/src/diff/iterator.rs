@@ -275,7 +275,7 @@ impl VirtualDom {
         let old_key_to_old_index = old
             .iter()
             .enumerate()
-            .map(|(i, o)| (o.key.as_ref().unwrap().as_str(), i))
+            .map(|(i, o)| (o.key.as_ref().unwrap(), i))
             .collect::<FxHashMap<_, _>>();
 
         let mut shared_keys = FxHashSet::default();
@@ -285,7 +285,7 @@ impl VirtualDom {
             .iter()
             .map(|node| {
                 let key = node.key.as_ref().unwrap();
-                if let Some(&index) = old_key_to_old_index.get(key.as_str()) {
+                if let Some(&index) = old_key_to_old_index.get(key) {
                     shared_keys.insert(key);
                     index
                 } else {

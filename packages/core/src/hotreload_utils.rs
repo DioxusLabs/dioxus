@@ -6,7 +6,8 @@ use std::{
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
 use crate::{
-    Attribute, AttributeValue, DynamicNode, Template, TemplateAttribute, TemplateNode, VNode, VText,
+    Attribute, AttributeValue, DynamicNode, Key, Template, TemplateAttribute, TemplateNode, VNode,
+    VText,
 };
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -261,12 +262,19 @@ impl DynamicValuePool {
         }
     }
 
-    pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
+    pub fn render_with(
+        &mut self,
+        hot_reload: &HotReloadedTemplate,
+        dynamic_key: Option<Key>,
+    ) -> VNode {
         // Get the node_paths from a depth first traversal of the template
-        let key = hot_reload
-            .key
-            .as_ref()
-            .map(|key| self.literal_pool.render_formatted(key));
+        let key = match &hot_reload.key {
+            Some(HotReloadKey::Fmted(key)) => {
+                Some(Key::from(self.literal_pool.render_formatted(key)))
+            }
+            Some(HotReloadKey::Dynamic) => dynamic_key,
+            None => None,
+        };
         let dynamic_nodes = hot_reload
             .dynamic_nodes
             .iter()
@@ -348,8 +356,18 @@ type StaticTemplateArray = &'static [TemplateNode];
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub enum HotReloadKey {
+    /// A formatted string key whose segments can be re-rendered from the literal pool
+    Fmted(FmtedSegments),
+    /// An arbitrary hashable expression key computed at the rsx call site
+    Dynamic,
+}
+
+#[doc(hidden)]
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct HotReloadedTemplate {
-    pub key: Option<FmtedSegments>,
+    pub key: Option<HotReloadKey>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
     pub component_values: Vec<HotReloadLiteral>,
@@ -364,7 +382,7 @@ pub struct HotReloadedTemplate {
 
 impl HotReloadedTemplate {
     pub fn new(
-        key: Option<FmtedSegments>,
+        key: Option<HotReloadKey>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
