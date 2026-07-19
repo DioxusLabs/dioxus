@@ -76,8 +76,13 @@ fn toggle_template() {
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    // Rendering again should replace the placeholder with an text node
+    // Re-rendering the parent doesn't rerun Comp: the children it passes down are
+    // equal by value, so Comp is memoized
     dom.mark_dirty(ScopeId::APP);
+    assert_eq!(dom.render_immediate_to_vec().edits, []);
+
+    // Rendering Comp again should replace the text node with a placeholder
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [

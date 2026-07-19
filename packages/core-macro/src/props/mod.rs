@@ -910,6 +910,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                     fn memoize(&mut self, new: &Self) -> bool {
                         #memoize
                     }
+                    fn props_eq(&self, new: &Self) -> bool {
+                        self == new
+                    }
                 }
             })
         }
@@ -1523,6 +1526,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                         fn memoize(&mut self, new: &Self) -> bool {
                             self.inner.memoize(&new.inner)
+                        }
+                        fn props_eq(&self, new: &Self) -> bool {
+                            self.inner.props_eq(&new.inner)
                         }
                     }
 

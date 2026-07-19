@@ -57,6 +57,9 @@ where
         }
         equal
     }
+    fn props_eq(&self, new: &Self) -> bool {
+        self == new
+    }
 }
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
@@ -194,6 +197,9 @@ impl Properties for SuspenseBoundaryPropsWithOwner {
     }
     fn memoize(&mut self, new: &Self) -> bool {
         self.inner.memoize(&new.inner)
+    }
+    fn props_eq(&self, new: &Self) -> bool {
+        self.inner.props_eq(&new.inner)
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
