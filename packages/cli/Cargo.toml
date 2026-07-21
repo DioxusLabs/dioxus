@@ -120,7 +120,7 @@ crossterm = { workspace = true, features = ["event-stream"] }
 ratatui = { workspace = true, features = ["crossterm", "unstable"] }
 shell-words = { workspace = true }
 
-resvg = "0.45.0"
+resvg = "0.47.0"
 # for Android VectorDrawable
 xml-rs = "1.0.0"
 
