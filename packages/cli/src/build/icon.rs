@@ -340,6 +340,28 @@ fn svg_path_to_string(path: &tiny_skia::Path) -> String {
     }
     s.trim().to_string()
 }
+// Resize artwork into the adaptive-icon safe zone (~66% of the 108dp layer),
+// centered on a full-bleed background scaled from the same artwork.
+fn resize_and_save_adaptive_layer(
+    source: &Source,
+    size: u32,
+    file_path: &Path,
+) -> Result<()> {
+    // Background: full-bleed artwork (fills whatever the mask leaves visible)
+    let bg = source.resize_exact(size)?;
+
+    // Foreground content: fit inside the 72dp safe circle (68dp with margin)
+    let inner = (size as f32 * 0.68) as u32;
+    let fg = source.resize_exact(inner)?;
+
+    let mut canvas = bg.to_rgba8();
+    let offset = ((size - inner) / 2) as i64;
+    image::imageops::overlay(&mut canvas, &fg.to_rgba8(), offset, offset);
+
+    let mut out_file = BufWriter::new(File::create(file_path)?);
+    write_png(canvas.as_raw(), &mut out_file, size)?;
+    Ok(out_file.flush()?)
+}
 
 // Generate Android icons from a given icon path and output directory.
 pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
@@ -436,7 +458,7 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
             ("xxhdpi", 324),
             ("xxxhdpi", 432),
         ] {
-            entries.push(IconEntry {
+            entries.push(PngEntry {
                 size,
                 out_path: out_dir
                     .join(format!("mipmap-{dpi}"))
@@ -445,7 +467,19 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
         }
 
         for entry in &entries {
-            resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
+            let is_foreground = entry
+                .out_path
+                .file_name()
+                .map(|n| n == "ic_launcher_foreground.png")
+                .unwrap_or(false);
+
+            if is_foreground {
+                // shrink into safe zone, composited over full-bleed background of the same art
+                resize_and_save_adaptive_layer(&source, entry.size, &entry.out_path)?;
+            } else {
+                // background + legacy icons: full-bleed
+                resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
+            }
             tracing::info!(
                 "Generated Android PNG icon: {} ({}x{})",
                 entry.out_path.display(),
@@ -453,6 +487,28 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
                 entry.size
             );
         }
+        // Write the adaptive icon descriptor for the PNG path. The scaffold's
+        // default XML references @drawable layers which are NOT regenerated when
+        // a custom icon is set (only the SVG/XML path writes them), so without
+        // this the background resolves to the stale default WHITE drawable.
+        // create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
+        // let adaptive_xml = r#"<?xml version="1.0" encoding="utf-8"?>
+        //     <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+        //         <background android:drawable="@mipmap/ic_launcher_background"/>
+        //         <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+        //     </adaptive-icon>
+        //     "#;
+        // write(
+        //     out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
+        //     adaptive_xml,
+        // )?;
+        create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
+                write(
+                    out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
+                    include_bytes!(
+                        "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+                    ),
+                )?;
         tracing::info!("Generating Android icons Finished");
         Ok(())
     }
