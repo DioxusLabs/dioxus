@@ -492,23 +492,16 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
         // a custom icon is set (only the SVG/XML path writes them), so without
         // this the background resolves to the stale default WHITE drawable.
         // create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
-        // let adaptive_xml = r#"<?xml version="1.0" encoding="utf-8"?>
-        //     <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-        //         <background android:drawable="@mipmap/ic_launcher_background"/>
-        //         <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-        //     </adaptive-icon>
-        //     "#;
-        // write(
-        //     out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
-        //     adaptive_xml,
-        // )?;
-        create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
-                write(
-                    out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
-                    include_bytes!(
-                        "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
-                    ),
-                )?;
+        let adaptive_xml = r#"<?xml version="1.0" encoding="utf-8"?>
+            <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+                <background android:drawable="@mipmap/ic_launcher_background"/>
+                <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+            </adaptive-icon>
+            "#;
+        write(
+            out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
+            adaptive_xml,
+        )?;
         tracing::info!("Generating Android icons Finished");
         Ok(())
     }
