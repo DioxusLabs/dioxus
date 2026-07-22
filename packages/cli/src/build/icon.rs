@@ -413,28 +413,46 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
             ));
         }
     };
-
     if source.width() != source.height() {
-        return Err(anyhow::anyhow!("Icon must be square"));
-    }
+            return Err(anyhow::anyhow!("Icon must be square"));
+        }
 
-    // For SVG generate Android VectorDrawable XML
-    if let Source::Svg(tree) = &source {
-        gen_android_vector_drawable(tree, out_dir)?;
-        tracing::info!("Found SVG icon. Generated Android VectorDrawable XML.");
-    }
+        // For SVG generate Android VectorDrawable XML
+        if let Source::Svg(tree) = &source {
+            gen_android_vector_drawable(tree, out_dir)?;
+            tracing::info!("Found SVG icon. Generated Android VectorDrawable XML.");
+        }
 
-    // For any icon file, generate PNG icons
-    let entries = android_png_entries(out_dir)?;
-    for entry in entries {
-        resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
-        tracing::info!(
-            "Generated Android PNG icon: {} ({}x{})",
-            entry.out_path.display(),
-            entry.size,
-            entry.size
-        );
+        // For any icon file, generate PNG icons
+        let mut entries = android_png_entries(out_dir)?;
+
+        // Generate the adaptive-icon BACKGROUND layer: full-bleed artwork.
+        // Nothing else generates it, but the adaptive-icon XML references it,
+        // so without this the background resolves to a default white resource.
+        for (dpi, size) in [
+            ("mdpi", 108u32),
+            ("hdpi", 162),
+            ("xhdpi", 216),
+            ("xxhdpi", 324),
+            ("xxxhdpi", 432),
+        ] {
+            entries.push(IconEntry {
+                size,
+                out_path: out_dir
+                    .join(format!("mipmap-{dpi}"))
+                    .join("ic_launcher_background.png"),
+            });
+        }
+
+        for entry in &entries {
+            resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
+            tracing::info!(
+                "Generated Android PNG icon: {} ({}x{})",
+                entry.out_path.display(),
+                entry.size,
+                entry.size
+            );
+        }
+        tracing::info!("Generating Android icons Finished");
+        Ok(())
     }
-    tracing::info!("Generating Android icons Finished");
-    Ok(())
-}
