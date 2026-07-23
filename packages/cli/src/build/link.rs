@@ -1549,6 +1549,9 @@ fn is_valid_fat_archive(path: &Path) -> std::io::Result<bool> {
         Err(error) => return Err(error),
     };
     let file_len = file.metadata()?.len();
+    if file_len < 8 || file_len % 2 != 0 {
+        return Ok(false);
+    }
     let mut archive = ar::Archive::new(file);
     let mut has_entry = false;
     while let Some(entry) = archive.next_entry() {
@@ -1660,6 +1663,22 @@ mod tests {
                 .unwrap();
         }
         bytes.truncate(bytes.len() - 2);
+        file.write_all(&bytes).unwrap();
+
+        assert!(!is_valid_fat_archive(file.path()).unwrap());
+    }
+
+    #[test]
+    fn fat_archive_missing_final_padding_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut archive = ar::Builder::new(&mut bytes);
+            archive
+                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 3), &b"odd"[..])
+                .unwrap();
+        }
+        bytes.pop();
         file.write_all(&bytes).unwrap();
 
         assert!(!is_valid_fat_archive(file.path()).unwrap());
