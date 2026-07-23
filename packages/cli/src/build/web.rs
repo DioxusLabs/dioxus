@@ -59,6 +59,31 @@ enum WebResourceKind {
     Local,
 }
 
+fn has_valid_percent_encoding(resource: &str) -> bool {
+    let bytes = resource.as_bytes();
+    let mut found = false;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            index += 1;
+            continue;
+        }
+
+        if index + 2 >= bytes.len()
+            || !bytes[index + 1].is_ascii_hexdigit()
+            || !bytes[index + 2].is_ascii_hexdigit()
+        {
+            return false;
+        }
+
+        found = true;
+        index += 3;
+    }
+
+    found
+}
+
 fn web_resource_kind(resource: &Path) -> Result<WebResourceKind> {
     let resource_str = resource
         .to_str()
@@ -69,6 +94,11 @@ fn web_resource_kind(resource: &Path) -> Result<WebResourceKind> {
     }
     if resource.is_absolute() {
         return Ok(WebResourceKind::Local);
+    }
+    if resource_str.bytes().any(|byte| matches!(byte, b'?' | b'#'))
+        || has_valid_percent_encoding(resource_str)
+    {
+        return Ok(WebResourceKind::Browser);
     }
     if url::Url::parse(resource_str).is_ok() {
         return Ok(WebResourceKind::Browser);
@@ -84,9 +114,9 @@ fn web_resource_location<'a>(
         .to_str()
         .context("Web resource paths must be valid UTF-8")?;
 
-    // Preserve the original `[web.resource]` contract for root-relative and
-    // protocol-relative browser URLs. On Windows, backslash UNC paths remain
-    // local while `//server/share` retains its browser URL meaning.
+    // Preserve the original `[web.resource]` browser-reference contract,
+    // including relative query, fragment, and percent-encoded URLs. On Windows,
+    // backslash UNC paths remain local while `//server/share` stays browser-side.
     match web_resource_kind(resource)? {
         WebResourceKind::Browser => Ok(WebResourceLocation::Browser(resource_str)),
         WebResourceKind::Local => {
@@ -998,13 +1028,13 @@ mod tests {
     #[test]
     fn release_hashed_urls_percent_encode_each_path_segment() {
         let temp = tempfile::tempdir().unwrap();
-        let css = temp.path().join("theme # %20 你好.css");
+        let css = temp.path().join("theme %zz 你好.css");
         std::fs::write(&css, "body { color: green; }").unwrap();
         let mut manifest = AppManifest::new();
         register_web_resource(
             &mut manifest,
             temp.path(),
-            Path::new("theme # %20 你好.css"),
+            Path::new("theme %zz 你好.css"),
             AssetOptions::css().into_asset_options(),
         )
         .unwrap();
@@ -1014,16 +1044,15 @@ mod tests {
             temp.path(),
             Some("docs space/版本"),
             &manifest,
-            Path::new("theme # %20 你好.css"),
+            Path::new("theme %zz 你好.css"),
             AssetOptions::css().into_asset_options(),
         )
         .unwrap();
 
         assert!(url.starts_with("/docs%20space/%E7%89%88%E6%9C%AC/assets/"));
-        assert!(url.contains("theme%20%23%20%2520%20%E4%BD%A0%E5%A5%BD-dxh"));
+        assert!(url.contains("theme%20%25zz%20%E4%BD%A0%E5%A5%BD-dxh"));
         assert!(!url.contains("%2F"));
         assert!(!url.contains('你'));
-        assert!(!url.contains('#'));
     }
 
     #[test]
@@ -1035,6 +1064,9 @@ mod tests {
             "data:text/css,body%7Bcolor:red%7D",
             "blob:https://example.com/3f4e",
             "https://cdn.example.com/styles.css",
+            "assets/main.css?v=123",
+            "assets/app.js#x",
+            "assets/my%20theme.css",
         ] {
             assert_eq!(
                 web_resource_kind(Path::new(resource)).unwrap(),
@@ -1051,6 +1083,20 @@ mod tests {
                 )
                 .unwrap(),
                 resource
+            );
+        }
+    }
+
+    #[test]
+    fn plain_relative_paths_and_invalid_percent_escapes_remain_local() {
+        for resource in [
+            "assets/main.css",
+            "assets/my%theme.css",
+            "assets/my%2theme.css",
+        ] {
+            assert_eq!(
+                web_resource_kind(Path::new(resource)).unwrap(),
+                WebResourceKind::Local
             );
         }
     }
@@ -1075,8 +1121,8 @@ mod tests {
     #[test]
     fn parsed_config_produces_encoded_html_and_matching_disk_assets() {
         let temp = tempfile::tempdir().unwrap();
-        let css_name = "assets/theme # %20 你好.css";
-        let js_name = "assets/main # %2F app.js";
+        let css_name = "assets/theme %zz 你好.css";
+        let js_name = "assets/main percent%.js";
         std::fs::create_dir_all(temp.path().join("assets")).unwrap();
         std::fs::write(temp.path().join(css_name), "body { color: navy; }").unwrap();
         std::fs::write(temp.path().join(js_name), "console.log('encoded');").unwrap();
@@ -1121,9 +1167,8 @@ mod tests {
             assert!(html.contains(&url));
         }
 
-        assert!(html.contains("%23"));
-        assert!(html.contains("%2520"));
-        assert!(html.contains("%252F"));
+        assert!(html.contains("%25zz"));
+        assert!(html.contains("percent%25"));
         assert!(html.contains("%E4%BD%A0%E5%A5%BD"));
         assert!(!html.contains(css_name));
         assert!(!html.contains(js_name));
