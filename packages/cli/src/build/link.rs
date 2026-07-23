@@ -957,6 +957,8 @@ impl BuildRequest {
             );
         }
         let mut compiler_rlibs = cached_compiler_rlibs.unwrap_or_default();
+        let mut link_archive_path = cache_paths.archive.clone();
+        let mut pending_cache_transaction = None;
 
         // Create it by dumping all the rlibs into it
         // This will include the std rlibs too, which can severely bloat the size of the archive
@@ -969,19 +971,12 @@ impl BuildRequest {
         if !archive_has_contents || cfg!(debug_assertions) {
             archive_has_contents = false;
             compiler_rlibs.clear();
-            match std::fs::remove_file(&cache_paths.manifest) {
-                Ok(()) => sync_parent_directory(cache_paths.parent()?)
-                    .context("Failed to sync invalidated fat cache manifest")?,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(error).with_context(|| {
-                        format!(
-                            "Failed to invalidate fat cache manifest '{}'",
-                            cache_paths.manifest.display()
-                        )
-                    });
-                }
-            }
+            invalidate_fat_cache(&cache_paths).with_context(|| {
+                format!(
+                    "Failed to invalidate fat cache manifest '{}'",
+                    cache_paths.manifest.display()
+                )
+            })?;
 
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
@@ -1076,6 +1071,7 @@ impl BuildRequest {
                     version: FAT_CACHE_MANIFEST_VERSION,
                     archive_len: archive_fingerprint.len,
                     archive_structure_hash: archive_fingerprint.structure_hash,
+                    archive_content_hash: archive_fingerprint.content_hash,
                     sidecar_len: sidecar_bytes.len() as u64,
                     sidecar_hash: sha256_hex(&sidecar_bytes),
                 };
@@ -1087,27 +1083,12 @@ impl BuildRequest {
                     &manifest_bytes,
                 )
                 .context("Failed to stage fat cache manifest")?;
-
-                commit_fat_cache_transaction(
-                    &cache_paths,
-                    temp_sidecar,
-                    temp_archive,
-                    temp_manifest,
-                    None,
-                )
-                .context("Failed to commit fat archive cache transaction")?;
-                ensure!(
-                    validate_fat_cache(&cache_paths)
-                        .context("Failed to verify committed fat archive cache transaction")?
-                        .is_some(),
-                    "Committed fat archive cache transaction is invalid"
-                );
-                tracing::debug!("Committed fat archive cache transaction '{}'", hash_id);
+                link_archive_path = temp_archive.path().to_path_buf();
+                pending_cache_transaction = Some((temp_sidecar, temp_archive, temp_manifest));
             }
         }
 
         compiler_rlibs.dedup();
-        drop(cache_lock);
 
         // We're going to replace the first rlib in the args with our fat archive
         // And then remove the rest of the rlibs
@@ -1119,7 +1100,7 @@ impl BuildRequest {
                 match self.linker_flavor() {
                     LinkerFlavor::WasmLld => {
                         args.insert(last_object, "--whole-archive".to_string());
-                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
+                        args.insert(last_object + 1, link_archive_path.display().to_string());
                         args.insert(last_object + 2, "--no-whole-archive".to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1128,7 +1109,7 @@ impl BuildRequest {
                     }
                     LinkerFlavor::Gnu => {
                         args.insert(last_object, "-Wl,--whole-archive".to_string());
-                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
+                        args.insert(last_object + 1, link_archive_path.display().to_string());
                         args.insert(last_object + 2, "-Wl,--no-whole-archive".to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1137,7 +1118,7 @@ impl BuildRequest {
                     }
                     LinkerFlavor::Darwin => {
                         args.insert(last_object, "-Wl,-force_load".to_string());
-                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
+                        args.insert(last_object + 1, link_archive_path.display().to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
                             args.insert(last_object + 2, rlib.display().to_string());
@@ -1146,7 +1127,7 @@ impl BuildRequest {
                     LinkerFlavor::Msvc => {
                         args.insert(
                             last_object,
-                            format!("/WHOLEARCHIVE:{}", cache_paths.archive.display()),
+                            format!("/WHOLEARCHIVE:{}", link_archive_path.display()),
                         );
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1227,7 +1208,14 @@ impl BuildRequest {
         }
 
         // And now we can run the linker with our new args
-        let linker = self.select_linker()?;
+        let linker = match self.select_linker() {
+            Ok(linker) => linker,
+            Err(error) => {
+                invalidate_fat_cache(&cache_paths)
+                    .context("Failed to invalidate fat cache after linker selection failure")?;
+                return Err(error);
+            }
+        };
 
         tracing::trace!("Fat linking with args: {:?} {:#?}", linker, args);
         tracing::trace!("Fat linking with env:");
@@ -1239,8 +1227,11 @@ impl BuildRequest {
         let mut out_args = args.clone();
         if cfg!(windows) {
             let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
-            std::fs::write(self.windows_command_file(), cmd_contents)
-                .context("Failed to write linker command file")?;
+            if let Err(error) = std::fs::write(self.windows_command_file(), cmd_contents) {
+                invalidate_fat_cache(&cache_paths)
+                    .context("Failed to invalidate fat cache after command file failure")?;
+                return Err(error).context("Failed to write linker command file");
+            }
             out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
@@ -1253,12 +1244,20 @@ impl BuildRequest {
         }
 
         // Run the linker directly!
-        let res = Command::new(linker)
+        let res = match Command::new(linker)
             .args(out_args)
             .env_clear()
             .envs(command_envs)
             .output()
-            .await?;
+            .await
+        {
+            Ok(output) => output,
+            Err(error) => {
+                invalidate_fat_cache(&cache_paths)
+                    .context("Failed to invalidate fat cache after linker execution error")?;
+                return Err(error).context("Failed to execute fat linker");
+            }
+        };
 
         if !res.status.success() {
             let stderr = String::from_utf8_lossy(&res.stderr);
@@ -1275,6 +1274,8 @@ impl BuildRequest {
                 "Failed to generate fat binary: {}",
                 combined
             );
+            invalidate_fat_cache(&cache_paths)
+                .context("Failed to invalidate fat cache after linker failure")?;
             bail!("Failed to generate fat binary: {combined}");
         }
 
@@ -1286,6 +1287,18 @@ impl BuildRequest {
         if !res.stdout.is_empty() {
             let out = String::from_utf8_lossy(&res.stdout);
             tracing::trace!("Output from fat linking: {}", out.trim());
+        }
+
+        if let Some((sidecar, archive, manifest)) = pending_cache_transaction {
+            commit_fat_cache_transaction(&cache_paths, sidecar, archive, manifest, None)
+                .context("Failed to commit validated fat archive cache transaction")?;
+            ensure!(
+                validate_fat_cache(&cache_paths)
+                    .context("Failed to verify committed fat archive cache transaction")?
+                    .is_some(),
+                "Committed fat archive cache transaction is invalid"
+            );
+            tracing::debug!("Committed fat archive cache transaction '{}'", hash_id);
         }
 
         // Clean up the temps manually
@@ -1301,6 +1314,7 @@ impl BuildRequest {
                 .as_micros()
         );
 
+        drop(cache_lock);
         Ok(())
     }
 
@@ -1570,7 +1584,7 @@ impl BuildRequest {
     }
 }
 
-const FAT_CACHE_MANIFEST_VERSION: u8 = 1;
+const FAT_CACHE_MANIFEST_VERSION: u8 = 2;
 const FAT_CACHE_METADATA_LIMIT: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1578,6 +1592,7 @@ struct FatCacheManifest {
     version: u8,
     archive_len: u64,
     archive_structure_hash: String,
+    archive_content_hash: String,
     sidecar_len: u64,
     sidecar_hash: String,
 }
@@ -1586,6 +1601,7 @@ struct FatCacheManifest {
 struct FatArchiveFingerprint {
     len: u64,
     structure_hash: String,
+    content_hash: String,
 }
 
 #[derive(Debug, Clone)]
@@ -1620,8 +1636,9 @@ impl FatCachePaths {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FatCacheCommitFailure {
-    AfterSidecar,
-    AfterArchive,
+    SidecarPublished,
+    ArchivePublished,
+    PayloadsSynced,
 }
 
 fn acquire_fat_cache_lock(path: &Path) -> std::io::Result<std::fs::File> {
@@ -1768,7 +1785,22 @@ fn bounded_ar_structure_scan(
     Ok(Some(FatArchiveFingerprint {
         len: file_len,
         structure_hash: format!("{:x}", structure.finalize()),
+        content_hash: String::new(),
     }))
+}
+
+fn sha256_file(path: &Path) -> std::io::Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn validate_fat_archive(path: &Path) -> std::io::Result<Option<FatArchiveFingerprint>> {
@@ -1779,7 +1811,7 @@ fn validate_fat_archive(path: &Path) -> std::io::Result<Option<FatArchiveFingerp
     };
     let file_len = file.metadata()?.len();
     let mut bounded_file = file.try_clone()?;
-    let Some(fingerprint) = bounded_ar_structure_scan(&mut bounded_file, file_len)? else {
+    let Some(mut fingerprint) = bounded_ar_structure_scan(&mut bounded_file, file_len)? else {
         return Ok(None);
     };
     file.seek(std::io::SeekFrom::Start(0))?;
@@ -1822,7 +1854,11 @@ fn validate_fat_archive(path: &Path) -> std::io::Result<Option<FatArchiveFingerp
         })?;
     }
 
-    Ok((valid_object_count > 0).then_some(fingerprint))
+    if valid_object_count == 0 {
+        return Ok(None);
+    }
+    fingerprint.content_hash = sha256_file(path)?;
+    Ok(Some(fingerprint))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -1859,6 +1895,8 @@ fn validate_fat_cache(paths: &FatCachePaths) -> std::io::Result<Option<Vec<PathB
         return Ok(None);
     }
 
+    // A cache hit deliberately pays O(archive bytes) I/O to bind the commit marker to the
+    // complete archive contents, rather than trusting only member names and lengths.
     let Some(archive) = validate_fat_archive(&paths.archive)? else {
         return Ok(None);
     };
@@ -1867,6 +1905,7 @@ fn validate_fat_cache(paths: &FatCachePaths) -> std::io::Result<Option<Vec<PathB
     };
     if archive.len != manifest.archive_len
         || archive.structure_hash != manifest.archive_structure_hash
+        || archive.content_hash != manifest.archive_content_hash
         || sidecar.len() as u64 != manifest.sidecar_len
         || sha256_hex(&sidecar) != manifest.sidecar_hash
     {
@@ -1928,19 +1967,37 @@ fn commit_fat_cache_transaction(
     fail_after: Option<FatCacheCommitFailure>,
 ) -> std::io::Result<()> {
     persist_cache_file(sidecar, &paths.sidecar)?;
-    if fail_after == Some(FatCacheCommitFailure::AfterSidecar) {
+    if fail_after == Some(FatCacheCommitFailure::SidecarPublished) {
         return Err(std::io::Error::other("injected failure after sidecar"));
     }
 
     persist_cache_file(archive, &paths.archive)?;
-    if fail_after == Some(FatCacheCommitFailure::AfterArchive) {
+    if fail_after == Some(FatCacheCommitFailure::ArchivePublished) {
         return Err(std::io::Error::other("injected failure after archive"));
+    }
+
+    // Make both payload renames durable before publishing the marker that makes them reusable.
+    // Windows keeps the atomic visibility guarantee from persist, but directory fsync is a no-op
+    // there, so this is not a cross-platform power-loss durability claim.
+    sync_parent_directory(paths.parent()?)?;
+    if fail_after == Some(FatCacheCommitFailure::PayloadsSynced) {
+        return Err(std::io::Error::other(
+            "injected failure after payload directory sync",
+        ));
     }
 
     // The manifest is the commit marker: cache readers hold the same lock and accept the
     // archive/sidecar pair only when both fingerprints match this last-published file.
     persist_cache_file(manifest, &paths.manifest)?;
     sync_parent_directory(paths.parent()?)
+}
+
+fn invalidate_fat_cache(paths: &FatCachePaths) -> std::io::Result<()> {
+    match std::fs::remove_file(&paths.manifest) {
+        Ok(()) => sync_parent_directory(paths.parent()?),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 /// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
@@ -1998,8 +2055,8 @@ mod tests {
     use super::{
         FAT_CACHE_MANIFEST_VERSION, FatCacheCommitFailure, FatCacheManifest, FatCachePaths,
         acquire_fat_cache_lock, cleanup_stale_fat_cache_temps, commit_fat_cache_transaction,
-        sha256_hex, stage_fat_cache_file, sync_file_at_path, validate_fat_archive,
-        validate_fat_cache,
+        invalidate_fat_cache, sha256_hex, stage_fat_cache_file, sync_file_at_path,
+        validate_fat_archive, validate_fat_cache,
     };
     use std::io::Write;
 
@@ -2041,6 +2098,7 @@ mod tests {
             version: FAT_CACHE_MANIFEST_VERSION,
             archive_len: fingerprint.len,
             archive_structure_hash: fingerprint.structure_hash,
+            archive_content_hash: fingerprint.content_hash,
             sidecar_len: sidecar_bytes.len() as u64,
             sidecar_hash: sha256_hex(sidecar_bytes),
         };
@@ -2220,7 +2278,7 @@ mod tests {
                 staged.0,
                 staged.1,
                 staged.2,
-                Some(FatCacheCommitFailure::AfterSidecar),
+                Some(FatCacheCommitFailure::SidecarPublished),
             )
             .is_err()
         );
@@ -2233,14 +2291,14 @@ mod tests {
         let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
         let old = stage_transaction(
             &paths,
-            &build_archive(b"old.rcgu.o", b"old"),
+            &build_archive(b"object.rcgu.o", b"old!"),
             b"/compiler.rlib",
         );
         commit_fat_cache_transaction(&paths, old.0, old.1, old.2, None).unwrap();
 
         let new = stage_transaction(
             &paths,
-            &build_archive(b"new.rcgu.o", b"new contents"),
+            &build_archive(b"object.rcgu.o", b"new!"),
             b"/compiler.rlib",
         );
         assert!(
@@ -2249,10 +2307,54 @@ mod tests {
                 new.0,
                 new.1,
                 new.2,
-                Some(FatCacheCommitFailure::AfterArchive),
+                Some(FatCacheCommitFailure::ArchivePublished),
             )
             .is_err()
         );
+        assert!(validate_fat_cache(&paths).unwrap().is_none());
+    }
+
+    #[test]
+    fn marker_is_not_published_before_payload_directory_sync() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        let staged = stage_transaction(
+            &paths,
+            &build_archive(b"object.rcgu.o", b"data"),
+            b"/compiler.rlib",
+        );
+
+        assert!(
+            commit_fat_cache_transaction(
+                &paths,
+                staged.0,
+                staged.1,
+                staged.2,
+                Some(FatCacheCommitFailure::PayloadsSynced),
+            )
+            .is_err()
+        );
+        assert!(paths.archive.exists());
+        assert!(paths.sidecar.exists());
+        assert!(!paths.manifest.exists());
+        assert!(validate_fat_cache(&paths).unwrap().is_none());
+    }
+
+    #[test]
+    fn linker_failure_invalidation_removes_commit_marker() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        let staged = stage_transaction(
+            &paths,
+            &build_archive(b"object.rcgu.o", b"data"),
+            b"/compiler.rlib",
+        );
+        commit_fat_cache_transaction(&paths, staged.0, staged.1, staged.2, None).unwrap();
+        assert!(validate_fat_cache(&paths).unwrap().is_some());
+
+        invalidate_fat_cache(&paths).unwrap();
+
+        assert!(!paths.manifest.exists());
         assert!(validate_fat_cache(&paths).unwrap().is_none());
     }
 
