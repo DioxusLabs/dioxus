@@ -21,34 +21,50 @@ use dioxus::prelude::*;
 use dioxus_core::ScopeId;
 use dioxus_native_dom::DioxusDocument;
 use std::cell::Cell;
+use std::rc::Rc;
 
-thread_local! {
-    static GENERATION: Cell<usize> = const { Cell::new(0) };
+#[derive(Props, Clone, PartialEq)]
+struct AppProps {
+    generation: Rc<Cell<usize>>,
+    view: fn(usize) -> Element,
 }
 
-fn generation() -> usize {
-    GENERATION.with(|g| g.get())
+fn app(props: AppProps) -> Element {
+    (props.view)(props.generation.get())
 }
 
-fn make_doc(app: fn() -> Element) -> DioxusDocument {
-    GENERATION.with(|g| g.set(0));
-    let vdom = VirtualDom::new(app);
-    let mut doc = DioxusDocument::new(
-        vdom,
-        DocumentConfig {
-            viewport: Some(Viewport::new(800, 600, 1.0, ColorScheme::Light)),
-            ..Default::default()
-        },
-    );
-    doc.initial_build();
-    doc
+struct Harness {
+    doc: DioxusDocument,
+    generation: Rc<Cell<usize>>,
 }
 
-fn step(doc: &mut DioxusDocument) {
-    use blitz_dom::Document as _;
-    GENERATION.with(|g| g.set(g.get() + 1));
-    doc.vdom.mark_dirty(ScopeId::APP);
-    doc.poll(None);
+impl Harness {
+    fn new(view: fn(usize) -> Element) -> Self {
+        let generation = Rc::new(Cell::new(0));
+        let vdom = VirtualDom::new_with_props(
+            app,
+            AppProps {
+                generation: Rc::clone(&generation),
+                view,
+            },
+        );
+        let mut doc = DioxusDocument::new(
+            vdom,
+            DocumentConfig {
+                viewport: Some(Viewport::new(800, 600, 1.0, ColorScheme::Light)),
+                ..Default::default()
+            },
+        );
+        doc.initial_build();
+        Self { doc, generation }
+    }
+
+    fn step(&mut self) {
+        use blitz_dom::Document as _;
+        self.generation.set(self.generation.get() + 1);
+        self.doc.vdom.mark_dirty(ScopeId::APP);
+        self.doc.poll(None);
+    }
 }
 
 /// Check that every ElementId -> NodeId mapping points at a node that still
@@ -72,13 +88,11 @@ fn assert_no_stale_mappings(doc: &DioxusDocument, context: &str) {
     );
 }
 
-fn bare_text() -> Element {
-    let generation = generation();
+fn bare_text(generation: usize) -> Element {
     rsx! { "bare text {generation}" }
 }
 
-fn section_with_list(n: usize) -> Element {
-    let generation = generation();
+fn section_with_list(generation: usize, n: usize) -> Element {
     rsx! {
         section {
             header { id: "gen-{generation}", "header" }
@@ -89,8 +103,7 @@ fn section_with_list(n: usize) -> Element {
     }
 }
 
-fn nested_divs() -> Element {
-    let generation = generation();
+fn nested_divs(generation: usize) -> Element {
     rsx! {
         article {
             div { class: "gen-{generation}",
@@ -104,28 +117,27 @@ fn nested_divs() -> Element {
 /// Minimal deterministic sequence of template swaps that panics with
 /// "invalid key" inside blitz-dom's `DocumentMutator` (in `node_at_path`
 /// via `assign_node_id`) on the 3rd re-render.
-fn minimal_panic_app() -> Element {
-    match generation() {
-        0 => nested_divs(),
-        1 => bare_text(),
-        2 => section_with_list(0),
-        _ => nested_divs(),
+fn minimal_panic_app(generation: usize) -> Element {
+    match generation {
+        0 => nested_divs(generation),
+        1 => bare_text(generation),
+        2 => section_with_list(generation, 0),
+        _ => nested_divs(generation),
     }
 }
 
 #[test]
 fn template_swaps_do_not_panic() {
-    let mut doc = make_doc(minimal_panic_app);
+    let mut harness = Harness::new(minimal_panic_app);
     for _ in 0..3 {
-        step(&mut doc);
+        harness.step();
     }
 }
 
 /// Toggles between templates where one variant has a nested element with a
 /// dynamic attribute (which is assigned an ElementId via `AssignId`).
 /// Detects the stale mapping (the precursor to the panic) directly.
-fn toggle_app() -> Element {
-    let generation = generation();
+fn toggle_app(generation: usize) -> Element {
     let class = format!("gen-{generation}");
     match generation % 3 {
         0 => rsx! {
@@ -153,17 +165,16 @@ fn toggle_app() -> Element {
 
 #[test]
 fn template_swaps_do_not_leave_stale_mappings() {
-    let mut doc = make_doc(toggle_app);
+    let mut harness = Harness::new(toggle_app);
     for i in 0..20 {
-        step(&mut doc);
-        assert_no_stale_mappings(&doc, &format!("step {i}"));
+        harness.step();
+        assert_no_stale_mappings(&harness.doc, &format!("step {i}"));
     }
 }
 
 /// Pseudo-random mix of templates designed to maximise ElementId and NodeId
 /// (slab slot) reuse. Panics with "invalid key" within a handful of steps.
-fn fuzz_app() -> Element {
-    let generation = generation();
+fn fuzz_app(generation: usize) -> Element {
     // Simple LCG for deterministic pseudo-random variety
     let r = generation
         .wrapping_mul(6364136223846793005)
@@ -181,7 +192,7 @@ fn fuzz_app() -> Element {
         1 => rsx! {
             p { "different template {generation}" }
         },
-        2 => section_with_list(n),
+        2 => section_with_list(generation, n),
         3 => rsx! {
             ul {
                 for i in 0..n {
@@ -191,23 +202,22 @@ fn fuzz_app() -> Element {
                 }
             }
         },
-        4 => nested_divs(),
-        _ => bare_text(),
+        4 => nested_divs(generation),
+        _ => bare_text(generation),
     }
 }
 
 #[test]
 fn fuzz_template_swaps_do_not_panic() {
-    let mut doc = make_doc(fuzz_app);
+    let mut harness = Harness::new(fuzz_app);
     for _ in 0..1000 {
-        step(&mut doc);
+        harness.step();
     }
 }
 
 /// A keyed list where items are removed and re-added, forcing ElementId reuse
 /// in dioxus-core and NodeId (slab slot) reuse in blitz-dom.
-fn list_app() -> Element {
-    let generation = generation();
+fn list_app(generation: usize) -> Element {
     // Vary the list length up and down so nodes are removed and recreated
     let len = [5usize, 0, 3, 1, 6, 2, 0, 4][generation % 8];
     rsx! {
@@ -226,9 +236,9 @@ fn list_app() -> Element {
 
 #[test]
 fn keyed_list_grow_shrink() {
-    let mut doc = make_doc(list_app);
+    let mut harness = Harness::new(list_app);
     for i in 0..300 {
-        step(&mut doc);
-        assert_no_stale_mappings(&doc, &format!("step {i}"));
+        harness.step();
+        assert_no_stale_mappings(&harness.doc, &format!("step {i}"));
     }
 }
