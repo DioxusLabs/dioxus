@@ -53,6 +53,10 @@ pub enum ImageSize {
     },
     /// The size will be automatically determined from the image source
     Automatic,
+    /// A manual width in pixels. The height will be derived from the image's aspect ratio.
+    Width(u32),
+    /// A manual height in pixels. The width will be derived from the image's aspect ratio.
+    Height(u32),
 }
 
 /// Options for an image asset
@@ -222,6 +226,28 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// ```
     pub const fn with_size(mut self, size: ImageSize) -> Self {
         self.variant.size = size;
+        self
+    }
+
+    /// Sets the width of the image and preserves its aspect ratio
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_width(512));
+    /// ```
+    pub const fn with_width(mut self, width: u32) -> Self {
+        self.variant.size = ImageSize::Width(width);
+        self
+    }
+
+    /// Sets the height of the image and preserves its aspect ratio
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_height(512));
+    /// ```
+    pub const fn with_height(mut self, height: u32) -> Self {
+        self.variant.size = ImageSize::Height(height);
         self
     }
 
