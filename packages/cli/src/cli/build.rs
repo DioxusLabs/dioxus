@@ -30,7 +30,7 @@ pub struct BuildArgs {
     pub(crate) fat_binary: bool,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server
-    /// and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    /// and client builds in parallel. This flag will force the client build to finish before the server build starts. [default: false]
     ///
     /// If CI is enabled, this will be set to true by default.
     ///
@@ -50,6 +50,12 @@ impl BuildArgs {
         self.force_sequential
             .unwrap_or_else(|| std::env::var("CI").is_ok())
     }
+}
+
+fn should_build_sequentially(force_sequential: bool, ssg: bool) -> bool {
+    // SSG renders into the client output, so the client must refresh index.html before the server
+    // reads it as the render template. Otherwise repeated builds can render into stale SSG output.
+    force_sequential || ssg
 }
 
 impl Anonymized for BuildArgs {
@@ -149,8 +155,9 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let force_sequential = self.shared.force_sequential_build();
         let ssg = self.shared.ssg;
+        let force_sequential =
+            should_build_sequentially(self.shared.force_sequential_build(), ssg);
         let mode = match self.shared.fat_binary {
             true => BuildMode::Fat,
             false => BuildMode::Base,
@@ -204,6 +211,18 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");
 
         Ok(Some(server_artifacts))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_build_sequentially;
+
+    #[test]
+    fn ssg_builds_require_sequential_order() {
+        assert!(!should_build_sequentially(false, false));
+        assert!(should_build_sequentially(true, false));
+        assert!(should_build_sequentially(false, true));
     }
 }
 
