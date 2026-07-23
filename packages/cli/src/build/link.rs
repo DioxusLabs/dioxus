@@ -25,6 +25,7 @@ use itertools::Itertools;
 use serde::Serialize;
 use sha1::Digest;
 use sha2::Sha256;
+use std::io::{Seek, Write};
 use std::process::Stdio;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -922,7 +923,14 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = out_ar_path.exists();
+        let mut archive_has_contents = is_valid_fat_archive(&out_ar_path)
+            .with_context(|| format!("Failed to validate archive '{}'", out_ar_path.display()))?;
+        if out_ar_path.exists() && !archive_has_contents {
+            tracing::warn!(
+                "Cached fat archive '{}' is invalid; regenerating it",
+                out_ar_path.display()
+            );
+        }
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -939,6 +947,7 @@ impl BuildRequest {
         // Since we're using the git hash for the CLI entropy, debug builds should always regenerate
         // the archive since their hash might not change, but the logic might.
         if !archive_has_contents || cfg!(debug_assertions) {
+            archive_has_contents = false;
             compiler_rlibs.clear();
 
             let mut bytes = vec![];
@@ -998,16 +1007,66 @@ impl BuildRequest {
             }
 
             let bytes = out_ar.into_inner().context("Failed to finalize archive")?;
-            std::fs::write(&out_ar_path, bytes).context("Failed to write archive")?;
-            tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
+            if archive_has_contents {
+                let parent = out_ar_path.parent().with_context(|| {
+                    format!(
+                        "Fat archive path '{}' has no parent directory",
+                        out_ar_path.display()
+                    )
+                })?;
+                let mut temp_archive = tempfile::Builder::new()
+                    .prefix(&format!(".libdeps-{hash_id}-"))
+                    .suffix(".a.tmp")
+                    .tempfile_in(parent)
+                    .context("Failed to create temporary fat archive")?;
+                temp_archive
+                    .write_all(bytes.as_slice())
+                    .context("Failed to write temporary fat archive")?;
+                temp_archive
+                    .flush()
+                    .context("Failed to flush temporary fat archive")?;
 
-            // Run the ranlib command to index the archive. This slows down this process a bit,
-            // but is necessary for some linkers to work properly.
-            // We ignore its error in case it doesn't recognize the architecture
-            if self.linker_flavor() == LinkerFlavor::Darwin {
-                if let Some(ranlib) = Workspace::select_ranlib() {
-                    _ = Command::new(ranlib).arg(&out_ar_path).output().await;
+                // Run ranlib before publishing the archive so the final cache path is always ready
+                // for the linker. We ignore command failures as before because some ranlib versions
+                // cannot index every target architecture.
+                if self.linker_flavor() == LinkerFlavor::Darwin {
+                    if let Some(ranlib) = Workspace::select_ranlib() {
+                        _ = Command::new(ranlib).arg(temp_archive.path()).output().await;
+                    }
                 }
+
+                temp_archive
+                    .as_file()
+                    .sync_all()
+                    .context("Failed to sync temporary fat archive")?;
+                ensure!(
+                    is_valid_fat_archive(temp_archive.path())
+                        .context("Failed to validate temporary fat archive")?,
+                    "Generated fat archive is invalid"
+                );
+
+                // tempfile's persist atomically replaces the destination on both Unix and Windows.
+                // If another dx process won the race (or Windows has the destination open), reuse
+                // its complete archive instead of failing this build.
+                if let Err(error) = temp_archive.persist(&out_ar_path) {
+                    if is_valid_fat_archive(&out_ar_path).with_context(|| {
+                        format!(
+                            "Failed to validate concurrently published archive '{}'",
+                            out_ar_path.display()
+                        )
+                    })? {
+                        tracing::debug!(
+                            "Another process published fat archive {:?} first",
+                            out_ar_path
+                        );
+                    } else {
+                        return Err(error.error).context(format!(
+                            "Failed to publish fat archive '{}'",
+                            out_ar_path.display()
+                        ));
+                    }
+                }
+                tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
             }
         }
 
@@ -1483,6 +1542,44 @@ impl BuildRequest {
     }
 }
 
+fn is_valid_fat_archive(path: &Path) -> std::io::Result<bool> {
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let file_len = file.metadata()?.len();
+    let mut archive = ar::Archive::new(file);
+    let mut has_entry = false;
+    while let Some(entry) = archive.next_entry() {
+        let mut entry = match entry {
+            Ok(entry) => entry,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
+                ) =>
+            {
+                return Ok(false);
+            }
+            Err(error) => return Err(error),
+        };
+        if let Err(error) = entry.seek(std::io::SeekFrom::End(0)) {
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
+            ) {
+                return Ok(false);
+            }
+            return Err(error);
+        }
+        has_entry = true;
+    }
+
+    let mut file = archive.into_inner()?;
+    Ok(has_entry && file.stream_position()? == file_len)
+}
+
 /// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
 /// `--out-dir`, `--crate-name`, and `-C extra-filename=` from the captured args. This mirrors
 /// rustc's own naming convention: `<out_dir>/<crate_name><extra_filename>.d`.
@@ -1531,4 +1628,54 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
     let out_dir = out_dir?;
     let crate_name = crate_name?;
     Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_fat_archive;
+    use std::io::Write;
+
+    #[test]
+    fn missing_fat_archive_is_invalid() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        assert!(!is_valid_fat_archive(&tempdir.path().join("missing.a")).unwrap());
+    }
+
+    #[test]
+    fn empty_fat_archive_is_invalid() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+
+        assert!(!is_valid_fat_archive(file.path()).unwrap());
+    }
+
+    #[test]
+    fn truncated_fat_archive_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut archive = ar::Builder::new(&mut bytes);
+            archive
+                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 4), &b"data"[..])
+                .unwrap();
+        }
+        bytes.truncate(bytes.len() - 2);
+        file.write_all(&bytes).unwrap();
+
+        assert!(!is_valid_fat_archive(file.path()).unwrap());
+    }
+
+    #[test]
+    fn complete_fat_archive_is_valid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        {
+            let mut archive = ar::Builder::new(&mut file);
+            archive
+                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 4), &b"data"[..])
+                .unwrap();
+        }
+        file.flush().unwrap();
+
+        assert!(is_valid_fat_archive(file.path()).unwrap());
+    }
 }
