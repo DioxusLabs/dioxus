@@ -22,10 +22,10 @@ use anyhow::{Context, bail, ensure};
 use cargo_metadata::diagnostic::Diagnostic;
 use depinfo::RustcDepInfo;
 use itertools::Itertools;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha1::Digest;
 use sha2::Sha256;
-use std::io::{Seek, Write};
+use std::io::{Read, Seek, Write};
 use std::process::Stdio;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
@@ -920,23 +920,43 @@ impl BuildRequest {
         .take(8)
         .collect::<String>();
 
-        // Check if we already have a cached object file
-        let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
-        let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = is_valid_fat_archive(&out_ar_path)
-            .with_context(|| format!("Failed to validate archive '{}'", out_ar_path.display()))?;
-        if out_ar_path.exists() && !archive_has_contents {
+        let cache_paths = FatCachePaths::new(exe, &hash_id);
+        let lock_path = cache_paths.lock.clone();
+        let cache_lock = tokio::task::spawn_blocking(move || acquire_fat_cache_lock(&lock_path))
+            .await
+            .context("Fat archive cache lock task failed")?
+            .with_context(|| {
+                format!(
+                    "Failed to lock fat archive cache '{}'",
+                    cache_paths.lock.display()
+                )
+            })?;
+        cleanup_stale_fat_cache_temps(&cache_paths).with_context(|| {
+            format!("Failed to clean stale fat archive cache staging files for '{hash_id}'")
+        })?;
+
+        let cached_compiler_rlibs = if cfg!(debug_assertions) {
+            None
+        } else {
+            validate_fat_cache(&cache_paths).with_context(|| {
+                format!(
+                    "Failed to validate fat archive cache '{}'",
+                    cache_paths.archive.display()
+                )
+            })?
+        };
+        let mut archive_has_contents = cached_compiler_rlibs.is_some();
+        if !archive_has_contents
+            && (cache_paths.archive.exists()
+                || cache_paths.sidecar.exists()
+                || cache_paths.manifest.exists())
+        {
             tracing::warn!(
-                "Cached fat archive '{}' is invalid; regenerating it",
-                out_ar_path.display()
+                "Fat archive cache transaction '{}' is incomplete or invalid; regenerating it",
+                hash_id
             );
         }
-
-        // Use the rlibs list if it exists
-        let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
-            .ok()
-            .map(|s| s.lines().map(PathBuf::from).collect::<Vec<_>>())
-            .unwrap_or_default();
+        let mut compiler_rlibs = cached_compiler_rlibs.unwrap_or_default();
 
         // Create it by dumping all the rlibs into it
         // This will include the std rlibs too, which can severely bloat the size of the archive
@@ -949,6 +969,19 @@ impl BuildRequest {
         if !archive_has_contents || cfg!(debug_assertions) {
             archive_has_contents = false;
             compiler_rlibs.clear();
+            match std::fs::remove_file(&cache_paths.manifest) {
+                Ok(()) => sync_parent_directory(cache_paths.parent()?)
+                    .context("Failed to sync invalidated fat cache manifest")?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "Failed to invalidate fat cache manifest '{}'",
+                            cache_paths.manifest.display()
+                        )
+                    });
+                }
+            }
 
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
@@ -1008,23 +1041,11 @@ impl BuildRequest {
 
             let bytes = out_ar.into_inner().context("Failed to finalize archive")?;
             if archive_has_contents {
-                let parent = out_ar_path.parent().with_context(|| {
-                    format!(
-                        "Fat archive path '{}' has no parent directory",
-                        out_ar_path.display()
-                    )
-                })?;
-                let mut temp_archive = tempfile::Builder::new()
-                    .prefix(&format!(".libdeps-{hash_id}-"))
-                    .suffix(".a.tmp")
-                    .tempfile_in(parent)
-                    .context("Failed to create temporary fat archive")?;
-                temp_archive
-                    .write_all(bytes.as_slice())
-                    .context("Failed to write temporary fat archive")?;
-                temp_archive
-                    .flush()
-                    .context("Failed to flush temporary fat archive")?;
+                compiler_rlibs.dedup();
+                let parent = cache_paths.parent()?;
+                let temp_archive =
+                    stage_fat_cache_file(parent, &format!(".libdeps-{hash_id}-"), bytes.as_slice())
+                        .context("Failed to stage fat archive")?;
 
                 // Run ranlib before publishing the archive so the final cache path is always ready
                 // for the linker. We ignore command failures as before because some ranlib versions
@@ -1035,42 +1056,58 @@ impl BuildRequest {
                     }
                 }
 
-                temp_archive
-                    .as_file()
-                    .sync_all()
-                    .context("Failed to sync temporary fat archive")?;
-                ensure!(
-                    is_valid_fat_archive(temp_archive.path())
-                        .context("Failed to validate temporary fat archive")?,
-                    "Generated fat archive is invalid"
-                );
+                // Darwin ranlib may replace the archive inode. Reopen by path so the inode that
+                // will actually be renamed is synced, not NamedTempFile's potentially stale handle.
+                sync_file_at_path(temp_archive.path())
+                    .context("Failed to sync indexed temporary fat archive")?;
+                let archive_fingerprint = validate_fat_archive(temp_archive.path())
+                    .context("Failed to validate temporary fat archive")?
+                    .context("Generated fat archive is invalid")?;
 
-                // tempfile's persist atomically replaces the destination on both Unix and Windows.
-                // If another dx process won the race (or Windows has the destination open), reuse
-                // its complete archive instead of failing this build.
-                if let Err(error) = temp_archive.persist(&out_ar_path) {
-                    if is_valid_fat_archive(&out_ar_path).with_context(|| {
-                        format!(
-                            "Failed to validate concurrently published archive '{}'",
-                            out_ar_path.display()
-                        )
-                    })? {
-                        tracing::debug!(
-                            "Another process published fat archive {:?} first",
-                            out_ar_path
-                        );
-                    } else {
-                        return Err(error.error).context(format!(
-                            "Failed to publish fat archive '{}'",
-                            out_ar_path.display()
-                        ));
-                    }
-                }
-                tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
+                let sidecar_bytes = compiler_rlibs
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .join("\n")
+                    .into_bytes();
+                let temp_sidecar =
+                    stage_fat_cache_file(parent, &format!(".rlibs-{hash_id}-"), &sidecar_bytes)
+                        .context("Failed to stage fat archive sidecar")?;
+                let manifest = FatCacheManifest {
+                    version: FAT_CACHE_MANIFEST_VERSION,
+                    archive_len: archive_fingerprint.len,
+                    archive_structure_hash: archive_fingerprint.structure_hash,
+                    sidecar_len: sidecar_bytes.len() as u64,
+                    sidecar_hash: sha256_hex(&sidecar_bytes),
+                };
+                let manifest_bytes =
+                    serde_json::to_vec(&manifest).context("Failed to encode fat cache manifest")?;
+                let temp_manifest = stage_fat_cache_file(
+                    parent,
+                    &format!(".fat-cache-{hash_id}-"),
+                    &manifest_bytes,
+                )
+                .context("Failed to stage fat cache manifest")?;
+
+                commit_fat_cache_transaction(
+                    &cache_paths,
+                    temp_sidecar,
+                    temp_archive,
+                    temp_manifest,
+                    None,
+                )
+                .context("Failed to commit fat archive cache transaction")?;
+                ensure!(
+                    validate_fat_cache(&cache_paths)
+                        .context("Failed to verify committed fat archive cache transaction")?
+                        .is_some(),
+                    "Committed fat archive cache transaction is invalid"
+                );
+                tracing::debug!("Committed fat archive cache transaction '{}'", hash_id);
             }
         }
 
         compiler_rlibs.dedup();
+        drop(cache_lock);
 
         // We're going to replace the first rlib in the args with our fat archive
         // And then remove the rest of the rlibs
@@ -1082,7 +1119,7 @@ impl BuildRequest {
                 match self.linker_flavor() {
                     LinkerFlavor::WasmLld => {
                         args.insert(last_object, "--whole-archive".to_string());
-                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
                         args.insert(last_object + 2, "--no-whole-archive".to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1091,7 +1128,7 @@ impl BuildRequest {
                     }
                     LinkerFlavor::Gnu => {
                         args.insert(last_object, "-Wl,--whole-archive".to_string());
-                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
                         args.insert(last_object + 2, "-Wl,--no-whole-archive".to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1100,7 +1137,7 @@ impl BuildRequest {
                     }
                     LinkerFlavor::Darwin => {
                         args.insert(last_object, "-Wl,-force_load".to_string());
-                        args.insert(last_object + 1, out_ar_path.display().to_string());
+                        args.insert(last_object + 1, cache_paths.archive.display().to_string());
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
                             args.insert(last_object + 2, rlib.display().to_string());
@@ -1109,7 +1146,7 @@ impl BuildRequest {
                     LinkerFlavor::Msvc => {
                         args.insert(
                             last_object,
-                            format!("/WHOLEARCHIVE:{}", out_ar_path.display()),
+                            format!("/WHOLEARCHIVE:{}", cache_paths.archive.display()),
                         );
                         args.retain(|arg| !arg.ends_with(".rlib"));
                         for rlib in compiler_rlibs.iter().rev() {
@@ -1255,15 +1292,6 @@ impl BuildRequest {
         for f in args.iter().filter(|arg| arg.ends_with(".rcgu.o")) {
             _ = std::fs::remove_file(f);
         }
-
-        // Cache the rlibs list
-        _ = std::fs::write(
-            &out_rlibs_list,
-            compiler_rlibs
-                .into_iter()
-                .map(|s| s.display().to_string())
-                .join("\n"),
-        );
 
         tracing::debug!(
             "Fat linking completed in {}us",
@@ -1542,18 +1570,222 @@ impl BuildRequest {
     }
 }
 
-fn is_valid_fat_archive(path: &Path) -> std::io::Result<bool> {
-    let file = match std::fs::File::open(path) {
+const FAT_CACHE_MANIFEST_VERSION: u8 = 1;
+const FAT_CACHE_METADATA_LIMIT: u64 = 16 * 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FatCacheManifest {
+    version: u8,
+    archive_len: u64,
+    archive_structure_hash: String,
+    sidecar_len: u64,
+    sidecar_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FatArchiveFingerprint {
+    len: u64,
+    structure_hash: String,
+}
+
+#[derive(Debug, Clone)]
+struct FatCachePaths {
+    archive: PathBuf,
+    sidecar: PathBuf,
+    manifest: PathBuf,
+    lock: PathBuf,
+    hash_id: String,
+}
+
+impl FatCachePaths {
+    fn new(exe: &Path, hash_id: &str) -> Self {
+        Self {
+            archive: exe.with_file_name(format!("libdeps-{hash_id}.a")),
+            sidecar: exe.with_file_name(format!("rlibs-{hash_id}.txt")),
+            manifest: exe.with_file_name(format!("fat-cache-{hash_id}.json")),
+            lock: exe.with_file_name(format!(".fat-cache-{hash_id}.lock")),
+            hash_id: hash_id.to_string(),
+        }
+    }
+
+    fn parent(&self) -> std::io::Result<&Path> {
+        self.archive.parent().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("'{}' has no parent directory", self.archive.display()),
+            )
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FatCacheCommitFailure {
+    AfterSidecar,
+    AfterArchive,
+}
+
+fn acquire_fat_cache_lock(path: &Path) -> std::io::Result<std::fs::File> {
+    use fs2::FileExt;
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)?;
+    file.lock_exclusive()?;
+    Ok(file)
+}
+
+fn cleanup_stale_fat_cache_temps(paths: &FatCachePaths) -> std::io::Result<()> {
+    let prefixes = [
+        format!(".libdeps-{}-", paths.hash_id),
+        format!(".rlibs-{}-", paths.hash_id),
+        format!(".fat-cache-{}-", paths.hash_id),
+    ];
+
+    for entry in std::fs::read_dir(paths.parent()?)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.ends_with(".tmp") && prefixes.iter().any(|prefix| name.starts_with(prefix)) {
+            match std::fs::remove_file(entry.path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_ar_decimal(field: &[u8]) -> Option<u64> {
+    let start = field.iter().position(|byte| !byte.is_ascii_whitespace())?;
+    let end = field
+        .iter()
+        .rposition(|byte| !byte.is_ascii_whitespace())?
+        .checked_add(1)?;
+    std::str::from_utf8(&field[start..end]).ok()?.parse().ok()
+}
+
+fn bounded_ar_structure_scan(
+    file: &mut std::fs::File,
+    file_len: u64,
+) -> std::io::Result<Option<FatArchiveFingerprint>> {
+    if file_len < 8 || !file_len.is_multiple_of(2) {
+        return Ok(None);
+    }
+
+    file.seek(std::io::SeekFrom::Start(0))?;
+    let mut global_header = [0; 8];
+    file.read_exact(&mut global_header)?;
+    if global_header != *b"!<arch>\n" {
+        return Ok(None);
+    }
+
+    let mut offset = 8_u64;
+    let mut member_count = 0_u64;
+    let mut gnu_name_table_len = None;
+    let mut structure = Sha256::new();
+    while offset < file_len {
+        let header_end = match offset.checked_add(60) {
+            Some(end) if end <= file_len => end,
+            _ => return Ok(None),
+        };
+        file.seek(std::io::SeekFrom::Start(offset))?;
+        let mut header = [0; 60];
+        file.read_exact(&mut header)?;
+        if header[58..60] != *b"`\n" {
+            return Ok(None);
+        }
+
+        let member_size = match parse_ar_decimal(&header[48..58]) {
+            Some(size) => size,
+            None => return Ok(None),
+        };
+        let data_end = match header_end.checked_add(member_size) {
+            Some(end) if end <= file_len => end,
+            _ => return Ok(None),
+        };
+
+        let identifier = &header[..16];
+        let identifier = &identifier[..identifier
+            .iter()
+            .rposition(|byte| !byte.is_ascii_whitespace())
+            .map_or(0, |index| index + 1)];
+        if let Some(name_len) = identifier.strip_prefix(b"#1/").and_then(parse_ar_decimal) {
+            if name_len > member_size {
+                return Ok(None);
+            }
+            header_end
+                .checked_add(name_len)
+                .filter(|end| *end <= data_end)
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "BSD archive member name exceeds its declared member",
+                    )
+                })?;
+        }
+        if identifier == b"//" {
+            gnu_name_table_len = Some(member_size);
+        } else if identifier != b"/" {
+            if let Some(name_offset) = identifier.strip_prefix(b"/").and_then(parse_ar_decimal) {
+                if gnu_name_table_len.is_none_or(|len| name_offset >= len) {
+                    return Ok(None);
+                }
+            }
+        }
+
+        structure.update(identifier);
+        structure.update(member_size.to_le_bytes());
+        member_count = match member_count.checked_add(1) {
+            Some(count) => count,
+            None => return Ok(None),
+        };
+
+        let padding = member_size % 2;
+        let next_offset = match data_end.checked_add(padding) {
+            Some(end) if end <= file_len => end,
+            _ => return Ok(None),
+        };
+        if padding == 1 {
+            file.seek(std::io::SeekFrom::Start(data_end))?;
+            let mut byte = [0; 1];
+            file.read_exact(&mut byte)?;
+            if byte[0] != b'\n' {
+                return Ok(None);
+            }
+        }
+        offset = next_offset;
+    }
+
+    if offset != file_len || member_count == 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(FatArchiveFingerprint {
+        len: file_len,
+        structure_hash: format!("{:x}", structure.finalize()),
+    }))
+}
+
+fn validate_fat_archive(path: &Path) -> std::io::Result<Option<FatArchiveFingerprint>> {
+    let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
     let file_len = file.metadata()?.len();
-    if file_len < 8 || file_len % 2 != 0 {
-        return Ok(false);
-    }
+    let mut bounded_file = file.try_clone()?;
+    let Some(fingerprint) = bounded_ar_structure_scan(&mut bounded_file, file_len)? else {
+        return Ok(None);
+    };
+    file.seek(std::io::SeekFrom::Start(0))?;
+
     let mut archive = ar::Archive::new(file);
-    let mut has_entry = false;
+    let mut valid_object_count = 0_u64;
     while let Some(entry) = archive.next_entry() {
         let mut entry = match entry {
             Ok(entry) => entry,
@@ -1563,24 +1795,152 @@ fn is_valid_fat_archive(path: &Path) -> std::io::Result<bool> {
                     std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
                 ) =>
             {
-                return Ok(false);
+                return Ok(None);
             }
             Err(error) => return Err(error),
         };
+        let identifier = entry.header().identifier();
+        if entry.header().size() == 0
+            || !(identifier.ends_with(b".rcgu.o") || identifier.ends_with(b".obj"))
+        {
+            return Ok(None);
+        }
         if let Err(error) = entry.seek(std::io::SeekFrom::End(0)) {
             if matches!(
                 error.kind(),
                 std::io::ErrorKind::InvalidData | std::io::ErrorKind::UnexpectedEof
             ) {
-                return Ok(false);
+                return Ok(None);
             }
             return Err(error);
         }
-        has_entry = true;
+        valid_object_count = valid_object_count.checked_add(1).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "fat archive object count overflow",
+            )
+        })?;
     }
 
-    let mut file = archive.into_inner()?;
-    Ok(has_entry && file.stream_position()? == file_len)
+    Ok((valid_object_count > 0).then_some(fingerprint))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn read_bounded_file(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let len = file.metadata()?.len();
+    if len > FAT_CACHE_METADATA_LIMIT {
+        return Ok(None);
+    }
+    let mut bytes = Vec::with_capacity(len as usize);
+    file.take(FAT_CACHE_METADATA_LIMIT + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != len {
+        return Ok(None);
+    }
+    Ok(Some(bytes))
+}
+
+fn validate_fat_cache(paths: &FatCachePaths) -> std::io::Result<Option<Vec<PathBuf>>> {
+    let Some(manifest_bytes) = read_bounded_file(&paths.manifest)? else {
+        return Ok(None);
+    };
+    let Ok(manifest) = serde_json::from_slice::<FatCacheManifest>(&manifest_bytes) else {
+        return Ok(None);
+    };
+    if manifest.version != FAT_CACHE_MANIFEST_VERSION {
+        return Ok(None);
+    }
+
+    let Some(archive) = validate_fat_archive(&paths.archive)? else {
+        return Ok(None);
+    };
+    let Some(sidecar) = read_bounded_file(&paths.sidecar)? else {
+        return Ok(None);
+    };
+    if archive.len != manifest.archive_len
+        || archive.structure_hash != manifest.archive_structure_hash
+        || sidecar.len() as u64 != manifest.sidecar_len
+        || sha256_hex(&sidecar) != manifest.sidecar_hash
+    {
+        return Ok(None);
+    }
+
+    let Ok(sidecar) = std::str::from_utf8(&sidecar) else {
+        return Ok(None);
+    };
+    let paths = sidecar
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    Ok(Some(paths))
+}
+
+fn stage_fat_cache_file(
+    parent: &Path,
+    prefix: &str,
+    bytes: &[u8],
+) -> std::io::Result<tempfile::NamedTempFile> {
+    let mut file = tempfile::Builder::new()
+        .prefix(prefix)
+        .suffix(".tmp")
+        .tempfile_in(parent)?;
+    file.write_all(bytes)?;
+    file.flush()?;
+    file.as_file().sync_all()?;
+    Ok(file)
+}
+
+fn sync_file_at_path(path: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .open(path)?
+        .sync_all()
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+    std::fs::File::open(path)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn persist_cache_file(file: tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
+    file.persist(path).map(|_| ()).map_err(|error| error.error)
+}
+
+fn commit_fat_cache_transaction(
+    paths: &FatCachePaths,
+    sidecar: tempfile::NamedTempFile,
+    archive: tempfile::NamedTempFile,
+    manifest: tempfile::NamedTempFile,
+    fail_after: Option<FatCacheCommitFailure>,
+) -> std::io::Result<()> {
+    persist_cache_file(sidecar, &paths.sidecar)?;
+    if fail_after == Some(FatCacheCommitFailure::AfterSidecar) {
+        return Err(std::io::Error::other("injected failure after sidecar"));
+    }
+
+    persist_cache_file(archive, &paths.archive)?;
+    if fail_after == Some(FatCacheCommitFailure::AfterArchive) {
+        return Err(std::io::Error::other("injected failure after archive"));
+    }
+
+    // The manifest is the commit marker: cache readers hold the same lock and accept the
+    // archive/sidecar pair only when both fingerprints match this last-published file.
+    persist_cache_file(manifest, &paths.manifest)?;
+    sync_parent_directory(paths.parent()?)
 }
 
 /// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
@@ -1635,66 +1995,372 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_valid_fat_archive;
+    use super::{
+        FAT_CACHE_MANIFEST_VERSION, FatCacheCommitFailure, FatCacheManifest, FatCachePaths,
+        acquire_fat_cache_lock, cleanup_stale_fat_cache_temps, commit_fat_cache_transaction,
+        sha256_hex, stage_fat_cache_file, sync_file_at_path, validate_fat_archive,
+        validate_fat_cache,
+    };
     use std::io::Write;
+
+    fn build_archive(identifier: &[u8], contents: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut archive = ar::Builder::new(&mut bytes);
+            archive
+                .append(
+                    &ar::Header::new(identifier.to_vec(), contents.len() as u64),
+                    contents,
+                )
+                .unwrap();
+        }
+        bytes
+    }
+
+    fn stage_transaction(
+        paths: &FatCachePaths,
+        archive_bytes: &[u8],
+        sidecar_bytes: &[u8],
+    ) -> (
+        tempfile::NamedTempFile,
+        tempfile::NamedTempFile,
+        tempfile::NamedTempFile,
+    ) {
+        let parent = paths.parent().unwrap();
+        let archive = stage_fat_cache_file(
+            parent,
+            &format!(".libdeps-{}-", paths.hash_id),
+            archive_bytes,
+        )
+        .unwrap();
+        let fingerprint = validate_fat_archive(archive.path()).unwrap().unwrap();
+        let sidecar =
+            stage_fat_cache_file(parent, &format!(".rlibs-{}-", paths.hash_id), sidecar_bytes)
+                .unwrap();
+        let manifest = FatCacheManifest {
+            version: FAT_CACHE_MANIFEST_VERSION,
+            archive_len: fingerprint.len,
+            archive_structure_hash: fingerprint.structure_hash,
+            sidecar_len: sidecar_bytes.len() as u64,
+            sidecar_hash: sha256_hex(sidecar_bytes),
+        };
+        let manifest = stage_fat_cache_file(
+            parent,
+            &format!(".fat-cache-{}-", paths.hash_id),
+            &serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        (sidecar, archive, manifest)
+    }
 
     #[test]
     fn missing_fat_archive_is_invalid() {
         let tempdir = tempfile::tempdir().unwrap();
 
-        assert!(!is_valid_fat_archive(&tempdir.path().join("missing.a")).unwrap());
+        assert!(
+            validate_fat_archive(&tempdir.path().join("missing.a"))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
     fn empty_fat_archive_is_invalid() {
         let file = tempfile::NamedTempFile::new().unwrap();
 
-        assert!(!is_valid_fat_archive(file.path()).unwrap());
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
     }
 
     #[test]
     fn truncated_fat_archive_is_invalid() {
         let mut file = tempfile::NamedTempFile::new().unwrap();
-        let mut bytes = Vec::new();
-        {
-            let mut archive = ar::Builder::new(&mut bytes);
-            archive
-                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 4), &b"data"[..])
-                .unwrap();
-        }
+        let mut bytes = build_archive(b"object.rcgu.o", b"data");
         bytes.truncate(bytes.len() - 2);
         file.write_all(&bytes).unwrap();
 
-        assert!(!is_valid_fat_archive(file.path()).unwrap());
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
     }
 
     #[test]
     fn fat_archive_missing_final_padding_is_invalid() {
         let mut file = tempfile::NamedTempFile::new().unwrap();
-        let mut bytes = Vec::new();
-        {
-            let mut archive = ar::Builder::new(&mut bytes);
-            archive
-                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 3), &b"odd"[..])
-                .unwrap();
-        }
+        let mut bytes = build_archive(b"object.rcgu.o", b"odd");
         bytes.pop();
         file.write_all(&bytes).unwrap();
 
-        assert!(!is_valid_fat_archive(file.path()).unwrap());
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
     }
 
     #[test]
     fn complete_fat_archive_is_valid() {
         let mut file = tempfile::NamedTempFile::new().unwrap();
-        {
-            let mut archive = ar::Builder::new(&mut file);
-            archive
-                .append(&ar::Header::new(b"object.rcgu.o".to_vec(), 4), &b"data"[..])
-                .unwrap();
-        }
+        file.write_all(&build_archive(b"object.rcgu.o", b"data"))
+            .unwrap();
         file.flush().unwrap();
 
-        assert!(is_valid_fat_archive(file.path()).unwrap());
+        assert!(validate_fat_archive(file.path()).unwrap().is_some());
+    }
+
+    #[test]
+    fn bsd_long_object_name_is_valid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"a-very-long-object-name.rcgu.o", b"data"))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_some());
+    }
+
+    #[test]
+    fn gnu_long_object_name_is_valid() {
+        let name = b"a-very-long-object-name.rcgu.o".to_vec();
+        let mut bytes = Vec::new();
+        {
+            let mut archive = ar::GnuBuilder::new(&mut bytes, vec![name.clone()]);
+            archive
+                .append(&ar::Header::new(name, 4), &b"data"[..])
+                .unwrap();
+        }
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&bytes).unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_some());
+    }
+
+    #[test]
+    fn zero_length_object_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"object.rcgu.o", b""))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn non_object_member_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"metadata.txt", b"data"))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn gnu_symbol_table_only_archive_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"/", &0_u32.to_be_bytes()))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn gnu_name_table_only_archive_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"//", b"long-object-name.rcgu.o/\n"))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn out_of_bounds_gnu_name_reference_is_rejected_before_ar_parsing() {
+        let name = b"a-very-long-object-name.rcgu.o".to_vec();
+        let mut bytes = Vec::new();
+        {
+            let mut archive = ar::GnuBuilder::new(&mut bytes, vec![name.clone()]);
+            archive
+                .append(&ar::Header::new(name, 4), &b"data"[..])
+                .unwrap();
+        }
+        let identifier = bytes[68..]
+            .windows(16)
+            .position(|field| field.starts_with(b"/0"))
+            .map(|offset| offset + 68)
+            .unwrap();
+        bytes[identifier..identifier + 16].fill(b' ');
+        bytes[identifier..identifier + 7].copy_from_slice(b"/999999");
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&bytes).unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn bsd_symbol_table_only_archive_is_invalid() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&build_archive(b"__.SYMDEF SORTED", b""))
+            .unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn oversized_special_table_is_rejected_before_ar_parsing() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let mut bytes = build_archive(b"//", b"names/\n");
+        bytes[56..66].copy_from_slice(b"9999999999");
+        file.write_all(&bytes).unwrap();
+
+        assert!(validate_fat_archive(file.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn incomplete_transaction_is_not_a_cache_hit() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        let archive = build_archive(b"old.rcgu.o", b"old");
+        let staged = stage_transaction(&paths, &archive, b"/old/compiler.rlib");
+        commit_fat_cache_transaction(&paths, staged.0, staged.1, staged.2, None).unwrap();
+        assert!(validate_fat_cache(&paths).unwrap().is_some());
+
+        let staged = stage_transaction(&paths, &archive, b"/new/compiler.rlib");
+        assert!(
+            commit_fat_cache_transaction(
+                &paths,
+                staged.0,
+                staged.1,
+                staged.2,
+                Some(FatCacheCommitFailure::AfterSidecar),
+            )
+            .is_err()
+        );
+        assert!(validate_fat_cache(&paths).unwrap().is_none());
+    }
+
+    #[test]
+    fn archive_published_without_new_manifest_is_not_a_cache_hit() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        let old = stage_transaction(
+            &paths,
+            &build_archive(b"old.rcgu.o", b"old"),
+            b"/compiler.rlib",
+        );
+        commit_fat_cache_transaction(&paths, old.0, old.1, old.2, None).unwrap();
+
+        let new = stage_transaction(
+            &paths,
+            &build_archive(b"new.rcgu.o", b"new contents"),
+            b"/compiler.rlib",
+        );
+        assert!(
+            commit_fat_cache_transaction(
+                &paths,
+                new.0,
+                new.1,
+                new.2,
+                Some(FatCacheCommitFailure::AfterArchive),
+            )
+            .is_err()
+        );
+        assert!(validate_fat_cache(&paths).unwrap().is_none());
+    }
+
+    #[test]
+    fn persist_error_is_not_treated_as_a_concurrent_winner() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        std::fs::create_dir(&paths.archive).unwrap();
+        let staged = stage_transaction(&paths, &build_archive(b"object.rcgu.o", b"data"), b"");
+
+        assert!(commit_fat_cache_transaction(&paths, staged.0, staged.1, staged.2, None).is_err());
+        assert!(validate_fat_cache(&paths).unwrap().is_none());
+    }
+
+    #[test]
+    fn exclusive_lock_serializes_same_hash_publishers() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let lock_path = tempdir.path().join(".fat-cache-12345678.lock");
+        let first = acquire_fat_cache_lock(&lock_path).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let second_path = lock_path.clone();
+        let thread = std::thread::spawn(move || {
+            let lock = acquire_fat_cache_lock(&second_path).unwrap();
+            sender.send(()).unwrap();
+            drop(lock);
+        });
+
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(50))
+                .is_err()
+        );
+        drop(first);
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn stale_temps_are_cleaned_only_for_locked_hash() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let paths = FatCachePaths::new(&tempdir.path().join("app"), "12345678");
+        let stale = tempdir.path().join(".libdeps-12345678-stale.a.tmp");
+        let other = tempdir.path().join(".libdeps-87654321-active.a.tmp");
+        std::fs::write(&stale, b"stale").unwrap();
+        std::fs::write(&other, b"other").unwrap();
+        let _lock = acquire_fat_cache_lock(&paths.lock).unwrap();
+
+        cleanup_stale_fat_cache_temps(&paths).unwrap();
+
+        assert!(!stale.exists());
+        assert!(other.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sync_reopens_path_after_inode_replacement() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("archive.a.tmp");
+        let replacement = tempdir.path().join("replacement");
+        std::fs::write(&path, b"old inode").unwrap();
+        std::fs::write(&replacement, b"replacement inode").unwrap();
+        std::fs::rename(&replacement, &path).unwrap();
+
+        sync_file_at_path(&path).unwrap();
+
+        assert_eq!(std::fs::read(path).unwrap(), b"replacement inode");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn darwin_ranlib_output_reopens_syncs_and_validates() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let source = tempdir.path().join("object.c");
+        let object = tempdir.path().join("object.rcgu.o");
+        let archive = tempdir.path().join("libdeps.a");
+        std::fs::write(&source, b"int dioxus_fat_cache_test(void) { return 1; }\n").unwrap();
+        assert!(
+            std::process::Command::new("cc")
+                .args(["-c"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&object)
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            std::process::Command::new("ar")
+                .arg("cr")
+                .arg(&archive)
+                .arg(&object)
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            std::process::Command::new("ranlib")
+                .arg(&archive)
+                .status()
+                .unwrap()
+                .success()
+        );
+
+        // ranlib is allowed to replace the inode, so durability must reopen the path instead of
+        // syncing a handle retained from before indexing.
+        sync_file_at_path(&archive).unwrap();
+        assert!(validate_fat_archive(&archive).unwrap().is_some());
     }
 }
