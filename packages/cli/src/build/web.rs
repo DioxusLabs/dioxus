@@ -48,6 +48,108 @@ use std::{
 };
 use uuid::Uuid;
 
+fn external_web_resource(resource: &Path) -> Result<Option<&str>> {
+    let resource = resource
+        .to_str()
+        .context("Web resource paths must be valid UTF-8")?;
+
+    if resource.starts_with("//") {
+        return Ok(Some(resource));
+    }
+
+    if !Path::new(resource).is_absolute()
+        && url::Url::parse(resource)
+            .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.has_host())
+    {
+        return Ok(Some(resource));
+    }
+
+    Ok(None)
+}
+
+fn resolve_web_resource(crate_dir: &Path, resource: &Path) -> Result<PathBuf> {
+    let source = if resource.is_absolute() {
+        resource.to_path_buf()
+    } else {
+        crate_dir.join(resource)
+    };
+
+    let source = dunce::canonicalize(&source).with_context(|| {
+        format!(
+            "Failed to resolve web resource `{}` from `{}`",
+            resource.display(),
+            crate_dir.display()
+        )
+    })?;
+
+    if !source.is_file() {
+        anyhow::bail!(
+            "Web resource `{}` does not resolve to a file",
+            resource.display()
+        );
+    }
+
+    Ok(source)
+}
+
+fn register_web_resource(
+    assets: &mut AppManifest,
+    crate_dir: &Path,
+    resource: &Path,
+    options: AssetOptions,
+) -> Result<()> {
+    if external_web_resource(resource)?.is_some() {
+        return Ok(());
+    }
+
+    let source = resolve_web_resource(crate_dir, resource)?;
+    assets
+        .register_asset(&source, options)
+        .with_context(|| format!("Failed to register web resource `{}`", resource.display()))?;
+    Ok(())
+}
+
+fn web_resource_url(
+    is_dev: bool,
+    crate_dir: &Path,
+    base_path: Option<&str>,
+    assets: &AppManifest,
+    resource: &Path,
+    options: AssetOptions,
+) -> Result<String> {
+    if is_dev {
+        return resource
+            .to_str()
+            .map(ToOwned::to_owned)
+            .context("Web resource paths must be valid UTF-8");
+    }
+
+    if let Some(external) = external_web_resource(resource)? {
+        return Ok(external.to_owned());
+    }
+
+    let source = resolve_web_resource(crate_dir, resource)?;
+    let asset = assets
+        .get_assets_for_source(&source)
+        .and_then(|assets| assets.iter().find(|asset| asset.options() == &options))
+        .with_context(|| {
+            format!(
+                "Web resource `{}` was not mapped to a bundled asset",
+                resource.display()
+            )
+        })?;
+
+    let path = match base_path {
+        Some(base_path) => format!(
+            "/{}/assets/{}",
+            base_path.trim_matches('/'),
+            asset.bundled_path()
+        ),
+        None => format!("assets/{}", asset.bundled_path()),
+    };
+    Ok(path)
+}
+
 impl BuildRequest {
     pub async fn verify_web_tooling(&self) -> Result<()> {
         // Wasm bindgen
@@ -273,6 +375,8 @@ impl BuildRequest {
             )?;
         }
 
+        self.register_web_resources(assets)?;
+
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
 
@@ -414,6 +518,32 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         !self.release
     }
 
+    fn register_web_resources(&self, assets: &mut AppManifest) -> Result<()> {
+        if !self.should_bundle_to_asset() {
+            return Ok(());
+        }
+
+        let resources = &self.config.web.resource;
+        for style in resources.style.iter().flatten() {
+            register_web_resource(
+                assets,
+                &self.crate_dir(),
+                style,
+                AssetOptions::css().into_asset_options(),
+            )?;
+        }
+        for script in resources.script.iter().flatten() {
+            register_web_resource(
+                assets,
+                &self.crate_dir(),
+                script,
+                AssetOptions::js().into_asset_options(),
+            )?;
+        }
+
+        Ok(())
+    }
+
     // Inject any resources from the config into the html
     fn inject_resources(&self, assets: &AppManifest, html: &mut String) -> Result<()> {
         use std::fmt::Write;
@@ -432,20 +562,32 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Add all styles to the head
         for style in &style_list {
+            let url = web_resource_url(
+                self.is_dev_build(),
+                &self.crate_dir(),
+                self.trimmed_base_path(),
+                assets,
+                style,
+                AssetOptions::css().into_asset_options(),
+            )?;
             writeln!(
                 &mut head_resources,
                 "<link rel=\"stylesheet\" href=\"{}\">",
-                &style.to_str().unwrap(),
+                url,
             )?;
         }
 
         // Add all scripts to the head
         for script in &script_list {
-            writeln!(
-                &mut head_resources,
-                "<script src=\"{}\"></script>",
-                &script.to_str().unwrap(),
+            let url = web_resource_url(
+                self.is_dev_build(),
+                &self.crate_dir(),
+                self.trimmed_base_path(),
+                assets,
+                script,
+                AssetOptions::js().into_asset_options(),
             )?;
+            writeln!(&mut head_resources, "<script src=\"{}\"></script>", url,)?;
         }
 
         // Add the base path to the head if this is a debug build
@@ -605,5 +747,171 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
         canonical_path.starts_with(&canonical_static)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_resources_use_hashed_manifest_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let css = temp.path().join("assets/styling/main.css");
+        let js = temp.path().join("assets/scripts/main.js");
+        std::fs::create_dir_all(css.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(js.parent().unwrap()).unwrap();
+        std::fs::write(&css, "body { color: red; }").unwrap();
+        std::fs::write(&js, "console.log('release');").unwrap();
+
+        let mut manifest = AppManifest::new();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("assets/styling/main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("assets/scripts/main.js"),
+            AssetOptions::js().into_asset_options(),
+        )
+        .unwrap();
+
+        let css_url = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("assets/styling/main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+        let js_url = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("assets/scripts/main.js"),
+            AssetOptions::js().into_asset_options(),
+        )
+        .unwrap();
+
+        assert!(css_url.starts_with("assets/main-dxh"));
+        assert!(css_url.ends_with(".css"));
+        assert!(js_url.starts_with("assets/main-dxh"));
+        assert!(js_url.ends_with(".js"));
+        assert_ne!(css_url, "assets/styling/main.css");
+        assert_ne!(js_url, "assets/scripts/main.js");
+
+        let public = temp.path().join("public");
+        for asset in manifest.unique_assets() {
+            crate::opt::process_file_to(
+                asset.options(),
+                Path::new(asset.absolute_source_path()),
+                &public.join("assets").join(asset.bundled_path()),
+                None,
+            )
+            .unwrap();
+        }
+        assert!(public.join(css_url).is_file());
+        assert!(public.join(js_url).is_file());
+    }
+
+    #[test]
+    fn dev_resources_keep_configured_source_paths() {
+        let manifest = AppManifest::new();
+        let resource = Path::new("assets/styling/main.css");
+
+        let url = web_resource_url(
+            true,
+            Path::new("/project"),
+            Some("docs"),
+            &manifest,
+            resource,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert_eq!(url, "assets/styling/main.css");
+    }
+
+    #[test]
+    fn release_resource_url_applies_base_path_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let css = temp.path().join("main.css");
+        std::fs::write(&css, "body { color: blue; }").unwrap();
+        let mut manifest = AppManifest::new();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        let url = web_resource_url(
+            false,
+            temp.path(),
+            Some("docs"),
+            &manifest,
+            Path::new("main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert!(url.starts_with("/docs/assets/main-dxh"));
+        assert_eq!(url.matches("/docs").count(), 1);
+    }
+
+    #[test]
+    fn missing_or_unregistered_release_resources_fail() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut manifest = AppManifest::new();
+        let missing = Path::new("missing.css");
+
+        let missing_error = register_web_resource(
+            &mut manifest,
+            temp.path(),
+            missing,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(missing_error.contains("missing.css"));
+
+        let existing = temp.path().join("existing.css");
+        std::fs::write(&existing, "body {}").unwrap();
+        let unmapped_error = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("existing.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(unmapped_error.contains("existing.css"));
+    }
+
+    #[test]
+    fn release_external_resources_remain_external() {
+        let manifest = AppManifest::new();
+        let resource = Path::new("https://cdn.example.com/main.css");
+
+        let url = web_resource_url(
+            false,
+            Path::new("/project"),
+            Some("docs"),
+            &manifest,
+            resource,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert_eq!(url, "https://cdn.example.com/main.css");
     }
 }
