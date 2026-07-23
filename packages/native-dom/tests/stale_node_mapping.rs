@@ -23,10 +23,16 @@ use dioxus_native_dom::DioxusDocument;
 use std::cell::Cell;
 use std::rc::Rc;
 
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone)]
 struct AppProps {
     generation: Rc<Cell<usize>>,
     view: fn(usize) -> Element,
+}
+
+impl PartialEq for AppProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.generation == other.generation && std::ptr::fn_addr_eq(self.view, other.view)
+    }
 }
 
 fn app(props: AppProps) -> Element {
