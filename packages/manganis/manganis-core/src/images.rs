@@ -231,23 +231,37 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
 
     /// Sets the width of the image and preserves its aspect ratio
     ///
+    /// If a height is already set, the image will use both dimensions as a manual size.
+    ///
     /// ```rust
     /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_width(512));
     /// ```
     pub const fn with_width(mut self, width: u32) -> Self {
-        self.variant.size = ImageSize::Width(width);
+        self.variant.size = match self.variant.size {
+            ImageSize::Height(height) | ImageSize::Manual { height, .. } => {
+                ImageSize::Manual { width, height }
+            }
+            _ => ImageSize::Width(width),
+        };
         self
     }
 
     /// Sets the height of the image and preserves its aspect ratio
+    ///
+    /// If a width is already set, the image will use both dimensions as a manual size.
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, AssetOptions};
     /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_height(512));
     /// ```
     pub const fn with_height(mut self, height: u32) -> Self {
-        self.variant.size = ImageSize::Height(height);
+        self.variant.size = match self.variant.size {
+            ImageSize::Width(width) | ImageSize::Manual { width, .. } => {
+                ImageSize::Manual { width, height }
+            }
+            _ => ImageSize::Height(height),
+        };
         self
     }
 
@@ -257,5 +271,67 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
             add_hash: self.add_hash,
             variant: AssetVariant::Image(self.variant),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image_size(options: AssetOptions) -> ImageSize {
+        let AssetVariant::Image(options) = options.variant() else {
+            unreachable!()
+        };
+        options.size()
+    }
+
+    #[test]
+    fn width_then_height_sets_manual_size() {
+        let options = AssetOptions::image()
+            .with_width(80)
+            .with_height(40)
+            .into_asset_options();
+
+        assert_eq!(
+            image_size(options),
+            ImageSize::Manual {
+                width: 80,
+                height: 40
+            }
+        );
+    }
+
+    #[test]
+    fn height_then_width_sets_manual_size() {
+        let options = AssetOptions::image()
+            .with_height(40)
+            .with_width(80)
+            .into_asset_options();
+
+        assert_eq!(
+            image_size(options),
+            ImageSize::Manual {
+                width: 80,
+                height: 40
+            }
+        );
+    }
+
+    #[test]
+    fn setters_update_existing_manual_size() {
+        let options = AssetOptions::image()
+            .with_width(80)
+            .with_height(40)
+            .with_width(60)
+            .with_height(30)
+            .into_asset_options();
+
+        assert_eq!(
+            image_size(options),
+            ImageSize::Manual {
+                width: 60,
+                height: 30
+            }
+        );
     }
 }
