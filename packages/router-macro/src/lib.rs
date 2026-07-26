@@ -375,7 +375,7 @@ impl RouteEnum {
                             return Err(syn::Error::new_spanned(
                                 attr,
                                 format!(
-                                    "layout `{layout_comp}` was opened inside the nest \"{nest_route}\" and is still active at this #[end_nest]; add #[end_layout] before #[end_nest] [optional auto-close policy not applied]"
+                                    "layout `{layout_comp}` was opened inside the nest \"{nest_route}\" and is still active at this #[end_nest]; add #[end_layout] before #[end_nest]"
                                 ),
                             ));
                         }
