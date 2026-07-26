@@ -273,6 +273,18 @@ impl BuildRequest {
             )?;
         }
 
+        if self.is_dev_build() {
+            std::fs::write(
+                self.root_dir().join("dev.css"),
+                include_str!("../../assets/web/dev.css"),
+            )?;
+
+            std::fs::write(
+                self.root_dir().join("dev.js"),
+                include_str!("../../assets/web/dev.js"),
+            )?;
+        }
+
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
 
