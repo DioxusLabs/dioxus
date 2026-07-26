@@ -48,6 +48,287 @@ use std::{
 };
 use uuid::Uuid;
 
+enum WebResourceLocation<'a> {
+    Browser(&'a str),
+    Local(PathBuf),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WebResourceKind {
+    Browser,
+    AmbiguousRelativeBrowserRef,
+    Local,
+}
+
+fn has_valid_percent_encoding(resource: &str) -> bool {
+    let bytes = resource.as_bytes();
+    let mut found = false;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            index += 1;
+            continue;
+        }
+
+        if index + 2 >= bytes.len()
+            || !bytes[index + 1].is_ascii_hexdigit()
+            || !bytes[index + 2].is_ascii_hexdigit()
+        {
+            return false;
+        }
+
+        found = true;
+        index += 3;
+    }
+
+    found
+}
+
+fn web_resource_kind(resource: &Path) -> Result<WebResourceKind> {
+    let resource_str = resource
+        .to_str()
+        .context("Web resource paths must be valid UTF-8")?;
+
+    if resource_str.starts_with('/') {
+        return Ok(WebResourceKind::Browser);
+    }
+    if resource.is_absolute() {
+        return Ok(WebResourceKind::Local);
+    }
+    if url::Url::parse(resource_str).is_ok() {
+        return Ok(WebResourceKind::Browser);
+    }
+    if resource_str.bytes().any(|byte| matches!(byte, b'?' | b'#'))
+        || has_valid_percent_encoding(resource_str)
+    {
+        return Ok(WebResourceKind::AmbiguousRelativeBrowserRef);
+    }
+    Ok(WebResourceKind::Local)
+}
+
+fn web_resource_location<'a>(
+    crate_dir: &Path,
+    resource: &'a Path,
+) -> Result<WebResourceLocation<'a>> {
+    let resource_str = resource
+        .to_str()
+        .context("Web resource paths must be valid UTF-8")?;
+
+    // A literal local file wins when relative URL syntax is ambiguous. This
+    // keeps special-character filenames bundleable without changing missing
+    // query, fragment, or percent-encoded browser references.
+    match web_resource_kind(resource)? {
+        WebResourceKind::Browser => Ok(WebResourceLocation::Browser(resource_str)),
+        WebResourceKind::AmbiguousRelativeBrowserRef => {
+            let literal_path = crate_dir.join(resource);
+            match std::fs::metadata(&literal_path) {
+                Ok(_) => resolve_web_resource(crate_dir, resource).map(WebResourceLocation::Local),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    Ok(WebResourceLocation::Browser(resource_str))
+                }
+                Err(error) => Err(error).with_context(|| {
+                    format!(
+                        "Failed to inspect ambiguous web resource `{}`",
+                        literal_path.display()
+                    )
+                }),
+            }
+        }
+        WebResourceKind::Local => {
+            resolve_web_resource(crate_dir, resource).map(WebResourceLocation::Local)
+        }
+    }
+}
+
+fn resolve_web_resource(crate_dir: &Path, resource: &Path) -> Result<PathBuf> {
+    let source = if resource.is_absolute() {
+        resource.to_path_buf()
+    } else {
+        crate_dir.join(resource)
+    };
+
+    let source = dunce::canonicalize(&source).with_context(|| {
+        format!(
+            "Failed to resolve web resource `{}` from `{}`",
+            resource.display(),
+            crate_dir.display()
+        )
+    })?;
+
+    if !source.is_file() {
+        anyhow::bail!(
+            "Web resource `{}` does not resolve to a file",
+            resource.display()
+        );
+    }
+
+    Ok(source)
+}
+
+fn register_web_resource(
+    assets: &mut AppManifest,
+    crate_dir: &Path,
+    resource: &Path,
+    options: AssetOptions,
+) -> Result<()> {
+    if let WebResourceLocation::Local(source) = web_resource_location(crate_dir, resource)? {
+        assets
+            .register_asset(&source, options)
+            .with_context(|| format!("Failed to register web resource `{}`", resource.display()))?;
+    }
+    Ok(())
+}
+
+fn append_url_path_segments<'a>(
+    segments: &mut url::PathSegmentsMut<'a>,
+    path: &Path,
+) -> Result<()> {
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::Normal(segment) => {
+                segments.push(
+                    segment
+                        .to_str()
+                        .context("Bundled web resource paths must be valid UTF-8")?,
+                );
+            }
+            _ => anyhow::bail!(
+                "Bundled web resource path must be relative: `{}`",
+                path.display()
+            ),
+        };
+    }
+    Ok(())
+}
+
+fn bundled_web_resource_url(base_path: Option<&str>, bundled_path: &Path) -> Result<String> {
+    let mut url = url::Url::parse("https://dioxus.invalid/")
+        .expect("the internal web resource URL base must be valid");
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .expect("the internal web resource URL base supports path segments");
+        segments.clear();
+        if let Some(base_path) = base_path {
+            append_url_path_segments(&mut segments, Path::new(base_path))?;
+        }
+        segments.push("assets");
+        append_url_path_segments(&mut segments, bundled_path)?;
+    }
+
+    let path = url.path();
+    Ok(if base_path.is_some() {
+        path.to_owned()
+    } else {
+        path.trim_start_matches('/').to_owned()
+    })
+}
+
+fn web_resource_url(
+    is_dev: bool,
+    crate_dir: &Path,
+    base_path: Option<&str>,
+    assets: &AppManifest,
+    resource: &Path,
+    options: AssetOptions,
+) -> Result<String> {
+    if is_dev {
+        return resource
+            .to_str()
+            .map(ToOwned::to_owned)
+            .context("Web resource paths must be valid UTF-8");
+    }
+
+    let source = match web_resource_location(crate_dir, resource)? {
+        WebResourceLocation::Browser(url) => return Ok(url.to_owned()),
+        WebResourceLocation::Local(source) => source,
+    };
+    let asset = assets
+        .get_assets_for_source(&source)
+        .and_then(|assets| assets.iter().find(|asset| asset.options() == &options))
+        .with_context(|| {
+            format!(
+                "Web resource `{}` was not mapped to a bundled asset",
+                resource.display()
+            )
+        })?;
+
+    bundled_web_resource_url(base_path, Path::new(asset.bundled_path()))
+}
+
+fn register_configured_web_resources(
+    assets: &mut AppManifest,
+    crate_dir: &Path,
+    resources: &crate::config::WebResourceConfig,
+) -> Result<()> {
+    for style in resources.style.iter().flatten() {
+        register_web_resource(
+            assets,
+            crate_dir,
+            style,
+            AssetOptions::css().into_asset_options(),
+        )?;
+    }
+    for script in resources.script.iter().flatten() {
+        register_web_resource(
+            assets,
+            crate_dir,
+            script,
+            AssetOptions::js().into_asset_options(),
+        )?;
+    }
+    Ok(())
+}
+
+fn configured_web_resource_tags(
+    is_dev: bool,
+    crate_dir: &Path,
+    base_path: Option<&str>,
+    assets: &AppManifest,
+    resources: &crate::config::WebResourceConfig,
+) -> Result<String> {
+    use std::fmt::Write;
+
+    let mut style_list = resources.style.clone().unwrap_or_default();
+    let mut script_list = resources.script.clone().unwrap_or_default();
+    if is_dev {
+        style_list.extend(resources.dev.style.iter().cloned());
+        script_list.extend(resources.dev.script.iter().cloned());
+    }
+
+    let mut tags = String::new();
+    for style in &style_list {
+        let url = web_resource_url(
+            is_dev,
+            crate_dir,
+            base_path,
+            assets,
+            style,
+            AssetOptions::css().into_asset_options(),
+        )?;
+        writeln!(&mut tags, "<link rel=\"stylesheet\" href=\"{url}\">")?;
+    }
+    for script in &script_list {
+        let url = web_resource_url(
+            is_dev,
+            crate_dir,
+            base_path,
+            assets,
+            script,
+            AssetOptions::js().into_asset_options(),
+        )?;
+        writeln!(&mut tags, "<script src=\"{url}\"></script>")?;
+    }
+    Ok(tags)
+}
+
+fn write_index_html_file(path: &Path, prepare: impl FnOnce() -> Result<String>) -> Result<()> {
+    let html = prepare().context("Failed to prepare web index.html")?;
+    std::fs::write(path, html).context("Failed to write web index.html")
+}
+
 impl BuildRequest {
     pub async fn verify_web_tooling(&self) -> Result<()> {
         // Wasm bindgen
@@ -273,6 +554,8 @@ impl BuildRequest {
             )?;
         }
 
+        self.register_web_resources(assets)?;
+
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
 
@@ -319,12 +602,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let js_path = self.bundled_js_path(assets);
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
-        std::fs::write(
-            self.root_dir().join("index.html"),
-            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
-        )?;
-
-        Ok(())
+        write_index_html_file(&self.root_dir().join("index.html"), || {
+            self.prepare_html(assets, &wasm_path, &js_path)
+        })
     }
 
     fn bundled_js_path(&self, assets: &AppManifest) -> String {
@@ -414,39 +694,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         !self.release
     }
 
+    fn register_web_resources(&self, assets: &mut AppManifest) -> Result<()> {
+        if !self.should_bundle_to_asset() {
+            return Ok(());
+        }
+
+        let resources = &self.config.web.resource;
+        register_configured_web_resources(assets, &self.crate_dir(), resources)
+    }
+
     // Inject any resources from the config into the html
     fn inject_resources(&self, assets: &AppManifest, html: &mut String) -> Result<()> {
         use std::fmt::Write;
 
-        // Collect all resources into a list of styles and scripts
         let resources = &self.config.web.resource;
-        let mut style_list = resources.style.clone().unwrap_or_default();
-        let mut script_list = resources.script.clone().unwrap_or_default();
-
-        if self.is_dev_build() {
-            style_list.extend(resources.dev.style.iter().cloned());
-            script_list.extend(resources.dev.script.iter().cloned());
-        }
-
-        let mut head_resources = String::new();
-
-        // Add all styles to the head
-        for style in &style_list {
-            writeln!(
-                &mut head_resources,
-                "<link rel=\"stylesheet\" href=\"{}\">",
-                &style.to_str().unwrap(),
-            )?;
-        }
-
-        // Add all scripts to the head
-        for script in &script_list {
-            writeln!(
-                &mut head_resources,
-                "<script src=\"{}\"></script>",
-                &script.to_str().unwrap(),
-            )?;
-        }
+        let mut head_resources = configured_web_resource_tags(
+            self.is_dev_build(),
+            &self.crate_dir(),
+            self.trimmed_base_path(),
+            assets,
+            resources,
+        )?;
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
@@ -605,5 +873,404 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
         canonical_path.starts_with(&canonical_static)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_resources_use_hashed_manifest_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let css = temp.path().join("assets/styling/main.css");
+        let js = temp.path().join("assets/scripts/main.js");
+        std::fs::create_dir_all(css.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(js.parent().unwrap()).unwrap();
+        std::fs::write(&css, "body { color: red; }").unwrap();
+        std::fs::write(&js, "console.log('release');").unwrap();
+
+        let mut manifest = AppManifest::new();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("assets/styling/main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("assets/scripts/main.js"),
+            AssetOptions::js().into_asset_options(),
+        )
+        .unwrap();
+
+        let css_url = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("assets/styling/main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+        let js_url = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("assets/scripts/main.js"),
+            AssetOptions::js().into_asset_options(),
+        )
+        .unwrap();
+
+        assert!(css_url.starts_with("assets/main-dxh"));
+        assert!(css_url.ends_with(".css"));
+        assert!(js_url.starts_with("assets/main-dxh"));
+        assert!(js_url.ends_with(".js"));
+        assert_ne!(css_url, "assets/styling/main.css");
+        assert_ne!(js_url, "assets/scripts/main.js");
+
+        let public = temp.path().join("public");
+        for asset in manifest.unique_assets() {
+            crate::opt::process_file_to(
+                asset.options(),
+                Path::new(asset.absolute_source_path()),
+                &public.join("assets").join(asset.bundled_path()),
+                None,
+            )
+            .unwrap();
+        }
+        assert!(public.join(css_url).is_file());
+        assert!(public.join(js_url).is_file());
+    }
+
+    #[test]
+    fn dev_resources_keep_configured_source_paths() {
+        let manifest = AppManifest::new();
+        let resource = Path::new("assets/styling/main.css");
+
+        let url = web_resource_url(
+            true,
+            Path::new("/project"),
+            Some("docs"),
+            &manifest,
+            resource,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert_eq!(url, "assets/styling/main.css");
+    }
+
+    #[test]
+    fn release_resource_url_applies_base_path_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let css = temp.path().join("main.css");
+        std::fs::write(&css, "body { color: blue; }").unwrap();
+        let mut manifest = AppManifest::new();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        let url = web_resource_url(
+            false,
+            temp.path(),
+            Some("docs"),
+            &manifest,
+            Path::new("main.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert!(url.starts_with("/docs/assets/main-dxh"));
+        assert_eq!(url.matches("/docs").count(), 1);
+    }
+
+    #[test]
+    fn missing_or_unregistered_release_resources_fail() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut manifest = AppManifest::new();
+        let missing = Path::new("missing.css");
+
+        let missing_error = register_web_resource(
+            &mut manifest,
+            temp.path(),
+            missing,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(missing_error.contains("missing.css"));
+
+        let existing = temp.path().join("existing.css");
+        std::fs::write(&existing, "body {}").unwrap();
+        let unmapped_error = web_resource_url(
+            false,
+            temp.path(),
+            None,
+            &manifest,
+            Path::new("existing.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(unmapped_error.contains("existing.css"));
+    }
+
+    #[test]
+    fn release_external_resources_remain_external() {
+        let manifest = AppManifest::new();
+        let resource = Path::new("https://cdn.example.com/main.css");
+
+        let url = web_resource_url(
+            false,
+            Path::new("/project"),
+            Some("docs"),
+            &manifest,
+            resource,
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert_eq!(url, "https://cdn.example.com/main.css");
+    }
+
+    #[test]
+    fn release_hashed_urls_percent_encode_each_path_segment() {
+        let temp = tempfile::tempdir().unwrap();
+        let css = temp.path().join("theme # %20 你好.css");
+        std::fs::write(&css, "body { color: green; }").unwrap();
+        let mut manifest = AppManifest::new();
+        register_web_resource(
+            &mut manifest,
+            temp.path(),
+            Path::new("theme # %20 你好.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        let url = web_resource_url(
+            false,
+            temp.path(),
+            Some("docs space/版本"),
+            &manifest,
+            Path::new("theme # %20 你好.css"),
+            AssetOptions::css().into_asset_options(),
+        )
+        .unwrap();
+
+        assert!(url.starts_with("/docs%20space/%E7%89%88%E6%9C%AC/assets/"));
+        assert!(url.contains("theme%20%23%20%2520%20%E4%BD%A0%E5%A5%BD-dxh"));
+        assert!(!url.contains("%2F"));
+        assert!(!url.contains('你'));
+        assert!(!url.contains('#'));
+    }
+
+    #[test]
+    fn browser_urls_keep_the_legacy_verbatim_contract() {
+        let manifest = AppManifest::new();
+        for resource in [
+            "/styles.css",
+            "//cdn.example.com/styles.css",
+            "data:text/css,body%7Bcolor:red%7D",
+            "blob:https://example.com/3f4e",
+            "https://cdn.example.com/styles.css",
+        ] {
+            assert_eq!(
+                web_resource_kind(Path::new(resource)).unwrap(),
+                WebResourceKind::Browser
+            );
+            assert_eq!(
+                web_resource_url(
+                    false,
+                    Path::new("/project"),
+                    Some("docs"),
+                    &manifest,
+                    Path::new(resource),
+                    AssetOptions::css().into_asset_options(),
+                )
+                .unwrap(),
+                resource
+            );
+        }
+    }
+
+    #[test]
+    fn missing_ambiguous_relative_urls_keep_the_legacy_verbatim_contract() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = AppManifest::new();
+        for resource in [
+            "assets/main.css?v=123",
+            "assets/app.js#x",
+            "assets/my%20theme.css",
+        ] {
+            assert_eq!(
+                web_resource_kind(Path::new(resource)).unwrap(),
+                WebResourceKind::AmbiguousRelativeBrowserRef
+            );
+            assert_eq!(
+                web_resource_url(
+                    false,
+                    temp.path(),
+                    Some("docs"),
+                    &manifest,
+                    Path::new(resource),
+                    AssetOptions::css().into_asset_options(),
+                )
+                .unwrap(),
+                resource
+            );
+        }
+    }
+
+    #[test]
+    fn plain_relative_paths_and_invalid_percent_escapes_remain_local() {
+        for resource in [
+            "assets/main.css",
+            "assets/my%theme.css",
+            "assets/my%2theme.css",
+        ] {
+            assert_eq!(
+                web_resource_kind(Path::new(resource)).unwrap(),
+                WebResourceKind::Local
+            );
+        }
+    }
+
+    #[test]
+    fn slash_unc_spelling_keeps_protocol_relative_browser_semantics() {
+        assert_eq!(
+            web_resource_kind(Path::new("//server/share/styles.css")).unwrap(),
+            WebResourceKind::Browser
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn backslash_unc_spelling_is_a_local_windows_path() {
+        assert_eq!(
+            web_resource_kind(Path::new(r"\\server\share\styles.css")).unwrap(),
+            WebResourceKind::Local
+        );
+    }
+
+    #[test]
+    fn parsed_config_produces_encoded_html_and_matching_disk_assets() {
+        let temp = tempfile::tempdir().unwrap();
+        let css_name = "assets/theme # %20 你好.css";
+        let js_name = "assets/main # %2F app.js";
+        std::fs::create_dir_all(temp.path().join("assets")).unwrap();
+        std::fs::write(temp.path().join(css_name), "body { color: navy; }").unwrap();
+        std::fs::write(temp.path().join(js_name), "console.log('encoded');").unwrap();
+
+        let config: crate::config::DioxusConfig = toml::from_str(&format!(
+            r#"
+                [web.resource]
+                style = ["{css_name}"]
+                script = ["{js_name}"]
+
+                [web.resource.dev]
+            "#
+        ))
+        .unwrap();
+        let mut manifest = AppManifest::new();
+        register_configured_web_resources(&mut manifest, temp.path(), &config.web.resource)
+            .unwrap();
+        let tags = configured_web_resource_tags(
+            false,
+            temp.path(),
+            Some("docs"),
+            &manifest,
+            &config.web.resource,
+        )
+        .unwrap();
+        let html = format!("<html><head>{tags}</head><body></body></html>");
+        let public_assets = temp.path().join("public/assets");
+        let mut bundled_names = Vec::new();
+
+        for asset in manifest.unique_assets() {
+            let output = public_assets.join(asset.bundled_path());
+            crate::opt::process_file_to(
+                asset.options(),
+                Path::new(asset.absolute_source_path()),
+                &output,
+                None,
+            )
+            .unwrap();
+            assert!(output.is_file());
+            bundled_names.push(asset.bundled_path().to_owned());
+
+            let url =
+                bundled_web_resource_url(Some("docs"), Path::new(asset.bundled_path())).unwrap();
+            assert!(html.contains(&url));
+        }
+
+        assert!(
+            bundled_names
+                .iter()
+                .any(|name| name.contains("theme # %20 你好-dxh"))
+        );
+        assert!(
+            bundled_names
+                .iter()
+                .any(|name| name.contains("main # %2F app-dxh"))
+        );
+        assert!(html.contains("%23"));
+        assert!(html.contains("%2520"));
+        assert!(html.contains("%252F"));
+        assert!(html.contains("%E4%BD%A0%E5%A5%BD"));
+        assert!(!html.contains(css_name));
+        assert!(!html.contains(js_name));
+    }
+
+    #[test]
+    fn index_resource_errors_propagate_before_writing_html() {
+        let temp = tempfile::tempdir().unwrap();
+        let resource = temp.path().join("existing.css");
+        std::fs::write(&resource, "body {}").unwrap();
+        let config: crate::config::DioxusConfig = toml::from_str(
+            r#"
+                [web.resource]
+                style = ["existing.css"]
+
+                [web.resource.dev]
+            "#,
+        )
+        .unwrap();
+
+        let error = configured_web_resource_tags(
+            false,
+            temp.path(),
+            None,
+            &AppManifest::new(),
+            &config.web.resource,
+        )
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("was not mapped to a bundled asset")
+        );
+    }
+
+    #[test]
+    fn write_index_html_file_returns_prepare_errors_without_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let index = temp.path().join("index.html");
+        let error = write_index_html_file(&index, || {
+            anyhow::bail!("configured resource was not mapped")
+        })
+        .unwrap_err();
+        let error = format!("{error:#}");
+        assert!(error.contains("Failed to prepare web index.html"));
+        assert!(error.contains("configured resource was not mapped"));
+        assert!(!index.exists());
     }
 }
