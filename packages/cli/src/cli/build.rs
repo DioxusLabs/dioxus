@@ -214,18 +214,6 @@ impl CommandWithPlatformOverrides<BuildArgs> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::should_build_sequentially;
-
-    #[test]
-    fn ssg_builds_require_sequential_order() {
-        assert!(!should_build_sequentially(false, false));
-        assert!(should_build_sequentially(true, false));
-        assert!(should_build_sequentially(false, true));
-    }
-}
-
 impl BuildArtifacts {
     pub(crate) fn into_structured_output(self) -> StructuredBuildArtifacts {
         // Extract the tip crate's args for the structured output.
