@@ -86,6 +86,9 @@ cargo-generate = "=0.23.10"
 # cargo-generate pulls in rhai, whose 1.24.0 release accepts newer incompatible
 # rhai_codegen releases in fresh `cargo install --path .` resolutions.
 rhai_codegen = "=3.1.0"
+# cargo-generate also pulls in liquid -> kstring. kstring 2.0.3 raised its
+# rust-version to 1.96, above the toolchain the workspace builds with.
+kstring = "=2.0.2"
 toml_edit = "0.22.27"
 
 # formatting
@@ -93,7 +96,7 @@ toml_edit = "0.22.27"
 prettyplease = { workspace = true }
 
 # Assets
-lightningcss = { version = "1.0.0-alpha.67", features = ["browserslist", "into_owned"] }
+lightningcss = { version = "1.0.0-alpha.72", features = ["browserslist", "into_owned"] }
 grass = "0.13.4"
 codemap = "0.1.3"
 mozjpeg = { version = "0.10.13", default-features = false, features = ["parallel"] }
