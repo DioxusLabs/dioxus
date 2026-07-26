@@ -156,8 +156,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         tracing::info!("Building project...");
 
         let ssg = self.shared.ssg;
-        let force_sequential =
-            should_build_sequentially(self.shared.force_sequential_build(), ssg);
+        let force_sequential = should_build_sequentially(self.shared.force_sequential_build(), ssg);
         let mode = match self.shared.fat_binary {
             true => BuildMode::Fat,
             false => BuildMode::Base,
