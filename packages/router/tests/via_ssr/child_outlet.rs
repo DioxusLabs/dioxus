@@ -92,8 +92,9 @@ mod dynamic_prefix {
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum Route {
-            #[child("/file/:file_id")]
-            File { file_id: String, child: ChildRoute },
+            #[nest("/file/:file_id")]
+                #[child("")]
+                File { file_id: String, child: ChildRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
@@ -145,8 +146,9 @@ mod depth_2_chain {
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum OuterRoute {
-            #[child("/host/:host_id")]
-            Host { host_id: String, child: MidRoute },
+            #[nest("/host/:host_id")]
+                #[child("")]
+                Host { host_id: String, child: MidRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
@@ -205,8 +207,9 @@ mod link_roundtrip_at_depth_2 {
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum OuterRoute {
-            #[child("/host/:host_id")]
-            Host { host_id: String, child: MidRoute },
+            #[nest("/host/:host_id")]
+                #[child("")]
+                Host { host_id: String, child: MidRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
@@ -273,15 +276,17 @@ mod depth_3_chain {
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum OuterRoute {
-            #[child("/host/:host_id")]
-            Host { host_id: String, child: MidRoute },
+            #[nest("/host/:host_id")]
+                #[child("")]
+                Host { host_id: String, child: MidRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum MidRoute {
-            #[child("/mount/:mount_id")]
-            Mount { mount_id: String, child: InnerRoute },
+            #[nest("/mount/:mount_id")]
+                #[child("")]
+                Mount { mount_id: String, child: InnerRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
@@ -340,15 +345,17 @@ mod link_roundtrip_at_depth_3 {
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum OuterRoute {
-            #[child("/host/:host_id")]
-            Host { host_id: String, child: MidRoute },
+            #[nest("/host/:host_id")]
+                #[child("")]
+                Host { host_id: String, child: MidRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]
         #[rustfmt::skip]
         enum MidRoute {
-            #[child("/mount/:mount_id")]
-            Mount { mount_id: String, child: InnerRoute },
+            #[nest("/mount/:mount_id")]
+                #[child("")]
+                Mount { mount_id: String, child: InnerRoute },
         }
 
         #[derive(Routable, Clone, PartialEq)]

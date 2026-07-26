@@ -223,7 +223,7 @@ fn child_route_preserves_query_and_hash() {
 }
 
 #[test]
-fn child_route_dynamic_prefix_roundtrip() {
+fn nested_child_dynamic_prefix_roundtrip() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum ChildRoute {
         #[route("/view")]
@@ -233,9 +233,11 @@ fn child_route_dynamic_prefix_roundtrip() {
     }
 
     #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
     enum Route {
-        #[child("/file/:file_id")]
-        File { file_id: String, child: ChildRoute },
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
     }
 
     #[component]
@@ -248,7 +250,8 @@ fn child_route_dynamic_prefix_roundtrip() {
         unimplemented!()
     }
 
-    // A `#[child("/path/:dyn")]` URL must parse with the parent's dynamic value bound.
+    // A nest-supplied dynamic prefix above a `#[child]` must parse with the parent's
+    // dynamic value bound.
     let parsed = Route::from_str("/file/abc/view").unwrap();
     assert_eq!(
         parsed,
@@ -276,7 +279,7 @@ fn child_route_dynamic_prefix_roundtrip() {
 }
 
 #[test]
-fn child_route_dynamic_prefix_with_query() {
+fn nested_child_dynamic_prefix_with_query() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum ChildRoute {
         #[route("/view?:zoom")]
@@ -284,9 +287,11 @@ fn child_route_dynamic_prefix_with_query() {
     }
 
     #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
     enum Route {
-        #[child("/file/:file_id")]
-        File { file_id: String, child: ChildRoute },
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
     }
 
     #[component]
@@ -315,46 +320,6 @@ fn child_route_dynamic_prefix_with_query() {
 }
 
 #[test]
-fn catchall_parent_with_query_only_child() {
-    #[derive(Routable, Clone, PartialEq, Debug)]
-    enum ChildRoute {
-        #[route("/?:zoom")]
-        View { zoom: u32 },
-    }
-
-    #[derive(Routable, Clone, PartialEq, Debug)]
-    enum Route {
-        #[child("/:..rest")]
-        Wild {
-            rest: Vec<String>,
-            child: ChildRoute,
-        },
-    }
-
-    #[component]
-    fn View(zoom: u32) -> Element {
-        unimplemented!()
-    }
-
-    // Catchall drains path segments; child's query flows through the orthogonal channel.
-    let parsed = Route::from_str("/a/b/c?zoom=100").unwrap();
-    assert_eq!(
-        parsed,
-        Route::Wild {
-            rest: vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            child: ChildRoute::View { zoom: 100 },
-        }
-    );
-
-    // Round-trip must preserve both the catchall segments and the child query.
-    let original = Route::Wild {
-        rest: vec!["x".to_string(), "y".to_string()],
-        child: ChildRoute::View { zoom: 7 },
-    };
-    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
-}
-
-#[test]
 fn child_route_typed_parent_segment_error_bubbles_parent() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum ChildRoute {
@@ -363,9 +328,11 @@ fn child_route_typed_parent_segment_error_bubbles_parent() {
     }
 
     #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
     enum Route {
-        #[child("/file/:file_id")]
-        File { file_id: usize, child: ChildRoute },
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: usize, child: ChildRoute },
     }
 
     #[component]
@@ -384,19 +351,19 @@ fn child_route_typed_parent_segment_error_bubbles_parent() {
     );
 
     // Walk-first failure-isolation: when the parent's typed dyn-seg cannot parse, the
-    // error surfaced is the parent's segment-parse failure, not a child-route mismatch.
-    // The error stringification must mention the parent variant ("File") so consumers
-    // can locate the failing segment.
+    // error surfaced is the enclosing nest's segment-parse failure, not a child-route
+    // mismatch. The stringification must name the failing segment so consumers can
+    // locate it.
     let err = Route::from_str("/file/abc/view").unwrap_err();
     let msg = format!("{err}");
     assert!(
-        msg.contains("File"),
-        "expected parent variant context in error; got: {msg}"
+        msg.contains("file_id") && msg.contains("invalid digit"),
+        "expected the parent segment-parse failure in error; got: {msg}"
     );
 }
 
 #[test]
-fn child_route_dynamic_prefix_with_hash() {
+fn nested_child_dynamic_prefix_with_hash() {
     #[derive(Routable, Clone, PartialEq, Debug)]
     enum ChildRoute {
         #[route("/view#:anchor")]
@@ -404,9 +371,11 @@ fn child_route_dynamic_prefix_with_hash() {
     }
 
     #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
     enum Route {
-        #[child("/file/:file_id")]
-        File { file_id: String, child: ChildRoute },
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
     }
 
     #[component]
@@ -433,79 +402,6 @@ fn child_route_dynamic_prefix_with_hash() {
         child: ChildRoute::View {
             anchor: "top".to_string(),
         },
-    };
-    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
-}
-
-#[test]
-fn catchall_parent_typed_element_roundtrip() {
-    use dioxus_router::{FromRouteSegments, ToRouteSegments};
-
-    #[derive(Default, Clone, PartialEq, Debug)]
-    struct NumericSegments {
-        numbers: Vec<u32>,
-    }
-
-    impl FromRouteSegments for NumericSegments {
-        type Err = std::num::ParseIntError;
-
-        fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
-            let numbers = segments
-                .iter()
-                .map(|s| s.parse::<u32>())
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(NumericSegments { numbers })
-        }
-    }
-
-    impl ToRouteSegments for NumericSegments {
-        fn display_route_segments(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            for n in &self.numbers {
-                write!(f, "/{n}")?;
-            }
-            Ok(())
-        }
-    }
-
-    #[derive(Routable, Clone, PartialEq, Debug)]
-    enum ChildRoute {
-        #[route("/?:zoom")]
-        View { zoom: u32 },
-    }
-
-    #[derive(Routable, Clone, PartialEq, Debug)]
-    enum Route {
-        #[child("/:..rest")]
-        Wild {
-            rest: NumericSegments,
-            child: ChildRoute,
-        },
-    }
-
-    #[component]
-    fn View(zoom: u32) -> Element {
-        unimplemented!()
-    }
-
-    // Catchall with a non-String element type round-trips through to_string. Confirms the
-    // catchall iterator-drain fix and the DisplayCatchAll wrapper compose with a custom
-    // FromRouteSegments / Display pair.
-    let parsed = Route::from_str("/1/2/3?zoom=100").unwrap();
-    assert_eq!(
-        parsed,
-        Route::Wild {
-            rest: NumericSegments {
-                numbers: vec![1, 2, 3],
-            },
-            child: ChildRoute::View { zoom: 100 },
-        }
-    );
-
-    let original = Route::Wild {
-        rest: NumericSegments {
-            numbers: vec![7, 8],
-        },
-        child: ChildRoute::View { zoom: 7 },
     };
     assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
 }

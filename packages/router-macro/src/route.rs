@@ -76,6 +76,9 @@ impl Route {
         let route;
         let ty;
         let route_name = variant.ident.clone();
+        // Retained so a parameter in a #[child] prefix can be reported against the
+        // prefix literal itself rather than against the variant name.
+        let mut child_route_lit = None;
         match route_attr {
             Some(attr) => {
                 let args = attr.parse_args::<RouteArgs>()?;
@@ -93,6 +96,7 @@ impl Route {
                 {
                     let args = route_attr.parse_args::<ChildArgs>()?;
                     route = args.route.value();
+                    child_route_lit = Some(args.route);
                     match &variant.fields {
                         syn::Fields::Named(fields) => {
                             // find either a field with #[child] or a field named "child"
@@ -153,6 +157,34 @@ impl Route {
                 &route,
             )?
         };
+
+        // A #[child] prefix delegates rendering to another Routable, whose components
+        // receive props only from their own segments. A parameter bound here would
+        // therefore be reachable from the child's components only through use_route on this
+        // enum, which couples the child to its parent. #[nest] keeps the parameter on this
+        // enum's variants, where layouts and sibling routes receive it as an ordinary prop.
+        // A catch-all additionally drains the whole remaining path, leaving a child with any
+        // path segment of its own unmatchable while Display still emits the joined URL.
+        if let Some(lit) = &child_route_lit {
+            let parameter = route_segments.iter().find(|seg| {
+                matches!(
+                    seg,
+                    RouteSegment::Dynamic(_, _) | RouteSegment::CatchAll(_, _)
+                )
+            });
+            if let Some(segment) = parameter {
+                let message = match segment {
+                    RouteSegment::Dynamic(ident, _) => format!(
+                        "invalid dynamic parameter `:{ident}` in #[child(\"{route}\")]; a #[child] prefix must be static. Move the prefix into a nest instead: #[nest(\"{route}\")] around this variant with #[child(\"\")] on it"
+                    ),
+                    RouteSegment::CatchAll(ident, _) => format!(
+                        "invalid catch-all `:..{ident}` in #[child(\"{route}\")]; a catch-all drains the whole remaining path, leaving nothing for the child to match. Use a static #[child] prefix, or put the catch-all on a #[route] variant instead"
+                    ),
+                    _ => unreachable!("filtered above"),
+                };
+                return Err(syn::Error::new_spanned(lit, message));
+            }
+        }
 
         Ok(Self {
             ty,
