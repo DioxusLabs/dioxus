@@ -76,7 +76,7 @@ pub extern "C" fn start_app() {
             let info = info.assume_init();
             if info.dli_fname.is_null() {
                 panic!("Current shared library has no filename");
-            }            
+            }
 
             let handle = libc::dlopen(info.dli_fname, libc::RTLD_NOW);
             if handle.is_null() {
