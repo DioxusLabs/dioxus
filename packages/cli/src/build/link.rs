@@ -146,15 +146,18 @@ impl BuildRequest {
 
         tracing::debug!("Changed crates dag using {modified_crates:?}");
 
-        // Replay the rustcs for all modified workspace crates. This is not the final tip binary.
-        // Note that the final tip might include itself as a lib (lib.rs + main.rs) which gets covered here.
+        // Replay captured workspace libs affected by this patch. The tip binary is
+        // compiled separately below.
         ctx.profile_phase("Workspace hotpatch replay");
-        let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
+        let replayed_crates =
+            self.workspace_hotpatch_replay_order(modified_crates, workspace_rustc_args)?;
         tracing::debug!("replaying crates: {replayed_crates:?}");
         for crate_name in &replayed_crates {
-            let rustc_args = self
-                .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
-                .with_context(|| format!("Missing rustc args for replay: '{crate_name}'"))?;
+            let lib_key = format!("{crate_name}.lib");
+            let rustc_args = workspace_rustc_args
+                .rustc_args
+                .get(&lib_key)
+                .with_context(|| format!("Missing rustc args for replay: '{lib_key}'"))?;
             self.compile_dep_crate(ctx, crate_name, rustc_args)
                 .await
                 .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
@@ -661,76 +664,80 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn workspace_hotpatch_replay_args<'a>(
-        &self,
-        workspace_rustc_args: &'a WorkspaceRustcArgs,
-        crate_name: &str,
-    ) -> Option<&'a RustcArgs> {
-        let lib_key = format!("{crate_name}.lib");
-        // if crate_name == self.tip_crate_name() {
-        //     return workspace_rustc_args
-        //         .rustc_args
-        //         .get(&format!("{crate_name}.bin"));
-        // }
-
-        workspace_rustc_args.rustc_args.get(&lib_key).or_else(|| {
-            workspace_rustc_args
-                .rustc_args
-                .get(&format!("{crate_name}.bin"))
-        })
-    }
-
     /// Topological sort of modified workspace crates for rustc replay.
     ///
-    /// The caller (builder) already guarantees that every crate in `modified_crates`
-    /// transitively reaches the tip. This function excludes the tip crate itself — it
-    /// gets compiled separately via `cargo_build` after the replay. The remaining lib
-    /// crates are ordered so dependencies compile before dependents (Kahn's algorithm).
-    /// Ties are broken lexicographically for determinism.
+    /// The caller (builder) includes every changed crate and its transitive workspace
+    /// reverse-dependents. Some of those reverse-dependents may not be part of the app
+    /// build graph, so the initial fat build never captured rustc args for them. Replay
+    /// only includes captured lib targets; the tip binary is compiled separately via
+    /// `cargo_build`. The remaining crates are ordered so dependencies compile before
+    /// dependents (Kahn's algorithm), with lexicographic tie-breaking for determinism.
     fn workspace_hotpatch_replay_order(
         &self,
         modified_crates: &HashSet<String>,
+        workspace_rustc_args: &WorkspaceRustcArgs,
     ) -> Result<Vec<String>> {
-        // Exclude the tip crate — it's compiled separately via cargo_build after replay.
         let tip = self.tip_crate_name();
-        let crates: HashSet<&String> = modified_crates
+        let rustc_args = &workspace_rustc_args.rustc_args;
+        let has_captured_lib = |name: &str| rustc_args.contains_key(&format!("{name}.lib"));
+
+        let replayable_crates: HashSet<String> = modified_crates
             .iter()
-            .filter(|name| **name != tip)
+            .filter(|name| name.as_str() != tip.as_str())
+            .filter(|name| has_captured_lib(name))
+            .cloned()
             .collect();
 
-        // Build the subgraph: edge A→B means "A must compile before B".
-        let mut indegree: HashMap<&String, usize> = crates.iter().map(|name| (*name, 0)).collect();
-        let mut edges: HashMap<&String, Vec<&String>> = HashMap::new();
+        let skipped_uncaptured: Vec<_> = modified_crates
+            .iter()
+            .filter(|name| {
+                name.as_str() != tip.as_str() && !replayable_crates.contains(name.as_str())
+            })
+            .sorted()
+            .collect();
+        if !skipped_uncaptured.is_empty() {
+            tracing::warn!(
+                "Skipping workspace hotpatch replay for crates without captured lib rustc args: {:?}",
+                skipped_uncaptured
+            );
+        }
 
-        for crate_name in &crates {
+        // Build the subgraph: edge A→B means "A must compile before B".
+        let mut indegree: HashMap<String, usize> = replayable_crates
+            .iter()
+            .map(|name| (name.clone(), 0))
+            .collect();
+        let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+
+        for crate_name in &replayable_crates {
             for dependent in self.workspace_dependents_of(crate_name) {
-                if let Some(dep) = crates.get(&dependent) {
-                    *indegree.entry(dep).or_default() += 1;
-                    edges.entry(crate_name).or_default().push(dep);
+                if replayable_crates.contains(&dependent) {
+                    *indegree.entry(dependent.clone()).or_default() += 1;
+                    edges.entry(crate_name.clone()).or_default().push(dependent);
                 }
             }
         }
 
         // Kahn's algorithm. BTreeSet gives deterministic (lexicographic) tie-breaking.
-        let mut ready: BTreeSet<&String> = indegree
+        let mut ready: BTreeSet<String> = indegree
             .iter()
             .filter(|&(_, &deg)| deg == 0)
-            .map(|(name, _)| *name)
+            .map(|(name, _)| name.clone())
             .collect();
-        let mut ordered = Vec::with_capacity(crates.len());
+        let mut ordered = Vec::with_capacity(replayable_crates.len());
         while let Some(name) = ready.pop_first() {
             ordered.push(name.clone());
-            for dep in edges.get(name).into_iter().flatten() {
+            for dep in edges.get(&name).into_iter().flatten() {
                 let deg = indegree.get_mut(dep).unwrap();
                 *deg -= 1;
                 if *deg == 0 {
-                    ready.insert(dep);
+                    ready.insert(dep.clone());
                 }
             }
         }
 
         ensure!(
-            ordered.len() == crates.len(),
+            ordered.len() == replayable_crates.len(),
             "Cycle in workspace dependency graph — cannot determine replay order"
         );
 
