@@ -86,13 +86,14 @@ impl<'a> DynIdVisitor<'a> {
                             // nodes and attributes that might move their captures
                             if let HotLiteral::Fmted(segments) = literal
                                 && crate::expression_pool::fmt_tier(segments) == Tier::Borrowing
+                                && let Some(slot) = component.prop_bindings.get(prop_index)
                             {
                                 let value = component.prop_value_tokens(property, index - 1);
                                 let binding = self
                                     .body
                                     .expression_pool
                                     .add_indexed(Tier::Borrowing, parse_quote!({ #value }));
-                                component.prop_bindings[prop_index].set(binding);
+                                slot.set(binding);
                             }
                         }
                     }
