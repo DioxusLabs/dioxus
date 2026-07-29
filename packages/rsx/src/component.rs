@@ -34,6 +34,9 @@ pub struct Component {
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
     pub component_literal_dyn_idx: Vec<DynIdx>,
+    /// The expression-pool binding for each prop (in `component_props` order), if that prop was
+    /// pulled into the pool
+    pub prop_bindings: Vec<DynIdx>,
     pub spreads: Vec<Spread>,
     pub brace: Option<token::Brace>,
     pub children: TemplateBody,
@@ -63,6 +66,7 @@ impl Parse for Component {
             .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
             .count();
         let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
+        let prop_bindings = vec![DynIdx::default(); fields.len()];
 
         let mut component = Self {
             dyn_idx: DynIdx::default(),
@@ -72,6 +76,7 @@ impl Parse for Component {
             fields,
             brace: Some(brace),
             component_literal_dyn_idx,
+            prop_bindings,
             spreads,
             diagnostics,
         };
@@ -265,33 +270,62 @@ impl Component {
             .filter(move |attr| !attr.name.is_likely_key())
     }
 
-    fn add_fields_to_builder(&self, manual_props: Option<Ident>) -> TokenStream2 {
-        let mut dynamic_literal_index = 0;
-        let mut tokens = TokenStream2::new();
-        for attribute in self.component_props() {
-            let release_value = attribute.value.to_token_stream();
+    /// The tokens for a single prop value. In debug mode literal props are read out of the dynamic
+    /// literal pool so they can be hot-reloaded.
+    pub(crate) fn prop_value_tokens(
+        &self,
+        attribute: &Attribute,
+        dynamic_literal_index: usize,
+    ) -> TokenStream2 {
+        let release_value = attribute.value.to_token_stream();
 
-            // In debug mode, we try to grab the value from the dynamic literal pool if possible
-            let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
-                let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
-                dynamic_literal_index += 1;
-                let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
-                quote! {
-                    {
-                        #[cfg(debug_assertions)]
-                        {
-                            #debug_value
-                        }
-                        #[cfg(not(debug_assertions))]
-                        {
-                            #release_value
-                        }
-                    }
+        let AttributeValue::AttrLiteral(literal) = &attribute.value else {
+            return release_value;
+        };
+
+        let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+        let debug_value =
+            quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+        quote! {
+            {
+                #[cfg(debug_assertions)]
+                {
+                    #debug_value
                 }
-            } else {
-                release_value
-            };
+                #[cfg(not(debug_assertions))]
+                {
+                    #release_value
+                }
+            }
+        }
+    }
 
+    fn add_fields_to_builder(&self, manual_props: Option<Ident>) -> TokenStream2 {
+        // Resolve every prop's value first - the dynamic literal indices follow source order
+        let mut dynamic_literal_index = 0;
+        let mut props: Vec<(&Attribute, TokenStream2)> = Vec::new();
+        for (prop_index, attribute) in self.component_props().enumerate() {
+            // If this prop was pulled into the expression pool, just reference the binding
+            let binding = self.prop_bindings.get(prop_index).map(DynIdx::get);
+            let value = match binding {
+                Some(idx) if idx != usize::MAX => {
+                    let ident = crate::expression_pool::binding_ident(idx, attribute.span());
+                    quote! { #ident }
+                }
+                _ => self.prop_value_tokens(attribute, dynamic_literal_index),
+            };
+            if matches!(attribute.value, AttributeValue::AttrLiteral(_)) {
+                dynamic_literal_index += 1;
+            }
+            props.push((attribute, value));
+        }
+
+        // The builder accepts fields in any order, so we apply the props that always move their
+        // captures (event handlers) after the props that might only borrow
+        props.sort_by_key(|(attribute, _)| attribute.is_event_handler());
+
+        let mut tokens = TokenStream2::new();
+        for (attribute, value) in props {
             match &attribute.name {
                 AttributeName::BuiltIn(name) => {
                     if let Some(manual_props) = &manual_props {
@@ -344,6 +378,7 @@ impl Component {
             spreads: vec![],
             children: TemplateBody::new(vec![]),
             component_literal_dyn_idx: vec![],
+            prop_bindings: vec![],
             dyn_idx: DynIdx::default(),
             diagnostics,
         }

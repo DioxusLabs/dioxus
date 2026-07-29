@@ -54,11 +54,12 @@
 //! ```
 
 use self::location::DynIdx;
+use crate::expression_pool::ExpressionPool;
 use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use syn::parse_quote;
+use syn::{Ident, parse_quote};
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -81,6 +82,13 @@ pub struct TemplateBody {
     pub attr_paths: Vec<(AttributePath, usize)>,
     pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
+
+    /// Every dynamic expression in this template, in the order we want them *evaluated*
+    pub(crate) expression_pool: ExpressionPool,
+    /// The pool binding for each dynamic node, in dynamic node order
+    pub(crate) node_bindings: Vec<Ident>,
+    /// The pool binding for each dynamic attribute, in dynamic attribute order
+    pub(crate) attr_bindings: Vec<Ident>,
 }
 
 impl Parse for TemplateBody {
@@ -117,21 +125,17 @@ impl ToTokens for TemplateBody {
         let node_paths = node.node_paths.iter().map(|it| quote!(&[#(#it),*]));
         let attr_paths = node.attr_paths.iter().map(|(it, _)| quote!(&[#(#it),*]));
 
-        // For printing dynamic nodes, we rely on the ToTokens impl
-        // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes: Vec<_> = node.dynamic_nodes().collect();
+        // Dynamic nodes and attributes are expanded into the expression pool (in the order we want
+        // them evaluated in) - here we just reference the bindings the pool handed out
+        let dynamic_nodes = &node.node_bindings;
         let dynamic_nodes_len = dynamic_nodes.len();
 
-        // We could add a ToTokens for Attribute but since we use that for both components and elements
-        // They actually need to be different, so we just localize that here
-        let dyn_attr_printer: Vec<_> = node
-            .dynamic_attributes()
-            .map(|attr| attr.rendered_as_dynamic_attr())
-            .collect();
+        let dyn_attr_printer = &node.attr_bindings;
         let dynamic_attr_len = dyn_attr_printer.len();
 
         let dynamic_text = node.dynamic_text_segments.iter();
 
+        let expression_pool = &node.expression_pool;
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
         let hot_reload_mapping = node.hot_reload_mapping();
@@ -188,6 +192,11 @@ impl ToTokens for TemplateBody {
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 #[cfg(not(debug_assertions))]
                 let __key = #key_tokens;
+
+                // Every dynamic expression in this template, expanded in the order we want them
+                // evaluated in. This must come after the dynamic literal pool (component literals
+                // read from it) and before the dynamic node/attribute arrays that use the bindings.
+                #expression_pool
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
                 let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
@@ -241,6 +250,9 @@ impl TemplateBody {
             attr_paths: Vec::new(),
             dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
+            expression_pool: Default::default(),
+            node_bindings: Vec::new(),
+            attr_bindings: Vec::new(),
         };
 
         // Assign paths to all nodes in the template
