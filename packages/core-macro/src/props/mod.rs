@@ -621,9 +621,22 @@ mod struct_info {
             generics
         }
 
-        /// Checks if the props have any fields that should be owned by the child. For example, when converting T to `ReadSignal<T>`, the new signal should be owned by the child
-        fn has_child_owned_fields(&self) -> bool {
-            self.fields.iter().any(|f| child_owned_type(f.ty))
+        /// Checks if the props have any fields whose conversions should run under an owner
+        /// tied to the props struct. Signal-like fields always convert (e.g. T to
+        /// `ReadSignal<T>`), but any `into` conversion or default expression may also
+        /// allocate reactive state (e.g. behind a type alias the macro cannot see through),
+        /// so those run under the props owner as well.
+        fn has_owned_fields(&self) -> bool {
+            fn nontrivial_default(attr: &FieldBuilderAttr) -> bool {
+                attr.default.as_ref().is_some_and(|default| {
+                    *default != parse_quote!(::core::default::Default::default())
+                })
+            }
+            self.fields.iter().any(|f| {
+                child_owned_type(f.ty)
+                    || f.builder_attr.auto_into
+                    || nontrivial_default(&f.builder_attr)
+            })
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
@@ -865,7 +878,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     quote!(#name: #ty)
                 })
                 .chain(
-                    self.has_child_owned_fields()
+                    self.has_owned_fields()
                         .then(|| quote!(owner: dioxus_core::PropsOwner)),
                 );
             let global_fields_value = self
@@ -875,7 +888,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     quote!(#name: Vec::new())
                 })
                 .chain(
-                    self.has_child_owned_fields()
+                    self.has_owned_fields()
                         .then(|| quote!(owner: dioxus_core::PropsOwner::default())),
                 );
 
@@ -1022,7 +1035,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
 
             let forward_owner = self
-                .has_child_owned_fields()
+                .has_owned_fields()
                 .then(|| quote!(owner: self.owner))
                 .into_iter();
 
@@ -1163,15 +1176,18 @@ Finally, call `.build()` to create the instance of `{name}`.
             let arg_type = field_type;
             // If the field is auto_into, we need to add a generic parameter to the builder for specialization
             let mut marker = None;
-            let (arg_type, arg_expr) = if child_owned_type(arg_type) {
+            let (arg_type, arg_expr) = if child_owned_type(arg_type) || field.builder_attr.auto_into
+            {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
                     quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
-                    // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
+                    // Signal-like types always convert, and any into conversion may allocate
+                    // reactive state (e.g. a signal type behind an alias the macro cannot see
+                    // through), so run the conversion with the props struct as the owner
                     quote!(dioxus_core::with_props_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
                 )
-            } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
+            } else if field.builder_attr.strip_option {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
@@ -1203,10 +1219,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let name = f.extends_vec_ident();
                     quote!(#name: self.#name)
                 })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: self.owner)),
-                );
+                .chain(self.has_owned_fields().then(|| quote!(owner: self.owner)));
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -1430,12 +1443,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
                     let is_default = *default == parse_quote!(::core::default::Default::default());
-                    // If this is a signal type, we use super_into and the props struct as the owner
-                    let is_child_owned_type = child_owned_type(field.ty);
-
 
                     let body = if !is_default {
-                        if is_child_owned_type {
+                        if child_owned_type(field.ty) {
                             quote!{ dioxus_core::SuperInto::super_into(#default) }
                         } else if field.builder_attr.auto_into {
                             quote!{ (#default).into() }
@@ -1448,12 +1458,14 @@ Finally, call `.build()` to create the instance of `{name}`.
                         default.to_token_stream()
                     };
 
-                    if field.builder_attr.skip {
-                        quote!(let #name = #body;)
-                    } else if is_child_owned_type {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_props_owner(self.owner.clone(), move || #body));)
-                    } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
+                    // Default expressions may allocate reactive state, so run them under the
+                    // props owner when the builder has one
+                    let wrap_owner = self.has_owned_fields();
+                    match (field.builder_attr.skip, wrap_owner) {
+                        (true, true) => quote!(let #name = dioxus_core::with_props_owner(self.owner.clone(), move || #body);),
+                        (true, false) => quote!(let #name = #body;),
+                        (false, true) => quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_props_owner(self.owner.clone(), move || #body));),
+                        (false, false) => quote!(let #name = #helper_trait_name::into_value(#name, || #body);),
                     }
                 } else {
                     quote!(let #name = #name.0;)
@@ -1475,7 +1487,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!()
             };
 
-            if self.has_child_owned_fields() {
+            if self.has_owned_fields() {
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
                 let vis = &self.vis;

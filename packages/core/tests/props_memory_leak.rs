@@ -35,6 +35,9 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 const WARMUP: usize = 200;
 const ITERS: usize = 1000;
 
+// Tests in this binary share the global allocator counter, so they must not run concurrently
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Rerender the app many times and return the growth in live heap bytes per render.
 fn bytes_leaked_per_render(app: fn() -> Element) -> f64 {
     let mut dom = VirtualDom::new(app);
@@ -103,6 +106,7 @@ fn DefaultStoreProp(#[props(default = Store::new(5))] id: Store<usize>) -> Eleme
 
 #[test]
 fn store_props_do_not_leak() {
+    let _guard = TEST_LOCK.lock().unwrap();
     // Mapped stores passed as Store/ReadStore/WriteStore props (issue #5671)
     assert_no_leak("Store<T> prop from mapped store", || {
         let data: Store<Vec<usize>> = use_store(|| (0..20).collect());
@@ -141,6 +145,7 @@ fn store_props_do_not_leak() {
 
 #[test]
 fn signal_props_do_not_leak() {
+    let _guard = TEST_LOCK.lock().unwrap();
     assert_no_leak("ReadSignal<T> prop from mapped signal", || {
         let data: Signal<Vec<usize>> = use_signal(|| (0..20).collect());
         rsx! {
@@ -169,6 +174,21 @@ fn signal_props_do_not_leak() {
             }
         },
     );
+    // The macro cannot see through type aliases, but explicit `#[props(into)]` conversions
+    // must still run under the props owner so any allocated state dies with the props
+    type AliasSignal = ReadSignal<usize>;
+    #[component]
+    fn AliasSignalProp(#[props(into)] id: AliasSignal) -> Element {
+        rsx!(div { "{id}" })
+    }
+    assert_no_leak("aliased ReadSignal prop with #[props(into)]", || {
+        let data: Signal<Vec<usize>> = use_signal(|| (0..20).collect());
+        rsx! {
+            for i in 0..20 {
+                AliasSignalProp { id: data.map(move |v| &v[i]) }
+            }
+        }
+    });
     // Plain values converted into ReadSignal props create a fresh signal on every render.
     // The point_to memoization must not accumulate stale subscriptions in the child.
     assert_no_leak("ReadSignal<String> prop from plain value", || {
