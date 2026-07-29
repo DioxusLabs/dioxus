@@ -692,7 +692,9 @@ impl BuildRequest {
         modified_crates: &HashSet<String>,
     ) -> Result<Vec<String>> {
         // Exclude the tip crate — it's compiled separately via cargo_build after replay.
-        let tip = self.tip_crate_name();
+        // Modified crates are tracked by *package* name, which can differ from the bin
+        // target name (`tip_crate_name()`), e.g. package `browser` with `[[bin]] name = "blitz"`.
+        let tip = self.tip_package_name();
         let crates: HashSet<&String> = modified_crates
             .iter()
             .filter(|name| **name != tip)
