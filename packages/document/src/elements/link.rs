@@ -137,6 +137,31 @@ pub fn Link(props: LinkProps) -> Element {
     VNode::empty()
 }
 
+/// Insert a stylesheet `<link>` element into the head of the current document.
+///
+/// The stylesheet is deduplicated within each document: calling this multiple times with the
+/// same href (or rendering a [`Link`] component with the same href and `rel="stylesheet"`)
+/// only inserts the link once per document.
+pub fn insert_stylesheet(href: &str) {
+    // Deduplicate before creating the head component so that repeated calls with the same
+    // href (e.g. on every render) don't create or consume extra hydration entries.
+    if !should_insert_link(href, Some("stylesheet")) {
+        return;
+    }
+
+    let document = document();
+    if !document.create_head_component() {
+        return;
+    }
+
+    document.create_link(
+        LinkProps::builder()
+            .rel(Some("stylesheet".to_string()))
+            .href(Some(href.to_string()))
+            .build(),
+    );
+}
+
 #[derive(Default, Clone)]
 struct LinkContext(DeduplicationContext);
 
