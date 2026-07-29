@@ -252,6 +252,16 @@ impl ReactiveContext {
         }
     }
 
+    /// Unsubscribe this context from a subscriber list. This removes the context from the
+    /// list and drops the context's reference to the list.
+    pub fn unsubscribe(&self, subscriptions: impl Into<Subscribers>) {
+        let subscriptions = subscriptions.into();
+        subscriptions.remove(self);
+        if let Ok(mut inner) = self.inner.try_write() {
+            inner.subscribers.remove(&PointerHash(subscriptions.inner));
+        }
+    }
+
     /// Get the scope that inner CopyValue is associated with
     pub fn origin_scope(&self) -> ScopeId {
         self.scope
@@ -365,6 +375,11 @@ impl Subscribers {
     /// Visit all subscribers in the list.
     pub fn visit(&self, mut f: impl FnMut(&ReactiveContext)) {
         self.inner.visit(&mut f);
+    }
+
+    /// Check if two subscriber lists point to the same underlying list.
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        std::ptr::addr_eq(Arc::as_ptr(&self.inner), Arc::as_ptr(&other.inner))
     }
 }
 

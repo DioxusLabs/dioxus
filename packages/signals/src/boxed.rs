@@ -42,12 +42,17 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult {
         let this_subscribers = self.subscribers();
-        let mut this_subscribers_vec = Vec::new();
-        // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
-        this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
         let other_subscribers = other.subscribers();
-        for subscriber in this_subscribers_vec {
-            subscriber.subscribe(other_subscribers.clone());
+        if !this_subscribers.ptr_eq(&other_subscribers) {
+            let mut this_subscribers_vec = Vec::new();
+            // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
+            this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
+            for subscriber in this_subscribers_vec {
+                subscriber.subscribe(other_subscribers.clone());
+                // Drop the subscription to the old list; the old value is being replaced,
+                // so keeping it would accumulate stale subscriptions on every point_to
+                subscriber.unsubscribe(this_subscribers.clone());
+            }
         }
         self.value.point_to(other.value)?;
         Ok(())

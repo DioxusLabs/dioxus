@@ -18,6 +18,25 @@ pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> 
     result
 }
 
+/// Owners for both storage types. Generated props structs hold one of these so that any
+/// state allocated while converting props is dropped with the props, regardless of
+/// which storage backs the state.
+#[doc(hidden)]
+#[derive(Clone, Default)]
+pub struct PropsOwner {
+    unsync: Owner<UnsyncStorage>,
+    sync: Owner<SyncStorage>,
+}
+
+/// Run a closure with both owners of the given [`PropsOwner`].
+///
+/// This will override the default owner for the current component for both storage types.
+#[doc(hidden)]
+pub fn with_props_owner<F: FnOnce() -> R, R>(owner: PropsOwner, f: F) -> R {
+    let PropsOwner { unsync, sync } = owner;
+    with_owner(unsync, move || with_owner(sync, f))
+}
+
 /// Set the owner for the current thread.
 fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
     let id = TypeId::of::<S>();

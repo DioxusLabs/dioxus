@@ -866,7 +866,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 })
                 .chain(
                     self.has_child_owned_fields()
-                        .then(|| quote!(owner: dioxus_core::internal::generational_box::Owner)),
+                        .then(|| quote!(owner: dioxus_core::PropsOwner)),
                 );
             let global_fields_value = self
                 .extend_fields()
@@ -874,9 +874,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
-                .chain(self.has_child_owned_fields().then(
-                    || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
-                ));
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_core::PropsOwner::default())),
+                );
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -1168,7 +1169,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 (
                     quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
                     // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
-                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
+                    quote!(dioxus_core::with_props_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
                 )
             } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
@@ -1450,7 +1451,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     if field.builder_attr.skip {
                         quote!(let #name = #body;)
                     } else if is_child_owned_type {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_owner(self.owner.clone(), move || #body));)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || dioxus_core::with_props_owner(self.owner.clone(), move || #body));)
                     } else {
                         quote!(let #name = #helper_trait_name::into_value(#name, || #body);)
                     }
@@ -1486,7 +1487,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
-                        owner: dioxus_core::internal::generational_box::Owner,
+                        owner: dioxus_core::PropsOwner,
                     }
 
                     impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {

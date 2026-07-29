@@ -230,11 +230,17 @@ impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
     where
         T: 'static,
     {
-        #[allow(clippy::mutable_key_type)]
-        let this_subscribers = self.inner.value.read().subscribers.lock().unwrap().clone();
-        let other_read = other.inner.value.read();
-        for subscriber in this_subscribers.iter() {
-            subscriber.subscribe(other_read.subscribers.clone());
+        let this_subscriber_list = self.inner.value.read().subscribers.clone();
+        let other_subscriber_list = other.inner.value.read().subscribers.clone();
+        if !std::sync::Arc::ptr_eq(&this_subscriber_list, &other_subscriber_list) {
+            #[allow(clippy::mutable_key_type)]
+            let this_subscribers = this_subscriber_list.lock().unwrap().clone();
+            for subscriber in this_subscribers.iter() {
+                subscriber.subscribe(other_subscriber_list.clone());
+                // Drop the subscription to the old list; the old value is being replaced,
+                // so keeping it would accumulate stale subscriptions on every point_to
+                subscriber.unsubscribe(this_subscriber_list.clone());
+            }
         }
         self.inner.point_to(other.inner)
     }
