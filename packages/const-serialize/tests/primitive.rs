@@ -38,9 +38,9 @@ fn test_serialize_const_layout_primitive() {
 
 fn test_serialize_primitive_too_little_data() {
     let mut buf = ConstVec::new();
-    buf = buf.push(1);
-    buf = buf.push(1);
-    buf = buf.push(1);
+    buf.push(1);
+    buf.push(1);
+    buf.push(1);
     let buf = buf.as_ref();
     assert_eq!(deserialize_const!([u64; 10], buf), None);
 }
