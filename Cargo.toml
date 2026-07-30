@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/core-template",
     "packages/core-types",
     "packages/cli",
     "packages/cli-config",
@@ -121,6 +122,7 @@ version = "0.8.0-alpha.0"
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.8.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.8.0-alpha.0" }
+dioxus-core-template = { path = "packages/core-template", version = "0.8.0-alpha.0" }
 dioxus-core-types = { path = "packages/core-types", version = "0.8.0-alpha.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.8.0-alpha.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.8.0-alpha.0" }
