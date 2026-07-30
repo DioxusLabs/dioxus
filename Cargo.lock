@@ -4271,6 +4271,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-vdom-fuzz"
+version = "0.8.0-alpha.0"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-core-template",
+ "dioxus-renderer-oracle",
+ "dioxus-ssr",
+ "mutatis",
+ "postcard",
+ "serde",
+]
+
+[[package]]
 name = "dioxus-web"
 version = "0.8.0-alpha.0"
 dependencies = [
@@ -8399,6 +8413,27 @@ name = "munge_macro"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4568f25ccbd45ab5d5603dc34318c1ec56b117531781260002151b8530a9f931"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "mutatis"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "468ca2a8bc8087a0b2c11d21e7dca51d92cc2662a6993d6b56bac2701795f202"
+dependencies = [
+ "mutatis-derive",
+ "rand 0.8.6",
+]
+
+[[package]]
+name = "mutatis-derive"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5708f6e65277d4a89733aff227b43d0989c5ead03999b6f1f33a8ec7a9978361"
 dependencies = [
  "proc-macro2",
  "quote",
