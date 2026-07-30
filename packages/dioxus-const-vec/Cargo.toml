@@ -1,0 +1,13 @@
+[package]
+name = "dioxus-const-vec"
+version = "0.8.0-alpha.0"
+authors = ["Evan Almloff"]
+edition = "2024"
+description = "A fixed-capacity Vec usable in const contexts"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dioxuslabs/dioxus"
+homepage = "https://dioxuslabs.com"
+keywords = ["const", "vec"]
+rust-version = "1.85.0"
+
+[dependencies]

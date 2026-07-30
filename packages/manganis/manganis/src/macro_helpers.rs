@@ -89,7 +89,7 @@ pub mod dx_macro_helpers {
         let mut data = const_serialize::serialize_const(value, data);
         // Reserve the maximum size of the type
         while data.len() < memory_layout_size {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }
@@ -108,10 +108,10 @@ pub mod dx_macro_helpers {
         // Serialize using the default buffer, then copy into the larger buffer
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
+        data.extend(serialized.as_ref());
         // Reserve the maximum size of the type (pad to MEMORY_LAYOUT size)
         while data.len() < memory_layout_size {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }
@@ -124,9 +124,9 @@ pub mod dx_macro_helpers {
     ) -> ConstVec<u8, MAX_SIZE> {
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
         let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
+        data.extend(serialized.as_ref());
         while data.len() < MAX_SIZE {
-            data = data.push(0);
+            data.push(0);
         }
         data
     }
