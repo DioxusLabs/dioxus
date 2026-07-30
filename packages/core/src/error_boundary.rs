@@ -1,9 +1,9 @@
 use crate::{
-    Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template, TemplateAttribute,
-    TemplateNode, VNode,
+    DynamicValues, Element, IntoDynNode, ReactiveContext, Subscribers, Template, VNode,
     innerlude::{CapturedError, provide_context},
     try_consume_context, use_hook,
 };
+use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 use std::{
     any::Any,
     cell::RefCell,
@@ -11,17 +11,19 @@ use std::{
     rc::Rc,
 };
 
+static ERROR_DYNAMIC_TREE: TemplateRawTree = TemplateRawTree::DynamicNode;
+
 /// Return early with an error.
 #[macro_export]
 macro_rules! bail {
     ($msg:literal $(,)?) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($msg).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($msg).into())
     };
     ($err:expr $(,)?) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($err).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($err).into())
     };
     ($fmt:expr, $($arg:tt)*) => {
-        return $crate::internal::Err($crate::internal::__anyhow!($fmt, $($arg)*).into())
+        return ::std::result::Result::Err($crate::internal::__anyhow!($fmt, $($arg)*).into())
     };
 }
 
@@ -61,7 +63,6 @@ impl Default for CreateErrorBoundary {
 
 /// Provides a method that is used to create error boundaries in `use_error_boundary_provider`.
 /// This is only called from fullstack to create a hydration compatible error boundary
-#[doc(hidden)]
 pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
     provide_context(CreateErrorBoundary(create_error_boundary));
 }
@@ -154,53 +155,67 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 }
 
 fn default_handler(errors: ErrorContext) -> Element {
-    static TEMPLATE: Template = Template::new(
-        &[TemplateNode::Element {
-            tag: "div",
-            namespace: None,
-            attrs: &[TemplateAttribute::Static {
-                name: "color",
-                namespace: Some("style"),
-                value: "red",
-            }],
-            children: &[TemplateNode::Dynamic { id: 0usize }],
-        }],
-        &[&[0u8, 0u8]],
-        &[],
-    );
+    static ATTRS: TemplateRawTree = TemplateRawTree::StaticAttr {
+        name: "color",
+        value: "red",
+        namespace: Some("style"),
+    };
+    static TREE: TemplateRawTree = TemplateRawTree::Element {
+        tag: "div",
+        namespace: None,
+        attrs: &ATTRS,
+        children: &ERROR_DYNAMIC_TREE,
+    };
+    static STORAGE: TemplateStorage<8, 4, 2> = TemplateStorage::build_from_tree(&TREE);
+    static TEMPLATE: Template = STORAGE.as_template();
+
     std::result::Result::Ok(VNode::new(
-        None,
         TEMPLATE,
-        Box::new([errors
-            .error()
-            .iter()
-            .map(|e| {
-                static INNER_TEMPLATE: Template = Template::new(
-                    &[TemplateNode::Element {
+        DynamicValues::from_parts(
+            None,
+            Box::new([errors
+                .error()
+                .iter()
+                .map(|e| {
+                    static TREE: TemplateRawTree = TemplateRawTree::Element {
                         tag: "pre",
                         namespace: None,
-                        attrs: &[],
-                        children: &[TemplateNode::Dynamic { id: 0usize }],
-                    }],
-                    &[&[0u8, 0u8]],
-                    &[],
-                );
-                VNode::new(
-                    None,
-                    INNER_TEMPLATE,
-                    Box::new([e.to_string().into_dyn_node()]),
-                    Default::default(),
-                )
-            })
-            .into_dyn_node()]),
-        Default::default(),
+                        attrs: &TemplateRawTree::Empty,
+                        children: &ERROR_DYNAMIC_TREE,
+                    };
+                    static STORAGE: TemplateStorage<4, 1, 2> =
+                        TemplateStorage::build_from_tree(&TREE);
+                    static INNER_TEMPLATE: Template = STORAGE.as_template();
+
+                    VNode::new(
+                        INNER_TEMPLATE,
+                        DynamicValues::from_parts(
+                            None,
+                            Box::new([e.to_string().into_dyn_node()]),
+                            Box::new([]),
+                        ),
+                    )
+                })
+                .into_dyn_node()]),
+            Box::new([]),
+        ),
     ))
 }
 
-#[derive(Clone)]
+#[derive(dioxus_core_macro::Props, Clone)]
 pub struct ErrorBoundaryProps {
     children: Element,
+    #[props(into, default = ErrorHandler(Rc::new(default_handler)))]
     handle_error: ErrorHandler,
+}
+
+// The `Props` derive needs the props to be `PartialEq` for memoization, but `ErrorHandler` wraps an
+// `Rc<dyn Fn>` that can't be compared structurally. Hand-write it: memoize on the children and the
+// handler's identity (pointer equality).
+impl PartialEq for ErrorBoundaryProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.children == other.children && Rc::ptr_eq(&self.handle_error.0, &other.handle_error.0)
+    }
 }
 
 /// Create a new error boundary component that catches any errors thrown from child components
@@ -321,140 +336,18 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template =
-                Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
+            static STORAGE: TemplateStorage<1, 1, 1> =
+                TemplateStorage::build_from_tree(&ERROR_DYNAMIC_TREE);
+            static TEMPLATE: Template = STORAGE.as_template();
+
             VNode::new(
-                None,
                 TEMPLATE,
-                Box::new([(props.children).into_dyn_node()]),
-                Default::default(),
+                DynamicValues::from_parts(
+                    None,
+                    Box::new([(props.children).into_dyn_node()]),
+                    Box::new([]),
+                ),
             )
         })
-    }
-}
-
-impl ErrorBoundaryProps {
-    /**
-    Create a builder for building `ErrorBoundaryProps`.
-    On the builder, call `.children(...)`(optional), `.handle_error(...)`(optional) to set the values of the fields.
-    Finally, call `.build()` to create the instance of `ErrorBoundaryProps`.
-                        */
-    #[allow(dead_code)]
-    pub fn builder() -> ErrorBoundaryPropsBuilder<((), ())> {
-        ErrorBoundaryPropsBuilder { fields: ((), ()) }
-    }
-}
-
-#[must_use]
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub struct ErrorBoundaryPropsBuilder<TypedBuilderFields> {
-    fields: TypedBuilderFields,
-}
-impl<TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<TypedBuilderFields>
-where
-    TypedBuilderFields: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            fields: self.fields.clone(),
-        }
-    }
-}
-impl Properties for ErrorBoundaryProps {
-    type Builder = ErrorBoundaryPropsBuilder<((), ())>;
-    fn builder() -> Self::Builder {
-        ErrorBoundaryProps::builder()
-    }
-    fn memoize(&mut self, other: &Self) -> bool {
-        *self = other.clone();
-        false
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub trait ErrorBoundaryPropsBuilder_Optional<T> {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
-}
-impl<T> ErrorBoundaryPropsBuilder_Optional<T> for () {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
-        default()
-    }
-}
-impl<T> ErrorBoundaryPropsBuilder_Optional<T> for (T,) {
-    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
-        self.0
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__handle_error> ErrorBoundaryPropsBuilder<((), __handle_error)> {
-    pub fn children(
-        self,
-        children: Element,
-    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-        let children = (children,);
-        let (_, handle_error) = self.fields;
-        ErrorBoundaryPropsBuilder {
-            fields: (children, handle_error),
-        }
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_children {}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__handle_error> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-    #[deprecated(note = "Repeated field children")]
-    pub fn children(
-        self,
-        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_children,
-    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-        self
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__children> ErrorBoundaryPropsBuilder<(__children, ())> {
-    pub fn handle_error(
-        self,
-        handle_error: impl ::core::convert::Into<ErrorHandler>,
-    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-        let handle_error = (handle_error.into(),);
-        let (children, _) = self.fields;
-        ErrorBoundaryPropsBuilder {
-            fields: (children, handle_error),
-        }
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error {}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-    #[deprecated(note = "Repeated field handle_error")]
-    pub fn handle_error(
-        self,
-        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error,
-    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-        self
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<
-    __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
-    __children: ErrorBoundaryPropsBuilder_Optional<Element>,
-> ErrorBoundaryPropsBuilder<(__children, __handle_error)>
-{
-    pub fn build(self) -> ErrorBoundaryProps {
-        let (children, handle_error) = self.fields;
-        let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
-        let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
-            ErrorHandler(Rc::new(default_handler))
-        });
-        ErrorBoundaryProps {
-            children,
-            handle_error,
-        }
     }
 }

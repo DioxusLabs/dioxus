@@ -1,621 +1,3 @@
-#![allow(non_upper_case_globals)]
-
-use dioxus_core::HasAttributes;
-use dioxus_core::IntoAttributeValue;
-#[cfg(feature = "hot-reload-context")]
-use dioxus_core_types::HotReloadingContext;
-use dioxus_html_internal_macro::impl_extension_attributes;
-
-#[cfg(feature = "hot-reload-context")]
-use crate::{map_global_attributes, map_svg_attributes};
-
-pub type AttributeDescription = (&'static str, Option<&'static str>, bool);
-
-macro_rules! impl_attribute {
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (DEFAULT),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), None, false);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident ($name:literal),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = ($name, None, false);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (volatile),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), None, true);
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (in $ns:literal),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), false)
-    };
-
-    (
-        $element:ident {
-            $(#[$attr_method:meta])*
-            $fil:ident: $vil:ident (in $ns:literal : volatile),
-        }
-    ) => {
-        $(#[$attr_method])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
-        ///
-        /// rsx! {
-        ///     // Attributes need to be under the element they modify
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Attributes are followed by a colon and then the value of the attribute
-        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
-        ///     }
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil), ",")]
-        ///     }
-        /// };
-        /// ```
-        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), true)
-    };
-}
-
-#[cfg(feature = "hot-reload-context")]
-macro_rules! impl_attribute_match {
-    (
-        $attr:ident $fil:ident: $vil:ident (DEFAULT),
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), None));
-        }
-    };
-
-    (
-        $attr:ident $fil:ident: $vil:ident (volatile),
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), None));
-        }
-    };
-
-    (
-        $attr:ident $fil:ident: $vil:ident ($name:literal),
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some(($name, None));
-        }
-    };
-
-    (
-        $attr:ident $fil:ident: $vil:ident (in $ns:literal),
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some((stringify!($fil), Some($ns)));
-        }
-    };
-}
-
-#[cfg(feature = "html-to-rsx")]
-macro_rules! impl_html_to_rsx_attribute_match {
-    (
-        $attr:ident $fil:ident $name:literal
-    ) => {
-        if $attr == $name {
-            return Some(stringify!($fil));
-        }
-    };
-
-    (
-        $attr:ident $fil:ident $_:tt
-    ) => {
-        if $attr == stringify!($fil) {
-            return Some(stringify!($fil));
-        }
-    };
-}
-
-macro_rules! impl_element {
-    (
-        $(#[$attr:meta])*
-        $name:ident None {
-            $(
-                $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        #[allow(non_camel_case_types)]
-        $(#[$attr])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { unimplemented!() }
-        /// # let raw_expression: Element = rsx! {};
-        /// rsx! {
-        ///     // Elements are followed by braces that surround any attributes and children for that element
-        #[doc = concat!("    ", stringify!($name), " {")]
-        ///         // Add any attributes first
-        ///         class: "my-class",
-        ///         "custom-attribute-name": "value",
-        ///         // Then add any attributes you are spreading into this element
-        ///         ..attributes,
-        ///         // Then add any children elements, components, text nodes, or raw expressions
-        ///         div {}
-        ///         ChildComponent {}
-        ///         "child text"
-        ///         {raw_expression}
-        ///     }
-        /// };
-        /// ```
-        pub mod $name {
-            #[allow(unused)]
-            use super::*;
-            pub use crate::attribute_groups::global_attributes::*;
-
-            pub const TAG_NAME: &'static str = stringify!($name);
-            pub const NAME_SPACE: Option<&'static str> = None;
-
-            $(
-                impl_attribute!(
-                    $name {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
-        }
-    };
-
-    (
-        $(#[$attr:meta])*
-        $name:ident $namespace:literal {
-            $(
-                $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        $(#[$attr])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { unimplemented!() }
-        /// # let raw_expression: Element = rsx! {};
-        /// rsx! {
-        ///     // Elements are followed by braces that surround any attributes and children for that element
-        #[doc = concat!("    ", stringify!($name), " {")]
-        ///         // Add any attributes first
-        ///         color: "red",
-        ///         "custom-attribute-name": "value",
-        ///         // Then add any attributes you are spreading into this element
-        ///         ..attributes,
-        ///         // Then add any children elements, components, text nodes, or raw expressions
-        ///         circle { cx: "10", cy: "10", r: "2", fill: "red" }
-        ///         ChildComponent {}
-        ///         "child text"
-        ///         {raw_expression}
-        ///     }
-        /// };
-        /// ```
-        pub mod $name {
-            #[allow(unused)]
-            use super::*;
-            pub use crate::attribute_groups::svg_attributes::*;
-
-            pub const TAG_NAME: &'static str = stringify!($name);
-            pub const NAME_SPACE: Option<&'static str> = Some($namespace);
-
-            $(
-                impl_attribute!(
-                    $name {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
-        }
-    };
-
-    (
-        $(#[$attr:meta])*
-        $element:ident [$name:literal, $namespace:tt] {
-            $(
-                $(#[$attr_method:meta])*
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        #[allow(non_camel_case_types)]
-        $(#[$attr])*
-        ///
-        /// ## Usage in rsx
-        ///
-        /// ```rust, no_run
-        /// # use dioxus::prelude::*;
-        /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { unimplemented!() }
-        /// # let raw_expression: Element = rsx! {};
-        /// rsx! {
-        ///     // Elements are followed by braces that surround any attributes and children for that element
-        #[doc = concat!("    ", stringify!($element), " {")]
-        ///         // Add any attributes first
-        ///         color: "red",
-        ///         "custom-attribute-name": "value",
-        ///         // Then add any attributes you are spreading into this element
-        ///         ..attributes,
-        ///         // Then add any children elements, components, text nodes, or raw expressions
-        ///         circle { cx: "10", cy: "10", r: "2", fill: "red" }
-        ///         ChildComponent {}
-        ///         "child text"
-        ///         {raw_expression}
-        ///     }
-        /// };
-        /// ```
-        pub mod $element {
-            #[allow(unused)]
-            use super::*;
-            pub use crate::attribute_groups::svg_attributes::*;
-
-            pub const TAG_NAME: &'static str = $name;
-            pub const NAME_SPACE: Option<&'static str> = Some($namespace);
-
-            $(
-                impl_attribute!(
-                    $element {
-                        $(#[$attr_method])*
-                        $fil: $vil ($extra),
-                    }
-                );
-            )*
-        }
-    }
-}
-
-#[cfg(feature = "hot-reload-context")]
-macro_rules! impl_element_match {
-    (
-        $el:ident $name:ident None {
-            $(
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        if $el == stringify!($name) {
-            return Some((stringify!($name), None));
-        }
-    };
-
-    (
-        $el:ident $name:ident $namespace:literal {
-            $(
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        if $el == stringify!($name) {
-            return Some((stringify!($name), Some($namespace)));
-        }
-    };
-
-    (
-        $el:ident $name:ident [$_:literal, $namespace:tt] {
-            $(
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        if $el == stringify!($name) {
-            return Some((stringify!($name), Some($namespace)));
-        }
-    };
-}
-
-#[cfg(feature = "hot-reload-context")]
-macro_rules! impl_element_match_attributes {
-    (
-        $el:ident $attr:ident $name:ident None {
-            $(
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        if $el == stringify!($name) {
-            $(
-                impl_attribute_match!(
-                    $attr $fil: $vil ($extra),
-                );
-            )*
-
-            return impl_map_global_attributes!($el $attr $name None);
-        }
-    };
-
-    (
-        $el:ident $attr:ident $name:ident $namespace:tt {
-            $(
-                $fil:ident: $vil:ident $extra:tt,
-            )*
-        }
-    ) => {
-        if $el == stringify!($name) {
-            $(
-                impl_attribute_match!(
-                    $attr $fil: $vil ($extra),
-                );
-            )*
-
-            return impl_map_global_attributes!($el $attr $name $namespace);
-        }
-    }
-}
-
-#[cfg(feature = "hot-reload-context")]
-macro_rules! impl_map_global_attributes {
-    (
-        $el:ident $attr:ident $element:ident None
-    ) => {
-        map_global_attributes($attr)
-    };
-
-    (
-        $el:ident $attr:ident $element:ident $namespace:literal
-    ) => {
-        if $namespace == "http://www.w3.org/2000/svg" {
-            map_svg_attributes($attr)
-        } else {
-            map_global_attributes($attr)
-        }
-    };
-
-    (
-        $el:ident $attr:ident $element:ident [$name:literal, $namespace:tt]
-    ) => {
-        if $namespace == "http://www.w3.org/2000/svg" {
-            map_svg_attributes($attr)
-        } else {
-            map_global_attributes($attr)
-        }
-    };
-}
-
-macro_rules! builder_constructors {
-    (
-        $(
-            $(#[$attr:meta])*
-            $name:ident $namespace:tt {
-                $(
-                    $(#[$attr_method:meta])*
-                    $fil:ident: $vil:ident $extra:tt,
-                )*
-            };
-         )*
-        ) => {
-        #[cfg(feature = "hot-reload-context")]
-        pub struct HtmlCtx;
-
-        #[cfg(feature = "hot-reload-context")]
-        impl HotReloadingContext for HtmlCtx {
-            fn map_attribute(element: &str, attribute: &str) -> Option<(&'static str, Option<&'static str>)> {
-                $(
-                    impl_element_match_attributes!(
-                        element attribute $name $namespace {
-                            $(
-                                $fil: $vil $extra,
-                            )*
-                        }
-                    );
-                )*
-                None
-            }
-
-            fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
-                $(
-                    impl_element_match!(
-                        element $name $namespace {
-                            $(
-                                $fil: $vil $extra,
-                            )*
-                        }
-                    );
-                )*
-                None
-            }
-        }
-
-        #[cfg(feature = "html-to-rsx")]
-        pub fn map_html_attribute_to_rsx(html: &str) -> Option<&'static str> {
-            $(
-                $(
-                    impl_html_to_rsx_attribute_match!(
-                        html $fil $extra
-                    );
-                )*
-            )*
-
-            if let Some(name) = crate::map_html_global_attributes_to_rsx(html) {
-                return Some(name);
-            }
-
-            if let Some(name) = crate::map_html_svg_attributes_to_rsx(html) {
-                return Some(name);
-            }
-
-            None
-        }
-
-        #[cfg(feature = "html-to-rsx")]
-        pub fn map_html_element_to_rsx(html: &str) -> Option<&'static str> {
-            $(
-                if html == stringify!($name) {
-                    return Some(stringify!($name));
-                }
-            )*
-
-            None
-        }
-
-        $(
-            impl_element!(
-                $(#[$attr])*
-                $name $namespace {
-                    $(
-                        $(#[$attr_method])*
-                        $fil: $vil $extra,
-                    )*
-                }
-            );
-        )*
-
-        /// This module contains helpers for rust analyzer autocompletion
-        #[doc(hidden)]
-        pub mod completions {
-            /// This helper tells rust analyzer that it should autocomplete the element name with braces.
-            #[allow(non_camel_case_types)]
-            pub enum CompleteWithBraces {
-                $(
-                    $(#[$attr])*
-                    ///
-                    /// ## Usage in rsx
-                    ///
-                    /// ```rust, no_run
-                    /// # use dioxus::prelude::*;
-                    /// # let attributes = vec![];
-                    /// # fn ChildComponent() -> Element { unimplemented!() }
-                    /// # let raw_expression: Element = rsx! {};
-                    /// rsx! {
-                    ///     // Elements are followed by braces that surround any attributes and children for that element
-                    #[doc = concat!("    ", stringify!($name), " {")]
-                    ///         // Add any attributes first
-                    ///         class: "my-class",
-                    ///         "custom-attribute-name": "value",
-                    ///         // Then add any attributes you are spreading into this element
-                    ///         ..attributes,
-                    ///         // Then add any children elements, components, text nodes, or raw expressions
-                    ///         div {}
-                    ///         ChildComponent {}
-                    ///         "child text"
-                    ///         {raw_expression}
-                    ///     }
-                    /// };
-                    /// ```
-                    $name {}
-                ),*
-            }
-        }
-
-        pub(crate) mod extensions {
-            use super::*;
-            $(
-                impl_extension_attributes![$name { $($fil,)* }];
-            )*
-        }
-    };
-}
-
 // Organized in the same order as
 // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
 //
@@ -624,76 +6,90 @@ macro_rules! builder_constructors {
 // This namespace represents a collection of modern HTML-5 compatible elements.
 //
 // This list does not include obsolete, deprecated, experimental, or poorly supported elements.
-builder_constructors! {
+
+// Re-export the element-vocabulary root so that any `use dioxus_html::elements::*` (the common
+// way to bring elements into scope) also brings `html` into scope. `rsx!` lowers a bare element
+// like `div` to the associated const `html::div`, which needs the root type reachable here.
+pub use crate::html;
+
+dioxus_html_internal_macro::define_elements! {
+    core = dioxus_core,
+    html = crate,
+    hot_reload_context = true;
+
     // Document metadata
 
     /// Build a
     /// [`<base>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base)
     /// element.
     ///
-    base None {
-        href: Uri DEFAULT,
-        target: Target DEFAULT,
-    };
+    base {
+        href,
+        target,
+    }
 
     /// Build a
     /// [`<head>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/head)
     /// element.
-    head None {};
+    head {}
 
     /// Build a
     /// [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link)
     /// element.
-    link None {
+    link {
         // as: Mime,
-        crossorigin: CrossOrigin DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        media: String DEFAULT, // FIXME media query
-        rel: LinkType DEFAULT,
-        sizes: String DEFAULT, // FIXME
-        title: String DEFAULT, // FIXME
-        r#type: Mime "type",
-        integrity: String DEFAULT,
-        disabled: Bool DEFAULT,
-        referrerpolicy: ReferrerPolicy DEFAULT,
-        fetchpriority: FetchPriority DEFAULT,
-        blocking: Blocking DEFAULT,
-        r#as: As "as",
-    };
+        crossorigin,
+        href,
+        hreflang,
+        media, // FIXME media query
+        rel,
+        sizes, // FIXME
+        title, // FIXME
+        #[attr(name = "type")]
+        r#type,
+        integrity,
+        disabled,
+        referrerpolicy,
+        fetchpriority,
+        blocking,
+        #[attr(name = "as")]
+        r#as,
+    }
 
     /// Build a
     /// [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta)
     /// element.
-    meta None {
-        charset: String DEFAULT, // FIXME IANA standard names
-        content: String DEFAULT,
-        http_equiv: String "http-equiv",
-        name: Metadata DEFAULT,
-        property: Metadata DEFAULT,
-    };
+    meta {
+        charset, // FIXME IANA standard names
+        content,
+        #[attr(name = "http-equiv")]
+        http_equiv,
+        name,
+        property,
+    }
 
     /// Build a
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element.
-    style None {
-        r#type: Mime "type",
-        media: String DEFAULT, // FIXME media query
-        nonce: Nonce DEFAULT,
-        title: String DEFAULT, // FIXME
-    };
+    style {
+        #[attr(name = "type")]
+        r#type,
+        media, // FIXME media query
+        nonce,
+        title, // FIXME
+    }
 
     /// Build a
     /// [`<title>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title)
     /// element.
-    title None { };
+    title {}
 
     // Sectioning root
 
     /// Build a
     /// [`<body>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/body)
     /// element.
-    body None {};
+    body {}
 
     // ------------------
     // Content sectioning
@@ -702,32 +98,32 @@ builder_constructors! {
     /// Build a
     /// [`<address>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/address)
     /// element.
-    address None {};
+    address {}
 
     /// Build a
     /// [`<article>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/article)
     /// element.
-    article None {};
+    article {}
 
     /// Build a
     /// [`<aside>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/aside)
     /// element.
-    aside None {};
+    aside {}
 
     /// Build a
     /// [`<footer>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/footer)
     /// element.
-    footer None {};
+    footer {}
 
     /// Build a
     /// [`<header>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/header)
     /// element.
-    header None {};
+    header {}
 
     /// Build a
     /// [`<hgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hgroup)
     /// element.
-    hgroup None {};
+    hgroup {}
 
     /// Build a
     /// [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
@@ -739,7 +135,7 @@ builder_constructors! {
     /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h1>` heading is the first heading in the document.
     /// - The `<h1>` heading is usually a large bolded font.
-    h1 None {};
+    h1 {}
 
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
@@ -751,7 +147,7 @@ builder_constructors! {
     /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h2>` heading is the second heading in the document.
     /// - The `<h2>` heading is usually a large bolded font.
-    h2 None {};
+    h2 {}
 
     /// Build a
     /// [`<h3>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h3)
@@ -763,50 +159,50 @@ builder_constructors! {
     /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h1>` heading is the first heading in the document.
     /// - The `<h1>` heading is usually a large bolded font.
-    h3 None {};
+    h3 {}
 
     /// Build a
     /// [`<h4>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h4)
     /// element.
-    h4 None {};
+    h4 {}
 
     /// Build a
     /// [`<h5>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h5)
     /// element.
-    h5 None {};
+    h5 {}
 
     /// Build a
     /// [`<h6>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h6)
     /// element.
-    h6 None {};
+    h6 {}
 
     /// Build a
     /// [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
     /// element.
-    main None {};
+    main {}
 
     /// Build a
     /// [`<nav>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/nav)
     /// element.
-    nav None {};
+    nav {}
 
     /// Build a
     /// [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
     /// element.
-    section None {};
+    section {}
 
     // Text content
 
     /// Build a
     /// [`<blockquote>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote)
     /// element.
-    blockquote None {
-        cite: Uri DEFAULT,
-    };
+    blockquote {
+        cite,
+    }
     /// Build a
     /// [`<dd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dd)
     /// element.
-    dd None {};
+    dd {}
 
     /// Build a
     /// [`<div>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div)
@@ -825,63 +221,64 @@ builder_constructors! {
     /// ## References:
     /// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>
     /// - <https://www.w3schools.com/tags/tag_div.asp>
-    div None {};
+    div {}
 
     /// Build a
     /// [`<dl>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dl)
     /// element.
-    dl None {};
+    dl {}
 
     /// Build a
     /// [`<dt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dt)
     /// element.
-    dt None {};
+    dt {}
 
     /// Build a
     /// [`<figcaption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figcaption)
     /// element.
-    figcaption None {};
+    figcaption {}
 
     /// Build a
     /// [`<figure>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figure)
     /// element.
-    figure None {};
+    figure {}
 
     /// Build a
     /// [`<hr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hr)
     /// element.
-    hr None {};
+    hr {}
 
     /// Build a
     /// [`<li>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/li)
     /// element.
-    li None {
-        value: isize DEFAULT,
-    };
+    li {
+        value,
+    }
 
     /// Build a
     /// [`<ol>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol)
     /// element.
-    ol None {
-        reversed: Bool DEFAULT,
-        start: isize DEFAULT,
-        r#type: OrderedListType "type",
-    };
+    ol {
+        reversed,
+        start,
+        #[attr(name = "type")]
+        r#type,
+    }
 
     /// Build a
     /// [`<p>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/p)
     /// element.
-    p None {};
+    p {}
 
     /// Build a
     /// [`<pre>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/pre)
     /// element.
-    pre None {};
+    pre {}
 
     /// Build a
     /// [`<ul>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ul)
     /// element.
-    ul None {};
+    ul {}
 
 
     // Inline text semantics
@@ -889,173 +286,174 @@ builder_constructors! {
     /// Build a
     /// [`<a>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a)
     /// element.
-    a None {
-        download: String DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        target: Target DEFAULT,
-        r#type: Mime "type",
+    a {
+        download,
+        href,
+        hreflang,
+        target,
+        #[attr(name = "type")]
+        r#type,
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
-        ping: SpacedList DEFAULT,
-        rel: SpacedList DEFAULT,
-    };
+        ping,
+        rel,
+    }
 
     /// Build a
     /// [`<abbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/abbr)
     /// element.
-    abbr None {};
+    abbr {}
 
     /// Build a
     /// [`<b>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b)
     /// element.
-    b None {};
+    b {}
 
     /// Build a
     /// [`<bdi>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi)
     /// element.
-    bdi None {};
+    bdi {}
 
     /// Build a
     /// [`<bdo>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo)
     /// element.
-    bdo None {};
+    bdo {}
 
     /// Build a
     /// [`<br>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br)
     /// element.
-    br None {};
+    br {}
 
     /// Build a
     /// [`<cite>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/cite)
     /// element.
-    cite None {};
+    cite {}
 
     /// Build a
     /// [`<code>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code)
     /// element.
-    code None {
-        language: String DEFAULT,
-    };
+    code {
+        language,
+    }
 
     /// Build a
     /// [`<data>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data)
     /// element.
-    data None {
-        value: String DEFAULT,
-    };
+    data {
+        value,
+    }
 
     /// Build a
     /// [`<dfn>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dfn)
     /// element.
-    dfn None {};
+    dfn {}
 
     /// Build a
     /// [`<em>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/em)
     /// element.
-    em None {};
+    em {}
 
     /// Build a
     /// [`<i>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/i)
     /// element.
-    i None {};
+    i {}
 
     /// Build a
     /// [`<kbd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/kbd)
     /// element.
-    kbd None {};
+    kbd {}
 
     /// Build a
     /// [`<mark>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/mark)
     /// element.
-    mark None {};
+    mark {}
 
     /// Build a
     /// [`<menu>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menu)
     /// element.
-    menu None {};
+    menu {}
 
     /// Build a
     /// [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
     /// element.
-    q None {
-        cite: Uri DEFAULT,
-    };
+    q {
+        cite,
+    }
 
 
     /// Build a
     /// [`<rp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rp)
     /// element.
-    rp None {};
+    rp {}
 
 
     /// Build a
     /// [`<rt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rt)
     /// element.
-    rt None {};
+    rt {}
 
 
     /// Build a
     /// [`<ruby>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby)
     /// element.
-    ruby None {};
+    ruby {}
 
     /// Build a
     /// [`<s>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/s)
     /// element.
-    s None {};
+    s {}
 
     /// Build a
     /// [`<samp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/samp)
     /// element.
-    samp None {};
+    samp {}
 
     /// Build a
     /// [`<small>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/small)
     /// element.
-    small None {};
+    small {}
 
     /// Build a
     /// [`<span>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/span)
     /// element.
-    span None {};
+    span {}
 
     /// Build a
     /// [`<strong>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/strong)
     /// element.
-    strong None {};
+    strong {}
 
     /// Build a
     /// [`<sub>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sub)
     /// element.
-    sub None {};
+    sub {}
 
     /// Build a
     /// [`<sup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sup)
     /// element.
-    sup None {};
+    sup {}
 
     /// Build a
     /// [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
     /// element.
-    time None {
-        datetime: Datetime DEFAULT,
-    };
+    time {
+        datetime,
+    }
 
     /// Build a
     /// [`<u>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/u)
     /// element.
-    u None {};
+    u {}
 
     /// Build a
     /// [`<var>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/var)
     /// element.
-    var None {};
+    var {}
 
     /// Build a
     /// [`<wbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/wbr)
     /// element.
-    wbr None {};
+    wbr {}
 
 
     // Image and multimedia
@@ -1063,86 +461,88 @@ builder_constructors! {
     /// Build a
     /// [`<area>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/area)
     /// element.
-    area None {
-        alt: String DEFAULT,
-        coords: String DEFAULT, // TODO could perhaps be validated
-        download: Bool DEFAULT,
-        href: Uri DEFAULT,
-        hreflang: LanguageTag DEFAULT,
-        shape: AreaShape DEFAULT,
-        target: Target DEFAULT,
+    area {
+        alt,
+        coords, // TODO could perhaps be validated
+        download,
+        href,
+        hreflang,
+        shape,
+        target,
         // ping: SpacedList<Uri>,
         // rel: SpacedSet<LinkType>,
-    };
+    }
 
     /// Build a
     /// [`<audio>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/audio)
     /// element.
-    audio None {
-        autoplay: Bool DEFAULT,
-        controls: Bool DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        muted: Bool DEFAULT,
-        preload: Preload DEFAULT,
-        src: Uri DEFAULT,
-        r#loop: Bool "loop",
-    };
+    audio {
+        autoplay,
+        controls,
+        crossorigin,
+        muted,
+        preload,
+        src,
+        #[attr(name = "loop")]
+        r#loop,
+    }
 
     /// Build a
     /// [`<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img)
     /// element.
-    img None {
-        alt: String DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        decoding: ImageDecoding DEFAULT,
-        height: usize DEFAULT,
-        ismap: Bool DEFAULT,
-        loading: String DEFAULT,
-        src: Uri DEFAULT,
-        srcset: String DEFAULT, // FIXME this is much more complicated
-        usemap: String DEFAULT, // FIXME should be a fragment starting with '#'
-        width: usize DEFAULT,
-        referrerpolicy: String DEFAULT,
-        sizes: String DEFAULT, // FIXME
-        elementtiming: String DEFAULT,
-        fetchpriority: String DEFAULT,
-        attributionsrc: String DEFAULT,
-    };
+    img {
+        alt,
+        crossorigin,
+        decoding,
+        height,
+        ismap,
+        loading,
+        src,
+        srcset, // FIXME this is much more complicated
+        usemap, // FIXME should be a fragment starting with '#'
+        width,
+        referrerpolicy,
+        sizes, // FIXME
+        elementtiming,
+        fetchpriority,
+        attributionsrc,
+    }
 
     /// Build a
     /// [`<map>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/map)
     /// element.
-    map None {
-        name: Id DEFAULT,
-    };
+    map {
+        name,
+    }
 
     /// Build a
     /// [`<track>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/track)
     /// element.
-    track None {
-        default: Bool DEFAULT,
-        kind: VideoKind DEFAULT,
-        label: String DEFAULT,
-        src: Uri DEFAULT,
-        srclang: LanguageTag DEFAULT,
-    };
+    track {
+        default,
+        kind,
+        label,
+        src,
+        srclang,
+    }
 
     /// Build a
     /// [`<video>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video)
     /// element.
-    video None {
-        autoplay: Bool DEFAULT,
-        controls: Bool DEFAULT,
-        crossorigin: CrossOrigin DEFAULT,
-        height: usize DEFAULT,
-        r#loop: Bool "loop",
-        muted: Bool DEFAULT,
-        preload: Preload DEFAULT,
-        playsinline: Bool DEFAULT,
-        poster: Uri DEFAULT,
-        src: Uri DEFAULT,
-        width: usize DEFAULT,
-    };
+    video {
+        autoplay,
+        controls,
+        crossorigin,
+        height,
+        #[attr(name = "loop")]
+        r#loop,
+        muted,
+        preload,
+        playsinline,
+        poster,
+        src,
+        width,
+    }
 
 
     // Embedded content
@@ -1150,76 +550,83 @@ builder_constructors! {
     /// Build a
     /// [`<embed>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/embed)
     /// element.
-    embed None {
-        height: usize DEFAULT,
-        src: Uri DEFAULT,
-        r#type: Mime "type",
-        width: usize DEFAULT,
-    };
+    embed {
+        height,
+        src,
+        #[attr(name = "type")]
+        r#type,
+        width,
+    }
 
     /// Build a
     /// [`<iframe>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)
     /// element.
-    iframe None {
-        allow: FeaturePolicy DEFAULT,
-        allowfullscreen: Bool DEFAULT,
-        allowpaymentrequest: Bool DEFAULT,
-        height: usize DEFAULT,
-        name: Id DEFAULT,
-        referrerpolicy: ReferrerPolicy DEFAULT,
-        src: Uri DEFAULT,
-        srcdoc: Uri DEFAULT,
-        width: usize DEFAULT,
+    iframe {
+        allow,
+        allowfullscreen,
+        allowpaymentrequest,
+        height,
+        name,
+        referrerpolicy,
+        src,
+        srcdoc,
+        width,
 
-        margin_width: String "marginWidth",
-        align: String DEFAULT,
-        longdesc: String DEFAULT,
+        #[attr(name = "marginWidth")]
 
-        scrolling: String DEFAULT,
-        margin_height: String "marginHeight",
-        frame_border: String "frameBorder",
+        margin_width,
+        align,
+        longdesc,
+
+        scrolling,
+        #[attr(name = "marginHeight")]
+        margin_height,
+        #[attr(name = "frameBorder")]
+        frame_border,
         // sandbox: SpacedSet<Sandbox>,
-    };
+    }
 
     /// Build a
     /// [`<object>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/object)
     /// element.
-    object None {
-        data: Uri DEFAULT,
-        form: Id DEFAULT,
-        height: usize DEFAULT,
-        name: Id DEFAULT,
-        r#type: Mime "type",
-        typemustmatch: Bool DEFAULT,
-        usemap: String DEFAULT, // TODO should be a fragment starting with '#'
-        width: usize DEFAULT,
-    };
+    object {
+        data,
+        form,
+        height,
+        name,
+        #[attr(name = "type")]
+        r#type,
+        typemustmatch,
+        usemap, // TODO should be a fragment starting with '#'
+        width,
+    }
 
     /// Build a
     /// [`<param>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/param)
     /// element.
-    param None {
-        name: String DEFAULT,
-        value: String DEFAULT,
-    };
+    param {
+        name,
+        value,
+    }
 
     /// Build a
     /// [`<picture>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/picture)
     /// element.
-    picture None {};
+    picture {}
 
     /// Build a
     /// [`<source>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/source)
     /// element.
-    source None {
-        src: Uri DEFAULT,
-        r#type: Mime "type",
-        srcset: String DEFAULT,
-        media: String DEFAULT,
-        sizes: String DEFAULT,
-        width: usize DEFAULT,
-        height: usize DEFAULT,
-    };
+    source {
+        src,
+        #[attr(name = "type")]
+        r#type,
+        srcset,
+        media,
+        sizes,
+        width,
+        height,
+    }
 
 
     // Scripting
@@ -1227,15 +634,15 @@ builder_constructors! {
     /// Build a
     /// [`<canvas>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas)
     /// element.
-    canvas None {
-        height: usize DEFAULT,
-        width: usize DEFAULT,
-    };
+    canvas {
+        height,
+        width,
+    }
 
     /// Build a
     /// [`<noscript>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript)
     /// element.
-    noscript None {};
+    noscript {}
 
     /// Build a
     /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
@@ -1244,11 +651,11 @@ builder_constructors! {
     /// The script HTML element is used to embed executable code or data; this is typically used to embed or refer to
     /// JavaScript code. The script element can also be used with other languages, such as WebGL's GLSL shader
     /// programming language and JSON.
-    script None {
+    script {
         /// Normal script elements pass minimal information to the window.onerror for scripts which do not pass the
         /// standard CORS checks. To allow error logging for sites which use a separate domain for static media, use
         /// this attribute. See CORS settings attributes for a more descriptive explanation of its valid arguments.
-        crossorigin: CrossOrigin DEFAULT,
+        crossorigin,
 
         /// This Boolean attribute is set to indicate to a browser that the script is meant to be executed after the
         /// document has been parsed, but before firing DOMContentLoaded.
@@ -1269,19 +676,23 @@ builder_constructors! {
         ///
         /// This attribute allows the elimination of parser-blocking JavaScript where the browser would have to load and
         /// evaluate scripts before continuing to parse. async has a similar effect in this case.
-        defer: Bool DEFAULT,
-        integrity: Integrity DEFAULT,
-        nomodule: Bool DEFAULT,
-        nonce: Nonce DEFAULT,
-        src: Uri DEFAULT,
-        text: String DEFAULT,
-        fetchpriority: String DEFAULT,
-        referrerpolicy: String DEFAULT,
+        defer,
+        integrity,
+        nomodule,
+        nonce,
+        src,
+        text,
+        fetchpriority,
+        referrerpolicy,
 
-        r#async: Bool "async",
-        r#type: String "type", // TODO could be an enum
-        r#script: String "script",
-    };
+        #[attr(name = "async")]
+
+        r#async,
+        #[attr(name = "type")]
+        r#type, // TODO could be an enum
+        #[attr(name = "script")]
+        r#script,
+    }
 
 
     // Demarcating edits
@@ -1289,18 +700,18 @@ builder_constructors! {
     /// Build a
     /// [`<del>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/del)
     /// element.
-    del None {
-        cite: Uri DEFAULT,
-        datetime: Datetime DEFAULT,
-    };
+    del {
+        cite,
+        datetime,
+    }
 
     /// Build a
     /// [`<ins>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ins)
     /// element.
-    ins None {
-        cite: Uri DEFAULT,
-        datetime: Datetime DEFAULT,
-    };
+    ins {
+        cite,
+        datetime,
+    }
 
 
     // Table content
@@ -1308,66 +719,66 @@ builder_constructors! {
     /// Build a
     /// [`<caption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/caption)
     /// element.
-    caption None {};
+    caption {}
 
     /// Build a
     /// [`<col>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/col)
     /// element.
-    col None {
-        span: usize DEFAULT,
-    };
+    col {
+        span,
+    }
 
     /// Build a
     /// [`<colgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/colgroup)
     /// element.
-    colgroup None {
-        span: usize DEFAULT,
-    };
+    colgroup {
+        span,
+    }
 
     /// Build a
     /// [`<table>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table)
     /// element.
-    table None {};
+    table {}
 
     /// Build a
     /// [`<tbody>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tbody)
     /// element.
-    tbody None {};
+    tbody {}
 
     /// Build a
     /// [`<td>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/td)
     /// element.
-    td None {
-        colspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
+    td {
+        colspan,
+        rowspan,
         // headers: SpacedSet<Id>,
-    };
+    }
 
     /// Build a
     /// [`<tfoot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tfoot)
     /// element.
-    tfoot None {};
+    tfoot {}
 
     /// Build a
     /// [`<th>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/th)
     /// element.
-    th None {
-        abbr: String DEFAULT,
-        colspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
-        scope: TableHeaderScope DEFAULT,
+    th {
+        abbr,
+        colspan,
+        rowspan,
+        scope,
         // headers: SpacedSet<Id>,
-    };
+    }
 
     /// Build a
     /// [`<thead>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/thead)
     /// element.
-    thead None {};
+    thead {}
 
     /// Build a
     /// [`<tr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tr)
     /// element.
-    tr None {};
+    tr {}
 
 
     // Forms
@@ -1375,91 +786,93 @@ builder_constructors! {
     /// Build a
     /// [`<button>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button)
     /// element.
-    button None {
-        autofocus: Bool DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        formaction: Uri DEFAULT,
-        formenctype: FormEncodingType DEFAULT,
-        formmethod: FormMethod DEFAULT,
-        formnovalidate: Bool DEFAULT,
-        formtarget: Target DEFAULT,
-        name: Id DEFAULT,
-        popovertarget: String DEFAULT,
-        popovertargetaction: String DEFAULT,
-        value: String DEFAULT,
-        r#type: String "type",
-    };
+    button {
+        autofocus,
+        disabled,
+        form,
+        formaction,
+        formenctype,
+        formmethod,
+        formnovalidate,
+        formtarget,
+        name,
+        popovertarget,
+        popovertargetaction,
+        value,
+        #[attr(name = "type")]
+        r#type,
+    }
 
     /// Build a
     /// [`<datalist>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist)
     /// element.
-    datalist None {};
+    datalist {}
 
     /// Build a
     /// [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
     /// element.
-    fieldset None {
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        name: Id DEFAULT,
-    };
+    fieldset {
+        disabled,
+        form,
+        name,
+    }
 
     /// Build a
     /// [`<form>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form)
     /// element.
-    form None {
+    form {
         // accept-charset: SpacedList<CharacterEncoding>,
-        action: Uri DEFAULT,
-        autocomplete: OnOff DEFAULT,
-        enctype: FormEncodingType DEFAULT,
-        method: FormMethod DEFAULT,
-        name: Id DEFAULT,
-        novalidate: Bool DEFAULT,
-        target: Target DEFAULT,
-    };
+        action,
+        autocomplete,
+        enctype,
+        method,
+        name,
+        novalidate,
+        target,
+    }
 
     /// Build a
     /// [`<input>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input)
     /// element.
-    input None {
-        accept: String DEFAULT,
-        alt: String DEFAULT,
-        autocomplete: String DEFAULT,
+    input {
+        accept,
+        alt,
+        autocomplete,
         /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
-        autocorrect: OnOff DEFAULT,
-        autofocus: Bool DEFAULT,
-        capture: String DEFAULT,
-        checked: Bool DEFAULT,
-        directory: Bool "webkitdirectory",
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        formaction: Uri DEFAULT,
-        formenctype: FormEncodingType DEFAULT,
-        formmethod: FormDialogMethod DEFAULT,
-        formnovalidate: Bool DEFAULT,
-        formtarget: Target DEFAULT,
-        height: isize DEFAULT,
-        initial_checked: Bool DEFAULT,
-        list: Id DEFAULT,
-        max: String DEFAULT,
-        maxlength: usize DEFAULT,
-        min: String DEFAULT,
-        minlength: usize DEFAULT,
-        multiple: Bool DEFAULT,
-        name: Id DEFAULT,
-        pattern: String DEFAULT,
-        popovertarget: String DEFAULT,
-        popovertargetaction: String DEFAULT,
-        placeholder: String DEFAULT,
-        readonly: Bool DEFAULT,
-        required: Bool DEFAULT,
-        size: usize DEFAULT,
-        spellcheck: Bool DEFAULT,
-        src: Uri DEFAULT,
-        step: String DEFAULT,
-        tabindex: usize DEFAULT,
-        width: isize DEFAULT,
+        autocorrect,
+        autofocus,
+        capture,
+        checked,
+        #[attr(name = "webkitdirectory")]
+        directory,
+        disabled,
+        form,
+        formaction,
+        formenctype,
+        formmethod,
+        formnovalidate,
+        formtarget,
+        height,
+        initial_checked,
+        list,
+        max,
+        maxlength,
+        min,
+        minlength,
+        multiple,
+        name,
+        pattern,
+        popovertarget,
+        popovertargetaction,
+        placeholder,
+        readonly,
+        required,
+        size,
+        spellcheck,
+        src,
+        step,
+        tabindex,
+        width,
 
         /// The type of input
         ///
@@ -1488,118 +901,125 @@ builder_constructors! {
         /// - `url`
         /// - `week`
 
-        r#type: InputType "type",
+        #[attr(name = "type")]
+
+        r#type,
         // value: String,
-        value: String volatile,
-        initial_value: String DEFAULT,
-    };
+        #[attr(volatile)]
+        value,
+        initial_value,
+    }
 
     /// Build a
     /// [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
     /// element.
-    label None {
-        form: Id DEFAULT,
-        r#for: Id "for",
-    };
+    label {
+        form,
+        #[attr(name = "for")]
+        r#for,
+    }
 
     /// Build a
     /// [`<legend>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/legend)
     /// element.
-    legend None {};
+    legend {}
 
     /// Build a
     /// [`<meter>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meter)
     /// element.
-    meter None {
-        value: isize DEFAULT,
-        min: isize DEFAULT,
-        max: isize DEFAULT,
-        low: isize DEFAULT,
-        high: isize DEFAULT,
-        optimum: isize DEFAULT,
-        form: Id DEFAULT,
-    };
+    meter {
+        value,
+        min,
+        max,
+        low,
+        high,
+        optimum,
+        form,
+    }
 
     /// Build a
     /// [`<optgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/optgroup)
     /// element.
-    optgroup None {
-        disabled: Bool DEFAULT,
-        label: String DEFAULT,
-    };
+    optgroup {
+        disabled,
+        label,
+    }
 
     /// Build a
     /// [`<option>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/option)
     /// element.
-    option None {
-        disabled: Bool DEFAULT,
-        label: String DEFAULT,
+    option {
+        disabled,
+        label,
 
 
-        value: String DEFAULT,
+        value,
 
-        selected: Bool volatile,
-        initial_selected: Bool DEFAULT,
-    };
+        #[attr(volatile)]
+        selected,
+        initial_selected,
+    }
 
     /// Build a
     /// [`<output>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/output)
     /// element.
-    output None {
-        form: Id DEFAULT,
-        name: Id DEFAULT,
+    output {
+        form,
+        name,
         // r#for: SpacedSet<Id>,
-    };
+    }
 
     /// Build a
     /// [`<progress>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress)
     /// element.
-    progress None {
-        max: f64 DEFAULT,
-        value: f64 DEFAULT,
-    };
+    progress {
+        max,
+        value,
+    }
 
     /// Build a
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
     /// element.
-    select None {
+    select {
         // defined below
         // value: String,
-        autocomplete: String DEFAULT,
-        autofocus: Bool DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        multiple: Bool DEFAULT,
-        name: Id DEFAULT,
-        required: Bool DEFAULT,
-        size: usize DEFAULT,
-        value: String volatile,
-    };
+        autocomplete,
+        autofocus,
+        disabled,
+        form,
+        multiple,
+        name,
+        required,
+        size,
+        #[attr(volatile)]
+        value,
+    }
 
     /// Build a
     /// [`<textarea>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea)
     /// element.
-    textarea None {
-        autocomplete: OnOff DEFAULT,
+    textarea {
+        autocomplete,
         /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
-        autocorrect: OnOff DEFAULT,
-        autofocus: Bool DEFAULT,
-        cols: usize DEFAULT,
-        disabled: Bool DEFAULT,
-        form: Id DEFAULT,
-        maxlength: usize DEFAULT,
-        minlength: usize DEFAULT,
-        name: Id DEFAULT,
-        placeholder: String DEFAULT,
-        readonly: Bool DEFAULT,
-        required: Bool DEFAULT,
-        rows: usize DEFAULT,
-        spellcheck: BoolOrDefault DEFAULT,
-        wrap: Wrap DEFAULT,
-        value: String volatile,
+        autocorrect,
+        autofocus,
+        cols,
+        disabled,
+        form,
+        maxlength,
+        minlength,
+        name,
+        placeholder,
+        readonly,
+        required,
+        rows,
+        spellcheck,
+        wrap,
+        #[attr(volatile)]
+        value,
 
-        initial_value: String DEFAULT,
-    };
+        initial_value,
+    }
 
 
     // Interactive elements
@@ -1607,567 +1027,663 @@ builder_constructors! {
     /// Build a
     /// [`<details>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details)
     /// element.
-    details None {
-        open: Bool DEFAULT,
-    };
+    details {
+        open,
+    }
 
     /// Build dialog
     /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
     /// element.
-    dialog None {
-        open: Bool DEFAULT,
-    };
+    dialog {
+        open,
+    }
 
     /// Build a
     /// [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)
     /// element.
-    summary None {};
+    summary {}
 
     // Web components
 
     /// Build a
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element.
-    slot None {
-        name: String DEFAULT,
-    };
+    slot {
+        name,
+    }
 
     /// Build a
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
     /// element.
-    template None {};
+    template {}
 
     // SVG components
     /// Build a
     /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
     /// element.
-    svg "http://www.w3.org/2000/svg" { };
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    svg {}
 
 
     // /// Build a
     // /// [`<a>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/a)
     // /// element.
-    // a "http://www.w3.org/2000/svg" {};
+    // #[element(namespace = "http://www.w3.org/2000/svg")]
+    // a {}
 
     /// Build a
     /// [`<animate>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animate)
     /// element.
-    animate "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    animate {}
 
     /// Build a
     /// [`<animateMotion>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateMotion)
     /// element.
-    animateMotion "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    animateMotion {}
 
     /// Build a
     /// [`<animateTransform>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateTransform)
     /// element.
-    animateTransform "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    animateTransform {}
 
     /// Build a
     /// [`<circle>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/circle)
     /// element.
-    circle "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    circle {}
 
     /// Build a
     /// [`<clipPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/clipPath)
     /// element.
-    clipPath "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    clipPath {}
 
     /// Build a
     /// [`<defs>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/defs)
     /// element.
-    defs "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    defs {}
 
     /// Build a
     /// [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/desc)
     /// element.
-    desc "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    desc {}
 
     /// Build a
     /// [`<discard>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/discard)
     /// element.
-    discard "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    discard {}
 
     /// Build a
     /// [`<ellipse>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/ellipse)
     /// element.
-    ellipse "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    ellipse {}
 
     /// Build a
     /// [`<feBlend>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feBlend)
     /// element.
-    feBlend "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feBlend {}
 
     /// Build a
     /// [`<feColorMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feColorMatrix)
     /// element.
-    feColorMatrix "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feColorMatrix {}
 
     /// Build a
     /// [`<feComponentTransfer>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComponentTransfer)
     /// element.
-    feComponentTransfer "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feComponentTransfer {}
 
     /// Build a
     /// [`<feComposite>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComposite)
     /// element.
-    feComposite "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feComposite {}
 
     /// Build a
     /// [`<feConvolveMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feConvolveMatrix)
     /// element.
-    feConvolveMatrix "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feConvolveMatrix {}
 
     /// Build a
     /// [`<feDiffuseLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDiffuseLighting)
     /// element.
-    feDiffuseLighting "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feDiffuseLighting {}
 
     /// Build a
     /// [`<feDisplacementMap>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDisplacementMap)
     /// element.
-    feDisplacementMap "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feDisplacementMap {}
 
     /// Build a
     /// [`<feDistantLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDistantLight)
     /// element.
-    feDistantLight "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feDistantLight {}
 
     /// Build a
     /// [`<feDropShadow>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDropShadow)
     /// element.
-    feDropShadow "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feDropShadow {}
 
     /// Build a
     /// [`<feFlood>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFlood)
     /// element.
-    feFlood "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feFlood {}
 
     /// Build a
     /// [`<feFuncA>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncA)
     /// element.
-    feFuncA "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feFuncA {}
 
     /// Build a
     /// [`<feFuncB>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncB)
     /// element.
-    feFuncB "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feFuncB {}
 
     /// Build a
     /// [`<feFuncG>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncG)
     /// element.
-    feFuncG "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feFuncG {}
 
     /// Build a
     /// [`<feFuncR>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncR)
     /// element.
-    feFuncR "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feFuncR {}
 
     /// Build a
     /// [`<feGaussianBlur>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feGaussianBlur)
     /// element.
-    feGaussianBlur "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feGaussianBlur {}
 
     /// Build a
     /// [`<feImage>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feImage)
     /// element.
-    feImage "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feImage {}
 
     /// Build a
     /// [`<feMerge>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMerge)
     /// element.
-    feMerge "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feMerge {}
 
     /// Build a
     /// [`<feMergeNode>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMergeNode)
     /// element.
-    feMergeNode "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feMergeNode {}
 
     /// Build a
     /// [`<feMorphology>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMorphology)
     /// element.
-    feMorphology "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feMorphology {}
 
     /// Build a
     /// [`<feOffset>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feOffset)
     /// element.
-    feOffset "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feOffset {}
 
     /// Build a
     /// [`<fePointLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/fePointLight)
     /// element.
-    fePointLight "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    fePointLight {}
 
     /// Build a
     /// [`<feSpecularLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpecularLighting)
     /// element.
-    feSpecularLighting "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feSpecularLighting {}
 
     /// Build a
     /// [`<feSpotLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpotLight)
     /// element.
-    feSpotLight "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feSpotLight {}
 
     /// Build a
     /// [`<feTile>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTile)
     /// element.
-    feTile "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feTile {}
 
     /// Build a
     /// [`<feTurbulence>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTurbulence)
     /// element.
-    feTurbulence "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    feTurbulence {}
 
     /// Build a
     /// [`<filter>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/filter)
     /// element.
-    filter "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    filter {}
 
     /// Build a
     /// [`<foreignObject>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject)
     /// element.
-    foreignObject "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    foreignObject {}
 
     /// Build a
     /// [`<g>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g)
     /// element.
-    g "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    g {}
 
     /// Build a
     /// [`<hatch>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatch)
     /// element.
-    hatch "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    hatch {}
 
     /// Build a
     /// [`<hatchpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatchpath)
     /// element.
-    hatchpath "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    hatchpath {}
 
     /// Build a
     /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
     /// element.
-    image "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    image {}
 
     /// Build a
     /// [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
     /// element.
-    line "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    line {}
 
     /// Build a
     /// [`<linearGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/linearGradient)
     /// element.
-    linearGradient "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    linearGradient {}
 
     /// Build a
     /// [`<marker>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/marker)
     /// element.
-    marker "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    marker {}
 
     /// Build a
     /// [`<mask>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mask)
     /// element.
-    mask "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    mask {}
 
     /// Build a
     /// [`<metadata>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/metadata)
     /// element.
-    metadata "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    metadata {}
 
     /// Build a
     /// [`<mpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mpath)
     /// element.
-    mpath "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    mpath {}
 
     /// Build a
     /// [`<path>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/path)
     /// element.
-    path "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    path {}
 
     /// Build a
     /// [`<pattern>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/pattern)
     /// element.
-    pattern "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    pattern {}
 
     /// Build a
     /// [`<polygon>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polygon)
     /// element.
-    polygon "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    polygon {}
 
     /// Build a
     /// [`<polyline>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline)
     /// element.
-    polyline "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    polyline {}
 
     /// Build a
     /// [`<radialGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/radialGradient)
     /// element.
-    radialGradient "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    radialGradient {}
 
     /// Build a
     /// [`<rect>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/rect)
     /// element.
-    rect "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    rect {}
 
     // /// Build a
     // /// [`<script>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/script)
     // /// element.
-    // script "http://www.w3.org/2000/svg" {};
+    // #[element(namespace = "http://www.w3.org/2000/svg")]
+    // script {}
 
     /// Build a
     /// [`<set>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/set)
     /// element.
-    set "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    set {}
 
     /// Build a
     /// [`<stop>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/stop)
     /// element.
-    stop "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    stop {}
 
     // /// Build a
     // /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/style)
     // /// element.
-    // style "http://www.w3.org/2000/svg" {};
+    // #[element(namespace = "http://www.w3.org/2000/svg")]
+    // style {}
 
     // /// Build a
     // /// [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
     // /// element.
-    // svg "http://www.w3.org/2000/svg" {};
+    // #[element(namespace = "http://www.w3.org/2000/svg")]
+    // svg {}
 
     /// Build a
     /// [`<switch>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/switch)
     /// element.
-    switch "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    switch {}
 
     /// Build a
     /// [`<symbol>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/symbol)
     /// element.
-    symbol "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    symbol {}
 
     /// Build a
     /// [`<text>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/text)
     /// element.
-    text "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    text {}
 
     /// Build a
     /// [`<textPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/textPath)
     /// element.
-    textPath "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    textPath {}
 
     // /// Build a
     // /// [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/title)
     // /// element.
-    // title "http://www.w3.org/2000/svg" {};
+    // #[element(namespace = "http://www.w3.org/2000/svg")]
+    // title {}
 
     /// Build a
     /// [`<tspan>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/tspan)
     /// element.
-    tspan "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    tspan {}
 
     /// Build a
     /// [`<view>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/view)
     /// element.
-    view "http://www.w3.org/2000/svg" {};
+    #[element(namespace = "http://www.w3.org/2000/svg")]
+    view {}
 
     // /// Build a
     // /// [`<use>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use)
     // /// element.
-    r#use ["use", "http://www.w3.org/2000/svg"] {
-        href: String DEFAULT,
-    };
+    #[element(name = "use", namespace = "http://www.w3.org/2000/svg")]
+    r#use {
+        href,
+    }
 
     // MathML elements
 
     /// Build a
     /// [`<annotation>`](https://w3c.github.io/mathml-core/#dfn-annotation)
     /// element.
-    annotation "http://www.w3.org/1998/Math/MathML" {
-            encoding: String DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    annotation {
+            encoding,
+    }
 
     /// Build a
     /// [`<annotation-xml>`](https://w3c.github.io/mathml-core/#dfn-annotation-xml)
     /// element.
-    annotationXml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {
-            encoding: String DEFAULT,
-    };
+    #[element(name = "annotation-xml", namespace = "http://www.w3.org/1998/Math/MathML")]
+    annotationXml {
+            encoding,
+    }
 
     /// Build a
     /// [`<merror>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/merror)
     /// element.
-    merror "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    merror {}
 
     /// Build a
     /// [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/math)
     /// element.
-    math "http://www.w3.org/1998/Math/MathML" {
-        display: String DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    math {
+        display,
+    }
 
     /// Build a
     /// [`<mfrac>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mfrac)
     /// element.
-    mfrac "http://www.w3.org/1998/Math/MathML" {
-        linethickness: usize DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mfrac {
+        linethickness,
+    }
 
     /// Build a
     /// [`<mi>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mi)
     /// element.
-    mi "http://www.w3.org/1998/Math/MathML" {
-        mathvariant: String DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mi {
+        mathvariant,
+    }
 
     /// Build a
     /// [`<mmultiscripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mmultiscripts)
     /// element.
-    mmultiscripts "http://www.w3.org/1998/math/mathml" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mmultiscripts {}
 
     /// Build a
     /// [`<mn>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mn)
     /// element.
-    mn "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mn {}
 
     /// Build a
     /// [`<mo>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mo)
     /// element.
-    mo "http://www.w3.org/1998/Math/MathML" {
-        fence: Bool DEFAULT,
-        largeop: Bool DEFAULT,
-        lspace: usize DEFAULT,
-        maxsize: usize DEFAULT,
-        minsize: usize DEFAULT,
-        movablelimits: Bool DEFAULT,
-        rspace: usize DEFAULT,
-        separator: Bool DEFAULT,
-        stretchy: Bool DEFAULT,
-        symmetric: Bool DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mo {
+        fence,
+        largeop,
+        lspace,
+        maxsize,
+        minsize,
+        movablelimits,
+        rspace,
+        separator,
+        stretchy,
+        symmetric,
+    }
 
     /// Build a
     /// [`<mover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mover)
     /// element.
-    mover "http://www.w3.org/1998/Math/MathML" {
-        accent: Bool DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mover {
+        accent,
+    }
 
     /// Build a
     /// [`<mpadded>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mpadded)
     /// element.
-    mpadded "http://www.w3.org/1998/Math/MathML" {
-        depth: usize DEFAULT,
-        height: usize DEFAULT,
-        lspace: usize DEFAULT,
-        voffset: usize DEFAULT,
-        width: usize DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mpadded {
+        depth,
+        height,
+        lspace,
+        voffset,
+        width,
+    }
 
     /// Build a
     /// [`<mphantom>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mphantom)
     /// element.
-    mphantom "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mphantom {}
 
     /// Build a
     /// [`<mprescripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mprescripts)
     /// element.
-    mprescripts "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mprescripts {}
 
     /// Build a
     /// [`<mroot>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mroot)
     /// element.
-    mroot "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mroot {}
 
     /// Build a
     /// [`<mrow>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mrow)
     /// element.
-    mrow "http://www.w3.org/1998/Math/MathML" {
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mrow {
 
-    };
+    }
 
     /// Build a
     /// [`<ms>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/ms)
     /// element.
-    ms "http://www.w3.org/1998/Math/MathML" {
-        lquote: String DEFAULT,
-        rquote: String DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    ms {
+        lquote,
+        rquote,
+    }
 
     /// Build a
     /// [`<mspace>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mspace)
     /// element.
-    mspace "http://www.w3.org/1998/Math/MathML" {
-        depth: usize DEFAULT,
-        height: usize DEFAULT,
-        width: usize DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mspace {
+        depth,
+        height,
+        width,
+    }
 
     /// Build a
     /// [`<msqrt>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msqrt)
     /// element.
-    msqrt "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    msqrt {}
 
     /// Build a
     /// [`<mstyle>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mstyle)
     /// element.
-    mstyle "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mstyle {}
 
     /// Build a
     /// [`<msub>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msub)
     /// element.
-    msub "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    msub {}
 
     /// Build a
     /// [`<msubsup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msubsup)
     /// element.
-    msubsup "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    msubsup {}
 
     /// Build a
     /// [`<msup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msup)
     /// element.
-    msup "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    msup {}
 
     /// Build a
     /// [`<mtable>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtable)
     /// element.
-    mtable "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mtable {}
 
     /// Build a
     /// [`<mtd>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtd)
     /// element.
-    mtd "http://www.w3.org/1998/Math/MathML" {
-        columnspan: usize DEFAULT,
-        rowspan: usize DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mtd {
+        columnspan,
+        rowspan,
+    }
 
     /// Build a
     /// [`<mtext>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtext)
     /// element.
-    mtext "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mtext {}
 
     /// Build a
     /// [`<mtr>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtr)
     /// element.
-    mtr "http://www.w3.org/1998/Math/MathML" {};
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    mtr {}
 
     /// Build a
     /// [`<munder>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munder)
     /// element.
-    munder "http://www.w3.org/1998/Math/MathML" {
-        accentunder: Bool DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    munder {
+        accentunder,
+    }
 
     /// Build a
     /// [`<munderover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munderover)
     /// element.
-    munderover "http://www.w3.org/1998/Math/MathML" {
-        accent: Bool DEFAULT,
-        accentunder: Bool DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    munderover {
+        accent,
+        accentunder,
+    }
 
     /// Build a
     /// [`<semantics>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/semantics)
     /// element.
-    semantics "http://www.w3.org/1998/Math/MathML" {
-        encoding: String DEFAULT,
-    };
+    #[element(namespace = "http://www.w3.org/1998/Math/MathML")]
+    semantics {
+        encoding,
+    }
 }

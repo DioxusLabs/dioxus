@@ -38,17 +38,17 @@ impl<'a> Writer<'a> {
     }
 
     pub fn write_rsx_call(&mut self, body: &CallBody) -> Result {
-        if body.body.roots.is_empty() {
+        if body.body().roots.is_empty() {
             return Ok(());
         }
 
-        if Self::is_short_rsx_call(&body.body.roots) {
+        if Self::is_short_rsx_call(&body.body().roots) {
             write!(self.out, " ")?;
-            self.write_ident(&body.body.roots[0])?;
+            self.write_ident(&body.body().roots[0])?;
             write!(self.out, " ")?;
         } else {
             self.out.new_line()?;
-            self.write_body_indented(&body.body.roots)?;
+            self.write_body_indented(&body.body().roots)?;
             self.write_trailing_body_comments(body)?;
         }
 
@@ -56,7 +56,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
-        if let Some(span) = body.span {
+        if let Some(span) = body.span() {
             self.out.indent_level += 1;
             let comments = self.accumulate_full_line_comments(span.span().end());
             let has_real_comment = comments
@@ -81,6 +81,7 @@ impl<'a> Writer<'a> {
             BodyNode::RawExpr(expr) => self.write_expr_node(expr),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
+            BodyNode::SyntheticBoundary(body) => self.write_synthetic_boundary(body),
         }?;
 
         let span = Self::final_span_of_node(node);
@@ -153,6 +154,19 @@ impl<'a> Writer<'a> {
 
     fn write_expr_node(&mut self, expr: &ExprNode) -> Result {
         self.write_partial_expr(expr.expr.as_expr(), expr.span())
+    }
+
+    fn write_synthetic_boundary(&mut self, body: &TemplateBody) -> Result {
+        let mut roots = body.roots.iter();
+        if let Some(first) = roots.next() {
+            self.write_ident(first)?;
+            for node in roots {
+                self.out.new_line()?;
+                self.out.tab()?;
+                self.write_ident(node)?;
+            }
+        }
+        Ok(())
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
@@ -1335,6 +1349,7 @@ impl<'a> Writer<'a> {
                 Some(b) => b.span.span(),
                 None => i.then_brace.span.span(),
             },
+            BodyNode::SyntheticBoundary(_) => node.span(),
         }
     }
 

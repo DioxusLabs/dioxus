@@ -1,7 +1,31 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![recursion_limit = "256"]
 #![warn(missing_docs)]
+// Coverage runs (`RUSTFLAGS="--cfg coverage_nightly" cargo +nightly fuzz coverage`)
+// opt into nightly's `#[coverage(off)]` attribute so unreachable-by-design
+// regions (typed-builder marker fn bodies that the dispatcher routes around)
+// don't drag the coverage metric down. Stable builds see no effect.
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
+// Lets the `Props`/`component` derive macros refer to this crate as `dioxus_core::` even when they
+// are expanded *inside* `dioxus-core` itself (e.g. for `ErrorBoundary`/`Fragment`), so those
+// components can use the derive instead of hand-written builders.
+extern crate self as dioxus_core;
+
+// Debug assertions document internal invariants, but the standard
+// `debug_assert*` macros leave unreachable `cfg!(debug_assertions)` branches in
+// coverage builds. These compile away completely under `coverage_nightly` so the
+// fuzzer coverage report tracks reachable runtime behavior.
+macro_rules! dioxus_debug_assert {
+    ($($arg:tt)*) => {{
+        #[cfg(all(debug_assertions, not(coverage_nightly)))]
+        {
+            debug_assert!($($arg)*);
+        }
+    }};
+}
 
 mod any_props;
 mod arena;
@@ -13,10 +37,13 @@ mod fragment;
 mod generational_box;
 mod global_context;
 mod launch;
+mod mount;
 mod mutations;
 mod nodes;
+mod portal;
 mod properties;
 mod reactive_context;
+mod render_driver;
 mod render_error;
 mod root_wrapper;
 mod runtime;
@@ -26,6 +53,7 @@ mod scope_context;
 mod scopes;
 mod suspense;
 mod tasks;
+pub mod view;
 mod virtual_dom;
 
 mod hotreload_utils;
@@ -33,23 +61,16 @@ mod hotreload_utils;
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
 pub mod internal {
-    #[doc(hidden)]
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
-        HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
-        TemplateGlobalKey,
+        HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute, TemplateGlobalKey,
     };
-
-    #[allow(non_snake_case)]
-    #[doc(hidden)]
-    pub fn Err<T, E>(e: E) -> Result<T, E> {
-        std::result::Result::Err(e)
-    }
 
     pub use anyhow::__anyhow;
 
-    #[doc(hidden)]
+    pub use dioxus_core_template::{TemplateRawTree, TemplateStorage};
+
     pub use generational_box;
 }
 
@@ -65,11 +86,12 @@ pub(crate) mod innerlude {
     pub use crate::launch::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub use crate::portal::*;
     pub use crate::properties::*;
     pub use crate::reactive_context::*;
     pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
-    pub use crate::scheduler::*;
+    pub(crate) use crate::scheduler::*;
     pub use crate::scopes::*;
     pub use crate::suspense::*;
     pub use crate::tasks::*;
@@ -77,6 +99,7 @@ pub(crate) mod innerlude {
 
     pub use anyhow::Context as AnyhowContext;
     pub use anyhow::anyhow;
+    pub use dioxus_core_template::Template;
     // pub use anyhow::Error as AnyhowError;
     // pub type Error = CapturedError;
 
@@ -93,20 +116,25 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
-    ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
-    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
-    ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
-    Properties, ReactiveContext, RenderError, Result, Runtime, RuntimeGuard, ScopeId, ScopeState,
-    SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,
-    SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAttribute,
-    TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
-    anyhow, consume_context, consume_context_from_scope, current_owner, current_scope_id,
-    fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
+    AnyValue, AnyhowContext, AsyncMarker, AsyncResultMarker, Attribute, AttributeValue, Callback,
+    CapturedError, Component, ComponentBuilder, ComponentBuilderOutput, ComponentBuilderRender,
+    ComponentFunction, ComponentFunctionExt, DynamicNode, DynamicValues, Element, ElementId,
+    ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+    IntoDynNode, IntoVNode, LaunchConfig, ListenerCallback, MarkerWrapper, MountedVNode,
+    MultiWriter, Mutation, Mutations, NoOpMutations, OptionArgumentsFromMarker,
+    OptionCallbackMarker, OptionStringFromMarker, Portal, PortalProps, Properties, ReactiveContext,
+    RenderError, RenderTargetId, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, UnitClosure, VComponent, VNode, VText,
+    VirtualDom, WriteMutations, anyhow, consume_context, consume_context_from_scope, current_owner,
+    current_scope_id, generation, has_context, needs_update, needs_update_any, parent_scope,
     provide_context, provide_create_error_boundary, provide_root_context, queue_effect,
     remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
     suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
     use_hook, use_hook_with_cleanup, with_owner,
+};
+pub use diff::template::{
+    DynamicAnchor, DynamicAttrSlot, DynamicNodeSlot, StaticElement, StaticText, VNodeChild,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

@@ -27,6 +27,7 @@ mod component;
 pub use component::*;
 
 use crate::innerlude::*;
+use crate::mount::SuspenseBranch;
 use std::{
     cell::{Cell, Ref, RefCell},
     fmt::Debug,
@@ -52,14 +53,6 @@ impl SuspendedFuture {
     /// Get the task that was suspended
     pub fn task(&self) -> Task {
         Task::from_id(self.task)
-    }
-
-    /// Create a deep clone of this suspended future
-    pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            task: self.task,
-            origin: self.origin,
-        }
     }
 }
 
@@ -89,7 +82,7 @@ impl SuspenseContext {
                 rt: Runtime::current(),
                 suspended_tasks: RefCell::new(vec![]),
                 id: Cell::new(ScopeId::ROOT),
-                suspended_nodes: Default::default(),
+                suspended_branch: Default::default(),
                 frozen: Default::default(),
                 after_suspense_resolved: Default::default(),
             }),
@@ -103,24 +96,33 @@ impl SuspenseContext {
 
     /// Get the suspense boundary's suspended nodes
     pub fn suspended_nodes(&self) -> Option<VNode> {
-        self.inner
-            .suspended_nodes
-            .borrow()
-            .as_ref()
-            .map(|node| node.clone())
+        self.suspended_branch().map(|branch| branch.root())
     }
 
-    /// Set the suspense boundary's suspended nodes
-    pub(crate) fn set_suspended_nodes(&self, suspended_nodes: VNode) {
-        self.inner
-            .suspended_nodes
-            .borrow_mut()
-            .replace(suspended_nodes);
+    /// Run a callback with the suspense boundary's retained primary branch and
+    /// its mounted identity.
+    pub fn with_suspended_mounted_root<R>(
+        &self,
+        with_root: impl FnOnce(MountedVNode<'_>) -> R,
+    ) -> Option<R> {
+        let branch = self.inner.suspended_branch.borrow();
+        let branch = branch.as_ref()?;
+        Some(with_root(branch.mounted_root()))
     }
 
-    /// Take the suspense boundary's suspended nodes
-    pub(crate) fn take_suspended_nodes(&self) -> Option<VNode> {
-        self.inner.suspended_nodes.borrow_mut().take()
+    /// Get the retained primary branch for this boundary.
+    pub(crate) fn suspended_branch(&self) -> Option<SuspenseBranch> {
+        self.inner.suspended_branch.borrow().clone()
+    }
+
+    /// Set the retained primary branch for this boundary.
+    pub(crate) fn set_suspended_branch(&self, branch: SuspenseBranch) {
+        self.inner.suspended_branch.borrow_mut().replace(branch);
+    }
+
+    /// Take the retained primary branch for this boundary.
+    pub(crate) fn take_suspended_branch(&self) -> Option<SuspenseBranch> {
+        self.inner.suspended_branch.borrow_mut().take()
     }
 
     /// Check if the suspense boundary is resolved and frozen
@@ -140,7 +142,7 @@ impl SuspenseContext {
 
     /// Check if the suspense boundary is currently rendered as suspended
     pub fn is_suspended(&self) -> bool {
-        self.inner.suspended_nodes.borrow().is_some()
+        self.inner.suspended_branch.borrow().is_some()
     }
 
     /// Add a suspended task
@@ -155,7 +157,9 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task != task.id);
-        self.inner.rt.needs_update(self.inner.id.get());
+        if let Some(scope) = self.inner.rt.try_get_state(self.inner.id.get()) {
+            scope.needs_update_any(scope.id);
+        }
     }
 
     /// Get all suspended tasks
@@ -184,15 +188,15 @@ impl SuspenseContext {
 }
 
 /// A boundary that will capture any errors from child components
-pub struct SuspenseBoundaryInner {
+pub(crate) struct SuspenseBoundaryInner {
     rt: Rc<Runtime>,
 
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
 
     id: Cell<ScopeId>,
 
-    /// The nodes that are suspended under this boundary
-    suspended_nodes: RefCell<Option<VNode>>,
+    /// The retained primary branch that is hidden while the fallback is visible.
+    suspended_branch: RefCell<Option<SuspenseBranch>>,
 
     /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
     frozen: Cell<bool>,
@@ -206,7 +210,10 @@ impl Debug for SuspenseBoundaryInner {
         f.debug_struct("SuspenseBoundaryInner")
             .field("suspended_tasks", &self.suspended_tasks)
             .field("id", &self.id)
-            .field("suspended_nodes", &self.suspended_nodes)
+            .field(
+                "has_suspended_branch",
+                &self.suspended_branch.borrow().is_some(),
+            )
             .field("frozen", &self.frozen)
             .finish()
     }

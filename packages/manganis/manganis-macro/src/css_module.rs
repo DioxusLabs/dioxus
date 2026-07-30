@@ -122,12 +122,7 @@ pub(crate) fn expand_css_module_struct(
                     static CELL: OnceLock<()> = OnceLock::new();
                     CELL.get_or_init(move || {
                         let doc = document();
-                        doc.create_link(
-                            LinkProps::builder()
-                                .rel(Some("stylesheet".to_string()))
-                                .href(Some(ASSET.to_string()))
-                                .build(),
-                        );
+                        doc.create_link(LinkProps::stylesheet(ASSET.to_string()));
                     });
 
                     self.inner

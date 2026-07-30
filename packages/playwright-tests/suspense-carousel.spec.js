@@ -66,4 +66,35 @@ test("suspense resolves on server", async ({ page }) => {
   await button.click();
   // The button should have incremented
   await expect(button).toContainText("1");
+
+  // Now decrementing the carousel should create a new suspense boundary at the front
+  let decrementCarouselButton = page.locator(
+    "button#decrement-carousel-button"
+  );
+  await decrementCarouselButton.click();
+
+  // A new pending suspense should be created on the client
+  await expect(main).toContainText("Loading...");
+
+  // The suspense should resolve on the client
+  newSuspense = page.locator("#outer-0");
+  await expect(newSuspense).toContainText("outer suspense result: Client");
+
+  // It should be loading more
+  await expect(newSuspense).toContainText("Loading... more");
+
+  // And the nested suspense result
+  await expect(newSuspense).toContainText("nested suspense result: Client");
+
+  // Click the outer button
+  button = page.locator("button#outer-button-0");
+  await button.click();
+  // The button should have incremented
+  await expect(button).toContainText("1");
+
+  // Click the nested button
+  button = page.locator("button#nested-button-0");
+  await button.click();
+  // The button should have incremented
+  await expect(button).toContainText("1");
 });

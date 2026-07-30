@@ -8,12 +8,13 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
-    Template, TemplateAttribute, TemplateNode, VNode,
+    Template, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
 };
+use dioxus_core_template::DecodedTemplateOp;
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::HotReloadResult;
@@ -42,7 +43,7 @@ fn hot_reload_from_tokens(
 ) -> Option<HashMap<usize, HotReloadedTemplate>> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
-    let results = HotReloadResult::new::<Mock>(&old.body, &new.body, Default::default())?;
+    let results = HotReloadResult::new::<Mock>(old.body(), new.body(), Default::default())?;
     Some(results.templates)
 }
 
@@ -449,4 +450,90 @@ fn reordered_props_within_single_component() {
     assert_eq!(template.component_values[0], HotReloadLiteral::Int(10));
     assert_eq!(template.component_values[1], HotReloadLiteral::Float(5.0));
     assert_eq!(template.component_values[2], HotReloadLiteral::Bool(false));
+}
+
+/// Fill-order regression: an element with both a dynamic attribute and a dynamic child must keep
+/// its attribute and node mappings in their separate pools. If the hot-reload differ mixed the two
+/// domains, the runtime would feed the child value into the attribute slot or vice versa.
+#[test]
+fn dynamic_attr_and_child_fill_attr_before_child() {
+    let old = quote! {
+        div {
+            class: "{x}",
+            {child}
+        }
+    };
+
+    let new = quote! {
+        div {
+            {child}
+            class: "{x}"
+        }
+    };
+
+    let templates = hot_reload_from_tokens(old, new).expect("should hotreload");
+    let template = templates.get(&0).unwrap();
+
+    assert_eq!(template.dynamic_attributes.len(), 1);
+    assert_eq!(template.dynamic_nodes.len(), 1);
+    assert_eq!(
+        template.dynamic_attributes[0],
+        HotReloadDynamicAttribute::Named(NamedAttribute::new(
+            "class",
+            None,
+            HotReloadAttributeValue::Literal(HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Dynamic { id: 0 }
+            ])))
+        ))
+    );
+    assert_eq!(template.dynamic_nodes[0], HotReloadDynamicNode::Dynamic(0));
+}
+
+/// Regression for the `bad static root` diff panic. Hot-reloading the readme counter to wrap
+/// its roots in `div { background_color: "red", ... }` adds a static-attribute element root.
+/// Static attributes lower into the op slots that precede an element's children, so the
+/// hot-reload template builder must emit the static-attr op BEFORE the child element ops;
+/// otherwise the diff's static-prototype walk steps onto the misplaced attr op and panics.
+#[test]
+fn static_attr_emitted_before_children_on_hot_reload() {
+    let before = quote! {
+        h1 { "High-Five counter: {count}" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
+    };
+    let after = quote! {
+        div {
+            background_color: "red",
+            h1 { "High-Five counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
+        }
+    };
+
+    let templates = hot_reload_from_tokens(before, after).expect("should hot reload");
+    let template = templates.get(&0).expect("template 0");
+    let ops = template.decoded_ops();
+
+    let first_attr = ops
+        .iter()
+        .position(|op| matches!(op, DecodedTemplateOp::Attr { .. }))
+        .expect("the wrapping div has a static attribute op");
+    let enters: Vec<usize> = ops
+        .iter()
+        .enumerate()
+        .filter(|(_, op)| matches!(op, DecodedTemplateOp::Enter { .. }))
+        .map(|(i, _)| i)
+        .collect();
+
+    // enters[0] is the div root; enters[1] is its first child element (h1). The static
+    // attribute must sit between them, not after the children.
+    assert!(
+        enters.len() >= 2,
+        "expected the div root and child elements: {ops:?}"
+    );
+    assert!(
+        first_attr < enters[1],
+        "static attr op (at {first_attr}) must precede the first child element Enter (at {}); ops: {ops:?}",
+        enters[1]
+    );
 }

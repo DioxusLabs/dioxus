@@ -48,8 +48,7 @@ impl Parse for Element {
         let name = stream.parse::<ElementName>()?;
 
         // We very liberally parse elements - they might not even have a brace!
-        // This is designed such that we can throw a compile error but still give autocomplete
-        // ... partial completions mean we do some weird parsing to get the right completions
+        // This is designed such that we can emit a diagnostic instead of failing to parse.
         let mut brace = None;
         let mut block = RsxBlock::default();
 
@@ -68,7 +67,7 @@ impl Parse for Element {
             ),
         }
 
-        // Make sure these attributes have an el_name set for completions and Template generation
+        // Make sure these attributes have element context for name and namespace resolution.
         for attr in block.attributes.iter_mut() {
             attr.el_name = Some(name.clone());
         }
@@ -97,7 +96,6 @@ impl Parse for Element {
                 colon: None,
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
                 comma: spread.comma,
-                dyn_idx: spread.dyn_idx.clone(),
                 el_name: Some(name.clone()),
             });
         }
@@ -108,105 +106,18 @@ impl Parse for Element {
 
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let el = self;
-        let el_name = &el.name;
+        let builder = self.view_builder_pieces();
+        let definitions = builder.definitions();
+        let view = builder.view_expr();
+        let diagnostics = &self.diagnostics;
 
-        let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
-            ElementName::Custom(_) => quote! { None },
-        };
-
-        let static_attrs = el
-            .merged_attributes
-            .iter()
-            .map(|attr| {
-                // Rendering static attributes requires a bit more work than just a dynamic attrs
-                // Early return for dynamic attributes
-                let Some((name, value)) = attr.as_static_str_literal() else {
-                    let id = attr.dyn_idx.get();
-                    return quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } };
-                };
-
-                let ns = match name {
-                    AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
-                    AttributeName::Custom(_) => quote!(None),
-                    AttributeName::Spread(_) => {
-                        unreachable!("spread attributes should not be static")
-                    }
-                };
-
-                let name = match (el_name, name) {
-                    (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                        quote! { dioxus_elements::#el_name::#name.0 }
-                    }
-                    //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
-                    _ => {
-                        let as_string = name.to_string();
-                        quote! { #as_string }
-                    }
-                };
-
-                let value = value.to_static().unwrap();
-
-                quote! {
-                    dioxus_core::TemplateAttribute::Static {
-                        name: #name,
-                        namespace: #ns,
-                        value: #value,
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // Render either the child
-        let children = el.children.iter().map(|c| match c {
-            BodyNode::Element(el) => quote! { #el },
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
-            }
-            BodyNode::Text(text) => {
-                let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::ForLoop(floop) => {
-                let id = floop.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::RawExpr(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::Component(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::IfChain(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-        });
-
-        let ns = ns(quote!(NAME_SPACE));
-        let el_name = el_name.tag_name();
-        let diagnostics = &el.diagnostics;
-        let completion_hints = &el.completion_hints();
-
-        // todo: generate less code if there's no diagnostics by not including the curlies
         tokens.append_all(quote! {
             {
-                #completion_hints
-
                 #diagnostics
-
-                dioxus_core::TemplateNode::Element {
-                    tag: #el_name,
-                    namespace: #ns,
-                    attrs: &[ #(#static_attrs),* ],
-                    children: &[ #(#children),* ],
-                }
+                #(#definitions)*
+                #view
             }
-        })
+        });
     }
 }
 
@@ -293,7 +204,6 @@ impl Element {
                 name: attr.name.clone(),
                 value: AttributeValue::AttrLiteral(out_lit),
                 colon: attr.colon,
-                dyn_idx: attr.dyn_idx.clone(),
                 comma: matching_attrs.last().unwrap().comma,
                 el_name: attr.el_name.clone(),
             });
@@ -305,29 +215,6 @@ impl Element {
             .iter()
             .find(|attr| attr.name.is_likely_key())
             .map(|attr| &attr.value)
-    }
-
-    fn completion_hints(&self) -> TokenStream2 {
-        // If there is already a brace, we don't need any completion hints
-        if self.brace.is_some() {
-            return quote! {};
-        }
-
-        let ElementName::Ident(name) = &self.name else {
-            return quote! {};
-        };
-
-        quote! {
-            {
-                #[allow(dead_code)]
-                #[doc(hidden)]
-                mod __completions {
-                    fn ignore() {
-                        super::dioxus_elements::elements::completions::CompleteWithBraces::#name
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -366,9 +253,23 @@ impl Parse for ElementName {
 }
 
 impl ElementName {
+    pub fn tag_name_string(&self) -> String {
+        match self {
+            ElementName::Ident(i) => i
+                .to_string()
+                .strip_prefix("r#")
+                .map(ToString::to_string)
+                .unwrap_or_else(|| i.to_string()),
+            ElementName::Custom(s) => s.value(),
+        }
+    }
+
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
-            ElementName::Ident(i) => quote! { dioxus_elements::elements::#i::TAG_NAME },
+            ElementName::Ident(_) => {
+                let name = self.tag_name_string();
+                quote! { #name }
+            }
             ElementName::Custom(s) => quote! { #s },
         }
     }
@@ -704,13 +605,12 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 3);
 
         // style should not generate a diagnostic
-        assert!(
-            !parsed
-                .diagnostics
-                .diagnostics
-                .into_iter()
-                .any(|f| f.emit_as_item_tokens().to_string().contains("style"))
-        );
+        assert!(!parsed.diagnostics.iter().any(|f| {
+            f.clone()
+                .emit_as_item_tokens()
+                .to_string()
+                .contains("style")
+        }));
     }
 
     #[test]

@@ -1,43 +1,74 @@
-use crate::PendingDesktopContext;
+use crate::WeakDesktopContext;
+use crate::desktop_context::{PendingDesktopWindow, PendingWindowCancellation};
+use crate::desktop_state::DesktopAppContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::{
-    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
-    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
-    waker::tao_waker,
+    DesktopContext, DesktopService, WindowConfig, assets::AssetHandlerRegistry, edits::WryQueue,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
 };
-use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
-use dioxus_document::Document;
-use dioxus_history::{History, MemoryHistory};
+use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{FutureExt, pin_mut};
+use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
-use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
+
+fn restore_window_state(
+    window: &tao::window::Window,
+    explicit_inner_size: Option<tao::dpi::Size>,
+    explicit_window_position: Option<tao::dpi::Position>,
+) {
+    if cfg!(target_os = "android") || cfg!(target_os = "ios") || !cfg!(debug_assertions) {
+        return;
+    }
+
+    let Ok(state) = std::fs::read_to_string(crate::app::restore_file()) else {
+        return;
+    };
+    let Ok(state) = serde_json::from_str::<crate::app::PreservedWindowState>(&state) else {
+        return;
+    };
+
+    let position = (state.x, state.y);
+    let size = (state.width, state.height);
+
+    if explicit_window_position.is_none() {
+        if cfg!(target_os = "macos") {
+            window.set_outer_position(tao::dpi::LogicalPosition::new(position.0, position.1));
+        } else {
+            window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
+        }
+    }
+
+    if explicit_inner_size.is_none() {
+        if cfg!(target_os = "macos") {
+            window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
+        } else {
+            window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
+    target_id: RenderTargetId,
     pub wry_queue: WryQueue,
     desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
-    fn new(runtime: Rc<Runtime>, wry_queue: WryQueue) -> Self {
+    fn new(runtime: Rc<Runtime>, target_id: RenderTargetId, wry_queue: WryQueue) -> Self {
         Self {
             runtime,
+            target_id,
             wry_queue,
             desktop_context: Default::default(),
         }
-    }
-
-    fn set_desktop_context(&self, context: WeakDesktopContext) {
-        _ = self.desktop_context.set(context);
     }
 
     pub fn handle_event(
@@ -188,7 +219,8 @@ impl WebviewEdits {
         };
 
         let event = dioxus_core::Event::new(as_any, bubbles);
-        self.runtime.handle_event(&name, event.clone(), element);
+        self.runtime
+            .handle_event_for_target(self.target_id, &name, event.clone(), element);
 
         // Get the response from the event
         SynchronousEventResponse::new(!event.default_action_enabled())
@@ -196,10 +228,8 @@ impl WebviewEdits {
 }
 
 pub(crate) struct WebviewInstance {
-    pub dom: VirtualDom,
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
-    pub waker: Waker,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -214,12 +244,21 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
+    /// The render target this webview draws. Stored once in [`WebviewEdits`];
+    /// this exposes it as the webview's identity to the app layer.
+    pub(crate) fn target_id(&self) -> RenderTargetId {
+        self.desktop_context.target_id
+    }
+
     pub(crate) fn new(
-        mut cfg: Config,
-        mut dom: VirtualDom,
-        shared: Rc<SharedContext>,
+        mut cfg: WindowConfig,
+        target_id: RenderTargetId,
+        dom: &mut VirtualDom,
+        app_context: Rc<DesktopAppContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
+        let explicit_window_size = cfg.window.window.inner_size;
+        let explicit_window_position = cfg.window.window.position;
 
         // tao makes small windows for some reason, make them bigger on desktop
         //
@@ -237,9 +276,10 @@ impl WebviewInstance {
             window = window.with_window_icon(crate::default_icon().ok());
         }
 
-        let window = Arc::new(window.build(&shared.target).unwrap());
+        let window = Arc::new(window.build(&app_context.target).unwrap());
+        restore_window_state(&window, explicit_window_size, explicit_window_position);
         if let Some(on_build) = cfg.on_window.as_mut() {
-            on_build(window.clone(), &mut dom);
+            on_build(window.clone(), dom);
         }
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
@@ -266,9 +306,9 @@ impl WebviewInstance {
                 None
             }
         }));
-        let edit_queue = shared.websocket.create_queue();
+        let edit_queue = app_context.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
-        let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
+        let edits = WebviewEdits::new(dom.runtime(), target_id, edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
@@ -303,7 +343,7 @@ impl WebviewInstance {
 
         let ipc_handler = {
             let window_id = window.id();
-            to_owned![shared.proxy];
+            to_owned![app_context.proxy];
             move |payload: wry::http::Request<String>| {
                 // defer the event to the main thread
                 let body = payload.into_body();
@@ -315,7 +355,7 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-            let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
+            let (proxy, window_id) = (app_context.proxy.to_owned(), window.id());
             move |evt: DragDropEvent| {
                 if cfg!(not(windows)) {
                     // Update the most recent file drop event - when the event comes in from the webview we can use the
@@ -501,87 +541,24 @@ impl WebviewInstance {
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
-            shared.clone(),
+            app_context.clone(),
+            target_id,
             asset_handlers,
             file_hover,
             cfg.window_close_behavior,
         ));
 
-        // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(Rc::downgrade(&desktop_context));
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-        dom.in_scope(ScopeId::ROOT, || {
-            provide_context(desktop_context.clone());
-            provide_context(provider);
-            provide_context(history_provider);
-        });
+        // Provide the desktop context to the edit handler.
+        _ = edits.desktop_context.set(Rc::downgrade(&desktop_context));
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
 
         WebviewInstance {
-            dom,
             edits,
-            waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             _menu: menu,
             _web_context: web_context,
-        }
-    }
-
-    pub fn poll_vdom(&mut self) {
-        let mut cx = std::task::Context::from_waker(&self.waker);
-
-        // Continuously poll the virtualdom until it's pending
-        // Wait for work will return Ready when it has edits to be sent to the webview
-        // It will return Pending when it needs to be polled again - nothing is ready
-        loop {
-            // Check if there is a new edit channel we need to send. On IOS,
-            // the websocket will be killed when the device is put into sleep. If we
-            // find the socket has been closed, we create a new socket and send it to
-            // the webview to continue on
-            // https://github.com/DioxusLabs/dioxus/issues/4374
-            if self
-                .edits
-                .wry_queue
-                .poll_new_edits_location(&mut cx)
-                .is_ready()
-            {
-                _ = self.desktop_context.webview.evaluate_script(&format!(
-                    "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                    edits_path = self.edits.wry_queue.edits_path(),
-                    expected_key = self.edits.wry_queue.required_server_key()
-                ));
-            }
-
-            // If we're waiting for a render, wait for it to finish before we continue
-            let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
-            if edits_flushed_poll.is_pending() {
-                return;
-            }
-
-            {
-                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
-                #[cfg(target_os = "android")]
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-                let fut = self.dom.wait_for_work();
-                pin_mut!(fut);
-
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
-            }
-
-            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
-            #[cfg(target_os = "android")]
-            let _lock = crate::android_sync_lock::android_runtime_lock();
-
-            self.edits
-                .wry_queue
-                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
-            self.edits.wry_queue.send_edits();
         }
     }
 
@@ -637,29 +614,79 @@ impl SynchronousEventResponse {
 }
 
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
-/// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+/// block on windows, so the app context queues them until the main event loop is ready.
 pub(crate) struct PendingWebview {
-    dom: VirtualDom,
-    cfg: Config,
+    target_id: RenderTargetId,
+    cfg: WindowConfig,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
 impl PendingWebview {
-    pub(crate) fn new(dom: VirtualDom, cfg: Config) -> (Self, PendingDesktopContext) {
+    pub(crate) fn new(
+        target_id: RenderTargetId,
+        cfg: WindowConfig,
+    ) -> (Self, PendingDesktopWindow) {
         let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self { dom, cfg, sender };
-        let pending = PendingDesktopContext { receiver };
+        let webview = Self {
+            target_id,
+            cfg,
+            sender,
+        };
+        let pending = PendingDesktopWindow {
+            target_id,
+            receiver,
+            cancellation: PendingWindowCancellation::default(),
+        };
         (webview, pending)
     }
 
-    pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
+    pub(crate) fn create_window(
+        self,
+        dom: &mut VirtualDom,
+        app_context: &Rc<DesktopAppContext>,
+    ) -> WebviewInstance {
+        let window = WebviewInstance::new(self.cfg, self.target_id, dom, app_context.clone());
 
-        let cx = window
-            .dom
-            .in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
-        _ = self.sender.send(cx);
+        _ = self.sender.send(window.desktop_context.clone());
 
         window
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::{Element, VNode};
+    use futures_util::FutureExt;
+
+    fn empty_app() -> Element {
+        VNode::empty()
+    }
+
+    #[test]
+    fn canceling_pending_webview_cancels_receiver_before_reusing_target() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_runtime(|| {
+            let target_id = Runtime::current().create_render_target();
+            let (pending_webview, pending_window) =
+                PendingWebview::new(target_id, WindowConfig::new());
+            let cancellation = pending_window.cancellation();
+
+            cancellation.cancel();
+            assert!(cancellation.is_canceled());
+
+            drop(pending_webview);
+
+            assert!(Runtime::current().remove_render_target(target_id));
+            assert_eq!(Runtime::current().create_render_target(), target_id);
+            assert!(
+                pending_window
+                    .try_resolve()
+                    .now_or_never()
+                    .expect("dropped pending webview should cancel immediately")
+                    .is_err()
+            );
+        });
     }
 }

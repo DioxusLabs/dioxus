@@ -4,6 +4,7 @@ members = [
     "packages/dioxus",
     "packages/core",
     "packages/core-template",
+    "packages/oracle",
     "packages/core-types",
     "packages/cli",
     "packages/cli-config",
@@ -65,6 +66,7 @@ members = [
     "packages/playwright-tests/fullstack-spread",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/fullstack-hydration-order",
+    "packages/playwright-tests/markerless-hydration-edges",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
@@ -123,6 +125,7 @@ version = "0.8.0-alpha.0"
 dioxus = { path = "packages/dioxus", version = "0.8.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.8.0-alpha.0" }
 dioxus-core-template = { path = "packages/core-template", version = "0.8.0-alpha.0" }
+dioxus-renderer-oracle = { path = "packages/oracle", version = "0.8.0-alpha.0" }
 dioxus-core-types = { path = "packages/core-types", version = "0.8.0-alpha.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.8.0-alpha.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.8.0-alpha.0" }

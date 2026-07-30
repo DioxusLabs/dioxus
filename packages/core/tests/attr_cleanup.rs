@@ -3,81 +3,63 @@
 //! This tests to ensure we clean it up
 
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, IntoAttributeValue, Mutation::*, generation};
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn attrs_cycle() {
     tracing_subscriber::fmt::init();
 
-    let mut dom = VirtualDom::new(|| {
-        let id = generation();
-        match id % 2 {
-            0 => rsx! { div {} },
-            1 => rsx! {
-                div { h1 { class: "{id}", id: "{id}" } }
-            },
-            _ => unreachable!(),
+    fn app() -> Element {
+        match generation() {
+            1 => {
+                let id = 1;
+                rsx! { div { h1 { class: "{id}", id: "{id}" } } }
+            }
+            3 => {
+                let id = 3;
+                rsx! { div { h1 { class: "{id}", id: "{id}" } } }
+            }
+            _ => rsx! { div {} },
         }
-    });
+    }
 
-    assert_eq!(
-        dom.rebuild_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    );
+    fn expected_1() -> Element {
+        rsx! { div { h1 { class: "1", id: "1" } } }
+    }
+
+    fn expected_3() -> Element {
+        rsx! { div { h1 { class: "3", id: "3" } } }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    // Each empty<->populated cycle loads the new node and removes the old one.
+    dom.mark_dirty(ScopeId::APP);
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_1);
+    assert_eq!(summary.set_attrs, 2);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            AssignId { path: &[0,], id: ElementId(3,) },
-            SetAttribute { name: "class", value: "1".into_value(), id: ElementId(3,), ns: None },
-            SetAttribute { name: "id", value: "1".into_value(), id: ElementId(3,), ns: None },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(app);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
-        ]
-    );
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(expected_3);
+    assert_eq!(summary.set_attrs, 2);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2) },
-            AssignId { path: &[0], id: ElementId(3) },
-            SetAttribute {
-                name: "class",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
-                id: ElementId(3),
-                ns: None
-            },
-            SetAttribute {
-                name: "id",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
-                id: ElementId(3),
-                ns: None
-            },
-            ReplaceWith { id: ElementId(1), m: 1 }
-        ]
-    );
-
-    // we take the node taken by attributes since we reused it
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
-        ]
-    );
+    let summary = oracle.render(&mut dom);
+    oracle.assert_matches(app);
+    assert_eq!(summary.loads, 1);
+    assert_eq!(summary.removes, 1);
 }

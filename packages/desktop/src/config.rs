@@ -51,9 +51,22 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
     }
 }
 
-/// The configuration for the desktop application.
-pub struct Config {
-    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
+pub(crate) type WryProtocol = (
+    String,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+);
+
+pub(crate) type AsyncWryProtocol = (
+    String,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+);
+
+/// The configuration for a single desktop window.
+///
+/// Pass a `WindowConfig` to the [`Window`](crate::Window) component's `config` prop to customize a
+/// window it opens. The [app-level `Config`](Config) embeds one of these to describe the window
+/// created for you by [`launch`](crate::launch::launch).
+pub struct WindowConfig {
     pub(crate) window: WindowBuilder,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
@@ -67,33 +80,17 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) exit_on_last_window_close: bool,
     pub(crate) window_close_behavior: WindowCloseBehaviour,
-    pub(crate) custom_event_handler: Option<CustomEventHandler>,
     pub(crate) disable_file_drop_handler: bool,
-    pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) additional_windows_args: Option<String>,
-    pub(crate) tray_icon_show_window_on_click: bool,
     pub(crate) navigation_handler: Option<NavigationHandler>,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
 }
 
-impl LaunchConfig for Config {}
-
-pub(crate) type WryProtocol = (
-    String,
-    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
-);
-
-pub(crate) type AsyncWryProtocol = (
-    String,
-    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
-);
-
-impl Config {
-    /// Initializes a new `WindowBuilder` with default values.
+impl WindowConfig {
+    /// Initializes a new `WindowConfig` with default values.
     #[inline]
     pub fn new() -> Self {
         let mut window: WindowBuilder = WindowBuilder::new()
@@ -109,7 +106,6 @@ impl Config {
         Self {
             window,
             as_child_window: false,
-            event_loop: None,
             menu: MenuBuilderState::Unset,
             protocols: Vec::new(),
             asynchronous_protocols: Vec::new(),
@@ -121,14 +117,10 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            exit_on_last_window_close: true,
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
-            custom_event_handler: None,
             disable_file_drop_handler: false,
-            disable_dma_buf_on_wayland: true,
             on_window: None,
             additional_windows_args: None,
-            tray_icon_show_window_on_click: true,
             navigation_handler: None,
         }
     }
@@ -173,12 +165,6 @@ impl Config {
         self
     }
 
-    /// Set the event loop to be used
-    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
-        self.event_loop = Some(event_loop);
-        self
-    }
-
     /// Set the configuration for the window.
     pub fn with_window(mut self, window: WindowBuilder) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
@@ -196,29 +182,9 @@ impl Config {
         self
     }
 
-    /// When the last window is closed, the application will exit.
-    ///
-    /// This is the default behaviour.
-    ///
-    /// If the last window is hidden, the application will not exit.
-    pub fn with_exits_when_last_window_closes(mut self, exit: bool) -> Self {
-        self.exit_on_last_window_close = exit;
-        self
-    }
-
-    /// Sets the behaviour of the application when the last window is closed.
+    /// Sets the behaviour of this window when it is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
         self.window_close_behavior = behaviour;
-        self
-    }
-
-    /// Sets a custom callback to run whenever the event pool receives an event.
-    pub fn with_custom_event_handler(
-        mut self,
-        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-        + 'static,
-    ) -> Self {
-        self.custom_event_handler = Some(Box::new(f));
         self
     }
 
@@ -237,10 +203,10 @@ impl Config {
     /// ```rust
     /// # use wry::http::response::Response as HTTPResponse;
     /// # use std::borrow::Cow;
-    /// # use dioxus_desktop::Config;
+    /// # use dioxus_desktop::WindowConfig;
     /// #
     /// # fn main() {
-    /// let cfg = Config::new()
+    /// let cfg = WindowConfig::new()
     ///     .with_asynchronous_custom_protocol("asset", |_webview_id, request, responder| {
     ///         tokio::spawn(async move {
     ///             responder.respond(
@@ -311,7 +277,7 @@ impl Config {
     ///
     /// > Note: Menu will be hidden if
     /// > [`with_decorations`](tao::window::WindowBuilder::with_decorations)
-    /// > is set to false and passed into [`with_window`](Config::with_window)
+    /// > is set to false and passed into [`with_window`](WindowConfig::with_window)
     #[allow(unused)]
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -332,18 +298,110 @@ impl Config {
         self
     }
 
+    /// Add additional windows only launch arguments for webview2
+    pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
+        self.additional_windows_args = Some(additional_args.to_string());
+        self
+    }
+
+    /// Set a custom navigation handler for non-dioxus URLs.
+    /// Return true to allow navigation inside the webview, false to block.
+    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
+        self.navigation_handler = Some(Box::new(f));
+        self
+    }
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The configuration for the desktop application.
+///
+/// This holds app-wide settings shared by every window plus the [`WindowConfig`] used for the
+/// window that [`launch`](crate::launch::launch) opens for you. The window-level builder methods
+/// (`with_window`, `with_menu`, `with_custom_head`, …) configure that default window; use
+/// [`WindowConfig`] directly when opening additional windows with the [`Window`](crate::Window)
+/// component.
+pub struct Config {
+    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
+    pub(crate) exit_on_last_window_close: bool,
+    pub(crate) custom_event_handler: Option<CustomEventHandler>,
+    pub(crate) disable_dma_buf_on_wayland: bool,
+    pub(crate) tray_icon_show_window_on_click: bool,
+    pub(crate) headless_root: bool,
+
+    /// Configuration for the window opened by `launch`.
+    pub(crate) window: WindowConfig,
+}
+
+impl LaunchConfig for Config {}
+
+impl Config {
+    /// Initializes a new `Config` with default values.
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            event_loop: None,
+            exit_on_last_window_close: true,
+            custom_event_handler: None,
+            disable_dma_buf_on_wayland: true,
+            tray_icon_show_window_on_click: true,
+            headless_root: false,
+            window: WindowConfig::new(),
+        }
+    }
+
+    /// Set whether [`launch`](crate::launch::launch) should run the root component without
+    /// wrapping it in a default [`Window`](crate::Window).
+    ///
+    /// Defaults to `false`. Set this to `true` when the root component should own all native
+    /// windows explicitly by rendering [`Window`](crate::Window) components itself.
+    pub fn with_headless_root(mut self, headless: bool) -> Self {
+        self.headless_root = headless;
+        self
+    }
+
+    /// Set the configuration for the window opened by `launch`.
+    pub fn with_window_config(mut self, window: WindowConfig) -> Self {
+        self.window = window;
+        self
+    }
+
+    /// Set the event loop to be used
+    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
+        self.event_loop = Some(event_loop);
+        self
+    }
+
+    /// When the last window is closed, the application will exit.
+    ///
+    /// This is the default behaviour.
+    ///
+    /// If the last window is hidden, the application will not exit.
+    pub fn with_exits_when_last_window_closes(mut self, exit: bool) -> Self {
+        self.exit_on_last_window_close = exit;
+        self
+    }
+
+    /// Sets a custom callback to run whenever the event pool receives an event.
+    pub fn with_custom_event_handler(
+        mut self,
+        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+        + 'static,
+    ) -> Self {
+        self.custom_event_handler = Some(Box::new(f));
+        self
+    }
+
     /// Set whether or not DMA-BUF usage should be disabled on Wayland.
     ///
     /// Defaults to true to avoid issues on some systems. If you want to enable DMA-BUF usage, set this to false.
     /// See <https://github.com/DioxusLabs/dioxus/issues/4528#issuecomment-3476430611>
     pub fn with_disable_dma_buf_on_wayland(mut self, disable: bool) -> Self {
         self.disable_dma_buf_on_wayland = disable;
-        self
-    }
-
-    /// Add additional windows only launch arguments for webview2
-    pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
-        self.additional_windows_args = Some(additional_args.to_string());
         self
     }
 
@@ -357,10 +415,131 @@ impl Config {
         self
     }
 
+    /// set the directory from which assets will be searched in release mode
+    pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.window = self.window.with_resource_directory(path);
+        self
+    }
+
+    /// Set the directory where WebView2 stores its user data (cookies, cache, IndexedDB, etc.).
+    ///
+    /// See [`WindowConfig::with_data_directory`] for details.
+    pub fn with_data_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.window = self.window.with_data_directory(path);
+        self
+    }
+
+    /// Set whether or not the right-click context menu should be disabled.
+    pub fn with_disable_context_menu(mut self, disable: bool) -> Self {
+        self.window = self.window.with_disable_context_menu(disable);
+        self
+    }
+
+    /// Set whether or not the file drop handler should be disabled.
+    /// On Windows the drop handler must be disabled for HTML drag and drop APIs to work.
+    pub fn with_disable_drag_drop_handler(mut self, disable: bool) -> Self {
+        self.window = self.window.with_disable_drag_drop_handler(disable);
+        self
+    }
+
+    /// Set the pre-rendered HTML content
+    pub fn with_prerendered(mut self, content: String) -> Self {
+        self.window = self.window.with_prerendered(content);
+        self
+    }
+
+    /// Set the configuration for the window opened by `launch`.
+    pub fn with_window(mut self, window: WindowBuilder) -> Self {
+        self.window = self.window.with_window(window);
+        self
+    }
+
+    /// Set the window opened by `launch` as a child window.
+    pub fn with_as_child_window(mut self) -> Self {
+        self.window = self.window.with_as_child_window();
+        self
+    }
+
+    /// Sets the close behaviour of the window opened by `launch`.
+    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
+        self.window = self.window.with_close_behaviour(behaviour);
+        self
+    }
+
+    /// Set a custom protocol
+    pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
+    where
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
+    {
+        self.window = self.window.with_custom_protocol(name, handler);
+        self
+    }
+
+    /// Set an asynchronous custom protocol
+    ///
+    /// See [`WindowConfig::with_asynchronous_custom_protocol`] for details.
+    pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
+    where
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+    {
+        self.window = self.window.with_asynchronous_custom_protocol(name, handler);
+        self
+    }
+
+    /// Set a custom icon for this application
+    pub fn with_icon(mut self, icon: Icon) -> Self {
+        self.window = self.window.with_icon(icon);
+        self
+    }
+
+    /// Inject additional content into the document's HEAD.
+    ///
+    /// This is useful for loading CSS libraries, JS libraries, etc.
+    pub fn with_custom_head(mut self, head: String) -> Self {
+        self.window = self.window.with_custom_head(head);
+        self
+    }
+
+    /// Use a custom index.html instead of the default Dioxus one.
+    pub fn with_custom_index(mut self, index: String) -> Self {
+        self.window = self.window.with_custom_index(index);
+        self
+    }
+
+    /// Set the name of the element that Dioxus will use as the root.
+    pub fn with_root_name(mut self, name: impl Into<String>) -> Self {
+        self.window = self.window.with_root_name(name);
+        self
+    }
+
+    /// Sets the background color of the WebView.
+    pub fn with_background_color(mut self, color: (u8, u8, u8, u8)) -> Self {
+        self.window = self.window.with_background_color(color);
+        self
+    }
+
+    /// Sets the menu the window opened by `launch` will use.
+    #[allow(unused)]
+    pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
+        self.window = self.window.with_menu(menu);
+        self
+    }
+
+    /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
+    pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
+        self.window = self.window.with_on_window(f);
+        self
+    }
+
+    /// Add additional windows only launch arguments for webview2
+    pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
+        self.window = self.window.with_windows_browser_args(additional_args);
+        self
+    }
+
     /// Set a custom navigation handler for non-dioxus URLs.
-    /// Return true to allow navigation inside the webview, false to block.
     pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
-        self.navigation_handler = Some(Box::new(f));
+        self.window = self.window.with_navigation_handler(f);
         self
     }
 }

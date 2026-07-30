@@ -56,7 +56,8 @@ async fn values_memoize_in_place() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
             _ = dom.wait_for_work() => {}
@@ -101,7 +102,8 @@ fn cloning_event_handler_components_work() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -147,23 +149,27 @@ fn spreads_memorize_in_place() {
         attributes: Vec<Attribute>,
     }
 
-    let mut props = CompProps::builder().build();
-    assert!(!props.memoize(&CompProps::builder().all("123").build()));
+    let mut props = CompProps { attributes: vec![] };
+    assert!(!props.memoize(&CompProps {
+        attributes: vec![Attribute::new("all", "123", Some("style"), false)],
+    }));
     assert_eq!(
         props.attributes,
         vec![Attribute::new("all", "123", Some("style"), false)]
     );
 
-    assert!(!props.memoize(&CompProps::builder().width("123").build()));
+    assert!(!props.memoize(&CompProps {
+        attributes: vec![Attribute::new("width", "123", Some("style"), false)],
+    }));
     assert_eq!(
         props.attributes,
         vec![Attribute::new("width", "123", Some("style"), false)]
     );
 
-    assert!(!props.memoize(&CompProps::builder().build()));
+    assert!(!props.memoize(&CompProps { attributes: vec![] }));
     assert_eq!(props.attributes, vec![]);
 
-    assert!(props.memoize(&CompProps::builder().build()));
+    assert!(props.memoize(&CompProps { attributes: vec![] }));
     assert_eq!(props.attributes, vec![]);
 }
 
@@ -210,7 +216,8 @@ fn cloning_read_signal_components_work() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.runtime()
+            .handle_event("click", event, ElementId::from_raw(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -229,14 +236,29 @@ async fn optional_event_handler_diff() {
     let dom = VirtualDom::new(|| rsx! {});
 
     dom.in_scope(ScopeId::APP, || {
+        let none_props = || CompPropsWithOwner {
+            inner: CompProps { callback: None },
+            owner: dioxus_core::internal::generational_box::Owner::default(),
+        };
+        let some_props = || {
+            let owner = dioxus_core::internal::generational_box::Owner::default();
+            let callback = dioxus_core::with_owner(owner.clone(), || Callback::new(|_| {}));
+            CompPropsWithOwner {
+                inner: CompProps {
+                    callback: Some(callback),
+                },
+                owner,
+            }
+        };
+
         // Diffing from None to Some should be different and copy the callback
-        let mut props = CompProps::builder().callback(None).build();
-        assert!(!props.memoize(&CompProps::builder().callback(|_| {}).build()));
+        let mut props = none_props();
+        assert!(!props.memoize(&some_props()));
         assert!(props.inner.callback.is_some());
 
         // Diffing from Some to None should be different and remove the callback
-        let mut props = CompProps::builder().callback(|_| {}).build();
-        assert!(!props.memoize(&CompProps::builder().callback(None).build()));
+        let mut props = some_props();
+        assert!(!props.memoize(&none_props()));
         assert!(props.inner.callback.is_none());
     });
 }

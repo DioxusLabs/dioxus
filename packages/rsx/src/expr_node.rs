@@ -1,11 +1,10 @@
-use crate::{DynIdx, PartialExpr};
+use crate::PartialExpr;
 use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::Parse;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ExprNode {
     pub expr: PartialExpr,
-    pub dyn_idx: DynIdx,
 }
 
 impl ExprNode {
@@ -28,14 +27,12 @@ impl Parse for ExprNode {
         //         let _brace = braced!(content in input);
         //         return Ok(Self {
         //             expr: content.parse()?,
-        //             dyn_idx: DynIdx::default(),
         //         });
         //     }
         // }
 
         Ok(Self {
             expr: input.parse()?,
-            dyn_idx: DynIdx::default(),
         })
     }
 }

@@ -1,6 +1,5 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
-use std::collections::HashMap;
 use syn::{
     parse::{Parse, ParseStream},
     *,
@@ -13,19 +12,19 @@ use syn::{
 /// actually shipped this!
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
-    pub source: LitStr,
+    pub(crate) source: LitStr,
     pub segments: Vec<Segment>,
 }
 
 impl IfmtInput {
-    pub fn new(span: Span) -> Self {
+    pub(crate) fn new(span: Span) -> Self {
         Self {
             source: LitStr::new("", span),
             segments: Vec::new(),
         }
     }
 
-    pub fn new_litstr(source: LitStr) -> Result<Self> {
+    pub(crate) fn new_litstr(source: LitStr) -> Result<Self> {
         let segments = IfmtInput::from_raw(&source.value()).map_err(|e| {
             // If there is an error creating the formatted string, attribute it to the litstr span
             let span = source.span();
@@ -38,15 +37,15 @@ impl IfmtInput {
         self.source.span()
     }
 
-    pub fn push_raw_str(&mut self, other: String) {
+    pub(crate) fn push_raw_str(&mut self, other: String) {
         self.segments.push(Segment::Literal(other.to_string()))
     }
 
-    pub fn push_ifmt(&mut self, other: IfmtInput) {
+    pub(crate) fn push_ifmt(&mut self, other: IfmtInput) {
         self.segments.extend(other.segments);
     }
 
-    pub fn push_expr(&mut self, expr: Expr) {
+    pub(crate) fn push_expr(&mut self, expr: Expr) {
         self.segments.push(Segment::Formatted(FormattedSegment {
             format_args: String::new(),
             segment: FormattedSegmentType::Expr(Box::new(expr)),
@@ -69,24 +68,6 @@ impl IfmtInput {
                     None
                 }
             })
-    }
-
-    pub fn dynamic_segments(&self) -> Vec<&FormattedSegment> {
-        self.segments
-            .iter()
-            .filter_map(|seg| match seg {
-                Segment::Formatted(seg) => Some(seg),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-    }
-
-    pub fn dynamic_seg_frequency_map(&self) -> HashMap<&FormattedSegment, usize> {
-        let mut map = HashMap::new();
-        for seg in self.dynamic_segments() {
-            *map.entry(seg).or_insert(0) += 1;
-        }
-        map
     }
 
     fn is_simple_expr(&self) -> bool {
@@ -283,19 +264,15 @@ pub enum Segment {
 }
 
 impl Segment {
-    pub fn is_literal(&self) -> bool {
-        matches!(self, Segment::Literal(_))
-    }
-
-    pub fn is_formatted(&self) -> bool {
+    pub(crate) fn is_formatted(&self) -> bool {
         matches!(self, Segment::Formatted(_))
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FormattedSegment {
-    pub format_args: String,
-    pub segment: FormattedSegmentType,
+    pub(crate) format_args: String,
+    pub(crate) segment: FormattedSegmentType,
 }
 
 impl ToTokens for FormattedSegment {
@@ -309,7 +286,7 @@ impl ToTokens for FormattedSegment {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum FormattedSegmentType {
+pub(crate) enum FormattedSegmentType {
     Expr(Box<Expr>),
     Ident(Ident),
 }

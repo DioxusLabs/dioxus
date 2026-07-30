@@ -309,7 +309,7 @@ pub fn parent_scope() -> Option<ScopeId> {
 
 /// Mark the current scope as dirty, causing it to re-render.
 pub fn needs_update() {
-    Runtime::with_current_scope(|cx| cx.needs_update());
+    Runtime::with_current_scope(|cx| cx.needs_update_any(cx.id));
 }
 
 /// Mark the current scope as dirty, causing it to re-render.

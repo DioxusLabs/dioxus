@@ -39,7 +39,7 @@ fn callbody_ctx() {
 
     let cb: CallBody = syn::parse2(item).unwrap();
 
-    dbg!(cb.template_idx.get());
+    dbg!(cb.body().template_idx.get());
 }
 
 #[test]
@@ -163,8 +163,8 @@ fn key_must_be_formatted() {
     };
 
     let parsed = syn::parse2::<CallBody>(item).unwrap();
-    println!("{:?}", parsed.body.diagnostics);
-    assert!(!parsed.body.diagnostics.is_empty());
+    println!("{:?}", parsed.body().diagnostics);
+    assert!(!parsed.body().diagnostics.is_empty());
 }
 
 #[test]
@@ -176,8 +176,8 @@ fn key_cannot_be_static() {
     };
 
     let parsed = syn::parse2::<CallBody>(item).unwrap();
-    println!("{:?}", parsed.body.diagnostics);
-    assert!(!parsed.body.diagnostics.is_empty());
+    println!("{:?}", parsed.body().diagnostics);
+    assert!(!parsed.body().diagnostics.is_empty());
 }
 
 #[test]

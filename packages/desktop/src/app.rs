@@ -1,57 +1,43 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    edits::EditWebsocket,
-    event_handlers::WindowEventHandlers,
+    desktop_state::{DesktopAppContext, WindowCloseRequestResult},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
-    shortcut::ShortcutRegistry,
-    webview::{PendingWebview, WebviewInstance},
+    waker::create_dom_waker,
+    webview::WebviewInstance,
 };
-use dioxus_core::VirtualDom;
+use dioxus_core::{RenderTargetId, ScopeId, VirtualDom, provide_context};
+use futures_util::{FutureExt, pin_mut};
 use std::{
-    cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     rc::Rc,
+    task::Waker,
     time::Duration,
 };
 use tao::{
     dpi::PhysicalSize,
     event::Event,
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::WindowId,
 };
 
-/// The single top-level object that manages all the running windows, assets, shortcuts, etc
+/// The single top-level object that manages the event loop, VirtualDom, and running windows.
 pub(crate) struct App {
-    // move the props into a cell so we can pop it out later to create the first window
-    // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
-    pub(crate) cfg: Cell<Option<Config>>,
+    pub(crate) dom: VirtualDom,
+    pub(crate) initial_dom_rebuild_done: bool,
 
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
-    pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
     pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
     pub(crate) tray_icon_show_window_on_click: bool,
+    pub(crate) dom_waker: Waker,
 
-    /// This single blob of state is shared between all the windows so they have access to the runtime state
-    ///
-    /// This includes stuff like the event handlers, shortcuts, etc as well as ways to modify *other* windows
-    pub(crate) shared: Rc<SharedContext>,
-}
-
-/// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
-pub(crate) struct SharedContext {
-    pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) pending_webviews: RefCell<Vec<PendingWebview>>,
-    pub(crate) shortcut_manager: ShortcutRegistry,
-    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
-    pub(crate) websocket: EditWebsocket,
+    /// App-wide state shared by every desktop window.
+    pub(crate) app_context: Rc<DesktopAppContext>,
 }
 
 impl App {
@@ -62,26 +48,21 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let tray_icon_show_window_on_click = cfg.tray_icon_show_window_on_click;
+        let proxy = event_loop.create_proxy();
+        let dom_waker = create_dom_waker(proxy.clone());
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
             disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
-            is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            unmounted_dom: Cell::new(Some(virtual_dom)),
+            dom: virtual_dom,
+            initial_dom_rebuild_done: false,
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
-            cfg: Cell::new(Some(cfg)),
-            shared: Rc::new(SharedContext {
-                event_handlers: WindowEventHandlers::default(),
-                pending_webviews: Default::default(),
-                shortcut_manager: ShortcutRegistry::new(),
-                proxy: event_loop.create_proxy(),
-                target: event_loop.clone(),
-                websocket: EditWebsocket::start(),
-            }),
+            dom_waker,
+            app_context: Rc::new(DesktopAppContext::new(proxy, event_loop.clone())),
         };
 
         // Set the event converter
@@ -115,22 +96,22 @@ impl App {
 
     pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
         self.control_flow = ControlFlow::Wait;
-        self.shared
+        self.app_context
             .event_handlers
-            .apply_event(window_event, &self.shared.target);
+            .apply_event(window_event, &self.app_context.target);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn handle_global_hotkey(&self, event: global_hotkey::GlobalHotKeyEvent) {
-        self.shared.shortcut_manager.call_handlers(event);
+        self.app_context.shortcut_manager.call_handlers(event);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn handle_menu_event(&mut self, event: muda::MenuEvent) {
         match event.id().0.as_str() {
             "dioxus-float-top" => {
-                for webview in self.webviews.values() {
-                    webview
+                for app_webview in self.webviews.values() {
+                    app_webview
                         .desktop_context
                         .window
                         .set_always_on_top(self.float_all);
@@ -139,8 +120,8 @@ impl App {
             }
             "dioxus-toggle-dev-tools" => {
                 self.show_devtools = !self.show_devtools;
-                for webview in self.webviews.values() {
-                    let wv = &webview.desktop_context.webview;
+                for app_webview in self.webviews.values() {
+                    let wv = &app_webview.desktop_context.webview;
                     if self.show_devtools {
                         wv.open_devtools();
                     } else {
@@ -167,9 +148,9 @@ impl App {
         } = event
         {
             if button == tray_icon::MouseButton::Left && self.tray_icon_show_window_on_click {
-                for webview in self.webviews.values() {
-                    webview.desktop_context.window.set_visible(true);
-                    webview.desktop_context.window.set_focus();
+                for app_webview in self.webviews.values() {
+                    app_webview.desktop_context.window.set_visible(true);
+                    app_webview.desktop_context.window.set_focus();
                 }
             }
         }
@@ -177,18 +158,17 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
+        let proxy = self.app_context.proxy.clone();
         dioxus_devtools::connect(move |msg| {
             _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
         })
     }
 
     pub fn handle_new_window(&mut self) {
-        for pending_webview in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let window = pending_webview.create_window(&self.shared);
-            let id = window.desktop_context.window.id();
-            self.webviews.insert(id, window);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+        for pending_webview in self.app_context.drain_pending_webviews() {
+            let app_webview = pending_webview.create_window(&mut self.dom, &self.app_context);
+            let id = app_webview.desktop_context.window.id();
+            self.webviews.insert(id, app_webview);
         }
     }
 
@@ -204,26 +184,48 @@ impl App {
                 window.desktop_context.window.set_visible(false);
             }
 
-            // If the window is set to close, we can remove it from the list of webviews
-            // If the app is set to exit when the last window closes, we should also exit the app
+            // Component-owned windows render out before native teardown. Root
+            // and unowned windows can be dropped here.
             WindowCloseBehaviour::WindowCloses => {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.webviews.remove(&id);
-
-                if self.exit_on_last_window_close && self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
+                match window.desktop_context.request_window_close() {
+                    WindowCloseRequestResult::DeferredToComponent => {}
+                    WindowCloseRequestResult::CloseImmediately => self.destroy_window(id),
                 }
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
-        self.webviews.remove(&id);
+        self.destroy_window(id);
+    }
+
+    /// Tear down one webview after its Dioxus owner has released the target, or
+    /// immediately for root/unowned windows.
+    pub(crate) fn destroy_window(&mut self, id: WindowId) {
+        let Some(app_webview) = self.webviews.remove(&id) else {
+            return;
+        };
+        app_webview.desktop_context.notify_window_destroyed();
+        let target_id = app_webview.target_id();
+        // A component-owned `Window` reclaims its own target when its portal is
+        // torn down, so this is usually a no-op. When the OS destroys a window
+        // (or the app is shutting down) before that teardown runs the portal is
+        // still mounted; `remove_render_target` leaves such a target in place and
+        // it is reclaimed when the runtime is dropped.
+        self.dom.runtime().remove_render_target(target_id);
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
+        } else {
+            // Removing the webview drops its `WryQueue`, including any
+            // `edits_in_progress` receiver that was gating `poll_vdom`. The
+            // webview's pending ack can no longer wake the event loop, so
+            // schedule a poll to resume any VDOM work that was waiting on it
+            // (for example effects queued by the window's `onclose`).
+            self.schedule_poll();
         }
     }
 
@@ -231,10 +233,10 @@ impl App {
         // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
         // Window creation and modification is the responsibility of the webview instance so it makes sense to
         // encapsulate that there.
-        if let Some(webview) = self.webviews.get(&id) {
+        if let Some(app_webview) = self.webviews.get(&id) {
             use wry::Rect;
 
-            _ = webview.desktop_context.webview.set_bounds(Rect {
+            _ = app_webview.desktop_context.webview.set_bounds(Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
                     size.width,
@@ -245,31 +247,16 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let virtual_dom = self
-            .unmounted_dom
-            .take()
-            .expect("Virtualdom should be set before initialization");
-        #[allow(unused_mut)]
-        let mut cfg = self
-            .cfg
-            .take()
-            .expect("Config should be set before initialization");
+        self.provide_app_context();
+        self.rebuild_dom();
+        self.handle_new_window();
+    }
 
-        self.is_visible_before_start = cfg.window.window.visible;
-        #[cfg(not(target_os = "linux"))]
-        {
-            cfg.window = cfg.window.with_visible(false);
-        }
-        let explicit_window_size = cfg.window.window.inner_size;
-        let explicit_window_position = cfg.window.window.position;
-
-        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
-
-        // And then attempt to resume from state
-        self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
-
-        let id = webview.desktop_context.window.id();
-        self.webviews.insert(id, webview);
+    fn provide_app_context(&mut self) {
+        let app_context = self.app_context.clone();
+        self.dom.in_scope(ScopeId::ROOT, || {
+            provide_context(app_context);
+        });
     }
 
     pub fn handle_browser_open(&mut self, msg: IpcMessage) {
@@ -284,26 +271,19 @@ impl App {
         }
     }
 
-    /// The webview is finally loaded
-    ///
-    /// Let's rebuild it and then start polling it
+    /// The webview is finally loaded. Rebuild once, then start polling the
+    /// shared VDOM.
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let view = self.webviews.get_mut(&id).unwrap();
-
-        view.edits
-            .wry_queue
-            .with_mutation_state_mut(|f| view.dom.rebuild(f));
-
-        view.edits.wry_queue.send_edits();
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            view.desktop_context
-                .window
-                .set_visible(self.is_visible_before_start);
+        if !self.webviews.contains_key(&id) {
+            return;
         }
 
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+        if !self.initial_dom_rebuild_done {
+            self.rebuild_dom();
+            self.send_touched_edits();
+        }
+
+        self.schedule_poll();
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -330,21 +310,22 @@ impl App {
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
-                for webview in self.webviews.values_mut() {
+                if !self.webviews.is_empty() {
                     {
                         // This is a place where wry says it's threadsafe but it's actually not.
                         // If we're patching the app, we want to make sure it's not going to progress in the interim.
                         #[cfg(target_os = "android")]
                         let _lock = crate::android_sync_lock::android_runtime_lock();
-                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+
+                        dioxus_devtools::apply_changes(&self.dom, &hr_msg);
                     }
 
-                    webview.poll_vdom();
+                    self.poll_vdom();
                 }
 
                 if !hr_msg.assets.is_empty() {
-                    for webview in self.webviews.values_mut() {
-                        webview.kick_stylsheets();
+                    for app_webview in self.webviews.values_mut() {
+                        app_webview.kick_stylsheets();
                     }
                 }
 
@@ -406,27 +387,126 @@ impl App {
         duration: Duration,
         after_reload: bool,
     ) {
-        for webview in self.webviews.values() {
-            webview.show_toast(header_text, message, level, duration, after_reload);
+        for app_webview in self.webviews.values() {
+            app_webview.show_toast(header_text, message, level, duration, after_reload);
         }
     }
 
-    /// Poll the virtualdom until it's pending
-    ///
-    /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
-    ///
-    /// All IO is done on the tokio runtime we started earlier
-    pub fn poll_vdom(&mut self, id: WindowId) {
-        let Some(view) = self.webviews.get_mut(&id) else {
-            return;
-        };
+    fn schedule_poll(&self) {
+        _ = self.app_context.proxy.send_event(UserWindowEvent::Poll);
+    }
 
-        view.poll_vdom();
+    /// Poll the shared VirtualDom until it is pending.
+    ///
+    /// The app-level waker is connected to the event loop, so async work wakes
+    /// the app by scheduling another [`UserWindowEvent::Poll`].
+    pub fn poll_vdom(&mut self) {
+        let dom_waker = self.dom_waker.clone();
+        let mut cx = std::task::Context::from_waker(&dom_waker);
+
+        loop {
+            if self.poll_webview_queues(&mut cx) {
+                return;
+            }
+
+            {
+                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
+                let _lock = crate::android_sync_lock::android_runtime_lock();
+                let fut = self.dom.wait_for_work();
+                pin_mut!(fut);
+
+                match fut.poll_unpin(&mut cx) {
+                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Pending => return,
+                }
+            }
+
+            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+
+            self.render_dom_immediate();
+            self.send_touched_edits();
+        }
+    }
+
+    /// Build the writer for one render pass: every webview's `WryQueue` keyed
+    /// by its target id, with each queue's `touched` flag cleared so we can
+    /// detect which targets receive writes during the pass.
+    fn dom_writer(&self) -> BTreeMap<RenderTargetId, crate::edits::WryQueue> {
+        self.webviews
+            .values()
+            .map(|app_webview| {
+                app_webview.edits.wry_queue.clear_touched();
+                (app_webview.target_id(), app_webview.edits.wry_queue.clone())
+            })
+            .collect()
+    }
+
+    fn rebuild_dom(&mut self) {
+        let mut writer = self.dom_writer();
+        let has_render_targets = !writer.is_empty();
+        self.dom.rebuild(&mut writer);
+        if has_render_targets {
+            self.initial_dom_rebuild_done = true;
+        }
+    }
+
+    fn render_dom_immediate(&mut self) {
+        let mut writer = self.dom_writer();
+        self.dom.render_immediate(&mut writer);
+    }
+
+    /// Flush queued edits for every webview whose `WryQueue` was touched during
+    /// the preceding render pass. The diff writes directly into each registered
+    /// queue (the `WriteMutations` impl on `WryQueue`), and `dom_writer` cleared
+    /// every `touched` flag at the start of the pass, so a touched queue means
+    /// "this webview received new edits to send".
+    fn send_touched_edits(&self) {
+        for app_webview in self.webviews.values() {
+            if app_webview.edits.wry_queue.is_touched() {
+                app_webview.edits.wry_queue.send_edits();
+            }
+        }
+    }
+
+    fn poll_webview_queues(&self, cx: &mut std::task::Context<'_>) -> bool {
+        let mut has_pending_edits = false;
+
+        for app_webview in self.webviews.values() {
+            if app_webview
+                .edits
+                .wry_queue
+                .poll_new_edits_location(cx)
+                .is_ready()
+            {
+                _ = app_webview
+                    .desktop_context
+                    .webview
+                    .evaluate_script(&format!(
+                        "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+                        edits_path = app_webview.edits.wry_queue.edits_path(),
+                        expected_key = app_webview.edits.wry_queue.required_server_key()
+                    ));
+            }
+
+            if app_webview
+                .edits
+                .wry_queue
+                .poll_edits_flushed(cx)
+                .is_pending()
+            {
+                has_pending_edits = true;
+            }
+        }
+
+        has_pending_edits
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_global_hotkey_handler(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the hotkey receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -440,7 +520,7 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_menubar_receiver(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the menu receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -454,7 +534,7 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_tray_icon_receiver(&self) {
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
 
         // The event loop becomes the menu receiver
         // This means we don't need to poll the receiver on every tick - we just get the events as they come in
@@ -466,7 +546,7 @@ impl App {
         }));
 
         // for whatever reason they had to make it separate
-        let receiver = self.shared.proxy.clone();
+        let receiver = self.app_context.proxy.clone();
         tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
@@ -485,8 +565,8 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        if let Some(webview) = self.webviews.values().next() {
-            let window = &webview.desktop_context.window;
+        if let Some(app_webview) = self.webviews.values().next() {
+            let window = &app_webview.desktop_context.window;
 
             let Some(monitor) = window.current_monitor() else {
                 return;
@@ -535,54 +615,6 @@ impl App {
         }
     }
 
-    // Write this to the target dir so we can pick back up
-    fn resume_from_state(
-        &mut self,
-        webview: &WebviewInstance,
-        explicit_inner_size: Option<tao::dpi::Size>,
-        explicit_window_position: Option<tao::dpi::Position>,
-    ) {
-        // We only want to do this on desktop
-        if cfg!(target_os = "android") || cfg!(target_os = "ios") {
-            return;
-        }
-
-        // We only want to do this in debug mode
-        if !cfg!(debug_assertions) {
-            return;
-        }
-
-        if let Ok(state) = std::fs::read_to_string(restore_file()) {
-            if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-                let window = &webview.desktop_context.window;
-                let position = (state.x, state.y);
-                let size = (state.width, state.height);
-
-                // Only set the outer position if it wasn't explicitly set
-                if explicit_window_position.is_none() {
-                    if cfg!(target_os = "macos") {
-                        window.set_outer_position(tao::dpi::LogicalPosition::new(
-                            position.0, position.1,
-                        ));
-                    } else {
-                        window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                            position.0, position.1,
-                        ));
-                    }
-                }
-
-                // Only set the inner size if it wasn't explicitly set
-                if explicit_inner_size.is_none() {
-                    if cfg!(target_os = "macos") {
-                        window.set_inner_size(tao::dpi::LogicalSize::new(size.0, size.1));
-                    } else {
-                        window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-                    }
-                }
-            }
-        }
-    }
-
     /// Wire up a receiver to sigkill that lets us preserve the window state
     /// Whenever sigkill is sent, we shut down the app and save the window state
     #[cfg(debug_assertions)]
@@ -591,7 +623,7 @@ impl App {
         #[cfg(unix)]
         {
             // Wire up the trap
-            let target = self.shared.proxy.clone();
+            let target = self.app_context.proxy.clone();
             std::thread::spawn(move || {
                 use signal_hook::consts::{SIGINT, SIGTERM};
                 let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
@@ -633,16 +665,16 @@ impl App {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct PreservedWindowState {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-    monitor: String,
+pub(crate) struct PreservedWindowState {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) monitor: String,
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
-fn restore_file() -> std::path::PathBuf {
+pub(crate) fn restore_file() -> std::path::PathBuf {
     let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
 }

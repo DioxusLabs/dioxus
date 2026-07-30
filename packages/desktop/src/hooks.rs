@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     DesktopContext, HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler, assets::*,
-    ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
+    desktop_state::DesktopAppContext, ipc::UserWindowEvent, shortcut::IntoAccelerator, window,
 };
 use dioxus_core::{Runtime, consume_context, use_hook, use_hook_with_cleanup};
 
@@ -13,6 +13,11 @@ use wry::RequestAsyncResponder;
 /// Get an imperative handle to the current window
 pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)
+}
+
+/// Get a handle to the desktop application.
+pub fn use_app() -> Rc<DesktopAppContext> {
+    use_hook(consume_context::<Rc<DesktopAppContext>>)
 }
 
 /// Register an event handler that runs when a wry event is processed.
