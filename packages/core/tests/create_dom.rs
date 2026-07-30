@@ -1,133 +1,86 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
 //! Prove that the dom works normally through virtualdom methods.
-//!
-//! This methods all use "rebuild_to_vec" which completely bypasses the scheduler.
-//! Hard rebuild_to_vecs don't consume any events from the event queue.
 
-use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_renderer_oracle::RendererOracle;
 
 #[test]
 fn test_original_diff() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div { div { "Hello, world!" } }
-        }
-    });
+    fn app() -> Element {
+        rsx! { div { div { "Hello, world!" } } }
+    }
 
-    let edits = dom.rebuild_to_vec();
-
-    assert_eq!(
-        edits.edits,
-        [
-            // add to root
-            LoadTemplate { index: 0, id: ElementId(1) },
-            AppendChildren { m: 1, id: ElementId(0) }
-        ]
-    )
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
 fn create() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx! {
             div {
                 div {
                     "Hello, world!"
                     div {
                         div {
-                            Fragment { "hello""world" }
+                            Fragment { "hello" "world" }
                         }
                     }
                 }
             }
         }
-    });
+    }
 
-    let _edits = dom.rebuild_to_vec();
-
-    // todo: we don't test template mutations anymore since the templates are passed along
-
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "Hello, world!" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateStaticPlaceholder {},
-    //         AppendChildren { m: 1 },
-    //         AppendChildren { m: 1 },
-    //         AppendChildren { m: 2 },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate {  m: 1 },
-    //         // The fragment child template
-    //         CreateStaticText { value: "hello" },
-    //         CreateStaticText { value: "world" },
-    //         SaveTemplate {  m: 2 },
-    //     ]
-    // );
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
+    fn app() -> Element {
+        rsx! {{(0..3).map(|_| rsx!( div { "hello" } ))}}
+    }
 
-    let _edits = dom.rebuild_to_vec();
+    fn expected() -> Element {
+        rsx! {
+            div { "hello" }
+            div { "hello" }
+            div { "hello" }
+        }
+    }
 
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "hello" },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate {  m: 1 }
-    //     ]
-    // );
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
 fn create_simple() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div {}
-            div {}
-            div {}
-            div {}
-        }
-    });
+    fn app() -> Element {
+        rsx! { div {} div {} div {} div {} }
+    }
 
-    let edits = dom.rebuild_to_vec();
-
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         // add to root
-    //         SaveTemplate {  m: 4 }
-    //     ]
-    // );
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(app);
 }
+
 #[test]
 fn create_components() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx! {
             Child { "abc1" }
             Child { "abc2" }
             Child { "abc3" }
         }
-    });
+    }
 
     #[derive(Props, Clone, PartialEq)]
     struct ChildProps {
@@ -142,14 +95,29 @@ fn create_components() {
         }
     }
 
-    let _edits = dom.rebuild_to_vec();
+    fn expected() -> Element {
+        rsx! {
+            h1 {}
+            div { "abc1" }
+            p {}
+            h1 {}
+            div { "abc2" }
+            p {}
+            h1 {}
+            div { "abc3" }
+            p {}
+        }
+    }
 
-    // todo: test this
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
 }
 
 #[test]
 fn anchors() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx! {
             if true {
                  div { "hello" }
@@ -158,29 +126,45 @@ fn anchors() {
                 div { "goodbye" }
             }
         }
-    });
+    }
 
-    // note that the template under "false" doesn't show up since it's not loaded
-    let edits = dom.rebuild_to_vec();
+    fn expected() -> Element {
+        rsx! {
+            div { "hello" }
+        }
+    }
 
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create each template
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "hello" },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate { m: 1, name: "template" },
-    //     ]
-    // );
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected);
+}
 
-    assert_eq!(
-        edits.edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            CreatePlaceholder { id: ElementId(2) },
-            AppendChildren { m: 2, id: ElementId(0) }
-        ]
-    )
+#[test]
+fn empty_fragment_root_via_direct_vnode_api_is_diffable() {
+    // `VNode::new` normalizes `DynamicNode::Fragment(Vec::new())` to
+    // `DynamicNode::Placeholder(..)` so the diff path never sees an empty fragment.
+    // Without that normalization, callers using the direct `VNode::new(..)` API would
+    // bypass the rsx macro's `IntoDynNode` collapse and trip
+    // `index out of bounds: the len is 0 but the index is 0` on the second rerender.
+    use dioxus_core::{DynamicNode, ScopeId, Template, TemplateNode, VNode, VirtualDom};
+    use dioxus_renderer_oracle::RendererOracle;
+
+    fn app() -> Element {
+        let template = Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0u8] as &[u8]], &[]);
+        Ok(VNode::new(
+            None,
+            template,
+            Box::new([DynamicNode::Fragment(Vec::new())]),
+            Vec::<Box<[dioxus_core::Attribute]>>::new().into_boxed_slice(),
+        ))
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    vdom.rebuild(&mut oracle);
+    vdom.mark_dirty(ScopeId::APP);
+    vdom.render_immediate(&mut oracle);
+    vdom.mark_dirty(ScopeId::APP);
+    vdom.render_immediate(&mut oracle);
 }

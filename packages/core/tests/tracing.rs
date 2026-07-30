@@ -1,16 +1,17 @@
 use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, Event};
+use dioxus_core::Event;
+use dioxus_renderer_oracle::RendererOracle;
 use std::{any::Any, rc::Rc};
 use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
 use tracing_subscriber::{Registry, layer::SubscriberExt};
 
+// This test asserts on tracing events emitted by `VirtualDom::new` and
+// `VirtualDom::rebuild`; it requires those calls to happen *exactly once*.
 #[test]
 fn basic_tracing() {
-    // setup tracing
     let assertion_registry = AssertionRegistry::default();
     let base_subscriber = Registry::default();
-    // log to standard out for testing
     let std_out_log = tracing_subscriber::fmt::layer().pretty();
     let subscriber = base_subscriber
         .with(std_out_log)
@@ -35,8 +36,8 @@ fn basic_tracing() {
 
     set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
 
     new_virtual_dom.assert();
     edited_virtual_dom.assert();
@@ -46,9 +47,10 @@ fn basic_tracing() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.runtime().handle_event("click", event, ElementId(2));
+        let target = oracle.element_id_by_attr("id", "increment");
+        dom.runtime().handle_event("click", event, target);
         dom.process_events();
-        _ = dom.render_immediate_to_vec();
+        oracle.render(&mut dom);
     }
 }
 
@@ -59,6 +61,7 @@ fn app() -> Element {
     rsx! {
         div {
             button {
+                id: "increment",
                 onclick: move |_| {
                     idx += 1;
                     println!("Clicked");

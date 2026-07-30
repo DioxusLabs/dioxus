@@ -1,6 +1,6 @@
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use pretty_assertions::assert_eq;
+use dioxus_core::ScopeId;
+use dioxus_renderer_oracle::{OracleNodeId, RendererOracle};
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -49,7 +49,7 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         rsx! {
-            h1 {
+            h1 { id: "nav",
                 "NavBar"
                 for _ in 0..3 {
                     nav_link {}
@@ -70,47 +70,56 @@ fn component_swap() {
         rsx!( div { "results" } )
     }
 
-    let mut dom = VirtualDom::new(app);
-    {
-        let edits = dom.rebuild_to_vec();
-        assert_eq!(
-            edits.edits,
-            [
-                LoadTemplate { index: 0, id: ElementId(1) },
-                LoadTemplate { index: 0, id: ElementId(2) },
-                LoadTemplate { index: 0, id: ElementId(3) },
-                LoadTemplate { index: 0, id: ElementId(4) },
-                ReplacePlaceholder { path: &[1], m: 3 },
-                LoadTemplate { index: 0, id: ElementId(5) },
-                AppendChildren { m: 2, id: ElementId(0) }
-            ]
-        );
+    fn expected_dashboard() -> Element {
+        rsx! {
+            h1 { id: "nav",
+                "NavBar"
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+            }
+            div { "dashboard" }
+        }
     }
 
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
-        ]
-    );
+    fn expected_results() -> Element {
+        rsx! {
+            h1 { id: "nav",
+                "NavBar"
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+            }
+            div { "results" }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_results);
+    let nav_identity = identity_by_attr(&oracle, "id", "nav");
 
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(5) },
-            ReplaceWith { id: ElementId(6), m: 1 }
-        ]
-    );
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_dashboard);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
 
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
-        ]
-    );
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_results);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
+
+    dom.mark_dirty(ScopeId::APP);
+    oracle.render(&mut dom);
+    oracle.assert_matches(expected_dashboard);
+    assert_eq!(identity_by_attr(&oracle, "id", "nav"), nav_identity);
+}
+
+fn identity_by_attr(oracle: &RendererOracle, attr: &str, value: &str) -> OracleNodeId {
+    oracle
+        .identities_by_attr(attr)
+        .into_iter()
+        .find_map(|(current_value, id)| (current_value == value).then_some(id))
+        .unwrap_or_else(|| panic!("no live element with `{attr}={value}` found in the oracle DOM"))
 }

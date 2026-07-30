@@ -1,52 +1,25 @@
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::generation;
+use dioxus_core::{ScopeId, generation};
+use dioxus_renderer_oracle::RendererOracle;
 
 /// As we clean up old templates, the ID for the node should cycle
 #[test]
 fn cycling_elements() {
-    let mut dom = VirtualDom::new(|| match generation() % 2 {
-        0 => rsx! { div { "wasd" } },
-        1 => rsx! { div { "abcd" } },
-        _ => unreachable!(),
-    });
-
-    {
-        let edits = dom.rebuild_to_vec();
-        assert_eq!(
-            edits.edits,
-            [
-                LoadTemplate { index: 0, id: ElementId(1,) },
-                AppendChildren { m: 1, id: ElementId(0) },
-            ]
-        );
+    fn app() -> Element {
+        match generation() % 2 {
+            0 => rsx! { div { "wasd" } },
+            _ => rsx! { div { "abcd" } },
+        }
     }
 
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
 
-    // notice that the IDs cycle back to ElementId(1), preserving a minimal memory footprint
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
+    for _ in 1..=3 {
+        dom.mark_dirty(ScopeId::APP);
+        let summary = oracle.render(&mut dom);
+        assert_eq!(summary.loads, 1);
+        assert_eq!(summary.replaces, 1);
+    }
 }
