@@ -1,4 +1,4 @@
-use quote::{format_ident, quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::parse_quote;
@@ -76,6 +76,9 @@ impl Route {
         let route;
         let ty;
         let route_name = variant.ident.clone();
+        // Retained so a parameter in a #[child] prefix can be reported against the
+        // prefix literal itself rather than against the variant name.
+        let mut child_route_lit = None;
         match route_attr {
             Some(attr) => {
                 let args = attr.parse_args::<RouteArgs>()?;
@@ -93,6 +96,7 @@ impl Route {
                 {
                     let args = route_attr.parse_args::<ChildArgs>()?;
                     route = args.route.value();
+                    child_route_lit = Some(args.route);
                     match &variant.fields {
                         syn::Fields::Named(fields) => {
                             // find either a field with #[child] or a field named "child"
@@ -154,6 +158,34 @@ impl Route {
             )?
         };
 
+        // A #[child] prefix delegates rendering to another Routable, whose components
+        // receive props only from their own segments. A parameter bound here would
+        // therefore be reachable from the child's components only through use_route on this
+        // enum, which couples the child to its parent. #[nest] keeps the parameter on this
+        // enum's variants, where layouts and sibling routes receive it as an ordinary prop.
+        // A catch-all additionally drains the whole remaining path, leaving a child with any
+        // path segment of its own unmatchable while Display still emits the joined URL.
+        if let Some(lit) = &child_route_lit {
+            let parameter = route_segments.iter().find(|seg| {
+                matches!(
+                    seg,
+                    RouteSegment::Dynamic(_, _) | RouteSegment::CatchAll(_, _)
+                )
+            });
+            if let Some(segment) = parameter {
+                let message = match segment {
+                    RouteSegment::Dynamic(ident, _) => format!(
+                        "invalid dynamic parameter `:{ident}` in #[child(\"{route}\")]; a #[child] prefix must be static. Move the prefix into a nest instead: #[nest(\"{route}\")] around this variant with #[child(\"\")] on it"
+                    ),
+                    RouteSegment::CatchAll(ident, _) => format!(
+                        "invalid catch-all `:..{ident}` in #[child(\"{route}\")]; a catch-all drains the whole remaining path, leaving nothing for the child to match. Use a static #[child] prefix, or put the catch-all on a #[route] variant instead"
+                    ),
+                    _ => unreachable!("filtered above"),
+                };
+                return Err(syn::Error::new_spanned(lit, message));
+            }
+        }
+
         Ok(Self {
             ty,
             route_name,
@@ -165,6 +197,36 @@ impl Route {
             layouts,
             fields,
         })
+    }
+
+    /// Every dynamic parameter of the nests this route sits inside must exist as a
+    /// field on the variant: the generated Display and render arms bind those
+    /// parameters from the variant's own fields, so a missing field surfaces as an
+    /// unbound identifier deep in generated code. Layouts never outlive their
+    /// enclosing nest (enforced at #[end_nest]), so covering the route's own nests
+    /// also covers every active layout's nests.
+    pub(crate) fn ensure_nest_fields_covered(&self, nests: &[Nest]) -> syn::Result<()> {
+        for id in &self.nests {
+            let nest = &nests[id.0];
+            for segment in &nest.segments {
+                let (RouteSegment::Dynamic(ident, ty) | RouteSegment::CatchAll(ident, ty)) =
+                    segment
+                else {
+                    continue;
+                };
+                if !self.fields.iter().any(|(name, _)| name == ident) {
+                    let ty = ty.to_token_stream();
+                    return Err(syn::Error::new(
+                        self.route_name.span(),
+                        format!(
+                            "variant `{}` is inside the nest \"{}\" but is missing its dynamic parameter; add the field `{}: {}` to the variant",
+                            self.route_name, nest.route, ident, ty
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
@@ -244,24 +306,36 @@ impl Route {
         tokens.extend(match &self.ty {
             RouteType::Child(field) => {
                 let field_name = field.ident.as_ref().unwrap();
+                // One clone per emitted position: destructure pattern, captured-binding setup, and constructor key/value.
+                let dynamic_segments_pat = self.dynamic_segments();
+                let dynamic_segments_capture_outer = self.dynamic_segments();
+                let dynamic_segments_capture_inner = self.dynamic_segments();
+                let dynamic_segments_emit_keys = self.dynamic_segments();
+                let dynamic_segments_emit_vals = self.dynamic_segments();
                 quote! {
                     #[allow(unused)]
-                    (#last_index.., Self::#name { #field_name, .. }) => {
+                    (#last_index.., Self::#name { #field_name, #(#dynamic_segments_pat,)* .. }) => {
                         rsx! {
                             dioxus_router::components::child_router::ChildRouter {
                                 route: #field_name,
-                                // Try to parse the current route as a parent route, and then match it as a child route
-                                parse_route_from_root_route: |__route| if let Ok(__route) = __route.parse() {
-                                    if let Self::#name { #field_name, .. } = __route {
+                                // Reproject the absolute URL into Self's URL space via any outer chain, then extract the child route
+                                parse_route_from_root_route: |__route| {
+                                    if let Some(Self::#name { #field_name, .. }) =
+                                        dioxus_router::components::child_router::parse_route_via_chain::<Self>(__route)
+                                    {
                                         Some(#field_name)
                                     } else {
                                         None
                                     }
-                                } else {
-                                    None
                                 },
-                                // Try to parse the child route and turn it into a parent route
-                                format_route_as_root_route: |#field_name| Self::#name { #field_name: #field_name }.to_string(),
+                                // Capture parent dynamic segments into the closure, then format via any outer chain
+                                format_route_as_root_route: {
+                                    #(let #dynamic_segments_capture_outer = #dynamic_segments_capture_inner.clone();)*
+                                    ::std::sync::Arc::new(move |#field_name| dioxus_router::components::child_router::format_route_via_chain::<Self>(Self::#name {
+                                        #field_name: #field_name,
+                                        #(#dynamic_segments_emit_keys: #dynamic_segments_emit_vals.clone(),)*
+                                    })) as ::std::sync::Arc<dyn ::std::ops::Fn(_) -> ::std::string::String>
+                                },
                             }
                         }
                     }

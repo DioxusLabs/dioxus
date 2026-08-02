@@ -1,0 +1,5 @@
+error: invalid dynamic parameter `:file_id` in #[child("/file/:file_id")]; a #[child] prefix must be static. Move the prefix into a nest instead: #[nest("/file/:file_id")] around this variant with #[child("")] on it
+  --> tests/derive-errors/child-dynamic-prefix.rs:17:13
+   |
+17 |     #[child("/file/:file_id")]
+   |             ^^^^^^^^^^^^^^^^
