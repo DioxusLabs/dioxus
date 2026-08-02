@@ -65,6 +65,7 @@ fn app() -> Element {
         DocumentElements {}
         MergeStyles {}
         SelectMultiple {}
+        ContentEditableSelection {}
     }
 }
 
@@ -217,6 +218,21 @@ fn SelectMultiple() -> Element {
             option { label: "Value1", value: "1" }
             option { label: "Value2", value: "2" }
         }
+    }
+}
+
+#[component]
+fn ContentEditableSelection() -> Element {
+    let mut changes = use_signal(|| 0);
+
+    rsx! {
+        div {
+            id: "contenteditable-selection",
+            contenteditable: true,
+            onselectionchange: move |_| changes += 1,
+            "select this text"
+        }
+        output { id: "contenteditable-selection-count", "{changes}" }
     }
 }
 

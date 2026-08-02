@@ -199,3 +199,33 @@ test("select multiple", async ({ page }) => {
   await dynamicSelect.selectOption(["1", "2"]);
   await expect(dynamicSelect).toHaveValues(["1", "2"]);
 });
+
+test("contenteditable selection change", async ({ page }) => {
+  await page.goto("http://localhost:9990", { waitUntil: "domcontentloaded" });
+
+  const count = page.locator("#contenteditable-selection-count");
+  await expect(count).toHaveText("0");
+
+  await page.locator("#contenteditable-selection").evaluate((editable) => {
+    const range = document.createRange();
+    range.selectNodeContents(editable);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+
+  await expect(count).toHaveText("1");
+
+  await page.locator("#contenteditable-selection").evaluate((editable) => {
+    const foreign = document.createElement("div");
+    foreign.setAttribute(
+      "data-dioxus-id",
+      editable.getAttribute("data-dioxus-id")
+    );
+    document.body.appendChild(foreign);
+    foreign.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+    foreign.remove();
+  });
+
+  await expect(count).toHaveText("1");
+});
