@@ -109,7 +109,7 @@ jobs:
           components: rustfmt, clippy
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-msrv
-        run: cargo binstall cargo-msrv -y --force
+        run: cargo binstall cargo-msrv -y --force --locked
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
