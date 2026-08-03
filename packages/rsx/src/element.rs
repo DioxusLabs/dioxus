@@ -41,6 +41,11 @@ pub struct Element {
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
     /// when rendering
     pub diagnostics: Diagnostics,
+
+    /// Whether this element was written using the JSX/XML-like tag syntax (`<div />`)
+    ///
+    /// Used by autofmt to print the element back out in the same style it was written in
+    pub tag_syntax: bool,
 }
 
 impl Parse for Element {
@@ -207,6 +212,7 @@ impl Element {
             diagnostics,
             spreads: spreads.clone(),
             merged_attributes: Vec::new(),
+            tag_syntax: false,
         };
 
         // And then merge the various attributes together
