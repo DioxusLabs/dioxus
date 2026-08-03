@@ -22,19 +22,22 @@ impl Parse for PartialExpr {
         // - another braced group
         // - an identifier
         // - a string literal
+        // - a `<` (the start of a JSX-style tag)
         let mut is_braced = false;
         if let Some((TokenTree::Group(group), next)) = input.fork().cursor().token_tree() {
             let next_char_is_a_comma = next.punct().is_some_and(|(tt, _)| tt.as_char() == ',');
             let next_is_a_braced_exp = next.group(Delimiter::Brace).is_some();
             let next_is_an_ident = next.ident().is_some();
             let next_is_a_string_literal = next.literal().is_some();
+            let next_is_a_lt = next.punct().is_some_and(|(tt, _)| tt.as_char() == '<');
 
             if group.delimiter() == Delimiter::Brace
                 && (next.eof()
                     || next_char_is_a_comma
                     || next_is_a_braced_exp
                     || next_is_an_ident
-                    || next_is_a_string_literal)
+                    || next_is_a_string_literal
+                    || next_is_a_lt)
             {
                 is_braced = true
             }
