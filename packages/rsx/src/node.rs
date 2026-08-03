@@ -36,6 +36,11 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Text(stream.parse()?));
         }
 
+        // A `<` token switches into the JSX/XML-like tag syntax
+        if stream.peek(Token![<]) {
+            return parse_jsx_node(stream);
+        }
+
         // Transform for loops into into_iter calls
         if stream.peek(Token![for]) {
             return Ok(BodyNode::ForLoop(stream.parse()?));
