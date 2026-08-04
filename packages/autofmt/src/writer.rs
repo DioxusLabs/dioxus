@@ -108,8 +108,19 @@ impl<'a> Writer<'a> {
             children,
             spreads,
             brace,
+            tag_syntax,
             ..
         } = el;
+
+        if *tag_syntax {
+            return self.write_jsx_tag(
+                &name.to_string(),
+                attributes,
+                spreads,
+                children,
+                &brace.unwrap_or_default(),
+            );
+        }
 
         write!(self.out, "{name} ")?;
         self.write_rsx_block(attributes, spreads, children, &brace.unwrap_or_default())?;
@@ -126,23 +137,150 @@ impl<'a> Writer<'a> {
             generics,
             spreads,
             brace,
+            tag_syntax,
             ..
         }: &Component,
     ) -> Result {
         // Write the path by to_tokensing it and then removing all whitespace
         let mut name = name.to_token_stream().to_string();
         name.retain(|c| !c.is_whitespace());
-        write!(self.out, "{name}")?;
 
         // Same idea with generics, write those via the to_tokens method and then remove all whitespace
         if let Some(generics) = generics {
             let mut written = generics.to_token_stream().to_string();
             written.retain(|c| !c.is_whitespace());
-            write!(self.out, "{written}")?;
+
+            // The tag syntax doesn't use the turbofish: `<Outlet<R>>`
+            if *tag_syntax {
+                written = written.trim_start_matches("::").to_string();
+            }
+
+            name.push_str(&written);
         }
 
-        write!(self.out, " ")?;
+        if *tag_syntax {
+            return self.write_jsx_tag(
+                &name,
+                fields,
+                spreads,
+                &children.roots,
+                &brace.unwrap_or_default(),
+            );
+        }
+
+        write!(self.out, "{name} ")?;
         self.write_rsx_block(fields, spreads, &children.roots, &brace.unwrap_or_default())?;
+
+        Ok(())
+    }
+
+    /// Write an element or component that was written using the JSX/XML-like tag syntax,
+    /// preserving the tag style:
+    ///
+    /// `<div class="asd">"hello"</div>` or `<img src="..." />`
+    fn write_jsx_tag(
+        &mut self,
+        name: &str,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+        children: &[BodyNode],
+        brace: &Brace,
+    ) -> Result {
+        write!(self.out, "<{name}")?;
+
+        // Decide if the attributes fit in the opening tag or need to be split across lines
+        let attr_len = self.is_short_attrs(brace, attributes, spreads);
+        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
+
+        if is_short_attr_list {
+            for attr in attributes {
+                write!(self.out, " ")?;
+                self.write_jsx_attribute(attr)?;
+            }
+            for spread in spreads {
+                write!(self.out, " {{")?;
+                self.write_spread_attribute(&spread.expr)?;
+                write!(self.out, "}}")?;
+            }
+        } else {
+            self.out.indent_level += 1;
+            for attr in attributes {
+                self.out.tabbed_line()?;
+                self.write_jsx_attribute(attr)?;
+            }
+            for spread in spreads {
+                self.out.tabbed_line()?;
+                write!(self.out, "{{")?;
+                self.write_spread_attribute(&spread.expr)?;
+                write!(self.out, "}}")?;
+            }
+            self.out.indent_level -= 1;
+            self.out.tabbed_line()?;
+        }
+
+        // Self-closing tags
+        if children.is_empty() {
+            if is_short_attr_list {
+                write!(self.out, " ")?;
+            }
+            write!(self.out, "/>")?;
+            return Ok(());
+        }
+
+        write!(self.out, ">")?;
+
+        // Inline a single short child: `<h1>"hello"</h1>`
+        let children_len = self
+            .is_short_children(children)
+            .map_err(|_| std::fmt::Error)?;
+        let is_small_children = children_len.is_some_and(|len| {
+            is_short_attr_list && len + attr_len + self.out.indent_level * 4 < 100
+        });
+
+        if is_small_children {
+            for child in children {
+                self.write_ident(child)?;
+            }
+        } else {
+            self.out.new_line()?;
+            self.write_body_indented(children)?;
+            self.out.tabbed_line()?;
+        }
+
+        write!(self.out, "</{name}>")?;
+
+        Ok(())
+    }
+
+    /// Write an attribute in the JSX style: `name`, `name="literal"` or `name={expr}`
+    fn write_jsx_attribute(&mut self, attr: &Attribute) -> Result {
+        match &attr.name {
+            // Dashed custom attributes don't need to be quoted in the tag syntax: `data-count="1"`
+            AttributeName::Custom(name)
+                if name
+                    .value()
+                    .split('-')
+                    .all(|seg| syn::parse_str::<syn::Ident>(seg).is_ok()) =>
+            {
+                write!(self.out, "{}", name.value())?
+            }
+            name => self.write_attribute_name(name)?,
+        }
+
+        if attr.can_be_shorthand() {
+            return Ok(());
+        }
+
+        write!(self.out, "=")?;
+
+        match &attr.value {
+            AttributeValue::AttrLiteral(value) => write!(self.out, "{value}")?,
+            value => {
+                write!(self.out, "{{")?;
+                self.write_attribute_value(value)?;
+                write!(self.out, "}}")?;
+            }
+        }
 
         Ok(())
     }

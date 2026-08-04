@@ -39,6 +39,11 @@ pub struct Component {
     pub children: TemplateBody,
     pub dyn_idx: DynIdx,
     pub diagnostics: Diagnostics,
+
+    /// Whether this component was written using the JSX/XML-like tag syntax (`<MyComponent />`)
+    ///
+    /// Used by autofmt to print the component back out in the same style it was written in
+    pub tag_syntax: bool,
 }
 
 impl Parse for Component {
@@ -125,6 +130,7 @@ impl Component {
             component_literal_dyn_idx,
             spreads,
             diagnostics,
+            tag_syntax: false,
         };
 
         // We've received a valid rsx block, but it's not necessarily a valid component
@@ -367,6 +373,7 @@ impl Component {
             component_literal_dyn_idx: vec![],
             dyn_idx: DynIdx::default(),
             diagnostics,
+            tag_syntax: false,
         }
     }
 }
