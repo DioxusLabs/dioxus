@@ -58,31 +58,15 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
-        let literal_properties_count = fields
-            .iter()
-            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
-            .count();
-        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
-
-        let mut component = Self {
-            dyn_idx: DynIdx::default(),
-            children: TemplateBody::new(children),
+        Ok(Self::from_parts(
             name,
             generics,
             fields,
-            brace: Some(brace),
-            component_literal_dyn_idx,
             spreads,
+            children,
+            Some(brace),
             diagnostics,
-        };
-
-        // We've received a valid rsx block, but it's not necessarily a valid component
-        // validating it will dump diagnostics into the output
-        component.validate_component_path();
-        component.validate_fields();
-        component.validate_component_spread();
-
-        Ok(component)
+        ))
     }
 }
 
@@ -115,6 +99,43 @@ impl ToTokens for Component {
 }
 
 impl Component {
+    /// Assemble a component from its parsed parts, running validation on the result
+    pub(crate) fn from_parts(
+        name: syn::Path,
+        generics: Option<AngleBracketedGenericArguments>,
+        fields: Vec<Attribute>,
+        spreads: Vec<Spread>,
+        children: Vec<BodyNode>,
+        brace: Option<token::Brace>,
+        diagnostics: Diagnostics,
+    ) -> Self {
+        let literal_properties_count = fields
+            .iter()
+            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .count();
+        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
+
+        let mut component = Self {
+            dyn_idx: DynIdx::default(),
+            children: TemplateBody::new(children),
+            name,
+            generics,
+            fields,
+            brace,
+            component_literal_dyn_idx,
+            spreads,
+            diagnostics,
+        };
+
+        // We've received a valid rsx block, but it's not necessarily a valid component
+        // validating it will dump diagnostics into the output
+        component.validate_component_path();
+        component.validate_fields();
+        component.validate_component_spread();
+
+        component
+    }
+
     // Make sure this a proper component path (uppercase ident, a path, or contains an underscorea)
     // This should be validated by the RsxBlock parser when it peeks bodynodes
     fn validate_component_path(&mut self) {
@@ -353,7 +374,7 @@ impl Component {
 /// Normalize the generics of a path
 ///
 /// Ensure there's a `::` after the last segment if there are generics
-fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
+pub(crate) fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
     let seg = name.segments.last_mut()?;
 
     let mut generics = match seg.arguments.clone() {
