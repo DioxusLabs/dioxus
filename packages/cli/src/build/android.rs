@@ -120,6 +120,7 @@ impl BuildRequest {
             application_id: String,
             app_name: String,
             version: String,
+            version_code: u32,
             android_bundle: Option<crate::AndroidSettings>,
             /// Android SDK version settings
             min_sdk: u32,
@@ -180,6 +181,7 @@ impl BuildRequest {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             version: self.crate_version(),
+            version_code: self.android_version_code()?,
             android_bundle: self.config.bundle.android.clone(),
             min_sdk: self.config.android.min_sdk.unwrap_or(24),
             target_sdk: self.config.android.target_sdk.unwrap_or(34),

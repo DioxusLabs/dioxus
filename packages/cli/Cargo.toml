@@ -27,7 +27,7 @@ dioxus-cli-telemetry = { workspace =  true }
 dioxus-component-manifest = { workspace = true }
 
 bytes = { workspace = true }
-clap = { workspace = true, features = ["derive", "cargo"] }
+clap = { workspace = true, features = ["derive", "cargo", "env"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4", "v5", "v7"] }

@@ -269,6 +269,8 @@ pub(crate) struct BuildRequest {
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
+    pub(crate) version_code: Option<u32>,
+    pub(crate) bundle_version: Option<String>,
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
@@ -919,6 +921,8 @@ impl BuildRequest {
             inject_loading_scripts: args.inject_loading_scripts,
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
+            version_code: args.version_code,
+            bundle_version: args.bundle_version.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
         })
@@ -2714,6 +2718,64 @@ impl BuildRequest {
         self.workspace.krates[self.crate_package]
             .version
             .to_string()
+    }
+
+    /// Get the Android `versionCode` for the generated Gradle project.
+    ///
+    /// Resolution order: `--version-code` / `DX_ANDROID_VERSION_CODE`, then
+    /// `[android] version_code` in Dioxus.toml, then a value derived from the crate
+    /// version as `major * 1000000 + minor * 1000 + patch`.
+    pub(crate) fn android_version_code(&self) -> Result<u32> {
+        /// The maximum value accepted by the Google Play Store.
+        const MAX_VERSION_CODE: u32 = 2_100_000_000;
+
+        let code = match self.version_code.or(self.config.android.version_code) {
+            Some(code) => code,
+            None => {
+                let version = &self.workspace.krates[self.crate_package].version;
+                if version.major > 2099 || version.minor > 999 || version.patch > 999 {
+                    bail!(
+                        "Cannot derive an Android versionCode from crate version `{version}`: each component must fit `major <= 2099`, `minor <= 999`, `patch <= 999`. Set an explicit version code via `[android] version_code` in Dioxus.toml or the `--version-code` flag."
+                    );
+                }
+                if !version.pre.is_empty() {
+                    tracing::warn!(
+                        "Pre-release identifier of crate version `{version}` is ignored when deriving the Android versionCode"
+                    );
+                }
+                let code =
+                    (version.major * 1_000_000 + version.minor * 1_000 + version.patch) as u32;
+
+                // Google Play requires versionCode >= 1, so bump 0.0.0 up to 1.
+                code.max(1)
+            }
+        };
+
+        if !(1..=MAX_VERSION_CODE).contains(&code) {
+            bail!(
+                "Android versionCode must be between 1 and {MAX_VERSION_CODE}, got {code}. See https://developer.android.com/studio/publish/versioning"
+            );
+        }
+
+        Ok(code)
+    }
+
+    /// The explicitly-configured `CFBundleVersion` for iOS/macOS bundles, if any.
+    ///
+    /// Resolution order: `--bundle-version` / `DX_BUNDLE_VERSION`, then the platform's
+    /// `bundle_version` in Dioxus.toml (`[ios]` or `[macos]`).
+    pub(crate) fn apple_bundle_version_override(&self) -> Option<String> {
+        self.bundle_version.clone().or_else(|| match self.bundle {
+            BundleFormat::Ios => self.config.ios.bundle_version.clone(),
+            BundleFormat::MacOS => self.config.macos.bundle_version.clone(),
+            _ => None,
+        })
+    }
+
+    /// The `CFBundleVersion` for iOS/macOS bundles, falling back to the crate version.
+    pub(crate) fn apple_bundle_version(&self) -> String {
+        self.apple_bundle_version_override()
+            .unwrap_or_else(|| self.crate_version())
     }
 
     pub(crate) fn bundle_identifier(&self) -> String {
