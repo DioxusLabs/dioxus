@@ -204,7 +204,6 @@ use crate::{
 };
 use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -1970,12 +1969,14 @@ impl BuildRequest {
             return Ok(());
         }
 
-        // Use the same format that rust itself does
+        // The rustc wrapper removed cargo's `-C strip=...` flag so symbols survived until
+        // asset extraction, recording the value it computed. Apply that setting manually now,
+        // using the same objcopy flags rust itself does:
         // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
-        let strip_arg = match self.get_strip_setting() {
-            StripSetting::Debuginfo => Some("--strip-debug"),
-            StripSetting::Symbols => Some("--strip-all"),
-            StripSetting::None => None,
+        let strip_arg = match self.recorded_strip_setting(&artifacts.mode).as_deref() {
+            Some("debuginfo") => Some("--strip-debug"),
+            Some("symbols") => Some("--strip-all"),
+            _ => None,
         };
 
         if let Some(strip_arg) = strip_arg {
@@ -2472,44 +2473,18 @@ impl BuildRequest {
         features
     }
 
-    /// Checks the strip setting for the package, resolving profiles recursively
-    pub(crate) fn get_strip_setting(&self) -> StripSetting {
-        let cargo_toml = &self.workspace.cargo_toml;
-        let profile = &self.profile;
-        let release = self.release;
-        let profile = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => Some(custom_profile),
-            (_, true) => cargo_toml.profile.release.as_ref(),
-            (_, false) => cargo_toml.profile.dev.as_ref(),
-        };
-
-        let Some(profile) = profile else {
-            return StripSetting::None;
-        };
-
-        // Get the strip setting from the profile or the profile it inherits from
-        fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
-            profile.strip.as_ref().copied().or_else(|| {
-                // If we can't find the strip setting, check if we inherit from another profile
-                profile.inherits.as_ref().and_then(|inherits| {
-                    let profile = match inherits.as_str() {
-                        "dev" => profiles.dev.as_ref(),
-                        "release" => profiles.release.as_ref(),
-                        "test" => profiles.test.as_ref(),
-                        "bench" => profiles.bench.as_ref(),
-                        other => profiles.custom.get(other),
-                    };
-                    profile.and_then(|p| get_strip(p, profiles))
-                })
-            })
-        }
-
-        let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, return None
-            return StripSetting::None;
-        };
-
-        strip
+    /// The `-C strip=...` value cargo computed for the tip crate, as recorded by the rustc
+    /// wrapper when it removed the flag from the tip's rustc invocation. Since cargo computes
+    /// this itself, it accounts for every source cargo considers: Cargo.toml profile inherit
+    /// chains, `.cargo/config.toml` `[profile]` tables, `CARGO_PROFILE_*` env vars, and the
+    /// implicit default of stripping debuginfo when debuginfo is disabled (since Rust 1.77).
+    fn recorded_strip_setting(&self, build_mode: &BuildMode) -> Option<String> {
+        let path = self
+            .rustc_wrapper_args_scope_dir(build_mode)
+            .ok()?
+            .join(format!("{}.bin.json", self.tip_crate_name()));
+        let contents = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str::<RustcArgs>(&contents).ok()?.strip
     }
 
     /// returns the path to root build folder. This will be our working directory for the build.
@@ -3068,11 +3043,11 @@ impl BuildRequest {
     ///
     /// Note how every platform gets its own profile, and each platform has a dev and release profile.
     fn profile_args(&self) -> Vec<String> {
-        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
-        // after assets are built
+        // Note: stripping is not disabled here. The rustc wrapper intercepts the `-C strip=...`
+        // flag cargo computes for the tip crate so symbols still exist for the asset system,
+        // and `post_process_executable` applies the recorded setting after assets are built.
         let profile = self.profile.as_str();
         let mut args = Vec::new();
-        args.push(format!(r#"profile.{profile}.strip=false"#));
 
         // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
         if !self
