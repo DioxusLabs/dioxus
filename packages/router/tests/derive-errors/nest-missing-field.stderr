@@ -1,0 +1,5 @@
+error: variant `Settings` is inside the nest "/user/:id" but is missing its dynamic parameter; add the field `id: String` to the variant
+  --> tests/derive-errors/nest-missing-field.rs:15:9
+   |
+15 |         Settings {},
+   |         ^^^^^^^^

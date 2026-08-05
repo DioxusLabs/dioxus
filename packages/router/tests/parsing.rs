@@ -221,3 +221,304 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+#[test]
+fn nested_child_dynamic_prefix_roundtrip() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view")]
+        View {},
+        #[route("/edit")]
+        Edit {},
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
+    }
+
+    #[component]
+    fn View() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Edit() -> Element {
+        unimplemented!()
+    }
+
+    // A nest-supplied dynamic prefix above a `#[child]` must parse with the parent's
+    // dynamic value bound.
+    let parsed = Route::from_str("/file/abc/view").unwrap();
+    assert_eq!(
+        parsed,
+        Route::File {
+            file_id: "abc".to_string(),
+            child: ChildRoute::View {},
+        }
+    );
+
+    // to_string -> from_str must round-trip with the dynamic value preserved.
+    let original = Route::File {
+        file_id: "abc".to_string(),
+        child: ChildRoute::Edit {},
+    };
+    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
+    assert_eq!(original.to_string(), "/file/abc/edit");
+
+    // A space in the parent's dynamic value must percent-encode on emit and decode on parse.
+    let spaced = Route::File {
+        file_id: "hello world".to_string(),
+        child: ChildRoute::View {},
+    };
+    assert_eq!(spaced.to_string(), "/file/hello%20world/view");
+    assert_eq!(Route::from_str(&spaced.to_string()).unwrap(), spaced);
+}
+
+#[test]
+fn nested_child_dynamic_prefix_with_query() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view?:zoom")]
+        View { zoom: u32 },
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
+    }
+
+    #[component]
+    fn View(zoom: u32) -> Element {
+        unimplemented!()
+    }
+
+    // Parent's dynamic-segment value and child's query must both bind from the URL,
+    // confirming the walk-first restructure preserves PR #5613's query-forwarding for
+    // children whose parents carry a dynamic prefix.
+    let parsed = Route::from_str("/file/abc/view?zoom=200").unwrap();
+    assert_eq!(
+        parsed,
+        Route::File {
+            file_id: "abc".to_string(),
+            child: ChildRoute::View { zoom: 200 },
+        }
+    );
+
+    // Round-trip must preserve both the parent dynamic and the child query.
+    let original = Route::File {
+        file_id: "xyz".to_string(),
+        child: ChildRoute::View { zoom: 50 },
+    };
+    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
+}
+
+#[test]
+fn child_route_typed_parent_segment_error_bubbles_parent() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view")]
+        View {},
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: usize, child: ChildRoute },
+    }
+
+    #[component]
+    fn View() -> Element {
+        unimplemented!()
+    }
+
+    // Happy path: a parseable usize binds and the child variant matches.
+    let parsed = Route::from_str("/file/42/view").unwrap();
+    assert_eq!(
+        parsed,
+        Route::File {
+            file_id: 42,
+            child: ChildRoute::View {},
+        }
+    );
+
+    // Walk-first failure-isolation: when the parent's typed dyn-seg cannot parse, the
+    // error surfaced is the enclosing nest's segment-parse failure, not a child-route
+    // mismatch. The stringification must name the failing segment so consumers can
+    // locate it.
+    let err = Route::from_str("/file/abc/view").unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("file_id") && msg.contains("invalid digit"),
+        "expected the parent segment-parse failure in error; got: {msg}"
+    );
+}
+
+#[test]
+fn nested_child_dynamic_prefix_with_hash() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view#:anchor")]
+        View { anchor: String },
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/file/:file_id")]
+            #[child("")]
+            File { file_id: String, child: ChildRoute },
+    }
+
+    #[component]
+    fn View(anchor: String) -> Element {
+        unimplemented!()
+    }
+
+    // Parent's dynamic-segment value and child's hash must both bind from the URL,
+    // confirming the walk-first restructure forwards raw_hash in parallel with raw_query.
+    let parsed = Route::from_str("/file/abc/view#section-2").unwrap();
+    assert_eq!(
+        parsed,
+        Route::File {
+            file_id: "abc".to_string(),
+            child: ChildRoute::View {
+                anchor: "section-2".to_string()
+            },
+        }
+    );
+
+    // Round-trip must preserve both the parent dynamic and the child hash.
+    let original = Route::File {
+        file_id: "xyz".to_string(),
+        child: ChildRoute::View {
+            anchor: "top".to_string(),
+        },
+    };
+    assert_eq!(Route::from_str(&original.to_string()).unwrap(), original);
+}
+
+#[test]
+fn dynamic_nest_scoped_layout_parses_variant_after_end_nest() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[route("/")]
+        Home {},
+        #[nest("/x/:name")]
+            #[layout(Frame)]
+                #[route("/")]
+                Inside { name: String },
+            #[end_layout]
+        #[end_nest]
+        #[route("/:id")]
+        After { id: String },
+    }
+
+    #[component]
+    fn Home() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Frame(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Inside(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn After(id: String) -> Element {
+        unimplemented!()
+    }
+
+    // A dynamic-prefix nest whose layout is closed with an explicit #[end_layout]
+    // must leave later variants untouched: no layout wrapping, no borrowed params.
+    assert_eq!(
+        Route::from_str("/x/foo").unwrap(),
+        Route::Inside {
+            name: "foo".to_string()
+        }
+    );
+    assert_eq!(
+        Route::from_str("/bar").unwrap(),
+        Route::After {
+            id: "bar".to_string()
+        }
+    );
+
+    for route in [
+        Route::Home {},
+        Route::Inside {
+            name: "foo".to_string(),
+        },
+        Route::After {
+            id: "bar".to_string(),
+        },
+    ] {
+        assert_eq!(Route::from_str(&route.to_string()).unwrap(), route);
+    }
+}
+
+#[test]
+fn dynamic_nest_scoped_layout_parses_child_after_end_nest() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/view")]
+        View {},
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    #[rustfmt::skip]
+    enum Route {
+        #[nest("/x/:name")]
+            #[layout(Frame)]
+                #[route("/")]
+                Inside { name: String },
+            #[end_layout]
+        #[end_nest]
+        #[child("/sub")]
+        Sub { child: ChildRoute },
+    }
+
+    #[component]
+    fn Frame(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Inside(name: String) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn View() -> Element {
+        unimplemented!()
+    }
+
+    // A #[child] variant declared after the closed nest/layout region must parse
+    // and round-trip without inheriting the nest's layout or parameters.
+    assert_eq!(
+        Route::from_str("/x/n").unwrap(),
+        Route::Inside {
+            name: "n".to_string()
+        }
+    );
+
+    let sub = Route::Sub {
+        child: ChildRoute::View {},
+    };
+    assert_eq!(Route::from_str("/sub/view").unwrap(), sub);
+    assert_eq!(Route::from_str(&sub.to_string()).unwrap(), sub);
+}
