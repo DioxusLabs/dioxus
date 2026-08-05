@@ -1,0 +1,16 @@
+[package]
+name = "dioxus-playwright-fullstack-headers-test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+http.workspace = true
+serde = { workspace = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+
+[features]
+default = []
+server = ["dioxus/server", "dep:tokio"]
+web = ["dioxus/web"]
