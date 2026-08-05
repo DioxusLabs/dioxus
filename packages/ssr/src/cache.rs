@@ -196,6 +196,17 @@ fn from_template_recursive(
             ..
         } => {
             cur_path.push(root_idx);
+
+            // Elements inside the VirtualDOM tree would render as invalid HTML inside
+            // `<div id="main">`. The browser strips these tags, corrupting the DOM and
+            // breaking hydration. Skip the `<head>` tag entirely — document::* components
+            // (Title, Meta, Link, etc.) register metadata via use_hook, and render_head()
+            // pulls that data out separately to build the real <head> section.
+            if *tag == "head" {
+                cur_path.pop();
+                return Ok(());
+            }
+
             write!(chain, "<{tag}")?;
             // we need to collect the styles and write them at the end
             let mut styles = Vec::new();
