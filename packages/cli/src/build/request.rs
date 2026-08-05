@@ -204,7 +204,7 @@ use crate::{
 };
 use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
+use cargo_toml::{DebugSetting, Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
@@ -2473,43 +2473,72 @@ impl BuildRequest {
     }
 
     /// Checks the strip setting for the package, resolving profiles recursively
+    ///
+    /// If the profile doesn't set `strip` explicitly, this mirrors Cargo's implicit default:
+    /// since Rust 1.77, Cargo strips debuginfo when the profile has debuginfo disabled
+    /// (as the `release` profile does by default). Since we build with `strip=false` to keep
+    /// symbols alive for the asset system, we need to replicate that default when stripping
+    /// manually afterwards.
     pub(crate) fn get_strip_setting(&self) -> StripSetting {
         let cargo_toml = &self.workspace.cargo_toml;
-        let profile = &self.profile;
         let release = self.release;
-        let profile = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => Some(custom_profile),
-            (_, true) => cargo_toml.profile.release.as_ref(),
-            (_, false) => cargo_toml.profile.dev.as_ref(),
-        };
+        let profile = cargo_toml.profile.custom.get(&self.profile);
 
-        let Some(profile) = profile else {
-            return StripSetting::None;
-        };
-
-        // Get the strip setting from the profile or the profile it inherits from
-        fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
-            profile.strip.as_ref().copied().or_else(|| {
-                // If we can't find the strip setting, check if we inherit from another profile
-                profile.inherits.as_ref().and_then(|inherits| {
-                    let profile = match inherits.as_str() {
-                        "dev" => profiles.dev.as_ref(),
-                        "release" => profiles.release.as_ref(),
-                        "test" => profiles.test.as_ref(),
-                        "bench" => profiles.bench.as_ref(),
-                        other => profiles.custom.get(other),
-                    };
-                    profile.and_then(|p| get_strip(p, profiles))
+        // Resolve a profile setting, following the `inherits` chain
+        fn resolve<T>(
+            profile: Option<&Profile>,
+            profiles: &Profiles,
+            release: bool,
+            get: fn(&Profile) -> Option<T>,
+        ) -> Option<T> {
+            fn resolve_inner<T>(
+                profile: &Profile,
+                profiles: &Profiles,
+                get: fn(&Profile) -> Option<T>,
+            ) -> Option<T> {
+                get(profile).or_else(|| {
+                    // If we can't find the setting, check if we inherit from another profile
+                    profile.inherits.as_ref().and_then(|inherits| {
+                        let profile = match inherits.as_str() {
+                            "dev" => profiles.dev.as_ref(),
+                            "release" => profiles.release.as_ref(),
+                            "test" => profiles.test.as_ref(),
+                            "bench" => profiles.bench.as_ref(),
+                            other => profiles.custom.get(other),
+                        };
+                        profile.and_then(|p| resolve_inner(p, profiles, get))
+                    })
                 })
-            })
+            }
+
+            let base = match (profile, release) {
+                (Some(custom_profile), _) => Some(custom_profile),
+                (_, true) => profiles.release.as_ref(),
+                (_, false) => profiles.dev.as_ref(),
+            };
+            base.and_then(|p| resolve_inner(p, profiles, get))
         }
 
-        let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, return None
-            return StripSetting::None;
-        };
+        if let Some(strip) = resolve(profile, &cargo_toml.profile, release, |p| {
+            p.strip.as_ref().copied()
+        }) {
+            return strip;
+        }
 
-        strip
+        // No explicit strip setting: apply Cargo's implicit default. Cargo strips debuginfo
+        // when the resolved debug setting is off, which is the default for release profiles.
+        let debug =
+            resolve(profile, &cargo_toml.profile, release, |p| p.debug).unwrap_or(if release {
+                DebugSetting::None
+            } else {
+                DebugSetting::Full
+            });
+
+        if debug == DebugSetting::None {
+            StripSetting::Debuginfo
+        } else {
+            StripSetting::None
+        }
     }
 
     /// returns the path to root build folder. This will be our working directory for the build.
