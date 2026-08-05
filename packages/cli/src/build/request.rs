@@ -1987,6 +1987,9 @@ impl BuildRequest {
             // todo: actually use this to copy over the binary to our staging
             let mut command = Command::new(rustc_objcopy);
             command.env("LD_LIBRARY_PATH", &dylib_path);
+            // macOS's dyld does not read LD_LIBRARY_PATH; rust-objcopy links against
+            // @rpath/libLLVM.dylib which lives in the sysroot's lib dir.
+            command.env("DYLD_FALLBACK_LIBRARY_PATH", &dylib_path);
             command
                 .arg(strip_arg)
                 .arg(&artifacts.exe)
