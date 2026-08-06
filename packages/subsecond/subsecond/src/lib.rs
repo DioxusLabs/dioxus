@@ -247,9 +247,10 @@ use std::{
 ///
 /// However, if you wrap your calling code in a future, you *can* simply drop the future which will
 /// cause `drop` to execute and get something similar to unwinding. Not great if refcells are open.
-pub fn call<O>(mut f: impl FnMut() -> O) -> O {
+pub fn call<O>(f: impl FnMut() -> O) -> O {
     // Only run in debug mode - the rest of this function will dissolve away
-    if !cfg!(debug_assertions) {
+    if cfg!(all(not(feature = "enable_always"), not(debug_assertions))) {
+        let mut f = f;
         return f();
     }
 
@@ -409,7 +410,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
     /// then this function will emit an [`HotFnPanic`] which can be unwrapped and handled by next [`call`]
     /// instance.
     pub fn try_call(&mut self, args: A) -> Result<F::Return, HotFnPanic> {
-        if !cfg!(debug_assertions) {
+        if cfg!(all(not(feature = "enable_always"), not(debug_assertions))) {
             return Ok(self.inner.call_it(args));
         }
 
@@ -456,7 +457,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         ptr: HotFnPtr,
         args: A,
     ) -> Result<F::Return, HotFnPanic> {
-        if !cfg!(debug_assertions) {
+        if cfg!(all(not(feature = "enable_always"), not(debug_assertions))) {
             return Ok(self.inner.call_it(args));
         }
 
