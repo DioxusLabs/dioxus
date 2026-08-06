@@ -237,8 +237,7 @@ impl<T, S: Storage<SignalData<T>>> Signal<T, S> {
             let this_subscribers = this_subscriber_list.lock().unwrap().clone();
             for subscriber in this_subscribers.iter() {
                 subscriber.subscribe(other_subscriber_list.clone());
-                // Drop the subscription to the old list; the old value is being replaced,
-                // so keeping it would accumulate stale subscriptions on every point_to
+                // Drop the subscription to the old list so stale subscriptions don't accumulate
                 subscriber.unsubscribe(this_subscriber_list.clone());
             }
         }

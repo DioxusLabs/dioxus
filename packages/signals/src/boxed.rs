@@ -49,8 +49,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
             for subscriber in this_subscribers_vec {
                 subscriber.subscribe(other_subscribers.clone());
-                // Drop the subscription to the old list; the old value is being replaced,
-                // so keeping it would accumulate stale subscriptions on every point_to
+                // Drop the subscription to the old list so stale subscriptions don't accumulate
                 subscriber.unsubscribe(this_subscribers.clone());
             }
         }

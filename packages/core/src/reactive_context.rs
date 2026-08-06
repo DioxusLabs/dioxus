@@ -252,8 +252,7 @@ impl ReactiveContext {
         }
     }
 
-    /// Unsubscribe this context from a subscriber list. This removes the context from the
-    /// list and drops the context's reference to the list.
+    /// Unsubscribe this context from a subscriber list
     pub fn unsubscribe(&self, subscriptions: impl Into<Subscribers>) {
         let subscriptions = subscriptions.into();
         subscriptions.remove(self);

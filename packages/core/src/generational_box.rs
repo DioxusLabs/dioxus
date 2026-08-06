@@ -18,9 +18,8 @@ pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> 
     result
 }
 
-/// Owners for both storage types. Generated props structs hold one of these so that any
-/// state allocated while converting props is dropped with the props, regardless of
-/// which storage backs the state.
+/// Owners for both storage types, used by generated props structs so that state
+/// allocated while converting props is dropped with the props
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct PropsOwner {
@@ -29,8 +28,6 @@ pub struct PropsOwner {
 }
 
 /// Run a closure with both owners of the given [`PropsOwner`].
-///
-/// This will override the default owner for the current component for both storage types.
 #[doc(hidden)]
 pub fn with_props_owner<F: FnOnce() -> R, R>(owner: PropsOwner, f: F) -> R {
     let PropsOwner { unsync, sync } = owner;

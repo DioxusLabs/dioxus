@@ -35,7 +35,7 @@ static ALLOCATOR: CountingAllocator = CountingAllocator;
 const WARMUP: usize = 200;
 const ITERS: usize = 1000;
 
-// Tests in this binary share the global allocator counter, so they must not run concurrently
+// Tests share the global allocator counter, so they must not run concurrently
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Rerender the app many times and return the growth in live heap bytes per render.
@@ -132,8 +132,7 @@ fn store_props_do_not_leak() {
             }
         }
     });
-    // Store::new allocates sync state for its subscription tree. If a store prop has a
-    // default value, that state must be owned by the props, not leaked into the parent scope.
+    // Store::new allocates sync state that must be owned by the props
     assert_no_leak("Store<T> prop with default value", || {
         rsx! {
             for _ in 0..20 {
@@ -162,7 +161,6 @@ fn signal_props_do_not_leak() {
             }
         }
     });
-    // Sync signals allocate with SyncStorage, which is owned separately from UnsyncStorage
     assert_no_leak(
         "ReadSignal<T, SyncStorage> prop from sync mapped signal",
         || {
@@ -174,8 +172,8 @@ fn signal_props_do_not_leak() {
             }
         },
     );
-    // The macro cannot see through type aliases, but explicit `#[props(into)]` conversions
-    // must still run under the props owner so any allocated state dies with the props
+    // The macro cannot see through type aliases, but `#[props(into)]` conversions
+    // must still run under the props owner
     type AliasSignal = ReadSignal<usize>;
     #[component]
     fn AliasSignalProp(#[props(into)] id: AliasSignal) -> Element {
@@ -189,8 +187,8 @@ fn signal_props_do_not_leak() {
             }
         }
     });
-    // Plain values converted into ReadSignal props create a fresh signal on every render.
-    // The point_to memoization must not accumulate stale subscriptions in the child.
+    // Value-converted props create a fresh signal every render; point_to memoization
+    // must not accumulate stale subscriptions
     assert_no_leak("ReadSignal<String> prop from plain value", || {
         rsx! {
             for i in 0..20 {

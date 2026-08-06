@@ -621,11 +621,8 @@ mod struct_info {
             generics
         }
 
-        /// Checks if the props have any fields whose conversions should run under an owner
-        /// tied to the props struct. Signal-like fields always convert (e.g. T to
-        /// `ReadSignal<T>`), but any `into` conversion or default expression may also
-        /// allocate reactive state (e.g. behind a type alias the macro cannot see through),
-        /// so those run under the props owner as well.
+        /// Checks if the props have any fields whose conversions or defaults may allocate
+        /// state that should be owned by the props struct
         fn has_owned_fields(&self) -> bool {
             fn nontrivial_default(attr: &FieldBuilderAttr) -> bool {
                 attr.default.as_ref().is_some_and(|default| {
@@ -1182,9 +1179,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 marker = Some(marker_ident.clone());
                 (
                     quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
-                    // Signal-like types always convert, and any into conversion may allocate
-                    // reactive state (e.g. a signal type behind an alias the macro cannot see
-                    // through), so run the conversion with the props struct as the owner
+                    // The conversion may allocate reactive state, so run it with the props struct as the owner
                     quote!(dioxus_core::with_props_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
                 )
             } else if field.builder_attr.strip_option {
@@ -1458,8 +1453,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         default.to_token_stream()
                     };
 
-                    // Default expressions may allocate reactive state, so run them under the
-                    // props owner when the builder has one
+                    // Default expressions may allocate reactive state, so run them under the props owner
                     let wrap_owner = self.has_owned_fields();
                     match (field.builder_attr.skip, wrap_owner) {
                         (true, true) => quote!(let #name = dioxus_core::with_props_owner(self.owner.clone(), move || #body);),
