@@ -13,7 +13,9 @@ use std::vec;
 use std::{
     any::{Any, TypeId},
     cell::Cell,
+    collections::hash_map::DefaultHasher,
     fmt::{Arguments, Debug},
+    hash::{Hash, Hasher},
 };
 
 /// The information about the
@@ -37,6 +39,54 @@ pub(crate) struct VNodeMount {
     pub(crate) mounted_dynamic_nodes: Box<[usize]>,
 }
 
+/// A key that uniquely identifies a node among its siblings during keyed diffing.
+///
+/// Keys are created either from a formatted string (`key: "{value}"`) or from the hash of any
+/// value that implements [`Hash`] (`key: value`).
+///
+/// Two keys only compare equal if they were created the same way: a key created from a string
+/// never equals a key created from a hash, even if the hashed value was that same string.
+///
+/// ```rust
+/// use dioxus_core::Key;
+///
+/// #[derive(Hash)]
+/// struct UserId(u64);
+///
+/// assert_eq!(Key::hashed(UserId(42)), Key::hashed(UserId(42)));
+/// assert_ne!(Key::hashed(UserId(42)), Key::hashed(UserId(7)));
+/// assert_eq!(Key::from("a"), Key::from("a"));
+/// assert_ne!(Key::from("a"), Key::hashed("a"));
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Key {
+    /// A key rendered from a formatted string like `key: "{value}"`
+    Str(String),
+    /// A key created from the hash of an arbitrary hashable value like `key: value`
+    Hashed(u64),
+}
+
+impl Key {
+    /// Create a key from the hash of any value that implements [`Hash`].
+    pub fn hashed(value: impl Hash) -> Self {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        Self::Hashed(hasher.finish())
+    }
+}
+
+impl From<String> for Key {
+    fn from(value: String) -> Self {
+        Self::Str(value)
+    }
+}
+
+impl From<&str> for Key {
+    fn from(value: &str) -> Self {
+        Self::Str(value.to_string())
+    }
+}
+
 /// A reference to a template along with any context needed to hydrate it
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
@@ -46,7 +96,7 @@ pub struct VNodeInner {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
-    pub key: Option<String>,
+    pub key: Option<Key>,
 
     /// The static nodes and static descriptor of the template
     pub template: Template,
@@ -152,7 +202,7 @@ impl VNode {
 
     /// Create a new VNode
     pub fn new(
-        key: Option<String>,
+        key: Option<Key>,
         template: Template,
         dynamic_nodes: Box<[DynamicNode]>,
         dynamic_attrs: Box<[Box<[Attribute]>]>,

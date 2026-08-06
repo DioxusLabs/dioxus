@@ -84,6 +84,8 @@ pub(crate) struct LastBuildState {
     /// In the new build, we must assign each of these a value even if we no longer use the component.
     /// The type must be the same as the last time we compiled the property
     pub component_properties: Vec<HotLiteral>,
+    /// The key of the template in the last build
+    pub key: Option<AttributeValue>,
     /// The root indexes of the last build
     pub root_index: DynIdx,
     /// The name of the original template
@@ -102,6 +104,7 @@ impl LastBuildState {
             dynamic_nodes: BakedPool::new(dynamic_nodes),
             dynamic_attributes: BakedPool::new(dynamic_attributes),
             component_properties,
+            key: body.implicit_key().cloned(),
             root_index: body.template_idx.clone(),
             name,
         }

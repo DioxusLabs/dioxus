@@ -65,7 +65,7 @@
 
 use dioxus_core::internal::{
     FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute, HotReloadDynamicNode,
-    HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+    HotReloadKey, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::*;
@@ -251,14 +251,19 @@ impl HotReloadResult {
         Some(())
     }
 
-    fn hot_reload_key(&mut self, new: &TemplateBody) -> Option<Option<FmtedSegments>> {
+    fn hot_reload_key(&mut self, new: &TemplateBody) -> Option<Option<HotReloadKey>> {
         match new.implicit_key() {
-            Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(value))) => Some(Some(
-                self.full_rebuild_state
-                    .hot_reload_formatted_segments(value)?,
-            )),
+            Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(value))) => {
+                Some(Some(HotReloadKey::Fmted(
+                    self.full_rebuild_state
+                        .hot_reload_formatted_segments(value)?,
+                )))
+            }
+            // Arbitrary expression keys are computed at the rsx call site, so they can only be
+            // reused if the expression is unchanged from the last build
+            Some(other) => (self.full_rebuild_state.key.as_ref() == Some(other))
+                .then_some(Some(HotReloadKey::Dynamic)),
             None => Some(None),
-            _ => None,
         }
     }
 

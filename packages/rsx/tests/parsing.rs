@@ -155,10 +155,33 @@ fn complex_kitchen_sink() {
 }
 
 #[test]
-fn key_must_be_formatted() {
+fn key_can_be_expr() {
     let item = quote::quote! {
         div {
             key: value
+        }
+    };
+
+    let parsed = syn::parse2::<CallBody>(item).unwrap();
+    println!("{:?}", parsed.body.diagnostics);
+    assert!(parsed.body.diagnostics.is_empty());
+
+    let item = quote::quote! {
+        div {
+            key: value.id()
+        }
+    };
+
+    let parsed = syn::parse2::<CallBody>(item).unwrap();
+    println!("{:?}", parsed.body.diagnostics);
+    assert!(parsed.body.diagnostics.is_empty());
+}
+
+#[test]
+fn key_cannot_be_event_handler() {
+    let item = quote::quote! {
+        div {
+            key: |e| {}
         }
     };
 
