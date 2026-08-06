@@ -368,9 +368,17 @@ fn MyComponent() -> Element {{
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
         let _runtime = RuntimeGuard::new(self.clone());
-        let elements = self.elements.borrow();
 
-        if let Some(Some(parent_path)) = elements.get(element.0).copied() {
+        // Read the path out and drop the borrow before calling user code, as
+        // handle_bubbling_event already does for `mounts`. Held across a
+        // listener, it panics any render that listener triggers, in
+        // VirtualDom::next_element.
+        let parent_path = {
+            let elements = self.elements.borrow();
+            elements.get(element.0).copied().flatten()
+        };
+
+        if let Some(parent_path) = parent_path {
             if event.propagates() {
                 self.handle_bubbling_event(parent_path, name, event);
             } else {
