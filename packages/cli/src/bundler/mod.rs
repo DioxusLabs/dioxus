@@ -218,7 +218,7 @@ impl<'a> BundleContext<'a> {
         self.package_types.clone()
     }
 
-    /// The product name (PascalCase).
+    /// The product name.
     pub(crate) fn product_name(&self) -> String {
         self.build.bundled_app_name()
     }
