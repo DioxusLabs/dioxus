@@ -17,6 +17,7 @@ mod mutations;
 mod nodes;
 mod properties;
 mod reactive_context;
+pub(crate) mod render_driver;
 mod render_error;
 mod root_wrapper;
 mod runtime;

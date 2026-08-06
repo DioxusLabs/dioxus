@@ -2,7 +2,9 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::innerlude::Work;
 use crate::properties::RootProps;
+use crate::render_driver::BodyDriver;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     ComponentFunction, Element, Mutations,
@@ -12,7 +14,6 @@ use crate::{
     scopes::ScopeId,
 };
 use crate::{Task, VComponent};
-use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
@@ -289,11 +290,13 @@ impl VirtualDom {
     ) -> Self {
         let render_fn = root.fn_ptr();
         let props = VProps::new(root, |_, _| true, root_props, "Root");
-        Self::new_with_component(VComponent {
-            name: "root",
+        let driver = BodyDriver::new();
+        Self::new_with_component(VComponent::new_with_driver(
+            "root",
             render_fn,
-            props: Box::new(props),
-        })
+            driver,
+            Box::new(props),
+        ))
     }
 
     /// Create a new virtualdom and build it immediately
@@ -316,13 +319,8 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
-        );
-        dom.new_scope(Box::new(root), "app");
+        let root = VComponent::new(RootScopeWrapper, RootProps(root), "RootWrapper");
+        dom.new_scope("app", root.driver.clone(), root.props.duplicate());
 
         #[cfg(debug_assertions)]
         dom.register_subsecond_handler();
@@ -578,17 +576,12 @@ impl VirtualDom {
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        let new_nodes = self
+
+        let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
+        let m = self
             .runtime
             .clone()
-            .while_rendering(|| self.run_scope(ScopeId::ROOT));
-
-        let new_nodes = LastRenderedNode::new(new_nodes);
-
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
-
-        // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+            .while_rendering(|| driver.create(self, ScopeId::ROOT, true, None, Some(to)));
 
         to.append_children(ElementId(0), m);
     }
@@ -726,7 +719,7 @@ impl VirtualDom {
                     if run_scope {
                         // If the scope is dirty, run the scope and get the mutations
                         self.runtime.clone().while_rendering(|| {
-                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                            self.run_and_diff_scope(None, scope_id);
                         });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
