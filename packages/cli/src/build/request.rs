@@ -434,6 +434,10 @@ impl BuildRequest {
             .load_dioxus_config(crate_package, Some(crate_target.src_path.as_std_path()))?
             .unwrap_or_default();
 
+        if let Some(name) = &config.application.name {
+            validate_bundled_app_name(name)?;
+        }
+
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
@@ -2704,16 +2708,32 @@ impl BuildRequest {
         self.crate_target.kind[0].clone()
     }
 
-    /// The application name. PascalCase version of the crate name by default.
+    /// The application's display name. PascalCase version of the crate name by default.
     /// May be overridden using [`ApplicationConfig::name`][crate::ApplicationConfig::name].
+    ///
+    /// This is what users see (window titles, launcher labels, installer UI, the
+    /// `.app` directory). It may contain spaces and most punctuation, but is
+    /// validated on startup to exclude characters that are invalid in file names
+    /// (see [`validate_bundled_app_name`]). For artifact file names and derived
+    /// identifiers, use [`Self::bundled_app_file_name`] instead.
     pub(crate) fn bundled_app_name(&self) -> String {
-        use convert_case::{Case, Casing};
-
         self.config
             .application
             .name
             .clone()
-            .unwrap_or_else(|| self.executable_name().to_case(Case::Pascal))
+            .unwrap_or_else(|| self.bundled_app_file_name())
+    }
+
+    /// The PascalCase version of the crate name, ignoring any `application.name`
+    /// override.
+    ///
+    /// Use this for artifact file names (`.msi`, `.ipa`, `.aab`, intermediate build
+    /// files) and anything identity-bearing (the default bundle identifier, MSI
+    /// upgrade code seed), so those stay filesystem/shell-friendly and stable even
+    /// when the display name changes.
+    pub(crate) fn bundled_app_file_name(&self) -> String {
+        use convert_case::{Case, Casing};
+        self.executable_name().to_case(Case::Pascal)
     }
 
     /// Get the crate version from Cargo.toml (e.g., "0.1.0")
@@ -2743,7 +2763,7 @@ impl BuildRequest {
             }
         }
 
-        format!("com.example.{}", self.bundled_app_name())
+        format!("com.example.{}", self.bundled_app_file_name())
     }
 
     /// The item that we'll try to run directly if we need to.
@@ -3169,5 +3189,51 @@ impl BuildRequest {
         }
 
         deps
+    }
+}
+
+/// Validate an `application.name` override from `Dioxus.toml`.
+///
+/// The name is used verbatim as a file/directory name in several bundle outputs
+/// (the macOS/iOS `.app` directory, Windows shortcuts and install directories),
+/// so it must be a valid file name on every supported platform. Display-only
+/// characters like spaces and unicode are allowed.
+fn validate_bundled_app_name(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        bail!("`application.name` in Dioxus.toml must not be empty");
+    }
+    if name != name.trim() {
+        bail!("`application.name` in Dioxus.toml must not start or end with whitespace: {name:?}");
+    }
+    if name.ends_with('.') {
+        bail!("`application.name` in Dioxus.toml must not end with a `.`: {name:?}");
+    }
+    if let Some(c) = name.chars().find(|c| {
+        matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
+    }) {
+        bail!(
+            "`application.name` in Dioxus.toml contains the character {c:?}, which is not valid in file names. The name is used as a file name in bundle outputs (e.g. the `.app` directory and installer shortcuts), so it must not contain any of `/ \\ : * ? \" < > |` or control characters."
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_bundled_app_name;
+
+    #[test]
+    fn app_name_validation() {
+        assert!(validate_bundled_app_name("My App").is_ok());
+        assert!(validate_bundled_app_name("Émile's App — 2").is_ok());
+        assert!(validate_bundled_app_name("").is_err());
+        assert!(validate_bundled_app_name("   ").is_err());
+        assert!(validate_bundled_app_name(" My App").is_err());
+        assert!(validate_bundled_app_name("My App.").is_err());
+        assert!(validate_bundled_app_name("My/App").is_err());
+        assert!(validate_bundled_app_name("My\\App").is_err());
+        assert!(validate_bundled_app_name("My: App").is_err());
+        assert!(validate_bundled_app_name("My \"App\"").is_err());
+        assert!(validate_bundled_app_name("My\tApp").is_err());
     }
 }
