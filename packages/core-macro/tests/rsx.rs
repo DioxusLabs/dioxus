@@ -148,3 +148,106 @@ mod test_optional_signals {
         rsx! { "hi!" }
     }
 }
+
+/// rsx evaluates expressions in three tiers: formatted strings that only borrow, then everything
+/// else in source order, then event handlers. These are compile-time tests for the patterns that
+/// ordering is supposed to keep working.
+///
+/// See https://github.com/DioxusLabs/dioxus/issues/3737
+#[cfg(test)]
+#[allow(unused)]
+mod test_evaluation_order {
+    use dioxus::prelude::*;
+
+    #[component]
+    fn TakesString(text: String) -> Element {
+        rsx! { "{text}" }
+    }
+
+    #[component]
+    fn TakesCallback(label: String, onpick: EventHandler<()>) -> Element {
+        rsx! { "{label}" }
+    }
+
+    fn consume(_: String) {}
+
+    /// An attribute that borrows can be written before a child that moves
+    fn attribute_then_component() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            div { width: "{text}",
+                TakesString { text }
+            }
+        }
+    }
+
+    /// A component that borrows can be written before an attribute that moves
+    fn component_then_attribute() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            div {
+                TakesString { text: "{text}" }
+                div { width: text }
+            }
+        }
+    }
+
+    /// Event handlers are evaluated last, so a handler can move a value that a formatted string
+    /// somewhere else in the template borrows
+    fn handler_then_formatted() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            div {
+                button { onclick: move |_| consume(text.clone()), "pick" }
+                span { "{text}" }
+            }
+        }
+    }
+
+    /// ...including when the formatted string is an attribute, or nested deeper in the tree
+    fn handler_then_nested_formatted() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            div { onclick: move |_| consume(text.clone()),
+                div {
+                    span { class: "{text}", "{text}" }
+                }
+            }
+        }
+    }
+
+    /// Callback props are applied to the props builder after the props that only borrow
+    fn callback_prop_then_prop() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            TakesCallback {
+                onpick: move |_| consume(text.clone()),
+                label: "{text}",
+            }
+        }
+    }
+
+    /// The shape of every list row: a handler that owns the item and a label that displays it
+    fn list_row() -> Element {
+        let items = vec![String::from("a"), String::from("b")];
+        rsx! {
+            for item in items {
+                div { key: "{item}",
+                    button { onclick: move |_| consume(item.clone()), "pick" }
+                    span { "{item}" }
+                }
+            }
+        }
+    }
+
+    /// Formatted strings only borrow, so they can be written after the value is moved elsewhere
+    fn move_then_formatted_sibling() -> Element {
+        let text = String::from("hello");
+        rsx! {
+            div {
+                TakesString { text: text.clone() }
+                span { "{text}" }
+            }
+        }
+    }
+}
