@@ -23,7 +23,7 @@
 
 `dioxus-desktop` provides a webview-based desktop renderer for the Dioxus VirtualDom.
 
-This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide](guide-url).
+This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide][guide-url].
 
 [guide-url]: https://dioxuslabs.com/learn/0.7/getting_started
 
