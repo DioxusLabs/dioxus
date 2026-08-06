@@ -9,6 +9,8 @@ pub(crate) trait AnyProps: 'static {
     fn render(&self) -> Element;
     /// Make the old props equal to the new type erased props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &dyn Any) -> bool;
+    /// Check if the internal props are equal to the new type erased props without mutating either set.
+    fn props_eq(&self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
     /// Get the props as a type erased `dyn Any`.
@@ -21,6 +23,7 @@ pub(crate) trait AnyProps: 'static {
 pub(crate) struct VProps<F: ComponentFunction<P, M>, P, M> {
     render_fn: F,
     memo: fn(&mut P, &P) -> bool,
+    props_eq: fn(&P, &P) -> bool,
     props: P,
     name: &'static str,
     phantom: std::marker::PhantomData<M>,
@@ -31,6 +34,7 @@ impl<F: ComponentFunction<P, M>, P: Clone, M> Clone for VProps<F, P, M> {
         Self {
             render_fn: self.render_fn.clone(),
             memo: self.memo,
+            props_eq: self.props_eq,
             props: self.props.clone(),
             name: self.name,
             phantom: std::marker::PhantomData,
@@ -43,12 +47,14 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<
     pub fn new(
         render_fn: F,
         memo: fn(&mut P, &P) -> bool,
+        props_eq: fn(&P, &P) -> bool,
         props: P,
         name: &'static str,
     ) -> VProps<F, P, M> {
         VProps {
             render_fn,
             memo,
+            props_eq,
             props,
             name,
             phantom: std::marker::PhantomData,
@@ -62,6 +68,13 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
     fn memoize(&mut self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
             Some(other) => (self.memo)(&mut self.props, other),
+            None => false,
+        }
+    }
+
+    fn props_eq(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<P>() {
+            Some(other) => (self.props_eq)(&self.props, other),
             None => false,
         }
     }
@@ -102,6 +115,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         Box::new(Self {
             render_fn: self.render_fn.clone(),
             memo: self.memo,
+            props_eq: self.props_eq,
             props: self.props.clone(),
             name: self.name,
             phantom: std::marker::PhantomData,
