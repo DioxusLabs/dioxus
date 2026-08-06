@@ -45,14 +45,17 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
-    let url = format!(
-        "{protocol}//{host}/_dioxus?build_id={build_id}",
-        protocol = match location.protocol().unwrap() {
-            prot if prot == "https:" => "wss:",
-            _ => "ws:",
-        },
-        host = location.host().unwrap(),
-        build_id = dioxus_cli_config::build_id(),
+    let protocol = match location.protocol().unwrap() {
+        prot if prot == "https:" => "wss:",
+        _ => "ws:",
+    };
+    let host = location.host().unwrap();
+    let base_path = dioxus_cli_config::base_path();
+    let url = devserver_ws_url(
+        protocol,
+        &host,
+        dioxus_cli_config::build_id(),
+        base_path.as_deref(),
     );
 
     let ws = WebSocket::new(&url).unwrap();
@@ -193,6 +196,19 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
     }
 }
 
+fn devserver_ws_url(protocol: &str, host: &str, build_id: u64, base_path: Option<&str>) -> String {
+    let base_path = base_path
+        .map(|base_path| base_path.trim_matches('/'))
+        .filter(|base_path| !base_path.is_empty());
+
+    match base_path {
+        Some(base_path) => {
+            format!("{protocol}//{host}/{base_path}/_dioxus?build_id={build_id}")
+        }
+        None => format!("{protocol}//{host}/_dioxus?build_id={build_id}"),
+    }
+}
+
 /// Represents what color the toast should have.
 pub(crate) enum ToastLevel {
     /// Green
@@ -201,6 +217,43 @@ pub(crate) enum ToastLevel {
     Info,
     /// Red
     Error,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::devserver_ws_url;
+
+    #[test]
+    fn devserver_ws_url_without_base_path_is_unchanged() {
+        assert_eq!(
+            devserver_ws_url("ws:", "localhost:8080", 123, None),
+            "ws://localhost:8080/_dioxus?build_id=123"
+        );
+    }
+
+    #[test]
+    fn devserver_ws_url_ignores_empty_base_path() {
+        assert_eq!(
+            devserver_ws_url("ws:", "localhost:8080", 123, Some("/")),
+            "ws://localhost:8080/_dioxus?build_id=123"
+        );
+    }
+
+    #[test]
+    fn devserver_ws_url_includes_base_path() {
+        assert_eq!(
+            devserver_ws_url("wss:", "example.com", 123, Some("my_app")),
+            "wss://example.com/my_app/_dioxus?build_id=123"
+        );
+    }
+
+    #[test]
+    fn devserver_ws_url_normalizes_base_path_slashes() {
+        assert_eq!(
+            devserver_ws_url("ws:", "localhost:8080", 123, Some("/my_app/")),
+            "ws://localhost:8080/my_app/_dioxus?build_id=123"
+        );
+    }
 }
 
 impl Display for ToastLevel {
