@@ -174,8 +174,11 @@ fn deep_root_reader_sees_future_child_write() {
     assert_eq!(*runs.borrow(), 2);
 }
 
+// `ReadSignal::subscribers` returns the wrapper's own subscriber set, so this
+// deep-subscription test exercises the underlying child signal directly instead of going
+// through a boxed wrapper.
 #[test]
-fn boxed_child_subscribers_remove_visited_parent_deep_subscriber() {
+fn child_store_subscribers_remove_visited_parent_deep_subscriber() {
     fn default_x() -> X {
         X::default()
     }
@@ -193,8 +196,7 @@ fn boxed_child_subscribers_remove_visited_parent_deep_subscriber() {
     dom.rebuild_in_place();
 
     dom.in_scope(ScopeId::APP, || {
-        let boxed_child = ReadSignal::new(STORE.resolve().inner1());
-        let subscribers = boxed_child.subscribers();
+        let subscribers = STORE.resolve().inner1().subscribers();
 
         let mut visited = Vec::new();
         subscribers.visit(|subscriber| visited.push(*subscriber));
@@ -211,7 +213,7 @@ fn boxed_child_subscribers_remove_visited_parent_deep_subscriber() {
         subscribers.visit(|subscriber| after_remove.push(*subscriber));
         assert!(
             after_remove.is_empty(),
-            "removing through boxed child subscribers should remove visited subscribers, got {} left",
+            "removing through child subscribers should remove visited subscribers, got {} left",
             after_remove.len()
         );
     });
