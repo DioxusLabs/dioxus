@@ -433,7 +433,11 @@ impl BuildRequest {
 
         // Rename it to Name-arch.aab
         let from = app_release.join("app-release.aab");
-        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.triple));
+        let to = app_release.join(format!(
+            "{}-{}.aab",
+            self.bundled_app_file_name(),
+            self.triple
+        ));
 
         std::fs::rename(from, &to).context("Failed to rename aab")?;
 
