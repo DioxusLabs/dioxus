@@ -7,7 +7,7 @@ use tao::{
     window::Window,
 };
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
-use wry::{RequestAsyncResponder, WebViewId};
+use wry::{BackgroundThrottlingPolicy, RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{DioxusMenu, default_menu_bar};
@@ -75,6 +75,7 @@ pub struct Config {
     pub(crate) additional_windows_args: Option<String>,
     pub(crate) tray_icon_show_window_on_click: bool,
     pub(crate) navigation_handler: Option<NavigationHandler>,
+    pub(crate) background_throttling: Option<BackgroundThrottlingPolicy>,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
@@ -130,6 +131,7 @@ impl Config {
             additional_windows_args: None,
             tray_icon_show_window_on_click: true,
             navigation_handler: None,
+            background_throttling: None,
         }
     }
 
@@ -361,6 +363,29 @@ impl Config {
     /// Return true to allow navigation inside the webview, false to block.
     pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
         self.navigation_handler = Some(Box::new(f));
+        self
+    }
+
+    /// Configure the WebView's background-throttling policy.
+    ///
+    /// On macOS, WKWebView aggressively suspends the WebContent process (the
+    /// process running page JS) when the host window is not visible/focused,
+    /// freezing all JS timers, fetches, and event handlers. The default
+    /// behaviour matches the OS — see [`wry::BackgroundThrottlingPolicy`]
+    /// for the three variants:
+    ///
+    /// - [`BackgroundThrottlingPolicy::Disabled`] — never throttle. Useful
+    ///   for apps that must continue background work (automation drivers,
+    ///   long-running background renderers, headless tests).
+    /// - [`BackgroundThrottlingPolicy::Suspend`] — fully suspend tasks when
+    ///   the view isn't in a window (current macOS default).
+    /// - [`BackgroundThrottlingPolicy::Throttle`] — limit rather than suspend.
+    ///
+    /// The setting is applied at WebView creation; changing it on an existing
+    /// view is not supported. On non-Apple platforms wry currently ignores
+    /// this attribute.
+    pub fn with_background_throttling(mut self, policy: BackgroundThrottlingPolicy) -> Self {
+        self.background_throttling = Some(policy);
         self
     }
 }
