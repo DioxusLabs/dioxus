@@ -29,7 +29,7 @@
 //! };
 //!```
 
-use crate::renderer::{BOOL_ATTRS, str_truthy};
+use crate::renderer::{BOOL_ATTRS, ssr_attr_name, str_truthy};
 use dioxus_core::{StaticElement, StaticText, VNode, VNodeChild};
 use std::{fmt::Write, ops::AddAssign};
 
@@ -183,6 +183,7 @@ fn from_template_element(
     // we need to collect the inner html and write it at the end
     let mut inner_html = None;
     for (name, value, namespace) in element.static_attributes() {
+        let name = ssr_attr_name(name);
         if name == "dangerous_inner_html" {
             inner_html = Some(value);
         } else if let Some("style") = namespace {

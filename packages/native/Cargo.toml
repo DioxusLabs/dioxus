@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
 
 # DOM features
@@ -18,15 +18,16 @@ svg = ["blitz-dom/svg", "blitz-paint/svg"]
 floats = ["blitz-dom/floats"]
 incremental = ["blitz-dom/incremental"]
 autofocus = ["blitz-dom/autofocus"]
-system-fonts = ["blitz-dom/system_fonts"]
+system-fonts = ["blitz-dom/system-fonts"]
+# complex-scripts: enable dictionary-based line-breaking
+complex-scripts = ["blitz-dom/complex-scripts"]
 # WOFF/WOFF2 decoder. Default-on so wasm callers (which can't use system fonts)
 # can bundle compressed fonts without extra setup.
 woff = ["blitz-dom/woff"]
 
 # Shell Features
 clipboard = ["blitz-shell/clipboard"]
-file_dialog = ["file-dialog"] # Backwards compat. Remove in next breaking version
-file-dialog = ["blitz-shell/file_dialog"]
+file-dialog = ["blitz-shell/file-dialog"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 data-uri = ["blitz-shell/data-uri"]
 
@@ -41,6 +42,7 @@ vello-cpu-base = ["dep:anyrender_vello_cpu"]
 
 font-embolden = ["blitz-paint/font-embolden"]
 apple-font-embolden = ["blitz-paint/apple-font-embolden"]
+scrollbars = ["blitz-paint/scrollbars"]
 
 # Other features
 # No-op on wasm32 (blitz_net::Provider needs tokio's threaded runtime); launch_cfg
@@ -53,7 +55,7 @@ hot-reload = ["dep:dioxus-devtools"]
 
 # Debug/Logging
 log-times = ["log-phase-times", "log-frame-times"]
-log-phase-times = ["blitz-dom/log_phase_times"]
+log-phase-times = ["blitz-dom/log-phase-times"]
 log-frame-times = [
   "anyrender_vello_cpu?/log_frame_times",
   "anyrender_vello?/log_frame_times",
@@ -111,6 +113,7 @@ tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 cfg-if = "1.0.4"
+slotmap = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }

@@ -237,8 +237,8 @@ impl<R: RealDom> WriteMutations for StackWriter<'_, R> {
 pub struct DioxusState {
     /// Stack machine state for applying dioxus mutations
     stack: StackState<NodeId>,
-    /// Count of each handler type
-    pub(crate) event_handler_counts: [u32; 32],
+    /// Count of each handler type (indexed by `DomEventKind` discriminant)
+    pub(crate) event_handler_counts: [u32; 64],
     /// Mounted events queued as elements are mounted
     pub(crate) queued_mounted_events: Vec<ElementId>,
 }
@@ -248,7 +248,7 @@ impl DioxusState {
     pub fn create(root_id: usize) -> Self {
         Self {
             stack: StackState::new(root_id),
-            event_handler_counts: [0; 32],
+            event_handler_counts: [0; 64],
             queued_mounted_events: Vec::new(),
         }
     }
@@ -293,7 +293,7 @@ pub(crate) struct BlitzBackend<'a> {
     /// The realdom mutation handle associated with this writer
     docm: DocumentMutator<'a>,
     /// Count of each handler type, kept so event dispatch can skip unused kinds
-    event_handler_counts: &'a mut [u32; 32],
+    event_handler_counts: &'a mut [u32; 64],
     /// Mounted events queued as elements are mounted
     queued_mounted_events: &'a mut Vec<ElementId>,
 }

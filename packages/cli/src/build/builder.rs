@@ -321,7 +321,8 @@ impl AppBuilder {
                     self.compile_end = Some(SystemTime::now());
                 }
             }
-            BuilderUpdate::BuildFailed { .. } => {
+            BuilderUpdate::BuildFailed { err } => {
+                tracing::error!("Build failed: {}", err);
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
@@ -407,7 +408,9 @@ impl AppBuilder {
         // patch (starting from changed_crates + cascade). That serves a different purpose — it only
         // compiles what changed now, not everything ever modified. Both use workspace_dependents_of
         // for the BFS, so they stay in sync automatically.
-        let tip_crate_name = self.build.main_target.replace('-', "_");
+        // Track the tip by *package* name — that's the identity used by the file→crate
+        // mapping and the workspace dependents graph (the bin target name can differ).
+        let tip_crate_name = self.build.tip_package_name();
         self.modified_crates.insert(tip_crate_name.clone());
 
         // Add changed crates and their transitive workspace dependents (cascade).

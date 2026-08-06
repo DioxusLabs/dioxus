@@ -117,10 +117,12 @@ unsafe extern "C" fn rust_callback<'a>(
     handler_ptr_low: jlong,
     location: JObject<'a>,
 ) {
-    // Reconstruct the pointer from two i64 values (for 64-bit pointers)
-    #[cfg(not(target_pointer_width = "64"))]
-    compile_error!("Only 64-bit Android targets are supported");
-
+    // Reconstruct the handler pointer from the two `jlong` halves it was split
+    // into for the JNI boundary. On 64-bit targets both halves are significant;
+    // on 32-bit targets (e.g. `armv7-linux-androideabi`) the pointer fits in the
+    // low half and the high half is zero, so casting the recombined value to a
+    // pointer-width `usize` drops the unused high bits and yields the original
+    // pointer either way.
     let handler_ptr_raw: usize =
         ((handler_ptr_high as u64) << 32 | handler_ptr_low as u64) as usize;
 

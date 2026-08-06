@@ -134,11 +134,12 @@ impl Renderer {
                         .expect("SSR attr segment must point at dynamic attributes")
                         .attrs();
                     for attr in attrs {
+                        let translated_name = ssr_attr_name(attr.name);
                         if attr.name == "dangerous_inner_html" {
                             inner_html = Some(attr);
                         } else if attr.namespace == Some("style") {
                             accumulated_dynamic_styles.push(attr);
-                        } else if BOOL_ATTRS.contains(&attr.name) {
+                        } else if BOOL_ATTRS.contains(&translated_name) {
                             if truthy(&attr.value) {
                                 write_attribute(buf, attr)?;
                             }
@@ -354,11 +355,21 @@ pub(crate) fn truthy(value: &AttributeValue) -> bool {
     }
 }
 
+/// Translate Dioxus virtual attribute names to their HTML equivalents for SSR.
+pub(crate) fn ssr_attr_name(name: &str) -> &str {
+    match name {
+        "initial_value" => "value",
+        "initial_checked" => "checked",
+        "initial_selected" => "selected",
+        other => other,
+    }
+}
+
 pub(crate) fn write_attribute<W: Write + ?Sized>(
     buf: &mut W,
     attr: &Attribute,
 ) -> std::fmt::Result {
-    let name = &attr.name;
+    let name = ssr_attr_name(attr.name);
     match &attr.value {
         AttributeValue::Text(value) => write!(
             buf,

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-const-vec"
-version = "0.8.0-alpha.0"
+version = { workspace = true }
 authors = ["Evan Almloff"]
 edition = "2024"
 description = "A fixed-capacity Vec usable in const contexts"
