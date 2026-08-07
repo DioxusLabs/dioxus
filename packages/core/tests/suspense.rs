@@ -454,6 +454,237 @@ fn toggle_suspense() {
         });
 }
 
+/// A nested suspense boundary that resolves while an ancestor suspense boundary is still
+/// suspended must not write mutations. Its entire rendered state (including its own fallback)
+/// was created in the background without a writer, so its mounts hold placeholder element ids
+/// (`usize::MAX` / `ElementId(0)`). Writing a resolve diff against that state emits mutations
+/// like `ReplaceWith { id: 4294967295 }` which crash the renderer.
+///
+/// The scenario is a pure-CSR app whose root content suspends (implicit root boundary) while
+/// an inner `SuspenseBoundary` suspends and resolves on its own faster future.
+#[test]
+fn nested_boundary_resolves_under_suspended_root() {
+    fn app() -> Element {
+        rsx! {
+            SlowOuter {}
+            SuspenseBoundary {
+                fallback: |_| rsx! { {"inner loading".to_string()} },
+                FastInner {}
+            }
+        }
+    }
+
+    #[component]
+    fn SlowOuter() -> Element {
+        let mut resolved = use_signal(|| false);
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                resolved.set(true);
+            })
+        });
+        if !resolved() {
+            suspend(task)?;
+        }
+        rsx! { div { "outer done" } }
+    }
+
+    #[component]
+    fn FastInner() -> Element {
+        let mut resolved = use_signal(|| false);
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                resolved.set(true);
+            })
+        });
+        if !resolved() {
+            suspend(task)?;
+        }
+        rsx! { div { "inner done" } }
+    }
+
+    fn assert_no_placeholder_ids(mutations: &dioxus_core::Mutations) {
+        let debug = format!("{:?}", mutations.edits);
+        let max = usize::MAX.to_string();
+        assert!(
+            !debug.contains(&max),
+            "mutations reference an unmounted placeholder element id: {debug}"
+        );
+        assert!(
+            !debug.contains("ReplaceWith { id: ElementId(0)"),
+            "mutations replace the root element: {debug}"
+        );
+    }
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            let mutations = dom.rebuild_to_vec();
+            assert_no_placeholder_ids(&mutations);
+
+            // Drive the client event loop until all suspense is resolved, checking every
+            // batch of mutations for references to unmounted placeholder ids
+            let work = async {
+                loop {
+                    dom.wait_for_work().await;
+                    let mutations = dom.render_immediate_to_vec();
+                    assert_no_placeholder_ids(&mutations);
+                    if !dom.suspended_tasks_remaining() {
+                        break;
+                    }
+                }
+                dom
+            };
+            let mut dom = tokio::select! {
+                dom = work => dom,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                    panic!("suspense never resolved")
+                }
+            };
+            // Flush any remaining work
+            let mutations = dom.render_immediate_to_vec();
+            assert_no_placeholder_ids(&mutations);
+
+            let out = dioxus_ssr::render(&dom);
+            assert_eq!(out, "<div>outer done</div><div>inner done</div>");
+        });
+}
+
+/// A suspense boundary living inside the suspended background of an outer (here: the
+/// implicit root) boundary whose parent re-renders during the outer suspension. The
+/// memoized props update replaces `props.children` with an unmounted clone; when the
+/// outer boundary resolves, its re-creation pass descends into the existing inner
+/// boundary via `SuspenseBoundaryProps::create`, which must reuse the boundary's
+/// current rendered state instead of re-running the children from props. Re-running
+/// them mints a second children tree with fresh scopes and orphans the previous child
+/// scopes: still alive and subscribed, but with writer-less renders whose mounts hold
+/// placeholder element ids. Once nothing is suspended anymore, any signal write makes
+/// the orphan re-render with a real writer, and removing its stale nodes emits
+/// `ReplaceWith { id: usize::MAX }` which crashes the renderer.
+#[test]
+fn boundary_recreation_keeps_child_scopes() {
+    use std::time::Duration;
+    static SHARED: GlobalSignal<i32> = Signal::global(|| 0);
+
+    fn app() -> Element {
+        use_hook(|| {
+            spawn(async move {
+                // Re-render Section (and memoize the inner boundary's props) while
+                // the root is still suspended
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                *SHARED.write() = 1;
+                // Write again after everything has resolved
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                *SHARED.write() = 2;
+            })
+        });
+        rsx! {
+            RootSuspender {}
+            Section {}
+        }
+    }
+
+    // Suspends against the implicit root boundary, like a lazy route shim
+    #[component]
+    fn RootSuspender() -> Element {
+        let mut resolved = use_signal(|| false);
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                resolved.set(true);
+            })
+        });
+        if !resolved() {
+            suspend(task)?;
+        }
+        rsx! { header { "root done" } }
+    }
+
+    #[component]
+    fn Section() -> Element {
+        let shared = SHARED();
+        rsx! {
+            section {
+                SuspenseBoundary {
+                    fallback: |_| rsx! { div { "inner loading" } },
+                    // The dynamic text forces a fresh children VNode every render,
+                    // so SuspenseBoundaryProps::memoize replaces props.children
+                    div { "gen {shared}" }
+                    InnerChild {}
+                }
+            }
+        }
+    }
+
+    #[component]
+    fn InnerChild() -> Element {
+        let shared = SHARED();
+        let mut resolved = use_signal(|| false);
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                resolved.set(true);
+            })
+        });
+        if !resolved() {
+            suspend(task)?;
+        }
+        if shared % 2 == 1 {
+            // dynamic text root: removal goes through remove_dynamic_node(Text)
+            rsx! { "inner {shared}" }
+        } else {
+            rsx! { span { "inner {shared}" } }
+        }
+    }
+
+    fn assert_no_placeholder_ids(mutations: &dioxus_core::Mutations) {
+        let debug = format!("{:?}", mutations.edits);
+        let max = usize::MAX.to_string();
+        assert!(
+            !debug.contains(&max),
+            "mutations reference an unmounted placeholder element id: {debug}"
+        );
+        assert!(
+            !debug.contains("ReplaceWith { id: ElementId(0)"),
+            "mutations replace the root element: {debug}"
+        );
+    }
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            let mutations = dom.rebuild_to_vec();
+            assert_no_placeholder_ids(&mutations);
+
+            // Drive the client event loop through the resolve and past the final
+            // signal write, checking every batch of mutations
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(600);
+            loop {
+                tokio::select! {
+                    _ = dom.wait_for_work() => {
+                        let mutations = dom.render_immediate_to_vec();
+                        assert_no_placeholder_ids(&mutations);
+                    }
+                    _ = tokio::time::sleep_until(deadline) => break,
+                }
+            }
+            assert!(!dom.suspended_tasks_remaining(), "suspense never resolved");
+
+            let out = dioxus_ssr::render(&dom);
+            assert_eq!(
+                out,
+                "<header>root done</header><section><div>gen 2</div><span>inner 2</span></section>"
+            );
+        });
+}
+
 #[test]
 fn nested_suspense_resolves_client() {
     use Mutation::*;

@@ -902,6 +902,32 @@ impl<'a> Splitter<'a> {
     }
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
+        // The linker tail-merges constants, so data symbol ranges can nest and
+        // overlap. Pruning a symbol from the main module zeroes its whole byte
+        // range, which would also wipe any main-reachable symbol sharing those
+        // bytes. Build an interval index of the data ranges main keeps so those
+        // overlapping symbols stay in the main module too.
+        let mut main_data_ranges: Vec<Range<usize>> = self
+            .main_graph
+            .iter()
+            .filter_map(|n| match n {
+                Node::DataSymbol(id) => self.data_symbols.get(id).map(|s| s.range.clone()),
+                _ => None,
+            })
+            .collect();
+        main_data_ranges.sort_by_key(|r| r.start);
+        let starts: Vec<usize> = main_data_ranges.iter().map(|r| r.start).collect();
+        let mut prefix_max_end = Vec::with_capacity(main_data_ranges.len());
+        let mut max_end = 0;
+        for r in &main_data_ranges {
+            max_end = max_end.max(r.end);
+            prefix_max_end.push(max_end);
+        }
+        let overlaps_main = |range: &Range<usize>| {
+            let idx = starts.partition_point(|&s| s < range.end);
+            idx > 0 && prefix_max_end[idx - 1] > range.start
+        };
+
         self.split_points
             .iter()
             .flat_map(|split| split.reachable_graph.iter())
@@ -914,7 +940,10 @@ impl<'a> Splitter<'a> {
                 // And ensure we aren't also exporting it
                 match sym {
                     Node::Function(u) => self.source_module.exports.get_exported_func(*u).is_none(),
-                    _ => true,
+                    Node::DataSymbol(id) => match self.data_symbols.get(id) {
+                        Some(symbol) => !overlaps_main(&symbol.range),
+                        None => false,
+                    },
                 }
             })
             .cloned()
@@ -940,20 +969,25 @@ impl<'a> Splitter<'a> {
             .flat_map(|f| Some((f.name.clone()?, f.id())))
             .collect();
 
-        let mut old_to_new = HashMap::new();
-        let mut new_call_graph: HashMap<Node, HashSet<Node>> = HashMap::new();
-
-        for (new_name, new_func) in new_names.iter() {
-            if let Some(old_func) = old_names.get(new_name) {
-                old_to_new.insert(*old_func, new_func);
-            } else {
-                new_call_graph.insert(Node::Function(*new_func), HashSet::new());
+        // The two name sections don't line up directly: wasm-bindgen demangles the
+        // name section (dx runs it with demangling enabled), while the original
+        // relocatable module carries mangled names. Match the raw name first and
+        // fall back to the demangled form. rustc-demangle's `Display` output is
+        // exactly what wasm-bindgen writes back into the module.
+        let mut old_to_new: HashMap<FunctionId, FunctionId> = HashMap::new();
+        for (old_name, old_func) in old_names.iter() {
+            let new_func = new_names
+                .get(old_name)
+                .or_else(|| new_names.get(&rustc_demangle::demangle(old_name).to_string()));
+            if let Some(new_func) = new_func {
+                old_to_new.insert(*old_func, *new_func);
             }
         }
+        let matched_new: HashSet<FunctionId> = old_to_new.values().copied().collect();
 
         let get_old = |old: &Node| -> Option<Node> {
             match old {
-                Node::Function(id) => old_to_new.get(id).map(|new_id| Node::Function(**new_id)),
+                Node::Function(id) => old_to_new.get(id).map(|new_id| Node::Function(*new_id)),
                 Node::DataSymbol(id) => Some(Node::DataSymbol(*id)),
             }
         };
@@ -1013,7 +1047,10 @@ impl<'a> Splitter<'a> {
                 Node::Function(id) => {
                     let func = original.module.funcs.get(id);
                     let name = func.name.as_ref().unwrap();
-                    if let Some(entry) = new_names.get(name) {
+                    let entry = new_names
+                        .get(name)
+                        .or_else(|| new_names.get(&rustc_demangle::demangle(name).to_string()));
+                    if let Some(entry) = entry {
                         recovered_children.insert(Node::Function(*entry));
                     }
                 }
@@ -1025,14 +1062,19 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        // We're going to attach the recovered children to the main function
+        // Attach the recovered children to the main function. This must land in the
+        // real call graph (`self.call_graph`). Anything reachable only through a
+        // function we couldn't line up has to stay in the main module. Otherwise its
+        // data or code is carved into a split chunk while main-module code still uses
+        // it, and the chunk's active data segments overwrite memory the main module
+        // reads from startup.
         let main_fn = self.source_module.funcs.by_name("main").context("Failed to find `main` function - was this built with LTO, --emit-relocs, and debug symbols?")?;
-        let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
+        let main_fn_entry = self.call_graph.entry(Node::Function(main_fn)).or_default();
         main_fn_entry.extend(recovered_children);
 
         // Also attach any truly new symbols to the main function. Usually these are the shim functions
-        for (name, new) in new_names.iter() {
-            if !old_names.contains_key(name) {
+        for new in new_names.values() {
+            if !matched_new.contains(new) {
                 main_fn_entry.insert(Node::Function(*new));
             }
         }
@@ -1189,6 +1231,7 @@ struct ModuleWithRelocations<'a> {
     module: Module,
     symbols: Vec<SymbolInfo<'a>>,
     names_to_funcs: HashMap<String, FunctionId>,
+    index_to_funcs: Vec<FunctionId>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parents: HashMap<Node, HashSet<Node>>,
     relocation_map: HashMap<Node, Vec<RelocationEntry>>,
@@ -1198,7 +1241,7 @@ struct ModuleWithRelocations<'a> {
 
 impl<'a> ModuleWithRelocations<'a> {
     fn new(bytes: &'a [u8]) -> Result<Self> {
-        let module = Module::from_buffer(bytes)?;
+        let (module, index_to_funcs, _) = parse_module_with_ids(bytes)?;
         let raw_data = parse_bytes_to_data_segment(bytes)?;
         let names_to_funcs = module
             .funcs
@@ -1212,6 +1255,7 @@ impl<'a> ModuleWithRelocations<'a> {
             data_section_range: raw_data.data_range,
             symbols: raw_data.symbols,
             names_to_funcs,
+            index_to_funcs,
             call_graph: Default::default(),
             relocation_map: Default::default(),
             parents: Default::default(),
@@ -1324,7 +1368,14 @@ impl<'a> ModuleWithRelocations<'a> {
     fn get_symbol_dep_node(&self, index: usize) -> Result<Option<Node>> {
         let res = match self.symbols[index] {
             SymbolInfo::Data { .. } => Some(Node::DataSymbol(index)),
-            SymbolInfo::Func { name, .. } => Some(Node::Function({
+            SymbolInfo::Func { index, name, .. } => Some(Node::Function({
+                // Resolve by function index first: it is authoritative and survives
+                // the linker folding identical functions (which leaves symbol names
+                // in the symbol table that no longer appear in the name section).
+                if let Some(func_id) = self.index_to_funcs.get(index as usize) {
+                    return Ok(Some(Node::Function(*func_id)));
+                }
+
                 let name = name.context(
                     "Function symbol has no name - did you forget to enable debug symbols",
                 )?;
@@ -1546,4 +1597,38 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         symbols,
         data_symbols,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    /// `build_call_graph` bridges the original module's mangled name section to the
+    /// post-wasm-bindgen demangled one by demangling the original names with
+    /// `rustc_demangle::demangle`. wasm-bindgen produces the demangled names it
+    /// writes back, so our lookup key must be byte-for-byte identical to that output
+    /// (hash suffix included). If this ever diverges, the splitter degrades to an
+    /// empty call graph and starts carving main-module data into split chunks.
+    #[test]
+    fn demangled_names_match_wasm_bindgen_form() {
+        let cases = [
+            (
+                "_ZN12wasm_bindgen26__wbindgen_object_drop_ref17h958b79f87d38af82E",
+                "wasm_bindgen::__wbindgen_object_drop_ref::h958b79f87d38af82",
+            ),
+            (
+                "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+                "core::ptr::drop_in_place::h1234567890abcdef",
+            ),
+            (
+                "_ZN7web_sys8features11gen_console7console5log_126__wbg_log_6614a4effdb4e98317hde81bf8087b7f274E",
+                "web_sys::features::gen_console::console::log_1::__wbg_log_6614a4effdb4e983::hde81bf8087b7f274",
+            ),
+        ];
+        for (mangled, expected) in cases {
+            assert_eq!(rustc_demangle::demangle(mangled).to_string(), expected);
+        }
+
+        // Non-mangled names (exports like `main`) must pass through unchanged so the
+        // direct name match keeps working.
+        assert_eq!(rustc_demangle::demangle("main").to_string(), "main");
+    }
 }

@@ -273,29 +273,39 @@ impl SuspenseBoundaryProps {
         to: Option<&mut M>,
     ) -> usize {
         let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-        // If the ScopeId is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
-        if scope_id.is_placeholder() {
-            {
-                let suspense_context = SuspenseContext::new();
-
-                let suspense_boundary_location =
-                    crate::scope_context::SuspenseLocation::SuspenseBoundary(
-                        suspense_context.clone(),
-                    );
-                dom.runtime
-                    .clone()
-                    .with_suspense_location(suspense_boundary_location, || {
-                        let scope_state = dom
-                            .new_scope(component.props.duplicate(), component.name)
-                            .state();
-                        suspense_context.mount(scope_state.id);
-                        scope_id = scope_state.id;
-                    });
-            }
-
-            // Store the scope id for the next render
-            dom.set_mounted_dyn_node(mount, idx, scope_id.0);
+        // If the scope already exists, this is a re-creation pass (e.g. an outer suspense
+        // boundary resolving and rebuilding its subtree). Recreate the boundary's current
+        // rendered state (the fallback while suspended, or the children once resolved) just
+        // like any other already-mounted component. Re-running the children from props here
+        // would mint a second children tree with fresh child scopes and orphan the live
+        // ones: props.children may hold an unmounted clone left by a memoized props update,
+        // and the orphaned scopes would later diff against mounts that were never written.
+        if !scope_id.is_placeholder() {
+            let new_node = dom.scopes[scope_id.0]
+                .last_rendered_node
+                .clone()
+                .expect("Component to be mounted");
+            return dom.create_scope(to, scope_id, new_node, parent);
         }
+        {
+            let suspense_context = SuspenseContext::new();
+
+            let suspense_boundary_location =
+                crate::scope_context::SuspenseLocation::SuspenseBoundary(suspense_context.clone());
+            dom.runtime
+                .clone()
+                .with_suspense_location(suspense_boundary_location, || {
+                    let scope_state = dom
+                        .new_scope(component.props.duplicate(), component.name)
+                        .state();
+                    suspense_context.mount(scope_state.id);
+                    scope_id = scope_state.id;
+                });
+        }
+
+        // Store the scope id for the next render
+        dom.set_mounted_dyn_node(mount, idx, scope_id.0);
+
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope_state = &mut dom.scopes[scope_id.0];
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();

@@ -23,6 +23,13 @@ impl VirtualDom {
     ) {
         let scope = &mut self.scopes[scope_id.0];
         if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
+            // A suspense boundary may rerun (e.g. resolve) while it is itself nested under a
+            // boundary that is still rendered as suspended. Its rendered state was created
+            // without a writer, so diffing it against the real dom would emit mutations that
+            // reference unmounted placeholder element ids. Defer the mutations like any other
+            // scope under a suspended boundary; the ancestor's own resolve pass will create
+            // the final state with a writer.
+            let to = to.filter(|_| self.runtime.scope_should_render(scope_id));
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
             let new_nodes = self.run_scope(scope_id);
