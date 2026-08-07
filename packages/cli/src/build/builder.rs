@@ -414,6 +414,12 @@ impl AppBuilder {
         self.modified_crates.insert(tip_crate_name.clone());
 
         // Add changed crates and their transitive workspace dependents (cascade).
+        //
+        // `workspace_dependents_of` walks the whole-workspace, target-agnostic dependency graph,
+        // so it can return a dependent that isn't actually part of *this* build's target/crate
+        // graph (e.g. a native-only sibling crate that a wasm32 build never compiles). Such a
+        // crate has no captured rustc invocation to replay, so skip it here rather than letting
+        // it reach `link.rs` and hard-error on a missing lookup.
         let mut to_visit: Vec<String> = changed_crates.clone();
         let mut visited = HashSet::new();
         while let Some(c) = to_visit.pop() {
@@ -422,7 +428,10 @@ impl AppBuilder {
             }
             self.modified_crates.insert(c.clone());
             for dep in self.build.workspace_dependents_of(&c) {
-                if dep != tip_crate_name && !visited.contains(&dep) {
+                if dep != tip_crate_name
+                    && !visited.contains(&dep)
+                    && artifacts.workspace_rustc.contains_crate(&dep)
+                {
                     to_visit.push(dep);
                 }
             }
