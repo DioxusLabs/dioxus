@@ -1,5 +1,8 @@
 use anyhow::Context;
+use std::borrow::Cow;
 use std::path::Path;
+
+const HTML5_DOCTYPE: &str = "<!DOCTYPE html>";
 
 /// An `IndexHtml` represents the contents of an `index.html` file used to serve a web application.
 ///
@@ -44,6 +47,9 @@ impl IndexHtml {
     /// The `root_id` parameter specifies the id of the main application container (e.g., "main")
     /// which your app will render into.
     pub fn new(contents: &str, root_id: &str) -> Result<IndexHtml, anyhow::Error> {
+        let contents = normalize_doctype(contents);
+        let contents = contents.as_ref();
+
         let (pre_main, post_main) = contents.split_once(&format!("id=\"{root_id}\""))
             .with_context(|| format!("Failed to find id=\"{root_id}\" in index.html. The id is used to inject the application into the page."))?;
 
@@ -112,5 +118,36 @@ impl IndexHtml {
         </html>"#;
 
         Self::new(DEFAULT, "main").expect("Failed to load default index.html")
+    }
+}
+
+fn normalize_doctype(contents: &str) -> Cow<'_, str> {
+    let trimmed = contents.trim_start();
+    let has_doctype = trimmed
+        .as_bytes()
+        .get(..HTML5_DOCTYPE.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(HTML5_DOCTYPE.as_bytes()));
+
+    if has_doctype {
+        Cow::Borrowed(contents)
+    } else {
+        Cow::Owned(format!("{HTML5_DOCTYPE}\n{contents}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn templates_without_a_doctype_are_normalized() {
+        let template = r#"<html>
+            <head><title>app</title></head>
+            <body><div id="main"></div></body>
+        </html>"#;
+
+        let index = IndexHtml::new(template, "main").unwrap();
+
+        assert!(index.head_before_title.starts_with("<!DOCTYPE html>"));
     }
 }
