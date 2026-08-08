@@ -480,12 +480,13 @@ pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
                 // background + legacy icons: full-bleed
                 resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
             }
-            tracing::info!(
-                "Generated Android PNG icon: {} ({}x{})",
-                entry.out_path.display(),
-                entry.size,
-                entry.size
-            );
+            // console output is a bit too much
+            // tracing::info!(
+            //     "Generated Android PNG icon: {} ({}x{})",
+            //     entry.out_path.display(),
+            //     entry.size,
+            //     entry.size
+            // );
         }
         // Write the adaptive icon descriptor for the PNG path. The scaffold's
         // default XML references @drawable layers which are NOT regenerated when
