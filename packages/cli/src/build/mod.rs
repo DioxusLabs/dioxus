@@ -13,6 +13,7 @@ mod android;
 mod apple;
 mod web;
 mod windows;
+mod icon;
 
 mod assets;
 mod builder;
