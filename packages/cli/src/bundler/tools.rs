@@ -4,7 +4,7 @@
 //! This keeps tool downloads out of the bundle format modules.
 
 use super::Arch;
-use crate::{PackageType, WebviewInstallMode, WindowsSettings};
+use crate::{CliSettings, PackageType, WebviewInstallMode, WindowsSettings};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
@@ -117,7 +117,7 @@ async fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
         return Ok(nsis_dir);
     }
 
-    if cfg!(feature = "no-downloads") {
+    if CliSettings::prefer_no_downloads() {
         bail!("NSIS not found and automatic downloads are disabled. Install NSIS manually.");
     }
 
@@ -147,7 +147,7 @@ async fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
         return Ok(wix_dir);
     }
 
-    if cfg!(feature = "no-downloads") {
+    if CliSettings::prefer_no_downloads() {
         bail!("WiX not found and automatic downloads are disabled. Install WiX manually.");
     }
 
@@ -175,7 +175,7 @@ async fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
         return Ok(linuxdeploy_path);
     }
 
-    if cfg!(feature = "no-downloads") {
+    if CliSettings::prefer_no_downloads() {
         bail!(
             "linuxdeploy not found and automatic downloads are disabled. Install linuxdeploy manually."
         );
@@ -302,4 +302,79 @@ fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CHILD_PROCESS_ENV: &str = "DIOXUS_TEST_RUNTIME_NO_DOWNLOADS";
+
+    #[test]
+    fn runtime_no_downloads_applies_to_bundler_tools() {
+        if std::env::var_os(CHILD_PROCESS_ENV).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .arg("runtime_no_downloads_applies_to_bundler_tools")
+                .arg("--nocapture")
+                .env("NO_DOWNLOADS", "1")
+                .env(CHILD_PROCESS_ENV, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+
+        assert!(CliSettings::prefer_no_downloads());
+
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let missing = tempfile::tempdir().unwrap();
+
+            let nsis_error = ensure_nsis(missing.path()).await.unwrap_err();
+            assert!(
+                nsis_error
+                    .to_string()
+                    .contains("automatic downloads are disabled")
+            );
+
+            let wix_error = ensure_wix(missing.path()).await.unwrap_err();
+            assert!(
+                wix_error
+                    .to_string()
+                    .contains("automatic downloads are disabled")
+            );
+
+            let linuxdeploy_error = ensure_linuxdeploy(missing.path(), "x86_64")
+                .await
+                .unwrap_err();
+            assert!(
+                linuxdeploy_error
+                    .to_string()
+                    .contains("automatic downloads are disabled")
+            );
+
+            let cached = tempfile::tempdir().unwrap();
+            let nsis_dir = cached.path().join("nsis-3.11");
+            let makensis = if cfg!(target_os = "windows") {
+                nsis_dir.join("makensis.exe")
+            } else {
+                nsis_dir.join("makensis")
+            };
+            std::fs::create_dir_all(&nsis_dir).unwrap();
+            std::fs::write(&makensis, []).unwrap();
+
+            let wix_dir = cached.path().join("wix314");
+            std::fs::create_dir_all(&wix_dir).unwrap();
+            std::fs::write(wix_dir.join("candle.exe"), []).unwrap();
+
+            let linuxdeploy = cached.path().join("linuxdeploy-x86_64.AppImage");
+            std::fs::write(&linuxdeploy, []).unwrap();
+
+            assert_eq!(ensure_nsis(cached.path()).await.unwrap(), nsis_dir);
+            assert_eq!(ensure_wix(cached.path()).await.unwrap(), wix_dir);
+            assert_eq!(
+                ensure_linuxdeploy(cached.path(), "x86_64").await.unwrap(),
+                linuxdeploy
+            );
+        });
+    }
 }
