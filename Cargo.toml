@@ -346,12 +346,17 @@ tao = { version = "0.35.2", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.2"
-muda = "0.19.1"
+# `libxdo` is a default feature of both `muda` and `tray-icon`. It is only used
+# to make the predefined Copy/Cut/Paste/SelectAll menu items work on Linux, but
+# enabling it links `libxdo.so` unconditionally into every Dioxus desktop app.
+# Opt in via the `dioxus-desktop/linux-libxdo` feature instead. `gtk` is kept —
+# it is what actually renders menus and tray icons on Linux.
+muda = { version = "0.19.1", default-features = false, features = ["gtk"] }
 objc2 = { version = "0.6.4", features = ["exception"] }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3.2", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false }
-tray-icon = "0.24.0"
+tray-icon = { version = "0.24.0", default-features = false, features = ["gtk"] }
 open = "5.3.5"
 webbrowser = "1.2.1"
 
