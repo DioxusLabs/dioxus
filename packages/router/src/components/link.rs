@@ -56,6 +56,15 @@ pub struct LinkProps {
     #[props(into)]
     pub to: NavigationTarget,
 
+    /// Whether to wrap the navigation in the browser's View Transition API
+    /// (`document.startViewTransition`).
+    ///
+    /// When enabled, the browser animates the transition between the old and new
+    /// page states. This is a no-op on browsers and webviews that do not support
+    /// the View Transition API.
+    #[props(default)]
+    pub view_transition: bool,
+
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
 }
@@ -70,6 +79,7 @@ impl Debug for LinkProps {
             .field("onclick", &self.onclick.as_ref().map(|_| "onclick is set"))
             .field("onclick_only", &self.onclick_only)
             .field("rel", &self.rel)
+            .field("view_transition", &self.view_transition)
             .finish()
     }
 }
@@ -145,6 +155,7 @@ pub fn Link(props: LinkProps) -> Element {
         rel,
         to,
         class,
+        view_transition,
         ..
     } = props;
 
@@ -224,6 +235,15 @@ pub fn Link(props: LinkProps) -> Element {
         event.prevent_default();
 
         if do_default && is_router_nav {
+            if view_transition {
+                // Opt into the browser's View Transition API. The old page state is
+                // captured synchronously here, before the route change. The new state
+                // is captured on the next frame, after Dioxus has applied the DOM
+                // mutations in the microtask checkpoint following this handler.
+                dioxus_document::eval(
+                    "if (typeof document !== 'undefined' && document.startViewTransition) { document.startViewTransition(() => {}); }",
+                );
+            }
             router.push_any(to.clone());
         }
 
