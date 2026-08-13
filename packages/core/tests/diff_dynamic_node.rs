@@ -76,25 +76,12 @@ fn toggle_template() {
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    // Rendering again should replace the placeholder with an text node
+    // Re-rendering the app does not re-render Comp: its children element has
+    // the same content, so it is memoized by value (see #1929).
     dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            CreatePlaceholder { id: ElementId(2) },
-            ReplaceWith { id: ElementId(1), m: 1 },
-        ]
-    );
+    assert_eq!(dom.render_immediate_to_vec().edits, []);
 
-    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            CreateTextNode { value: "true".to_string(), id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 },
-        ]
-    );
-
+    // Rendering again should replace the placeholder with an text node
     dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
     assert_eq!(
         dom.render_immediate_to_vec().edits,
@@ -110,6 +97,15 @@ fn toggle_template() {
         [
             CreateTextNode { value: "true".to_string(), id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 1));
+    assert_eq!(
+        dom.render_immediate_to_vec().edits,
+        [
+            CreatePlaceholder { id: ElementId(2) },
+            ReplaceWith { id: ElementId(1), m: 1 },
         ]
     );
 }
