@@ -5,6 +5,7 @@ use crate::{
     events::ListenerCallback,
     innerlude::{ElementRef, MountId, ScopeState, VProps},
     properties::ComponentFunction,
+    render_driver::{BodyDriver, RenderDriver},
 };
 use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;
@@ -634,6 +635,9 @@ pub struct VComponent {
     /// The raw pointer to the render function
     pub(crate) render_fn: usize,
 
+    /// The driver owning this component's rendering lifecycle.
+    pub(crate) driver: Rc<dyn RenderDriver>,
+
     /// The props for this component
     pub(crate) props: BoxedAnyProps,
 }
@@ -644,6 +648,7 @@ impl Clone for VComponent {
             name: self.name,
             props: self.props.duplicate(),
             render_fn: self.render_fn,
+            driver: self.driver.clone(),
         }
     }
 }
@@ -665,10 +670,22 @@ impl VComponent {
             props,
             fn_name,
         ));
+        let driver = BodyDriver::new();
 
+        Self::new_with_driver(fn_name, render_fn, driver, props)
+    }
+
+    /// Create a [`VComponent`] with a custom [`RenderDriver`].
+    pub(crate) fn new_with_driver(
+        name: &'static str,
+        render_fn: usize,
+        driver: impl RenderDriver,
+        props: BoxedAnyProps,
+    ) -> Self {
         VComponent {
+            name,
             render_fn,
-            name: fn_name,
+            driver: Rc::new(driver),
             props,
         }
     }

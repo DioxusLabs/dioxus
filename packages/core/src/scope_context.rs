@@ -1,6 +1,7 @@
 use crate::{
     Runtime, ScopeId, Task,
     innerlude::{SchedulerMsg, SuspenseContext},
+    render_driver::RenderDriver,
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
@@ -8,6 +9,7 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
+    rc::Rc,
     sync::Arc,
 };
 
@@ -60,6 +62,9 @@ pub(crate) struct Scope {
     /// The suspense boundary that this scope is currently in (if any)
     suspense_boundary: SuspenseLocation,
 
+    /// The driver owning this scope's rendered output.
+    render_driver: Rc<dyn RenderDriver>,
+
     pub(crate) status: RefCell<ScopeStatus>,
 }
 
@@ -70,6 +75,7 @@ impl Scope {
         parent_id: Option<ScopeId>,
         height: u32,
         suspense_boundary: SuspenseLocation,
+        render_driver: Rc<dyn RenderDriver>,
     ) -> Self {
         Self {
             name,
@@ -87,11 +93,17 @@ impl Scope {
                 effects_queued: Vec::new(),
             }),
             suspense_boundary,
+            render_driver,
         }
     }
 
     pub fn parent_id(&self) -> Option<ScopeId> {
         self.parent_id
+    }
+
+    /// The driver owning this scope's rendered output.
+    pub(crate) fn render_driver(&self) -> Rc<dyn RenderDriver> {
+        self.render_driver.clone()
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {

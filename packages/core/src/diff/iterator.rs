@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 impl VirtualDom {
     pub(crate) fn diff_non_empty_fragment(
         &mut self,
-        to: Option<&mut impl WriteMutations>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -42,7 +42,7 @@ impl VirtualDom {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -87,7 +87,7 @@ impl VirtualDom {
     // The stack is empty upon entry.
     fn diff_keyed_children(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -156,7 +156,7 @@ impl VirtualDom {
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -238,7 +238,7 @@ impl VirtualDom {
     #[allow(clippy::too_many_lines)]
     fn diff_keyed_middle(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -346,7 +346,7 @@ impl VirtualDom {
             vdom: &mut VirtualDom,
             new: &[VNode],
             old: &[VNode],
-            mut to: Option<&mut impl WriteMutations>,
+            mut to: Option<&mut (dyn WriteMutations + '_)>,
             parent: Option<ElementRef>,
             new_index_to_old_index: &[usize],
             range: std::ops::Range<usize>,
@@ -431,7 +431,7 @@ impl VirtualDom {
 
     fn create_and_insert_before(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         new: &[VNode],
         before: &VNode,
         parent: Option<ElementRef>,
@@ -440,7 +440,12 @@ impl VirtualDom {
         self.insert_before(to, m, before);
     }
 
-    fn insert_before(&mut self, to: Option<&mut impl WriteMutations>, new: usize, before: &VNode) {
+    fn insert_before(
+        &mut self,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+        new: usize,
+        before: &VNode,
+    ) {
         if let Some(to) = to {
             if new > 0 {
                 let id = before.find_first_element(self);
@@ -451,7 +456,7 @@ impl VirtualDom {
 
     fn create_and_insert_after(
         &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut (dyn WriteMutations + '_)>,
         new: &[VNode],
         after: &VNode,
         parent: Option<ElementRef>,
@@ -460,7 +465,12 @@ impl VirtualDom {
         self.insert_after(to, m, after);
     }
 
-    fn insert_after(&mut self, to: Option<&mut impl WriteMutations>, new: usize, after: &VNode) {
+    fn insert_after(
+        &mut self,
+        to: Option<&mut (dyn WriteMutations + '_)>,
+        new: usize,
+        after: &VNode,
+    ) {
         if let Some(to) = to {
             if new > 0 {
                 let id = after.find_last_element(self);
@@ -475,7 +485,7 @@ impl VNode {
     pub(crate) fn push_all_root_nodes(
         &self,
         dom: &VirtualDom,
-        to: &mut impl WriteMutations,
+        to: &mut (dyn WriteMutations + '_),
     ) -> usize {
         let template = self.template;
 
