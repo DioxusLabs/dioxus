@@ -1,300 +1,334 @@
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::Duration;
 
-use refract::ReadGuard;
-use refract::prelude::*;
-
-#[derive(PartialEq, Debug)]
-struct App {
-    count: i32,
-    name: String,
-}
-
-fn counter() -> (Rc<Cell<usize>>, impl Fn() -> usize) {
-    let cell = Rc::new(Cell::new(0));
-    let reader = {
-        let cell = cell.clone();
-        move || cell.get()
-    };
-    (cell, reader)
-}
-
-#[test]
-fn effect_reruns_on_write() {
-    let store = Store::new(App {
-        count: 0,
-        name: "a".into(),
-    });
-    let count = lens!(store => 0: count);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *count.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    *count.write() += 1;
-    assert_eq!(run_count(), 2);
-}
-
-#[test]
-fn sibling_fields_do_not_cross_talk() {
-    let store = Store::new(App {
-        count: 0,
-        name: "a".into(),
-    });
-    let count = lens!(store => 0: count);
-    let name = lens!(store => 1: name);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *count.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    // Writing a sibling field must not rerun the count effect.
-    name.write().push('b');
-    assert_eq!(run_count(), 1);
-    // Writing the whole store must rerun it (prefix rule).
-    store.set(App {
-        count: 5,
-        name: "c".into(),
-    });
-    assert_eq!(run_count(), 2);
-}
-
-#[test]
-fn write_guard_without_deref_mut_does_not_notify() {
-    let store = Store::new(App {
-        count: 0,
-        name: "a".into(),
-    });
-    let count = lens!(store => 0: count);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *count.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    {
-        let guard = count.write();
-        // Only reads through the guard: no notification on drop.
-        assert_eq!(*guard, 0);
-    }
-    assert_eq!(run_count(), 1);
-}
-
-#[test]
-fn index_lens_granularity() {
-    let store = Store::new(vec![1, 2, 3]);
-    let first = store.index::<i32>(0);
-    let second = store.index::<i32>(1);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *first.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    *second.write() = 20;
-    assert_eq!(run_count(), 1);
-    *first.write() = 10;
-    assert_eq!(run_count(), 2);
-    // Writing the whole vec wakes per-item subscribers.
-    store.with_mut(|v| v.push(4));
-    assert_eq!(run_count(), 3);
-}
-
-#[test]
-fn memo_equality_cutoff() {
-    let store = Store::new(App {
-        count: 1,
-        name: "a".into(),
-    });
-    let count = lens!(store => 0: count);
-    let parity = memo(move || *count.read() % 2);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *parity.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    // 1 -> 3: parity unchanged, effect must not rerun.
-    *count.write() = 3;
-    assert_eq!(run_count(), 1);
-    // 3 -> 4: parity changed.
-    *count.write() = 4;
-    assert_eq!(run_count(), 2);
-}
-
-#[test]
-fn diamond_runs_once() {
-    let store = Store::new(1i32);
-    let double = memo(move || *store.read() * 2);
-    let triple = memo(move || *store.read() * 3);
-    let (runs, run_count) = counter();
-    let sum = memo(move || *double.read() + *triple.read());
-    effect(move || {
-        let _ = *sum.read();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    store.set(2);
-    assert_eq!(run_count(), 2);
-    assert_eq!(*sum.read(), 10);
-}
-
-#[test]
-fn lens_into_memo_is_zero_copy() {
-    let store = Store::new(3i32);
-    let pair = memo(move || {
-        let v = *store.read();
-        (v, v * v)
-    });
-    let square = pair.select(1, |p| &p.1, |p| &mut p.1);
-    assert_eq!(*square.read(), 9);
-    store.set(4);
-    assert_eq!(*square.read(), 16);
-    // Guard projection combinators also work.
-    let guard: ReadGuard<i32> = ReadGuard::map(pair.read(), |p| &p.0);
-    assert_eq!(*guard, 4);
-}
-
-#[test]
-fn effect_rerun_drops_owned_children() {
-    let outer = Store::new(0i32);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let generation = *outer.read();
-        // This inner store and effect are owned by the outer effect and must
-        // be torn down on every rerun.
-        let inner = Store::new(generation);
-        let runs = runs.clone();
-        effect(move || {
-            let _ = *inner.read();
-            runs.set(runs.get() + 1);
-        });
-    });
-    assert_eq!(run_count(), 1);
-    outer.set(1);
-    assert_eq!(run_count(), 2);
-    outer.set(2);
-    // If old inner effects leaked, the count would jump by more than one.
-    assert_eq!(run_count(), 3);
-}
-
-#[test]
-fn guard_keeps_value_alive_after_scope_drop() {
-    let outer = Store::new(0i32);
-    let stash: Rc<Cell<Option<Store<String>>>> = Rc::new(Cell::new(None));
-    let stash2 = stash.clone();
-    effect(move || {
-        let _ = *outer.read();
-        stash2.set(Some(Store::new("quarantined".to_string())));
-    });
-    let inner = stash.get().unwrap();
-    let guard = inner.read();
-    // Rerunning the outer effect drops the inner store while `guard` is
-    // alive: the value must be quarantined, not freed.
-    outer.set(1);
-    assert!(!inner.is_alive());
-    assert_eq!(&*guard, "quarantined");
-    drop(guard);
-}
-
-#[test]
-#[should_panic(expected = "reactive cycle")]
-fn cycle_panics() {
-    let store = Store::new(1i32);
-    let stash: Rc<Cell<Option<Memo<i32>>>> = Rc::new(Cell::new(None));
-    let stash2 = stash.clone();
-    let cyclic = memo(move || {
-        let inner = stash2.get();
-        match inner {
-            Some(memo) => *memo.read() + *store.read(),
-            None => *store.read(),
-        }
-    });
-    stash.set(Some(cyclic));
-    let _ = *cyclic.read(); // first read: no cycle yet (stash was empty)
-    store.set(2);
-    let _ = *cyclic.read(); // now the memo reads itself
-}
-
-#[test]
-fn untracked_reads_do_not_subscribe() {
-    let store = Store::new(0i32);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = untracked(|| *store.read());
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    store.set(1);
-    assert_eq!(run_count(), 1);
-}
-
-#[test]
-fn peek_does_not_subscribe() {
-    let store = Store::new(0i32);
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = *store.peek();
-        runs.set(runs.get() + 1);
-    });
-    assert_eq!(run_count(), 1);
-    store.set(1);
-    assert_eq!(run_count(), 1);
-}
+use refract::{Lens, ResourceState, Ui, VecLens, dyn_text, el, lens, text};
 
 mod async_util {
+    use std::cell::RefCell;
     use std::future::Future;
     use std::pin::Pin;
-    use std::sync::{Arc, Mutex};
-    use std::task::{Context, Poll, Waker};
+    use std::rc::Rc;
+    use std::task::{Context, Poll};
 
-    /// A future resolved manually from the test.
-    pub struct ManualFuture<T> {
-        state: Arc<Mutex<(Option<T>, Option<Waker>)>>,
-    }
-
-    #[derive(Clone)]
+    /// A future resolved by hand from the test body.
     pub struct ManualHandle<T> {
-        state: Arc<Mutex<(Option<T>, Option<Waker>)>>,
-    }
-
-    pub fn manual<T>() -> (ManualHandle<T>, ManualFuture<T>) {
-        let state = Arc::new(Mutex::new((None, None)));
-        (
-            ManualHandle {
-                state: state.clone(),
-            },
-            ManualFuture { state },
-        )
+        slot: Rc<RefCell<Option<T>>>,
     }
 
     impl<T> ManualHandle<T> {
         pub fn resolve(&self, value: T) {
-            let mut state = self.state.lock().unwrap();
-            state.0 = Some(value);
-            if let Some(waker) = state.1.take() {
-                waker.wake();
-            }
+            *self.slot.borrow_mut() = Some(value);
         }
+    }
+
+    pub struct ManualFuture<T> {
+        slot: Rc<RefCell<Option<T>>>,
     }
 
     impl<T> Future for ManualFuture<T> {
         type Output = T;
 
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
-            let mut state = self.state.lock().unwrap();
-            match state.0.take() {
-                Some(value) => Poll::Ready(value),
-                None => {
-                    state.1 = Some(cx.waker().clone());
-                    Poll::Pending
-                }
+        fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<T> {
+            match self.slot.borrow_mut().take() {
+                Some(v) => Poll::Ready(v),
+                None => Poll::Pending,
             }
         }
     }
+
+    pub fn manual<T>() -> (ManualHandle<T>, ManualFuture<T>) {
+        let slot = Rc::new(RefCell::new(None));
+        (ManualHandle { slot: slot.clone() }, ManualFuture { slot })
+    }
+}
+
+struct App {
+    count: i32,
+    label: String,
+}
+
+fn app_ui() -> Ui<App> {
+    Ui::new(App {
+        count: 0,
+        label: "hi".to_string(),
+    })
+}
+
+#[test]
+fn effect_reruns_on_write() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.get(count);
+        runs2.set(runs2.get() + 1);
+    });
+    assert_eq!(runs.get(), 1);
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn sibling_fields_are_isolated() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let label = lens!(App => 1: label);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = ctx.get(label).len();
+        runs2.set(runs2.get() + 1);
+    });
+    assert_eq!(runs.get(), 1);
+    // Writing a sibling field must not rerun the label effect.
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(runs.get(), 1);
+    ui.with(|ctx| ctx.write(label).push('!'));
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn whole_state_write_wakes_field_readers() {
+    let mut ui = app_ui();
+    let root = refract::Root::<App>::new();
+    let count = lens!(App => 0: count);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.get(count);
+        runs2.set(runs2.get() + 1);
+    });
+    ui.with(|ctx| {
+        *ctx.write(root) = App {
+            count: 9,
+            label: "new".to_string(),
+        };
+    });
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn write_guard_used_read_only_does_not_notify() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.get(count);
+        runs2.set(runs2.get() + 1);
+    });
+    ui.with(|ctx| {
+        // Only Deref, never DerefMut: no notification.
+        let guard = ctx.write(count);
+        let _ = *guard;
+    });
+    assert_eq!(runs.get(), 1);
+}
+
+struct Todos {
+    items: Vec<Todo>,
+}
+
+#[derive(PartialEq, Clone)]
+struct Todo {
+    title: String,
+    done: bool,
+}
+
+#[test]
+fn index_lens_granularity() {
+    let mut ui = Ui::new(Todos {
+        items: vec![
+            Todo {
+                title: "a".into(),
+                done: false,
+            },
+            Todo {
+                title: "b".into(),
+                done: false,
+            },
+        ],
+    });
+    let items = lens!(Todos => 0: items);
+    let first_done = items.at(0).field(1, |t: &Todo| &t.done, |t| &mut t.done);
+    let second_done = items.at(1).field(1, |t: &Todo| &t.done, |t| &mut t.done);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.get(first_done);
+        runs2.set(runs2.get() + 1);
+    });
+    assert_eq!(runs.get(), 1);
+    // Writing item 1 must not wake a reader of item 0.
+    ui.with(|ctx| *ctx.write(second_done) = true);
+    assert_eq!(runs.get(), 1);
+    // Writing item 0 wakes it.
+    ui.with(|ctx| *ctx.write(first_done) = true);
+    assert_eq!(runs.get(), 2);
+    // Writing the whole list wakes it too.
+    ui.with(|ctx| {
+        ctx.write(items).push(Todo {
+            title: "c".into(),
+            done: false,
+        })
+    });
+    assert_eq!(runs.get(), 3);
+}
+
+#[test]
+fn memo_is_lazy_and_equality_gated() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let computes = Rc::new(Cell::new(0));
+    let computes2 = computes.clone();
+    let parity = ui.memo(move |ctx| {
+        computes2.set(computes2.get() + 1);
+        *ctx.get(count) % 2
+    });
+    // Lazy: not computed until read.
+    assert_eq!(computes.get(), 0);
+    assert_eq!(*ui.read_memo(parity), 0);
+    assert_eq!(computes.get(), 1);
+    // 0 -> 2: parity unchanged; dependent effects must not rerun.
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.read_memo(parity);
+        runs2.set(runs2.get() + 1);
+    });
+    assert_eq!(runs.get(), 1);
+    ui.with(|ctx| *ctx.write(count) += 2);
+    assert_eq!(
+        runs.get(),
+        1,
+        "effect must not rerun when memo value is unchanged"
+    );
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(runs.get(), 2);
+}
+
+#[test]
+fn diamond_recomputes_once() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let left = ui.memo(move |ctx| *ctx.get(count) + 1);
+    let right = ui.memo(move |ctx| *ctx.get(count) * 2);
+    let computes = Rc::new(Cell::new(0));
+    let computes2 = computes.clone();
+    let sum = ui.memo(move |ctx| {
+        computes2.set(computes2.get() + 1);
+        *ctx.read_memo(left) + *ctx.read_memo(right)
+    });
+    assert_eq!(*ui.read_memo(sum), 1);
+    assert_eq!(computes.get(), 1);
+    ui.with(|ctx| *ctx.write(count) = 3);
+    assert_eq!(*ui.read_memo(sum), 10);
+    assert_eq!(
+        computes.get(),
+        2,
+        "diamond must recompute the join exactly once"
+    );
+}
+
+#[test]
+fn memo_chain_check_propagation() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let parity = ui.memo(move |ctx| *ctx.get(count) % 2);
+    let label = ui.memo(move |ctx| {
+        if *ctx.read_memo(parity) == 0 {
+            "even"
+        } else {
+            "odd"
+        }
+    });
+    let computes = Rc::new(Cell::new(0));
+    let computes2 = computes.clone();
+    let shout = ui.memo(move |ctx| {
+        computes2.set(computes2.get() + 1);
+        ctx.read_memo(label).to_uppercase()
+    });
+    assert_eq!(*ui.read_memo(shout), "EVEN");
+    assert_eq!(computes.get(), 1);
+    // 0 -> 2: parity unchanged, so the whole chain must cut off without
+    // recomputing `shout`.
+    ui.with(|ctx| *ctx.write(count) = 2);
+    assert_eq!(*ui.read_memo(shout), "EVEN");
+    assert_eq!(computes.get(), 1);
+    ui.with(|ctx| *ctx.write(count) = 3);
+    assert_eq!(*ui.read_memo(shout), "ODD");
+    assert_eq!(computes.get(), 2);
+}
+
+#[test]
+#[should_panic(expected = "reactive cycle detected")]
+fn cycle_detection() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    // A memo that reads itself.
+    let cyclic: Rc<Cell<Option<refract::Memo<i32>>>> = Rc::new(Cell::new(None));
+    let cyclic2 = cyclic.clone();
+    let memo = ui.memo(move |ctx| {
+        let me = cyclic2.get().unwrap();
+        *ctx.get(count) + *ctx.read_memo(me)
+    });
+    cyclic.set(Some(memo));
+    let _ = ui.read_memo(memo);
+}
+
+#[test]
+fn peek_does_not_subscribe() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.peek(count);
+        runs2.set(runs2.get() + 1);
+    });
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(runs.get(), 1);
+}
+
+#[test]
+fn untracked_reads_do_not_subscribe() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let runs = Rc::new(Cell::new(0));
+    let runs2 = runs.clone();
+    ui.effect(move |ctx| {
+        ctx.untracked(|ctx| {
+            let _ = *ctx.get(count);
+        });
+        runs2.set(runs2.get() + 1);
+    });
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(runs.get(), 1);
+}
+
+#[test]
+fn nested_effects_torn_down_on_parent_rerun() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let label = lens!(App => 1: label);
+    let child_runs = Rc::new(Cell::new(0));
+    let child_runs2 = child_runs.clone();
+    ui.effect(move |ctx| {
+        let _ = *ctx.get(count);
+        let child_runs3 = child_runs2.clone();
+        ctx.effect(move |ctx| {
+            let _ = ctx.get(label).len();
+            child_runs3.set(child_runs3.get() + 1);
+        });
+    });
+    assert_eq!(child_runs.get(), 1);
+    // Parent reruns: old child is dropped, a fresh child runs once.
+    ui.with(|ctx| *ctx.write(count) += 1);
+    assert_eq!(child_runs.get(), 2);
+    // The label write must only rerun the single live child, not the stale one.
+    ui.with(|ctx| ctx.write(label).push('!'));
+    assert_eq!(child_runs.get(), 3);
 }
 
 #[test]
@@ -302,122 +336,161 @@ fn resource_lifecycle() {
     use async_util::{ManualHandle, manual};
     use std::cell::RefCell;
 
-    let query = Store::new(1i32);
+    struct Q {
+        query: i32,
+    }
+    let mut ui = Ui::new(Q { query: 1 });
+    let query = lens!(Q => 0: query);
     type Handles = Rc<RefCell<Vec<(i32, ManualHandle<String>)>>>;
     let handles: Handles = Rc::new(RefCell::new(Vec::new()));
     let handles2 = handles.clone();
 
-    let res: Resource<String> = resource(move || {
+    let res = ui.resource(move |ctx| {
         // Tracked: reading `query` here makes it a dependency.
-        let q = *query.read();
+        let q = *ctx.get(query);
         let (handle, future) = manual::<String>();
         handles2.borrow_mut().push((q, handle));
         future
     });
 
-    assert!(matches!(*res.read(), ResourceState::Pending));
-    assert!(res.try_read().is_none());
+    assert!(matches!(ui.read_resource(res), ResourceState::Pending));
+    assert_eq!(handles.borrow().len(), 1);
 
+    // Resolve the first run.
     handles.borrow()[0].1.resolve("one".to_string());
-    assert!(run_until_settled(Duration::from_secs(1)));
-    assert_eq!(res.try_read().as_deref(), Some(&"one".to_string()));
+    ui.run_until_settled();
+    assert_eq!(
+        *ui.read_resource(res),
+        ResourceState::Ready("one".to_string())
+    );
 
-    // Changing the dependency restarts the future; the old value survives as
-    // Reloading (moved, not cloned).
-    query.set(2);
-    assert!(matches!(
-        &*res.read(),
-        ResourceState::Reloading(v) if v == "one"
-    ));
-    assert_eq!(res.try_read().as_deref(), Some(&"one".to_string()));
-    assert!(res.read().is_loading());
-
+    // Changing the dependency cancels and reloads, keeping stale data.
+    ui.with(|ctx| *ctx.write(query) = 2);
     assert_eq!(handles.borrow().len(), 2);
-    assert_eq!(handles.borrow()[1].0, 2);
-    handles.borrow()[1].1.resolve("two".to_string());
-    assert!(run_until_settled(Duration::from_secs(1)));
-    assert!(matches!(&*res.read(), ResourceState::Ready(v) if v == "two"));
+    assert_eq!(
+        *ui.read_resource(res),
+        ResourceState::Reloading("one".to_string())
+    );
 
-    // Effects over resources rerun on completion.
-    let (runs, run_count) = counter();
-    effect(move || {
-        let _ = res.read().value().cloned();
-        runs.set(runs.get() + 1);
+    handles.borrow()[1].1.resolve("two".to_string());
+    ui.run_until_settled();
+    assert_eq!(
+        *ui.read_resource(res),
+        ResourceState::Ready("two".to_string())
+    );
+}
+
+#[test]
+fn resource_completion_wakes_effects() {
+    use async_util::manual;
+    use std::cell::RefCell;
+
+    struct Empty;
+    let mut ui = Ui::new(Empty);
+    let (handle, future) = manual::<i32>();
+    let future = Rc::new(RefCell::new(Some(future)));
+    let res = ui.resource(move |_ctx| {
+        future
+            .borrow_mut()
+            .take()
+            .expect("resource restarted unexpectedly")
     });
-    assert_eq!(run_count(), 1);
-    query.set(3);
-    assert_eq!(run_count(), 2); // Ready -> Reloading
-    handles.borrow()[2].1.resolve("three".to_string());
-    assert!(run_until_settled(Duration::from_secs(1)));
-    assert_eq!(run_count(), 3); // Reloading -> Ready
+    let seen = Rc::new(Cell::new(-1));
+    let seen2 = seen.clone();
+    ui.effect(move |ctx| {
+        if let Some(v) = ctx.read_resource(res).value() {
+            seen2.set(*v);
+        }
+    });
+    assert_eq!(seen.get(), -1);
+    handle.resolve(42);
+    ui.run_until_settled();
+    assert_eq!(seen.get(), 42);
 }
 
 #[test]
 fn dom_updates_in_place() {
-    let store = Store::new(App {
-        count: 0,
-        name: "world".into(),
-    });
-    let count = lens!(store => 0: count);
-    let name = lens!(store => 1: name);
-
-    let view = el("div")
-        .attr("id", "root")
-        .child(dyn_text(move || format!("hello {}", name.read())))
-        .child(el("span").child(dyn_text(move || format!("count: {}", count.read()))));
-
-    assert_eq!(
-        view.render_to_string(),
-        "<div id=\"root\">hello world<span>count: 0</span></div>"
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let root = ui.mount(
+        el("div")
+            .attr("class", "counter")
+            .child(text("count: "))
+            .child(dyn_text(move |ctx| ctx.get(count).to_string())),
     );
-    *count.write() += 1;
     assert_eq!(
-        view.render_to_string(),
-        "<div id=\"root\">hello world<span>count: 1</span></div>"
+        ui.render_to_string(root),
+        "<div class=\"counter\">count: 0</div>"
+    );
+    ui.with(|ctx| *ctx.write(count) = 7);
+    assert_eq!(
+        ui.render_to_string(root),
+        "<div class=\"counter\">count: 7</div>"
     );
 }
 
 #[test]
 fn dyn_children_rebuild_and_teardown() {
-    let items = Store::new(vec!["a".to_string(), "b".to_string()]);
-    let (runs, run_count) = counter();
-
-    // Reading the whole vec in the list effect would subscribe it at the root
-    // path, so any item write would rebuild the list. Subscribing through an
-    // equality-gated `len` memo keeps the rebuild granularity at "list shape
-    // changed" while per-item effects track individual items.
-    let len = memo(move || items.read().len());
-    let view = el("ul").dyn_children(move || {
-        let runs = runs.clone();
-        (0..*len.read())
+    let mut ui = Ui::new(Todos {
+        items: vec![Todo {
+            title: "a".into(),
+            done: false,
+        }],
+    });
+    let items = lens!(Todos => 0: items);
+    // Memoize the length so editing one item's title (which structurally
+    // overlaps the whole list) cuts off instead of rebuilding the list.
+    let len = ui.memo(move |ctx| ctx.get(items).len());
+    let text_effect_runs = Rc::new(Cell::new(0));
+    let text_effect_runs2 = text_effect_runs.clone();
+    let root = ui.mount(el("ul").dyn_children(move |ctx| {
+        let n = *ctx.read_memo(len);
+        let runs = text_effect_runs2.clone();
+        (0..n)
             .map(|i| {
-                let item = items.index::<String>(i);
+                let title = items.at(i).field(0, |t: &Todo| &t.title, |t| &mut t.title);
                 let runs = runs.clone();
-                el("li").child(dyn_text(move || {
-                    runs.set(runs.get() + 1);
-                    item.read().clone()
-                }))
+                el("li")
+                    .child(dyn_text(move |ctx| {
+                        runs.set(runs.get() + 1);
+                        ctx.get(title).clone()
+                    }))
+                    .into()
             })
             .collect()
+    }));
+    assert_eq!(ui.render_to_string(root), "<ul><li>a</li></ul>");
+    assert_eq!(text_effect_runs.get(), 1);
+
+    // Pushing an item rebuilds the list; old per-item effects are torn down.
+    ui.with(|ctx| {
+        ctx.write(items).push(Todo {
+            title: "b".into(),
+            done: false,
+        })
     });
+    assert_eq!(ui.render_to_string(root), "<ul><li>a</li><li>b</li></ul>");
+    assert_eq!(text_effect_runs.get(), 3);
 
-    assert_eq!(view.render_to_string(), "<ul><li>a</li><li>b</li></ul>");
-    assert_eq!(run_count(), 2);
+    // Editing one title touches only that item's effect.
+    ui.with(|ctx| {
+        let title = items.at(1).field(0, |t: &Todo| &t.title, |t| &mut t.title);
+        *ctx.write(title) = "B".to_string();
+    });
+    assert_eq!(ui.render_to_string(root), "<ul><li>a</li><li>B</li></ul>");
+    assert_eq!(text_effect_runs.get(), 4);
+}
 
-    // Editing one item reruns only that item's text effect.
-    *items.index::<String>(0).write() = "A".to_string();
-    assert_eq!(view.render_to_string(), "<ul><li>A</li><li>b</li></ul>");
-    assert_eq!(run_count(), 3);
-
-    // Pushing rebuilds the list; old per-item effects are torn down, so the
-    // count grows by exactly the new list length.
-    items.with_mut(|v| v.push("c".to_string()));
-    assert_eq!(
-        view.render_to_string(),
-        "<ul><li>A</li><li>b</li><li>c</li></ul>"
-    );
-    assert_eq!(run_count(), 6);
-    // ...and editing an item after the rebuild still reruns exactly one.
-    *items.index::<String>(2).write() = "C".to_string();
-    assert_eq!(run_count(), 7);
+#[test]
+fn multiple_read_guards_coexist() {
+    let mut ui = app_ui();
+    let count = lens!(App => 0: count);
+    let label = lens!(App => 1: label);
+    ui.with(|ctx| {
+        // Two simultaneous zero-copy reads: fine, they are plain `&T`.
+        let a = ctx.get(count);
+        let b = ctx.get(label);
+        assert_eq!(*a, 0);
+        assert_eq!(&*b, "hi");
+    });
 }

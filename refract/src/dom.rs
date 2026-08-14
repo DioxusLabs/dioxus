@@ -1,149 +1,260 @@
-//! A deliberately small retained DOM.
-//!
-//! There is no VDOM and no diffing: every dynamic part of the tree
-//! (`dyn_text`, `dyn_attr`, `dyn_children`) is an [`crate::Effect`] that
-//! patches the retained node in place, so update granularity comes from the
-//! lens graph, not tree comparison. `dyn_children` rebuilds only its own
-//! subtree, and because child effects are owned by the rebuilding effect,
-//! everything the old subtree created is torn down automatically.
+//! A minimal retained DOM. There is no virtual DOM and no diffing: dynamic
+//! text, attributes, and children are bound with effects that surgically
+//! mutate the retained tree when their lens/memo dependencies change.
 
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::rc::Rc;
+use crate::ui::Ctx;
 
-use crate::effect::Effect;
+/// Index of a retained node in the [`Dom`] arena.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct NodeId(usize);
 
-type NodeRef = Rc<RefCell<DomNode>>;
-
-enum DomNode {
+pub(crate) enum RetainedNode {
     Element {
         tag: String,
-        attrs: BTreeMap<String, String>,
-        children: Vec<NodeRef>,
+        attrs: Vec<(String, String)>,
+        children: Vec<NodeId>,
     },
     Text(String),
+    /// An anonymous container for a dynamic child list.
+    Fragment {
+        children: Vec<NodeId>,
+    },
 }
 
-/// A handle to a retained DOM subtree. Cheap to clone (an `Rc`).
-#[derive(Clone)]
-pub struct Element {
-    node: NodeRef,
+/// The retained node arena. Owned by [`crate::Ui`]; mutated by binding
+/// effects through [`Ctx`].
+pub struct Dom<S: 'static> {
+    pub(crate) nodes: Vec<RetainedNode>,
+    _marker: std::marker::PhantomData<fn() -> S>,
 }
 
-/// Create an element node.
-pub fn el(tag: &str) -> Element {
-    Element {
-        node: Rc::new(RefCell::new(DomNode::Element {
-            tag: tag.to_string(),
-            attrs: BTreeMap::new(),
-            children: Vec::new(),
-        })),
+impl<S: 'static> Default for Dom<S> {
+    fn default() -> Self {
+        Dom {
+            nodes: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
-/// Create a static text node.
-pub fn text(content: impl Into<String>) -> Element {
-    Element {
-        node: Rc::new(RefCell::new(DomNode::Text(content.into()))),
+impl<S: 'static> Dom<S> {
+    fn push(&mut self, node: RetainedNode) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(node);
+        id
     }
-}
 
-/// Create a text node bound to a reactive closure: it re-renders whenever a
-/// value it read changes.
-pub fn dyn_text(f: impl Fn() -> String + 'static) -> Element {
-    let node: NodeRef = Rc::new(RefCell::new(DomNode::Text(String::new())));
-    let target = node.clone();
-    Effect::new(move || {
-        *target.borrow_mut() = DomNode::Text(f());
-    });
-    Element { node }
-}
-
-impl Element {
-    fn with_element<R>(
-        &self,
-        f: impl FnOnce(&mut BTreeMap<String, String>, &mut Vec<NodeRef>) -> R,
-    ) -> R {
-        match &mut *self.node.borrow_mut() {
-            DomNode::Element {
-                attrs, children, ..
-            } => f(attrs, children),
-            DomNode::Text(_) => panic!("text nodes have no attributes or children"),
+    pub(crate) fn set_text(&mut self, id: NodeId, content: String) {
+        if let RetainedNode::Text(t) = &mut self.nodes[id.0] {
+            *t = content;
         }
     }
 
-    pub fn attr(self, name: &str, value: impl Into<String>) -> Self {
-        self.with_element(|attrs, _| {
-            attrs.insert(name.to_string(), value.into());
-        });
-        self
-    }
-
-    /// Bind an attribute to a reactive closure.
-    pub fn dyn_attr(self, name: &str, f: impl Fn() -> String + 'static) -> Self {
-        let name = name.to_string();
-        let target = self.node.clone();
-        Effect::new(move || {
-            let value = f();
-            if let DomNode::Element { attrs, .. } = &mut *target.borrow_mut() {
-                attrs.insert(name.clone(), value);
+    pub(crate) fn set_attr(&mut self, id: NodeId, name: &str, value: String) {
+        if let RetainedNode::Element { attrs, .. } = &mut self.nodes[id.0] {
+            if let Some(slot) = attrs.iter_mut().find(|(n, _)| n == name) {
+                slot.1 = value;
+            } else {
+                attrs.push((name.to_string(), value));
             }
-        });
-        self
+        }
     }
 
-    pub fn child(self, child: Element) -> Self {
-        self.with_element(|_, children| children.push(child.node.clone()));
-        self
+    pub(crate) fn set_fragment_children(&mut self, id: NodeId, children: Vec<NodeId>) {
+        if let RetainedNode::Fragment { children: c } = &mut self.nodes[id.0] {
+            *c = children;
+        }
     }
 
-    pub fn children(self, iter: impl IntoIterator<Item = Element>) -> Self {
-        self.with_element(|_, children| {
-            children.extend(iter.into_iter().map(|c| c.node));
-        });
-        self
-    }
-
-    /// Bind this element's child list to a reactive closure. The closure owns
-    /// everything it builds: nested effects created for the previous children
-    /// are dropped before each rebuild.
-    pub fn dyn_children(self, f: impl Fn() -> Vec<Element> + 'static) -> Self {
-        let target = self.node.clone();
-        Effect::new(move || {
-            let new_children: Vec<NodeRef> = f().into_iter().map(|c| c.node).collect();
-            if let DomNode::Element { children, .. } = &mut *target.borrow_mut() {
-                *children = new_children;
-            }
-        });
-        self
-    }
-
-    /// Render the subtree to an HTML-ish string (for tests and terminals).
-    pub fn render_to_string(&self) -> String {
+    /// Render a retained node (and its subtree) to an HTML string.
+    pub(crate) fn render_to_string(&self, id: NodeId) -> String {
         let mut out = String::new();
-        render_node(&self.node, &mut out);
+        self.write_node(id, &mut out);
         out
+    }
+
+    fn write_node(&self, id: NodeId, out: &mut String) {
+        match &self.nodes[id.0] {
+            RetainedNode::Text(t) => out.push_str(t),
+            RetainedNode::Fragment { children } => {
+                for child in children {
+                    self.write_node(*child, out);
+                }
+            }
+            RetainedNode::Element {
+                tag,
+                attrs,
+                children,
+            } => {
+                out.push('<');
+                out.push_str(tag);
+                for (name, value) in attrs {
+                    out.push(' ');
+                    out.push_str(name);
+                    out.push_str("=\"");
+                    out.push_str(value);
+                    out.push('"');
+                }
+                out.push('>');
+                for child in children {
+                    self.write_node(*child, out);
+                }
+                out.push_str("</");
+                out.push_str(tag);
+                out.push('>');
+            }
+        }
     }
 }
 
-fn render_node(node: &NodeRef, out: &mut String) {
-    match &*node.borrow() {
-        DomNode::Text(content) => out.push_str(content),
-        DomNode::Element {
-            tag,
-            attrs,
-            children,
-        } => {
-            let _ = write!(out, "<{tag}");
-            for (name, value) in attrs {
-                let _ = write!(out, " {name}=\"{value}\"");
+type TextFn<S> = Box<dyn FnMut(&mut Ctx<'_, S>) -> String>;
+type ChildrenFn<S> = Box<dyn FnMut(&mut Ctx<'_, S>) -> Vec<Node<S>>>;
+
+enum Attr<S: 'static> {
+    Static(String, String),
+    Dyn(String, TextFn<S>),
+}
+
+/// A DOM tree description, consumed by [`mount`].
+pub enum Node<S: 'static> {
+    /// An element with attributes and children.
+    Element(El<S>),
+    /// A static text node.
+    Text(String),
+    /// A reactive text node bound by an effect.
+    DynText(TextFn<S>),
+    /// A reactive child list rebuilt by an effect.
+    DynChildren(ChildrenFn<S>),
+}
+
+/// An element description with static and dynamic attributes and children.
+pub struct El<S: 'static> {
+    tag: String,
+    attrs: Vec<Attr<S>>,
+    children: Vec<Node<S>>,
+}
+
+/// Describe an element.
+pub fn el<S: 'static>(tag: &str) -> El<S> {
+    El {
+        tag: tag.to_string(),
+        attrs: Vec::new(),
+        children: Vec::new(),
+    }
+}
+
+/// Describe a static text node.
+pub fn text<S: 'static>(content: impl Into<String>) -> Node<S> {
+    Node::Text(content.into())
+}
+
+/// Describe a reactive text node. `f` runs inside an effect: whatever it
+/// reads through its [`Ctx`] becomes a dependency, and the retained text is
+/// updated in place when a dependency changes.
+pub fn dyn_text<S: 'static>(f: impl FnMut(&mut Ctx<'_, S>) -> String + 'static) -> Node<S> {
+    Node::DynText(Box::new(f))
+}
+
+impl<S: 'static> El<S> {
+    /// Add a static attribute.
+    pub fn attr(mut self, name: &str, value: impl Into<String>) -> Self {
+        self.attrs
+            .push(Attr::Static(name.to_string(), value.into()));
+        self
+    }
+
+    /// Add a reactive attribute, updated in place by an effect.
+    pub fn dyn_attr(
+        mut self,
+        name: &str,
+        f: impl FnMut(&mut Ctx<'_, S>) -> String + 'static,
+    ) -> Self {
+        self.attrs.push(Attr::Dyn(name.to_string(), Box::new(f)));
+        self
+    }
+
+    /// Append a child node.
+    pub fn child(mut self, node: impl Into<Node<S>>) -> Self {
+        self.children.push(node.into());
+        self
+    }
+
+    /// Append several child nodes.
+    pub fn children(mut self, nodes: impl IntoIterator<Item = Node<S>>) -> Self {
+        self.children.extend(nodes);
+        self
+    }
+
+    /// Append a reactive child list. `f` runs inside an effect: when a
+    /// dependency changes the previous children (and any effects they
+    /// registered) are torn down and the list is rebuilt.
+    pub fn dyn_children(
+        mut self,
+        f: impl FnMut(&mut Ctx<'_, S>) -> Vec<Node<S>> + 'static,
+    ) -> Self {
+        self.children.push(Node::DynChildren(Box::new(f)));
+        self
+    }
+}
+
+impl<S: 'static> From<El<S>> for Node<S> {
+    fn from(el: El<S>) -> Self {
+        Node::Element(el)
+    }
+}
+
+/// Mount a node description into the retained arena, registering binding
+/// effects for all dynamic parts. Effects created here are owned by the
+/// current observer, so a dynamic subtree is torn down with its creator.
+pub fn mount<S: 'static>(ctx: &mut Ctx<'_, S>, node: Node<S>) -> NodeId {
+    match node {
+        Node::Text(t) => ctx.dom.push(RetainedNode::Text(t)),
+        Node::DynText(mut f) => {
+            let id = ctx.dom.push(RetainedNode::Text(String::new()));
+            ctx.effect(move |ctx| {
+                let content = f(ctx);
+                ctx.dom.set_text(id, content);
+            });
+            id
+        }
+        Node::DynChildren(mut f) => {
+            let id = ctx.dom.push(RetainedNode::Fragment {
+                children: Vec::new(),
+            });
+            ctx.effect(move |ctx| {
+                let nodes = f(ctx);
+                let children: Vec<NodeId> =
+                    nodes.into_iter().map(|node| mount(ctx, node)).collect();
+                ctx.dom.set_fragment_children(id, children);
+            });
+            id
+        }
+        Node::Element(element) => {
+            let id = ctx.dom.push(RetainedNode::Element {
+                tag: element.tag,
+                attrs: Vec::new(),
+                children: Vec::new(),
+            });
+            for attr in element.attrs {
+                match attr {
+                    Attr::Static(name, value) => ctx.dom.set_attr(id, &name, value),
+                    Attr::Dyn(name, mut f) => {
+                        ctx.effect(move |ctx| {
+                            let value = f(ctx);
+                            ctx.dom.set_attr(id, &name, value);
+                        });
+                    }
+                }
             }
-            out.push('>');
-            for child in children {
-                render_node(child, out);
+            let children: Vec<NodeId> = element
+                .children
+                .into_iter()
+                .map(|child| mount(ctx, child))
+                .collect();
+            if let RetainedNode::Element { children: c, .. } = &mut ctx.dom.nodes[id.0] {
+                *c = children;
             }
-            let _ = write!(out, "</{tag}>");
+            id
         }
     }
 }

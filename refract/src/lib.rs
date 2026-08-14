@@ -1,50 +1,41 @@
-//! # Refract
+//! # refract
 //!
-//! A from-scratch, store/lens-first reactive UI runtime in the spirit of
-//! Dioxus, inspired by [ealmloff/qk](https://github.com/ealmloff/qk)'s
-//! `Deref`/`DerefMut` dirty tracking. See `DESIGN.md` for the full design
-//! discussion (especially the memo/resource borrow-safety story).
+//! An experimental Dioxus-like reactive UI runtime built from scratch around
+//! **stores and lenses**, inspired by [qk](https://github.com/ealmloff/qk).
+//!
+//! The [`Ui`] runtime owns the root state; reactive closures receive a
+//! [`Ctx`] of split `&mut` borrows, so all aliasing rules are enforced
+//! statically by the borrow checker — there is **no `RefCell`** and no
+//! runtime borrow counting. Reads and writes are **zero-copy** (`&T` /
+//! `&mut T` through [`Lens`] projections) and tracked via `Deref` /
+//! `DerefMut` on guards, qk `RwTrack`-style. See `DESIGN.md` for the full
+//! rationale, in particular the memo/resource semantics and `Pin` handling.
 //!
 //! ```
-//! use refract::prelude::*;
+//! use refract::{Ui, lens};
 //!
-//! #[derive(PartialEq)]
 //! struct App { count: i32, step: i32 }
 //!
-//! let app = Store::new(App { count: 0, step: 2 });
-//! let count = lens!(app => 0: count);
-//! let step = lens!(app => 1: step);
+//! let mut ui = Ui::new(App { count: 0, step: 2 });
+//! let count = lens!(App => 0: count);
+//! let step = lens!(App => 1: step);
 //!
-//! let doubled = memo(move || *count.read() * 2);
+//! let doubled = ui.memo(move |ctx| *ctx.get(count) * 2);
 //!
-//! let view = el("div").child(dyn_text(move || format!("{}", doubled.read())));
+//! ui.with(|ctx| {
+//!     let by = *ctx.peek(step);
+//!     *ctx.write(count) += by;
+//! });
 //!
-//! // Lenses over one store share its cell: finish reads before writing.
-//! let by = *step.peek();
-//! *count.write() += by;
-//! assert_eq!(view.render_to_string(), "<div>4</div>");
+//! assert_eq!(*ui.read_memo(doubled), 4);
 //! ```
 
+#![warn(missing_docs)]
+
 mod dom;
-mod effect;
-mod memo;
-mod resource;
-mod runtime;
-mod store;
+mod lens;
+mod ui;
 
-pub use dom::{Element, dyn_text, el, text};
-pub use effect::{Effect, effect};
-pub use memo::{Memo, memo};
-pub use resource::{Resource, ResourceState, resource};
-pub use runtime::{NodeId, flush, run_until_settled};
-pub use store::{IndexLens, Lens, ReadGuard, Readable, Store, Writable, WriteGuard, untracked};
-
-pub mod prelude {
-    pub use crate::dom::{Element, dyn_text, el, text};
-    pub use crate::effect::{Effect, effect};
-    pub use crate::lens;
-    pub use crate::memo::{Memo, memo};
-    pub use crate::resource::{Resource, ResourceState, resource};
-    pub use crate::runtime::{flush, run_until_settled};
-    pub use crate::store::{Readable, Store, Writable, untracked};
-}
+pub use dom::{Dom, El, Node, NodeId, dyn_text, el, mount, text};
+pub use lens::{Field, Index, Lens, Path, Root, VecLens};
+pub use ui::{Ctx, Effect, Memo, ReadGuard, ResourceHandle, ResourceState, Ui, WriteGuard};

@@ -1,36 +1,48 @@
-//! The classic counter, driven from the terminal instead of click events.
+//! Counter: field lenses, a memo, and dynamic text bindings.
 
-use refract::prelude::*;
+use refract::{Ui, dyn_text, el, lens, text};
 
-#[derive(PartialEq)]
 struct App {
     count: i32,
     step: i32,
 }
 
 fn main() {
-    let app = Store::new(App { count: 0, step: 1 });
-    let count = lens!(app => 0: count);
-    let step = lens!(app => 1: step);
+    let mut ui = Ui::new(App { count: 0, step: 1 });
+    let count = lens!(App => 0: count);
+    let step = lens!(App => 1: step);
 
-    let doubled = memo(move || *count.read() * 2);
+    let doubled = ui.memo(move |ctx| *ctx.get(count) * 2);
 
-    let view = el("div")
-        .child(el("span").child(dyn_text(move || format!("count: {}", count.read()))))
-        .child(el("span").child(dyn_text(move || format!(" doubled: {}", doubled.read()))));
+    let root = ui.mount(
+        el("div")
+            .child(
+                el("span")
+                    .child(text("count: "))
+                    .child(dyn_text(move |ctx| ctx.get(count).to_string())),
+            )
+            .child(
+                el("span")
+                    .child(text(" doubled: "))
+                    .child(dyn_text(move |ctx| ctx.read_memo(doubled).to_string())),
+            ),
+    );
 
-    println!("{}", view.render_to_string());
+    println!("{}", ui.render_to_string(root));
 
-    // Simulate three "increment" clicks.
     for _ in 0..3 {
-        let by = *step.peek();
-        *count.write() += by;
-        println!("{}", view.render_to_string());
+        ui.with(|ctx| {
+            let by = *ctx.peek(step);
+            *ctx.write(count) += by;
+        });
+        println!("{}", ui.render_to_string(root));
     }
 
-    // Changing `step` does not re-render anything: nothing subscribes to it.
-    step.set(10);
-    let by = *step.peek();
-    *count.write() += by;
-    println!("{}", view.render_to_string());
+    // Bump the step, then count once more.
+    ui.with(|ctx| *ctx.write(step) = 10);
+    ui.with(|ctx| {
+        let by = *ctx.peek(step);
+        *ctx.write(count) += by;
+    });
+    println!("{}", ui.render_to_string(root));
 }

@@ -1,64 +1,76 @@
-//! A todo list showing path-granular updates: editing one todo reruns only
-//! that row's bindings, while adding a todo rebuilds only the list shape.
+//! Todos: index lenses, memoized derived values, and a dynamic list.
 
-use refract::prelude::*;
+use refract::{Lens, Ui, VecLens, dyn_text, el, lens};
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone)]
 struct Todo {
     title: String,
     done: bool,
 }
 
+struct App {
+    todos: Vec<Todo>,
+}
+
 fn main() {
-    let todos = Store::new(vec![
-        Todo {
-            title: "learn lenses".into(),
-            done: true,
-        },
-        Todo {
-            title: "ship refract".into(),
-            done: false,
-        },
-    ]);
+    let mut ui = Ui::new(App {
+        todos: vec![
+            Todo {
+                title: "learn lenses".into(),
+                done: true,
+            },
+            Todo {
+                title: "build refract".into(),
+                done: false,
+            },
+        ],
+    });
+    let todos = lens!(App => 0: todos);
 
-    // Equality-gated shape signal: item edits don't rebuild the list.
-    let len = memo(move || todos.read().len());
-    let remaining = memo(move || todos.read().iter().filter(|t| !t.done).count());
+    // Memos cut off structural over-invalidation: editing one todo's fields
+    // dirties these, but they only propagate if the value actually changed.
+    let len = ui.memo(move |ctx| ctx.get(todos).len());
+    let remaining = ui.memo(move |ctx| ctx.get(todos).iter().filter(|t| !t.done).count());
 
-    let view = el("div")
-        .child(el("h1").child(dyn_text(move || {
-            format!("todos ({} left)", remaining.read())
-        })))
-        .child(el("ul").dyn_children(move || {
-            (0..*len.read())
-                .map(|i| {
-                    let todo = todos.index::<Todo>(i);
-                    let title = lens!(todo => 0: title);
-                    let done = lens!(todo => 1: done);
-                    el("li")
-                        .dyn_attr("class", move || {
-                            if *done.read() { "done" } else { "open" }.to_string()
-                        })
-                        .child(dyn_text(move || title.read().clone()))
-                })
-                .collect()
-        }));
+    let root = ui.mount(
+        el("div")
+            .child(el("p").child(dyn_text(move |ctx| {
+                // `read_memo` borrows the ctx mutably, so copy out
+                // one value before reading the next.
+                let left = *ctx.read_memo(remaining);
+                let total = *ctx.read_memo(len);
+                format!("{left} left of {total}")
+            })))
+            .child(el("ul").dyn_children(move |ctx| {
+                let n = *ctx.read_memo(len);
+                (0..n)
+                    .map(|i| {
+                        let title = todos.at(i).field(0, |t: &Todo| &t.title, |t| &mut t.title);
+                        let done = todos.at(i).field(1, |t: &Todo| &t.done, |t| &mut t.done);
+                        el("li")
+                            .dyn_attr("class", move |ctx| {
+                                if *ctx.get(done) { "done" } else { "open" }.to_string()
+                            })
+                            .child(dyn_text(move |ctx| ctx.get(title).clone()))
+                            .into()
+                    })
+                    .collect()
+            })),
+    );
 
-    println!("{}", view.render_to_string());
+    println!("{}", ui.render_to_string(root));
 
-    // Toggle one todo: only that row's class binding and the counter rerun.
-    let done = todos
-        .index::<Todo>(1)
-        .select(1, |t| &t.done, |t| &mut t.done);
-    *done.write() = true;
-    println!("{}", view.render_to_string());
+    // Toggle one todo: only that item's bindings update.
+    let second_done = todos.at(1).field(1, |t: &Todo| &t.done, |t| &mut t.done);
+    ui.with(|ctx| *ctx.write(second_done) = true);
+    println!("{}", ui.render_to_string(root));
 
-    // Add a todo: the list rebuilds, old row bindings are torn down.
-    todos.with_mut(|v| {
-        v.push(Todo {
-            title: "profile it".into(),
+    // Push a new todo: the list rebuilds.
+    ui.with(|ctx| {
+        ctx.write(todos).push(Todo {
+            title: "ship it".into(),
             done: false,
         })
     });
-    println!("{}", view.render_to_string());
+    println!("{}", ui.render_to_string(root));
 }
