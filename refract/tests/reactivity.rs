@@ -4,7 +4,7 @@ use std::rc::Rc;
 use refract::{Lens, ResourceState, Ui, VecLens, dyn_text, el, lens, text};
 
 mod async_util {
-    use std::cell::RefCell;
+    use std::cell::Cell;
     use std::future::Future;
     use std::pin::Pin;
     use std::rc::Rc;
@@ -12,24 +12,24 @@ mod async_util {
 
     /// A future resolved by hand from the test body.
     pub struct ManualHandle<T> {
-        slot: Rc<RefCell<Option<T>>>,
+        slot: Rc<Cell<Option<T>>>,
     }
 
     impl<T> ManualHandle<T> {
         pub fn resolve(&self, value: T) {
-            *self.slot.borrow_mut() = Some(value);
+            self.slot.set(Some(value));
         }
     }
 
     pub struct ManualFuture<T> {
-        slot: Rc<RefCell<Option<T>>>,
+        slot: Rc<Cell<Option<T>>>,
     }
 
     impl<T> Future for ManualFuture<T> {
         type Output = T;
 
         fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<T> {
-            match self.slot.borrow_mut().take() {
+            match self.slot.take() {
                 Some(v) => Poll::Ready(v),
                 None => Poll::Pending,
             }
@@ -37,7 +37,7 @@ mod async_util {
     }
 
     pub fn manual<T>() -> (ManualHandle<T>, ManualFuture<T>) {
-        let slot = Rc::new(RefCell::new(None));
+        let slot = Rc::new(Cell::new(None));
         (ManualHandle { slot: slot.clone() }, ManualFuture { slot })
     }
 }
@@ -334,30 +334,38 @@ fn nested_effects_torn_down_on_parent_rerun() {
 #[test]
 fn resource_lifecycle() {
     use async_util::{ManualHandle, manual};
-    use std::cell::RefCell;
 
     struct Q {
         query: i32,
     }
     let mut ui = Ui::new(Q { query: 1 });
     let query = lens!(Q => 0: query);
-    type Handles = Rc<RefCell<Vec<(i32, ManualHandle<String>)>>>;
-    let handles: Handles = Rc::new(RefCell::new(Vec::new()));
+    type Handles = Rc<Cell<Vec<(i32, ManualHandle<String>)>>>;
+    let handles: Handles = Rc::new(Cell::new(Vec::new()));
     let handles2 = handles.clone();
+    // Cell take/inspect/put-back instead of RefCell borrows.
+    fn with<R>(h: &Handles, f: impl FnOnce(&Vec<(i32, ManualHandle<String>)>) -> R) -> R {
+        let v = h.take();
+        let r = f(&v);
+        h.set(v);
+        r
+    }
 
     let res = ui.resource(move |ctx| {
         // Tracked: reading `query` here makes it a dependency.
         let q = *ctx.get(query);
         let (handle, future) = manual::<String>();
-        handles2.borrow_mut().push((q, handle));
+        let mut v = handles2.take();
+        v.push((q, handle));
+        handles2.set(v);
         future
     });
 
     assert!(matches!(ui.read_resource(res), ResourceState::Pending));
-    assert_eq!(handles.borrow().len(), 1);
+    assert_eq!(with(&handles, |v| v.len()), 1);
 
     // Resolve the first run.
-    handles.borrow()[0].1.resolve("one".to_string());
+    with(&handles, |v| v[0].1.resolve("one".to_string()));
     ui.run_until_settled();
     assert_eq!(
         *ui.read_resource(res),
@@ -366,13 +374,13 @@ fn resource_lifecycle() {
 
     // Changing the dependency cancels and reloads, keeping stale data.
     ui.with(|ctx| *ctx.write(query) = 2);
-    assert_eq!(handles.borrow().len(), 2);
+    assert_eq!(with(&handles, |v| v.len()), 2);
     assert_eq!(
         *ui.read_resource(res),
         ResourceState::Reloading("one".to_string())
     );
 
-    handles.borrow()[1].1.resolve("two".to_string());
+    with(&handles, |v| v[1].1.resolve("two".to_string()));
     ui.run_until_settled();
     assert_eq!(
         *ui.read_resource(res),
@@ -383,18 +391,12 @@ fn resource_lifecycle() {
 #[test]
 fn resource_completion_wakes_effects() {
     use async_util::manual;
-    use std::cell::RefCell;
 
     struct Empty;
     let mut ui = Ui::new(Empty);
     let (handle, future) = manual::<i32>();
-    let future = Rc::new(RefCell::new(Some(future)));
-    let res = ui.resource(move |_ctx| {
-        future
-            .borrow_mut()
-            .take()
-            .expect("resource restarted unexpectedly")
-    });
+    let future = Rc::new(Cell::new(Some(future)));
+    let res = ui.resource(move |_ctx| future.take().expect("resource restarted unexpectedly"));
     let seen = Rc::new(Cell::new(-1));
     let seen2 = seen.clone();
     ui.effect(move |ctx| {
