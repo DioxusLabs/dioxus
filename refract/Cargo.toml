@@ -1,0 +1,16 @@
+[package]
+name = "refract"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "A store/lens-first reactive UI runtime experiment."
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+
+[lib]
+name = "refract"
+path = "src/lib.rs"

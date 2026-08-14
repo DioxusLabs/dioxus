@@ -109,6 +109,9 @@ members = [
     "examples/10-integrations/pwa",
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
+
+    # Experiments
+    "refract",
 ]
 exclude = ["packages/stores/tests/visibility-helper"]
 
