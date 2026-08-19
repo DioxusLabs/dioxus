@@ -36,7 +36,7 @@ pub mod internal {
     #[doc(hidden)]
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
-        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
+        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadKey, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
@@ -95,7 +95,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyValue, AnyhowContext, Attribute, AttributeValue, Callback, CapturedError, Component,
     ComponentFunction, DynamicNode, Element, ElementId, ErrorBoundary, ErrorContext, Event,
-    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LaunchConfig,
+    EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, Key, LaunchConfig,
     ListenerCallback, MarkerWrapper, Mutation, Mutations, NoOpMutations, OptionStringFromMarker,
     Properties, ReactiveContext, RenderError, Result, Runtime, RuntimeGuard, ScopeId, ScopeState,
     SpawnIfAsync, SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture,

@@ -104,9 +104,20 @@ impl ToTokens for TemplateBody {
         let node = self.normalized();
 
         // If we have an implicit key, then we need to write its tokens
-        let key_tokens = match node.implicit_key() {
-            Some(tok) => quote! { Some( #tok.to_string() ) },
-            None => quote! { None },
+        //
+        // Formatted string keys are stored as strings so hot reloading can rewrite them from the
+        // literal pool. In debug mode they are rendered from the pool, so the call site passes None.
+        // Any other expression is hashed into the key at the call site in both modes.
+        let (release_key, debug_key) = match node.implicit_key() {
+            Some(tok @ AttributeValue::AttrLiteral(HotLiteral::Fmted(_))) => (
+                quote! { Some( dioxus_core::Key::from(#tok.to_string()) ) },
+                quote! { None },
+            ),
+            Some(tok) => {
+                let key = quote! { Some( dioxus_core::Key::hashed(&(#tok)) ) };
+                (key.clone(), key)
+            }
+            None => (quote! { None }, quote! { None }),
         };
 
         let key_warnings = self.check_for_duplicate_keys();
@@ -187,7 +198,9 @@ impl ToTokens for TemplateBody {
 
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes
                 #[cfg(not(debug_assertions))]
-                let __key = #key_tokens;
+                let __key = #release_key;
+                #[cfg(debug_assertions)]
+                let __key: Option<dioxus_core::Key> = #debug_key;
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
                 let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
@@ -202,7 +215,7 @@ impl ToTokens for TemplateBody {
                         Vec::from(__dynamic_attributes),
                         __dynamic_literal_pool
                     );
-                    __dynamic_value_pool.render_with(__template_read)
+                    __dynamic_value_pool.render_with(__template_read, __key)
                 }
                 #[cfg(not(debug_assertions))]
                 {
@@ -282,7 +295,8 @@ impl TemplateBody {
 
     /// Ensure only one key and that the key is not a static str
     ///
-    /// todo: we want to allow arbitrary exprs for keys provided they impl hash / eq
+    /// Keys can be either formatted strings like `key: "{value}"` or arbitrary expressions that
+    /// implement `Hash` like `key: value`
     fn validate_key(&mut self) {
         let key = self.implicit_key();
 
@@ -290,14 +304,15 @@ impl TemplateBody {
             let diagnostic = match &attr {
                 AttributeValue::AttrLiteral(ifmt) => {
                     if ifmt.is_static() {
-                        ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
+                        ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"` or an expression that implements `Hash` like `key: value`")
                     } else {
                         return;
                     }
                 }
+                AttributeValue::AttrExpr(_) | AttributeValue::Shorthand(_) => return,
                 _ => attr
                     .span()
-                    .error("Key must be in the form of a formatted string like `key: \"{value}\""),
+                    .error("Key must be a formatted string like `key: \"{value}\"` or an expression that implements `Hash` like `key: value`"),
             };
 
             self.diagnostics.push(diagnostic);
@@ -381,12 +396,12 @@ impl TemplateBody {
     }
 
     fn hot_reload_mapping(&self) -> TokenStream2 {
-        let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
-            self.implicit_key()
-        {
-            quote! { Some(#key) }
-        } else {
-            quote! { None }
+        let key = match self.implicit_key() {
+            Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) => {
+                quote! { Some(dioxus_core::internal::HotReloadKey::Fmted(#key)) }
+            }
+            Some(_) => quote! { Some(dioxus_core::internal::HotReloadKey::Dynamic) },
+            None => quote! { None },
         };
         let dynamic_nodes = self.dynamic_nodes().map(|node| {
             let id = node.get_dyn_idx();

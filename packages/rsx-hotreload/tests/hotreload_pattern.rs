@@ -6,7 +6,7 @@ use dioxus_core::{
     Template, TemplateAttribute, TemplateNode, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
-        HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+        HotReloadDynamicNode, HotReloadKey, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
 };
 use dioxus_core_types::HotReloadingContext;
@@ -365,11 +365,81 @@ fn valid_keys() {
 
     assert_eq!(
         template.key,
-        Some(FmtedSegments::new(vec![
+        Some(HotReloadKey::Fmted(FmtedSegments::new(vec![
             FmtSegment::Dynamic { id: 0 },
             FmtSegment::Literal { value: "-1234" }
-        ]))
+        ])))
     );
+}
+
+#[test]
+fn expr_keys() {
+    // An unchanged expression key is reused as a dynamic key
+    let a = quote! {
+        div {
+            key: value,
+            class: "hello"
+        }
+    };
+    let b = quote! {
+        div {
+            key: value,
+            class: "world"
+        }
+    };
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = &hot_reload[&0];
+    assert_eq!(template.key, Some(HotReloadKey::Dynamic));
+
+    // A changed expression key requires a full rebuild
+    let a = quote! {
+        div {
+            key: value,
+        }
+    };
+    let b = quote! {
+        div {
+            key: other_value,
+        }
+    };
+    assert!(!can_hotreload(a, b));
+
+    // Switching from a formatted string key to an expression key requires a full rebuild
+    let a = quote! {
+        div {
+            key: "{value}",
+        }
+    };
+    let b = quote! {
+        div {
+            key: value,
+        }
+    };
+    assert!(!can_hotreload(a, b));
+
+    // Adding an expression key requires a full rebuild
+    let a = quote! {
+        div {}
+    };
+    let b = quote! {
+        div {
+            key: value,
+        }
+    };
+    assert!(!can_hotreload(a, b));
+
+    // Removing an expression key is allowed
+    let a = quote! {
+        div {
+            key: value,
+        }
+    };
+    let b = quote! {
+        div {}
+    };
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = &hot_reload[&0];
+    assert_eq!(template.key, None);
 }
 
 #[test]
@@ -1188,11 +1258,11 @@ fn component_modify_key() {
     let template = hot_reload.get(&0).unwrap();
     assert_eq!(
         template.key,
-        Some(FmtedSegments::new(vec![
+        Some(HotReloadKey::Fmted(FmtedSegments::new(vec![
             FmtSegment::Dynamic { id: 0 },
             FmtSegment::Literal { value: "-" },
             FmtSegment::Dynamic { id: 2 },
-        ]))
+        ])))
     );
     assert_eq!(
         template.component_values,
