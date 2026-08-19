@@ -288,7 +288,7 @@ impl VirtualDom {
         root_props: P,
     ) -> Self {
         let render_fn = root.fn_ptr();
-        let props = VProps::new(root, |_, _| true, root_props, "Root");
+        let props = VProps::new(root, |_, _| true, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
             render_fn,
@@ -318,6 +318,7 @@ impl VirtualDom {
 
         let root = VProps::new(
             RootScopeWrapper,
+            |_, _| true,
             |_, _| true,
             RootProps(root),
             "RootWrapper",

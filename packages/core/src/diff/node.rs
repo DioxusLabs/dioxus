@@ -38,7 +38,7 @@ impl VNode {
         self.move_mount_to(new, dom);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
-        if self == new {
+        if self.ptr_eq(new) {
             return;
         }
 

@@ -56,6 +56,22 @@ pub trait Properties: Clone + Sized + 'static {
     /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &Self) -> bool;
 
+    /// Compare two sets of props without mutating either one. Return `true` only if rendering a
+    /// component with `other` is guaranteed to produce the same output as rendering it with `self`.
+    ///
+    /// This powers memoization by value of [`Element`]s passed as props: when a parent component
+    /// re-renders, any [`Element`] it passes down is only considered changed if the components
+    /// inside of it report their props as unequal through this method.
+    ///
+    /// Unlike [`Properties::memoize`], this must not update `self` in place, so implementations
+    /// that cannot compare some of their fields (like event handlers) must return `false`. The
+    /// default implementation is conservative and always returns `false`, which keeps the
+    /// previous behavior of re-rendering the component. The [`Props`](dioxus_core_macro::Props)
+    /// derive macro overrides it with a full [`PartialEq`] comparison.
+    fn props_eq(&self, _other: &Self) -> bool {
+        false
+    }
+
     /// Create a component from the props.
     fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {
         let type_name = std::any::type_name_of_val(&render_fn);
@@ -69,6 +85,9 @@ impl Properties for () {
         EmptyBuilder {}
     }
     fn memoize(&mut self, _other: &Self) -> bool {
+        true
+    }
+    fn props_eq(&self, _other: &Self) -> bool {
         true
     }
 }

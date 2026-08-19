@@ -107,8 +107,25 @@ impl Default for VNode {
 }
 
 impl PartialEq for VNode {
+    /// Compare two [`VNode`]s by value.
+    ///
+    /// Two [`VNode`]s are equal if they point to the same underlying allocation, or if their
+    /// templates, keys, dynamic nodes and dynamic attributes are all equal. Parts of the tree
+    /// that cannot be compared cheaply, like event listeners that point to different closures,
+    /// compare unequal.
+    ///
+    /// This makes it possible to memoize components that accept [`Element`]s in their props: if
+    /// a parent component re-renders but produces equivalent children, the child component that
+    /// receives them will not re-render.
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.vnode, &other.vnode)
+        if Rc::ptr_eq(&self.vnode, &other.vnode) {
+            return true;
+        }
+
+        self.vnode.key == other.vnode.key
+            && self.vnode.template == other.vnode.template
+            && self.vnode.dynamic_nodes == other.vnode.dynamic_nodes
+            && self.vnode.dynamic_attrs == other.vnode.dynamic_attrs
     }
 }
 
@@ -220,6 +237,26 @@ impl VNode {
             .mounted_attributes
             .get(dynamic_attribute_idx)
             .copied()
+    }
+
+    /// Check if two [`VNode`]s point to the same underlying allocation.
+    ///
+    /// Unlike the [`PartialEq`] implementation, which compares nodes by value, this only checks
+    /// identity, which is much cheaper and is the right comparison to use when checking if a
+    /// node has already been rendered, like during diffing.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// let node = rsx! { div { "hello" } }.unwrap();
+    /// let clone = node.clone();
+    /// assert!(node.ptr_eq(&clone));
+    ///
+    /// let other = rsx! { div { "hello" } }.unwrap();
+    /// assert!(!node.ptr_eq(&other));
+    /// assert_eq!(node, other);
+    /// ```
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.vnode, &other.vnode)
     }
 
     /// Create a deep clone of this VNode
@@ -626,6 +663,18 @@ impl Default for DynamicNode {
     }
 }
 
+impl PartialEq for DynamicNode {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Component(l), Self::Component(r)) => l == r,
+            (Self::Text(l), Self::Text(r)) => l == r,
+            (Self::Placeholder(l), Self::Placeholder(r)) => l == r,
+            (Self::Fragment(l), Self::Fragment(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
 /// An instance of a child component
 pub struct VComponent {
     /// The name of this component
@@ -662,6 +711,7 @@ impl VComponent {
         let props = Box::new(VProps::new(
             component,
             <P as Properties>::memoize,
+            <P as Properties>::props_eq,
             props,
             fn_name,
         ));
@@ -712,6 +762,17 @@ impl VComponent {
     }
 }
 
+impl PartialEq for VComponent {
+    /// Compare two [`VComponent`]s by value.
+    ///
+    /// Two [`VComponent`]s are equal if they share the same render function and their props
+    /// compare equal through [`crate::Properties::props_eq`]. Props that cannot be compared
+    /// without being mutated, like event handlers, compare unequal.
+    fn eq(&self, other: &Self) -> bool {
+        self.render_fn == other.render_fn && self.props.props_eq(other.props.props())
+    }
+}
+
 impl std::fmt::Debug for VComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponent")
@@ -721,7 +782,7 @@ impl std::fmt::Debug for VComponent {
 }
 
 /// A text node
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VText {
     /// The actual text itself
     pub value: String,
@@ -743,7 +804,7 @@ impl From<Arguments<'_>> for VText {
 }
 
 /// A placeholder node, used by suspense and fragments
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct VPlaceholder {}
 
