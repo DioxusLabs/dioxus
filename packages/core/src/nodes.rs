@@ -108,7 +108,31 @@ impl Default for VNode {
 
 impl PartialEq for VNode {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.vnode, &other.vnode)
+        // Fast path: the same allocation
+        if Rc::ptr_eq(&self.vnode, &other.vnode) {
+            return true;
+        }
+
+        let a = &*self.vnode;
+        let b = &*other.vnode;
+
+        // Compare the template by content hash, the dynamic attributes, and the
+        // dynamic nodes by value. This allows `Element`s passed as props to be
+        // memoized by value: a freshly-built `Element` with the same content as
+        // the previous one compares equal, so the child component can skip
+        // re-rendering.
+        a.key == b.key
+            && a.template == b.template
+            && a.dynamic_nodes.len() == b.dynamic_nodes.len()
+            && a.dynamic_attrs.len() == b.dynamic_attrs.len()
+            && a.dynamic_nodes
+                .iter()
+                .zip(b.dynamic_nodes.iter())
+                .all(|(left, right)| left.value_eq(right))
+            && a.dynamic_attrs
+                .iter()
+                .zip(b.dynamic_attrs.iter())
+                .all(|(left, right)| left.as_ref() == right.as_ref())
     }
 }
 
@@ -121,6 +145,11 @@ impl Deref for VNode {
 }
 
 impl VNode {
+    /// Whether this node is the same allocation as `other`.
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.vnode, &other.vnode)
+    }
+
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
@@ -618,6 +647,23 @@ impl DynamicNode {
     pub fn make_node<'c, I>(into: impl IntoDynNode<I> + 'c) -> DynamicNode {
         into.into_dyn_node()
     }
+
+    /// Compare two dynamic nodes by value.
+    ///
+    /// Unlike [`VNode`]s, dynamic nodes do not have an identity of their own, so
+    /// this comparison is always structural. Components are compared by their
+    /// render function and, through the props `PartialEq`, by value.
+    fn value_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (DynamicNode::Text(left), DynamicNode::Text(right)) => left.value == right.value,
+            (DynamicNode::Component(left), DynamicNode::Component(right)) => left == right,
+            (DynamicNode::Placeholder(_), DynamicNode::Placeholder(_)) => true,
+            (DynamicNode::Fragment(left), DynamicNode::Fragment(right)) => {
+                left.len() == right.len() && left.iter().zip(right).all(|(l, r)| l == r)
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Default for DynamicNode {
@@ -645,6 +691,20 @@ impl Clone for VComponent {
             props: self.props.duplicate(),
             render_fn: self.render_fn,
         }
+    }
+}
+
+impl PartialEq for VComponent {
+    fn eq(&self, other: &Self) -> bool {
+        if self.render_fn != other.render_fn {
+            return false;
+        }
+
+        // Compare the props with the same type-erased equality the renderer uses
+        // for component memoization. This recurses into any `Element` props, which
+        // are compared by value.
+        let mut other_props = other.props.duplicate();
+        other_props.memoize(self.props.props())
     }
 }
 

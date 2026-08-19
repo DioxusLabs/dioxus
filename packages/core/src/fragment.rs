@@ -57,9 +57,11 @@ impl<const A: bool> FragmentBuilder<A> {
 /// or classes. If you want to generate nodes instead of accepting them as a list, consider declaring a closure
 /// on the props that takes Context.
 ///
-/// If a parent passes children into a component, the child will always re-render when the parent re-renders. In other
-/// words, a component cannot be automatically memoized if it borrows nodes from its parent, even if the component's
-/// props are valid for the static lifetime.
+/// If a parent passes children into a component, the child will re-render when the parent
+/// re-renders unless the children are unchanged. Since [`Element`]s are compared by value
+/// (see [`VNode`]'s `PartialEq` impl), a component *can* be automatically memoized even when
+/// it borrows nodes from its parent: if the newly-built children element has the same content
+/// as the previous one, the child skips re-rendering.
 ///
 /// ## Example
 ///

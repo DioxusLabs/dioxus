@@ -37,8 +37,10 @@ impl VNode {
 
         self.move_mount_to(new, dom);
 
-        // If the templates are the same, we don't need to do anything, except copy over the mount information
-        if self == new {
+        // If the nodes are the same allocation, we don't need to do anything, except copy over the mount information.
+        // Note: this intentionally uses pointer equality instead of `PartialEq`, which compares by value. The diff
+        // algorithm walks the tree structurally, so a value comparison here would be wasted work.
+        if self.ptr_eq(new) {
             return;
         }
 
