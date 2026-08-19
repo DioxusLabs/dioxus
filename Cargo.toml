@@ -342,7 +342,7 @@ winnow = "0.7.14"
 
 # desktop
 wry = { version = "0.55.1", default-features = false }
-tao = { version = "0.35.2", features = ["rwh_05"] }
+tao = { version = "0.36.0", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.2"
