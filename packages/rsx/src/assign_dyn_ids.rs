@@ -1,4 +1,7 @@
+use syn::parse_quote;
+
 use crate::attribute::Attribute;
+use crate::expression_pool::Tier;
 use crate::{
     AttributeValue, BodyNode, HotLiteral, HotReloadFormattedSegment, Segment, TemplateBody,
 };
@@ -35,10 +38,10 @@ impl<'a> DynIdVisitor<'a> {
             BodyNode::Element(el) => {
                 for (idx, attr) in el.merged_attributes.iter().enumerate() {
                     if !attr.is_static_str_literal() {
-                        self.assign_path_to_attribute(attr, idx);
                         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
                             self.assign_formatted_segment(lit);
                         }
+                        self.assign_path_to_attribute(attr, idx);
                     }
                 }
                 // Assign formatted segments to the key which is not included in the merged_attributes
@@ -52,32 +55,53 @@ impl<'a> DynIdVisitor<'a> {
             // Text nodes are dynamic if they contain dynamic segments
             BodyNode::Text(txt) => {
                 if !txt.is_static() {
-                    self.assign_path_to_node(node);
                     self.assign_formatted_segment(&txt.input);
+                    let tier = crate::expression_pool::fmt_tier(&txt.input);
+                    self.assign_path_to_node(node, tier);
                 }
             }
 
             // Raw exprs are always dynamic
             BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
-                self.assign_path_to_node(node)
+                self.assign_path_to_node(node, Tier::Unknown)
             }
             BodyNode::Component(component) => {
-                self.assign_path_to_node(node);
                 let mut index = 0;
+                let mut prop_index = 0;
                 for property in &component.fields {
+                    let is_key = property.name.is_likely_key();
                     if let AttributeValue::AttrLiteral(literal) = &property.value {
                         if let HotLiteral::Fmted(segments) = literal {
                             self.assign_formatted_segment(segments);
                         }
                         // Don't include keys in the component dynamic pool
-                        if !property.name.is_likely_key() {
+                        if !is_key {
                             component.component_literal_dyn_idx[index]
                                 .set(self.component_literal_index);
                             self.component_literal_index += 1;
                             index += 1;
+
+                            // Props that are provably-borrowing formatted strings get pulled into
+                            // the expression pool on their own so they can be evaluated before the
+                            // nodes and attributes that might move their captures
+                            if let HotLiteral::Fmted(segments) = literal
+                                && crate::expression_pool::fmt_tier(segments) == Tier::Borrowing
+                                && let Some(slot) = component.prop_bindings.get(prop_index)
+                            {
+                                let value = component.prop_value_tokens(property, index - 1);
+                                let binding = self
+                                    .body
+                                    .expression_pool
+                                    .add_indexed(Tier::Borrowing, parse_quote!({ #value }));
+                                slot.set(binding);
+                            }
                         }
                     }
+                    if !is_key {
+                        prop_index += 1;
+                    }
                 }
+                self.assign_path_to_node(node, Tier::Unknown);
             }
         };
     }
@@ -99,12 +123,17 @@ impl<'a> DynIdVisitor<'a> {
 
     /// Assign a path to a node and give it its dynamic index
     /// This simplifies the ToTokens implementation for the macro to be a little less centralized
-    fn assign_path_to_node(&mut self, node: &BodyNode) {
+    fn assign_path_to_node(&mut self, node: &BodyNode, tier: Tier) {
         // Assign the TemplateNode::Dynamic index to the node
         node.set_dyn_idx(self.body.node_paths.len());
 
         // And then save the current path as the corresponding path
         self.body.node_paths.push(self.current_path.clone());
+
+        // Finally, pull the expression into the expression pool so we control the order it is
+        // evaluated in relative to every other dynamic expression in this template
+        let binding = self.body.expression_pool.add(tier, parse_quote!({ #node }));
+        self.body.node_bindings.push(binding);
     }
 
     /// Assign a path to a attribute and give it its dynamic index
@@ -121,6 +150,14 @@ impl<'a> DynIdVisitor<'a> {
         self.body
             .attr_paths
             .push((self.current_path.clone(), attribute_index));
+
+        // And pull the rendered attribute into the expression pool
+        let rendered = attribute.rendered_as_dynamic_attr();
+        let binding = self
+            .body
+            .expression_pool
+            .add(attribute.tier(), parse_quote!({ #rendered }));
+        self.body.attr_bindings.push(binding);
     }
 }
 
