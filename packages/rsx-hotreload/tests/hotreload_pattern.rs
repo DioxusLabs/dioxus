@@ -1286,3 +1286,38 @@ fn valid_spread() {
 
     assert!(valid);
 }
+
+// JSX-style syntax should hot reload, including when mixed with the regular syntax
+#[test]
+fn valid_jsx_syntax() {
+    // Literal changes in JSX-style rsx are hot reloadable
+    let valid = can_hotreload(
+        quote! {
+            <div class="container">
+                <h1>"Hello, world!"</h1>
+            </div>
+        },
+        quote! {
+            <div class="new-class">
+                <h1>"Goodbye, world!"</h1>
+            </div>
+        },
+    );
+    assert!(valid);
+
+    // Rewriting between the two syntax styles is hot reloadable since they
+    // produce the same templates
+    let valid = can_hotreload(
+        quote! {
+            div { class: "container",
+                h1 { "Hello, world!" }
+            }
+        },
+        quote! {
+            <div class="container">
+                <h1>"Hello, world!"</h1>
+            </div>
+        },
+    );
+    assert!(valid);
+}

@@ -55,6 +55,7 @@ mod component;
 mod element;
 mod forloop;
 mod ifchain;
+mod jsx;
 mod node;
 mod raw_expr;
 mod rsx_block;
@@ -92,6 +93,7 @@ pub(crate) mod innerlude {
     pub use crate::expr_node::*;
     pub use crate::forloop::*;
     pub use crate::ifchain::*;
+    pub(crate) use crate::jsx::*;
     pub use crate::location::*;
     pub use crate::node::*;
     pub use crate::raw_expr::*;

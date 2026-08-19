@@ -68,41 +68,14 @@ impl Parse for Element {
             ),
         }
 
-        // Make sure these attributes have an el_name set for completions and Template generation
-        for attr in block.attributes.iter_mut() {
-            attr.el_name = Some(name.clone());
-        }
-
-        // Assemble the new element from the contents of the block
-        let mut element = Element {
+        Ok(Self::from_parts(
+            name,
+            block.attributes,
+            block.spreads,
+            block.children,
             brace,
-            name: name.clone(),
-            raw_attributes: block.attributes,
-            children: block.children,
-            diagnostics: block.diagnostics,
-            spreads: block.spreads.clone(),
-            merged_attributes: Vec::new(),
-        };
-
-        // And then merge the various attributes together
-        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
-        element.merge_attributes();
-
-        // And then merge the spreads *after* the attributes are merged. This ensures walking the
-        // merged attributes in path order stops before we hit the spreads, but spreads are still
-        // counted as dynamic attributes
-        for spread in block.spreads.iter() {
-            element.merged_attributes.push(Attribute {
-                name: AttributeName::Spread(spread.dots),
-                colon: None,
-                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
-                comma: spread.comma,
-                dyn_idx: spread.dyn_idx.clone(),
-                el_name: Some(name.clone()),
-            });
-        }
-
-        Ok(element)
+            block.diagnostics,
+        ))
     }
 }
 
@@ -211,6 +184,52 @@ impl ToTokens for Element {
 }
 
 impl Element {
+    /// Assemble an element from its parsed parts, merging attributes and spreads
+    pub(crate) fn from_parts(
+        name: ElementName,
+        mut attributes: Vec<Attribute>,
+        spreads: Vec<Spread>,
+        children: Vec<BodyNode>,
+        brace: Option<Brace>,
+        diagnostics: Diagnostics,
+    ) -> Self {
+        // Make sure these attributes have an el_name set for completions and Template generation
+        for attr in attributes.iter_mut() {
+            attr.el_name = Some(name.clone());
+        }
+
+        // Assemble the new element from the contents of the block
+        let mut element = Element {
+            brace,
+            name: name.clone(),
+            raw_attributes: attributes,
+            children,
+            diagnostics,
+            spreads: spreads.clone(),
+            merged_attributes: Vec::new(),
+        };
+
+        // And then merge the various attributes together
+        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
+        element.merge_attributes();
+
+        // And then merge the spreads *after* the attributes are merged. This ensures walking the
+        // merged attributes in path order stops before we hit the spreads, but spreads are still
+        // counted as dynamic attributes
+        for spread in spreads.iter() {
+            element.merged_attributes.push(Attribute {
+                name: AttributeName::Spread(spread.dots),
+                colon: None,
+                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
+                comma: spread.comma,
+                dyn_idx: spread.dyn_idx.clone(),
+                el_name: Some(name.clone()),
+            });
+        }
+
+        element
+    }
+
     pub(crate) fn add_merging_non_string_diagnostic(diagnostics: &mut Diagnostics, span: Span) {
         diagnostics.push(span.error("Cannot merge non-fmt literals").help(
             "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
