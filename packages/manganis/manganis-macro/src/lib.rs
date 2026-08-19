@@ -600,7 +600,10 @@ mod tests {
             ctx.create_resolver("../assets/does-not-exist.txt")
                 .resolve(),
             Err(AssetParseError::DoesNotExist {
-                path: ctx.crate_root.join("src/../assets/does-not-exist.txt"),
+                // The reported path is normalized by `std::path::absolute`, which resolves `..`
+                // components on windows but keeps them on unix.
+                path: std::path::absolute(ctx.crate_root.join("src/../assets/does-not-exist.txt"))
+                    .unwrap(),
             }),
         );
     }
