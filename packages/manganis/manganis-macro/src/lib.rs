@@ -602,7 +602,7 @@ mod tests {
             Err(AssetParseError::DoesNotExist {
                 // The reported path is normalized by `std::path::absolute`, which resolves `..`
                 // components on windows but keeps them on unix.
-                path: std::path::absolute(ctx.crate_root.join("src/../assets/does-not-exist.txt"),)
+                path: std::path::absolute(ctx.crate_root.join("src/../assets/does-not-exist.txt"))
                     .unwrap(),
             }),
         );
