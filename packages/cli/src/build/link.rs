@@ -1454,7 +1454,7 @@ impl BuildRequest {
         }
 
         let scope = RustcWrapperScope {
-            version: 1,
+            version: 2,
             capture_mode: self.rustc_wrapper_capture_mode(build_mode),
             bundle: self.bundle.to_string(),
             triple: self.triple.to_string(),
