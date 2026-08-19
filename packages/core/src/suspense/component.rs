@@ -26,7 +26,7 @@ impl SuspenseBoundaryProps {
     #[allow(dead_code, clippy::type_complexity)]
     fn builder() -> SuspenseBoundaryPropsBuilder<((), ())> {
         SuspenseBoundaryPropsBuilder {
-            owner: Owner::default(),
+            owner: PropsOwner::default(),
             fields: ((), ()),
             _phantom: ::core::default::Default::default(),
         }
@@ -36,7 +36,7 @@ impl SuspenseBoundaryProps {
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
 pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
-    owner: Owner,
+    owner: PropsOwner,
     fields: TypedBuilderFields,
     _phantom: (),
 }
@@ -80,7 +80,7 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
         self,
         fallback: impl SuperInto<Callback<SuspenseContext, Element>, __Marker>,
     ) -> SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)> {
-        let fallback = (with_owner(self.owner.clone(), move || {
+        let fallback = (with_props_owner(self.owner.clone(), move || {
             SuperInto::super_into(fallback)
         }),);
         let (_, children) = self.fields;
@@ -155,7 +155,7 @@ impl<__children> SuspenseBoundaryPropsBuilder<((), __children)> {
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 pub struct SuspenseBoundaryPropsWithOwner {
     inner: SuspenseBoundaryProps,
-    owner: Owner,
+    owner: PropsOwner,
 }
 #[automatically_derived]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -254,7 +254,6 @@ mod SuspenseBoundary_completions {
 }
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
-use generational_box::Owner;
 
 /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {
