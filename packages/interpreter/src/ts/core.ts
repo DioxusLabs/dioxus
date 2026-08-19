@@ -115,8 +115,33 @@ export class BaseInterpreter {
 
     if (bubbles) {
       if (this.global[event_name] === undefined) {
-        this.global[event_name] = { active: 1, callback: this.handler };
-        this.root.addEventListener(event_name, this.handler);
+        let callback = this.handler;
+        if (event_name === "selectionchange") {
+          callback = (event) => {
+            if (event.target !== document) {
+              if (event.target instanceof Node && this.root.contains(event.target)) {
+                this.handler(event);
+              }
+              return;
+            }
+
+            const selection = document.getSelection();
+            let editable = selection?.anchorNode?.parentElement;
+            if (selection?.anchorNode instanceof HTMLElement) {
+              editable = selection.anchorNode;
+            }
+            while (editable?.parentElement?.isContentEditable) {
+              editable = editable.parentElement;
+            }
+            if (editable?.isContentEditable && this.root.contains(editable)) {
+              editable.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+            }
+          };
+        }
+
+        this.global[event_name] = { active: 1, callback };
+        const target = event_name === "selectionchange" ? document : this.root;
+        target.addEventListener(event_name, callback);
       } else {
         this.global[event_name].active++;
       }
@@ -144,10 +169,8 @@ export class BaseInterpreter {
   removeBubblingListener(event_name: string) {
     this.global[event_name].active--;
     if (this.global[event_name].active === 0) {
-      this.root.removeEventListener(
-        event_name,
-        this.global[event_name].callback
-      );
+      const target = event_name === "selectionchange" ? document : this.root;
+      target.removeEventListener(event_name, this.global[event_name].callback);
       delete this.global[event_name];
     }
   }
