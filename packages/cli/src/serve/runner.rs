@@ -716,7 +716,7 @@ impl AppServer {
         let should_open = self.client.stage == BuildStage::Success
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
-        use crate::cli::styles::GLOW_STYLE;
+        use crate::cli::styles::{GLOW_STYLE, LINK_STYLE};
 
         if should_open {
             let time_taken = self.client.total_build_time().unwrap_or_else(|| {
@@ -731,6 +731,34 @@ impl AppServer {
                     "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
                     format_duration_ms(time_taken)
                 );
+
+                // Only now is the app actually ready to be used - this is the first point at
+                // which the bundle exists on disk and (for non-web platforms) the process has
+                // been launched, so this is when we tell the user the app is truly being served.
+                tracing::info!(
+                    r#"-----------------------------------------------------------------
+                Serving your app: {binname}! 🚀
+                • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
+                • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
+                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to change hotreload mode
+                • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
+                • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
+               ----------------------------------------------------------------"#,
+                    binname = self.client.build.executable_name(),
+                    extra = if self.client.build.using_dioxus_explicitly {
+                        format!(
+                            "\n                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.7/getting_started{LINK_STYLE:#}"
+                        )
+                    } else {
+                        String::new()
+                    }
+                );
+
+                if self.hotreload_mode == HotReloadMode::Hotpatch {
+                    tracing::warn!(
+                        "Note: {GLOW_STYLE}Rust hot-patching{GLOW_STYLE:#} is now enabled by default! Unexpected behavior might occur. Press `p` to change modes."
+                    );
+                }
             } else {
                 tracing::info!(
                     "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",

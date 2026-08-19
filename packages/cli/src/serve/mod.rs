@@ -1,8 +1,6 @@
 use crate::{
     AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
-    TraceController,
-    build::PatchError,
-    styles::{GLOW_STYLE, LINK_STYLE},
+    TraceController, build::PatchError,
 };
 
 mod ansi_buffer;
@@ -47,33 +45,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
     let mut devserver = WebServer::start(&builder)?;
     let mut screen = Output::start(builder.interactive).await?;
 
-    // This is our default splash screen. We might want to make this a fancier splash screen in the future
-    // Also, these commands might not be the most important, but it's all we've got enabled right now
-    tracing::info!(
-        r#"-----------------------------------------------------------------
-                Serving your app: {binname}! 🚀
-                • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
-                • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
-                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to change hotreload mode
-                • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
-                • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
-               ----------------------------------------------------------------"#,
-        binname = builder.client.build.executable_name(),
-        extra = if builder.client.build.using_dioxus_explicitly {
-            format!(
-                "\n                Learn more at {LINK_STYLE}https://dioxuslabs.com/learn/0.7/getting_started{LINK_STYLE:#}"
-            )
-        } else {
-            String::new()
-        }
-    );
-
-    // Let people know hotpatching is enabled by default now.
-    if builder.hotreload_mode == HotReloadMode::Hotpatch {
-        tracing::warn!(
-            "Note: {GLOW_STYLE}Rust hot-patching{GLOW_STYLE:#} is now enabled by default! Unexpected behavior might occur. Press `p` to change modes."
-        );
-    }
+    // The "Serving your app" readiness banner is shown later, in `AppBuilder::open`, once the
+    // first build has actually completed and (for non-web platforms) the app has launched -
+    // printing it here would claim readiness before the build even starts.
 
     builder.initialize();
 
