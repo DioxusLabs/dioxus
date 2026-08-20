@@ -1,6 +1,6 @@
 use crate::{Runtime, ScopeId, current_scope_id, scope_context::Scope, tasks::SchedulerMsg};
 use futures_channel::mpsc::UnboundedReceiver;
-use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
+use generational_box::{BorrowMutError, GenerationalBox, Owner, SyncStorage};
 use std::{
     cell::RefCell,
     collections::HashSet,
@@ -70,6 +70,20 @@ impl ReactiveContext {
     pub fn new_with_callback(
         callback: impl FnMut() + Send + Sync + 'static,
         scope: ScopeId,
+        origin: &'static std::panic::Location<'static>,
+    ) -> Self {
+        let owner = Runtime::current().scope_owner::<SyncStorage>(scope);
+        Self::new_with_callback_in_owner(callback, scope, owner, origin)
+    }
+
+    /// Create a new reactive context owned by the given owner.
+    ///
+    /// This can be used when the reactive context is embedded in another owned value and should be
+    /// dropped with that value instead of with the component scope.
+    pub fn new_with_callback_in_owner(
+        callback: impl FnMut() + Send + Sync + 'static,
+        scope: ScopeId,
+        owner: Owner<SyncStorage>,
         #[allow(unused)] origin: &'static std::panic::Location<'static>,
     ) -> Self {
         let inner = Inner {
@@ -81,8 +95,6 @@ impl ReactiveContext {
             #[cfg(debug_assertions)]
             scope: None,
         };
-
-        let owner = Runtime::current().scope_owner(scope);
 
         let self_ = Self {
             scope,
@@ -134,7 +146,17 @@ impl ReactiveContext {
     pub fn clear_subscribers(&self) {
         // The key type is mutable, but the hash is stable through mutations because we hash by pointer
         #[allow(clippy::mutable_key_type)]
-        let old_subscribers = std::mem::take(&mut self.inner.write().subscribers);
+        let old_subscribers = match self.inner.try_write() {
+            Ok(mut inner) => std::mem::take(&mut inner.subscribers),
+            // If the context was dropped, it cannot actively unsubscribe itself;
+            // stale subscriber-list entries are cleaned lazily when they fail to mark dirty.
+            Err(BorrowMutError::Dropped(_)) => return,
+            Err(expect) => {
+                panic!(
+                    "Expected to be able to write to reactive context to clear subscribers, but it failed with: {expect:?}"
+                );
+            }
+        };
         for subscriber in old_subscribers {
             subscriber.0.remove(self);
         }
