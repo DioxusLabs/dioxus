@@ -1368,7 +1368,7 @@ impl AppServer {
     /// Uses BFS from the tip crate through its workspace dependencies to find the path.
     /// If the changed crate IS the tip crate, returns just `[tip]`.
     fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
-        let tip_name = self.client.build.main_target.replace('-', "_");
+        let tip_name = self.client.build.tip_package_name();
 
         // If the changed crate is the tip, no chain needed
         if changed_crate == tip_name {

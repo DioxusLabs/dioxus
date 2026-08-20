@@ -12,6 +12,7 @@ use winit::window::WindowId;
 use winit::platform::macos::ApplicationHandlerExtMacOS;
 
 use crate::DioxusNativeWindowRenderer;
+use crate::event_handlers::WindowEventHandlers;
 use crate::{BlitzShellEvent, DioxusDocument, WindowConfig, contexts::DioxusNativeDocument};
 
 /// Dioxus-native specific event type
@@ -34,6 +35,7 @@ pub enum DioxusNativeEvent {
 pub struct DioxusNativeApplication {
     pending_window: Option<WindowConfig<DioxusNativeWindowRenderer>>,
     inner: BlitzApplication<DioxusNativeWindowRenderer>,
+    event_handlers: Rc<WindowEventHandlers>,
 }
 
 impl DioxusNativeApplication {
@@ -45,6 +47,7 @@ impl DioxusNativeApplication {
         Self {
             pending_window: Some(config),
             inner: BlitzApplication::new(proxy, event_queue),
+            event_handlers: Rc::new(WindowEventHandlers::default()),
         }
     }
 
@@ -147,6 +150,7 @@ impl ApplicationHandler for DioxusNativeApplication {
                     window_id,
                 ));
                 provide_context(shared);
+                provide_context(self.event_handlers.clone());
             });
 
             // Add shell provider
@@ -190,6 +194,8 @@ impl ApplicationHandler for DioxusNativeApplication {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        self.event_handlers
+            .apply_event(window_id, &event, event_loop);
         self.inner.window_event(event_loop, window_id, event);
     }
 

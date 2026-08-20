@@ -1841,7 +1841,10 @@ fn remove_option_wrapper(type_: Type) -> Type {
 
 /// Check if a type should be owned by the child component after conversion
 pub(crate) fn child_owned_type(ty: &Type) -> bool {
-    looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
+    looks_like_signal_type(ty)
+        || looks_like_write_type(ty)
+        || looks_like_callback_type(ty)
+        || looks_like_store_type(ty)
 }
 
 /// Check if the path without generics matches the type we are looking for

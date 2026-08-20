@@ -23,3 +23,4 @@ bytemuck = "1.25"
 blitz-paint = { workspace = true, default-features = true }
 blitz-traits = { workspace = true, default-features = true }
 blitz-dom = { workspace = true, default-features = true }
+atomic_refcell =  { workspace = true }

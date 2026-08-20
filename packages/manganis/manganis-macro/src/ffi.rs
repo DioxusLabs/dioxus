@@ -725,10 +725,10 @@ impl FfiBridgeParser {
             let class_name_bytes = format!("{}\0", name);
 
             let type_def = quote! {
-                /// Opaque wrapper around an Objective-C object pointer
+                /// Opaque wrapper around a retained Objective-C object
                 /// The actual Swift class is looked up dynamically at runtime after dx links everything
                 pub struct #name {
-                    inner: *mut manganis::objc2::runtime::AnyObject,
+                    inner: manganis::objc2::rc::Retained<manganis::objc2::runtime::AnyObject>,
                 }
 
                 unsafe impl Send for #name {}
@@ -828,17 +828,26 @@ impl FfiBridgeParser {
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![class, alloc];
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![instance, init];
 
-                            if instance.is_null() {
-                                return Err("Failed to initialize instance");
-                            }
+                            // `alloc` + `init` returns a +1 retained object; `Retained::from_raw`
+                            // takes over that reference and sends `release` on drop.
+                            let inner = manganis::objc2::rc::Retained::from_raw(instance)
+                                .ok_or("Failed to initialize instance")?;
 
-                            Ok(Self { inner: instance })
+                            Ok(Self { inner })
                         }
                     }
 
-                    /// Create from an existing object pointer
+                    /// Create from an existing object pointer.
+                    ///
+                    /// # Safety
+                    ///
+                    /// `ptr` must be a valid, non-null pointer to an Objective-C object,
+                    /// and the caller must transfer ownership of one retain count (+1)
+                    /// to the returned wrapper, which sends `release` on drop.
                     pub unsafe fn from_raw(ptr: *mut manganis::objc2::runtime::AnyObject) -> Self {
-                        Self { inner: ptr }
+                        let inner = manganis::objc2::rc::Retained::from_raw(ptr)
+                            .expect("from_raw called with a null pointer");
+                        Self { inner }
                     }
                 }
             };
@@ -961,7 +970,7 @@ impl FfiBridgeParser {
 
         // Build the msg_send call
         let this_expr = if func.receiver.is_some() {
-            quote! { this.inner }
+            quote! { manganis::objc2::rc::Retained::as_ptr(&this.inner) as *mut manganis::objc2::runtime::AnyObject }
         } else {
             // For static methods, we'd need the class
             quote! { class }

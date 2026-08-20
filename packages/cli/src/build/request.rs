@@ -2612,6 +2612,16 @@ impl BuildRequest {
         self.main_target.replace('-', "_")
     }
 
+    /// The workspace package name of the tip crate (hyphens replaced with underscores).
+    ///
+    /// This can differ from `tip_crate_name()` when the binary target is named differently
+    /// than its package (e.g. package `browser` with `[[bin]] name = "blitz"`). Use this for
+    /// workspace-graph lookups (which are keyed by package name) and `tip_crate_name()` for
+    /// rustc `--crate-name` keys like `{name}.bin`.
+    pub(crate) fn tip_package_name(&self) -> String {
+        self.package().name.replace('-', "_")
+    }
+
     /// Stderr captured from the linker during the last build. Written by the linker
     /// interception in `rustcwrapper` and read back to surface warnings/errors to the user.
     fn link_err_file(&self) -> PathBuf {
@@ -2694,9 +2704,16 @@ impl BuildRequest {
         self.crate_target.kind[0].clone()
     }
 
+    /// The application name. PascalCase version of the crate name by default.
+    /// May be overridden using [`ApplicationConfig::name`][crate::ApplicationConfig::name].
     pub(crate) fn bundled_app_name(&self) -> String {
         use convert_case::{Case, Casing};
-        self.executable_name().to_case(Case::Pascal)
+
+        self.config
+            .application
+            .name
+            .clone()
+            .unwrap_or_else(|| self.executable_name().to_case(Case::Pascal))
     }
 
     /// Get the crate version from Cargo.toml (e.g., "0.1.0")
@@ -3126,7 +3143,7 @@ impl BuildRequest {
             })
             .collect();
 
-        let tip = self.tip_crate_name();
+        let tip = self.tip_package_name();
         let Some(tip_nid) = krates.workspace_members().find_map(|m| match m {
             krates::Node::Krate { id, krate, .. } if krate.name.replace('-', "_") == tip => {
                 krates.nid_for_kid(id)
