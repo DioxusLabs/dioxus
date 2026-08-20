@@ -88,6 +88,9 @@ pub use dioxus_server as server;
 #[cfg(feature = "server")]
 pub use dioxus_server::serve;
 
+#[cfg(feature = "server")]
+pub use dioxus_server::serve_router;
+
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use dioxus_devtools as devtools;
@@ -225,7 +228,9 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{self, DioxusRouterExt, ServeConfig, ServerFunction, serve};
+    pub use dioxus_server::{
+        self, DioxusRouterExt, ServeConfig, ServerFunction, serve, serve_router,
+    };
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
