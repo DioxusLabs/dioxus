@@ -465,16 +465,14 @@ macro_rules! expand_html_event_listeners {
             )*
         }
     ) => {
-        $(
-            impl_event! {
-                $data;
+        dioxus_html_internal_macro::impl_event_extensions! {
+            $(
                 $(
-                    #[doc = concat!(stringify!($name))]
                     $( #[$attr] )*
-                    $name: concat!("on", stringify!($raw));
+                    $name => $raw => $data,
                 )*
-            }
-        )*
+            )*
+        }
     };
 }
 

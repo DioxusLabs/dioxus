@@ -1,9 +1,110 @@
 #![allow(non_snake_case)]
 
-use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, ElementId};
-use pretty_assertions::assert_eq;
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
+
+macro_rules! oversized_static_divs {
+    ($render:ident) => {
+        $render! {
+            div { "0" }
+            div { "1" }
+            div { "2" }
+            div { "3" }
+            div { "4" }
+            div { "5" }
+            div { "6" }
+            div { "7" }
+            div { "8" }
+            div { "9" }
+            div { "10" }
+            div { "11" }
+            div { "12" }
+            div { "13" }
+            div { "14" }
+            div { "15" }
+            div { "16" }
+            div { "17" }
+            div { "18" }
+            div { "19" }
+            div { "20" }
+            div { "21" }
+            div { "22" }
+            div { "23" }
+            div { "24" }
+            div { "25" }
+            div { "26" }
+            div { "27" }
+            div { "28" }
+            div { "29" }
+            div { "30" }
+            div { "31" }
+            div { "32" }
+            div { "33" }
+            div { "34" }
+            div { "35" }
+            div { "36" }
+            div { "37" }
+            div { "38" }
+            div { "39" }
+            div { "40" }
+            div { "41" }
+            div { "42" }
+            div { "43" }
+            div { "44" }
+            div { "45" }
+            div { "46" }
+            div { "47" }
+            div { "48" }
+            div { "49" }
+            div { "50" }
+            div { "51" }
+            div { "52" }
+            div { "53" }
+            div { "54" }
+            div { "55" }
+            div { "56" }
+            div { "57" }
+            div { "58" }
+            div { "59" }
+            div { "60" }
+            div { "61" }
+            div { "62" }
+            div { "63" }
+            div { "64" }
+            div { "65" }
+            div { "66" }
+            div { "67" }
+            div { "68" }
+            div { "69" }
+        }
+    };
+}
+
+macro_rules! render_as_roots {
+    ($($node:tt)*) => {
+        rsx! {
+            $($node)*
+        }
+    };
+}
+
+macro_rules! render_as_children {
+    ($($node:tt)*) => {
+        rsx! {
+            section {
+                $($node)*
+            }
+        }
+    };
+}
+
+fn render_app(app: fn() -> Element) -> Vec<SnapshotNode> {
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
+
+    oracle.snapshot()
+}
 
 /// Should push the text node onto the stack and modify it
 /// Regression test for https://github.com/DioxusLabs/dioxus/issues/2809 and https://github.com/DioxusLabs/dioxus/issues/3055
@@ -38,32 +139,91 @@ fn many_roots() {
         )
     }
 
-    let mut dom = VirtualDom::new(app);
-    let edits = dom.rebuild_to_vec();
+    fn expected() -> Element {
+        rsx! {
+            div {
+                div { "trailing nav" }
+                div { "whhhhh" }
+                div { "bhhhh" }
+                div { "homepage 1" }
+                div { width: "100%" }
+            }
+        }
+    }
 
-    assert_eq!(
-        edits.edits,
-        [
-            // load the div {} container
-            LoadTemplate { index: 0, id: ElementId(1) },
-            // Set the width attribute first
-            AssignId { path: &[2], id: ElementId(2,) },
-            SetAttribute {
-                name: "width",
-                ns: Some("style",),
-                value: AttributeValue::Text("100%".to_string()),
-                id: ElementId(2,),
-            },
-            // Load MyOutlet next
-            LoadTemplate { index: 0, id: ElementId(3) },
-            ReplacePlaceholder { path: &[1], m: 1 },
-            // Then MyNav
-            LoadTemplate { index: 0, id: ElementId(4) },
-            LoadTemplate { index: 1, id: ElementId(5) },
-            LoadTemplate { index: 2, id: ElementId(6) },
-            ReplacePlaceholder { path: &[0], m: 3 },
-            // Then mount the div to the dom
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    )
+    let mut dom = VirtualDom::new(app);
+    let mut oracle = RendererOracle::new();
+    let summary = oracle.rebuild(&mut dom);
+
+    oracle.assert_matches(expected);
+    assert_eq!(summary.set_attrs, 1);
+}
+
+#[test]
+fn large_static_root_block_renders_through_dynamic_chunks() {
+    fn app() -> Element {
+        oversized_static_divs!(render_as_roots)
+    }
+
+    let snapshot = render_app(app);
+    assert_eq!(snapshot.len(), 70);
+    assert!(snapshot.iter().all(|node| matches!(
+        node,
+        SnapshotNode::Element { tag, .. } if tag == "div"
+    )));
+}
+
+#[test]
+fn large_static_child_block_renders_through_dynamic_chunks() {
+    fn app() -> Element {
+        oversized_static_divs!(render_as_children)
+    }
+
+    let snapshot = render_app(app);
+    let [SnapshotNode::Element { tag, children, .. }] = snapshot.as_slice() else {
+        panic!("expected one section element");
+    };
+    assert_eq!(tag, "section");
+    assert_eq!(children.len(), 70);
+    assert!(children.iter().all(|node| matches!(
+        node,
+        SnapshotNode::Element { tag, .. } if tag == "div"
+    )));
+}
+
+/// Regression test for deeply nested elements. These 40 levels of nesting
+/// lower and render normally.
+#[test]
+fn deeply_nested_elements_lower_without_panicking() {
+    fn app() -> Element {
+        rsx! {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+            div { div { div { div { div {
+                "deep nesting marker"
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+            } } } } }
+        }
+    }
+
+    let snapshot = render_app(app);
+    let mut node = snapshot.first().expect("one root div");
+    for _ in 0..40 {
+        let SnapshotNode::Element { tag, children, .. } = node else {
+            panic!("expected a nested div at every level");
+        };
+        assert_eq!(tag, "div");
+        node = children.first().expect("each div has a single child");
+    }
 }

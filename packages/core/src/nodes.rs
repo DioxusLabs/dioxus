@@ -1,103 +1,148 @@
 use crate::{
-    Element, Event, Properties, ScopeId, VirtualDom,
-    any_props::BoxedAnyProps,
+    DynamicAnchor, DynamicNodeSlot, Element, Event, Properties, ScopeId, Template, VirtualDom,
     arena::ElementId,
     events::ListenerCallback,
-    innerlude::{ElementRef, MountId, ScopeState, VProps},
+    innerlude::{BoxedAnyProps, MountId, ScopeState, VProps},
     properties::ComponentFunction,
+    view::ViewExt,
 };
 use dioxus_core_types::DioxusFormattable;
+
 use std::ops::Deref;
 use std::rc::Rc;
-use std::vec;
 use std::{
     any::{Any, TypeId},
-    cell::Cell,
     fmt::{Arguments, Debug},
 };
 
-/// The information about the
-#[derive(Debug)]
-pub(crate) struct VNodeMount {
-    /// The parent of this node
-    pub parent: Option<ElementRef>,
+/// Runtime node and attribute values that hydrate a static [`Template`].
+pub struct DynamicValues {
+    /// Root key for this render.
+    pub(crate) key: Option<String>,
 
-    /// A back link to the original node
-    pub node: VNode,
+    /// Dynamic node values in template order.
+    pub(crate) dynamic_nodes: Vec<DynamicNode>,
 
-    /// The IDs for the roots of this template - to be used when moving the template around and removing it from
-    /// the actual Dom
-    pub root_ids: Box<[ElementId]>,
-
-    /// The element in the DOM that each attribute is mounted to
-    pub(crate) mounted_attributes: Box<[ElementId]>,
-
-    /// For components: This is the ScopeId the component is mounted to
-    /// For other dynamic nodes: This is element in the DOM that each dynamic node is mounted to
-    pub(crate) mounted_dynamic_nodes: Box<[usize]>,
+    /// Dynamic attribute values in template order.
+    pub(crate) dynamic_attrs: Vec<Box<[Attribute]>>,
 }
 
-/// A reference to a template along with any context needed to hydrate it
-///
-/// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
-/// static parts of the template.
-#[derive(Debug)]
-pub struct VNodeInner {
-    /// The key given to the root of this template.
-    ///
-    /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
-    pub key: Option<String>,
+impl Debug for DynamicValues {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynamicValues").finish_non_exhaustive()
+    }
+}
 
-    /// The static nodes and static descriptor of the template
+impl DynamicValues {
+    /// Create a dynamic node/attribute payload.
+    ///
+    /// Each dynamic attribute slot is normalized so its attributes are sorted by
+    /// `(name, namespace)`. Duplicate keys keep their relative input order, giving
+    /// last-wins semantics for spread attributes like `..props.attributes`.
+    #[inline]
+    pub fn from_parts(
+        key: Option<String>,
+        dynamic_nodes: Box<[DynamicNode]>,
+        dynamic_attrs: Box<[Box<[Attribute]>]>,
+    ) -> Self {
+        let mut values = Self {
+            key,
+            dynamic_nodes: dynamic_nodes.into_vec(),
+            dynamic_attrs: dynamic_attrs.into_vec(),
+        };
+        values.normalize();
+        values
+    }
+
+    /// Create an empty dynamic node/attribute payload.
+    pub(crate) fn new() -> Self {
+        Self {
+            key: None,
+            dynamic_nodes: Vec::new(),
+            dynamic_attrs: Vec::new(),
+        }
+    }
+
+    /// Set the root key for this render.
+    pub(crate) fn set_key(&mut self, key: Option<String>) {
+        self.key = key;
+    }
+
+    /// Push a dynamic node slot.
+    pub(crate) fn push_node(&mut self, value: DynamicNode) {
+        self.dynamic_nodes.push(value);
+    }
+
+    /// Push a dynamic attribute slot.
+    ///
+    /// Dynamic attribute slots are normalized by [`Self::normalize`] before the values are stored
+    /// on a [`VNode`].
+    pub(crate) fn push_attrs(&mut self, value: Box<[Attribute]>) {
+        self.dynamic_attrs.push(value);
+    }
+
+    /// Normalize dynamic attribute slots for diffing.
+    pub(crate) fn normalize(&mut self) {
+        for slot in self.dynamic_attrs.iter_mut() {
+            slot.sort_by_key(|attribute| (attribute.name, attribute.namespace));
+        }
+    }
+
+    /// The root key for this render.
+    #[inline]
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+
+    /// The dynamic node values in template order.
+    #[inline]
+    pub fn dynamic_node_values(&self) -> &[DynamicNode] {
+        &self.dynamic_nodes
+    }
+
+    /// The dynamic attribute values in template order.
+    #[inline]
+    pub fn dynamic_attr_values(&self) -> &[Box<[Attribute]>] {
+        &self.dynamic_attrs
+    }
+}
+
+/// A static template with the values rendered for it.
+pub(crate) struct VNodeInner {
+    /// The static template.
     pub template: Template,
 
-    /// The dynamic nodes in the template
-    pub dynamic_nodes: Box<[DynamicNode]>,
+    /// The rendered dynamic node/attribute values.
+    pub view: DynamicValues,
+}
 
-    /// The dynamic attribute slots in the template
-    ///
-    /// This is a list of positions in the template where dynamic attributes can be inserted.
-    ///
-    /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
-    ///
-    /// For example:
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// let class = "my-class";
-    /// let attrs = vec![];
-    /// let color = "red";
-    ///
-    /// rsx! {
-    ///     div {
-    ///         class: "{class}",
-    ///         ..attrs,
-    ///         p {
-    ///             color: "{color}",
-    ///         }
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// Would be represented as:
-    /// ```text
-    /// [
-    ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
-    ///     [color], // Slot 1 in the template
-    /// ]
-    /// ```
-    pub dynamic_attrs: Box<[Box<[Attribute]>]>,
+impl Debug for VNodeInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VNodeInner").finish_non_exhaustive()
+    }
+}
+
+impl Deref for VNodeInner {
+    type Target = DynamicValues;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view
+    }
 }
 
 /// A reference to a template along with any context needed to hydrate it
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
+}
 
-    /// The mount information for this template
-    pub(crate) mount: Cell<MountId>,
+impl Debug for VNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VNode").finish_non_exhaustive()
+    }
 }
 
 impl Default for VNode {
@@ -112,473 +157,161 @@ impl PartialEq for VNode {
     }
 }
 
-impl Deref for VNode {
-    type Target = VNodeInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.vnode
-    }
-}
-
 impl VNode {
+    /// The static template for this rendered node.
+    pub fn template(&self) -> &Template {
+        &self.vnode.template
+    }
+
+    /// The rendered dynamic node/attribute values.
+    pub fn dynamic_values(&self) -> &DynamicValues {
+        &self.vnode.view
+    }
+
+    /// The dynamic node values in template order.
+    pub fn dynamic_node_values(&self) -> &[DynamicNode] {
+        self.dynamic_values().dynamic_node_values()
+    }
+
+    /// The dynamic attribute values in template order.
+    pub fn dynamic_attr_values(&self) -> &[Box<[Attribute]>] {
+        self.dynamic_values().dynamic_attr_values()
+    }
+
+    /// The root key for this render.
+    pub fn key(&self) -> Option<&str> {
+        self.dynamic_values().key()
+    }
+
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
     }
 
-    /// Create a template with a single placeholder node
+    /// Create an empty VNode that produces no DOM nodes
     pub fn placeholder() -> Self {
         use std::cell::OnceCell;
-        // We can reuse all placeholders across the same thread to save memory
+        // We can reuse this empty vnode across the same thread to save memory
         thread_local! {
-            static PLACEHOLDER_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+            static EMPTY_VNODE: OnceCell<VNode> = const { OnceCell::new() };
         }
-        let vnode = PLACEHOLDER_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
-                    dynamic_attrs: Box::new([]),
-                    template: Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
-                })
-            })
-            .clone()
-        });
-        Self {
-            vnode,
-            mount: Default::default(),
-        }
+        EMPTY_VNODE.with(|cell| {
+            cell.get_or_init(move || crate::view::fragment().into_vnode())
+                .clone()
+        })
     }
 
-    /// Create a new VNode
-    pub fn new(
-        key: Option<String>,
-        template: Template,
-        dynamic_nodes: Box<[DynamicNode]>,
-        dynamic_attrs: Box<[Box<[Attribute]>]>,
-    ) -> Self {
+    /// Create a new VNode from a static template and dynamic node/attribute payload.
+    pub fn new(template: Template, mut values: DynamicValues) -> Self {
+        values.normalize();
+
+        debug_assert!(
+            values.dynamic_nodes.len()
+                == template
+                    .anchors()
+                    .iter()
+                    .map(|anchor| anchor.nodes().end)
+                    .max()
+                    .unwrap_or_default(),
+            "bad dynamic node count"
+        );
+        debug_assert!(
+            values.dynamic_attrs.len()
+                == template
+                    .anchors()
+                    .iter()
+                    .map(|anchor| anchor.attributes().end)
+                    .max()
+                    .unwrap_or_default(),
+            "bad dynamic attribute count"
+        );
+
         Self {
             vnode: Rc::new(VNodeInner {
-                key,
                 template,
-                dynamic_nodes,
-                dynamic_attrs,
+                view: values,
             }),
-            mount: Default::default(),
         }
     }
+}
 
-    /// Load a dynamic root at the given index
-    ///
-    /// Returns [`None`] if the root is actually a static node (Element/Text)
-    pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.roots()[idx]
-            .dynamic_id()
-            .map(|id| &self.dynamic_nodes[id])
+#[derive(Clone, Copy, Debug)]
+/// A [`VNode`] paired with the live mount that renders it.
+pub struct MountedVNode<'a> {
+    vnode: &'a VNode,
+    mount: MountId,
+}
+
+impl<'a> MountedVNode<'a> {
+    pub(crate) const fn new(vnode: &'a VNode, mount: MountId) -> Self {
+        Self { vnode, mount }
     }
 
-    /// Get the mounted id for a dynamic node index
+    pub(crate) const fn mount(self) -> MountId {
+        self.mount
+    }
+
+    /// Return the underlying vnode.
+    pub const fn vnode(self) -> &'a VNode {
+        self.vnode
+    }
+
+    /// Get the mounted id for a dynamic node.
     pub fn mounted_dynamic_node(
-        &self,
-        dynamic_node_idx: usize,
+        self,
+        slot: DynamicNodeSlot<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mount.get().as_usize()?;
-
-        match &self.dynamic_nodes[dynamic_node_idx] {
-            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => {
-                let mounts = dom.runtime.mounts.borrow();
-                mounts
-                    .get(mount)?
-                    .mounted_dynamic_nodes
-                    .get(dynamic_node_idx)
-                    .map(|id| ElementId(*id))
-            }
+        let dynamic_node_idx = slot.index();
+        match &self.vnode.dynamic_node_values()[dynamic_node_idx] {
+            DynamicNode::Text(_) => dom
+                .mounted_dynamic_text_node(self.mount, dynamic_node_idx)
+                .map(|id| id.element_id()),
             _ => None,
         }
     }
 
-    /// Get the mounted id for a root node index
-    pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
-        let mount = self.mount.get().as_usize()?;
-
-        let mounts = dom.runtime.mounts.borrow();
-        mounts.get(mount)?.root_ids.get(root_idx).copied()
-    }
-
-    /// Get the mounted id for a dynamic attribute index
-    pub fn mounted_dynamic_attribute(
-        &self,
-        dynamic_attribute_idx: usize,
+    /// Get the mounted id for the static template node addressed by a dynamic anchor.
+    pub fn mounted_anchor_node(
+        self,
+        anchor: DynamicAnchor<'a>,
         dom: &VirtualDom,
     ) -> Option<ElementId> {
-        let mount = self.mount.get().as_usize()?;
-
-        let mounts = dom.runtime.mounts.borrow();
-        mounts
-            .get(mount)?
-            .mounted_attributes
-            .get(dynamic_attribute_idx)
-            .copied()
+        dom.mounted_anchor_node(self.mount, anchor.anchor_index())
+            .map(|id| id.element_id())
     }
 
-    /// Create a deep clone of this VNode
-    pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            vnode: Rc::new(VNodeInner {
-                key: self.vnode.key.clone(),
-                template: self.vnode.template,
-                dynamic_nodes: self
-                    .vnode
-                    .dynamic_nodes
-                    .iter()
-                    .map(|node| match node {
-                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
-                            nodes.iter().map(|node| node.deep_clone()).collect(),
-                        ),
-                        other => other.clone(),
-                    })
-                    .collect(),
-                dynamic_attrs: self
-                    .vnode
-                    .dynamic_attrs
-                    .iter()
-                    .map(|attr| {
-                        attr.iter()
-                            .map(|attribute| attribute.deep_clone())
-                            .collect()
-                    })
-                    .collect(),
-            }),
-            mount: Default::default(),
-        }
+    /// Get the mounted id for a static template node by anchor index.
+    pub fn mounted_static_anchor(self, anchor_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+        dom.mounted_anchor_node(self.mount, anchor_idx)
+            .map(|id| id.element_id())
+    }
+
+    /// Get mounted children for a dynamic fragment.
+    pub fn mounted_fragment_children(
+        self,
+        slot: DynamicNodeSlot<'a>,
+        dom: &VirtualDom,
+    ) -> Vec<MountedVNode<'a>> {
+        let dynamic_node_idx = slot.index();
+        let DynamicNode::Fragment(children) = &self.vnode.dynamic_node_values()[dynamic_node_idx]
+        else {
+            return Vec::new();
+        };
+
+        children
+            .iter()
+            .zip(dom.mounted_fragment_children(self.mount, dynamic_node_idx, children.len()))
+            .map(|(vnode, mount)| MountedVNode::new(vnode, mount))
+            .collect()
     }
 }
 
-type StaticStr = &'static str;
-type StaticPathArray = &'static [&'static [u8]];
-type StaticTemplateArray = &'static [TemplateNode];
-type StaticTemplateAttributeArray = &'static [TemplateAttribute];
+impl Deref for MountedVNode<'_> {
+    type Target = VNode;
 
-/// A static layout of a UI tree that describes a set of dynamic and static nodes.
-///
-/// This is the core innovation in Dioxus. Most UIs are made of static nodes, yet participate in diffing like any
-/// dynamic node. This struct can be created at compile time. It promises that its pointer is unique, allow Dioxus to use
-/// its static description of the UI to skip immediately to the dynamic nodes during diffing.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
-pub struct Template {
-    /// The list of template nodes that make up the template
-    ///
-    /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    roots: StaticTemplateArray,
-
-    /// The paths of each node relative to the root of the template.
-    ///
-    /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
-    /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
-    )]
-    node_paths: StaticPathArray,
-
-    /// The paths of each dynamic attribute relative to the root of the template
-    ///
-    /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
-    /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky", bound = "")
-    )]
-    attr_paths: StaticPathArray,
-
-    /// Compile-time hash of template content for reliable cross-crate comparison.
-    /// This ensures identical templates compare equal regardless of optimization levels.
-    ///
-    /// Uses xxh64 (64-bit hash). By the birthday paradox, collision probability is:
-    /// P ≈ 1 - e^(-n²/(2 × 2^64)) where n = number of templates.
-    ///
-    /// - 1,000 templates: P ≈ 2.7 × 10^-14 (essentially zero)
-    /// - 10,000 templates: P ≈ 2.7 × 10^-12 (essentially zero)
-    /// - 1 million templates: P ≈ 0.000003%
-    /// - 50% collision chance requires ~5 billion templates
-    ///
-    /// For any realistic application, collision probability is negligible.
-    hash: u64,
-}
-
-impl Template {
-    /// Create a new Template with the given roots, node_paths, and attr_paths.
-    /// The hash is computed automatically from the template content.
-    pub const fn new(
-        roots: &'static [TemplateNode],
-        node_paths: &'static [&'static [u8]],
-        attr_paths: &'static [&'static [u8]],
-    ) -> Self {
-        Self {
-            roots,
-            node_paths,
-            attr_paths,
-            hash: Self::compute_hash(roots, node_paths, attr_paths),
-        }
-    }
-
-    /// Get the template nodes that make up this template.
-    pub const fn roots(&self) -> &'static [TemplateNode] {
-        self.roots
-    }
-
-    /// Get the paths of each dynamic node relative to the root of the template.
-    pub const fn node_paths(&self) -> &'static [&'static [u8]] {
-        self.node_paths
-    }
-
-    /// Get the paths of each dynamic attribute relative to the root of the template.
-    pub const fn attr_paths(&self) -> &'static [&'static [u8]] {
-        self.attr_paths
-    }
-
-    /// Compute a content-based hash of template structure.
-    /// This is const so it can be used both at compile time and runtime.
-    const fn compute_hash(
-        roots: &[TemplateNode],
-        node_paths: &[&[u8]],
-        attr_paths: &[&[u8]],
-    ) -> u64 {
-        use xxhash_rust::const_xxh64::xxh64;
-
-        const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
-            match node {
-                TemplateNode::Element {
-                    tag,
-                    namespace,
-                    attrs,
-                    children,
-                } => {
-                    let mut h = xxh64(tag.as_bytes(), seed);
-                    if let Some(ns) = *namespace {
-                        h = xxh64(ns.as_bytes(), h);
-                    }
-
-                    // Hash attributes (already in deterministic order from macro)
-                    let mut i = 0;
-                    while i < attrs.len() {
-                        h = match &attrs[i] {
-                            TemplateAttribute::Static {
-                                name,
-                                value,
-                                namespace,
-                            } => {
-                                let mut new_h = xxh64(name.as_bytes(), h);
-                                new_h = xxh64(value.as_bytes(), new_h);
-                                if let Some(ns) = *namespace {
-                                    new_h = xxh64(ns.as_bytes(), new_h);
-                                }
-                                new_h
-                            }
-                            TemplateAttribute::Dynamic { id } => {
-                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFE], h))
-                            }
-                        };
-                        i += 1;
-                    }
-
-                    // Hash children
-                    let mut i = 0;
-                    while i < children.len() {
-                        h = hash_template_node(&children[i], h);
-                        i += 1;
-                    }
-
-                    h
-                }
-                TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
-                TemplateNode::Dynamic { id } => {
-                    xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
-                }
-            }
-        }
-
-        let mut hash = 0u64;
-
-        // Hash roots
-        let mut i = 0;
-        while i < roots.len() {
-            hash = hash_template_node(&roots[i], hash);
-            i += 1;
-        }
-
-        // Hash node paths (mixed with a section marker so they can't collapse into attr_paths)
-        hash = xxh64(&[0xA1], hash);
-        let mut i = 0;
-        while i < node_paths.len() {
-            hash = xxh64(node_paths[i], hash);
-            i += 1;
-        }
-
-        // Hash attr paths
-        hash = xxh64(&[0xA2], hash);
-        let mut i = 0;
-        while i < attr_paths.len() {
-            hash = xxh64(attr_paths[i], hash);
-            i += 1;
-        }
-
-        hash
-    }
-}
-
-impl std::hash::Hash for Template {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.hash.hash(state);
-    }
-}
-
-impl PartialEq for Template {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash
-    }
-}
-
-#[cfg(feature = "serialize")]
-pub(crate) fn deserialize_string_leaky<'a, 'de, D>(
-    deserializer: D,
-) -> Result<&'static str, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = String::deserialize(deserializer)?;
-    Ok(&*Box::leak(deserialized.into_boxed_str()))
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_bytes_leaky<'a, 'de, D>(
-    deserializer: D,
-) -> Result<&'static [&'static [u8]], D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
-    let deserialized = deserialized
-        .into_iter()
-        .map(|v| &*Box::leak(v.into_boxed_slice()))
-        .collect::<Vec<_>>();
-    Ok(&*Box::leak(deserialized.into_boxed_slice()))
-}
-
-#[cfg(feature = "serialize")]
-pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
-where
-    T: serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Box::<[T]>::deserialize(deserializer)?;
-    Ok(&*Box::leak(deserialized))
-}
-
-#[cfg(feature = "serialize")]
-pub(crate) fn deserialize_option_leaky<'a, 'de, D>(
-    deserializer: D,
-) -> Result<Option<&'static str>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Option::<String>::deserialize(deserializer)?;
-    Ok(deserialized.map(|deserialized| &*Box::leak(deserialized.into_boxed_str())))
-}
-
-impl Template {
-    /// Is this template worth caching at all, since it's completely runtime?
-    ///
-    /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
-    pub fn is_completely_dynamic(&self) -> bool {
-        use TemplateNode::*;
-        self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
-    }
-}
-
-/// A statically known node in a layout.
-///
-/// This can be created at compile time, saving the VirtualDom time when diffing the tree
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum TemplateNode {
-    /// An statically known element in the dom.
-    ///
-    /// In HTML this would be something like `<div id="123"> </div>`
-    Element {
-        /// The name of the element
-        ///
-        /// IE for a div, it would be the string "div"
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky")
-        )]
-        tag: StaticStr,
-
-        /// The namespace of the element
-        ///
-        /// In HTML, this would be a valid URI that defines a namespace for all elements below it
-        /// SVG is an example of this namespace
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky")
-        )]
-        namespace: Option<StaticStr>,
-
-        /// A list of possibly dynamic attributes for this element
-        ///
-        /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_leaky", bound = "")
-        )]
-        attrs: StaticTemplateAttributeArray,
-
-        /// A list of template nodes that define another set of template nodes
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        children: StaticTemplateArray,
-    },
-
-    /// This template node is just a piece of static text
-    Text {
-        /// The actual text
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        text: StaticStr,
-    },
-
-    /// This template node is unknown, and needs to be created at runtime.
-    Dynamic {
-        /// The index of the dynamic node in the VNode's dynamic_nodes list
-        id: usize,
-    },
-}
-
-impl TemplateNode {
-    /// Try to load the dynamic node at the given index
-    pub fn dynamic_id(&self) -> Option<usize> {
-        use TemplateNode::*;
-        match self {
-            Dynamic { id } => Some(*id),
-            _ => None,
-        }
+    fn deref(&self) -> &Self::Target {
+        self.vnode
     }
 }
 
@@ -599,13 +332,6 @@ pub enum DynamicNode {
     /// A text node
     Text(VText),
 
-    /// A placeholder
-    ///
-    /// Used by suspense when a node isn't ready and by fragments that don't render anything
-    ///
-    /// In code, this is just an ElementId whose initial value is set to 0 upon creation
-    Placeholder(VPlaceholder),
-
     /// A list of VNodes.
     ///
     /// Note that this is not a list of dynamic nodes. These must be VNodes and created through conditional rendering
@@ -622,7 +348,7 @@ impl DynamicNode {
 
 impl Default for DynamicNode {
     fn default() -> Self {
-        Self::Placeholder(Default::default())
+        Self::Fragment(Vec::new())
     }
 }
 
@@ -631,10 +357,13 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The raw pointer to the render function
+    /// The raw pointer to the render function.
     pub(crate) render_fn: usize,
 
-    /// The props for this component
+    /// The rendering lifecycle for this component's scope.
+    pub(crate) driver: Rc<dyn crate::render_driver::RenderDriver>,
+
+    /// The props this component renders from.
     pub(crate) props: BoxedAnyProps,
 }
 
@@ -642,8 +371,9 @@ impl Clone for VComponent {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
-            props: self.props.duplicate(),
             render_fn: self.render_fn,
+            driver: self.driver.clone(),
+            props: self.props.duplicate(),
         }
     }
 }
@@ -665,10 +395,25 @@ impl VComponent {
             props,
             fn_name,
         ));
-
-        VComponent {
+        Self::new_with_driver(
+            fn_name,
             render_fn,
+            Rc::new(crate::render_driver::BodyDriver),
+            props,
+        )
+    }
+
+    /// Create a new [`VComponent`] whose scope is rendered by `driver`.
+    pub(crate) fn new_with_driver(
+        fn_name: &'static str,
+        render_fn: usize,
+        driver: Rc<dyn crate::render_driver::RenderDriver>,
+        props: BoxedAnyProps,
+    ) -> Self {
+        VComponent {
             name: fn_name,
+            render_fn,
+            driver,
             props,
         }
     }
@@ -680,16 +425,11 @@ impl VComponent {
     /// Returns [`None`] if the node is not mounted
     pub fn mounted_scope_id(
         &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
+        slot: DynamicNodeSlot<'_>,
+        vnode: MountedVNode<'_>,
         dom: &VirtualDom,
     ) -> Option<ScopeId> {
-        let mount = vnode.mount.get().as_usize()?;
-
-        let mounts = dom.runtime.mounts.borrow();
-        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
-
-        Some(ScopeId(scope_id))
+        dom.mounted_dynamic_component_scope(vnode.mount(), slot.index())
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -699,16 +439,13 @@ impl VComponent {
     /// Returns [`None`] if the node is not mounted
     pub fn mounted_scope<'a>(
         &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
+        slot: DynamicNodeSlot<'_>,
+        vnode: MountedVNode<'_>,
         dom: &'a VirtualDom,
     ) -> Option<&'a ScopeState> {
-        let mount = vnode.mount.get().as_usize()?;
+        let scope_id = dom.mounted_dynamic_component_scope(vnode.mount(), slot.index())?;
 
-        let mounts = dom.runtime.mounts.borrow();
-        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
-
-        dom.scopes.get(scope_id)
+        dom.scopes.get(scope_id.index())
     }
 }
 
@@ -729,6 +466,7 @@ pub struct VText {
 
 impl VText {
     /// Create a new VText
+    #[inline]
     pub fn new(value: impl ToString) -> Self {
         Self {
             value: value.to_string(),
@@ -740,56 +478,6 @@ impl From<Arguments<'_>> for VText {
     fn from(args: Arguments) -> Self {
         Self::new(args.to_string())
     }
-}
-
-/// A placeholder node, used by suspense and fragments
-#[derive(Clone, Debug, Default)]
-#[non_exhaustive]
-pub struct VPlaceholder {}
-
-/// An attribute of the TemplateNode, created at compile time
-#[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum TemplateAttribute {
-    /// This attribute is entirely known at compile time, enabling
-    Static {
-        /// The name of this attribute.
-        ///
-        /// For example, the `href` attribute in `href="https://example.com"`, would have the name "href"
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        name: StaticStr,
-
-        /// The value of this attribute, known at compile time
-        ///
-        /// Currently this only accepts &str, so values, even if they're known at compile time, are not known
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky", bound = "")
-        )]
-        value: StaticStr,
-
-        /// The namespace of this attribute. Does not exist in the HTML spec
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky", bound = "")
-        )]
-        namespace: Option<StaticStr>,
-    },
-
-    /// The attribute in this position is actually determined dynamically at runtime
-    ///
-    /// This is the index into the dynamic_attributes field on the container VNode
-    Dynamic {
-        /// The index
-        id: usize,
-    },
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
@@ -826,16 +514,6 @@ impl Attribute {
             namespace,
             volatile,
             value: value.into_value(),
-        }
-    }
-
-    /// Create a new deep clone of this attribute
-    pub(crate) fn deep_clone(&self) -> Self {
-        Attribute {
-            name: self.name,
-            namespace: self.namespace,
-            volatile: self.volatile,
-            value: self.value.clone(),
         }
     }
 }
@@ -913,8 +591,13 @@ impl PartialEq for AttributeValue {
 
 #[doc(hidden)]
 pub trait AnyValue: 'static {
+    /// Compare this value with another erased value.
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+
+    /// Return this value as [`Any`] for downcasting.
     fn as_any(&self) -> &dyn Any;
+
+    /// Return the underlying value's [`TypeId`].
     fn type_id(&self) -> TypeId {
         self.as_any().type_id()
     }
@@ -941,21 +624,25 @@ pub trait IntoDynNode<A = ()> {
 }
 
 impl IntoDynNode for () {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::default()
     }
 }
 impl IntoDynNode for VNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self])
     }
 }
 impl IntoDynNode for DynamicNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         self
     }
 }
 impl<T: IntoDynNode> IntoDynNode for Option<T> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self {
             Some(val) => val.into_dyn_node(),
@@ -964,6 +651,7 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
     }
 }
 impl IntoDynNode for &Element {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
             Ok(val) => val.into_dyn_node(),
@@ -972,6 +660,7 @@ impl IntoDynNode for &Element {
     }
 }
 impl IntoDynNode for Element {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self {
             Ok(val) => val.into_dyn_node(),
@@ -980,6 +669,7 @@ impl IntoDynNode for Element {
     }
 }
 impl IntoDynNode for &Option<VNode> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
             Some(val) => val.clone().into_dyn_node(),
@@ -988,6 +678,7 @@ impl IntoDynNode for &Option<VNode> {
     }
 }
 impl IntoDynNode for &str {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
@@ -995,11 +686,13 @@ impl IntoDynNode for &str {
     }
 }
 impl IntoDynNode for String {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText { value: self })
     }
 }
 impl IntoDynNode for Arguments<'_> {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
@@ -1007,25 +700,31 @@ impl IntoDynNode for Arguments<'_> {
     }
 }
 impl IntoDynNode for &VNode {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
     }
 }
 
+/// Convert a value into a [`VNode`].
 pub trait IntoVNode {
+    /// Convert this value into a [`VNode`].
     fn into_vnode(self) -> VNode;
 }
 impl IntoVNode for VNode {
+    #[inline]
     fn into_vnode(self) -> VNode {
         self
     }
 }
 impl IntoVNode for &VNode {
+    #[inline]
     fn into_vnode(self) -> VNode {
         self.clone()
     }
 }
 impl IntoVNode for Element {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
@@ -1034,6 +733,7 @@ impl IntoVNode for Element {
     }
 }
 impl IntoVNode for &Element {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
@@ -1042,6 +742,7 @@ impl IntoVNode for &Element {
     }
 }
 impl IntoVNode for Option<VNode> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
@@ -1050,6 +751,7 @@ impl IntoVNode for Option<VNode> {
     }
 }
 impl IntoVNode for &Option<VNode> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
@@ -1058,6 +760,7 @@ impl IntoVNode for &Option<VNode> {
     }
 }
 impl IntoVNode for Option<Element> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
@@ -1066,6 +769,7 @@ impl IntoVNode for Option<Element> {
     }
 }
 impl IntoVNode for &Option<Element> {
+    #[inline]
     fn into_vnode(self) -> VNode {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
@@ -1081,14 +785,9 @@ where
     T: Iterator<Item = I>,
     I: IntoVNode,
 {
+    #[inline]
     fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
-        }
+        DynamicNode::Fragment(self.into_iter().map(|node| node.into_vnode()).collect())
     }
 }
 
@@ -1116,78 +815,33 @@ impl IntoAttributeValue for String {
     }
 }
 
-impl IntoAttributeValue for f32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self as _)
-    }
-}
-impl IntoAttributeValue for f64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Float(self)
-    }
-}
-
-impl IntoAttributeValue for i8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self)
-    }
-}
-impl IntoAttributeValue for isize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for i128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
+macro_rules! impl_float_attribute_value {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl IntoAttributeValue for $ty {
+                fn into_value(self) -> AttributeValue {
+                    AttributeValue::Float(self as _)
+                }
+            }
+        )*
+    };
 }
 
-impl IntoAttributeValue for u8 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
+macro_rules! impl_int_attribute_value {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl IntoAttributeValue for $ty {
+                fn into_value(self) -> AttributeValue {
+                    AttributeValue::Int(self as _)
+                }
+            }
+        )*
+    };
 }
-impl IntoAttributeValue for u16 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u32 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u64 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for usize {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
-impl IntoAttributeValue for u128 {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Int(self as _)
-    }
-}
+
+impl_float_attribute_value!(f32, f64);
+impl_int_attribute_value!(i8, i16, i32, i64, isize, i128);
+impl_int_attribute_value!(u8, u16, u32, u64, usize, u128);
 
 impl IntoAttributeValue for bool {
     fn into_value(self) -> AttributeValue {
@@ -1228,6 +882,7 @@ impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
     }
 }
 
+#[doc(hidden)]
 pub struct AnyFmtMarker;
 impl<T> IntoAttributeValue<AnyFmtMarker> for T
 where

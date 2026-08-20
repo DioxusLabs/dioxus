@@ -1,6 +1,8 @@
 use crate::{
-    Element, RenderError, Runtime, VNode, any_props::BoxedAnyProps,
-    reactive_context::ReactiveContext, scope_context::Scope,
+    Element, MountedVNode, RenderError, Runtime, VNode,
+    innerlude::{BoxedAnyProps, MountId},
+    reactive_context::ReactiveContext,
+    scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -11,7 +13,7 @@ use std::{cell::Ref, rc::Rc};
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ScopeId(pub usize);
+pub struct ScopeId(usize);
 
 impl std::fmt::Debug for ScopeId {
     #[allow(unused_mut)]
@@ -60,10 +62,12 @@ impl ScopeId {
     // ScopeId(0) is the root scope wrapper
     pub const ROOT: ScopeId = ScopeId(0);
 
-    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
 
-    pub(crate) fn is_placeholder(&self) -> bool {
-        *self == Self::PLACEHOLDER
+    pub(crate) const fn index(self) -> usize {
+        self.0
     }
 }
 
@@ -73,10 +77,9 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-    /// The last node that has been rendered for this component. This node may not ben mounted
-    /// During suspense, this component can be rendered in the background multiple times
-    pub(crate) last_rendered_node: Option<LastRenderedNode>,
     pub(crate) props: BoxedAnyProps,
+    /// The last mounted output for this component.
+    pub(crate) last_rendered_node: Option<MountedOutput>,
     pub(crate) reactive_context: ReactiveContext,
 }
 
@@ -98,10 +101,18 @@ impl ScopeState {
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&VNode> {
         match &self.last_rendered_node {
-            Some(LastRenderedNode::Real(vnode)) => Some(vnode),
-            Some(LastRenderedNode::Placeholder(vnode, _)) => Some(vnode),
+            Some(output) => Some(output.as_vnode()),
             None => None,
         }
+    }
+
+    /// Try to get the currently active root node with its mounted identity.
+    ///
+    /// Returns [`None`] if the tree has not been built or mounted yet.
+    pub fn try_mounted_root_node(&self) -> Option<MountedVNode<'_>> {
+        self.last_rendered_node
+            .as_ref()
+            .map(MountedOutput::mounted_vnode)
     }
 
     /// Returns the scope id of this [`ScopeState`].
@@ -120,7 +131,43 @@ impl ScopeState {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum LastRenderedNode {
+pub(crate) struct MountedOutput {
+    node: LastRenderedNode,
+    root_mount: MountId,
+}
+
+impl MountedOutput {
+    pub(crate) fn new(node: LastRenderedNode, root_mount: MountId) -> Self {
+        Self { node, root_mount }
+    }
+
+    pub(crate) fn node(&self) -> &LastRenderedNode {
+        &self.node
+    }
+
+    pub(crate) fn root_mount(&self) -> MountId {
+        self.root_mount
+    }
+
+    pub(crate) fn as_vnode(&self) -> &VNode {
+        self.node.as_vnode()
+    }
+
+    pub(crate) fn mounted_vnode(&self) -> MountedVNode<'_> {
+        MountedVNode::new(self.as_vnode(), self.root_mount)
+    }
+}
+
+impl std::ops::Deref for MountedOutput {
+    type Target = LastRenderedNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) enum LastRenderedNode {
     Real(VNode),
     Placeholder(VNode, RenderError),
 }
@@ -137,14 +184,14 @@ impl std::ops::Deref for LastRenderedNode {
 }
 
 impl LastRenderedNode {
-    pub fn new(node: Element) -> Self {
+    pub(crate) fn new(node: Element) -> Self {
         match node {
             Ok(vnode) => LastRenderedNode::Real(vnode),
             Err(err) => LastRenderedNode::Placeholder(VNode::placeholder(), err),
         }
     }
 
-    pub fn as_vnode(&self) -> &VNode {
+    pub(crate) fn as_vnode(&self) -> &VNode {
         match self {
             LastRenderedNode::Real(vnode) => vnode,
             LastRenderedNode::Placeholder(vnode, _err) => vnode,

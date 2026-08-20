@@ -9,7 +9,8 @@ use dioxus_core_macro::rsx;
 use dioxus_document::{
     Document, Eval, LinkProps, MetaProps, NoOpDocument, ScriptProps, StyleProps,
 };
-use dioxus_html as dioxus_elements;
+use dioxus_html::elements::prelude::*;
+use dioxus_html::*;
 use dioxus_ssr::Renderer;
 use parking_lot::RwLock;
 use std::sync::LazyLock;

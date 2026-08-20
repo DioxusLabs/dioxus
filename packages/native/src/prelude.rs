@@ -8,11 +8,11 @@ pub use dioxus_core::{
 };
 #[allow(deprecated)]
 pub use dioxus_core_macro::{Props, component, rsx};
-pub use dioxus_html as dioxus_elements;
+pub use dioxus_html;
 pub use dioxus_html::{Code, Key, Location, Modifiers};
 pub use dioxus_html::{
-    GlobalAttributesExtension, SvgAttributesExtension, events::*, extensions::*, global_attributes,
-    keyboard_types, svg_attributes, traits::*,
+    GlobalAttributesExtension, SvgAttributesExtension, events::*, extensions::*, keyboard_types,
+    traits::*,
 };
 
 // Assets

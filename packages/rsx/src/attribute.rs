@@ -18,7 +18,7 @@ use super::literal::HotLiteral;
 use crate::{innerlude::*, partial_closure::PartialClosure};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
 use std::fmt::Display;
 use syn::{
     Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
@@ -40,7 +40,7 @@ pub struct Attribute {
     pub name: AttributeName,
 
     /// The colon that separates the name and value - keep this for lossless parsing
-    pub colon: Option<Token![:]>,
+    pub(crate) colon: Option<Token![:]>,
 
     /// The value of the attribute
     ///
@@ -50,9 +50,6 @@ pub struct Attribute {
     /// The comma that separates this attribute from the next one
     /// Used for more accurate completions
     pub comma: Option<Token![,]>,
-
-    /// The dynamic index of this attribute - used by the template system
-    pub dyn_idx: DynIdx,
 
     /// The element name of this attribute if it is bound to an element.
     /// When parsed for components or freestanding, this will be None
@@ -71,7 +68,6 @@ impl Parse for Attribute {
                 colon: None,
                 value: AttributeValue::Shorthand(ident),
                 comma,
-                dyn_idx: DynIdx::default(),
                 el_name: None,
             });
         }
@@ -97,7 +93,6 @@ impl Parse for Attribute {
             value,
             colon,
             comma,
-            dyn_idx: DynIdx::default(),
             el_name: None,
         };
 
@@ -113,44 +108,12 @@ impl Attribute {
             colon: Default::default(),
             value,
             comma: Default::default(),
-            dyn_idx: Default::default(),
             el_name: None,
         }
     }
 
-    /// Set the dynamic index of this attribute
-    pub fn set_dyn_idx(&self, idx: usize) {
-        self.dyn_idx.set(idx);
-    }
-
-    /// Get the dynamic index of this attribute
-    pub fn get_dyn_idx(&self) -> usize {
-        self.dyn_idx.get()
-    }
-
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
-    }
-
-    pub fn as_lit(&self) -> Option<&HotLiteral> {
-        match &self.value {
-            AttributeValue::AttrLiteral(lit) => Some(lit),
-            _ => None,
-        }
-    }
-
-    /// Run this closure against the attribute if it's hotreloadable
-    pub fn with_literal(&self, f: impl FnOnce(&HotLiteral)) {
-        if let AttributeValue::AttrLiteral(ifmt) = &self.value {
-            f(ifmt);
-        }
-    }
-
-    pub fn ifmt(&self) -> Option<&IfmtInput> {
-        match &self.value {
-            AttributeValue::AttrLiteral(HotLiteral::Fmted(input)) => Some(input),
-            _ => None,
-        }
     }
 
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
@@ -176,40 +139,20 @@ impl Attribute {
             return quote_spanned! { expr.span() => {#expr}.into_boxed_slice() };
         }
 
-        let el_name = self
-            .el_name
-            .as_ref()
-            .expect("el_name rendered as a dynamic attribute should always have an el_name set");
-
-        let ns = |name: &AttributeName| match (el_name, name) {
-            (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
-                quote! { dioxus_elements::#i::#name.1 }
-            }
-            _ => quote! { None },
-        };
-
-        let volatile = |name: &AttributeName| match (el_name, name) {
-            (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
-                quote! { dioxus_elements::#i::#name.2 }
-            }
-            _ => quote! { false },
-        };
-
         let attribute = |name: &AttributeName| match name {
-            AttributeName::BuiltIn(name) => match el_name {
-                ElementName::Ident(_) => quote! { dioxus_elements::#el_name::#name.0 },
-                ElementName::Custom(_) => {
-                    let as_string = name.to_string();
-                    quote!(#as_string)
-                }
-            },
-            AttributeName::Custom(s) => quote! { #s },
+            AttributeName::BuiltIn(_) | AttributeName::Custom(_) => {
+                let name = name.resolved();
+                quote! { #name }
+            }
             AttributeName::Spread(_) => unreachable!("Spread attributes are handled elsewhere"),
         };
 
-        let attribute = {
+        let ns = || quote! { None };
+
+        let volatile = || quote! { false };
+
+        let attributes = {
             let value = &self.value;
-            let name = &self.name;
             let is_not_event = !self.name.is_likely_event();
 
             match &self.value {
@@ -220,21 +163,25 @@ impl Attribute {
                     if is_not_event =>
                 {
                     let name = &self.name;
-                    let ns = ns(name);
-                    let volatile = volatile(name);
+                    let ns = ns();
+                    let volatile = volatile();
                     let attribute = attribute(name);
                     let value = quote! { #value };
 
                     quote! {
-                        dioxus_core::Attribute::new(
-                            #attribute,
-                            #value,
-                            #ns,
-                            #volatile
-                        )
+                        Box::new([
+                            dioxus_core::Attribute::new(
+                                #attribute,
+                                #value,
+                                #ns,
+                                #volatile
+                            )
+                        ])
                     }
                 }
-                AttributeValue::EventTokens(_) | AttributeValue::AttrExpr(_) => {
+                AttributeValue::EventTokens(_)
+                | AttributeValue::AttrExpr(_)
+                | AttributeValue::Shorthand(_) => {
                     let (tokens, span) = match &self.value {
                         AttributeValue::EventTokens(tokens) => {
                             (tokens.to_token_stream(), tokens.span())
@@ -242,64 +189,29 @@ impl Attribute {
                         AttributeValue::AttrExpr(tokens) => {
                             (tokens.to_token_stream(), tokens.span())
                         }
+                        AttributeValue::Shorthand(ident) => (ident.to_token_stream(), ident.span()),
                         _ => unreachable!(),
                     };
-
-                    fn check_tokens_is_closure(tokens: &TokenStream2) -> bool {
-                        if syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok() {
-                            return true;
-                        }
-                        let Ok(block) = syn::parse2::<ExprBlock>(tokens.to_token_stream()) else {
-                            return false;
-                        };
-                        let mut block = &block;
-                        loop {
-                            match block.block.stmts.last() {
-                                Some(Stmt::Expr(Expr::Closure(_), _)) => return true,
-                                Some(Stmt::Expr(Expr::Block(b), _)) => {
-                                    block = b;
-                                    continue;
-                                }
-                                _ => return false,
-                            }
-                        }
-                    }
                     match &self.name {
                         AttributeName::BuiltIn(name) => {
-                            let event_tokens_is_closure = check_tokens_is_closure(&tokens);
-                            let function_name =
-                                quote_spanned! { span => dioxus_elements::events::#name };
-                            let function = if event_tokens_is_closure {
-                                // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
-                                quote_spanned! { span => #function_name::call_with_explicit_closure }
-                            } else {
-                                function_name
-                            };
+                            let method = event_handler_method(name, &self.value);
                             quote_spanned! { span =>
-                                #function(#tokens)
+                                ::std::vec::Vec::<dioxus_core::Attribute>::new()
+                                    .#method(#tokens)
+                                    .into_boxed_slice()
                             }
                         }
                         AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
                         AttributeName::Spread(_) => unreachable!("Handled elsewhere in the macro"),
                     }
                 }
-                _ => {
-                    quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
+                AttributeValue::IfExpr(_) | AttributeValue::AttrLiteral(_) => {
+                    unreachable!("event attributes must be handlers")
                 }
             }
         };
 
-        let attr_span = attribute.span();
-        let completion_hints = self.completion_hints();
-        quote_spanned! { attr_span =>
-            Box::new([
-                {
-                    #completion_hints
-                    #attribute
-                }
-            ])
-        }
-        .to_token_stream()
+        attributes.to_token_stream()
     }
 
     pub fn can_be_shorthand(&self) -> bool {
@@ -319,54 +231,39 @@ impl Attribute {
 
         false
     }
+}
 
-    /// If this is the last attribute of an element and it doesn't have a tailing comma,
-    /// we add hints so that rust analyzer completes it either as an attribute or element
-    fn completion_hints(&self) -> TokenStream2 {
-        let Attribute {
-            name,
-            value,
-            comma,
-            el_name,
-            ..
-        } = self;
+/// Pick the builder method used to attach an event handler.
+///
+/// Inline closures use the hidden `_with_explicit_closure` variant whose explicit
+/// `FnMut(Event<Data>) -> _` signature gives the closure parameter a known type, so the user
+/// does not need to annotate it. Any other value uses the plain event method, which accepts
+/// listeners, callbacks, and closures alike.
+pub(crate) fn event_handler_method(method: &Ident, value: &AttributeValue) -> Ident {
+    if value.is_inline_event_closure() {
+        format_ident!("{}_with_explicit_closure", method, span = method.span())
+    } else {
+        method.clone()
+    }
+}
 
-        // If there is a trailing comma, rust analyzer does a good job of completing the attribute by itself
-        if comma.is_some() {
-            return quote! {};
-        }
+fn event_tokens_are_inline_closure(tokens: &TokenStream2) -> bool {
+    if syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok() {
+        return true;
+    }
 
-        // Only add hints if the attribute is:
-        // - a built in attribute (not a literal)
-        // - an build in element (not a custom element)
-        // - a shorthand attribute
-        let (
-            Some(ElementName::Ident(el)),
-            AttributeName::BuiltIn(name),
-            AttributeValue::Shorthand(_),
-        ) = (&el_name, &name, &value)
-        else {
-            return quote! {};
-        };
-        // If the attribute is a shorthand attribute, but it is an event handler, rust analyzer already does a good job of completing the attribute by itself
-        if name.to_string().starts_with("on") {
-            return quote! {};
-        }
+    let Ok(block) = syn::parse2::<ExprBlock>(tokens.to_token_stream()) else {
+        return false;
+    };
 
-        quote! {
-            {
-                #[allow(dead_code)]
-                #[doc(hidden)]
-                mod __completions {
-                    // Autocomplete as an attribute
-                    pub use super::dioxus_elements::#el::*;
-                    // Autocomplete as an element
-                    pub use super::dioxus_elements::elements::completions::CompleteWithBraces::*;
-                    fn ignore() {
-                        #name;
-                    }
-                }
+    let mut block = &block;
+    loop {
+        match block.block.stmts.last() {
+            Some(Stmt::Expr(Expr::Closure(_), _)) => return true,
+            Some(Stmt::Expr(Expr::Block(b), _)) => {
+                block = b;
             }
+            _ => return false,
         }
     }
 }
@@ -386,7 +283,18 @@ pub enum AttributeName {
 }
 
 impl AttributeName {
-    pub fn is_likely_event(&self) -> bool {
+    pub(crate) fn resolved(&self) -> String {
+        match self {
+            Self::BuiltIn(ident) => {
+                let raw_name = ident.to_string();
+                raw_name.strip_prefix("r#").unwrap_or(&raw_name).to_string()
+            }
+            Self::Custom(lit) => lit.value(),
+            Self::Spread(_) => unreachable!("spread attributes do not have static metadata"),
+        }
+    }
+
+    pub(crate) fn is_likely_event(&self) -> bool {
         matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
     }
 
@@ -426,10 +334,9 @@ impl ToTokens for AttributeName {
 // ..spread attribute
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Spread {
-    pub dots: Token![..],
+    pub(crate) dots: Token![..],
     pub expr: Expr,
-    pub dyn_idx: DynIdx,
-    pub comma: Option<Token![,]>,
+    pub(crate) comma: Option<Token![,]>,
 }
 
 impl Spread {
@@ -525,13 +432,20 @@ impl AttributeValue {
             Self::EventTokens(closure) => closure.span(),
         }
     }
+
+    fn is_inline_event_closure(&self) -> bool {
+        match self {
+            Self::EventTokens(_) => true,
+            Self::AttrExpr(expr) => event_tokens_are_inline_closure(&expr.to_token_stream()),
+            Self::Shorthand(_) | Self::AttrLiteral(_) | Self::IfExpr(_) => false,
+        }
+    }
 }
 
 /// A if else chain attribute value
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfAttributeValue {
     pub if_expr: ExprIf,
-    pub condition: Expr,
     pub then_value: Box<AttributeValue>,
     pub else_value: Option<Box<AttributeValue>>,
 }
@@ -764,7 +678,6 @@ impl Parse for IfAttributeValue {
         };
 
         Ok(Self {
-            condition: *if_expr.cond.clone(),
             if_expr,
             then_value,
             else_value,
@@ -831,6 +744,26 @@ mod tests {
     }
 
     #[test]
+    fn event_handler_method_uses_parsed_event_tokens() {
+        let method = format_ident!("onclick");
+
+        let parsed: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        assert_eq!(
+            event_handler_method(&method, &parsed.value),
+            format_ident!("onclick_with_explicit_closure")
+        );
+
+        let parsed: Attribute = parse2(quote! { onclick: { |e| {} } }).unwrap();
+        assert_eq!(
+            event_handler_method(&method, &parsed.value),
+            format_ident!("onclick_with_explicit_closure")
+        );
+
+        let parsed: Attribute = parse2(quote! { onclick: callback }).unwrap();
+        assert_eq!(event_handler_method(&method, &parsed.value), method);
+    }
+
+    #[test]
     fn merge_attrs() {
         let _a: Attribute = parse2(quote! { class: "value1" }).unwrap();
         let _b: Attribute = parse2(quote! { class: "value2" }).unwrap();
@@ -872,41 +805,6 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_ne!(a, d);
-    }
-
-    #[test]
-    fn call_with_explicit_closure() {
-        let mut a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let a = 1; |e| {} } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let b = 2; { |e| { b } } } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
-
-        let mut a: Attribute = parse2(quote! { onclick: { let r = |e| { b }; r } }).unwrap();
-        a.el_name = Some(parse_quote!(button));
-        assert!(
-            !a.rendered_as_dynamic_attr()
-                .to_string()
-                .contains("call_with_explicit_closure")
-        );
     }
 
     /// Make sure reserved keywords are parsed as attributes

@@ -4,6 +4,7 @@ use crate::{
     data_transfer::DataTransfer,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
 };
+use std::option::Option;
 
 use dioxus_core::Event;
 use keyboard_types::Modifiers;

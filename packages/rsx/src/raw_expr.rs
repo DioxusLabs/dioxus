@@ -9,8 +9,8 @@ use syn::{Expr, parse::Parse, spanned::Spanned, token::Brace};
 /// are braces, it parses the contents as a `TokenStream2` and stores it as such.
 #[derive(Clone, Debug)]
 pub struct PartialExpr {
-    pub brace: Option<Brace>,
-    pub expr: TokenStream2,
+    brace: Option<Brace>,
+    expr: TokenStream2,
 }
 
 impl Parse for PartialExpr {
@@ -81,7 +81,7 @@ impl PartialExpr {
         syn::parse2(expr.to_token_stream())
     }
 
-    pub fn from_expr(expr: &Expr) -> Self {
+    pub(crate) fn from_expr(expr: &Expr) -> Self {
         Self {
             brace: None,
             expr: expr.to_token_stream(),

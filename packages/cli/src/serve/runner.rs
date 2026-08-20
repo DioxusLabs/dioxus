@@ -517,8 +517,8 @@ impl AppServer {
 
                     // Returns a list of templates that are hotreloadable
                     let results = HotReloadResult::new::<HtmlCtx>(
-                        &old_call_body.body,
-                        &new_call_body.body,
+                        old_call_body.body(),
+                        new_call_body.body(),
                         file_name.clone(),
                     );
 
@@ -531,7 +531,7 @@ impl AppServer {
                     // Only send down templates that have roots, and ideally ones that have changed
                     // todo(jon): maybe cache these and don't send them down if they're the same
                     for (index, template) in results.templates {
-                        if template.roots.is_empty() {
+                        if template.root_count() == 0 {
                             continue;
                         }
 

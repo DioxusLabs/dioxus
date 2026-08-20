@@ -84,7 +84,10 @@ pub(crate) struct LastBuildState {
     /// In the new build, we must assign each of these a value even if we no longer use the component.
     /// The type must be the same as the last time we compiled the property
     pub component_properties: Vec<HotLiteral>,
-    /// The root indexes of the last build
+    /// For each dynamic node in [`Self::dynamic_nodes`], the global component literal indexes owned
+    /// by that dynamic node when it is a component.
+    pub component_literal_indexes_by_dynamic_node: Vec<Option<Vec<usize>>>,
+    /// The hot-reload template index for the root template in the last build.
     pub root_index: DynIdx,
     /// The name of the original template
     pub name: String,
@@ -93,15 +96,14 @@ pub(crate) struct LastBuildState {
 impl LastBuildState {
     /// Create a new LastBuildState from the given [`TemplateBody`]
     pub fn new(body: &TemplateBody, name: String) -> Self {
-        let dynamic_text_segments = body.dynamic_text_segments.iter().cloned();
-        let dynamic_nodes = body.dynamic_nodes().cloned();
-        let dynamic_attributes = body.dynamic_attributes().cloned();
-        let component_properties = body.literal_component_properties().cloned().collect();
+        let pools = TemplateBodyPools::collect(body);
         Self {
-            dynamic_text_segments: BakedPool::new(dynamic_text_segments),
-            dynamic_nodes: BakedPool::new(dynamic_nodes),
-            dynamic_attributes: BakedPool::new(dynamic_attributes),
-            component_properties,
+            dynamic_text_segments: BakedPool::new(pools.dynamic_text_segments),
+            dynamic_nodes: BakedPool::new(pools.dynamic_nodes),
+            dynamic_attributes: BakedPool::new(pools.dynamic_attributes),
+            component_properties: pools.component_properties,
+            component_literal_indexes_by_dynamic_node: pools
+                .component_literal_indexes_by_dynamic_node,
             root_index: body.template_idx.clone(),
             name,
         }
@@ -153,5 +155,99 @@ impl LastBuildState {
         }
 
         Some(FmtedSegments::new(segments))
+    }
+}
+
+#[derive(Default)]
+struct TemplateBodyPools {
+    dynamic_text_segments: Vec<FormattedSegment>,
+    dynamic_nodes: Vec<BodyNode>,
+    dynamic_attributes: Vec<Attribute>,
+    component_properties: Vec<HotLiteral>,
+    component_literal_indexes_by_dynamic_node: Vec<Option<Vec<usize>>>,
+}
+
+impl TemplateBodyPools {
+    fn collect(body: &TemplateBody) -> Self {
+        let mut pools = Self::default();
+        // Walk in canonical fill order so the pool indices line up with the order the typed view
+        // builder fills dynamic slots.
+        visit_roots(&mut pools, &body.roots);
+        pools
+    }
+
+    fn push_dynamic_node(&mut self, node: BodyNode) {
+        self.dynamic_nodes.push(node);
+        self.component_literal_indexes_by_dynamic_node.push(None);
+    }
+
+    fn push_formatted(&mut self, segments: &HotReloadFormattedSegment) {
+        for segment in &segments.segments {
+            if let Segment::Formatted(segment) = segment {
+                self.dynamic_text_segments.push(segment.clone());
+            }
+        }
+    }
+
+    fn push_component(&mut self, component: &Component) {
+        let mut literal_indexes = Vec::new();
+        self.push_dynamic_node(BodyNode::Component(component.clone()));
+        let dynamic_node_index = self.component_literal_indexes_by_dynamic_node.len() - 1;
+
+        for property in &component.fields {
+            let AttributeValue::AttrLiteral(literal) = &property.value else {
+                continue;
+            };
+
+            if let HotLiteral::Fmted(segments) = literal {
+                self.push_formatted(segments);
+            }
+
+            if !property.name.is_likely_key() {
+                literal_indexes.push(self.component_properties.len());
+                self.component_properties.push(literal.clone());
+            }
+        }
+
+        self.component_literal_indexes_by_dynamic_node[dynamic_node_index] = Some(literal_indexes);
+    }
+}
+
+impl<'a> FillOrderVisitor<'a> for TemplateBodyPools {
+    fn dynamic_attribute(&mut self, _element: &'a Element, attr: &'a Attribute) -> Option<()> {
+        self.dynamic_attributes.push(attr.clone());
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
+            self.push_formatted(lit);
+        }
+        Some(())
+    }
+
+    fn key(&mut self, _element: &'a Element, key: &'a AttributeValue) -> Option<()> {
+        if let AttributeValue::AttrLiteral(HotLiteral::Fmted(key)) = key {
+            self.push_formatted(key);
+        }
+        Some(())
+    }
+
+    fn dynamic_node(&mut self, node: &'a BodyNode) -> Option<()> {
+        match node {
+            BodyNode::Text(text) => {
+                self.push_dynamic_node(node.clone());
+                self.push_formatted(&text.input);
+            }
+            BodyNode::Component(component) => {
+                self.push_component(component);
+            }
+            BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::SyntheticBoundary(_) => {
+                self.push_dynamic_node(node.clone());
+            }
+            BodyNode::Element(_) => {
+                unreachable!("elements are not dynamic nodes in the fill-order traversal")
+            }
+        }
+        Some(())
     }
 }

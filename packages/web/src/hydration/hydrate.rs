@@ -1,22 +1,30 @@
 //! When hydrating streaming components:
-//! 1. Just hydrate the template on the outside
+//! 1. Hydrate the already-rendered DOM on the outside
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use RehydrationError::*;
-use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
-    SuspenseContext, TemplateNode, VNode, VirtualDom,
-};
+use dioxus_core::{ScopeState, SuspenseBoundaryProps, VirtualDom};
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
-use std::fmt::Write;
+use wasm_bindgen::JsCast;
+
+use super::cursor::HydrationCursor;
 
 use super::SuspenseMessage;
+use super::suspense::path_to_resolved_suspense_id;
+
+fn children_array(parent: &web_sys::Node) -> js_sys::Array {
+    js_sys::Array::from(parent.child_nodes().unchecked_ref())
+}
+
+fn node_array(node: &web_sys::Node) -> js_sys::Array {
+    let array = js_sys::Array::new();
+    array.push(node.unchecked_ref());
+    array
+}
 
 #[derive(Debug)]
-#[non_exhaustive]
 pub(crate) enum RehydrationError {
     /// The client tried to rehydrate a vnode before the dom was built
     VNodeNotInitialized,
@@ -24,77 +32,9 @@ pub(crate) enum RehydrationError {
     SuspenseHydrationIdNotFound,
     /// The client tried to rehydrate a dom id that was not found on the server
     ElementNotFound,
-}
-
-#[derive(Debug)]
-struct SuspenseHydrationIdsNode {
-    /// The scope id of the suspense boundary
-    scope_id: ScopeId,
-    /// Children of this node
-    children: Vec<SuspenseHydrationIdsNode>,
-}
-
-impl SuspenseHydrationIdsNode {
-    fn new(scope_id: ScopeId) -> Self {
-        Self {
-            scope_id,
-            children: Vec::new(),
-        }
-    }
-
-    fn traverse(&self, path: &[u32]) -> Option<&Self> {
-        match path {
-            [] => Some(self),
-            [id, rest @ ..] => self.children.get(*id as usize)?.traverse(rest),
-        }
-    }
-
-    fn traverse_mut(&mut self, path: &[u32]) -> Option<&mut Self> {
-        match path {
-            [] => Some(self),
-            [id, rest @ ..] => self.children.get_mut(*id as usize)?.traverse_mut(rest),
-        }
-    }
-}
-
-/// Streaming hydration happens in waves. The server assigns suspense hydrations ids based on the order
-/// the suspense boundaries are discovered in which should be consistent on the client and server.
-///
-/// This struct keeps track of the order the suspense boundaries are discovered in on the client so we can map the id in the dom to the scope we need to rehydrate.
-///
-/// Diagram: <https://excalidraw.com/#json=4NxmW90g0207Y62lESxfF,vP_Yn6j7k23utq2HZIsuiw>
-#[derive(Default, Debug)]
-pub(crate) struct SuspenseHydrationIds {
-    /// A dense mapping from traversal order to the scope id of the suspense boundary
-    /// The suspense boundary may be unmounted if the component was removed after partial hydration on the client
-    children: Vec<SuspenseHydrationIdsNode>,
-    current_path: Vec<u32>,
-}
-
-impl SuspenseHydrationIds {
-    /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
-    /// Running this on a scope that is only created on the client may cause hydration issues.
-    fn add_suspense_boundary(&mut self, id: ScopeId) {
-        match self.current_path.as_slice() {
-            // This is a root node, add the new node
-            [] => {
-                self.children.push(SuspenseHydrationIdsNode::new(id));
-            }
-            // This isn't a root node, traverse into children and add the new node
-            [first_index, rest @ ..] => {
-                let child_node = self.children[*first_index as usize]
-                    .traverse_mut(rest)
-                    .unwrap();
-                child_node.children.push(SuspenseHydrationIdsNode::new(id));
-            }
-        }
-    }
-
-    /// Get the scope id of the suspense boundary from the id in the dom
-    fn get_suspense_boundary(&self, path: &[u32]) -> Option<ScopeId> {
-        let root = self.children.get(path[0] as usize)?;
-        root.traverse(&path[1..]).map(|node| node.scope_id)
-    }
+    /// The server-rendered DOM did not match the shape the client expected
+    /// while walking the VDOM (e.g. a tag, text node, or split offset mismatch).
+    HydrationMismatch,
 }
 
 impl WebsysDom {
@@ -117,7 +57,6 @@ impl WebsysDom {
             #[cfg(debug_assertions)]
             debug_locations,
         } = message;
-
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
         let resolved_suspense_id = path_to_resolved_suspense_id(&suspense_path);
@@ -131,15 +70,15 @@ impl WebsysDom {
             .suspense_hydration_ids
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
+        // Snapshot the new nodes. `resolve_suspense` pushes them after it
+        // pushes the placeholder target so replacement stays stack-only.
+        let children = children_array(resolved_suspense_element.unchecked_ref());
+        let children_len = children.length();
 
-        // Push the new nodes onto the stack
-        let mut current_child = resolved_suspense_element.first_child();
-        let mut children = Vec::new();
-        while let Some(node) = current_child {
-            children.push(node.clone());
-            current_child = node.next_sibling();
-            self.interpreter.base().push_root(node);
-        }
+        // A zero-DOM stream still needs core's suspense placement. Push one
+        // empty text node through that placement, then let the hydration cursor
+        // claim it if the mounted scope has an addressable empty slot.
+        let mut empty_hydration_root = None;
 
         #[cfg(not(debug_assertions))]
         let debug_types = None;
@@ -147,23 +86,40 @@ impl WebsysDom {
         let debug_locations = None;
 
         let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
-        // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
+        // If the server streamed an error into this boundary, there is no
+        // resolved subtree to hydrate: the error bubbles to the nearest
+        // ErrorBoundary, whose output replaces the boundary entirely, so the
+        // markerless walk would mismatch the resolved suspense scope against
+        // that error DOM. Throw the error (which marks the ErrorBoundary dirty),
+        // drop the streamed nodes, and let that boundary render its message on
+        // the next render instead of hydrating here.
         if let Some(error) = server_data.error_entry().get().ok().flatten() {
+            resolved_suspense_element.remove();
             dom.in_runtime(|| dom.runtime().throw_error(id, error));
+            return Ok(());
         }
+
         server_data.in_context(|| {
             // rerun the scope with the new data
-            SuspenseBoundaryProps::resolve_suspense(
-                id,
-                dom,
-                self,
-                |to| {
-                    // Switch to only writing templates
-                    to.skip_mutations = true;
-                },
-                children.len(),
-            );
-            self.skip_mutations = false;
+            SuspenseBoundaryProps::resolve_suspense(id, dom, self, |to| {
+                // `resolve_suspense` queues a `push_id` for the node being
+                // replaced. The streamed nodes below are pushed directly onto
+                // the JS interpreter stack, so flush first to keep the target
+                // below the replacement nodes for `replace_with`.
+                to.flush_edits();
+                if children_len == 0 {
+                    let node: web_sys::Node = document.create_text_node("").unchecked_into();
+                    to.interpreter.base().push_root(node.clone());
+                    empty_hydration_root = Some(node);
+                    1
+                } else {
+                    for index in 0..children_len {
+                        let node: web_sys::Node = children.get(index).unchecked_into();
+                        to.interpreter.base().push_root(node);
+                    }
+                    children_len as usize
+                }
+            });
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -181,7 +137,12 @@ impl WebsysDom {
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        self.start_hydration_at_scope(root_scope, dom, children)?;
+
+        let roots = empty_hydration_root
+            .as_ref()
+            .map(node_array)
+            .unwrap_or(children);
+        self.start_hydration_at_scope(root_scope, dom, roots, false, true)?;
 
         Ok(())
     }
@@ -190,203 +151,59 @@ impl WebsysDom {
         &mut self,
         scope: &ScopeState,
         dom: &VirtualDom,
-        under: Vec<web_sys::Node>,
+        under: js_sys::Array,
+        filter_scripts: bool,
+        collect_suspense: bool,
     ) -> Result<(), RehydrationError> {
-        let mut ids = Vec::new();
-        let mut to_mount = Vec::new();
-
-        // Recursively rehydrate the nodes under the scope
-        self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount)?;
-
-        self.interpreter.base().hydrate(ids, under);
-
-        #[cfg(feature = "mounted")]
-        for id in to_mount {
-            self.send_mount_event(id);
-        }
-
-        Ok(())
+        // Park on the first server-rendered root; subsequent roots are stepped
+        // via `advance(1)` as the VDOM walker descends siblings. When SSR emitted
+        // no roots, hydrate directly inside the mount element so zero-DOM root ids
+        // still get anchors with a concrete parent.
+        let mut cursor =
+            match HydrationCursor::over_roots(self.interpreter.base(), under, filter_scripts)? {
+                Some(cursor) => cursor,
+                None => HydrationCursor::in_parent(self.interpreter.base(), self.root.clone()),
+            };
+        self.emit_scope(scope, dom, &mut cursor, collect_suspense)
     }
 
     pub fn rehydrate(
         &mut self,
-        vdom: &VirtualDom,
+        vdom: &mut VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
-        let closure =
-            move |path: Vec<u32>,
-                  data: js_sys::Uint8Array,
-                  #[allow(unused)] debug_types: Option<Vec<String>>,
-                  #[allow(unused)] debug_locations: Option<Vec<String>>| {
-                let data = data.to_vec();
-                _ = tx.start_send(SuspenseMessage {
-                    suspense_path: path,
-                    data,
-                    #[cfg(debug_assertions)]
-                    debug_types,
-                    #[cfg(debug_assertions)]
-                    debug_locations,
-                });
-            };
+        // A single registration path for both build profiles. The JS side always
+        // invokes the callback with four arguments; in release the trailing
+        // type/location metadata arrives as `null` (the server omits it) and is
+        // dropped before the message is sent.
+        let closure = move |path: Vec<u32>,
+                            data: js_sys::Uint8Array,
+                            debug_types: Option<Vec<String>>,
+                            debug_locations: Option<Vec<String>>| {
+            let data = data.to_vec();
+            #[cfg(not(debug_assertions))]
+            let _ = (debug_types, debug_locations);
+            _ = tx.start_send(SuspenseMessage {
+                suspense_path: path,
+                data,
+                #[cfg(debug_assertions)]
+                debug_types,
+                #[cfg(debug_assertions)]
+                debug_locations,
+            });
+        };
         let closure = wasm_bindgen::closure::Closure::new(closure);
-        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming_debug(
-            &closure,
-        );
-        closure.forget();
 
-        // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
-        // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone()])?;
+        // EnterRoot(i) parks the cursor on under[i], so pass the mount
+        // children. The JS cursor filters dx-injected hydration scripts before
+        // exposing the root list.
+        self.collect_initial_suspense(vdom.base_scope(), vdom);
+        let roots = children_array(&self.root);
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, roots, true, false)?;
+
+        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
+        closure.forget();
 
         Ok(rx)
     }
-
-    fn rehydrate_scope(
-        &mut self,
-        scope: &ScopeState,
-        dom: &VirtualDom,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
-    ) -> Result<(), RehydrationError> {
-        // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
-        if let Some(suspense) =
-            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
-            && suspense.has_suspended_tasks()
-        {
-            self.suspense_hydration_ids
-                .add_suspense_boundary(scope.id());
-        }
-
-        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
-    }
-
-    fn rehydrate_vnode(
-        &mut self,
-        dom: &VirtualDom,
-        vnode: &VNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
-    ) -> Result<(), RehydrationError> {
-        for (i, root) in vnode.template.roots().iter().enumerate() {
-            self.rehydrate_template_node(
-                dom,
-                vnode,
-                root,
-                ids,
-                to_mount,
-                Some(vnode.mounted_root(i, dom).ok_or(VNodeNotInitialized)?),
-            )?;
-        }
-        Ok(())
-    }
-
-    fn rehydrate_template_node(
-        &mut self,
-        dom: &VirtualDom,
-        vnode: &VNode,
-        node: &TemplateNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
-        root_id: Option<ElementId>,
-    ) -> Result<(), RehydrationError> {
-        match node {
-            TemplateNode::Element {
-                children, attrs, ..
-            } => {
-                let mut mounted_id = root_id;
-                for attr in *attrs {
-                    if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
-                        let attributes = &*vnode.dynamic_attrs[*id];
-                        let id = vnode
-                            .mounted_dynamic_attribute(*id, dom)
-                            .ok_or(VNodeNotInitialized)?;
-                        // We always need to hydrate the node even if the attributes are empty so we have
-                        // a mount for the node later. This could be spread attributes that are currently empty,
-                        // but will be filled later
-                        mounted_id = Some(id);
-                        for attribute in attributes {
-                            let value = &attribute.value;
-                            if let AttributeValue::Listener(_) = value
-                                && attribute.name == "onmounted"
-                            {
-                                to_mount.push(id);
-                            }
-                        }
-                    }
-                }
-                if let Some(id) = mounted_id {
-                    ids.push(id.0 as u32);
-                }
-                if !children.is_empty() {
-                    for child in *children {
-                        self.rehydrate_template_node(dom, vnode, child, ids, to_mount, None)?;
-                    }
-                }
-            }
-            TemplateNode::Dynamic { id } => self.rehydrate_dynamic_node(
-                dom,
-                &vnode.dynamic_nodes[*id],
-                *id,
-                vnode,
-                ids,
-                to_mount,
-            )?,
-            TemplateNode::Text { .. } => {
-                if let Some(id) = root_id {
-                    ids.push(id.0 as u32);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn rehydrate_dynamic_node(
-        &mut self,
-        dom: &VirtualDom,
-        dynamic: &DynamicNode,
-        dynamic_node_index: usize,
-        vnode: &VNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
-    ) -> Result<(), RehydrationError> {
-        match dynamic {
-            dioxus_core::DynamicNode::Text(_) | dioxus_core::DynamicNode::Placeholder(_) => {
-                ids.push(
-                    vnode
-                        .mounted_dynamic_node(dynamic_node_index, dom)
-                        .ok_or(VNodeNotInitialized)?
-                        .0 as u32,
-                );
-            }
-            dioxus_core::DynamicNode::Component(comp) => {
-                let scope = comp
-                    .mounted_scope(dynamic_node_index, vnode, dom)
-                    .ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(scope, dom, ids, to_mount)?;
-            }
-            dioxus_core::DynamicNode::Fragment(fragment) => {
-                for vnode in fragment {
-                    self.rehydrate_vnode(dom, vnode, ids, to_mount)?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-fn write_comma_separated(id: &[u32], into: &mut String) {
-    let mut iter = id.iter();
-    if let Some(first) = iter.next() {
-        write!(into, "{first}").unwrap();
-    }
-    for id in iter {
-        write!(into, ",{id}").unwrap();
-    }
-}
-
-fn path_to_resolved_suspense_id(path: &[u32]) -> String {
-    let mut resolved_suspense_id_formatted = String::from("ds-");
-    write_comma_separated(path, &mut resolved_suspense_id_formatted);
-    resolved_suspense_id_formatted.push_str("-r");
-    resolved_suspense_id_formatted
 }

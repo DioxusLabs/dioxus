@@ -18,12 +18,13 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
+use dioxus_core::{AttributeValue, ElementId, WriteMutations};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
@@ -31,26 +32,73 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{
+    collections::HashMap,
     net::IpAddr,
     sync::{Arc, RwLock},
 };
 use tokio::sync::Notify;
 
 /// This handles communication between the requests that the webview makes and the interpreter.
+///
+/// `WryQueue` is registered with the VirtualDom at its window's `RenderTargetId`;
+/// the diff writes its mutations directly into this queue's `MutationState`.
 #[derive(Clone)]
 pub(crate) struct WryQueue {
     inner: Rc<RefCell<WryQueueInner>>,
 }
 
 impl WryQueue {
-    pub(crate) fn with_mutation_state_mut<O: 'static>(
-        &self,
-        callback: impl FnOnce(&mut MutationState) -> O,
-    ) -> O {
-        let mut inner = self.inner.borrow_mut();
-        callback(&mut inner.mutation_state)
+    /// Whether any mutations have been written since the last `clear_touched`.
+    pub(crate) fn is_touched(&self) -> bool {
+        self.inner.borrow().touched
     }
 
+    /// Reset the touched flag - called after `send_edits` so the next render
+    /// pass can detect a fresh batch of writes.
+    pub(crate) fn clear_touched(&self) {
+        self.inner.borrow_mut().touched = false;
+    }
+
+    #[inline]
+    fn with_mutation_state(&mut self, f: impl FnOnce(&mut MutationState)) {
+        let mut inner = self.inner.borrow_mut();
+        inner.touched = true;
+        f(&mut inner.mutation_state);
+    }
+}
+
+macro_rules! forward_wry_queue_mutations {
+    ($($method:ident($($arg:ident: $arg_ty:ty),*);)*) => {
+        $(
+            fn $method(&mut self, $($arg: $arg_ty),*) {
+                self.with_mutation_state(|state| WriteMutations::$method(state, $($arg),*));
+            }
+        )*
+    };
+}
+
+impl WriteMutations for WryQueue {
+    forward_wry_queue_mutations! {
+        push_id(id: ElementId);
+        set_id(id: ElementId);
+        child(index: usize);
+        pop();
+        create_element(tag: &str, ns: Option<&str>);
+        create_text(value: &str);
+        clone();
+        append_children(m: usize);
+        replace_with(m: usize);
+        insert_after(m: usize);
+        insert_before(m: usize);
+        set_attribute(name: &str, ns: Option<&str>, value: &AttributeValue);
+        set_text(value: &str);
+        add_event_listener(name: &str);
+        remove_event_listener(name: &str);
+        remove();
+    }
+}
+
+impl WryQueue {
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self) {
         let mut myself = self.inner.borrow_mut();
@@ -67,7 +115,13 @@ impl WryQueue {
     ) -> std::task::Poll<()> {
         let mut self_mut = self.inner.borrow_mut();
         if let Some(receiver) = self_mut.edits_in_progress.as_mut() {
-            receiver.poll_unpin(cx).map(|_| ())
+            match receiver.poll_unpin(cx) {
+                std::task::Poll::Ready(_) => {
+                    self_mut.edits_in_progress = None;
+                    std::task::Poll::Ready(())
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            }
         } else {
             std::task::Poll::Ready(())
         }
@@ -86,7 +140,7 @@ impl WryQueue {
         if poll.is_ready() {
             // If the future is ready, we need to reset it to wait for the next change
             self_mut.server_location_changed_future =
-                owned_notify_future(self_mut.server_location_changed.clone());
+                owned_notify_future(self_mut.websocket.server_location.clone());
         }
         poll
     }
@@ -116,10 +170,14 @@ pub(crate) struct WryQueueInner {
     websocket: EditWebsocket,
     // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
     edits_in_progress: Option<oneshot::Receiver<()>>,
-    // The socket may be killed by the OS while running. If it does, this channel will receive the new server location
-    server_location_changed: Arc<Notify>,
+    // The socket may be killed by the OS while running. If it does, this future resolves with the
+    // new server location. The notify it waits on is owned by `websocket.server_location`.
     server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
     mutation_state: MutationState,
+    /// `true` if any mutation has been forwarded since the last `clear_touched`.
+    /// Used by the desktop app to decide which webviews need a `send_edits` call
+    /// after a render pass.
+    touched: bool,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
@@ -332,9 +390,7 @@ impl EditWebsocket {
                 let msg = queued_message.take().expect("Message should be set here");
 
                 // Notify that the edits have been applied
-                if msg.response.send(()).is_err() {
-                    tracing::error!("Error sending edits applied notification");
-                }
+                _ = msg.response.send(());
             }
             tracing::trace!("Webview {} closed the connection", location.webview_id);
             let mut connection = WebviewConnectionState::default();
@@ -383,12 +439,12 @@ impl EditWebsocket {
         let server_location = self.server_location.clone();
         WryQueue {
             inner: Rc::new(RefCell::new(WryQueueInner {
-                server_location_changed: server_location.clone(),
                 server_location_changed_future: owned_notify_future(server_location),
                 location: WebviewWebsocketLocation { webview_id, server },
                 websocket: self.clone(),
                 edits_in_progress: None,
                 mutation_state: MutationState::default(),
+                touched: false,
             })),
         }
     }

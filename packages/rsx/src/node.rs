@@ -28,6 +28,9 @@ pub enum BodyNode {
 
     /// if cond {} else if cond {} (else {}?)
     IfChain(IfChain),
+
+    /// A macro-inserted dynamic boundary around a nested static template.
+    SyntheticBoundary(Box<TemplateBody>),
 }
 
 impl Parse for BodyNode {
@@ -121,37 +124,19 @@ impl ToTokens for BodyNode {
             BodyNode::ForLoop(floop) => floop.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::IfChain(ifchain) => ifchain.to_tokens(tokens),
+            BodyNode::SyntheticBoundary(body) => {
+                tokens.extend(quote::quote! {
+                    {
+                        let ___nodes = dioxus_core::IntoDynNode::into_dyn_node({ #body });
+                        ___nodes
+                    }
+                });
+            }
         }
     }
 }
 
 impl BodyNode {
-    pub fn get_dyn_idx(&self) -> usize {
-        match self {
-            BodyNode::Text(text) => text.dyn_idx.get(),
-            BodyNode::RawExpr(exp) => exp.dyn_idx.get(),
-            BodyNode::Component(comp) => comp.dyn_idx.get(),
-            BodyNode::ForLoop(floop) => floop.dyn_idx.get(),
-            BodyNode::IfChain(chain) => chain.dyn_idx.get(),
-            BodyNode::Element(_) => panic!("Cannot get dyn_idx for this node"),
-        }
-    }
-
-    pub fn set_dyn_idx(&self, idx: usize) {
-        match self {
-            BodyNode::Text(text) => text.dyn_idx.set(idx),
-            BodyNode::RawExpr(exp) => exp.dyn_idx.set(idx),
-            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
-            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
-            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
-            BodyNode::Element(_) => panic!("Cannot set dyn_idx for this node"),
-        }
-    }
-
-    pub fn is_litstr(&self) -> bool {
-        matches!(self, BodyNode::Text { .. })
-    }
-
     pub fn span(&self) -> Span {
         match self {
             BodyNode::Element(el) => el.name.span(),
@@ -160,20 +145,7 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
-        }
-    }
-
-    pub fn element_children(&self) -> &[BodyNode] {
-        match self {
-            BodyNode::Element(el) => &el.children,
-            _ => panic!("Children not available for this node"),
-        }
-    }
-
-    pub fn el_name(&self) -> &ElementName {
-        match self {
-            BodyNode::Element(el) => &el.name,
-            _ => panic!("Element name not available for this node"),
+            BodyNode::SyntheticBoundary(body) => body.first_root_span(),
         }
     }
 
@@ -181,6 +153,7 @@ impl BodyNode {
         match self {
             Self::Element(el) => el.key(),
             Self::Component(comp) => comp.get_key(),
+            Self::SyntheticBoundary(body) => body.implicit_key(),
             _ => None,
         }
     }

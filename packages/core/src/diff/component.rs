@@ -1,58 +1,84 @@
-use std::{
-    any::TypeId,
-    ops::{Deref, DerefMut},
-};
-
 use crate::{
-    Element, SuspenseContext,
-    any_props::AnyProps,
-    innerlude::{
-        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
-        VComponent, WriteMutations,
+    Element,
+    diff::{
+        context::{DiffContext, DiffFrame, DiffState},
+        placement::{InsertionSite, insertion_site_for_slot},
+        template::DynamicNodeSlot,
     },
+    innerlude::{MountId, VComponent, WriteMutations},
     nodes::VNode,
-    scopes::{LastRenderedNode, ScopeId},
+    scopes::{LastRenderedNode, MountedOutput, ScopeId},
     virtual_dom::VirtualDom,
 };
 
 impl VirtualDom {
-    pub(crate) fn run_and_diff_scope<M: WriteMutations>(
+    /// Run a queued scope diff.
+    ///
+    /// Invariant: the scope id is live and its render driver owns the scope's current props and
+    /// rendered output.
+    pub(crate) fn run_and_diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope_id: ScopeId,
     ) {
-        let scope = &mut self.scopes[scope_id.0];
-        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
-            SuspenseBoundaryProps::diff(scope_id, self, to)
-        } else {
-            let new_nodes = self.run_scope(scope_id);
-            self.diff_scope(to, scope_id, new_nodes);
-        }
+        let mut state = DiffState::new(self, to);
+        let context = state.context();
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        let to = state.to.as_deref_mut();
+        driver.diff(&mut *state.dom, scope_id, context, to)
     }
 
-    #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
-    fn diff_scope<M: WriteMutations>(
+    #[tracing::instrument(
+        skip(self, to, new_nodes, parent_context),
+        level = "trace",
+        name = "VirtualDom::diff_scope"
+    )]
+    pub(crate) fn diff_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: Element,
+        parent_context: Option<DiffContext<'_>>,
     ) {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // We don't diff the nodes if the scope is suspended or has an error
             let Ok(new_real_nodes) = &new_nodes else {
                 return;
             };
-            let scope_state = &mut self.scopes[scope.0];
             // Load the old and new rendered nodes
-            let old = scope_state.last_rendered_node.take().unwrap();
+            let old_output = self.scopes[scope.index()]
+                .last_rendered_node
+                .take()
+                .unwrap();
+            let old_mount = old_output.root_mount();
+            let old_render_parent = self.mounted_render_parent(old_mount);
+            let old = old_output.node();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
-            old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
+            let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
+            let mut state =
+                DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
+            let new_mount =
+                DiffFrame::new(old_mount, old.as_vnode(), new_real_nodes).diff_into(&mut state);
+            // Component roots owned by a dynamic slot have a render parent. The root wrapper is
+            // appended directly under the renderer root, so it only needs scope root-mount cells
+            // retargeted when a template replacement creates a new mount.
+            if let Some(old_render_parent) = old_render_parent {
+                self.replace_mounted_component_root_mount(old_mount, new_mount, old_render_parent);
+            } else if old_mount != new_mount {
+                for scope in self.runtime.scope_states.borrow().iter().flatten() {
+                    if scope.root_mount() == Some(old_mount) {
+                        scope.set_root_mount(Some(new_mount));
+                    }
+                }
+            }
 
-            self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
+            self.scopes[scope.index()].last_rendered_node = Some(MountedOutput::new(
+                LastRenderedNode::new(new_nodes),
+                new_mount,
+            ));
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
@@ -60,158 +86,211 @@ impl VirtualDom {
         })
     }
 
-    /// Create a new [`Scope`](crate::scope_context::Scope) for a component.
+    /// Create a component scope's rendered output.
     ///
-    /// Returns the number of nodes created on the stack
+    /// Invariant: the render driver sets `last_rendered_node` and the scope root mount before this
+    /// returns. Returns the number of renderer nodes left on the stack.
     #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
-    pub(crate) fn create_scope<M: WriteMutations>(
+    pub(crate) fn create_scope(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         scope: ScopeId,
         new_nodes: LastRenderedNode,
-        parent: Option<ElementRef>,
+        parent: Option<MountId>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-            let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
+            let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
 
-            // Create the node
-            let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
+            // Create the node, reusing the scope's existing mount in place when it
+            // holds the same template (re-render, or promoting a background subtree)
+            // so the scope subtree keeps its identity instead of allocating fresh
+            // scopes.
+            let old_mount = self.scopes[scope.index()]
+                .last_rendered_node
+                .as_ref()
+                .map(MountedOutput::root_mount);
+            let created = new_nodes.as_vnode().create_or_reuse_mount(
+                self,
+                old_mount,
+                parent,
+                parent,
+                render_to.as_deref_mut(),
+            );
 
             // Then set the new node as the last rendered node
-            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+            self.scopes[scope.index()].last_rendered_node =
+                Some(MountedOutput::new(new_nodes, created.mount));
+            self.runtime
+                .get_state(scope)
+                .set_root_mount(Some(created.mount));
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).mount(&self.runtime);
             }
 
-            nodes
+            created.nodes
         })
     }
 
-    pub(crate) fn remove_component_node<M: WriteMutations>(
+    pub(crate) fn scope_should_write_now(&self, scope: ScopeId) -> bool {
+        self.runtime.scope_should_render(scope)
+    }
+
+    pub(crate) fn remove_component_node(
         &mut self,
-        to: Option<&mut M>,
+        to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
         scope_id: ScopeId,
-        replace_with: Option<usize>,
     ) {
-        // If this is a suspense boundary, remove the suspended nodes as well
-        SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
-
-        // Remove the component from the dom
-        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.clone() {
-            node.remove_node_inner(self, to, destroy_component_state, replace_with)
-        };
-
-        if destroy_component_state {
-            // Now drop all the resources
-            self.drop_scope(scope_id);
-        }
+        let driver = self.runtime.get_state(scope_id).render_driver();
+        driver.remove(self, scope_id, to, destroy_component_state)
     }
 }
 
 impl VNode {
-    pub(crate) fn diff_vcomponent(
+    /// Diff a dynamic component value in a same-template vnode.
+    ///
+    /// Invariant: `scope_id` is the component scope mounted in `mount` at `idx`.
+    pub(super) fn diff_vcomponent(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         new: &VComponent,
         old: &VComponent,
         scope_id: ScopeId,
-        parent: Option<ElementRef>,
-        dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
-        // Replace components that have different render fns
-        if old.render_fn != new.render_fn {
-            return self.replace_vcomponent(mount, idx, new, parent, dom, to);
+        // Replace components whose render function or specialized lifecycle driver changed.
+        if old.render_fn != new.render_fn || !old.driver.same_component(&*new.driver) {
+            return self.replace_vcomponent(mount, slot, new, state);
         }
 
-        // copy out the box for both
-        let old_scope = &mut dom.scopes[scope_id.0];
-        let old_props: &mut dyn AnyProps = old_scope.props.deref_mut();
-        let new_props: &dyn AnyProps = new.props.deref();
-
-        // If the props are static, then we try to memoize by setting the new with the old
-        // The target ScopeState still has the reference to the old props, so there's no need to update anything
-        // This also implicitly drops the new props since they're not used
-        if old_props.memoize(new_props.props()) {
-            tracing::trace!("Memoized props for component {:#?}", scope_id,);
+        // If the props are static, then we try to memoize by setting the new with the old. The
+        // target ScopeState still has the old props, so a true return means there is no need to
+        // update anything. This also implicitly drops the new props since they are not used.
+        let old_scope = &mut state.dom.scopes[scope_id.index()];
+        if old_scope.props.memoize(new.props.props()) {
             return;
         }
 
-        // Now diff the scope
-        dom.run_and_diff_scope(to, scope_id);
-
-        let height = dom.runtime.get_state(scope_id).height;
-        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+        let context = state.context();
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        let to = state.to.as_deref_mut();
+        driver.diff(&mut *state.dom, scope_id, context, to);
+        state.dom.mark_clean(scope_id);
     }
 
     fn replace_vcomponent(
         &self,
         mount: MountId,
-        idx: usize,
+        slot: DynamicNodeSlot<'_>,
         new: &VComponent,
-        parent: Option<ElementRef>,
-        dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) {
-        let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+        let idx = slot.index();
+        let scope = state
+            .dom
+            .unchecked_mounted_dynamic_component_scope(mount, idx);
 
-        // Remove the scope id from the mount
-        dom.set_mounted_dyn_node(mount, idx, ScopeId::PLACEHOLDER.0);
-        let m = self.create_component_node(mount, idx, new, parent, dom, to.as_deref_mut());
+        // Read the old rendered root before freeing the scope slot. If a
+        // writer is active, this is the first placement anchor for the new
+        // component. Hidden/no-writer diffs do not resolve renderer placement.
+        let live_first = state.dom.scopes[scope.index()]
+            .last_rendered_node
+            .as_ref()
+            .and_then(|n| n.mounted_vnode().find_first_element(state.dom));
+        let context = state.context();
 
-        // Instead of *just* removing it, we can use the replace mutation
-        dom.remove_component_node(to, true, scope, Some(m));
+        // Free the scope slot so `create_component_node` allocates a new scope.
+        state.dom.clear_mounted_dynamic_node_slot(mount, idx);
+
+        if let Some(to) = state.to.as_deref_mut() {
+            let site = live_first
+                .map(InsertionSite::before)
+                .unwrap_or_else(|| insertion_site_for_slot(mount, slot, state.dom, context));
+            let runtime = state.dom.runtime.clone();
+            let dom = &mut *state.dom;
+            site.create_and_place_with_result(to, runtime, |to| {
+                let mut state = DiffState::new_with_context(dom, Some(to), context);
+                let nodes = self.create_component_node(mount, idx, new, &mut state);
+                (nodes, nodes)
+            });
+        } else {
+            self.create_component_node(mount, idx, new, state);
+        }
+        state
+            .dom
+            .remove_component_node(state.to.as_deref_mut(), true, scope);
     }
 
-    /// Create a new component (if it doesn't already exist) node and then mount the [`crate::ScopeState`] for a component
+    /// Create or mount the scope for a dynamic component node.
     ///
-    /// Returns the number of nodes created on the stack
+    /// Invariant: the driver writes a rendered root mount into the scope state before returning.
     pub(super) fn create_component_node(
         &self,
         mount: MountId,
         idx: usize,
         component: &VComponent,
-        parent: Option<ElementRef>,
-        dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        state: &mut DiffState<'_, '_, '_, '_>,
     ) -> usize {
-        // If this is a suspense boundary, run our suspense creation logic instead of running the component
-        if component.props.props().type_id() == TypeId::of::<SuspenseBoundaryPropsWithOwner>() {
-            return SuspenseBoundaryProps::create(mount, idx, component, parent, dom, to);
-        }
+        let scope_id = state
+            .dom
+            .mounted_dynamic_component_scope(mount, idx)
+            .unwrap_or_else(|| {
+                // The scope adopts a duplicate of the vnode's driver so the live
+                // scope never aliases props with a vnode (a cached rsx element
+                // hands out the same driver instance every render).
+                let scope_id = state
+                    .dom
+                    .new_scope(
+                        component.name,
+                        component.driver.clone(),
+                        component.props.duplicate(),
+                    )
+                    .state()
+                    .id;
 
-        let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                // Store the scope id for the next render.
+                state
+                    .dom
+                    .set_mounted_dynamic_component_scope(mount, idx, scope_id);
+                scope_id
+            });
 
-        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
-        if scope_id.is_placeholder() {
-            scope_id = dom
-                .new_scope(component.props.duplicate(), component.name)
-                .state()
-                .id;
+        let driver = state.dom.runtime.get_state(scope_id).render_driver();
+        let to = state.to.as_deref_mut();
+        let parent = Some(mount);
+        let nodes = driver.create(&mut *state.dom, scope_id, parent, to);
+        self.finish_component_create(mount, idx, scope_id, nodes, state)
+    }
 
-            // Store the scope id for the next render
-            dom.set_mounted_dyn_node(mount, idx, scope_id.0);
-
-            // If this is a new scope, we also need to run it once to get the initial state
-            let new = dom.run_scope(scope_id);
-
-            // Then set the new node as the last rendered node
-            dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
-        }
-
-        let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-
-        let new_node = dom.scopes[scope.0]
+    fn finish_component_create(
+        &self,
+        mount: MountId,
+        idx: usize,
+        scope_id: ScopeId,
+        nodes: usize,
+        state: &mut DiffState<'_, '_, '_, '_>,
+    ) -> usize {
+        let root_mount = state
+            .dom
+            .get_scope(scope_id)
+            .expect("component scope")
             .last_rendered_node
-            .clone()
-            .expect("Component to be mounted");
-
-        dom.create_scope(to, scope, new_node, parent)
+            .as_ref()
+            .expect("component root")
+            .root_mount();
+        state
+            .dom
+            .runtime
+            .get_state(scope_id)
+            .set_root_mount(Some(root_mount));
+        state
+            .dom
+            .set_component_root_render_parent(mount, idx, root_mount);
+        nodes
     }
 }
