@@ -24,6 +24,8 @@ mod serve;
 mod settings;
 mod tailwind;
 mod test_harnesses;
+#[cfg(test)]
+mod test_workspace;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
