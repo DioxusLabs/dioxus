@@ -389,6 +389,15 @@ impl AppBuilder {
             krate == tip_crate_name || artifacts.workspace_rustc.contains_crate(krate)
         };
 
+        // Nothing the user edited is compiled for this target, so it cannot affect the running
+        // binary. Patching anyway would rebuild, relink and reload the client for no change.
+        if edit_cannot_reach_target(&changed_crates, in_target_graph) {
+            tracing::debug!(
+                "Ignoring patch rebuild for {build_id:?} since none of {changed_crates:?} are built for this target."
+            );
+            return;
+        }
+
         // On web, our patches are fully relocatable, so we don't need to worry about ASLR, but
         // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
         let aslr_reference = match self.aslr_reference {
@@ -2221,6 +2230,18 @@ impl AppBuilder {
     }
 }
 
+/// Whether an edit cannot reach the running binary: it mapped to workspace crates, and not one
+/// of them is built for this target.
+///
+/// An empty `changed_crates` means the changed files mapped to no workspace crate at all, which
+/// says nothing about relevance - those edits keep going through the normal patch path.
+fn edit_cannot_reach_target(
+    changed_crates: &[String],
+    in_target_graph: impl Fn(&str) -> bool,
+) -> bool {
+    !changed_crates.is_empty() && !changed_crates.iter().any(|krate| in_target_graph(krate))
+}
+
 /// The crates whose objects a patch must carry: the crates the user edited, plus every workspace
 /// crate that transitively depends on one of them, plus `tip_crate_name` (always rebuilt).
 ///
@@ -2292,6 +2313,59 @@ mod tests {
 
         result.sort();
         result
+    }
+
+    fn cannot_reach(changed: &[&str], outside: &[&str]) -> bool {
+        let changed: Vec<String> = changed.iter().map(|c| c.to_string()).collect();
+        edit_cannot_reach_target(&changed, |krate| !outside.contains(&krate))
+    }
+
+    /// Drive the cascade from a real cargo workspace, as a wasm32 build sees it: `native_ffi` is
+    /// in the metadata graph and reported as a dependent, but is never compiled for this target.
+    fn wasm_replay_set(edited: &str) -> Vec<String> {
+        let (_dir, krates) = crate::test_workspace::native_sibling_workspace();
+        let members = crate::Workspace::member_nids(&krates);
+
+        let mut got: Vec<String> = crates_to_replay(
+            &[edited.to_string()],
+            "app",
+            |krate| crate::workspace::dependents_of(&krates, &members, krate),
+            |krate| krate != "native_ffi",
+        )
+        .into_iter()
+        .collect();
+
+        got.sort();
+        got
+    }
+
+    #[test]
+    fn editing_a_shared_library_patches_the_app_but_not_the_native_sibling() {
+        assert_eq!(wasm_replay_set("shared_lib"), ["app", "shared_lib"]);
+    }
+
+    #[test]
+    fn editing_the_native_sibling_leaves_nothing_to_replay() {
+        assert_eq!(wasm_replay_set("native_ffi"), ["app"]);
+    }
+
+    #[test]
+    fn edit_touching_only_crates_outside_the_target_graph_cannot_reach_it() {
+        assert!(cannot_reach(&["native_ffi"], &["native_ffi"]));
+    }
+
+    #[test]
+    fn edit_touching_one_built_crate_can_reach_the_target() {
+        assert!(!cannot_reach(
+            &["native_ffi", "shared_lib"],
+            &["native_ffi"]
+        ));
+    }
+
+    #[test]
+    fn edit_mapping_to_no_workspace_crate_takes_the_normal_path() {
+        // Says nothing about relevance, so it must not be treated as unreachable.
+        assert!(!cannot_reach(&[], &[]));
     }
 
     #[test]
