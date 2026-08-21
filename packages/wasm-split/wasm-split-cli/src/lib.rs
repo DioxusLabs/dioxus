@@ -966,6 +966,28 @@ impl<'a> Splitter<'a> {
         //
         // wasm-bindgen will dissolve describe functions into the shim functions, but we don't have a
         // sense of lining up old to new, so we just assume everything ends up in the main chunk.
+        // Shared by both branches below: a node we can't line up between the
+        // old and new modules by name still has real callees in the *old*
+        // graph, and those callees are exactly as reachable as the node
+        // itself - losing them silently would make wasm-split think a
+        // subtree is dead code when the (unresolvable, but very much still
+        // compiled-in) caller right next to it calls it just fine.
+        fn descend(
+            lost_children: &mut HashSet<Node>,
+            old_graph: &HashMap<Node, HashSet<Node>>,
+            node: Node,
+        ) {
+            if !lost_children.insert(node) {
+                return;
+            }
+
+            if let Some(children) = old_graph.get(&node) {
+                for child in children {
+                    descend(lost_children, old_graph, *child);
+                }
+            }
+        }
+
         let mut lost_children = HashSet::new();
         self.call_graph = original
             .call_graph
@@ -974,22 +996,6 @@ impl<'a> Splitter<'a> {
                 // If the old function isn't in the new module, we need to move all its descendents into the main chunk
                 let Some(new) = get_old(old) else {
                     for child in children {
-                        fn descend(
-                            lost_children: &mut HashSet<Node>,
-                            old_graph: &HashMap<Node, HashSet<Node>>,
-                            node: Node,
-                        ) {
-                            if !lost_children.insert(node) {
-                                return;
-                            }
-
-                            if let Some(children) = old_graph.get(&node) {
-                                for child in children {
-                                    descend(lost_children, old_graph, *child);
-                                }
-                            }
-                        }
-
                         descend(&mut lost_children, &original.call_graph, *child);
                     }
                     return None;
@@ -997,8 +1003,15 @@ impl<'a> Splitter<'a> {
 
                 let mut new_children = HashSet::new();
                 for child in children {
-                    if let Some(new) = get_old(child) {
-                        new_children.insert(new);
+                    match get_old(child) {
+                        Some(new) => {
+                            new_children.insert(new);
+                        }
+                        // Same situation as a dropped parent above, just for
+                        // one edge instead of the whole node - recover this
+                        // child's own descendants instead of dropping the
+                        // edge with no trace at all.
+                        None => descend(&mut lost_children, &original.call_graph, *child),
                     }
                 }
 
