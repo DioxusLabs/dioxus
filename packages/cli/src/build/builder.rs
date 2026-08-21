@@ -354,8 +354,8 @@ impl AppBuilder {
     /// the latest version of *every* crate modified since the fat build, not just the one that
     /// changed this iteration. We BFS `workspace_dependents_of` from `changed_crates` to catch
     /// the cascade — e.g. editing a leaf crate forces parent crates' generic instantiations to
-    /// change too. (`compile_workspace_deps` does its own walk to decide what to *compile* now;
-    /// this set tracks what to *link* into the patch.)
+    /// change too. Crates outside the active build's target graph are excluded, since there is no
+    /// captured rustc invocation to replay for them.
     ///
     /// Then aborts any in-flight build and spawns a fresh task with [`BuildMode::Thin`], handing
     /// it the fat build's `workspace_rustc_args`/`artifact_paths` (so rustc gets re-invoked with
@@ -374,6 +374,29 @@ impl AppBuilder {
             );
             return;
         };
+
+        // Track the tip by *package* name — that's the identity used by the file→crate
+        // mapping and the workspace dependents graph (the bin target name can differ).
+        let tip_crate_name = self.build.tip_package_name();
+
+        // Whether a crate belongs to *this* build's target graph, i.e. the fat build captured a
+        // rustc invocation we can replay for it. Workspace dependency graphs are target-agnostic,
+        // so a crate can be watched (and report as changed) without ever being compiled here —
+        // e.g. a dependency behind `[target.'cfg(...)'.dependencies]`. The tip always belongs: it
+        // is tracked by package name, which can differ from its captured `.bin` target name (see
+        // `workspace_hotpatch_replay_order`).
+        let in_target_graph = |krate: &str| {
+            krate == tip_crate_name || artifacts.workspace_rustc.contains_crate(krate)
+        };
+
+        // Nothing the user edited is compiled for this target, so it cannot affect the running
+        // binary. Patching anyway would rebuild, relink and reload the client for no change.
+        if edit_cannot_reach_target(&changed_crates, in_target_graph) {
+            tracing::debug!(
+                "Ignoring patch rebuild for {build_id:?} since none of {changed_crates:?} are built for this target."
+            );
+            return;
+        }
 
         // On web, our patches are fully relocatable, so we don't need to worry about ASLR, but
         // for all other platforms, we need to use the ASLR reference to know where to insert the patch.
@@ -404,29 +427,14 @@ impl AppBuilder {
         // ALL crates modified since the fat build. We compute the full cascade closure here
         // (while we have &mut self) so it doesn't need to be round-tripped through BuildArtifacts.
         //
-        // Note: compile_workspace_deps() independently computes which crates to compile for THIS
-        // patch (starting from changed_crates + cascade). That serves a different purpose — it only
-        // compiles what changed now, not everything ever modified. Both use workspace_dependents_of
-        // for the BFS, so they stay in sync automatically.
-        // Track the tip by *package* name — that's the identity used by the file→crate
-        // mapping and the workspace dependents graph (the bin target name can differ).
-        let tip_crate_name = self.build.tip_package_name();
-        self.modified_crates.insert(tip_crate_name.clone());
-
-        // Add changed crates and their transitive workspace dependents (cascade).
-        let mut to_visit: Vec<String> = changed_crates.clone();
-        let mut visited = HashSet::new();
-        while let Some(c) = to_visit.pop() {
-            if !visited.insert(c.clone()) {
-                continue;
-            }
-            self.modified_crates.insert(c.clone());
-            for dep in self.build.workspace_dependents_of(&c) {
-                if dep != tip_crate_name && !visited.contains(&dep) {
-                    to_visit.push(dep);
-                }
-            }
-        }
+        // `compile_workspace_hotpatch` consumes this set directly, ordering it with
+        // `workspace_hotpatch_replay_order` so dependencies replay before their dependents.
+        self.modified_crates.extend(crates_to_replay(
+            &changed_crates,
+            &tip_crate_name,
+            |krate| self.build.workspace_dependents_of(krate),
+            in_target_graph,
+        ));
 
         tracing::debug!(
             "Patch rebuild: changed_crates={:?}, modified_crates={:?}",
@@ -2219,5 +2227,220 @@ impl AppBuilder {
         drop(_child);
 
         Ok(())
+    }
+}
+
+/// Whether an edit cannot reach the running binary: it mapped to workspace crates, and not one
+/// of them is built for this target.
+///
+/// An empty `changed_crates` means the changed files mapped to no workspace crate at all, which
+/// says nothing about relevance - those edits keep going through the normal patch path.
+fn edit_cannot_reach_target(
+    changed_crates: &[String],
+    in_target_graph: impl Fn(&str) -> bool,
+) -> bool {
+    !changed_crates.is_empty() && !changed_crates.iter().any(|krate| in_target_graph(krate))
+}
+
+/// The crates whose objects a patch must carry: the crates the user edited, plus every workspace
+/// crate that transitively depends on one of them, plus `tip_crate_name` (always rebuilt).
+///
+/// `in_target_graph` excludes crates the active build never compiled. Workspace dependency graphs
+/// are target-agnostic, so `dependents_of` can report a crate that has no captured rustc
+/// invocation to replay - e.g. a dependency behind `[target.'cfg(...)'.dependencies]` while
+/// serving wasm. Such a crate is dropped, and the walk is pruned through it: anything reachable
+/// only via a crate this target never compiled does not consume the change on this target either.
+/// A dependent that also has a compiled path back to the edited crate is still reached along that
+/// path, so excluding one route never drops a crate that genuinely needs the patch.
+fn crates_to_replay(
+    changed_crates: &[String],
+    tip_crate_name: &str,
+    dependents_of: impl Fn(&str) -> Vec<String>,
+    in_target_graph: impl Fn(&str) -> bool,
+) -> HashSet<String> {
+    let mut replay = HashSet::from([tip_crate_name.to_string()]);
+    let mut to_visit = changed_crates.to_vec();
+    let mut visited = HashSet::new();
+
+    while let Some(krate) = to_visit.pop() {
+        if !visited.insert(krate.clone()) {
+            continue;
+        }
+
+        if !in_target_graph(&krate) {
+            continue;
+        }
+
+        for dependent in dependents_of(&krate) {
+            if dependent != tip_crate_name && !visited.contains(&dependent) {
+                to_visit.push(dependent);
+            }
+        }
+
+        replay.insert(krate);
+    }
+
+    replay
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    const TIP: &str = "wasm_app";
+
+    /// `edges` maps a crate to the workspace crates that depend on it.
+    fn replay(
+        changed: &[&str],
+        edges: &[(&str, &[&str])],
+        outside_target_graph: &[&str],
+    ) -> Vec<String> {
+        let graph: HashMap<&str, Vec<String>> = edges
+            .iter()
+            .map(|(krate, deps)| (*krate, deps.iter().map(|d| d.to_string()).collect()))
+            .collect();
+
+        let changed: Vec<String> = changed.iter().map(|c| c.to_string()).collect();
+        let mut result: Vec<String> = crates_to_replay(
+            &changed,
+            TIP,
+            |krate| graph.get(krate).cloned().unwrap_or_default(),
+            |krate| !outside_target_graph.contains(&krate),
+        )
+        .into_iter()
+        .collect();
+
+        result.sort();
+        result
+    }
+
+    fn cannot_reach(changed: &[&str], outside: &[&str]) -> bool {
+        let changed: Vec<String> = changed.iter().map(|c| c.to_string()).collect();
+        edit_cannot_reach_target(&changed, |krate| !outside.contains(&krate))
+    }
+
+    /// Drive the cascade from a real cargo workspace, as a wasm32 build sees it: `native_ffi` is
+    /// in the metadata graph and reported as a dependent, but is never compiled for this target.
+    fn wasm_replay_set(edited: &str) -> Vec<String> {
+        let (_dir, krates) = crate::test_workspace::native_sibling_workspace();
+        let members = crate::Workspace::member_nids(&krates);
+
+        let mut got: Vec<String> = crates_to_replay(
+            &[edited.to_string()],
+            "app",
+            |krate| crate::workspace::dependents_of(&krates, &members, krate),
+            |krate| krate != "native_ffi",
+        )
+        .into_iter()
+        .collect();
+
+        got.sort();
+        got
+    }
+
+    #[test]
+    fn editing_a_shared_library_patches_the_app_but_not_the_native_sibling() {
+        assert_eq!(wasm_replay_set("shared_lib"), ["app", "shared_lib"]);
+    }
+
+    #[test]
+    fn editing_the_native_sibling_leaves_nothing_to_replay() {
+        assert_eq!(wasm_replay_set("native_ffi"), ["app"]);
+    }
+
+    #[test]
+    fn edit_touching_only_crates_outside_the_target_graph_cannot_reach_it() {
+        assert!(cannot_reach(&["native_ffi"], &["native_ffi"]));
+    }
+
+    #[test]
+    fn edit_touching_one_built_crate_can_reach_the_target() {
+        assert!(!cannot_reach(
+            &["native_ffi", "shared_lib"],
+            &["native_ffi"]
+        ));
+    }
+
+    #[test]
+    fn edit_mapping_to_no_workspace_crate_takes_the_normal_path() {
+        // Says nothing about relevance, so it must not be treated as unreachable.
+        assert!(!cannot_reach(&[], &[]));
+    }
+
+    #[test]
+    fn cascade_reaches_every_dependent_when_all_are_built() {
+        // The baseline the exclusion must not disturb.
+        let got = replay(
+            &["shared_lib"],
+            &[("shared_lib", &["helper", TIP]), ("helper", &[TIP])],
+            &[],
+        );
+        assert_eq!(got, vec!["helper", "shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn dependent_outside_the_target_graph_is_excluded() {
+        let got = replay(
+            &["shared_lib"],
+            &[("shared_lib", &["native_ffi", TIP])],
+            &["native_ffi"],
+        );
+        assert_eq!(got, vec!["shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn edited_crate_outside_the_target_graph_is_excluded() {
+        // The seed path: the user edited the excluded crate itself.
+        let got = replay(&["native_ffi"], &[("native_ffi", &[TIP])], &["native_ffi"]);
+        assert_eq!(got, vec!["wasm_app"]);
+    }
+
+    #[test]
+    fn walk_is_pruned_through_a_crate_outside_the_target_graph() {
+        // `leaf` is reachable only via `native_ffi`, which this target never compiles.
+        let got = replay(
+            &["shared_lib"],
+            &[("shared_lib", &["native_ffi"]), ("native_ffi", &["leaf"])],
+            &["native_ffi"],
+        );
+        assert_eq!(got, vec!["shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn compiled_route_still_reaches_a_dependent_the_pruned_route_dropped() {
+        // Same graph, but `leaf` also depends on `shared_lib` directly - it must survive.
+        let got = replay(
+            &["shared_lib"],
+            &[
+                ("shared_lib", &["native_ffi", "leaf"]),
+                ("native_ffi", &["leaf"]),
+            ],
+            &["native_ffi"],
+        );
+        assert_eq!(got, vec!["leaf", "shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn tip_is_kept_even_when_reported_outside_the_target_graph() {
+        // The tip is tracked by package name, which can differ from its captured `.bin` name.
+        let got = replay(&["shared_lib"], &[("shared_lib", &[TIP])], &[TIP]);
+        assert_eq!(got, vec!["shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn every_edited_crate_is_walked_independently() {
+        let got = replay(
+            &["shared_lib", "native_ffi"],
+            &[("shared_lib", &["helper"]), ("native_ffi", &["leaf"])],
+            &["native_ffi"],
+        );
+        assert_eq!(got, vec!["helper", "shared_lib", "wasm_app"]);
+    }
+
+    #[test]
+    fn a_dependency_cycle_terminates() {
+        let got = replay(&["a"], &[("a", &["b"]), ("b", &["a"])], &[]);
+        assert_eq!(got, vec!["a", "b", "wasm_app"]);
     }
 }

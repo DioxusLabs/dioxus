@@ -21,6 +21,17 @@ impl WorkspaceRustcArgs {
             rustc_args: Default::default(),
         }
     }
+
+    /// Was a rustc invocation captured for `crate_name` (as a lib or bin) during this build?
+    ///
+    /// Workspace dependency graphs are target-agnostic, so a crate can be a workspace dependent
+    /// of another without ever being part of *this* build's target/crate graph (e.g. a
+    /// native-only sibling crate that a wasm32 build never compiles). This is used to filter such
+    /// crates out before treating them as part of the current build.
+    pub fn contains_crate(&self, crate_name: &str) -> bool {
+        self.rustc_args.contains_key(&format!("{crate_name}.lib"))
+            || self.rustc_args.contains_key(&format!("{crate_name}.bin"))
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -169,4 +180,46 @@ fn has_linking_args() -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args_for(names: &[&str]) -> WorkspaceRustcArgs {
+        let mut workspace_args = WorkspaceRustcArgs::new(Vec::new());
+        for name in names {
+            workspace_args
+                .rustc_args
+                .insert(name.to_string(), RustcArgs::default());
+        }
+        workspace_args
+    }
+
+    #[test]
+    fn contains_crate_matches_lib_key() {
+        let workspace_args = args_for(&["shared_lib.lib"]);
+        assert!(workspace_args.contains_crate("shared_lib"));
+    }
+
+    #[test]
+    fn contains_crate_matches_bin_key() {
+        let workspace_args = args_for(&["wasm_app.bin"]);
+        assert!(workspace_args.contains_crate("wasm_app"));
+    }
+
+    #[test]
+    fn contains_crate_false_for_uncaptured_crate() {
+        // Mirrors the hot-patch cascade bug: a workspace dependent (e.g. a native-only sibling
+        // crate) that was never compiled for the active build's target has no captured rustc
+        // invocation at all, so it must not be treated as part of the current build.
+        let workspace_args = args_for(&["shared_lib.lib", "wasm_app.bin"]);
+        assert!(!workspace_args.contains_crate("native_ffi"));
+    }
+
+    #[test]
+    fn contains_crate_false_on_empty_map() {
+        let workspace_args = WorkspaceRustcArgs::new(Vec::new());
+        assert!(!workspace_args.contains_crate("anything"));
+    }
 }

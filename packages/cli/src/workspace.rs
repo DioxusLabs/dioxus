@@ -7,7 +7,10 @@ use ignore::gitignore::Gitignore;
 use krates::{Cmd, Krates, NodeId};
 use krates::{KrateDetails, LockOptions, semver::Version};
 use std::sync::Arc;
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 use std::{path::PathBuf, time::Duration};
 use target_lexicon::Triple;
 use tokio::process::Command;
@@ -21,6 +24,12 @@ pub struct Workspace {
     pub(crate) ignore: Gitignore,
     pub(crate) cargo_toml: cargo_toml::Manifest,
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
+
+    /// Every workspace member's crate name in rustc convention (hyphens as underscores), mapped
+    /// to its node in `krates`. Derived once at load: resolving a name against `krates` means
+    /// scanning and re-normalising every member, which reverse-dependency lookups would
+    /// otherwise repeat on each query.
+    pub(crate) member_nids: HashMap<String, NodeId>,
 }
 
 /// Process-wide cache of the loaded workspace. `Workspace::current()` populates this on first
@@ -30,6 +39,31 @@ static WORKSPACE_CACHE: tokio::sync::Mutex<Option<Arc<Workspace>>> =
     tokio::sync::Mutex::const_new(None);
 
 impl Workspace {
+    /// Workspace members that directly depend on `crate_name`, in rustc convention.
+    pub(crate) fn dependents_of(&self, crate_name: &str) -> Vec<String> {
+        dependents_of(&self.krates, &self.member_nids, crate_name)
+    }
+
+    /// Index every workspace member by its rustc-convention crate name.
+    pub(crate) fn member_nids(krates: &Krates) -> HashMap<String, NodeId> {
+        let mut members = HashMap::new();
+
+        for member in krates.workspace_members() {
+            let krates::Node::Krate { id, krate, .. } = member else {
+                continue;
+            };
+            let Some(nid) = krates.nid_for_kid(id) else {
+                continue;
+            };
+
+            // `foo-bar` and `foo_bar` are distinct packages that share one rustc name, so keep
+            // the first in workspace order - collecting would silently prefer the last.
+            members.entry(krate.name.replace('-', "_")).or_insert(nid);
+        }
+
+        members
+    }
+
     /// Load the workspace from the current directory. This is cached and will only be loaded once.
     pub async fn current() -> Result<Arc<Workspace>> {
         // Lock the workspace to prevent multiple threads from loading it at the same time
@@ -109,6 +143,8 @@ impl Workspace {
 
         let android_tools = AndroidTools::current();
 
+        let member_nids = Self::member_nids(&krates);
+
         let workspace = Arc::new(Self {
             krates,
             settings,
@@ -118,6 +154,7 @@ impl Workspace {
             ignore,
             cargo_toml,
             android_tools,
+            member_nids,
         });
 
         tracing::debug!(
@@ -674,5 +711,87 @@ impl std::fmt::Debug for Workspace {
             .field("sysroot", &self.sysroot)
             .field("wasm_opt", &self.wasm_opt)
             .finish()
+    }
+}
+
+/// Workspace members that directly depend on `crate_name`, in rustc convention.
+///
+/// Answered from the whole-workspace graph, which is target-agnostic: a member that depends on
+/// `crate_name` only for some other target is still reported here.
+pub(crate) fn dependents_of(
+    krates: &Krates,
+    members: &HashMap<String, NodeId>,
+    crate_name: &str,
+) -> Vec<String> {
+    let Some(&target_nid) = members.get(crate_name) else {
+        return Vec::new();
+    };
+
+    // Membership is the same question as "is it in the index", so one lookup table serves both
+    // resolving the crate above and filtering its dependents here.
+    krates
+        .direct_dependents(target_nid)
+        .into_iter()
+        .map(|dep| dep.krate.name.replace('-', "_"))
+        .filter(|name| members.contains_key(name))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_workspace::{colliding_member_names_workspace, native_sibling_workspace};
+
+    #[test]
+    fn members_are_indexed_under_their_rustc_names() {
+        let (_dir, krates) = native_sibling_workspace();
+        let members = Workspace::member_nids(&krates);
+
+        // `shared-lib` is declared with a hyphen but referred to as `shared_lib` everywhere the
+        // cascade looks it up.
+        let mut names: Vec<&str> = members.keys().map(String::as_str).collect();
+        names.sort();
+        assert_eq!(names, ["app", "native_ffi", "shared_lib"]);
+    }
+
+    #[test]
+    fn a_native_only_sibling_is_still_reported_as_a_dependent() {
+        // The premise of the hotpatch bug: this graph has no notion of the target being built,
+        // so a wasm32 build is told `native_ffi` depends on the library it just changed.
+        let (_dir, krates) = native_sibling_workspace();
+        let members = Workspace::member_nids(&krates);
+
+        let mut dependents = dependents_of(&krates, &members, "shared_lib");
+        dependents.sort();
+        assert_eq!(dependents, ["app", "native_ffi"]);
+    }
+
+    #[test]
+    fn a_crate_outside_the_workspace_has_no_dependents() {
+        let (_dir, krates) = native_sibling_workspace();
+        let members = Workspace::member_nids(&krates);
+
+        assert!(dependents_of(&krates, &members, "serde").is_empty());
+    }
+
+    #[test]
+    fn colliding_member_names_resolve_the_same_way_a_scan_would() {
+        let (_dir, krates) = colliding_member_names_workspace();
+        let members = Workspace::member_nids(&krates);
+
+        // Resolving by scanning members, which is what the index replaced.
+        let scanned = krates
+            .workspace_members()
+            .find_map(|member| match member {
+                krates::Node::Krate { id, krate, .. }
+                    if krate.name.replace('-', "_") == "dup_name" =>
+                {
+                    krates.nid_for_kid(id)
+                }
+                _ => None,
+            })
+            .expect("a member normalises to dup_name");
+
+        assert_eq!(members.get("dup_name"), Some(&scanned));
     }
 }

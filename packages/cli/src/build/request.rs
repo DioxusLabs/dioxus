@@ -2897,46 +2897,7 @@ impl BuildRequest {
     /// as a dependency. Used for cascade detection — when a dep's public symbols change,
     /// its dependents need recompilation too.
     pub(crate) fn workspace_dependents_of(&self, crate_name: &str) -> Vec<String> {
-        let krates = &self.workspace.krates;
-
-        // Find the NodeId for the target crate
-        let target_nid = krates.workspace_members().find_map(|member| {
-            if let krates::Node::Krate { id, krate, .. } = member {
-                if krate.name.replace('-', "_") == crate_name {
-                    return krates.nid_for_kid(id);
-                }
-            }
-            None
-        });
-
-        let Some(target_nid) = target_nid else {
-            return Vec::new();
-        };
-
-        // Use krates' direct_dependents to find reverse deps, filter to workspace members
-        let workspace_names: HashSet<String> = krates
-            .workspace_members()
-            .filter_map(|m| {
-                if let krates::Node::Krate { krate, .. } = m {
-                    Some(krate.name.replace('-', "_"))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        krates
-            .direct_dependents(target_nid)
-            .into_iter()
-            .filter_map(|dep| {
-                let name = dep.krate.name.replace('-', "_");
-                if workspace_names.contains(&name) {
-                    Some(name)
-                } else {
-                    None
-                }
-            })
-            .collect()
+        self.workspace.dependents_of(crate_name)
     }
 
     /// Get the folder where Apple Widget Extensions (.appex bundles) are installed.
