@@ -492,6 +492,30 @@ impl<'a> Splitter<'a> {
             out.exports.delete(split.export_id);
         }
 
+        // Data symbols can overlap: LLVM/wasm-ld tail-merges identical
+        // suffixes of NUL-terminated byte constants (e.g. a short, dead
+        // `core::fmt::Arguments::template` bytecode blob can be a byte-for-
+        // byte suffix of a longer, still-live one, sharing storage). Zeroing
+        // an unused symbol's declared range is only safe where no live
+        // symbol's range also claims those bytes - so mark every byte a
+        // live (not-unused) symbol owns before zeroing anything, per data
+        // segment actually touched below (segment 0 only).
+        let mut live_bytes: Vec<bool> = out
+            .data
+            .iter()
+            .nth(0)
+            .map(|data| vec![false; data.value.len()])
+            .unwrap_or_default();
+        for (id, symbol) in self.data_symbols.iter() {
+            if symbol.which_data_segment != 0 || unused_symbols.contains(&Node::DataSymbol(*id)) {
+                continue;
+            }
+            let end = (symbol.segment_offset + symbol.symbol_size).min(live_bytes.len());
+            for i in symbol.segment_offset.min(end)..end {
+                live_bytes[i] = true;
+            }
+        }
+
         // And then any actual symbols from the callgraph
         for symbol in unused_symbols.iter().cloned() {
             match symbol {
@@ -517,6 +541,11 @@ impl<'a> Splitter<'a> {
                         let data_id = out.data.iter().nth(symbol.which_data_segment).unwrap().id();
                         let data = out.data.get_mut(data_id);
                         for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
+                            // Don't stomp bytes a still-live, overlapping
+                            // symbol owns (see the tail-merge comment above).
+                            if live_bytes.get(i).copied().unwrap_or(false) {
+                                continue;
+                            }
                             data.value[i] = 0;
                         }
                     }
