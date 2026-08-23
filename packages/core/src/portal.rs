@@ -93,11 +93,20 @@ impl<__children> PortalPropsBuilder<((), __children)> {
 
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<__target> PortalPropsBuilder<(__target, ())> {
+    /// Accepts `impl SuperInto<Element, __Marker>` rather than a bare `Element`, mirroring what
+    /// `#[derive(Props)]` now generates for every `children: Element` field - the `rsx!` call
+    /// site always compiles a component's children as a `Vec<Element>` and relies on `SuperInto`
+    /// (see `dioxus_core::properties::VecElementFromMarker`) to land it in whatever shape the
+    /// field actually declares. Without this, `Portal { ... }` would be the one component in the
+    /// entire framework a caller couldn't put ordinary children into.
     #[allow(clippy::type_complexity)]
-    pub fn children(self, children: Element) -> PortalPropsBuilder<(__target, (Element,))> {
+    pub fn children<__Marker>(
+        self,
+        children: impl crate::SuperInto<Element, __Marker>,
+    ) -> PortalPropsBuilder<(__target, (Element,))> {
         let (target, _) = self.fields;
         PortalPropsBuilder {
-            fields: (target, (children,)),
+            fields: (target, (children.super_into(),)),
             _phantom: self._phantom,
         }
     }
@@ -147,9 +156,9 @@ impl<RenderFn, ComponentMarker, __target>
     PortalComponentBuilder<RenderFn, ComponentMarker, (__target, ())>
 {
     #[allow(clippy::type_complexity)]
-    pub fn children(
+    pub fn children<__Marker>(
         self,
-        children: Element,
+        children: impl crate::SuperInto<Element, __Marker>,
     ) -> PortalComponentBuilder<RenderFn, ComponentMarker, (__target, (Element,))> {
         PortalComponentBuilder {
             render_fn: self.render_fn,

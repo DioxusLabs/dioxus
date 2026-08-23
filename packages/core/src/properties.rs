@@ -356,6 +356,57 @@ where
     }
 }
 
+/// Marker used to merge a `Vec<Element>` - the top-level children an `rsx!` body produces when a
+/// component declares `children: Vec<Element>` instead of `children: Element` - back into a single
+/// [`Element`], for a callee that still declares `children: Element`. This is what makes the two
+/// declared shapes interchangeable at every call site: the macro always produces a `Vec<Element>`,
+/// and this impl (found through [`SuperFrom`]'s blanket bridge) is what a plain `Element` field's
+/// generated setter uses to accept it, with zero change to the calling code.
+#[doc(hidden)]
+pub struct VecElementFromMarker;
+
+/// Shared by both `Element` and `Option<Element>` targets below - `None` only for a genuinely
+/// empty list (an empty `Vec<Element>`, e.g. from an `if` branch with no `else`), never as a
+/// stand-in for a render error, same as `IntoDynNode for Element` already treats an `Err` as
+/// "nothing" rather than propagating it.
+fn merge_vnodes(input: Vec<Element>) -> Option<VNode> {
+    let mut nodes: Vec<VNode> = input.into_iter().map(IntoVNode::into_vnode).collect();
+    match nodes.len() {
+        0 => None,
+        // The overwhelmingly common case (a single child) skips the Fragment indirection below
+        // entirely, so it produces exactly the same VNode shape `children: Element` always has
+        // for one child.
+        1 => Some(nodes.pop().unwrap()),
+        // 2+ independently-built VNodes have no static Template in common (they may even come
+        // from different `for`/`if` branches), so they can only be combined at runtime, through
+        // the same dynamic-node-slot machinery a `for` loop's output already uses.
+        _ => {
+            use crate::view::{ViewExt, dynamic_node_builder};
+            Some(dynamic_node_builder::<_, ()>(DynamicNode::Fragment(nodes)).into_vnode())
+        }
+    }
+}
+
+impl SuperFrom<Vec<Element>, VecElementFromMarker> for Element {
+    fn super_from(input: Vec<Element>) -> Self {
+        // Matches the pre-existing `children: Element` default (`VNode::empty()`) exactly for an
+        // empty list - this is also what an empty `Vec<Element>` reduces to.
+        Ok(merge_vnodes(input).unwrap_or_default())
+    }
+}
+
+/// Marker used to merge a `Vec<Element>` into `Option<Element>`, for a callee whose `children`
+/// is itself optional (e.g. an optional label) - `None` for an empty list, same as that field's
+/// own pre-existing default.
+#[doc(hidden)]
+pub struct VecElementFromOptionMarker;
+
+impl SuperFrom<Vec<Element>, VecElementFromOptionMarker> for Option<Element> {
+    fn super_from(input: Vec<Element>) -> Self {
+        merge_vnodes(input).map(Ok)
+    }
+}
+
 /// Marker used to convert `&str` into `Option<String>` through [`SuperFrom`].
 #[doc(hidden)]
 pub struct OptionStringFromMarker;

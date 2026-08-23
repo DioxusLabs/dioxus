@@ -204,10 +204,31 @@ mod field_info {
                 let strip_option_auto = builder_attr.strip_option
                     || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
 
-                // children field is automatically defaulted to an empty VNode unless it is marked as optional (in which case it defaults to None)
-                if name == "children" && !strip_option_auto {
-                    builder_attr.default =
-                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
+                // children field is automatically defaulted to an empty VNode (or an empty Vec, for
+                // a `children: Vec<Element>` field) unless it is marked as optional (in which case
+                // it defaults to None).
+                //
+                // The setter always goes through `SuperInto` (like `#[props(into)]`) rather than
+                // taking the field's exact type, regardless of whether `children` is declared
+                // `Element` or `Vec<Element>` - the call site (see `dioxus-rsx`'s `component.rs`)
+                // always produces a `Vec<Element>` for a component's children, and it's this
+                // `SuperInto` resolution (against whichever shape this field actually declares)
+                // that makes both declared shapes accept that exact same call-site syntax.
+                if name == "children" {
+                    builder_attr.auto_into = true;
+                    if !strip_option_auto {
+                        builder_attr.default = Some(
+                            if field.ty == parse_quote!(Vec<Element>)
+                                || field.ty == parse_quote!(::std::vec::Vec<Element>)
+                                || field.ty == parse_quote!(std::vec::Vec<Element>)
+                                || field.ty == parse_quote!(Vec<dioxus_core::Element>)
+                            {
+                                syn::parse(quote!(::std::vec::Vec::new()).into()).unwrap()
+                            } else {
+                                syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap()
+                            },
+                        );
+                    }
                 }
 
                 // String fields automatically use impl Display

@@ -263,6 +263,59 @@ impl ToTokens for TemplateBody {
     }
 }
 
+impl TemplateBody {
+    /// Like [`ToTokens`], but produces a `Vec<Element>` - one entry per top-level "thing" this
+    /// body's `roots` contains - instead of one merged [`Element`]. A `for`/`if` root contributes
+    /// however many elements it actually produces at runtime (0, 1, or many), flattened into the
+    /// same list, rather than being merged into one nested dynamic node the way the single-
+    /// `Element` form (above) does.
+    ///
+    /// This is what lets a component declare `children: Vec<Element>` instead of `children:
+    /// Element` and get each of its caller's top-level children as an independent value, with no
+    /// change to how the caller writes them - see `dioxus-core-macro`'s handling of the
+    /// `children` field, and `dioxus_core::properties::VecElementFromMarker`, for the other half
+    /// of this: how the same call site still works for a component that keeps `children: Element`.
+    pub(crate) fn to_vec_tokens(&self) -> TokenStream2 {
+        let root_exprs = self.roots.iter().map(BodyNode::to_vec_tokens);
+        quote! {
+            {
+                let mut __children: ::std::vec::Vec<dioxus_core::Element> = ::std::vec::Vec::new();
+                #( __children.extend(#root_exprs); )*
+                __children
+            }
+        }
+    }
+}
+
+impl BodyNode {
+    /// See [`TemplateBody::to_vec_tokens`]. Produces an expression implementing `IntoIterator<Item
+    /// = Element>` (a `Vec<Element>`, or a lazy iterator for a `for` loop) so the caller can
+    /// `.extend(...)` it directly regardless of how many elements this one root turns out to
+    /// contribute.
+    fn to_vec_tokens(&self) -> TokenStream2 {
+        match self {
+            BodyNode::ForLoop(for_loop) => {
+                let ForLoop {
+                    pat, expr, body, ..
+                } = for_loop;
+                let inner = body.to_vec_tokens();
+                quote! {
+                    (#expr).into_iter().flat_map(move |#pat| #inner)
+                }
+            }
+            BodyNode::IfChain(if_chain) => if_chain.to_vec_tokens(),
+            // A plain node (element, component, text, raw `{expr}`, or a synthetic boundary)
+            // contributes exactly one `Element` - compile it as its own standalone single-root
+            // template, reusing the existing `ToTokens` impl above unchanged (and its fresh
+            // `TemplateBody::new` path/index bookkeeping) rather than re-deriving it here.
+            _ => {
+                let single = TemplateBody::new(vec![self.clone()]);
+                quote! { ::std::vec::Vec::from([ #single ]) }
+            }
+        }
+    }
+}
+
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,

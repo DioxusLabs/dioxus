@@ -239,14 +239,20 @@ impl Component {
 
         if !self.children.is_empty() {
             let children = &self.children;
+            // Always compiled as a `Vec<Element>` - one entry per top-level child, `for`/`if`
+            // flattened - rather than one merged `Element`. Whether the callee actually wants a
+            // `Vec<Element>` or a plain `Element` is resolved on the other side, through
+            // `SuperInto` (see `dioxus_core::properties::VecElementFromMarker`), not here: this
+            // call site has no visibility into the callee's declared field type.
+            let children = children.to_vec_tokens();
             // If the props don't accept children, attach the error to the first child
             if manual_props.is_some() {
                 tokens.append_all(
-                    quote_spanned! { children.first_root_span() => __manual_props.children = #children; },
+                    quote_spanned! { self.children.first_root_span() => __manual_props.children = dioxus_core::SuperInto::super_into(#children); },
                 )
             } else {
                 tokens.append_all(
-                    quote_spanned! { children.first_root_span() => .children( #children ) },
+                    quote_spanned! { self.children.first_root_span() => .children( #children ) },
                 )
             }
         }
