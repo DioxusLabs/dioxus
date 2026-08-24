@@ -28,6 +28,10 @@ pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
     pub cwd: PathBuf,
+    /// The `-C strip=...` value cargo computed for this invocation, removed from `args`
+    /// so that symbols survive until asset extraction. Applied manually after the build.
+    #[serde(default)]
+    pub strip: Option<String>,
 }
 
 /// The environment variable indicating where the args directory is located.
@@ -58,12 +62,20 @@ pub fn run_rustc() -> ExitCode {
 
     // Cargo invokes a workspace wrapper like: `wrapper-name rustc [args...]`
     // We skip our own executable name (`wrapper-name`) to get the args passed to us.
-    let captured_args = args().skip(1).collect::<Vec<_>>();
+    let mut captured_args = args().skip(1).collect::<Vec<_>>();
+
+    // Cargo resolves the profile's strip setting (including the implicit default of stripping
+    // debuginfo when debuginfo is disabled, since Rust 1.77) and passes it as `-C strip=...`.
+    // We need symbols to survive until after asset extraction, so remove the flag before
+    // invoking rustc and record its value. `post_process_executable` applies it manually
+    // with `rust-objcopy` once assets have been extracted.
+    let strip = extract_strip_arg(&mut captured_args);
 
     let rustc_args = RustcArgs {
         args: captured_args.clone(),
         envs: vars().collect::<_>(),
         cwd: std::env::current_dir().expect("Failed to get current dir"),
+        strip,
     };
 
     // Always persist the captured rustc invocation, even for link steps.
@@ -135,6 +147,40 @@ fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
             .expect("Failed to write rustc args to file");
         }
     }
+}
+
+/// Remove any `-C strip=...` / `-Cstrip=...` argument from `args`, returning its value.
+fn extract_strip_arg(args: &mut Vec<String>) -> Option<String> {
+    let mut strip = None;
+    let mut filtered = Vec::with_capacity(args.len());
+    let mut idx = 0;
+
+    while idx < args.len() {
+        let arg = &args[idx];
+
+        if let Some(value) = arg.strip_prefix("-Cstrip=") {
+            strip = Some(value.to_string());
+            idx += 1;
+            continue;
+        }
+
+        if arg == "-C" {
+            if let Some(value) = args
+                .get(idx + 1)
+                .and_then(|next| next.strip_prefix("strip="))
+            {
+                strip = Some(value.to_string());
+                idx += 2;
+                continue;
+            }
+        }
+
+        filtered.push(arg.clone());
+        idx += 1;
+    }
+
+    *args = filtered;
+    strip
 }
 
 /// Check if the arguments indicate a linking step, including those in command files.
