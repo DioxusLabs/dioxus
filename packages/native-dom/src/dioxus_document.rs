@@ -258,7 +258,7 @@ pub struct DioxusEventHandler<'v> {
 impl EventHandler for DioxusEventHandler<'_> {
     fn handle_event(
         &mut self,
-        chain: &[usize],
+        chain: &[NodeId],
         event: &mut DomEvent,
         doc: &mut dyn Document,
         event_state: &mut EventState,

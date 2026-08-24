@@ -245,7 +245,7 @@ pub struct DioxusState {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(root_id: usize) -> Self {
+    pub fn create(root_id: NodeId) -> Self {
         Self {
             stack: StackState::new(root_id),
             event_handler_counts: [0; 64],
@@ -481,7 +481,7 @@ fn set_attribute_inner(
     ns: Option<&str>,
     value: Option<&str>,
     is_falsy: bool,
-    node_id: usize,
+    node_id: NodeId,
 ) {
     trace!("set_attribute node_id:{node_id} ns: {ns:?} name:{local_name}, value:{value:?}");
 

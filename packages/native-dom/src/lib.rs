@@ -18,8 +18,8 @@ pub use dioxus_document::DioxusDocument;
 pub use events::{NodeHandle, synthetic_click_event};
 pub use write_once_attr::{CustomWidgetAttr, SubDocumentAttr};
 
+pub use blitz_dom::NodeId;
 use blitz_dom::{LocalName, Namespace, QualName, ns};
-type NodeId = usize;
 
 pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
     QualName {

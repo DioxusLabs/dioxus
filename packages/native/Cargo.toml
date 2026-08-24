@@ -16,7 +16,9 @@ prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "d
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
 floats = ["blitz-dom/floats"]
-incremental = ["blitz-dom/incremental"]
+# Incremental layout is now a runtime setting in blitz's `DocumentConfig`; this
+# feature toggles that setting.
+incremental = []
 autofocus = ["blitz-dom/autofocus"]
 system-fonts = ["blitz-dom/system-fonts"]
 # complex-scripts: enable dictionary-based line-breaking
