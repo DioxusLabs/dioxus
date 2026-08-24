@@ -213,7 +213,6 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             html_parser_provider,
             navigation_provider,
             font_ctx: config.font_ctx,
-            incremental: Some(cfg!(feature = "incremental")),
             ..Default::default()
         },
     );

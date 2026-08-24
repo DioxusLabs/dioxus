@@ -10,15 +10,12 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file-dialog", "vello-hybrid", "woff", "apple-font-embolden"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
 
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
 floats = ["blitz-dom/floats"]
-# Incremental layout is now a runtime setting in blitz's `DocumentConfig`; this
-# feature toggles that setting.
-incremental = []
 autofocus = ["blitz-dom/autofocus"]
 system-fonts = ["blitz-dom/system-fonts"]
 # complex-scripts: enable dictionary-based line-breaking
