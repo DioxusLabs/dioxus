@@ -44,11 +44,10 @@ impl DioxusNativeWindowRenderer {
 
     #[cfg(any(feature = "vello-hybrid", feature = "vello"))]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
-        let vello_renderer = InnerRenderer::with_options(InnerRendererOptions {
-            features,
-            limits,
-            ..Default::default()
-        });
+        let mut options = InnerRendererOptions::default();
+        options.features = features;
+        options.limits = limits;
+        let vello_renderer = InnerRenderer::with_options(options);
         Self::with_inner_renderer(vello_renderer)
     }
 

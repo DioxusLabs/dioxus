@@ -200,14 +200,14 @@ impl RenderedElementBacking for NodeHandle {
     }
 
     fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
-        let scroll_offset = self.node().scroll_offset;
+        let scroll_offset = *self.node().scroll_offset();
         Box::pin(async move { Ok(PixelsVector2D::new(scroll_offset.x, scroll_offset.y)) })
     }
 
     fn get_scroll_size(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsSize>>>> {
         let node = self.node();
-        let scroll_width = node.final_layout.scroll_width() as f64;
-        let scroll_height = node.final_layout.scroll_height() as f64;
+        let scroll_width = node.final_layout().scroll_width() as f64;
+        let scroll_height = node.final_layout().scroll_height() as f64;
         Box::pin(async move { Ok(PixelsSize::new(scroll_width, scroll_height)) })
     }
 
