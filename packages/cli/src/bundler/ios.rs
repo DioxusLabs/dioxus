@@ -57,7 +57,7 @@ impl BundleContext<'_> {
 
         let ipa_name = format!(
             "{}_{}_{}.ipa",
-            self.product_name(),
+            self.product_file_name(),
             self.version_string(),
             self.binary_arch()
         );
