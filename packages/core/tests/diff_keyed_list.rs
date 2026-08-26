@@ -310,6 +310,31 @@ fn no_common_keys() {
 }
 
 #[test]
+fn replace_keyed_middle_preserves_edges() {
+    fn app() -> Element {
+        let order: &[_] = match generation() % 2 {
+            0 => &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            1 => &[0, 1, 2, 10, 11, 12, 6, 7, 8, 9],
+            _ => unreachable!(),
+        };
+
+        rsx!({
+            order.iter().map(|i| {
+                rsx! {
+                    div { key: "{i}", id: "{i}" }
+                }
+            })
+        })
+    }
+
+    let (mut dom, mut oracle, _) = rebuild(app, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    let (summary, _) = rerender(&mut dom, &mut oracle, &[0, 1, 2, 10, 11, 12, 6, 7, 8, 9]);
+    assert_eq!(summary.loads, 3);
+    assert_eq!(summary.removes, 3);
+    assert_eq!(summary.replaces, 0);
+}
+
+#[test]
 fn perfect_reverse() {
     fn app() -> Element {
         let order: &[_] = match generation() % 2 {
