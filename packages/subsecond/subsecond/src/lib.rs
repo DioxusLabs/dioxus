@@ -394,12 +394,10 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
-        if let Some(jump_table) = unsafe { get_jump_table() } {
-            if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                log_jump_table_hit(known_fn_ptr as u64, ptr);
-                return HotFnPtr(ptr);
-            }
-            log_jump_table_miss(known_fn_ptr as u64, jump_table);
+        if let Some(jump_table) = unsafe { get_jump_table() }
+            && let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned()
+        {
+            return HotFnPtr(ptr);
         }
 
         HotFnPtr(known_fn_ptr as u64)
@@ -431,13 +429,11 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             if let Some(jump_table) = get_jump_table() {
                 let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as u64;
                 if let Some(ptr) = jump_table.map.get(&known_fn_ptr).cloned() {
-                    log_jump_table_hit(known_fn_ptr, ptr);
                     // The type sig of the cast should match the call_it function
                     // Technically function pointers need to be aligned, but that alignment is 1 so we're good
                     let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr as _);
                     return Ok(call_it(&self.inner, args));
                 }
-                log_jump_table_miss(known_fn_ptr, jump_table);
             }
 
             Ok(self.inner.call_it(args))
@@ -518,20 +514,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         // Use the `main` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that we can use to base the executable.
         let old_offset = aslr_reference() - table.aslr_reference as usize;
-
-        #[cfg(windows)]
-        {
-            let module_base = win_module_base();
-            eprintln!(
-                "[subsecond] apply_patch: aslr_reference()={:#x} table.aslr_reference={:#x} old_offset={:#x} module_base={:#x} module_base+rva(main)={:#x} entries={}",
-                aslr_reference(),
-                table.aslr_reference,
-                old_offset,
-                module_base,
-                module_base + table.aslr_reference as usize,
-                table.map.len()
-            );
-        }
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -706,51 +688,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     });
 
     Ok(())
-}
-
-/// Diagnostic: log the first few jump-table lookup misses on Windows so we can
-/// tell whether the rebased keys are offset from the actual function addresses.
-#[cfg(windows)]
-fn log_jump_table_miss(key: u64, table: &JumpTable) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static MISSES: AtomicUsize = AtomicUsize::new(0);
-    let n = MISSES.fetch_add(1, Ordering::Relaxed);
-    if n < 16 {
-        let nearest = table.map.keys().min_by_key(|k| k.abs_diff(key)).copied();
-        eprintln!(
-            "[subsecond] jump table miss #{n}: key={key:#x} nearest_key={:?} delta={:?} entries={}",
-            nearest.map(|k| format!("{k:#x}")),
-            nearest.map(|k| key as i128 - k as i128),
-            table.map.len()
-        );
-    }
-}
-
-#[cfg(not(windows))]
-fn log_jump_table_miss(_key: u64, _table: &JumpTable) {}
-
-/// Diagnostic: log the first few jump-table lookup hits on Windows so we can tell whether the
-/// changed tip-crate functions are actually being redirected into the patch library.
-#[cfg(windows)]
-fn log_jump_table_hit(key: u64, target: u64) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static HITS: AtomicUsize = AtomicUsize::new(0);
-    let n = HITS.fetch_add(1, Ordering::Relaxed);
-    if n < 16 {
-        eprintln!("[subsecond] jump table hit #{n}: key={key:#x} -> {target:#x}");
-    }
-}
-
-#[cfg(not(windows))]
-fn log_jump_table_hit(_key: u64, _target: u64) {}
-
-/// Diagnostic: the HMODULE of the main executable, which is its actual load base address.
-#[cfg(windows)]
-fn win_module_base() -> usize {
-    unsafe extern "system" {
-        fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
-    }
-    unsafe { GetModuleHandleA(std::ptr::null()) as usize }
 }
 
 #[derive(Debug, PartialEq, thiserror::Error)]
@@ -980,7 +917,6 @@ macro_rules! impl_hot_function {
                             #[cfg(target_pointer_width = "32")] let real = real as u64;
 
                             if let Some(ptr) = jump_table.map.get(&real).cloned() {
-                                crate::log_jump_table_hit(real, ptr);
                                 // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
                                 #[cfg(all(target_pointer_width = "64", target_os = "android"))] let ptr: u64 = ptr | nibble;
 
@@ -999,8 +935,6 @@ macro_rules! impl_hot_function {
 
                                 return std::mem::transmute::<PtrWidth, Self::Real>(ptr)($($arg),*);
                             }
-
-                            crate::log_jump_table_miss(real, jump_table);
                         }
 
                         self.call_it(args)

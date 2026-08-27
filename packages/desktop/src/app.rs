@@ -345,13 +345,7 @@ impl App {
                         }
                     }
 
-                    if hr_msg.jump_table.is_some() {
-                        eprintln!("[desktop] hot-patch applied; polling vdom to re-render");
-                    }
                     self.poll_vdom();
-                    if hr_msg.jump_table.is_some() {
-                        eprintln!("[desktop] post-patch poll_vdom returned");
-                    }
                 }
 
                 if !hr_msg.assets.is_empty() {
@@ -446,7 +440,6 @@ impl App {
 
         loop {
             if self.poll_webview_queues(&mut cx) {
-                eprintln!("[desktop] poll_vdom: blocked on pending unflushed edits");
                 return;
             }
 
@@ -458,13 +451,8 @@ impl App {
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {
-                        eprintln!("[desktop] poll_vdom: work ready, rendering");
-                    }
-                    std::task::Poll::Pending => {
-                        eprintln!("[desktop] poll_vdom: no work pending, returning");
-                        return;
-                    }
+                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Pending => return,
                 }
             }
 
@@ -502,15 +490,6 @@ impl App {
     fn render_dom_immediate(&mut self) {
         let mut writer = self.dom_writer();
         self.dom.render_immediate(&mut writer);
-        let touched = self
-            .webviews
-            .values()
-            .filter(|w| w.edits.wry_queue.is_touched())
-            .count();
-        eprintln!(
-            "[desktop] render_immediate done: {touched} of {} webview queues touched",
-            self.webviews.len()
-        );
     }
 
     /// Flush queued edits for every webview whose `WryQueue` was touched during
