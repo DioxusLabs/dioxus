@@ -56,6 +56,9 @@ impl BundledAsset {
     pub const PLACEHOLDER_HASH: &str = "This should be replaced by dx as part of the build process. If you see this error, make sure you are using a matching version of dx and dioxus and you are not stripping symbols from your binary.";
 
     #[doc(hidden)]
+    pub const MAX_PATH_LEN: usize = ConstStr::MAX_LEN;
+
+    #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new asset
     pub const fn new(

@@ -606,7 +606,7 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
     // Add the hash to each asset in parallel
     assets
         .par_iter_mut()
-        .for_each(crate::opt::add_hash_to_asset);
+        .try_for_each(crate::opt::add_hash_to_asset)?;
 
     // Write back only assets to the binary file (permissions are not modified)
     for entry in write_entries {
