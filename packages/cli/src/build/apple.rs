@@ -1330,12 +1330,25 @@ We checked the folders:
         let build_dir = self.target_dir.join("swift-build");
         std::fs::create_dir_all(&build_dir)?;
 
+        // The framework's minimum OS (LC_BUILD_VERSION minos and its
+        // Info.plist MinimumOSVersion) must equal the app's own
+        // MinimumOSVersion, or App Store rejects the nested framework with
+        // ITMS-90208. Mirror the fallback used when generating the app's
+        // Info.plist (codesign_apple / collect_ios_dt_metadata).
+        let deployment_target = self
+            .config
+            .ios
+            .deployment_target
+            .as_deref()
+            .unwrap_or("15.0");
+
         // Compile Swift sources and get the framework bundle path
         let framework_path = super::apple::compile_swift_sources(
             swift_sources,
             &self.triple,
             &build_dir,
             self.release,
+            deployment_target,
         )
         .await?;
 
@@ -1535,6 +1548,7 @@ async fn compile_swift_sources(
     target_triple: &Triple,
     build_dir: &Path,
     release: bool,
+    deployment_target: &str,
 ) -> Result<Option<PathBuf>> {
     if swift_sources.is_empty() {
         return Ok(None);
@@ -1608,7 +1622,22 @@ async fn compile_swift_sources(
 
         let build_path = package_path.join(".build");
 
+        // Pin the dylib's LC_BUILD_VERSION minos to the app deployment target.
+        // Without this, swiftc defaults to the SDK's deployment target and
+        // App Store rejects the framework with ITMS-90208.
+        let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
+        let versioned_target = if is_ios {
+            if let Some((base, _)) = swift_triple.split_once("-simulator") {
+                format!("{base}{deployment_target}-simulator")
+            } else {
+                format!("{swift_triple}{deployment_target}")
+            }
+        } else {
+            swift_triple.clone()
+        };
+
         let mut cmd = Command::new("xcrun");
+
         cmd.args(["swift", "build"])
             .arg("--package-path")
             .arg(package_path)
@@ -1622,6 +1651,13 @@ async fn compile_swift_sources(
             .arg(product_name)
             .arg("--build-path")
             .arg(&build_path);
+
+        if is_ios {
+            cmd.arg("-Xswiftc")
+                .arg("-target")
+                .arg("-Xswiftc")
+                .arg(&versioned_target);
+        }
 
         tracing::debug!("Running: xcrun swift build for {}", product_name);
 
@@ -1702,6 +1738,7 @@ async fn compile_swift_sources(
         build_dir,
         target_triple,
         bundle_identifier,
+        deployment_target,
     )
     .await?;
 
@@ -1713,6 +1750,7 @@ async fn compile_swift_sources(
             build_dir,
             target_triple,
             &format!("com.dioxus.swift.{}", name.to_lowercase()),
+            deployment_target,
         )
         .await?;
         tracing::debug!(
@@ -2279,9 +2317,10 @@ pub async fn create_framework_bundle(
     output_dir: &Path,
     target_triple: &Triple,
     bundle_identifier: &str,
+    deployment_target: &str,
 ) -> Result<PathBuf> {
     let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
-    let min_os_version = if is_ios { "13.0" } else { "11.0" };
+    let min_os_version = if is_ios { deployment_target } else { "11.0" };
 
     let framework_dir = output_dir.join(format!("{}.framework", framework_name));
 
