@@ -26,6 +26,12 @@ pub(crate) struct App {
     pub(crate) dom: VirtualDom,
     pub(crate) initial_dom_rebuild_done: bool,
 
+    /// Hot-reload messages that arrived before the initial DOM rebuild. Applying them (and
+    /// polling the vdom) before `rebuild` runs corrupts the initial render, so they are queued
+    /// and replayed right after the first rebuild.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub(crate) pending_hot_reload_msgs: Vec<dioxus_devtools::DevserverMsg>,
+
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) exit_on_last_window_close: bool,
@@ -58,6 +64,8 @@ impl App {
             control_flow: ControlFlow::Wait,
             dom: virtual_dom,
             initial_dom_rebuild_done: false,
+            #[cfg(all(feature = "devtools", debug_assertions))]
+            pending_hot_reload_msgs: Vec::new(),
             float_all: false,
             show_devtools: false,
             tray_icon_show_window_on_click,
@@ -281,6 +289,13 @@ impl App {
         if !self.initial_dom_rebuild_done {
             self.rebuild_dom();
             self.send_touched_edits();
+
+            #[cfg(all(feature = "devtools", debug_assertions))]
+            if self.initial_dom_rebuild_done {
+                for msg in std::mem::take(&mut self.pending_hot_reload_msgs) {
+                    self.handle_hot_reload_msg(msg);
+                }
+            }
         }
 
         self.schedule_poll();
@@ -308,6 +323,11 @@ impl App {
         const TOAST_TIMEOUT: Duration = Duration::from_secs(2);
         const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
+        if !self.initial_dom_rebuild_done {
+            self.pending_hot_reload_msgs.push(msg);
+            return;
+        }
+
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 let mut patch_error = None;
@@ -325,7 +345,13 @@ impl App {
                         }
                     }
 
+                    if hr_msg.jump_table.is_some() {
+                        eprintln!("[desktop] hot-patch applied; polling vdom to re-render");
+                    }
                     self.poll_vdom();
+                    if hr_msg.jump_table.is_some() {
+                        eprintln!("[desktop] post-patch poll_vdom returned");
+                    }
                 }
 
                 if !hr_msg.assets.is_empty() {
@@ -420,6 +446,7 @@ impl App {
 
         loop {
             if self.poll_webview_queues(&mut cx) {
+                eprintln!("[desktop] poll_vdom: blocked on pending unflushed edits");
                 return;
             }
 
@@ -431,8 +458,13 @@ impl App {
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
+                    std::task::Poll::Ready(_) => {
+                        eprintln!("[desktop] poll_vdom: work ready, rendering");
+                    }
+                    std::task::Poll::Pending => {
+                        eprintln!("[desktop] poll_vdom: no work pending, returning");
+                        return;
+                    }
                 }
             }
 
@@ -470,6 +502,15 @@ impl App {
     fn render_dom_immediate(&mut self) {
         let mut writer = self.dom_writer();
         self.dom.render_immediate(&mut writer);
+        let touched = self
+            .webviews
+            .values()
+            .filter(|w| w.edits.wry_queue.is_touched())
+            .count();
+        eprintln!(
+            "[desktop] render_immediate done: {touched} of {} webview queues touched",
+            self.webviews.len()
+        );
     }
 
     /// Flush queued edits for every webview whose `WryQueue` was touched during
