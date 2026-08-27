@@ -105,7 +105,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: "chromium",
-      grep: process.platform === "win32" ? /windows/ : undefined,
+      grep: process.platform === "win32" ? /windows|native-interpreter/ : undefined,
       grepInvert: process.platform !== "win32" ? /windows/ : undefined,
       use: { ...devices["Desktop Chrome"] },
     },
