@@ -57,7 +57,28 @@ impl VirtualDom {
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
+            let to_was_some = to.is_some();
             let mut render_to = to.filter(|_| self.scope_should_write_now(scope));
+            {
+                let texts = |vnode: &crate::nodes::VNode| {
+                    vnode
+                        .dynamic_node_values()
+                        .iter()
+                        .filter_map(|n| match n {
+                            crate::innerlude::DynamicNode::Text(t) => Some(t.value.clone()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                };
+                eprintln!(
+                    "[core] diff_scope {scope:?}: to={} render_to={} tmpl_eq={} old_texts={:?} new_texts={:?}",
+                    to_was_some,
+                    render_to.is_some(),
+                    old.as_vnode().template() == new_real_nodes.template(),
+                    texts(old.as_vnode()),
+                    texts(new_real_nodes),
+                );
+            }
             let mut state =
                 DiffState::new_with_context(self, render_to.as_deref_mut(), parent_context);
             let new_mount =

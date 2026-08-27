@@ -104,6 +104,10 @@ impl WryQueue {
         let mut myself = self.inner.borrow_mut();
         let webview_id = myself.location.webview_id;
         let serialized_edits = myself.mutation_state.export_memory();
+        eprintln!(
+            "[edits] queueing edit batch for webview {webview_id}: {} bytes",
+            serialized_edits.len()
+        );
         let receiver = myself.websocket.send_edits(webview_id, serialized_edits);
         myself.edits_in_progress = Some(receiver);
     }
@@ -365,33 +369,54 @@ impl EditWebsocket {
             // Wait until there are edits ready to send
             'connection: while let Ok(msg) = edits_incoming_rx.recv() {
                 let data = msg.edits.clone();
+                let data_len = data.len();
                 queued_message = Some(msg);
                 // Send the edits to the webview
                 if let Err(e) = websocket.send(tungstenite::Message::Binary(data.into())) {
                     tracing::error!("Error sending edits to webview: {}", e);
                     break 'connection;
                 }
+                eprintln!(
+                    "[edits] sent batch of {data_len} bytes to webview {}, waiting for ack",
+                    location.webview_id
+                );
 
                 // Wait for the webview to apply the edits
-                while let Ok(ws_msg) = websocket.read() {
-                    match ws_msg {
+                loop {
+                    match websocket.read() {
                         // We expect the webview to send a binary message when it has applied the edits
                         // This is a signal that we can continue processing
-                        tungstenite::Message::Binary(_) => break,
+                        Ok(tungstenite::Message::Binary(_)) => break,
                         // If the websocket closes, switch back to the pending state and
                         // re-queue the edits that haven't been acknowledged yet
-                        tungstenite::Message::Close(_) => {
+                        Ok(tungstenite::Message::Close(frame)) => {
+                            eprintln!(
+                                "[edits] webview {} sent Close while awaiting ack: {frame:?}",
+                                location.webview_id
+                            );
                             break 'connection;
                         }
-                        _ => {}
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!(
+                                "[edits] websocket read error while awaiting ack from webview {}: {e}",
+                                location.webview_id
+                            );
+                            break 'connection;
+                        }
                     }
                 }
+                eprintln!("[edits] webview {} acked batch", location.webview_id);
 
                 let msg = queued_message.take().expect("Message should be set here");
 
                 // Notify that the edits have been applied
                 _ = msg.response.send(());
             }
+            eprintln!(
+                "[edits] webview {} connection loop exited; re-queueing unacked edits",
+                location.webview_id
+            );
             tracing::trace!("Webview {} closed the connection", location.webview_id);
             let mut connection = WebviewConnectionState::default();
             if let Some(msg) = queued_message {

@@ -45,8 +45,9 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 
             if msg.for_pid == our_pid {
                 tracing::debug!(
-                    "Applying hot-patch jump table with {} entries",
-                    jump_table.map.len()
+                    "Applying hot-patch jump table with {} entries ({} templates in message)",
+                    jump_table.map.len(),
+                    msg.templates.len()
                 );
                 unsafe { subsecond::apply_patch(jump_table) }?;
                 dom.runtime().force_all_dirty();

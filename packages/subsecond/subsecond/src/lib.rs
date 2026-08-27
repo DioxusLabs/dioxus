@@ -396,6 +396,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
         if let Some(jump_table) = unsafe { get_jump_table() } {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                log_jump_table_hit(known_fn_ptr as u64, ptr);
                 return HotFnPtr(ptr);
             }
             log_jump_table_miss(known_fn_ptr as u64, jump_table);
@@ -430,6 +431,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             if let Some(jump_table) = get_jump_table() {
                 let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as u64;
                 if let Some(ptr) = jump_table.map.get(&known_fn_ptr).cloned() {
+                    log_jump_table_hit(known_fn_ptr, ptr);
                     // The type sig of the cast should match the call_it function
                     // Technically function pointers need to be aligned, but that alignment is 1 so we're good
                     let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr as _);
@@ -713,7 +715,7 @@ fn log_jump_table_miss(key: u64, table: &JumpTable) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static MISSES: AtomicUsize = AtomicUsize::new(0);
     let n = MISSES.fetch_add(1, Ordering::Relaxed);
-    if n < 8 {
+    if n < 16 {
         let nearest = table.map.keys().min_by_key(|k| k.abs_diff(key)).copied();
         eprintln!(
             "[subsecond] jump table miss #{n}: key={key:#x} nearest_key={:?} delta={:?} entries={}",
@@ -726,6 +728,21 @@ fn log_jump_table_miss(key: u64, table: &JumpTable) {
 
 #[cfg(not(windows))]
 fn log_jump_table_miss(_key: u64, _table: &JumpTable) {}
+
+/// Diagnostic: log the first few jump-table lookup hits on Windows so we can tell whether the
+/// changed tip-crate functions are actually being redirected into the patch library.
+#[cfg(windows)]
+fn log_jump_table_hit(key: u64, target: u64) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static HITS: AtomicUsize = AtomicUsize::new(0);
+    let n = HITS.fetch_add(1, Ordering::Relaxed);
+    if n < 16 {
+        eprintln!("[subsecond] jump table hit #{n}: key={key:#x} -> {target:#x}");
+    }
+}
+
+#[cfg(not(windows))]
+fn log_jump_table_hit(_key: u64, _target: u64) {}
 
 /// Diagnostic: the HMODULE of the main executable, which is its actual load base address.
 #[cfg(windows)]
@@ -963,6 +980,7 @@ macro_rules! impl_hot_function {
                             #[cfg(target_pointer_width = "32")] let real = real as u64;
 
                             if let Some(ptr) = jump_table.map.get(&real).cloned() {
+                                crate::log_jump_table_hit(real, ptr);
                                 // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
                                 #[cfg(all(target_pointer_width = "64", target_os = "android"))] let ptr: u64 = ptr | nibble;
 
