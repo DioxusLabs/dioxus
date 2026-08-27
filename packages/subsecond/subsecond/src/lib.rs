@@ -398,7 +398,6 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
                 return HotFnPtr(ptr);
             }
-            #[cfg(windows)]
             log_jump_table_miss(known_fn_ptr as u64, jump_table);
         }
 
@@ -436,7 +435,6 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
                     let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr as _);
                     return Ok(call_it(&self.inner, args));
                 }
-                #[cfg(windows)]
                 log_jump_table_miss(known_fn_ptr, jump_table);
             }
 
@@ -726,6 +724,9 @@ fn log_jump_table_miss(key: u64, table: &JumpTable) {
     }
 }
 
+#[cfg(not(windows))]
+fn log_jump_table_miss(_key: u64, _table: &JumpTable) {}
+
 /// Diagnostic: the HMODULE of the main executable, which is its actual load base address.
 #[cfg(windows)]
 fn win_module_base() -> usize {
@@ -981,7 +982,6 @@ macro_rules! impl_hot_function {
                                 return std::mem::transmute::<PtrWidth, Self::Real>(ptr)($($arg),*);
                             }
 
-                            #[cfg(windows)]
                             crate::log_jump_table_miss(real, jump_table);
                         }
 
