@@ -473,6 +473,11 @@ impl BuildRequest {
             // signature over the nested bundle hashes — sign children last
             // and the parent signature is invalidated).
             Self::sign_ios_app_extensions(&target_exe, app_dev_name, self.appstore).await?;
+
+            // Swift plugin frameworks under Frameworks/ are assembled from
+            // Swift packages and are never signed by `swift build`; sign them
+            // with the Apple Distribution identity before signing the parent.
+            Self::sign_ios_frameworks(&target_exe, app_dev_name).await?;
         }
 
         // codesign the app
@@ -764,6 +769,48 @@ impl BuildRequest {
                 bail!(
                     "Failed to codesign app extension {}: {}",
                     appex_path.display(),
+                    String::from_utf8(output.stderr).unwrap_or_default()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sign every `.framework` bundle under `<app>/Frameworks/` with the same
+    /// Apple Distribution identity used for the parent app, but with no
+    /// entitlements. App Store upload rejects unsigned Swift plugin frameworks
+    /// (ITMS-90034). Sign frameworks BEFORE the parent `.app` so the parent
+    /// signature covers their final code hash.
+    async fn sign_ios_frameworks(app_root: &Path, dev_name: &str) -> Result<()> {
+        let frameworks_dir = app_root.join("Frameworks");
+        if !frameworks_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(&frameworks_dir)?.flatten() {
+            let framework_path = entry.path();
+            let is_framework = framework_path
+                .extension()
+                .map(|e| e == "framework")
+                .unwrap_or(false);
+            if !is_framework {
+                continue;
+            }
+
+            tracing::debug!("Signing framework {}", framework_path.display());
+
+            let output = Command::new("codesign")
+                .args(["--force", "--sign", dev_name])
+                .arg(&framework_path)
+                .output()
+                .await
+                .context("Failed to codesign framework - is `codesign` in your path?")?;
+
+            if !output.status.success() {
+                bail!(
+                    "Failed to codesign framework {}: {}",
+                    framework_path.display(),
                     String::from_utf8(output.stderr).unwrap_or_default()
                 );
             }
