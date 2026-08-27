@@ -359,14 +359,17 @@ jobs:
         with:
           path: ~\AppData\Local\ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('packages/playwright-tests/package-lock.json') }}
+      - name: Install npm dependencies
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
+        run: npx playwright install chromium
       - name: Playwright
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
         env:
           CARGO_INCREMENTAL: 1
-        run: |
-          npm ci
-          npx playwright install chromium
-          npx playwright test
+        run: npx playwright test
       # - name: Clean Windows artifacts before cache save
       #   if: always()
       #   shell: pwsh
@@ -428,15 +431,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           rm -rf ./target/dx
+      - name: Install npm dependencies
+        working-directory: ./packages/playwright-tests
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: ./packages/playwright-tests
+        run: npx playwright install chromium
       - name: Playwright
         working-directory: ./packages/playwright-tests
         env:
           # The hot patch test requires incremental compilation
           CARGO_INCREMENTAL: 1
-        run: |
-          npm ci
-          npx playwright install chromium
-          npx playwright test
+        run: npx playwright test
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
