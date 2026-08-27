@@ -47,6 +47,12 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
                 unsafe { subsecond::apply_patch(jump_table) }?;
                 dom.runtime().force_all_dirty();
                 ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
+            } else {
+                tracing::warn!(
+                    "Ignoring hot-patch intended for pid {:?} (this process is pid {:?})",
+                    msg.for_pid,
+                    our_pid
+                );
             }
         }
 

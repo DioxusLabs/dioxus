@@ -310,6 +310,8 @@ impl App {
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
+                let mut patch_error = None;
+
                 if !self.webviews.is_empty() {
                     {
                         // This is a place where wry says it's threadsafe but it's actually not.
@@ -317,7 +319,10 @@ impl App {
                         #[cfg(target_os = "android")]
                         let _lock = crate::android_sync_lock::android_runtime_lock();
 
-                        dioxus_devtools::apply_changes(&self.dom, &hr_msg);
+                        if let Err(err) = dioxus_devtools::try_apply_changes(&self.dom, &hr_msg) {
+                            tracing::error!("Failed to apply hot-patch: {err}");
+                            patch_error = Some(err);
+                        }
                     }
 
                     self.poll_vdom();
@@ -332,13 +337,22 @@ impl App {
                 if hr_msg.jump_table.is_some()
                     && hr_msg.for_build_id == Some(dioxus_cli_config::build_id())
                 {
-                    self.send_toast_to_all(
-                        "Hot-patch success!",
-                        &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
-                        "success",
-                        TOAST_TIMEOUT,
-                        false,
-                    );
+                    match patch_error {
+                        None => self.send_toast_to_all(
+                            "Hot-patch success!",
+                            &format!("App successfully patched in {} ms", hr_msg.ms_elapsed),
+                            "success",
+                            TOAST_TIMEOUT,
+                            false,
+                        ),
+                        Some(err) => self.send_toast_to_all(
+                            "Hot-patch failed!",
+                            &format!("Failed to apply hot-patch: {err}"),
+                            "error",
+                            TOAST_TIMEOUT_LONG,
+                            false,
+                        ),
+                    }
                 }
             }
             DevserverMsg::FullReloadCommand => {

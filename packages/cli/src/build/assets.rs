@@ -58,38 +58,17 @@ const MANGANIS_SECTION_SIZE: usize = 4096;
 /// it carries the variant tag and falls back to the bare `BundledAsset` form for the
 /// asset-only path.
 fn deserialize_manganis_payload(data: &[u8]) -> Option<SymbolDataOrAsset> {
-    if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
-        // Accept any trailing zero padding — the linker section is padded to MANGANIS_SECTION_SIZE.
-        let is_valid = remaining.is_empty()
-            || remaining.iter().all(|&b| b == 0)
-            || remaining.len() <= data.len();
-
-        if is_valid {
-            return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
-        } else {
-            tracing::debug!(
-                "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
-                remaining.len(),
-                data.len(),
-                &data[..data.len().min(32)]
-            );
-        }
-    } else {
-        tracing::debug!(
-            "Failed to deserialize as SymbolData. Data length: {}, first few bytes: {:?}",
-            data.len(),
-            &data[..data.len().min(32)]
-        );
+    // A bare `BundledAsset` payload is not valid `SymbolData`, so a failed parse here is the
+    // expected path for every `asset!()` symbol and is not worth logging.
+    if let Some((_remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
+        return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
     }
 
     if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
+        // Accept any trailing zero padding — the linker section is padded to MANGANIS_SECTION_SIZE.
         let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
 
         if is_valid {
-            tracing::debug!(
-                "Successfully deserialized BundledAsset, remaining padding: {} bytes",
-                remaining.len()
-            );
             return Some(SymbolDataOrAsset::Asset(asset));
         } else {
             tracing::warn!(
@@ -100,7 +79,7 @@ fn deserialize_manganis_payload(data: &[u8]) -> Option<SymbolDataOrAsset> {
         }
     } else {
         tracing::warn!(
-            "Failed to deserialize as BundledAsset. Data length: {}, first 32 bytes: {:?}",
+            "Failed to deserialize as SymbolData or BundledAsset. Data length: {}, first 32 bytes: {:?}",
             data.len(),
             &data[..data.len().min(32)]
         );
