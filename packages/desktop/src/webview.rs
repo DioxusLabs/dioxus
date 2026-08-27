@@ -466,6 +466,10 @@ impl WebviewInstance {
             });
         }
 
+        for (script, for_main_only) in cfg.initialization_scripts.drain(..) {
+            webview = webview.with_initialization_script_for_main_only(script, for_main_only);
+        }
+
         const INITIALIZATION_SCRIPT: &str = r#"
         if (document.addEventListener) {
             document.addEventListener('contextmenu', function(e) {
