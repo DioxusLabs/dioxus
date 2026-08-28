@@ -68,7 +68,7 @@ impl HtmlEvent {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum EventData {
