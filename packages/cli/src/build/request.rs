@@ -1461,12 +1461,14 @@ impl BuildRequest {
                     let from = entry.path().to_path_buf();
                     let relative_path = from.strip_prefix(&dir).unwrap();
                     let to = format!("../{}", relative_path.display());
+                    // Public directory assets are documented to be copied verbatim, so they use
+                    // `into_file_asset_options()` which skips the image/css/js optimizer. Routing
+                    // them through the optimizer (e.g. as an `Unknown` asset) would re-encode WebP
+                    // files, discarding animation frames or inflating file size (see #5656).
                     manifest.insert_asset(BundledAsset::new(
                         from.to_string_lossy().as_ref(),
                         to.as_str(),
-                        manganis_core::AssetOptions::builder()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
+                        manganis_core::AssetOptions::builder().into_file_asset_options(),
                     ));
                 }
             }

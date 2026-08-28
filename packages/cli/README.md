@@ -61,6 +61,10 @@ name = "project-name"
 default_platform = "web"
 
 # Optional: enable copying from a static directory (e.g. "public")
+#
+# Files in `public_dir` are copied verbatim into the build output. They are NOT run through the
+# asset optimizer, so images (including animated or lossy WebP) keep their exact bytes, frames, and
+# size. Use the `asset!()` macro for files you want optimized (e.g. hashed, resized, or re-encoded).
 public_dir = "public"
 
 [web.app]
