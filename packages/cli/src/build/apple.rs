@@ -87,14 +87,28 @@ fn collect_ios_dt_metadata(deployment_target: &str) -> IosDtMetadata {
         "defaults",
         &["read", "/Applications/Xcode.app/Contents/Info", "DTXcode"],
     );
-    let xcode_build = run(
-        "defaults",
-        &[
-            "read",
-            "/Applications/Xcode.app/Contents/Info",
-            "DTXcodeBuild",
-        ],
-    );
+    // App Store Connect rejects builds whose embedded `DTXcodeBuild` is not a
+    // release build. `defaults read .../Info DTXcodeBuild` can lag the real
+    // build (e.g. a delta-updated Xcode 26.6 whose Info.plist still carries the
+    // RC build 17F112 while `xcodebuild -version` reports the GA 17F113), so
+    // take the authoritative value from `xcodebuild -version` and only fall
+    // back to the Info.plist value when that is unavailable.
+    let xcode_build = {
+        let from_xcodebuild = run("xcodebuild", &["-version"])
+            .lines()
+            .find_map(|line| line.strip_prefix("Build version "))
+            .map(str::to_string);
+        from_xcodebuild.unwrap_or_else(|| {
+            run(
+                "defaults",
+                &[
+                    "read",
+                    "/Applications/Xcode.app/Contents/Info",
+                    "DTXcodeBuild",
+                ],
+            )
+        })
+    };
     let os_build = run("sw_vers", &["-buildVersion"]);
 
     let dt_sdk_name = if sdk_version.is_empty() {
