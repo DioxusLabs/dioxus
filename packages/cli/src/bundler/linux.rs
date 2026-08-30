@@ -222,7 +222,7 @@ impl BundleContext<'_> {
     /// 6. Copy configured sidecar binaries into `/usr/bin` so RPM payloads match the
     ///    other Linux formats.
     /// 7. Reuse Debian-style custom files and maintainer scripts where applicable.
-    /// 8. Attach runtime dependency declarations from the Debian settings.
+    /// 8. Attach `Requires` from `[bundle.rpm] depends`.
     /// 9. Serialize the final package to disk and remove the temporary staging area.
     ///
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
@@ -417,7 +417,7 @@ impl BundleContext<'_> {
             builder = builder.post_uninstall_script(content);
         }
 
-        if let Some(deps) = &deb_settings.depends {
+        if let Some(deps) = &self.rpm().depends {
             for dep in deps {
                 builder = builder.requires(rpm::Dependency::any(dep));
             }

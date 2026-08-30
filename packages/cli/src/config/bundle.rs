@@ -26,6 +26,8 @@ pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) deb: Option<DebianSettings>,
     #[serde(default)]
+    pub(crate) rpm: Option<RpmSettings>,
+    #[serde(default)]
     pub(crate) macos: Option<MacOsSettings>,
     #[serde(default)]
     pub(crate) windows: Option<WindowsSettings>,
@@ -95,6 +97,13 @@ pub(crate) struct DebianSettings {
     /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
     #[serde(default)]
     pub post_remove_script: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub(crate) struct RpmSettings {
+    /// RPM package dependencies (`Requires`).
+    #[serde(default)]
+    pub depends: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]

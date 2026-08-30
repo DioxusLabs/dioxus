@@ -182,6 +182,20 @@ mod tests {
     }
 
     #[test]
+    fn bundle_rpm_depends_parses() {
+        let source = r#"
+            [bundle.rpm]
+            depends = ["libxdo"]
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.bundle.rpm.unwrap().depends.unwrap(),
+            vec!["libxdo".to_string()]
+        );
+    }
+
+    #[test]
     fn static_dir_can_be_disabled() {
         let source = r#"
             [application]
