@@ -35,7 +35,7 @@ pub(crate) fn wix(version: &Version) -> Result<String> {
 
 /// Validate and normalize an explicitly configured WiX product version.
 pub(crate) fn wix_from_string(version: &str) -> Result<String> {
-    let version = version.split(['-', '+']).next().unwrap_or(version);
+    let version = version.split('-').next().unwrap_or(version);
     let parts: Vec<&str> = version.split('.').collect();
 
     if parts.len() < 2 || parts.len() > 4 {
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(wix_from_string("1.2").unwrap(), "1.2.0");
         assert_eq!(wix_from_string("1.2.3.4").unwrap(), "1.2.3.4");
         assert_eq!(wix_from_string("1.2.3-rc.1").unwrap(), "1.2.3");
-        assert_eq!(wix_from_string("1.2.3+build.5").unwrap(), "1.2.3");
+        assert!(wix_from_string("1.2.3+build.5").is_err());
         assert!(wix_from_string("1").is_err());
         assert!(wix_from_string("1.2.3.4.5").is_err());
         assert!(wix_from_string("1.2.invalid").is_err());
