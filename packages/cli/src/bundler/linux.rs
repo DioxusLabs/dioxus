@@ -228,7 +228,7 @@ impl BundleContext<'_> {
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
     pub(crate) async fn bundle_linux_rpm(&self) -> Result<Vec<PathBuf>> {
         let name = self.main_binary_name().to_string();
-        let version = self.version_string();
+        let version = rpm_version(&self.version_string());
         let arch = self.binary_arch().rpm_arch();
         let license = self.license().unwrap_or("Unknown").to_string();
         let description = self.short_description();
@@ -1149,5 +1149,52 @@ fn resolve_path(crate_dir: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         crate_dir.join(path)
+    }
+}
+
+/// Convert a SemVer version string into an RPM-compatible version.
+fn rpm_version(version: &str) -> String {
+    let (core, build) = match version.split_once('+') {
+        Some((core, build)) => (core, Some(build)),
+        None => (version, None),
+    };
+    let core = match core.split_once('-') {
+        Some((release, prerelease)) => {
+            format!("{release}~{}", prerelease.replace('-', "_"))
+        }
+        None => core.to_string(),
+    };
+
+    match build {
+        Some(build) => format!("{core}+{}", build.replace('-', "_")),
+        None => core,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rpm_version;
+
+    #[test]
+    fn rpm_version_preserves_release_versions() {
+        assert_eq!(rpm_version("1.2.3"), "1.2.3");
+    }
+
+    #[test]
+    fn rpm_version_maps_prerelease_separator_for_rpm_ordering() {
+        assert_eq!(rpm_version("1.2.3-rc.1"), "1.2.3~rc.1");
+    }
+
+    #[test]
+    fn rpm_version_sanitizes_hyphens_inside_identifiers() {
+        assert_eq!(
+            rpm_version("1.2.3-alpha-1+build-5"),
+            "1.2.3~alpha_1+build_5"
+        );
+    }
+
+    #[test]
+    fn rpm_version_preserves_build_metadata() {
+        assert_eq!(rpm_version("1.2.3+build.5"), "1.2.3+build.5");
     }
 }
