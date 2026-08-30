@@ -15,6 +15,13 @@ fn linux(version: &Version) -> String {
     projected
 }
 
+fn validate_component(value: u64, max: u64) -> Result<()> {
+    if value > max {
+        bail!("Version component {value} exceeds maximum value of {max}");
+    }
+    Ok(())
+}
+
 /// Convert a SemVer version into an RPM-compatible version.
 pub(crate) fn rpm(version: &Version) -> String {
     linux(version)
@@ -27,9 +34,9 @@ pub(crate) fn deb(version: &Version) -> String {
 
 /// Convert a SemVer version into a WiX-compatible product version.
 pub(crate) fn wix(version: &Version) -> Result<String> {
-    wix_validate_component(version.major, 0)?;
-    wix_validate_component(version.minor, 1)?;
-    wix_validate_component(version.patch, 2)?;
+    validate_component(version.major, u8::MAX.into())?;
+    validate_component(version.minor, u8::MAX.into())?;
+    validate_component(version.patch, u16::MAX.into())?;
     Ok(core(version))
 }
 
@@ -49,7 +56,12 @@ pub(crate) fn wix_from_string(version: &str) -> Result<String> {
         let value: u64 = part
             .parse()
             .with_context(|| format!("Invalid version component: '{part}'"))?;
-        wix_validate_component(value, index)?;
+        let max = if index < 2 {
+            u8::MAX.into()
+        } else {
+            u16::MAX.into()
+        };
+        validate_component(value, max)?;
     }
 
     if parts.len() == 2 {
@@ -59,23 +71,14 @@ pub(crate) fn wix_from_string(version: &str) -> Result<String> {
     }
 }
 
-fn wix_validate_component(value: u64, index: usize) -> Result<()> {
-    match index {
-        0 | 1 if value > 255 => {
-            bail!("Version component {value} exceeds maximum value of 255")
-        }
-        2 | 3 if value > 65535 => {
-            bail!("Version component {value} exceeds maximum value of 65535")
-        }
-        _ => Ok(()),
-    }
-}
-
 /// Convert a SemVer version into an NSIS-compatible product version.
 ///
 /// The NSIS template appends `.0` to form `VIProductVersion`.
-pub(crate) fn nsis(version: &Version) -> String {
-    core(version)
+pub(crate) fn nsis(version: &Version) -> Result<String> {
+    validate_component(version.major, u16::MAX.into())?;
+    validate_component(version.minor, u16::MAX.into())?;
+    validate_component(version.patch, u16::MAX.into())?;
+    Ok(core(version))
 }
 
 /// Convert a SemVer version into a macOS bundle version (`CFBundleShortVersionString`).
@@ -108,8 +111,9 @@ mod tests {
     #[test]
     fn macos_and_nsis_use_the_numeric_core() {
         assert_eq!(macos(&version("1.2.3-rc.1+build.5")), "1.2.3");
-        assert_eq!(nsis(&version("1.2.3-rc.1+build.5")), "1.2.3");
-        assert_eq!(nsis(&version("256.2.3")), "256.2.3");
+        assert_eq!(nsis(&version("1.2.3-rc.1+build.5")).unwrap(), "1.2.3");
+        assert_eq!(nsis(&version("256.2.3")).unwrap(), "256.2.3");
+        assert!(nsis(&version("65536.0.0")).is_err());
     }
 
     #[test]

@@ -391,7 +391,7 @@ impl BundleContext<'_> {
 
         let product_name = self.product_name();
         let version = self.version_string();
-        let product_version = version::nsis(self.package_version());
+        let product_version = version::nsis(self.package_version())?;
         let installer_name = format!("{product_name}_{version}_{arch_str}-setup.exe");
         let output_path = output_dir.join(&installer_name);
 
