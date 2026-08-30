@@ -390,7 +390,8 @@ impl BundleContext<'_> {
         let arch_str = arch.windows_arch();
 
         let product_name = self.product_name();
-        let version = version::nsis(self.package_version());
+        let version = self.version_string();
+        let product_version = version::nsis(self.package_version());
         let installer_name = format!("{product_name}_{version}_{arch_str}-setup.exe");
         let output_path = output_dir.join(&installer_name);
 
@@ -428,6 +429,10 @@ impl BundleContext<'_> {
             JsonValue::String(product_name.clone()),
         );
         data.insert("version".to_string(), JsonValue::String(version.clone()));
+        data.insert(
+            "product_version".to_string(),
+            JsonValue::String(product_version),
+        );
         data.insert(
             "output_path".to_string(),
             JsonValue::String(output_path.to_string_lossy().replace('/', "\\")),
@@ -1096,7 +1101,7 @@ RequestExecutionLevel user
 {{/if}}
 
 ; Version information
-VIProductVersion "{{version}}.0"
+VIProductVersion "{{product_version}}.0"
 VIAddVersionKey "ProductName" "{{product_name}}"
 VIAddVersionKey "FileVersion" "{{version}}"
 VIAddVersionKey "ProductVersion" "{{version}}"
