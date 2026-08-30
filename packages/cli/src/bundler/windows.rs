@@ -1,4 +1,4 @@
-use crate::bundler::BundleContext;
+use crate::bundler::{BundleContext, version};
 use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings};
 use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
@@ -54,12 +54,10 @@ impl BundleContext<'_> {
         let wix_program_files_folder = arch.wix_program_files_folder();
 
         let product_name = self.product_name();
-        let version = wix_version(
-            &wix_settings
-                .version
-                .clone()
-                .unwrap_or_else(|| self.version_string()),
-        )?;
+        let version = match wix_settings.version.as_deref() {
+            Some(version) => version::wix_from_string(version)?,
+            None => version::wix(self.package_version())?,
+        };
 
         let msi_name = format!("{product_name}_{version}_{arch_str}.msi");
         let output_path = output_dir.join(&msi_name);
@@ -392,7 +390,7 @@ impl BundleContext<'_> {
         let arch_str = arch.windows_arch();
 
         let product_name = self.product_name();
-        let version = self.version_string();
+        let version = version::nsis(self.package_version());
         let installer_name = format!("{product_name}_{version}_{arch_str}-setup.exe");
         let output_path = output_dir.join(&installer_name);
 
@@ -926,42 +924,6 @@ fn render_template(template: &str, data: &BTreeMap<String, JsonValue>) -> Result
         .render("template", data)
         .context("Failed to render template")?;
     Ok(rendered.replace(BACKSLASH_PLACEHOLDER, "\\"))
-}
-
-/// Convert a semver version string to a WiX-compatible version.
-fn wix_version(version: &str) -> Result<String> {
-    let version = version.split('-').next().unwrap_or(version);
-    let parts: Vec<&str> = version.split('.').collect();
-
-    if parts.len() < 2 || parts.len() > 4 {
-        bail!(
-            "Invalid version for MSI: '{}'. Expected format: major.minor.patch[.build]",
-            version
-        );
-    }
-
-    for (i, part) in parts.iter().enumerate() {
-        let num: u64 = part
-            .parse()
-            .with_context(|| format!("Invalid version component: '{part}'"))?;
-        match i {
-            0 | 1 if num > 255 => {
-                bail!("Version component {part} exceeds maximum value of 255");
-            }
-            2 | 3 if num > 65535 => {
-                bail!("Version component {part} exceeds maximum value of 65535");
-            }
-            _ => {}
-        }
-    }
-
-    let version_str = if parts.len() == 2 {
-        format!("{}.{}.0", parts[0], parts[1])
-    } else {
-        parts.join(".")
-    };
-
-    Ok(version_str)
 }
 
 /// The embedded WiX template.
