@@ -99,6 +99,18 @@ pub(crate) struct RpmSettings {
     /// RPM package `Requires`.
     #[serde(default)]
     pub requires: Option<Vec<String>>,
+    /// RPM package `Recommends`.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
+    /// RPM package `Provides`.
+    #[serde(default)]
+    pub provides: Option<Vec<String>>,
+    /// RPM package `Conflicts`.
+    #[serde(default)]
+    pub conflicts: Option<Vec<String>>,
+    /// RPM package `Obsoletes`. Closest equivalent of Debian `Replaces`.
+    #[serde(default)]
+    pub obsoletes: Option<Vec<String>>,
     /// Extra files to add to the RPM payload.
     /// Maps the path in the package to the source path (relative to the crate directory).
     #[serde(default)]

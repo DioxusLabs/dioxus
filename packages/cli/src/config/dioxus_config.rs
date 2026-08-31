@@ -200,12 +200,23 @@ mod tests {
         let source = r#"
             [bundle.rpm]
             requires = ["libxdo"]
+            recommends = ["shared-mime-info"]
+            provides = ["hotdog"]
+            conflicts = ["hotdog-nightly"]
+            obsoletes = ["hotdog-legacy"]
             pre_install_script = "rpm-pre.sh"
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         let rpm = config.bundle.rpm.unwrap();
         assert_eq!(rpm.requires.unwrap(), vec!["libxdo".to_string()]);
+        assert_eq!(
+            rpm.recommends.unwrap(),
+            vec!["shared-mime-info".to_string()]
+        );
+        assert_eq!(rpm.provides.unwrap(), vec!["hotdog".to_string()]);
+        assert_eq!(rpm.conflicts.unwrap(), vec!["hotdog-nightly".to_string()]);
+        assert_eq!(rpm.obsoletes.unwrap(), vec!["hotdog-legacy".to_string()]);
         assert_eq!(
             rpm.pre_install_script.as_deref(),
             Some(std::path::Path::new("rpm-pre.sh"))

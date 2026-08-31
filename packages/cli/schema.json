@@ -2110,10 +2110,30 @@
     "RpmSettings": {
       "type": "object",
       "properties": {
+        "conflicts": {
+          "description": "RPM package `Conflicts`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "files": {
           "description": "Extra files to add to the RPM payload.\nMaps the path in the package to the source path (relative to the crate directory).",
           "type": "object",
           "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "obsoletes": {
+          "description": "RPM package `Obsoletes`. Closest equivalent of Debian `Replaces`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
             "type": "string"
           }
         },
@@ -2144,6 +2164,26 @@
             "string",
             "null"
           ]
+        },
+        "provides": {
+          "description": "RPM package `Provides`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "RPM package `Recommends`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "requires": {
           "description": "RPM package `Requires`.",
