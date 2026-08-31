@@ -182,16 +182,33 @@ mod tests {
     }
 
     #[test]
-    fn bundle_rpm_depends_parses() {
+    fn linux_desktop_template_parses() {
         let source = r#"
-            [bundle.rpm]
-            depends = ["libxdo"]
+            [linux]
+            desktop_template = "linux.desktop"
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(
-            config.bundle.rpm.unwrap().depends.unwrap(),
-            vec!["libxdo".to_string()]
+            config.linux.desktop_template.as_deref(),
+            Some(std::path::Path::new("linux.desktop"))
+        );
+    }
+
+    #[test]
+    fn bundle_rpm_settings_parse() {
+        let source = r#"
+            [bundle.rpm]
+            depends = ["libxdo"]
+            pre_install_script = "rpm-pre.sh"
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        let rpm = config.bundle.rpm.unwrap();
+        assert_eq!(rpm.depends.unwrap(), vec!["libxdo".to_string()]);
+        assert_eq!(
+            rpm.pre_install_script.as_deref(),
+            Some(std::path::Path::new("rpm-pre.sh"))
         );
     }
 

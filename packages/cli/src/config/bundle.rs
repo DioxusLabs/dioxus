@@ -67,7 +67,8 @@ pub(crate) struct DebianSettings {
     pub files: HashMap<PathBuf, PathBuf>,
     /// Path to a custom desktop file Handlebars template.
     ///
-    /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
+    /// Overrides `[linux] desktop_template`. Available variables: `categories`,
+    /// `comment` (optional), `exec`, `icon` and `name`.
     #[serde(default)]
     pub desktop_template: Option<PathBuf>,
     /// Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>
@@ -104,6 +105,22 @@ pub(crate) struct RpmSettings {
     /// RPM package dependencies (`Requires`).
     #[serde(default)]
     pub depends: Option<Vec<String>>,
+    /// Extra files to add to the RPM payload.
+    /// Maps the path in the package to the source path (relative to the crate directory).
+    #[serde(default)]
+    pub files: HashMap<PathBuf, PathBuf>,
+    /// Script run before the package is installed (`%pre`).
+    #[serde(default)]
+    pub pre_install_script: Option<PathBuf>,
+    /// Script run after the package is installed (`%post`).
+    #[serde(default)]
+    pub post_install_script: Option<PathBuf>,
+    /// Script run before the package is removed (`%preun`).
+    #[serde(default)]
+    pub pre_remove_script: Option<PathBuf>,
+    /// Script run after the package is removed (`%postun`).
+    #[serde(default)]
+    pub post_remove_script: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]

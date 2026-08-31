@@ -1301,6 +1301,8 @@ pub struct WindowsSignCommand {
 /// identifier = "com.example.myapp.linux"  # Override bundle.identifier for Linux
 /// categories = ["Utility"]
 ///
+/// desktop_template = "linux.desktop"
+///
 /// # Debian package settings (previously in [bundle.deb])
 /// [linux.deb]
 /// depends = ["libwebkit2gtk-4.0-37"]
@@ -1348,6 +1350,13 @@ pub struct LinuxConfig {
     /// Overrides `bundle.long_description` for Linux builds.
     #[serde(default)]
     pub long_description: Option<String>,
+
+    /// Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.
+    ///
+    /// `[bundle.deb] desktop_template` overrides this. RPM and AppImage use this value.
+    /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
+    #[serde(default)]
+    pub desktop_template: Option<PathBuf>,
 
     // === Debian package settings (previously in bundle.deb) ===
     /// Debian-specific package settings.
