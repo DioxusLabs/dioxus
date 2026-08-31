@@ -3,7 +3,8 @@
 #
 # Each packager's dependency field must equal its config list (RPM also has
 # rpmlib(...) markers from the format). Isolation follows: extra names from
-# the other format fail the equality check, shared names are allowed.
+# the other format fail the equality check, shared names are allowed. The
+# custom [linux] desktop_template id must appear in .deb, .rpm, and AppImage.
 set -euo pipefail
 
 target_dir=${TARGET_DIR:-target}
@@ -32,6 +33,7 @@ if (( ${#appimages[@]} != 1 || ${#debs[@]} != 1 || ${#rpms[@]} != 1 )); then
   exit 1
 fi
 
+appimage=$(readlink -f "${appimages[0]}")
 deb=${debs[0]}
 rpm_pkg=${rpms[0]}
 
@@ -46,8 +48,12 @@ assert_equal_deps "rpm Requires" "$rpm_requires" \
 
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
-mkdir -p "$staging/deb" "$staging/rpm"
+mkdir -p "$staging/deb" "$staging/rpm" "$staging/appimage"
+
 dpkg-deb -x "$deb" "$staging/deb"
 rpm2cpio "$rpm_pkg" | (cd "$staging/rpm" && cpio -idm --quiet --no-absolute-filenames)
+( cd "$staging/appimage" && "$appimage" --appimage-extract )
+
 grep -F -q "$desktop_template_test_id" "$staging/deb"/usr/share/applications/*.desktop
 grep -F -q "$desktop_template_test_id" "$staging/rpm"/usr/share/applications/*.desktop
+grep -F -q "$desktop_template_test_id" "$staging/appimage"/squashfs-root/usr/share/applications/*.desktop
