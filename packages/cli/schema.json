@@ -30,7 +30,7 @@
     },
     "linux": {
       "description": "Linux-specific configuration.",
-      "$ref": "#/$defs/LinuxConfig"
+      "$ref": "#/$defs/LinuxSettings"
     },
     "macos": {
       "description": "macOS-specific configuration.",
@@ -848,13 +848,6 @@
             "type": "string"
           }
         },
-        "desktop_template": {
-          "description": "Path to a custom desktop file Handlebars template.\n\nOverrides `[linux] desktop_template`. Available variables: `categories`,\n`comment` (optional), `exec`, `icon` and `name`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "files": {
           "description": "List of custom files to add to the deb package.\nMaps the path on the debian package to the path of the file to include (relative to the current working directory).",
           "type": "object",
@@ -1258,127 +1251,6 @@
         "identifier"
       ]
     },
-    "LinuxConfig": {
-      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\n\ndesktop_template = \"linux.desktop\"\n\n# Debian package settings (previously in [bundle.deb])\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n```",
-      "type": "object",
-      "properties": {
-        "categories": {
-          "description": "Desktop entry categories.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "category": {
-          "description": "App category.\nOverrides `bundle.category` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "copyright": {
-          "description": "Copyright notice.\nOverrides `bundle.copyright` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "dbus_access": {
-          "description": "D-Bus interfaces to access.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "deb": {
-          "description": "Debian-specific package settings.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LinuxDebSettings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "desktop_template": {
-          "description": "Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.\n\n`[bundle.deb] desktop_template` overrides this. RPM and AppImage use this value.\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "flatpak_permissions": {
-          "description": "Flatpak sandbox permissions.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "icon": {
-          "description": "Icons for the app.\nOverrides `bundle.icon` for Linux builds.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "identifier": {
-          "description": "The app's identifier (e.g., \"com.example.myapp\").\nOverrides `bundle.identifier` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "keywords": {
-          "description": "Desktop entry keywords.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "long_description": {
-          "description": "Long description.\nOverrides `bundle.long_description` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "mime_types": {
-          "description": "MIME types the app can handle.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "publisher": {
-          "description": "The app's publisher.\nOverrides `bundle.publisher` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "resources": {
-          "description": "Additional resources to bundle.\nOverrides `bundle.resources` for Linux builds.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "short_description": {
-          "description": "Short description.\nOverrides `bundle.short_description` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
     "LinuxDebSettings": {
       "description": "Debian package settings.",
       "type": "object",
@@ -1409,13 +1281,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "desktop_template": {
-          "description": "Path to custom desktop template.",
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "files": {
           "description": "Additional files to include. Maps package path to source path.",
@@ -1491,6 +1356,127 @@
         },
         "section": {
           "description": "Debian section (e.g., \"utils\", \"web\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "LinuxSettings": {
+      "description": "Linux-specific settings.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\n\ndesktop_template = \"linux.desktop\"\n\n# Debian package settings (previously in [bundle.deb])\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n```",
+      "type": "object",
+      "properties": {
+        "categories": {
+          "description": "Desktop entry categories.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "category": {
+          "description": "App category.\nOverrides `bundle.category` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice.\nOverrides `bundle.copyright` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbus_access": {
+          "description": "D-Bus interfaces to access.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deb": {
+          "description": "Debian-specific package settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinuxDebSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "desktop_template": {
+          "description": "Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flatpak_permissions": {
+          "description": "Flatpak sandbox permissions.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "description": "Icons for the app.\nOverrides `bundle.icon` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\").\nOverrides `bundle.identifier` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keywords": {
+          "description": "Desktop entry keywords.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "long_description": {
+          "description": "Long description.\nOverrides `bundle.long_description` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_types": {
+          "description": "MIME types the app can handle.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "publisher": {
+          "description": "The app's publisher.\nOverrides `bundle.publisher` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "description": "Additional resources to bundle.\nOverrides `bundle.resources` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description.\nOverrides `bundle.short_description` for Linux builds.",
           "type": [
             "string",
             "null"

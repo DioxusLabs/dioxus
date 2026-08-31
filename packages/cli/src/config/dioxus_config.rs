@@ -54,7 +54,7 @@ pub(crate) struct DioxusConfig {
 
     /// Linux-specific configuration.
     #[serde(default)]
-    pub(crate) linux: LinuxConfig,
+    pub(crate) linux: LinuxSettings,
 }
 
 /// Platform identifier for bundle resolution.
@@ -149,7 +149,7 @@ impl Default for DioxusConfig {
             android: AndroidConfig::default(),
             macos: MacosConfig::default(),
             windows: WindowsConfig::default(),
-            linux: LinuxConfig::default(),
+            linux: LinuxSettings::default(),
         }
     }
 }

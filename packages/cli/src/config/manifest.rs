@@ -1293,7 +1293,7 @@ pub struct WindowsSignCommand {
 // Linux Configuration
 // ============================================================================
 
-/// Linux-specific configuration.
+/// Linux-specific settings.
 ///
 /// Example:
 /// ```toml
@@ -1309,7 +1309,7 @@ pub struct WindowsSignCommand {
 /// section = "utils"
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub struct LinuxConfig {
+pub struct LinuxSettings {
     // === Bundle settings (override [bundle] section) ===
     /// The app's identifier (e.g., "com.example.myapp").
     /// Overrides `bundle.identifier` for Linux builds.
@@ -1353,7 +1353,6 @@ pub struct LinuxConfig {
 
     /// Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.
     ///
-    /// `[bundle.deb] desktop_template` overrides this. RPM and AppImage use this value.
     /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
     #[serde(default)]
     pub desktop_template: Option<PathBuf>,
@@ -1411,10 +1410,6 @@ pub struct LinuxDebSettings {
     /// Additional files to include. Maps package path to source path.
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
-
-    /// Path to custom desktop template.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
 
     /// Debian section (e.g., "utils", "web").
     #[serde(default)]
@@ -1776,7 +1771,7 @@ mod tests {
         assert!(json.contains("AndroidConfig"));
         assert!(json.contains("MacosConfig"));
         assert!(json.contains("WindowsConfig"));
-        assert!(json.contains("LinuxConfig"));
+        assert!(json.contains("LinuxSettings"));
 
         // Verify some specific properties exist
         assert!(json.contains("location"));

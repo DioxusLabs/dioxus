@@ -57,8 +57,7 @@ impl BundleContext<'_> {
         }
         fs::create_dir_all(&appdir)?;
 
-        let desktop_template = self.linux_desktop_template(None);
-        self.generate_linux_common_data(&appdir, desktop_template.as_deref())?;
+        self.generate_linux_common_data(&appdir)?;
         self.create_linux_appdir_symlinks(&appdir, &name)?;
 
         let linuxdeploy = self
@@ -165,10 +164,7 @@ impl BundleContext<'_> {
         }
         fs::create_dir_all(&data_dir)?;
 
-        let deb_settings = self.deb();
-        let desktop_template =
-            self.linux_desktop_template(deb_settings.desktop_template.as_deref());
-        self.generate_linux_common_data(&data_dir, desktop_template.as_deref())?;
+        self.generate_linux_common_data(&data_dir)?;
         self.add_linux_deb_data(&data_dir)?;
 
         let installed_size = dir_size_kb(&data_dir)?;
@@ -259,8 +255,7 @@ impl BundleContext<'_> {
             .context("Failed to add binary to RPM")?;
 
         let rpm_settings = self.rpm();
-        let desktop_content =
-            self.generate_linux_desktop_file(self.linux_desktop_template(None).as_deref())?;
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_dest = format!("/usr/share/applications/{name}.desktop");
 
         let temp_dir = output_dir.join("_rpm_temp");
@@ -484,11 +479,7 @@ impl BundleContext<'_> {
     }
 
     /// Generate the Linux payload shared across bundle formats.
-    fn generate_linux_common_data(
-        &self,
-        data_dir: &Path,
-        desktop_template: Option<&Path>,
-    ) -> Result<()> {
+    fn generate_linux_common_data(&self, data_dir: &Path) -> Result<()> {
         let bin_name = self.main_binary_name();
         let resource_dir_name = self.linux_resource_dir_name();
 
@@ -507,7 +498,7 @@ impl BundleContext<'_> {
         let desktop_dir = data_dir.join("usr/share/applications");
         fs::create_dir_all(&desktop_dir)?;
 
-        let desktop_content = self.generate_linux_desktop_file(desktop_template)?;
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_path = desktop_dir.join(format!("{bin_name}.desktop"));
         fs::write(&desktop_path, &desktop_content)?;
 
@@ -573,11 +564,11 @@ impl BundleContext<'_> {
     }
 
     /// Generate the contents of a .desktop file for the given bundle context.
-    fn generate_linux_desktop_file(&self, desktop_template: Option<&Path>) -> Result<String> {
+    fn generate_linux_desktop_file(&self) -> Result<String> {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(false);
 
-        let template = match desktop_template {
+        let template = match self.linux().desktop_template.as_deref() {
             // Path to template
             Some(path) => fs::read_to_string(path)
                 .with_context(|| format!("Failed to read desktop template: {}", path.display()))?,

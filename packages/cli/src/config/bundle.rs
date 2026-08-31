@@ -65,12 +65,6 @@ pub(crate) struct DebianSettings {
     /// Maps the path on the debian package to the path of the file to include (relative to the current working directory).
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
-    /// Path to a custom desktop file Handlebars template.
-    ///
-    /// Overrides `[linux] desktop_template`. Available variables: `categories`,
-    /// `comment` (optional), `exec`, `icon` and `name`.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
     /// Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>
     #[serde(default)]
     pub section: Option<String>,

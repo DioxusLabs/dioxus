@@ -6,7 +6,9 @@ mod updater;
 mod windows;
 
 use crate::PackageType;
-use crate::{BuildRequest, DebianSettings, MacOsSettings, RpmSettings, WindowsSettings};
+use crate::{
+    BuildRequest, DebianSettings, LinuxSettings, MacOsSettings, RpmSettings, WindowsSettings,
+};
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -425,13 +427,9 @@ impl<'a> BundleContext<'a> {
         self.build.config.bundle.rpm.clone().unwrap_or_default()
     }
 
-    /// Desktop template: `[bundle.deb] desktop_template` override, else `[linux] desktop_template`.
-    pub(crate) fn linux_desktop_template(&self, format_override: Option<&Path>) -> Option<PathBuf> {
-        resolve_linux_desktop_template(
-            format_override,
-            self.build.config.linux.desktop_template.as_deref(),
-        )
-        .map(Path::to_path_buf)
+    /// Linux settings from config.
+    pub(crate) fn linux(&self) -> &LinuxSettings {
+        &self.build.config.linux
     }
 
     /// macOS settings from config.
@@ -442,38 +440,6 @@ impl<'a> BundleContext<'a> {
     /// Windows settings from config.
     pub(crate) fn windows(&self) -> WindowsSettings {
         self.build.config.bundle.windows.clone().unwrap_or_default()
-    }
-}
-
-fn resolve_linux_desktop_template<'a>(
-    format_override: Option<&'a Path>,
-    linux: Option<&'a Path>,
-) -> Option<&'a Path> {
-    format_override.or(linux)
-}
-
-#[cfg(test)]
-mod linux_desktop_template_tests {
-    use super::resolve_linux_desktop_template;
-    use std::path::Path;
-
-    #[test]
-    fn format_override_wins_over_linux() {
-        let format = Path::new("deb.desktop");
-        let linux = Path::new("linux.desktop");
-        assert_eq!(
-            resolve_linux_desktop_template(Some(format), Some(linux)),
-            Some(format)
-        );
-    }
-
-    #[test]
-    fn linux_is_used_when_format_is_unset() {
-        let linux = Path::new("linux.desktop");
-        assert_eq!(
-            resolve_linux_desktop_template(None, Some(linux)),
-            Some(linux)
-        );
     }
 }
 
