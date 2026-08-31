@@ -150,6 +150,9 @@ pub(crate) struct WixSettings {
     /// MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\Programs`, no
     /// elevation). `PerMachine` installs under `ProgramFiles` and requires
     /// elevation.
+    ///
+    /// This value must stay the same across updates because Windows Installer
+    /// cannot perform a major upgrade across per-user and per-machine scopes.
     #[serde(default)]
     pub(crate) install_scope: WixInstallScope,
 }
