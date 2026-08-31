@@ -3226,6 +3226,14 @@
         }
       }
     },
+    "WixInstallScope": {
+      "description": "MSI `InstallScope`. Defaults to `PerUser`.",
+      "type": "string",
+      "enum": [
+        "PerMachine",
+        "PerUser"
+      ]
+    },
     "WixSettings": {
       "type": "object",
       "properties": {
@@ -3276,6 +3284,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "install_scope": {
+          "description": "MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\\Programs`, no\nelevation). `PerMachine` installs under `ProgramFiles` and requires\nelevation.",
+          "$ref": "#/$defs/WixInstallScope"
         },
         "language": {
           "type": "array",

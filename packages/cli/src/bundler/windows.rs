@@ -1,5 +1,5 @@
 use crate::bundler::BundleContext;
-use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings};
+use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings, WixInstallScope};
 use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use serde_json::Value as JsonValue;
@@ -107,6 +107,17 @@ impl BundleContext<'_> {
         data.insert(
             "wix_program_files_folder".to_string(),
             serde_json::Value::String(wix_program_files_folder.to_string()),
+        );
+        data.insert(
+            "install_scope".to_string(),
+            serde_json::Value::String(wix_settings.install_scope.as_wix_attr().to_string()),
+        );
+        data.insert(
+            "install_scope_per_user".to_string(),
+            serde_json::Value::Bool(matches!(
+                wix_settings.install_scope,
+                WixInstallScope::PerUser
+            )),
         );
         data.insert(
             "main_binary_name".to_string(),
@@ -983,7 +994,10 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
             Description="{{short_description}}"
             {{/if}}
             Manufacturer="{{publisher}}"
-            InstallScope="perMachine"
+            InstallScope="{{install_scope}}"
+            {{#if install_scope_per_user}}
+            InstallPrivileges="limited"
+            {{/if}}
             Languages="1033"
             Compressed="yes"
             SummaryCodepage="1252" />
@@ -1027,8 +1041,13 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
 
         <Directory Id="TARGETDIR" Name="SourceDir">
+            {{#if install_scope_per_user}}
+            <Directory Id="LocalAppDataFolder">
+                <Directory Id="LocalAppDataPrograms" Name="Programs">
+            {{else}}
             <Directory Id="{{wix_program_files_folder}}">
-                <Directory Id="INSTALLDIR" Name="{{product_name}}">
+            {{/if}}
+                    <Directory Id="INSTALLDIR" Name="{{product_name}}">
                     <Component Id="MainExecutable" Guid="*">
                         <File
                             Id="MainExe"
@@ -1037,8 +1056,13 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
                             KeyPath="yes" />
                     </Component>
 {{{install_tree}}}
+                    </Directory>
+            {{#if install_scope_per_user}}
                 </Directory>
             </Directory>
+            {{else}}
+            </Directory>
+            {{/if}}
 
             <Directory Id="ProgramMenuFolder">
                 <Directory Id="ProgramMenuSubfolder" Name="{{product_name}}">
@@ -1272,7 +1296,27 @@ mod tests {
 
     #[test]
     fn wix_template_uses_arch_specific_program_files_folder() {
-        let data: BTreeMap<String, serde_json::Value> = serde_json::from_value(json!({
+        let rendered = render_template(
+            WIX_TEMPLATE,
+            &wix_template_data("perMachine", false, "ProgramFiles64Folder"),
+        )
+        .unwrap();
+
+        assert!(rendered.contains("InstallScope=\"perMachine\""));
+        assert!(!rendered.contains("InstallPrivileges=\"limited\""));
+        assert!(rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
+        assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
+        assert!(!rendered.contains("<Directory Id=\"LocalAppDataFolder\">"));
+        // Verify \{{ substitution works: registry key should contain actual values
+        assert!(rendered.contains("Software\\Dioxus Labs\\Hotdog"));
+    }
+
+    fn wix_template_data(
+        install_scope: &str,
+        per_user: bool,
+        program_files: &str,
+    ) -> BTreeMap<String, serde_json::Value> {
+        serde_json::from_value(json!({
             "product_name": "Hotdog",
             "upgrade_code": "00000000-0000-0000-0000-000000000000",
             "version": "0.1.0",
@@ -1289,15 +1333,25 @@ mod tests {
             "feature_group_refs": [],
             "feature_refs": [],
             "merge_refs": [],
-            "wix_program_files_folder": "ProgramFiles64Folder"
+            "wix_program_files_folder": program_files,
+            "install_scope": install_scope,
+            "install_scope_per_user": per_user
         }))
+        .unwrap()
+    }
+
+    #[test]
+    fn wix_template_per_user_uses_local_app_data() {
+        let rendered = render_template(
+            WIX_TEMPLATE,
+            &wix_template_data("perUser", true, "ProgramFiles64Folder"),
+        )
         .unwrap();
 
-        let rendered = render_template(WIX_TEMPLATE, &data).unwrap();
-
-        assert!(rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
-        assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
-        // Verify \{{ substitution works: registry key should contain actual values
-        assert!(rendered.contains("Software\\Dioxus Labs\\Hotdog"));
+        assert!(rendered.contains("InstallScope=\"perUser\""));
+        assert!(rendered.contains("InstallPrivileges=\"limited\""));
+        assert!(rendered.contains("<Directory Id=\"LocalAppDataFolder\">"));
+        assert!(rendered.contains("<Directory Id=\"LocalAppDataPrograms\" Name=\"Programs\">"));
+        assert!(!rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
     }
 }
