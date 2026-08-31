@@ -147,6 +147,28 @@ pub(crate) struct WixSettings {
     #[serde(default)]
     #[schemars(with = "Option<String>")]
     pub upgrade_code: Option<uuid::Uuid>,
+    /// MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\Programs`, no
+    /// elevation). `PerMachine` installs under `ProgramFiles` and requires
+    /// elevation.
+    #[serde(default)]
+    pub(crate) install_scope: WixInstallScope,
+}
+
+/// MSI `InstallScope`. Defaults to `PerUser`.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub(crate) enum WixInstallScope {
+    PerMachine,
+    #[default]
+    PerUser,
+}
+
+impl WixInstallScope {
+    pub(crate) fn as_wix_attr(self) -> &'static str {
+        match self {
+            Self::PerMachine => "perMachine",
+            Self::PerUser => "perUser",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
