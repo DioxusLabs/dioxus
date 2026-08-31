@@ -6,3 +6,13 @@ name = "hot_dog"
 [bundle]
 identifier = "com.dioxuslabs"
 publisher = "Dioxus Labs"
+
+# Shared by .deb, .rpm, and AppImage. Format-specific packaging stays under [bundle.*].
+[linux]
+desktop_template = "hotdog.desktop"
+
+[bundle.deb]
+depends = ["libwebkit2gtk-4.1-0"]
+
+[bundle.rpm]
+requires = ["webkit2gtk4.1"]

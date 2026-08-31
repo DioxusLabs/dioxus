@@ -1252,7 +1252,7 @@
       ]
     },
     "LinuxConfig": {
-      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"\ncategories = [\"Utility\"]\ndesktop_template = \"linux.desktop\"\n\n[bundle.deb]\ndepends = [\"libwebkit2gtk-4.1-0\"]\n\n[bundle.rpm]\ndepends = [\"webkit2gtk4.1\"]\n```",
+      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"\ncategories = [\"Utility\"]\ndesktop_template = \"linux.desktop\"\n\n[bundle.deb]\ndepends = [\"libwebkit2gtk-4.1-0\"]\n\n[bundle.rpm]\nrequires = [\"webkit2gtk4.1\"]\n```",
       "type": "object",
       "properties": {
         "categories": {
@@ -2110,16 +2110,6 @@
     "RpmSettings": {
       "type": "object",
       "properties": {
-        "depends": {
-          "description": "RPM package dependencies (`Requires`).",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
         "files": {
           "description": "Extra files to add to the RPM payload.\nMaps the path in the package to the source path (relative to the crate directory).",
           "type": "object",
@@ -2154,6 +2144,16 @@
             "string",
             "null"
           ]
+        },
+        "requires": {
+          "description": "RPM package `Requires`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

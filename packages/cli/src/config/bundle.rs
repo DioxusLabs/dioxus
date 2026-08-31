@@ -96,9 +96,9 @@ pub(crate) struct DebSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct RpmSettings {
-    /// RPM package dependencies (`Requires`).
+    /// RPM package `Requires`.
     #[serde(default)]
-    pub depends: Option<Vec<String>>,
+    pub requires: Option<Vec<String>>,
     /// Extra files to add to the RPM payload.
     /// Maps the path in the package to the source path (relative to the crate directory).
     #[serde(default)]

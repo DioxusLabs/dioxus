@@ -1306,7 +1306,7 @@ pub struct WindowsSignCommand {
 /// depends = ["libwebkit2gtk-4.1-0"]
 ///
 /// [bundle.rpm]
-/// depends = ["webkit2gtk4.1"]
+/// requires = ["webkit2gtk4.1"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxConfig {

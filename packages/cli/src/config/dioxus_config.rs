@@ -199,13 +199,13 @@ mod tests {
     fn bundle_rpm_settings_parse() {
         let source = r#"
             [bundle.rpm]
-            depends = ["libxdo"]
+            requires = ["libxdo"]
             pre_install_script = "rpm-pre.sh"
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         let rpm = config.bundle.rpm.unwrap();
-        assert_eq!(rpm.depends.unwrap(), vec!["libxdo".to_string()]);
+        assert_eq!(rpm.requires.unwrap(), vec!["libxdo".to_string()]);
         assert_eq!(
             rpm.pre_install_script.as_deref(),
             Some(std::path::Path::new("rpm-pre.sh"))
