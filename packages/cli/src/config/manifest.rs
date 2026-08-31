@@ -1298,15 +1298,15 @@ pub struct WindowsSignCommand {
 /// Example:
 /// ```toml
 /// [linux]
-/// identifier = "com.example.myapp.linux"  # Override bundle.identifier for Linux
+/// identifier = "com.example.myapp.linux"
 /// categories = ["Utility"]
-///
 /// desktop_template = "linux.desktop"
 ///
-/// # Debian package settings (previously in [bundle.deb])
-/// [linux.deb]
-/// depends = ["libwebkit2gtk-4.0-37"]
-/// section = "utils"
+/// [bundle.deb]
+/// depends = ["libwebkit2gtk-4.1-0"]
+///
+/// [bundle.rpm]
+/// depends = ["webkit2gtk4.1"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxSettings {

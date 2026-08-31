@@ -1364,7 +1364,7 @@
       }
     },
     "LinuxSettings": {
-      "description": "Linux-specific settings.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\n\ndesktop_template = \"linux.desktop\"\n\n# Debian package settings (previously in [bundle.deb])\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n```",
+      "description": "Linux-specific settings.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"\ncategories = [\"Utility\"]\ndesktop_template = \"linux.desktop\"\n\n[bundle.deb]\ndepends = [\"libwebkit2gtk-4.1-0\"]\n\n[bundle.rpm]\ndepends = [\"webkit2gtk4.1\"]\n```",
       "type": "object",
       "properties": {
         "categories": {
