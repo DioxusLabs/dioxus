@@ -7,7 +7,7 @@ mod windows;
 
 use crate::PackageType;
 use crate::{
-    BuildRequest, DebianSettings, LinuxSettings, MacOsSettings, RpmSettings, WindowsSettings,
+    BuildRequest, DebianSettings, LinuxConfig, MacOsSettings, RpmSettings, WindowsSettings,
 };
 use anyhow::Context;
 use anyhow::Result;
@@ -428,7 +428,7 @@ impl<'a> BundleContext<'a> {
     }
 
     /// Linux settings from config.
-    pub(crate) fn linux(&self) -> &LinuxSettings {
+    pub(crate) fn linux(&self) -> &LinuxConfig {
         &self.build.config.linux
     }
 

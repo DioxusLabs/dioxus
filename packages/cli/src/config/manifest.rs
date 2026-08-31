@@ -1293,7 +1293,7 @@ pub struct WindowsSignCommand {
 // Linux Configuration
 // ============================================================================
 
-/// Linux-specific settings.
+/// Linux-specific configuration.
 ///
 /// Example:
 /// ```toml
@@ -1309,7 +1309,7 @@ pub struct WindowsSignCommand {
 /// depends = ["webkit2gtk4.1"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub struct LinuxSettings {
+pub struct LinuxConfig {
     // === Bundle settings (override [bundle] section) ===
     /// The app's identifier (e.g., "com.example.myapp").
     /// Overrides `bundle.identifier` for Linux builds.
@@ -1771,7 +1771,7 @@ mod tests {
         assert!(json.contains("AndroidConfig"));
         assert!(json.contains("MacosConfig"));
         assert!(json.contains("WindowsConfig"));
-        assert!(json.contains("LinuxSettings"));
+        assert!(json.contains("LinuxConfig"));
 
         // Verify some specific properties exist
         assert!(json.contains("location"));
