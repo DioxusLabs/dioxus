@@ -1283,17 +1283,6 @@
             "type": "string"
           }
         },
-        "deb": {
-          "description": "Debian-specific package settings.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LinuxDebSettings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "desktop_template": {
           "description": "Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
           "type": [
@@ -1365,118 +1354,6 @@
         },
         "short_description": {
           "description": "Short description.\nOverrides `bundle.short_description` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
-    "LinuxDebSettings": {
-      "description": "Debian package settings.",
-      "type": "object",
-      "properties": {
-        "changelog": {
-          "description": "Path to changelog file.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "conflicts": {
-          "description": "Package conflicts.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "depends": {
-          "description": "Package dependencies.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "files": {
-          "description": "Additional files to include. Maps package path to source path.",
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "post_install_script": {
-          "description": "Post-install script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "post_remove_script": {
-          "description": "Post-remove script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_install_script": {
-          "description": "Pre-install script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_remove_script": {
-          "description": "Pre-remove script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "priority": {
-          "description": "Package priority (\"required\", \"important\", \"standard\", \"optional\", \"extra\").",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "provides": {
-          "description": "Packages this provides.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "recommends": {
-          "description": "Recommended packages.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "replaces": {
-          "description": "Packages this replaces.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "section": {
-          "description": "Debian section (e.g., \"utils\", \"web\").",
           "type": [
             "string",
             "null"
