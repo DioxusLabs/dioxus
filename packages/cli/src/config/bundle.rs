@@ -24,7 +24,7 @@ pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) external_bin: Option<Vec<String>>,
     #[serde(default)]
-    pub(crate) deb: Option<DebianSettings>,
+    pub(crate) deb: Option<DebSettings>,
     #[serde(default)]
     pub(crate) rpm: Option<RpmSettings>,
     #[serde(default)]
@@ -44,7 +44,7 @@ pub(crate) struct BundleConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub(crate) struct DebianSettings {
+pub(crate) struct DebSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     #[serde(default)]

@@ -640,7 +640,7 @@
         "deb": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DebianSettings"
+              "$ref": "#/$defs/DebSettings"
             },
             {
               "type": "null"
@@ -818,7 +818,7 @@
         "args"
       ]
     },
-    "DebianSettings": {
+    "DebSettings": {
       "type": "object",
       "properties": {
         "changelog": {
