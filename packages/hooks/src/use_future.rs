@@ -95,7 +95,7 @@ pub enum UseFutureState {
     /// The future has been forcefully stopped
     Stopped,
 
-    /// The future has been paused, tempoarily
+    /// The future has been paused, temporarily
     Paused,
 
     /// The future has completed

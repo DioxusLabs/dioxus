@@ -156,7 +156,7 @@ pub enum UseResourceState {
     /// The resource's future has been forcefully stopped
     Stopped,
 
-    /// The resource's future has been paused, tempoarily
+    /// The resource's future has been paused, temporarily
     Paused,
 
     /// The resource's future has completed

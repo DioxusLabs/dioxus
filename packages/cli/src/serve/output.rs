@@ -139,7 +139,7 @@ impl Output {
     /// Enable raw mode, but don't let it block forever.
     ///
     /// This lets us check if writing to tty is going to block forever and then recover, allowing
-    /// interopability with programs like `bg`.
+    /// interoperability with programs like `bg`.
     fn enable_raw_mode() -> Result<()> {
         #[cfg(unix)]
         {
