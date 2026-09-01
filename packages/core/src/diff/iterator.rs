@@ -403,47 +403,52 @@ impl DiffState<'_, '_, '_, '_> {
             }
         }
 
-        let stable_edges = StableFragmentEdges::new(new, &new_mounts, &anchorable, self.dom);
-        for range in plan.placement_runs(&stable_edges.live_stable) {
-            let context = self.context();
-            let runtime = self.dom.runtime.clone();
-            let dom = &mut *self.dom;
-            let mut replaced_nodes = Vec::new();
-            if let Some(to) = self.to.as_deref_mut() {
-                let site = stable_edges
-                    .next_first(range.end)
-                    .map(InsertionSite::before)
-                    .or_else(|| {
-                        stable_edges
-                            .prev_last(range.start)
-                            .map(InsertionSite::after)
-                    })
-                    .or(fallback_site)
-                    .expect("visible fragment placement requires a fallback insertion site");
-                site.create_and_place_with_result(to, runtime, |to| {
-                    let mut state = DiffState::new_with_context(dom, Some(to), context);
-                    let nodes = state.create_or_diff_placed_range(
+        // `placement_runs` only opens a run on a `!stable` child, so when every child is
+        // stable there is nothing to place and the stable edges are never read. Skip the
+        // two per-child element scans `StableFragmentEdges::new` would otherwise perform.
+        if plan.stable.iter().any(|stable| !stable) {
+            let stable_edges = StableFragmentEdges::new(new, &new_mounts, &anchorable, self.dom);
+            for range in plan.placement_runs(&stable_edges.live_stable) {
+                let context = self.context();
+                let runtime = self.dom.runtime.clone();
+                let dom = &mut *self.dom;
+                let mut replaced_nodes = Vec::new();
+                if let Some(to) = self.to.as_deref_mut() {
+                    let site = stable_edges
+                        .next_first(range.end)
+                        .map(InsertionSite::before)
+                        .or_else(|| {
+                            stable_edges
+                                .prev_last(range.start)
+                                .map(InsertionSite::after)
+                        })
+                        .or(fallback_site)
+                        .expect("visible fragment placement requires a fallback insertion site");
+                    site.create_and_place_with_result(to, runtime, |to| {
+                        let mut state = DiffState::new_with_context(dom, Some(to), context);
+                        let nodes = state.create_or_diff_placed_range(
+                            &inputs,
+                            &plan,
+                            range.clone(),
+                            &mut new_mounts,
+                            &mut replaced_nodes,
+                        );
+                        (nodes, nodes)
+                    });
+                } else {
+                    let mut state = DiffState::new_with_context(dom, None, context);
+                    state.create_or_diff_placed_range(
                         &inputs,
                         &plan,
                         range.clone(),
                         &mut new_mounts,
                         &mut replaced_nodes,
                     );
-                    (nodes, nodes)
-                });
-            } else {
-                let mut state = DiffState::new_with_context(dom, None, context);
-                state.create_or_diff_placed_range(
-                    &inputs,
-                    &plan,
-                    range.clone(),
-                    &mut new_mounts,
-                    &mut replaced_nodes,
-                );
-            }
+                }
 
-            for (node, mount) in replaced_nodes.into_iter().rev() {
-                node.remove_node(mount, self.dom, self.to.as_deref_mut());
+                for (node, mount) in replaced_nodes.into_iter().rev() {
+                    node.remove_node(mount, self.dom, self.to.as_deref_mut());
+                }
             }
         }
 
