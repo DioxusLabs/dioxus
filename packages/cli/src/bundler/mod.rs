@@ -6,7 +6,7 @@ mod updater;
 mod windows;
 
 use crate::PackageType;
-use crate::{BuildRequest, DebianSettings, MacOsSettings, WindowsSettings};
+use crate::{BuildRequest, DebSettings, LinuxConfig, MacOsSettings, RpmSettings, WindowsSettings};
 use anyhow::Context;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -415,9 +415,19 @@ impl<'a> BundleContext<'a> {
         self.build.crate_dir()
     }
 
-    /// Debian settings from config.
-    pub(crate) fn deb(&self) -> DebianSettings {
+    /// Deb settings from config.
+    pub(crate) fn deb(&self) -> DebSettings {
         self.build.config.bundle.deb.clone().unwrap_or_default()
+    }
+
+    /// RPM settings from config.
+    pub(crate) fn rpm(&self) -> RpmSettings {
+        self.build.config.bundle.rpm.clone().unwrap_or_default()
+    }
+
+    /// Linux settings from config.
+    pub(crate) fn linux(&self) -> &LinuxConfig {
+        &self.build.config.linux
     }
 
     /// macOS settings from config.
