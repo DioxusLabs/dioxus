@@ -51,6 +51,16 @@ pub enum ImageSize {
         /// The height of the image in pixels
         height: u32,
     },
+    /// Only the width is specified; the height will be derived from the image's aspect ratio
+    WidthOnly {
+        /// The width of the image in pixels
+        width: u32,
+    },
+    /// Only the height is specified; the width will be derived from the image's aspect ratio
+    HeightOnly {
+        /// The height of the image in pixels
+        height: u32,
+    },
     /// The size will be automatically determined from the image source
     Automatic,
 }
@@ -222,6 +232,36 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
     /// ```
     pub const fn with_size(mut self, size: ImageSize) -> Self {
         self.variant.size = size;
+        self
+    }
+
+    /// Sets the width of the image and derives the height from the aspect ratio
+    ///
+    /// This is useful when you want to resize an image to a specific width but maintain
+    /// its original aspect ratio. The height will be computed at build time from the
+    /// actual image dimensions.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_width(52));
+    /// ```
+    pub const fn with_width(mut self, width: u32) -> Self {
+        self.variant.size = ImageSize::WidthOnly { width };
+        self
+    }
+
+    /// Sets the height of the image and derives the width from the aspect ratio
+    ///
+    /// This is useful when you want to resize an image to a specific height but maintain
+    /// its original aspect ratio. The width will be computed at build time from the
+    /// actual image dimensions.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_height(52));
+    /// ```
+    pub const fn with_height(mut self, height: u32) -> Self {
+        self.variant.size = ImageSize::HeightOnly { height };
         self
     }
 
