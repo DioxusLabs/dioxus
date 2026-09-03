@@ -27,7 +27,7 @@ use wasmparser::{
 };
 
 #[cfg(test)]
-#[path = "patch_tests.rs"]
+#[path = "../../tests/unit/patch.rs"]
 mod tests;
 
 type Result<T, E = PatchError> = std::result::Result<T, E>;
