@@ -270,14 +270,17 @@ pub fn call<O>(mut f: impl FnMut() -> O) -> O {
     }
 }
 
-// We use an AtomicPtr with a leaked JumpTable and Relaxed ordering to give us a global jump table
-// with very little overhead. Reading this amounts of a Relaxed atomic load which basically
+// We use an AtomicPtr with a leaked JumpTable and release/acquire ordering for a global jump table
+// with very little overhead. Reading this amounts to an acquire atomic load which basically
 // is no overhead. We might want to look into using a thread_local with a stop-the-world approach
 // just in case multiple threads try to call the jump table before synchronization with the runtime.
 // For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on
 // multithreading, it might become an issue.
 static APP_JUMP_TABLE: AtomicPtr<JumpTable> = AtomicPtr::new(std::ptr::null_mut());
 static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
+
+#[cfg(target_arch = "wasm32")]
+static PATCH_GENERATION: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Register a function that will be called whenever a patch is applied.
 ///
@@ -298,7 +301,7 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 ///
 /// You should only use this lifetime in temporary contexts - not *across* hotpatches!
 pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
-    let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Relaxed);
+    let ptr = APP_JUMP_TABLE.load(std::sync::atomic::Ordering::Acquire);
     if ptr.is_null() {
         return None;
     }
@@ -308,16 +311,12 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
-        std::sync::atomic::Ordering::Relaxed,
+        std::sync::atomic::Ordering::Release,
     );
-    HOTRELOAD_HANDLERS
-        .lock()
-        .unwrap()
-        .clone()
-        .iter()
-        .for_each(|handler| {
-            handler();
-        });
+    let handlers = HOTRELOAD_HANDLERS.lock().unwrap().clone();
+    handlers.iter().for_each(|handler| {
+        handler();
+    });
 }
 
 /// A panic issued by the [`call`] function if the caller would be stale if called. This causes
@@ -513,7 +512,12 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
 
         // Use the `main` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that we can use to base the executable.
-        let old_offset = aslr_reference() - table.aslr_reference as usize;
+        let old_offset = aslr_reference()
+            .checked_sub(
+                usize::try_from(table.aslr_reference)
+                    .map_err(|_| PatchError::InvalidJumpTable("Base address overflows".into()))?,
+            )
+            .ok_or_else(|| PatchError::InvalidJumpTable("Invalid ASLR reference".into()))?;
 
         // Use the `main` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -523,12 +527,20 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             //
             // This code currently assumes "main" always makes it to the export list (which it should)
             // and requires coordination from the CLI to export it.
-            lib.get::<*const ()>(b"main")
-                .ok()
-                .unwrap()
+            let main = lib
+                .get::<*const ()>(b"main")
+                .map_err(|err| PatchError::Dlopen(err.to_string()))?;
+            let address = main
                 .try_as_raw_ptr()
-                .unwrap()
-                .wrapping_byte_sub(table.new_base_address as usize) as usize
+                .ok_or_else(|| PatchError::InvalidJumpTable("Missing patch entrypoint".into()))?
+                as usize;
+            address
+                .checked_sub(
+                    usize::try_from(table.new_base_address).map_err(|_| {
+                        PatchError::InvalidJumpTable("Patch address overflows".into())
+                    })?,
+                )
+                .ok_or_else(|| PatchError::InvalidJumpTable("Invalid patch base address".into()))?
         };
 
         // Modify the jump table to be relative to the base address of the loaded library
@@ -536,17 +548,40 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .map
             .iter()
             .map(|(k, v)| {
-                (
-                    (*k as usize + old_offset) as u64,
-                    (*v as usize + new_offset) as u64,
-                )
+                let old = k
+                    .checked_add(old_offset as u64)
+                    .filter(|v| usize::try_from(*v).is_ok())
+                    .ok_or_else(|| {
+                        PatchError::InvalidJumpTable("Old function address overflows".into())
+                    })?;
+                let new = v
+                    .checked_add(new_offset as u64)
+                    .filter(|v| usize::try_from(*v).is_ok())
+                    .ok_or_else(|| {
+                        PatchError::InvalidJumpTable("New function address overflows".into())
+                    })?;
+                Ok((old, new))
             })
-            .collect();
+            .collect::<Result<_, PatchError>>()?;
 
         unsafe { commit_patch(table) };
     };
 
     // On wasm, we need to download the module, compile it, and then run it.
+    #[cfg(target_arch = "wasm32")]
+    let layout = table.wasm_layout.ok_or_else(|| {
+        PatchError::InvalidJumpTable(
+            "Missing WASM memory layout; rebuild with the current CLI".into(),
+        )
+    })?;
+    #[cfg(target_arch = "wasm32")]
+    let (patch_pages, patch_slots) = layout
+        .reservation()
+        .ok_or_else(|| PatchError::InvalidJumpTable("WASM allocation overflows".into()))?;
+    #[cfg(target_arch = "wasm32")]
+    let generation = PATCH_GENERATION
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .wrapping_add(1);
     #[cfg(target_arch = "wasm32")]
     wasm_bindgen_futures::spawn_local(async move {
         use js_sys::{
@@ -619,21 +654,33 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         //    value instead.
         //  * Cancellation between grow and `commit_patch` leaks memory
         //    pages and table slots, but doesn't corrupt anything.
-        const PAGE_SIZE: u32 = 64 * 1024;
-        let patch_pages = (dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32 + 1;
+        if PATCH_GENERATION.load(std::sync::atomic::Ordering::Relaxed) != generation {
+            return;
+        }
 
         // Use grow's return value (the prior page count) to derive
         // memory_base. Atomic w.r.t. concurrent grows, unlike reading
         // memory.buffer().byteLength().
         let prev_pages = memory.grow(patch_pages);
-        let memory_base = (prev_pages + 1) * PAGE_SIZE;
+        let memory_base = layout
+            .memory_base(prev_pages)
+            .expect("WASM memory base overflows");
 
-        // grow returns the prior table length, which is __table_base.
-        let table_base = funcs.grow(table.ifunc_count as u32).unwrap();
+        // grow returns the prior table length, from which we align __table_base.
+        let table_base = layout
+            .table_base(funcs.grow(patch_slots).unwrap())
+            .expect("WASM table base overflows");
 
         // Rebase the jump table entries onto the patch's table slot range.
         for v in table.map.values_mut() {
-            *v += table_base as u64;
+            assert!(
+                *v < u64::from(layout.table_size),
+                "Patch function exceeds its table allocation"
+            );
+            *v = u64::from(table_base)
+                .checked_add(*v)
+                .filter(|v| *v <= u64::from(u32::MAX))
+                .expect("WASM function address overflows");
         }
 
         // Build the env import object: copy every host export through and
@@ -663,6 +710,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .await
             .unwrap()
             .unchecked_into();
+        if PATCH_GENERATION.load(std::sync::atomic::Ordering::Relaxed) != generation {
+            return;
+        }
         let inst_exports: Object = instance.exports();
 
         // Run the patch's relocation thunks and constructors. Order
@@ -677,14 +727,19 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             "__wasm_apply_global_relocs",
             "__wasm_call_ctors",
         ] {
-            if let Ok(val) = Reflect::get(&inst_exports, &func_name.into()) {
-                if let Ok(func) = val.dyn_into::<js_sys::Function>() {
-                    _ = func.call0(&JsValue::undefined());
-                }
+            let val = Reflect::get(&inst_exports, &func_name.into()).unwrap();
+            if !val.is_undefined() {
+                let func = val
+                    .dyn_into::<js_sys::Function>()
+                    .expect("Patch initializer is not a function");
+                func.call0(&JsValue::undefined())
+                    .expect("Patch initialization failed");
             }
         }
 
-        unsafe { commit_patch(table) };
+        if PATCH_GENERATION.load(std::sync::atomic::Ordering::Relaxed) == generation {
+            unsafe { commit_patch(table) };
+        }
     });
 
     Ok(())
@@ -702,6 +757,9 @@ pub enum PatchError {
     /// The patch failed to apply on Android, most likely due to a permissions issue.
     #[error("Failed to load library on Android: {0}")]
     AndroidMemfd(String),
+
+    #[error("Invalid jump table: {0}")]
+    InvalidJumpTable(String),
 }
 
 /// This function returns the address of the main function in the current executable. This is used as
@@ -719,19 +777,15 @@ pub fn aslr_reference() -> usize {
 
     #[cfg(not(target_family = "wasm"))]
     unsafe {
-        use std::ffi::c_void;
+        // The first call to this function should occur in the main executable.
+        static MAIN_PTR: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 
-        // The first call to this function should occur in the
-        static mut MAIN_PTR: *mut c_void = std::ptr::null_mut();
-
-        if MAIN_PTR.is_null() {
+        *MAIN_PTR.get_or_init(|| {
             #[cfg(unix)]
-            {
-                MAIN_PTR = libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _);
-            }
+            let pointer = libc::dlsym(libc::RTLD_DEFAULT, c"main".as_ptr() as _);
 
             #[cfg(windows)]
-            {
+            let pointer = {
                 unsafe extern "system" {
                     fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
                     fn GetProcAddress(
@@ -740,12 +794,10 @@ pub fn aslr_reference() -> usize {
                     ) -> *mut std::ffi::c_void;
                 }
 
-                MAIN_PTR =
-                    GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _) as _;
-            }
-        }
-
-        MAIN_PTR as usize
+                GetProcAddress(GetModuleHandleA(std::ptr::null()), c"main".as_ptr() as _)
+            };
+            pointer as usize
+        })
     }
 }
 
@@ -957,3 +1009,35 @@ impl_hot_function!(
     (Fn8Marker, A, B, C, D, E, F, G, H),
     (Fn9Marker, A, B, C, D, E, F, G, H, I)
 );
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn publishing_a_patch_releases_the_handler_lock() {
+        let handler = Arc::new(|| {
+            assert!(HOTRELOAD_HANDLERS.try_lock().is_ok());
+            register_handler(Arc::new(|| {}));
+        });
+        register_handler(handler);
+        let mut map = subsecond_types::AddressMap::default();
+        map.insert(1, 2);
+        unsafe {
+            commit_patch(JumpTable {
+                lib: "test".into(),
+                map,
+                aslr_reference: 0,
+                new_base_address: 0,
+                ifunc_count: 0,
+                wasm_layout: None,
+            })
+        };
+        std::thread::spawn(|| {
+            assert_eq!(unsafe { get_jump_table() }.unwrap().map.get(&1), Some(&2));
+        })
+        .join()
+        .unwrap();
+        HOTRELOAD_HANDLERS.lock().unwrap().clear();
+    }
+}
