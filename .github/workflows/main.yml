@@ -354,15 +354,22 @@ jobs:
           cache-provider: "warpbuild"
           workspaces: ${{ env.DIOXUS_WORKSPACE }}
           # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('packages/playwright-tests/package-lock.json') }}
+      - name: Install npm dependencies
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
+        run: npx playwright install chromium
       - name: Playwright
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
         env:
           CARGO_INCREMENTAL: 1
-        run: |
-          npm ci
-          npm install -D @playwright/test
-          npx playwright install
-          npx playwright test
+        run: npx playwright test
       # - name: Clean Windows artifacts before cache save
       #   if: always()
       #   shell: pwsh
@@ -415,20 +422,27 @@ jobs:
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/ms-playwright' || '~/Library/Caches/ms-playwright' }}
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('packages/playwright-tests/package-lock.json') }}
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |
           rm -rf ./target/dx
+      - name: Install npm dependencies
+        working-directory: ./packages/playwright-tests
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: ./packages/playwright-tests
+        run: npx playwright install chromium
       - name: Playwright
         working-directory: ./packages/playwright-tests
         env:
           # The hot patch test requires incremental compilation
           CARGO_INCREMENTAL: 1
-        run: |
-          npm ci
-          npm install -D @playwright/test
-          npx playwright install
-          npx playwright test
+        run: npx playwright test
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
