@@ -20,10 +20,6 @@ type CustomEventHandler = Box<
         ),
 >;
 
-/// A function taking a URL and returning whether the webview should navigate to it or open it in
-/// the browser. If missing in the config, all URLs will be allowed.
-type NavigationHandler = Box<dyn Fn(&str) -> bool + 'static>;
-
 /// The closing behaviour of specific application window.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
@@ -78,12 +74,12 @@ pub struct WindowConfig {
     pub(crate) data_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
+    pub(crate) initialization_scripts: Vec<(String, bool)>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) disable_file_drop_handler: bool,
     pub(crate) additional_windows_args: Option<String>,
-    pub(crate) navigation_handler: Option<NavigationHandler>,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
@@ -115,13 +111,13 @@ impl WindowConfig {
             data_dir: None,
             custom_head: None,
             custom_index: None,
+            initialization_scripts: Vec::new(),
             root_name: "main".to_string(),
             background_color: None,
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             disable_file_drop_handler: false,
             on_window: None,
             additional_windows_args: None,
-            navigation_handler: None,
         }
     }
 
@@ -257,6 +253,19 @@ impl WindowConfig {
         self
     }
 
+    /// Inject JavaScript when each document is created.
+    ///
+    /// When `for_main_only` is false, the script is also injected into child frames.
+    pub fn with_initialization_script_for_main_only(
+        mut self,
+        script: impl Into<String>,
+        for_main_only: bool,
+    ) -> Self {
+        self.initialization_scripts
+            .push((script.into(), for_main_only));
+        self
+    }
+
     /// Set the name of the element that Dioxus will use as the root.
     ///
     /// This is akin to calling React.render() on the element with the specified name.
@@ -301,13 +310,6 @@ impl WindowConfig {
     /// Add additional windows only launch arguments for webview2
     pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
         self.additional_windows_args = Some(additional_args.to_string());
-        self
-    }
-
-    /// Set a custom navigation handler for non-dioxus URLs.
-    /// Return true to allow navigation inside the webview, false to block.
-    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
-        self.navigation_handler = Some(Box::new(f));
         self
     }
 }
@@ -414,7 +416,6 @@ impl Config {
         self.tray_icon_show_window_on_click = show;
         self
     }
-
     /// set the directory from which assets will be searched in release mode
     pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.window = self.window.with_resource_directory(path);
@@ -534,12 +535,6 @@ impl Config {
     /// Add additional windows only launch arguments for webview2
     pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
         self.window = self.window.with_windows_browser_args(additional_args);
-        self
-    }
-
-    /// Set a custom navigation handler for non-dioxus URLs.
-    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
-        self.window = self.window.with_navigation_handler(f);
         self
     }
 }
