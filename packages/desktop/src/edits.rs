@@ -373,17 +373,24 @@ impl EditWebsocket {
                 }
 
                 // Wait for the webview to apply the edits
-                while let Ok(ws_msg) = websocket.read() {
-                    match ws_msg {
+                loop {
+                    match websocket.read() {
                         // We expect the webview to send a binary message when it has applied the edits
                         // This is a signal that we can continue processing
-                        tungstenite::Message::Binary(_) => break,
+                        Ok(tungstenite::Message::Binary(_)) => break,
                         // If the websocket closes, switch back to the pending state and
                         // re-queue the edits that haven't been acknowledged yet
-                        tungstenite::Message::Close(_) => {
+                        Ok(tungstenite::Message::Close(_)) => {
                             break 'connection;
                         }
-                        _ => {}
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::error!(
+                                "Error reading edit ack from webview {}: {e}",
+                                location.webview_id
+                            );
+                            break 'connection;
+                        }
                     }
                 }
 

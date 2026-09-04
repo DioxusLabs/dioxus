@@ -176,7 +176,12 @@ impl WebServer {
                     Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
                     _ => {
                         drop(new_message);
-                        _ = self.hot_reload_sockets.remove(idx);
+                        let socket = self.hot_reload_sockets.remove(idx);
+                        tracing::warn!(
+                            "Devtools websocket disconnected (build_id: {:?}, pid: {:?}) - this client will no longer receive hot-reloads or hot-patches",
+                            socket.build_id,
+                            socket.pid
+                        );
                     }
                 }
             }
@@ -305,6 +310,19 @@ impl WebServer {
         build: BuildId,
         for_pid: Option<u32>,
     ) {
+        if jump_table.map.is_empty() {
+            tracing::warn!(
+                "Hot-patch jump table for {build:?} is empty - the patch will have no effect. \
+                This usually means no symbols in the patch matched the running binary."
+            );
+        } else {
+            tracing::debug!(
+                "Sending hot-patch for {build:?} with {} jump table entries to {} connected client(s)",
+                jump_table.map.len(),
+                self.hot_reload_sockets.len()
+            );
+        }
+
         let msg = DevserverMsg::HotReload(HotReloadMsg {
             jump_table: Some(jump_table),
             ms_elapsed: time_taken.as_millis() as u64,
@@ -351,10 +369,17 @@ impl WebServer {
     /// Sends a devserver message to all connected clients.
     async fn send_devserver_message_to_all(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
-            _ = socket
+            if let Err(err) = socket
                 .socket
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
-                .await;
+                .await
+            {
+                tracing::warn!(
+                    "Failed to send devserver message to client (build_id: {:?}, pid: {:?}): {err}",
+                    socket.build_id,
+                    socket.pid
+                );
+            }
         }
     }
 
