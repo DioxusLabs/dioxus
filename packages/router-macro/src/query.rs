@@ -39,10 +39,17 @@ impl QuerySegment {
             QuerySegment::Single(segment) => segment.write(),
             QuerySegment::Segments(segments) => {
                 let mut tokens = TokenStream2::new();
-                tokens.extend(quote! { write!(f, "?")?; });
-                for (i, segment) in segments.iter().enumerate() {
-                    tokens.extend(segment.write(i == segments.len() - 1));
+                // Buffer the pairs so the `?` (and each joining `&`) is only
+                // written when something actually follows it.
+                tokens.extend(quote! { let mut __query_string = String::new(); });
+                for segment in segments {
+                    tokens.extend(segment.write());
                 }
+                tokens.extend(quote! {
+                    if !__query_string.is_empty() {
+                        write!(f, "?{}", __query_string)?;
+                    }
+                });
                 tokens
             }
         }
@@ -129,7 +136,9 @@ impl FullQuerySegment {
         quote! {
             {
                 let as_string = #ident.to_string();
-                write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                if !as_string.is_empty() {
+                    write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                }
             }
         }
     }
@@ -156,18 +165,17 @@ impl QueryArgument {
         }
     }
 
-    pub fn write(&self, trailing: bool) -> TokenStream2 {
+    pub fn write(&self) -> TokenStream2 {
         let ident = &self.ident;
-        let write_ampersand = if !trailing {
-            quote! { if !as_string.is_empty() { write!(f, "&")?; } }
-        } else {
-            quote! {}
-        };
         quote! {
             {
                 let as_string = dioxus_router::routable::DisplayQueryArgument::new(stringify!(#ident), #ident).to_string();
-                write!(f, "{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
-                #write_ampersand
+                if !as_string.is_empty() {
+                    if !__query_string.is_empty() {
+                        __query_string.push('&');
+                    }
+                    __query_string.push_str(&dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET).to_string());
+                }
             }
         }
     }
