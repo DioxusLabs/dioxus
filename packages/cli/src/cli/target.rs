@@ -162,6 +162,22 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) wasm_js_cfg: bool,
 
+    /// The Android `versionCode` to stamp into the generated Gradle project.
+    ///
+    /// Must be between 1 and 2100000000 (the Google Play Store maximum). Overrides
+    /// `[android] version_code` in Dioxus.toml. If neither is set, the version code is
+    /// derived from the crate version as `major * 1000000 + minor * 1000 + patch`.
+    #[clap(long, env = "DX_ANDROID_VERSION_CODE", help_heading = HELP_HEADING)]
+    pub(crate) version_code: Option<u32>,
+
+    /// The bundle version (CFBundleVersion) to stamp into the Info.plist of iOS and macOS bundles.
+    ///
+    /// This is the machine-readable build number that must increase with every upload to
+    /// App Store Connect. Overrides `[ios] bundle_version` / `[macos] bundle_version` in
+    /// Dioxus.toml. Defaults to the crate version.
+    #[clap(long, env = "DX_BUNDLE_VERSION", help_heading = HELP_HEADING)]
+    pub(crate) bundle_version: Option<String>,
+
     /// The Windows subsystem to use when building for Windows targets. This can be either `CONSOLE` or `WINDOWS`.
     ///
     /// By default, DX uses `WINDOWS` since it assumes a GUI application, but you can override this behavior with this flag.
@@ -200,6 +216,8 @@ impl Anonymized for TargetArgs {
             "debug_symbols": self.debug_symbols,
             "keep_names": self.keep_names,
             "device": self.device,
+            "version_code": self.version_code,
+            "bundle_version": self.bundle_version.is_some(),
             "base_path": self.base_path.is_some(),
             "cargo_args": self.cargo_args.is_some(),
             "rustc_args": self.rustc_args.is_some(),
