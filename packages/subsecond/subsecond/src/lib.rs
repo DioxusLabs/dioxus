@@ -569,16 +569,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
 
     // On wasm, we need to download the module, compile it, and then run it.
     #[cfg(target_arch = "wasm32")]
-    let layout = table.wasm_layout.ok_or_else(|| {
-        PatchError::InvalidJumpTable(
-            "Missing WASM memory layout; rebuild with the current CLI".into(),
-        )
-    })?;
-    #[cfg(target_arch = "wasm32")]
-    let (patch_pages, patch_slots) = layout
-        .reservation()
-        .ok_or_else(|| PatchError::InvalidJumpTable("WASM allocation overflows".into()))?;
-    #[cfg(target_arch = "wasm32")]
     let generation = PATCH_GENERATION
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         .wrapping_add(1);
@@ -658,29 +648,21 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             return;
         }
 
+        const PAGE_SIZE: u32 = 64 * 1024;
+        let patch_pages = (dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32 + 1;
+
         // Use grow's return value (the prior page count) to derive
         // memory_base. Atomic w.r.t. concurrent grows, unlike reading
         // memory.buffer().byteLength().
         let prev_pages = memory.grow(patch_pages);
-        let memory_base = layout
-            .memory_base(prev_pages)
-            .expect("WASM memory base overflows");
+        let memory_base = (prev_pages + 1) * PAGE_SIZE;
 
-        // grow returns the prior table length, from which we align __table_base.
-        let table_base = layout
-            .table_base(funcs.grow(patch_slots).unwrap())
-            .expect("WASM table base overflows");
+        // grow returns the prior table length, which is __table_base.
+        let table_base = funcs.grow(table.ifunc_count as u32).unwrap();
 
         // Rebase the jump table entries onto the patch's table slot range.
         for v in table.map.values_mut() {
-            assert!(
-                *v < u64::from(layout.table_size),
-                "Patch function exceeds its table allocation"
-            );
-            *v = u64::from(table_base)
-                .checked_add(*v)
-                .filter(|v| *v <= u64::from(u32::MAX))
-                .expect("WASM function address overflows");
+            *v += table_base as u64;
         }
 
         // Build the env import object: copy every host export through and
@@ -1030,7 +1012,6 @@ mod tests {
                 aslr_reference: 0,
                 new_base_address: 0,
                 ifunc_count: 0,
-                wasm_layout: None,
             })
         };
         std::thread::spawn(|| {

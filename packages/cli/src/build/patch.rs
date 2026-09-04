@@ -15,7 +15,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
-use subsecond_types::{AddressMap, JumpTable, WasmPatchLayout};
+use subsecond_types::{AddressMap, JumpTable};
 use target_lexicon::{Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 use walrus::{
@@ -442,7 +442,6 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
-        wasm_layout: None,
     })
 }
 
@@ -509,7 +508,6 @@ pub fn create_native_jump_table(
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
-        wasm_layout: None,
     })
 }
 
@@ -817,14 +815,13 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
-    let wasm_layout = wasm_patch_layout(&new, &new_bytes)?;
 
     // And now assemble the jump table by mapping the old ifunc table to the new one, by name
     //
     // The ifunc_count will be passed to the dynamic loader so it can allocate the right amount of space
     // in the indirect function table when loading the patch.
     let name_to_ifunc_new = collect_func_ifuncs(&new);
-    let ifunc_count = u64::from(wasm_layout.table_size);
+    let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
         // Find the corresponding ifunc in the old module by name
@@ -841,89 +838,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         ifunc_count,
         aslr_reference: 0,
         new_base_address: 0,
-        wasm_layout: Some(wasm_layout),
     })
-}
-
-fn wasm_patch_layout(module: &Module, bytes: &[u8]) -> Result<WasmPatchLayout> {
-    use wasmparser::{Dylink0SectionReader, Dylink0Subsection};
-    let mut metadata = None;
-    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
-        if let Payload::CustomSection(section) = payload?
-            && section.name() == "dylink.0"
-        {
-            for subsection in
-                Dylink0SectionReader::new(BinaryReader::new(section.data(), section.data_offset()))
-            {
-                if let Dylink0Subsection::MemInfo(info) = subsection? {
-                    if metadata.is_some() {
-                        return Err(PatchError::InvalidModule(
-                            "Duplicate WASM memory metadata".into(),
-                        ));
-                    }
-                    metadata = Some(WasmPatchLayout {
-                        memory_size: info.memory_size,
-                        memory_alignment: info.memory_alignment,
-                        table_size: info.table_size,
-                        table_alignment: info.table_alignment,
-                    });
-                }
-            }
-        }
-    }
-    if metadata.is_none()
-        && (module.data.iter().next().is_some() || module.memories.iter().next().is_some())
-    {
-        return Err(PatchError::InvalidModule(
-            "Missing dylink.0 memory layout; rebuild required".into(),
-        ));
-    }
-    let mut layout = metadata.unwrap_or_default();
-    let is_base = |global, name| {
-        module.imports.iter().any(|i| {
-            i.module == "env"
-                && i.name == name
-                && matches!(i.kind, ImportKind::Global(id) if id == global)
-        })
-    };
-    for element in module.elements.iter() {
-        let ElementKind::Active { table, offset } = element.kind else {
-            continue;
-        };
-        let is_shared_table = module.imports.iter().any(|i| {
-            i.module == "env"
-                && i.name == "__indirect_function_table"
-                && matches!(i.kind, ImportKind::Table(id) if id == table)
-        });
-        if !is_shared_table || !matches!(offset, ConstExpr::Global(g) if is_base(g, "__table_base"))
-        {
-            return Err(PatchError::InvalidModule(
-                "Patch element segment is not relative to __table_base".into(),
-            ));
-        }
-        let count = match &element.items {
-            ElementItems::Functions(items) => items.len(),
-            ElementItems::Expressions(_, items) => items.len(),
-        };
-        layout.table_size = layout
-            .table_size
-            .max(u32::try_from(count).context("WASM table size overflows")?);
-    }
-    for data in module.data.iter() {
-        if let DataKind::Active { offset, .. } = data.kind {
-            if !matches!(offset, ConstExpr::Global(g) if is_base(g, "__memory_base"))
-                || data.value.len() as u64 > u64::from(layout.memory_size)
-            {
-                return Err(PatchError::InvalidModule(
-                    "Patch data segment exceeds its relocatable memory layout".into(),
-                ));
-            }
-        }
-    }
-    layout
-        .reservation()
-        .context("WASM patch allocation overflows")?;
-    Ok(layout)
 }
 
 fn convert_func_to_ifunc_call(
