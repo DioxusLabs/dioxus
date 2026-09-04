@@ -221,3 +221,38 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+#[test]
+fn segmented_query_values_round_trip_reserved_characters() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[route("/search?:query&:sort")]
+        Search { query: String, sort: String },
+    }
+
+    #[component]
+    fn Search(query: String, sort: String) -> Element {
+        unimplemented!()
+    }
+
+    for (query, encoded) in [
+        ("one & two", "/search?query=one%20%26%20two&sort=name"),
+        ("%26", "/search?query=%2526&sort=name"),
+        ("a=b", "/search?query=a=b&sort=name"),
+    ] {
+        let route = Route::Search {
+            query: query.to_string(),
+            sort: "name".to_string(),
+        };
+        assert_eq!(route.to_string(), encoded);
+        assert_eq!(Route::from_str(encoded).unwrap(), route);
+    }
+
+    assert_eq!(
+        Route::from_str("/search?query=one%20%26%20two&sort=name").unwrap(),
+        Route::Search {
+            query: "one & two".to_string(),
+            sort: "name".to_string(),
+        }
+    );
+}
