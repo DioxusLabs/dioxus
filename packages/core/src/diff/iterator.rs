@@ -92,8 +92,8 @@ impl StableFragmentEdges {
             let Some(mount) = new_mounts[idx] else {
                 continue;
             };
-            first_edges[idx] = new[idx].find_first_element(mount, dom);
-            last_edges[idx] = new[idx].find_last_element(mount, dom);
+            first_edges[idx] = new[idx].find_first_element_committed(mount, dom);
+            last_edges[idx] = new[idx].find_last_element_committed(mount, dom);
             live_stable[idx] = first_edges[idx].is_some() || last_edges[idx].is_some();
         }
 
