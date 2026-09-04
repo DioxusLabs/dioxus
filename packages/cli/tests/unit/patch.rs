@@ -326,6 +326,31 @@ fn malformed_wasm_metadata_is_not_silently_ignored() {
 }
 
 #[test]
+fn wasm_layout_preserves_bss_and_alignment() {
+    let mut module = Module::default();
+    module.customs.add(walrus::RawCustomSection {
+        name: "dylink.0".into(),
+        data: vec![1, 6, 0x84, 0x80, 0x40, 20, 7, 2],
+    });
+    let bytes = module.emit_wasm();
+    let layout = wasm_patch_layout(&module, &bytes).unwrap();
+    assert_eq!(layout.memory_size, 1048580);
+    assert_eq!(layout.memory_alignment, 20);
+    assert_eq!(layout.table_size, 7);
+    assert_eq!(layout.table_alignment, 2);
+    let (pages, _) = layout.reservation().unwrap();
+    assert!(pages >= 17);
+}
+
+#[test]
+fn wasm_memory_requires_linker_layout() {
+    let mut module = Module::default();
+    module.add_import_memory("env", "memory", false, false, 0, None, None);
+    let bytes = module.emit_wasm();
+    assert!(wasm_patch_layout(&module, &bytes).is_err());
+}
+
+#[test]
 fn wasm_patch_without_elements_is_rewritable() {
     let dir = tempdir().unwrap();
     let mut module = Module::default();
@@ -392,4 +417,42 @@ fn native_stubs_preserve_absolute_symbols_and_unix_import_prefixes() {
         st_other: 0,
     };
     assert!(create_undefined_symbol_stub(&cache, &[path], &triple, 0x10000).is_err());
+}
+
+#[test]
+fn wasm_table_size_counts_duplicate_and_unnamed_slots() {
+    let dir = tempdir().unwrap();
+    let mut module = Module::default();
+    let (table, _) = module.add_import_table(
+        "env",
+        "__indirect_function_table",
+        false,
+        0,
+        None,
+        walrus::RefType::Funcref,
+    );
+    let (base, _) =
+        module.add_import_global("env", "__table_base", walrus::ValType::I32, false, false);
+    let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+    builder.name("duplicate".to_string());
+    let function = builder.finish(vec![], &mut module.funcs);
+    let unnamed =
+        FunctionBuilder::new(&mut module.types, &[], &[]).finish(vec![], &mut module.funcs);
+    module.elements.add(
+        ElementKind::Active {
+            table,
+            offset: ConstExpr::Global(base),
+        },
+        ElementItems::Functions(vec![function, function, unnamed]),
+    );
+    let path = dir.path().join("patch.wasm");
+    std::fs::write(&path, module.emit_wasm()).unwrap();
+    let mut old = Module::default();
+    let cache = HotpatchModuleCache {
+        old_bytes: old.emit_wasm(),
+        old_wasm: old,
+        ..Default::default()
+    };
+    let patch = create_wasm_jump_table(&path, &cache).unwrap();
+    assert_eq!(patch.ifunc_count, 3);
 }
