@@ -26,6 +26,10 @@ use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
 };
 
+#[cfg(test)]
+#[path = "../../tests/unit/patch.rs"]
+mod tests;
+
 type Result<T, E = PatchError> = std::result::Result<T, E>;
 
 #[derive(Debug, Error)]
@@ -79,6 +83,7 @@ pub struct HotpatchModuleCache {
 
     // ... native stuff
     pub symbol_table: HashMap<String, CachedSymbol>,
+    pub ambiguous_symbols: HashSet<String>,
 
     /// Contents of the .tdata section from the original binary (TLS initialization image).
     /// Used to provide correct init data for TLS symbol stubs instead of garbage addresses.
@@ -96,6 +101,9 @@ pub struct CachedSymbol {
     pub kind: SymbolKind,
     pub is_undefined: bool,
     pub is_weak: bool,
+    pub is_absolute: bool,
+    pub is_tlv: bool,
+    pub alignment: u64,
     pub size: u64,
     pub flags: SymbolFlags<SectionId, SymbolId>,
 }
@@ -132,7 +140,7 @@ impl HotpatchModuleCache {
                 let address_map = pdb_file.address_map()?;
                 let mut symbol_table = HashMap::new();
                 let mut symbols = global_symbols.iter();
-                while let Ok(Some(symbol)) = symbols.next() {
+                while let Some(symbol) = symbols.next()? {
                     match symbol.parse() {
                         Ok(pdb::SymbolData::Public(data)) => {
                             let rva = data.offset.to_rva(&address_map);
@@ -152,6 +160,9 @@ impl HotpatchModuleCache {
                                     },
                                     is_undefined,
                                     is_weak: false,
+                                    is_absolute: false,
+                                    is_tlv: false,
+                                    alignment: 1,
                                     size: 0,
                                     flags: SymbolFlags::None,
                                 },
@@ -172,6 +183,9 @@ impl HotpatchModuleCache {
                                     kind: SymbolKind::Data,
                                     is_undefined,
                                     is_weak: false,
+                                    is_absolute: false,
+                                    is_tlv: false,
+                                    alignment: 1,
                                     size: 0,
                                     flags: SymbolFlags::None,
                                 },
@@ -279,6 +293,7 @@ impl HotpatchModuleCache {
                 let obj = File::parse(&old_bytes as &[u8])?;
                 let symbol_table = obj
                     .symbols()
+                    .filter(|s| !s.is_undefined())
                     .filter_map(|s| {
                         let flags = match s.flags() {
                             SymbolFlags::None => SymbolFlags::None,
@@ -295,6 +310,16 @@ impl HotpatchModuleCache {
                                 address: s.address(),
                                 is_undefined: s.is_undefined(),
                                 is_weak: s.is_weak(),
+                                is_absolute: s.section() == object::SymbolSection::Absolute,
+                                is_tlv: s
+                                    .section_index()
+                                    .and_then(|i| obj.section_by_index(i).ok())
+                                    .is_some_and(|s| s.kind() == object::SectionKind::TlsVariables),
+                                alignment: s
+                                    .section_index()
+                                    .and_then(|i| obj.section_by_index(i).ok())
+                                    .map(|s| s.align())
+                                    .unwrap_or(1),
                                 kind: s.kind(),
                                 size: s.size(),
                                 flags,
@@ -302,6 +327,15 @@ impl HotpatchModuleCache {
                         ))
                     })
                     .collect::<HashMap<_, _>>();
+
+                let ambiguous_symbols = obj
+                    .symbols()
+                    .filter(|s| !s.is_undefined())
+                    .filter_map(|s| {
+                        let name = s.name().ok()?;
+                        (symbol_table.get(name)?.address != s.address()).then(|| name.to_string())
+                    })
+                    .collect();
 
                 // Extract TLS initialization data and section metadata.
                 // This is used to correctly initialize TLS symbols in the stub
@@ -349,6 +383,7 @@ impl HotpatchModuleCache {
                     symbol_table,
                     path: original.to_path_buf(),
                     old_bytes,
+                    ambiguous_symbols,
                     tls_init_data,
                     tls_init_sizes,
                     ..Default::default()
@@ -370,8 +405,10 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
     let symbol_table = pdb_file.global_symbols()?;
     let address_map = pdb_file.address_map()?;
     let mut symbol_iter = symbol_table.iter();
-    while let Ok(Some(symbol)) = symbol_iter.next() {
-        if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
+    while let Some(symbol) = symbol_iter.next()? {
+        if let Ok(pdb::SymbolData::Public(data)) = symbol.parse()
+            && data.function
+        {
             let rva = data.offset.to_rva(&address_map);
             if let Some(rva) = rva {
                 new_name_to_addr.insert(data.name.to_string(), rva.0 as u64);
@@ -381,8 +418,11 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
 
     let mut map = AddressMap::default();
     for (new_name, new_addr) in new_name_to_addr.iter() {
-        if let Some(old_addr) = old_name_to_addr.get(new_name.as_ref()) {
-            map.insert(old_addr.address, *new_addr);
+        if let Some(old_addr) = old_name_to_addr.get(new_name.as_ref())
+            && !old_addr.is_undefined
+            && old_addr.kind == SymbolKind::Text
+        {
+            insert_jump_mapping(&mut map, old_addr.address, *new_addr)?;
         }
     }
 
@@ -423,17 +463,32 @@ pub fn create_native_jump_table(
     let obj2_bytes = std::fs::read(patch)?;
     let obj2 = File::parse(&obj2_bytes as &[u8])?;
     let mut map = AddressMap::default();
-    let new_syms = obj2.symbol_map();
-
-    let new_name_to_addr = new_syms
+    let mut new_name_to_addr = HashMap::new();
+    for symbol in obj2
         .symbols()
-        .par_iter()
-        .map(|s| (s.name(), s.address()))
-        .collect::<HashMap<_, _>>();
+        .filter(|s| s.is_definition() && s.kind() == SymbolKind::Text)
+    {
+        let name = symbol.name()?;
+        if cache.ambiguous_symbols.contains(name) {
+            return Err(PatchError::InvalidModule(format!(
+                "Ambiguous base symbol {name}; rebuild required"
+            )));
+        }
+        if let Some(previous) = new_name_to_addr.insert(name, symbol.address())
+            && previous != symbol.address()
+        {
+            return Err(PatchError::InvalidModule(format!(
+                "Ambiguous patch symbol {name}; rebuild required"
+            )));
+        }
+    }
 
     for (new_name, new_addr) in new_name_to_addr.iter() {
-        if let Some(old_addr) = old_name_to_addr.get(*new_name) {
-            map.insert(old_addr.address, *new_addr);
+        if let Some(old_addr) = old_name_to_addr.get(*new_name)
+            && !old_addr.is_undefined
+            && old_addr.kind == SymbolKind::Text
+        {
+            insert_jump_mapping(&mut map, old_addr.address, *new_addr)?;
         }
     }
 
@@ -622,7 +677,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         // value with a local global.
         new.imports.delete(mem);
         new.globals.get_mut(global_id).kind = walrus::GlobalKind::Local(ConstExpr::Value(
-            walrus::ir::Value::I32(offset + data_symbol.segment_offset as i32),
+            walrus::ir::Value::I32(offset.wrapping_add(data_symbol.segment_offset as i32)),
         ));
     }
 
@@ -631,14 +686,25 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // local function that calls the indirect function from the table.
     //
     // https://github.com/emscripten-core/emscripten/issues/22863
-    let ifunc_table_initializer = new
-        .elements
-        .iter()
-        .find_map(|e| match e.kind {
-            ElementKind::Active { table, .. } => Some(table),
-            _ => None,
-        })
-        .context("Missing ifunc table")?;
+    let ifunc_table_initializer = new.imports.iter().find_map(|import| match import.kind {
+        ImportKind::Table(table)
+            if import.module == "env" && import.name == "__indirect_function_table" =>
+        {
+            Some(table)
+        }
+        _ => None,
+    });
+    let ifunc_table_initializer = ifunc_table_initializer.unwrap_or_else(|| {
+        new.add_import_table(
+            "env",
+            "__indirect_function_table",
+            false,
+            0,
+            None,
+            walrus::RefType::Funcref,
+        )
+        .0
+    });
     for env_func_import in env_funcs {
         let import = new.imports.get(env_func_import);
         let ImportKind::Function(func_id) = import.kind else {
@@ -742,13 +808,13 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         .funcs
         .iter()
         .find(|f| f.name.as_deref() == Some(APPLY_RELOCS))
+        && !new.exports.iter().any(|e| e.name == APPLY_RELOCS)
     {
         new.exports.add(APPLY_RELOCS, func.id());
     }
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
-    std::fs::write(&lib, new.emit_wasm())?;
 
     // And now assemble the jump table by mapping the old ifunc table to the new one, by name
     //
@@ -760,11 +826,12 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     for (name, idx) in name_to_ifunc_new.iter() {
         // Find the corresponding ifunc in the old module by name
         if let Some(old_idx) = name_to_ifunc_old.get(*name) {
-            map.insert(*old_idx as u64, *idx as u64);
+            insert_jump_mapping(&mut map, *old_idx as u32 as u64, *idx as u32 as u64)?;
             continue;
         }
     }
 
+    std::fs::write(&lib, new.emit_wasm())?;
     Ok(JumpTable {
         map,
         lib,
@@ -841,11 +908,19 @@ fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
             ElementItems::Functions(ids) => {
                 for (idx, id) in ids.iter().enumerate() {
                     if let Some(name) = m.funcs.get(*id).name.as_deref() {
-                        func_to_offset.insert(name, offset + idx as i32);
+                        func_to_offset.insert(name, offset.wrapping_add(idx as i32));
                     }
                 }
             }
-            ElementItems::Expressions(_ref_type, _const_exprs) => {}
+            ElementItems::Expressions(_, expressions) => {
+                for (idx, expression) in expressions.iter().enumerate() {
+                    if let ConstExpr::RefFunc(id) = expression
+                        && let Some(name) = m.funcs.get(*id).name.as_deref()
+                    {
+                        func_to_offset.insert(name, offset.wrapping_add(idx as i32));
+                    }
+                }
+            }
         }
     }
 
@@ -869,6 +944,9 @@ pub fn create_undefined_symbol_stub(
     triple: &Triple,
     aslr_reference: u64,
 ) -> Result<Vec<u8>> {
+    if triple.endianness() != Ok(target_lexicon::Endianness::Little) {
+        return Err(PatchError::UnsupportedPlatform(triple.to_string()));
+    }
     let sorted: Vec<_> = incrementals.iter().sorted().collect();
 
     // Find all the undefined symbols in the incrementals
@@ -954,11 +1032,19 @@ pub fn create_undefined_symbol_stub(
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
-    for name in undefined_symbols {
-        let Some(sym) = cache
-            .symbol_table
-            .get(name.as_str().trim_start_matches("__imp_"))
-        else {
+    for name in undefined_symbols.into_iter().sorted() {
+        let import_name = (triple.operating_system == OperatingSystem::Windows)
+            .then(|| name.strip_prefix("__imp_"))
+            .flatten();
+        if cache
+            .ambiguous_symbols
+            .contains(import_name.unwrap_or(&name))
+        {
+            return Err(PatchError::InvalidModule(format!(
+                "Ambiguous base symbol {name}; rebuild required"
+            )));
+        }
+        let Some(sym) = cache.symbol_table.get(import_name.unwrap_or(&name)) else {
             tracing::debug!("Symbol not found: {}", name);
             continue;
         };
@@ -976,7 +1062,21 @@ pub fn create_undefined_symbol_stub(
             _ => 0,
         };
 
-        let abs_addr = sym.address + aslr_offset;
+        let abs_addr = sym
+            .address
+            .checked_add(if sym.is_absolute { 0 } else { aslr_offset })
+            .context("Symbol address overflows after applying ASLR")?;
+
+        if matches!(sym.flags, SymbolFlags::Elf { st_info, .. } if st_info & 0xf == object::elf::STT_GNU_IFUNC)
+        {
+            return Err(PatchError::InvalidModule(format!(
+                "Cannot redirect GNU IFUNC resolver {name}; rebuild required"
+            )));
+        }
+        if sym.is_tlv {
+            emit_macho_tlv_stub(&mut obj, &name[name_offset..], abs_addr)?;
+            continue;
+        }
 
         match sym.kind {
             // Handle synthesized window linker cross-dll statics.
@@ -993,7 +1093,7 @@ pub fn create_undefined_symbol_stub(
             // This is currently only implemented for 64bit architectures (haven't tested 32bit yet).
             //
             // https://stackoverflow.com/questions/5159353/how-can-i-get-rid-of-the-imp-prefix-in-the-linker-in-vc
-            _ if name.starts_with("__imp_") => {
+            _ if import_name.is_some() => {
                 let data_section = obj.section_id(StandardSection::Data);
 
                 // Add a pointer to the resolved address
@@ -1174,6 +1274,11 @@ pub fn create_undefined_symbol_stub(
             //    b       0x10005acac
             // ```
             SymbolKind::Tls => {
+                if obj.format() != object::BinaryFormat::Elf || sym.size == 0 {
+                    return Err(PatchError::InvalidModule(format!(
+                        "Missing TLS layout for {name}; rebuild required"
+                    )));
+                }
                 let tls_section = obj.section_id(StandardSection::Tls);
 
                 let pointer_width = match triple.pointer_width().unwrap() {
@@ -1211,11 +1316,13 @@ pub fn create_undefined_symbol_stub(
                         (sym.address, pointer_width)
                     };
 
-                let align = size.min(pointer_width).next_power_of_two();
+                let align = sym.alignment.max(1);
 
-                let start = tls_offset as usize;
-                let end = start + size as usize;
-                let init = if end <= cache.tls_init_data.len() {
+                let start = usize::try_from(tls_offset).context("TLS offset overflows")?;
+                let end = start
+                    .checked_add(usize::try_from(size).context("TLS size overflows")?)
+                    .context("TLS range overflows")?;
+                let mut init = if end <= cache.tls_init_data.len() {
                     cache.tls_init_data[start..end].to_vec()
                 } else {
                     // Beyond .tdata bounds (.tbss) or Mach-O fallback: zero-init
@@ -1236,6 +1343,7 @@ pub fn create_undefined_symbol_stub(
                     section: SymbolSection::Undefined,
                     flags: SymbolFlags::None,
                 });
+                relocate_elf_tls(cache, sym, &mut init, aslr_offset)?;
                 obj.add_symbol_data(sym_id, tls_section, &init, align);
             }
 
@@ -1270,6 +1378,185 @@ pub fn create_undefined_symbol_stub(
     }
 
     Ok(obj.write()?)
+}
+
+fn insert_jump_mapping(map: &mut AddressMap, old: u64, new: u64) -> Result<()> {
+    if let Some(previous) = map.insert(old, new)
+        && previous != new
+    {
+        return Err(PatchError::InvalidModule(format!(
+            "Folded function at {old:#x} has diverging patch targets; rebuild required"
+        )));
+    }
+    Ok(())
+}
+
+fn emit_macho_tlv_stub(
+    obj: &mut object::write::Object<'_>,
+    name: &str,
+    original: u64,
+) -> Result<()> {
+    let code: Vec<u8> = match obj.architecture() {
+        object::Architecture::Aarch64 => [
+            0xa9bf7bf0u32,
+            0xf9400400,
+            0xf9400010,
+            0xd63f0200,
+            0xa8c17bf0,
+            0xd65f03c0,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect(),
+        object::Architecture::X86_64 => vec![0x57, 0x48, 0x8b, 0x7f, 0x08, 0xff, 0x17, 0x5f, 0xc3],
+        arch => {
+            return Err(PatchError::UnsupportedPlatform(format!(
+                "Mach-O TLS on {arch:?}"
+            )));
+        }
+    };
+    let text = obj.section_id(StandardSection::Text);
+    let thunk = obj.append_section_data(text, &code, 8);
+    let text_symbol = obj.section_symbol(text);
+    let data = obj.section_id(StandardSection::Data);
+    let mut descriptor = [0u8; 24];
+    descriptor[8..16].copy_from_slice(&original.to_le_bytes());
+    let offset = obj.append_section_data(data, &descriptor, 8);
+    obj.add_symbol(Symbol {
+        name: name.as_bytes().to_vec(),
+        value: offset,
+        size: 24,
+        kind: SymbolKind::Data,
+        scope: SymbolScope::Linkage,
+        weak: false,
+        section: SymbolSection::Section(data),
+        flags: SymbolFlags::None,
+    });
+    obj.add_relocation(
+        data,
+        object::write::Relocation {
+            offset,
+            symbol: text_symbol,
+            addend: thunk as i64,
+            flags: object::RelocationFlags::Generic {
+                kind: object::RelocationKind::Absolute,
+                encoding: object::RelocationEncoding::Generic,
+                size: 64,
+            },
+        },
+    )?;
+    Ok(())
+}
+
+fn relocate_elf_tls(
+    cache: &HotpatchModuleCache,
+    symbol: &CachedSymbol,
+    init: &mut [u8],
+    slide: u64,
+) -> Result<()> {
+    use object::{ObjectSymbolTable, RelocationFlags, RelocationTarget};
+    let file = File::parse(cache.old_bytes.as_slice())?;
+    if file
+        .sections()
+        .any(|s| s.name().is_ok_and(|n| n.starts_with(".android.rel")))
+    {
+        return Err(PatchError::InvalidModule(
+            "Android packed TLS relocations require a rebuild".into(),
+        ));
+    }
+    let Some(tdata) = file.section_by_name(".tdata") else {
+        return Ok(());
+    };
+    let start = tdata
+        .address()
+        .checked_add(symbol.address)
+        .context("TLS address overflows")?;
+    let end = start
+        .checked_add(init.len() as u64)
+        .context("TLS range overflows")?;
+    for (address, relocation) in file.dynamic_relocations().into_iter().flatten() {
+        if !(start..end).contains(&address) {
+            continue;
+        }
+        let relative = matches!(
+            (file.architecture(), relocation.flags()),
+            (
+                object::Architecture::X86_64,
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_X86_64_RELATIVE
+                }
+            ) | (
+                object::Architecture::Aarch64,
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_AARCH64_RELATIVE
+                }
+            )
+        );
+        let offset = (address - start) as usize;
+        let bytes = init
+            .get_mut(offset..offset + 8)
+            .context("TLS relocation exceeds initializer")?;
+        let addend = if relocation.has_implicit_addend() {
+            u64::from_le_bytes(bytes.try_into().unwrap())
+        } else {
+            relocation.addend() as u64
+        };
+        let target = if relative {
+            slide
+        } else if relocation.kind() == object::RelocationKind::Absolute && relocation.size() == 64 {
+            let RelocationTarget::Symbol(index) = relocation.target() else {
+                return Err(PatchError::InvalidModule(
+                    "Unsupported ELF TLS relocation target".into(),
+                ));
+            };
+            let table = file
+                .dynamic_symbol_table()
+                .context("Missing dynamic symbols for TLS relocation")?;
+            let target = table.symbol_by_index(index)?;
+            if target.is_undefined()
+                || matches!(target.flags(), SymbolFlags::Elf { st_info, .. } if st_info & 0xf == object::elf::STT_GNU_IFUNC)
+            {
+                return Err(PatchError::InvalidModule(format!(
+                    "Unresolved TLS initializer symbol {}; rebuild required",
+                    target.name()?
+                )));
+            }
+            target
+                .address()
+                .wrapping_add(if target.section() == object::SymbolSection::Absolute {
+                    0
+                } else {
+                    slide
+                })
+        } else {
+            return Err(PatchError::InvalidModule(format!(
+                "Unsupported ELF TLS relocation {:?}; rebuild required",
+                relocation.flags()
+            )));
+        };
+        bytes.copy_from_slice(&target.wrapping_add(addend).to_le_bytes());
+    }
+    if let File::Elf64(elf) = &file {
+        use object::read::elf::SectionHeader;
+        for section in elf.elf_section_table().iter() {
+            for address in section
+                .relr(elf.endian(), elf.data())?
+                .into_iter()
+                .flatten()
+            {
+                if !(start..end).contains(&address) {
+                    continue;
+                }
+                let offset = (address - start) as usize;
+                let bytes = init
+                    .get_mut(offset..offset + 8)
+                    .context("RELR exceeds TLS initializer")?;
+                let target = u64::from_le_bytes(bytes.try_into().unwrap());
+                bytes.copy_from_slice(&target.wrapping_add(slide).to_le_bytes());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn collect_stub_symbols_from_path(
@@ -1482,6 +1769,9 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
+    make_indirect.sort_unstable();
+    make_indirect.dedup();
+
     // Now we need to make sure to add the new ifuncs to the ifunc segment initializer.
     // We just assume the last segment is the safest one we can add to which is common practice.
     let segment = module
@@ -1631,14 +1921,14 @@ fn wbg_cast_symbol_catch() {
 /// do a small amount extra of parsing here.
 fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
     let parser = wasmparser::Parser::new(0);
-    let mut parser = parser.parse_all(bytes);
+    let parser = parser.parse_all(bytes);
     let mut segments = vec![];
     let mut data_range = 0..0;
     let mut symbols = vec![];
 
     // Process the payloads in the raw wasm file so we can extract the specific sections we need
-    while let Some(Ok(payload)) = parser.next() {
-        match payload {
+    for payload in parser {
+        match payload? {
             Payload::DataSection(section) => {
                 data_range = section.range();
                 segments = section
