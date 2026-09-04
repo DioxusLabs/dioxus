@@ -38,3 +38,15 @@ fn test_serialize_str_too_little_data() {
     let buf = buf.as_ref();
     assert_eq!(deserialize_const!(ConstStr, buf), None);
 }
+
+#[test]
+fn const_str_accepts_its_maximum_length() {
+    let value = "a".repeat(ConstStr::MAX_LEN);
+    assert_eq!(ConstStr::new(&value).as_str(), value);
+}
+
+#[test]
+#[should_panic(expected = "ConstStr capacity exceeded")]
+fn const_str_rejects_values_over_its_maximum_length() {
+    ConstStr::new(&"a".repeat(ConstStr::MAX_LEN + 1));
+}
