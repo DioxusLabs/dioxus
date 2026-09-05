@@ -16,7 +16,8 @@ impl ElementId {
     /// The root element within a render target.
     pub const ROOT: Self = Self(0);
 
-    pub(crate) const fn new(index: usize) -> Self {
+    /// Constructs an [`ElementId`] from the given raw `index`.
+    pub const fn new(index: usize) -> Self {
         Self(index)
     }
 
