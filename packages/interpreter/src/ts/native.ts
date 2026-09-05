@@ -21,6 +21,9 @@ export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
   edits: WebSocket;
+  private appliedEditSequence = BigInt(0);
+  private editsGeneration = 0;
+  private editsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
   baseUri: string;
   eventsPath: string;
   headless: boolean;
@@ -432,38 +435,53 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Paired with desktop/edits.rs. An edit keeps its sequence across reconnects
+  // so losing an acknowledgement cannot apply a DOM mutation twice.
   waitForRequest(editsPath: string, required_server_key: string) {
-    this.edits = new WebSocket(editsPath);
-    // Only trust the websocket once it sends us the required server key
+    const generation = ++this.editsGeneration;
+    clearTimeout(this.editsReconnectTimer);
+    this.edits?.close();
+    const socket = new WebSocket(editsPath);
+    this.edits = socket;
+    socket.binaryType = "arraybuffer";
     let authenticated = false;
-    // Reconnect if the websocket closes. This may happen on ios when the app is suspended
-    // in the background: https://github.com/DioxusLabs/dioxus/issues/4374
-    this.edits.onclose = () => {
-      setTimeout(() => {
-        // If the edits path has changed, we don't want to reconnect to the old one
-        if (this.edits.url != editsPath) {
-          return;
+
+    // iOS can suspend the socket while an animation callback is still queued.
+    // Every callback belongs to one socket, including reconnect timers.
+    socket.onclose = () => {
+      if (generation !== this.editsGeneration) return;
+      this.editsReconnectTimer = setTimeout(() => {
+        if (generation === this.editsGeneration) {
+          this.waitForRequest(editsPath, required_server_key);
         }
-        this.waitForRequest(editsPath, required_server_key);
       }, 100);
     };
-    this.edits.onmessage = (event) => {
-      const data = event.data;
-      if (data instanceof Blob) {
-        if (!authenticated) {
-          return;
-        }
-        // If the data is a blob, we need to convert it to an ArrayBuffer
-        data.arrayBuffer().then((buffer) => {
-          this.rafEdits(buffer);
-        });
-      } else if (typeof data === "string") {
-        if (data === required_server_key) {
-          // If the data is the required server key, we can trust the websocket
-          authenticated = true;
-          return;
-        }
+    socket.onmessage = (event) => {
+      if (generation !== this.editsGeneration) return;
+      if (typeof event.data === "string") {
+        authenticated = event.data === required_server_key;
+        if (!authenticated) socket.close();
+        return;
       }
+      if (
+        !authenticated ||
+        !(event.data instanceof ArrayBuffer) ||
+        event.data.byteLength < 8
+      ) return;
+      const frame: ArrayBuffer = event.data;
+      const sequence = new DataView(frame).getBigUint64(0, true);
+      const apply = () => {
+        if (generation !== this.editsGeneration) return;
+        if (sequence > this.appliedEditSequence) {
+          // @ts-ignore - supplied by the binary interpreter
+          this.run_from_bytes(frame.slice(8));
+          this.appliedEditSequence = sequence;
+        }
+        if (socket.readyState === WebSocket.OPEN) socket.send(frame.slice(0, 8));
+      };
+      // Hidden/headless webviews do not receive requestAnimationFrame callbacks.
+      if (this.headless) apply();
+      else requestAnimationFrame(apply);
     };
   }
 

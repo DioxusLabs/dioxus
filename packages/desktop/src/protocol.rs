@@ -147,8 +147,7 @@ fn index_request(
 /// - webview_id: the id of the webview that we're loading this into. This is used to differentiate between
 ///   multiple webviews in the same application, so that we can send edits to the correct one.
 fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> String {
-    let edits_path = edit_state.wry_queue.edits_path();
-    let expected_key = edit_state.wry_queue.required_server_key();
+    let (edits_path, expected_key) = edit_state.wry_queue.connection_details();
 
     format!(
         r#"
