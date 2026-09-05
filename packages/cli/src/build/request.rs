@@ -269,9 +269,30 @@ pub(crate) struct BuildRequest {
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
-    pub(crate) session_cache_dir: PathBuf,
+    pub(crate) session_cache_dir: SessionCacheDir,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+}
+
+#[derive(Clone)]
+pub(crate) enum SessionCacheDir {
+    Owned(Arc<TempDir>),
+    Provided(PathBuf),
+}
+
+impl SessionCacheDir {
+    pub(crate) fn path(&self) -> &Path {
+        match self {
+            Self::Owned(dir) => dir.path(),
+            Self::Provided(path) => path,
+        }
+    }
+}
+
+impl std::fmt::Debug for SessionCacheDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.path(), f)
+    }
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -867,11 +888,12 @@ impl BuildRequest {
             }
         }
 
-        #[allow(deprecated)]
-        let session_cache_dir = args
-            .session_cache_dir
-            .clone()
-            .unwrap_or_else(|| TempDir::new().unwrap().into_path());
+        let session_cache_dir = match args.session_cache_dir.clone() {
+            Some(path) => SessionCacheDir::Provided(path),
+            None => SessionCacheDir::Owned(Arc::new(
+                TempDir::new().context("Failed to create temporary directory for session cache")?,
+            )),
+        };
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -2594,7 +2616,7 @@ impl BuildRequest {
     ///
     /// The directory is specific for this app and might be
     pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.session_cache_dir.join(self.bundle.to_string())
+        self.session_cache_dir.path().join(self.bundle.to_string())
     }
 
     pub(crate) fn rustc_wrapper_args_dir(&self) -> PathBuf {
