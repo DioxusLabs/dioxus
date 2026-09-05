@@ -415,6 +415,10 @@ jobs:
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Desktop reconnect regressions
+        run: |
+          cargo test -p dioxus-desktop --lib
+          node --test packages/interpreter/tests/native_reconnect.cjs
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |

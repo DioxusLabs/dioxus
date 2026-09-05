@@ -481,13 +481,12 @@ impl App {
                 .poll_new_edits_location(cx)
                 .is_ready()
             {
+                let (edits_path, expected_key) = app_webview.edits.wry_queue.connection_details();
                 _ = app_webview
                     .desktop_context
                     .webview
                     .evaluate_script(&format!(
-                        "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
-                        edits_path = app_webview.edits.wry_queue.edits_path(),
-                        expected_key = app_webview.edits.wry_queue.required_server_key()
+                        "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");"
                     ));
             }
 
