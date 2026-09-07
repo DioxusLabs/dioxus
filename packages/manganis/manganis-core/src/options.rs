@@ -113,7 +113,33 @@ impl<T> AssetOptionsBuilder<T> {
             variant,
         }
     }
+}
 
+mod sealed {
+    /// Keeps [`Hashable`](super::Hashable) implemented for the variants of this crate only
+    pub trait Sealed {}
+}
+
+/// The asset variants that are bundled to a single file, which lets their bundled name carry a
+/// content hash for [cache busting](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching#cache_busting).
+///
+/// The builders of these variants have [`AssetOptionsBuilder::with_hash_suffix`]. A
+/// [`FolderAssetOptions`] asset is bundled to a directory that the rest of the app joins paths onto,
+/// so it keeps the name of the source folder.
+pub trait Hashable: sealed::Sealed {}
+
+impl sealed::Sealed for () {}
+impl Hashable for () {}
+impl sealed::Sealed for CssAssetOptions {}
+impl Hashable for CssAssetOptions {}
+impl sealed::Sealed for CssModuleAssetOptions {}
+impl Hashable for CssModuleAssetOptions {}
+impl sealed::Sealed for ImageAssetOptions {}
+impl Hashable for ImageAssetOptions {}
+impl sealed::Sealed for JsAssetOptions {}
+impl Hashable for JsAssetOptions {}
+
+impl<T: Hashable> AssetOptionsBuilder<T> {
     /// Set whether a hash should be added to the asset path. Manganis adds hashes to asset paths by default
     /// for [cache busting](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching#cache_busting).
     /// With hashed assets, you can serve the asset with a long expiration time, and when the asset changes,
