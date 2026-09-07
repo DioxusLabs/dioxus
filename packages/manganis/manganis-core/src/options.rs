@@ -172,3 +172,39 @@ pub enum AssetVariant {
     /// An unknown asset
     Unknown,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::AssetOptions;
+
+    /// Every variant that is bundled to a hashable file has to carry the hash suffix setting of the
+    /// builder through to the options it produces
+    #[test]
+    fn variants_keep_the_hash_suffix_setting() {
+        let hashless = [
+            AssetOptions::builder()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+            AssetOptions::css()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+            AssetOptions::css_module()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+            AssetOptions::image()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+            AssetOptions::js()
+                .with_hash_suffix(false)
+                .into_asset_options(),
+        ];
+
+        for options in hashless {
+            assert!(
+                !options.hash_suffix(),
+                "{:?} should not get a hash suffix",
+                options.variant()
+            );
+        }
+    }
+}
