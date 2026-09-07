@@ -2117,7 +2117,7 @@ impl BuildRequest {
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self.should_pre_compress_web_assets(self.release);
 
-                if pre_compress {
+                if pre_compress.is_some() {
                     ctx.status_compressing_assets();
                     let asset_dir = self.bundle_asset_dir();
                     tokio::task::spawn_blocking(move || {
