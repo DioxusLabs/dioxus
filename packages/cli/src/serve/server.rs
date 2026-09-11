@@ -21,7 +21,7 @@ use axum::{
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
-    StreamExt, future,
+    StreamExt,
     stream::{self, FuturesUnordered},
 };
 use hyper::HeaderMap;
@@ -132,57 +132,57 @@ impl WebServer {
 
     /// Wait for new clients to be connected and then save them
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
-        let mut new_build_status_socket = self.new_build_status_sockets.next();
-        let mut new_message = self
-            .hot_reload_sockets
-            .iter_mut()
-            .enumerate()
-            .map(|(idx, socket)| async move { (idx, socket.socket.next().await) })
-            .collect::<FuturesUnordered<_>>();
+        // Internal socket events must not stop us from listening for the next update.
+        loop {
+            let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
+            let mut new_build_status_socket = self.new_build_status_sockets.next();
+            let mut new_message = self
+                .hot_reload_sockets
+                .iter_mut()
+                .enumerate()
+                .map(|(idx, socket)| async move { (idx, socket.socket.next().await) })
+                .collect::<FuturesUnordered<_>>();
 
-        tokio::select! {
-            new_hot_reload_socket = &mut new_hot_reload_socket => {
-                if let Some(new_socket) = new_hot_reload_socket {
-                    let aslr_reference = new_socket.aslr_reference;
-                    let pid = new_socket.pid;
-                    let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
+            tokio::select! {
+                new_hot_reload_socket = &mut new_hot_reload_socket => {
+                    if let Some(new_socket) = new_hot_reload_socket {
+                        let aslr_reference = new_socket.aslr_reference;
+                        let pid = new_socket.pid;
+                        let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
 
-                    drop(new_message);
-                    self.hot_reload_sockets.push(new_socket);
-
-                    return ServeUpdate::NewConnection { aslr_reference, id, pid };
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            new_build_status_socket = &mut new_build_status_socket => {
-                if let Some(mut new_socket) = new_build_status_socket {
-                    drop(new_message);
-
-                    // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
-                    if project_info.send_to(&mut new_socket.socket).await.is_ok() {
-                        _ = self.build_status.send_to(&mut new_socket.socket).await;
-                        self.build_status_sockets.push(new_socket);
-                    }
-                    return future::pending::<ServeUpdate>().await;
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            Some((idx, message)) = new_message.next() => {
-                match message {
-                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
-                    _ => {
                         drop(new_message);
-                        _ = self.hot_reload_sockets.remove(idx);
+                        self.hot_reload_sockets.push(new_socket);
+
+                        return ServeUpdate::NewConnection { aslr_reference, id, pid };
+                    } else {
+                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                    }
+                }
+                new_build_status_socket = &mut new_build_status_socket => {
+                    if let Some(mut new_socket) = new_build_status_socket {
+                        drop(new_message);
+
+                        // Update the socket with project info and current build status
+                        let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
+                        if project_info.send_to(&mut new_socket.socket).await.is_ok() {
+                            _ = self.build_status.send_to(&mut new_socket.socket).await;
+                            self.build_status_sockets.push(new_socket);
+                        }
+                    } else {
+                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                    }
+                }
+                Some((idx, message)) = new_message.next() => {
+                    match message {
+                        Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
+                        _ => {
+                            drop(new_message);
+                            _ = self.hot_reload_sockets.remove(idx);
+                        }
                     }
                 }
             }
         }
-
-        future::pending().await
     }
 
     pub(crate) async fn shutdown(&mut self) {
@@ -789,5 +789,179 @@ impl SharedStatus {
     async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
         let msg = serde_json::to_string(&self.get()).unwrap();
         socket.send(Message::Text(msg.into())).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::{SinkExt, poll};
+    use tokio::{net::TcpStream, time::timeout};
+    use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite};
+
+    type ClientSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+    const TIMEOUT: Duration = Duration::from_secs(5);
+
+    async fn socket_pair() -> (ConnectedWsClient, ClientSocket) {
+        let (tx, mut rx) = futures_channel::mpsc::unbounded();
+        let router = Router::new().route(
+            "/",
+            get(move |ws: WebSocketUpgrade| async move {
+                ws.on_upgrade(move |socket| async move {
+                    tx.unbounded_send(socket).unwrap();
+                })
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind((WebServer::SELF_IP, 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let (client, _) = connect_async(format!("ws://{address}/")).await.unwrap();
+        let socket = rx.next().await.unwrap();
+        task.abort();
+        (
+            ConnectedWsClient {
+                socket,
+                build_id: None,
+                aslr_reference: None,
+                pid: None,
+            },
+            client,
+        )
+    }
+
+    fn server() -> (
+        WebServer,
+        UnboundedSender<ConnectedWsClient>,
+        UnboundedSender<ConnectedWsClient>,
+    ) {
+        let (hot_tx, hot_rx) = futures_channel::mpsc::unbounded();
+        let (status_tx, status_rx) = futures_channel::mpsc::unbounded();
+        (
+            WebServer {
+                devserver_exposed_ip: WebServer::SELF_IP,
+                devserver_port: 0,
+                proxied_port: None,
+                hot_reload_sockets: vec![],
+                build_status_sockets: vec![],
+                new_hot_reload_sockets: hot_rx,
+                new_build_status_sockets: status_rx,
+                build_status: SharedStatus::new_with_starting_build(),
+                application_name: "reconnect-test".to_string(),
+                bundle: BundleFormat::Web,
+            },
+            hot_tx,
+            status_tx,
+        )
+    }
+
+    async fn receive_status(client: &mut ClientSocket) -> Status {
+        let message = client.next().await.unwrap().unwrap();
+        serde_json::from_str(message.to_text().unwrap()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn reconnect_after_disconnect_receives_hotreload() {
+        timeout(TIMEOUT, async {
+            let (mut server, hot_tx, _status_tx) = server();
+            let reload = HotReloadMsg {
+                assets: vec!["main.css".into()],
+                for_build_id: Some(BuildId::PRIMARY.0 as _),
+                ..Default::default()
+            };
+
+            for _ in 0..3 {
+                let (socket, mut client) = socket_pair().await;
+                {
+                    // Poll cleanup before queueing the next client, without cancelling wait.
+                    let wait = server.wait();
+                    tokio::pin!(wait);
+                    assert!(poll!(wait.as_mut()).is_pending());
+                    hot_tx.unbounded_send(socket).unwrap();
+                    assert!(matches!(wait.await, ServeUpdate::NewConnection { .. }));
+                }
+                assert_eq!(server.hot_reload_sockets.len(), 1);
+                server.send_hotreload(reload.clone()).await;
+                let message = client.next().await.unwrap().unwrap();
+                assert_eq!(
+                    serde_json::from_str::<DevserverMsg>(message.to_text().unwrap()).unwrap(),
+                    DevserverMsg::HotReload(reload.clone())
+                );
+
+                drop(client);
+                // Leave an exhausted real socket for wait to remove. Reading only a Close
+                // frame would instead exercise the externally returned WsMessage branch.
+                while server.hot_reload_sockets[0].socket.next().await.is_some() {}
+            }
+        })
+        .await
+        .expect("reconnect stalled after socket cleanup");
+    }
+
+    #[tokio::test]
+    async fn new_connection_after_build_status_initialization() {
+        timeout(TIMEOUT, async {
+            let (mut server, hot_tx, status_tx) = server();
+            for _ in 0..3 {
+                let (status_socket, mut status_client) = socket_pair().await;
+                let (mut socket, _client) = socket_pair().await;
+                socket.build_id = Some(BuildId::SECONDARY);
+                socket.aslr_reference = Some(1234);
+                socket.pid = Some(42);
+                status_tx.unbounded_send(status_socket).unwrap();
+                let expected_status = server.build_status.get();
+                let (update, ()) = tokio::join!(server.wait(), async {
+                    assert_eq!(
+                        receive_status(&mut status_client).await,
+                        Status::ClientInit {
+                            application_name: "reconnect-test".to_string(),
+                            bundle: BundleFormat::Web,
+                        }
+                    );
+                    assert_eq!(receive_status(&mut status_client).await, expected_status);
+                    hot_tx.unbounded_send(socket).unwrap();
+                });
+                assert!(matches!(
+                    update,
+                    ServeUpdate::NewConnection {
+                        id: BuildId::SECONDARY,
+                        aslr_reference: Some(1234),
+                        pid: Some(42),
+                    }
+                ));
+            }
+            assert_eq!(server.build_status_sockets.len(), 3);
+        })
+        .await
+        .expect("new connection stalled after build-status initialization");
+    }
+
+    #[tokio::test]
+    async fn client_message_after_build_status_initialization() {
+        timeout(TIMEOUT, async {
+            let (mut server, _hot_tx, status_tx) = server();
+            let (socket, mut client) = socket_pair().await;
+            server.hot_reload_sockets.push(socket);
+            let (status_socket, mut status_client) = socket_pair().await;
+            status_tx.unbounded_send(status_socket).unwrap();
+            let (update, ()) = tokio::join!(server.wait(), async {
+                receive_status(&mut status_client).await;
+                receive_status(&mut status_client).await;
+                client
+                    .send(tungstenite::Message::Text("client log".into()))
+                    .await
+                    .unwrap();
+            });
+            assert!(matches!(
+                update,
+                ServeUpdate::WsMessage { msg: Message::Text(text), bundle: BundleFormat::Web }
+                    if text == "client log"
+            ));
+            assert_eq!(server.hot_reload_sockets.len(), 1);
+            assert_eq!(server.build_status_sockets.len(), 1);
+        })
+        .await
+        .expect("client message stalled after build-status initialization");
     }
 }
