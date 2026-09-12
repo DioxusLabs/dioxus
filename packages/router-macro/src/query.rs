@@ -39,7 +39,7 @@ impl QuerySegment {
             QuerySegment::Single(segment) => segment.write(),
             QuerySegment::Segments(segments) => {
                 let mut tokens = TokenStream2::new();
-                tokens.extend(quote! { write!(f, "?")?; });
+                tokens.extend(quote! { f.write_str("?")?; });
                 for (i, segment) in segments.iter().enumerate() {
                     tokens.extend(segment.write(i == segments.len() - 1));
                 }
@@ -127,10 +127,7 @@ impl FullQuerySegment {
     pub fn write(&self) -> TokenStream2 {
         let ident = &self.ident;
         quote! {
-            {
-                let as_string = #ident.to_string();
-                write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
-            }
+            dioxus_router::route_match::write_query(f, &#ident)?;
         }
     }
 }
@@ -158,17 +155,12 @@ impl QueryArgument {
 
     pub fn write(&self, trailing: bool) -> TokenStream2 {
         let ident = &self.ident;
-        let write_ampersand = if !trailing {
-            quote! { if !as_string.is_empty() { write!(f, "&")?; } }
-        } else {
-            quote! {}
-        };
         quote! {
-            {
-                let as_string = dioxus_router::routable::DisplayQueryArgument::new(stringify!(#ident), #ident).to_string();
-                write!(f, "{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
-                #write_ampersand
-            }
+            dioxus_router::route_match::write_query_argument(
+                f,
+                &dioxus_router::routable::DisplayQueryArgument::new(stringify!(#ident), #ident),
+                #trailing,
+            )?;
         }
     }
 }

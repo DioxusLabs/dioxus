@@ -7,7 +7,7 @@ use layout::Layout;
 use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{ToTokens, format_ident, quote};
+use quote::{ToTokens, quote};
 use redirect::Redirect;
 use route::{Route, RouteType};
 use segment::RouteSegment;
@@ -252,14 +252,14 @@ pub fn routable(input: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    let error_type = route_enum.error_type();
+    let match_sites = route_enum.match_sites();
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
 
     (quote! {
         const _: () = {
-            #error_type
+            #match_sites
 
             #display_impl
 
@@ -507,10 +507,9 @@ impl RouteEnum {
         let tree = ParseRouteTree::new(&self.endpoints, &self.nests);
         let name = &self.name;
 
-        let error_name = format_ident!("{}MatchError", self.name);
         let tokens = tree.roots.iter().map(|&id| {
             let route = tree.get(id).unwrap();
-            route.to_tokens(&self.nests, &tree, self.name.clone(), error_name.clone())
+            route.to_tokens(&self.nests, &tree, self.name.clone(), 0)
         });
 
         quote! {
@@ -523,41 +522,30 @@ impl RouteEnum {
             }
 
             impl ::std::str::FromStr for #name {
-                type Err = dioxus_router::routable::RouteParseError<#error_name>;
+                type Err = dioxus_router::routable::RouteParseError<dioxus_router::route_match::RouteMatchError>;
 
                 fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
                     let (route, raw_hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, raw_query) = route.split_once('?').unwrap_or((route, ""));
-                    // Remove any trailing slashes. We parse /route/ and /route in the same way
-                    // Note: we don't use trim because it includes more code
-                    let route = route.strip_suffix('/').unwrap_or(route);
                     let query = dioxus_router::exports::percent_encoding::percent_decode_str(raw_query)
                         .decode_utf8()
                         .unwrap_or(raw_query.into());
                     let hash = dioxus_router::exports::percent_encoding::percent_decode_str(raw_hash)
                         .decode_utf8()
                         .unwrap_or(raw_hash.into());
-                    let mut segments = route.split('/').map(|s| {
-                        dioxus_router::exports::percent_encoding::percent_decode_str(s)
-                            .decode_utf8()
-                            .unwrap_or(s.into())
-                    });
-                    // skip the first empty segment
-                    if s.starts_with('/') {
-                        let _ = segments.next();
-                    } else {
-                        // if this route does not start with a slash, it is not a valid route
+                    // A route that does not start with a slash is not a valid route
+                    let Some(__segments) = dioxus_router::route_match::RouteSegments::parse(route) else {
                         return Err(dioxus_router::routable::RouteParseError {
                             attempted_routes: Vec::new(),
                         });
-                    }
-                    let mut errors = Vec::new();
+                    };
+                    let mut __errors = Vec::new();
 
                     #(#tokens)*
 
                     Err(dioxus_router::routable::RouteParseError {
-                        attempted_routes: errors,
+                        attempted_routes: __errors,
                     })
                 }
             }
@@ -568,97 +556,19 @@ impl RouteEnum {
         Ident::new(&(self.name.to_string() + "MatchError"), Span::call_site())
     }
 
-    fn error_type(&self) -> TokenStream2 {
-        let match_error_name = self.error_name();
-
-        let mut type_defs = Vec::new();
-        let mut error_variants = Vec::new();
-        let mut display_match = Vec::new();
-
-        for endpoint in &self.endpoints {
-            match endpoint {
-                RouteEndpoint::Route(route) => {
-                    let route_name = &route.route_name;
-
-                    let error_name = route.error_ident();
-                    let route_str = &route.route;
-                    let comment = format!(
-                        " An error that can occur when trying to parse the route [`{}::{}`] ('{}').",
-                        self.name, route_name, route_str
-                    );
-
-                    error_variants.push(quote! {
-                        #[doc = #comment]
-                        #route_name(#error_name)
-                    });
-                    display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
-                    type_defs.push(route.error_type());
-                }
-                RouteEndpoint::Redirect(redirect) => {
-                    let error_variant = redirect.error_variant();
-                    let error_name = redirect.error_ident();
-                    let route_str = &redirect.route;
-                    let comment = format!(
-                        " An error that can occur when trying to parse the redirect '{}'.",
-                        route_str.value()
-                    );
-
-                    error_variants.push(quote! {
-                        #[doc = #comment]
-                        #error_variant(#error_name)
-                    });
-                    display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
-                    type_defs.push(redirect.error_type());
-                }
-            }
-        }
-
-        for nest in &self.nests {
-            let error_variant = nest.error_variant();
-            let error_name = nest.error_ident();
-            let route_str = &nest.route;
-            let comment = format!(
-                " An error that can occur when trying to parse the nested segment {} ('{}').",
-                error_name, route_str
-            );
-
-            error_variants.push(quote! {
-                #[doc = #comment]
-                #error_variant(#error_name)
-            });
-            display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
-            type_defs.push(nest.error_type());
-        }
-
-        let comment = format!(
-            " An error that can occur when trying to parse the route enum [`{}`].",
-            self.name
-        );
+    /// One `RouteMatchSite` const per route, redirect and nest; parse failures point at these
+    /// instead of carrying a generated error enum per variant.
+    fn match_sites(&self) -> TokenStream2 {
+        let error_type = self.error_name();
+        let endpoints = self.endpoints.iter().map(|endpoint| match endpoint {
+            RouteEndpoint::Route(route) => route.site_def(&error_type),
+            RouteEndpoint::Redirect(redirect) => redirect.site_def(&error_type),
+        });
+        let nests = self.nests.iter().map(|nest| nest.site_def(&error_type));
 
         quote! {
-            #(#type_defs)*
-
-            #[doc = #comment]
-            #[allow(non_camel_case_types)]
-            #[allow(clippy::derive_partial_eq_without_eq)]
-            pub enum #match_error_name {
-                #(#error_variants),*
-            }
-
-            impl ::std::fmt::Debug for #match_error_name {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                    write!(f, "{}({})", stringify!(#match_error_name), self)
-                }
-            }
-
-            impl ::std::fmt::Display for #match_error_name {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                    match self {
-                        #(#display_match),*
-                    }
-                    Ok(())
-                }
-            }
+            #(#endpoints)*
+            #(#nests)*
         }
     }
 

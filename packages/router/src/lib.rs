@@ -7,6 +7,8 @@
 
 pub mod navigation;
 pub mod routable;
+#[doc(hidden)]
+pub mod route_match;
 
 /// Components interacting with the router.
 pub mod components {

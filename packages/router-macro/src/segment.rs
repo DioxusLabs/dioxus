@@ -1,4 +1,4 @@
-use quote::{ToTokens, format_ident, quote};
+use quote::quote;
 use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -21,100 +21,45 @@ impl RouteSegment {
         }
     }
 
-    pub fn write_segment(&self) -> TokenStream2 {
-        match self {
-            Self::Static(segment) => quote! { write!(f, "/{}", #segment)?; },
-            Self::Dynamic(ident, _) => quote! {
-                {
-                    let as_string = #ident.to_string();
-                    write!(f, "/{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::PATH_ASCII_SET))?;
-                }
-            },
-            Self::CatchAll(ident, _) => quote! {
-                dioxus_router::ToRouteSegments::display_route_segments(#ident,f)?;
-            },
-        }
-    }
-
-    pub fn error_name(&self, idx: usize) -> Ident {
-        match self {
-            Self::Static(_) => static_segment_idx(idx),
-            Self::Dynamic(ident, _) => format_ident!("{}ParseError", ident),
-            Self::CatchAll(ident, _) => format_ident!("{}ParseError", ident),
-        }
-    }
-
-    pub fn missing_error_name(&self) -> Option<Ident> {
-        match self {
-            Self::Dynamic(ident, _) => Some(format_ident!("{}MissingError", ident)),
-            _ => None,
-        }
-    }
-
+    /// Emit the parser for this segment at `depth`, running `parse_children` once it matched.
+    ///
+    /// `site` names the `RouteMatchSite` const failures are reported against.
     pub fn try_parse(
         &self,
-        idx: usize,
-        error_enum_name: &Ident,
-        error_enum_variant: &Ident,
-        inner_parse_enum: &Ident,
+        depth: usize,
+        site: &Ident,
         parse_children: TokenStream2,
     ) -> TokenStream2 {
-        let error_name = self.error_name(idx);
         match self {
             Self::Static(segment) => {
                 quote! {
-                    {
-                        let mut segments = segments.clone();
-                        let segment = segments.next();
-                        let segment = segment.as_deref();
-                        if let Some(#segment) = segment {
-                            #parse_children
-                        } else {
-                            errors.push(#error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())));
-                        }
+                    if let Some(#segment) = __segments.get(#depth) {
+                        #parse_children
+                    } else {
+                        __errors.push(#site.static_segment(#segment, __segments.get(#depth).unwrap_or_default()));
                     }
                 }
             }
             Self::Dynamic(name, ty) => {
-                let missing_error_name = self.missing_error_name().unwrap();
                 quote! {
-                    {
-                        let mut segments = segments.clone();
-                        let segment = segments.next();
-                        let parsed = if let Some(segment) = segment.as_deref() {
-                            <#ty as dioxus_router::routable::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(err)))
-                        } else {
-                            Err(#error_enum_name::#error_enum_variant(#inner_parse_enum::#missing_error_name))
-                        };
-                        match parsed {
-                            Ok(#name) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
+                    match __segments.dynamic::<#ty>(#depth, #site, stringify!(#name), stringify!(#ty)) {
+                        Ok(#name) => {
+                            #parse_children
+                        }
+                        Err(err) => {
+                            __errors.push(err);
                         }
                     }
                 }
             }
             Self::CatchAll(name, ty) => {
                 quote! {
-                    {
-                        let parsed = {
-                            let remaining_segments: Vec<_> = segments.collect();
-                            let mut new_segments: Vec<&str> = Vec::new();
-                            for segment in &remaining_segments {
-                                new_segments.push(&*segment);
-                            }
-                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&new_segments).map_err(|err| #error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(err)))
-                        };
-                        match parsed {
-                            Ok(#name) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
+                    match __segments.catch_all::<#ty>(#depth, #site, stringify!(#name), stringify!(#ty)) {
+                        Ok(#name) => {
+                            #parse_children
+                        }
+                        Err(err) => {
+                            __errors.push(err);
                         }
                     }
                 }
@@ -123,8 +68,62 @@ impl RouteSegment {
     }
 }
 
-pub fn static_segment_idx(idx: usize) -> Ident {
-    format_ident!("StaticSegment{}ParseError", idx)
+/// Emit the `Display` code for a run of segments, writing to the `fmt::Write` bound to `f`.
+///
+/// Consecutive static segments collapse into one `write_str` of their joined text.
+pub fn write_segments<'a>(segments: impl IntoIterator<Item = &'a RouteSegment>) -> TokenStream2 {
+    let mut tokens = TokenStream2::new();
+    let mut pending = String::new();
+    let flush = |pending: &mut String, tokens: &mut TokenStream2| {
+        if !pending.is_empty() {
+            tokens.extend(quote! { f.write_str(#pending)?; });
+            pending.clear();
+        }
+    };
+
+    for segment in segments {
+        match segment {
+            RouteSegment::Static(segment) => {
+                pending.push('/');
+                pending.push_str(segment);
+            }
+            RouteSegment::Dynamic(ident, _) => {
+                flush(&mut pending, &mut tokens);
+                tokens.extend(quote! {
+                    dioxus_router::route_match::write_path_segment(f, &#ident)?;
+                });
+            }
+            RouteSegment::CatchAll(ident, _) => {
+                flush(&mut pending, &mut tokens);
+                tokens.extend(quote! {
+                    dioxus_router::ToRouteSegments::display_route_segments(#ident, f)?;
+                });
+            }
+        }
+    }
+    flush(&mut pending, &mut tokens);
+    tokens
+}
+
+/// Emit the `RouteMatchSite` const named `site` for one route, redirect or nest.
+pub fn site_const(
+    site: &Ident,
+    error_type: &Ident,
+    kind: &str,
+    name: &str,
+    route: &str,
+) -> TokenStream2 {
+    let error_type = error_type.to_string();
+    quote! {
+        #[allow(non_upper_case_globals)]
+        const #site: &dioxus_router::route_match::RouteMatchSite =
+            &dioxus_router::route_match::RouteMatchSite {
+                error_type: #error_type,
+                kind: #kind,
+                name: #name,
+                route: #route,
+            };
+    }
 }
 
 pub fn parse_route_segments<'a>(
@@ -221,118 +220,4 @@ pub fn parse_route_segments<'a>(
     }
 
     Ok((route_segments, query, hash))
-}
-
-pub(crate) fn create_error_type(
-    route: &str,
-    error_name: Ident,
-    segments: &[RouteSegment],
-    child_type: Option<&Type>,
-) -> TokenStream2 {
-    let mut error_variants = Vec::new();
-    let mut display_match = Vec::new();
-
-    for (i, segment) in segments.iter().enumerate() {
-        let error_name = segment.error_name(i);
-        match segment {
-            RouteSegment::Static(index) => {
-                let comment = format!(
-                    " An error that can occur when trying to parse the static segment '/{}'.",
-                    index
-                );
-                error_variants.push(quote! {
-                    #[doc = #comment]
-                    #error_name(String)
-                });
-                display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{}'", #index, found)? });
-            }
-            RouteSegment::Dynamic(ident, ty) => {
-                let missing_error = segment.missing_error_name().unwrap();
-                let comment = format!(
-                    " An error that can occur when trying to parse the dynamic segment '/:{}'.",
-                    ident
-                );
-                error_variants.push(quote! {
-                    #[doc = #comment]
-                    #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err)
-                });
-                display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                error_variants.push(quote! {
-                    #[doc = #comment]
-                    #missing_error
-                });
-                display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
-            }
-            RouteSegment::CatchAll(ident, ty) => {
-                let comment = format!(
-                    " An error that can occur when trying to parse the catch-all segment '/:..{}'.",
-                    ident
-                );
-                error_variants.push(quote! {
-                    #[doc = #comment]
-                    #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err)
-                });
-                display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-            }
-        }
-    }
-
-    let child_type_variant = child_type
-        .map(|child_type| {
-            let comment = format!(
-                " An error that can occur when trying to parse the child route [`{}`].",
-                child_type.to_token_stream()
-            );
-            quote! {
-                #[doc = #comment]
-                ChildRoute(<#child_type as std::str::FromStr>::Err)
-            }
-        })
-        .into_iter();
-
-    let child_type_error = child_type
-        .map(|_| {
-            quote! {
-                Self::ChildRoute(error) => {
-                    write!(f, "{}", error)?
-                }
-            }
-        })
-        .into_iter();
-
-    let comment = format!(
-        " An error that can occur when trying to parse the route variant `{}`.",
-        route
-    );
-
-    quote! {
-        #[doc = #comment]
-        #[allow(non_camel_case_types)]
-        #[allow(clippy::derive_partial_eq_without_eq)]
-        pub enum #error_name {
-            #[doc = " An error that can occur when extra segments are provided after the route."]
-            ExtraSegments(String),
-            #(#child_type_variant,)*
-            #(#error_variants,)*
-        }
-
-        impl ::std::fmt::Debug for #error_name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                write!(f, "{}({})", stringify!(#error_name), self)
-            }
-        }
-
-        impl ::std::fmt::Display for #error_name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                match self {
-                    Self::ExtraSegments(segments) => {
-                        write!(f, "Found additional trailing segments: {}", segments)?
-                    },
-                    #(#child_type_error,)*
-                    #(#display_match,)*
-                }
-                Ok(())
-            }
-        }
-    }
 }

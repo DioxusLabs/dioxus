@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, LitStr};
 
-use crate::segment::{RouteSegment, create_error_type, parse_route_segments};
+use crate::segment::{RouteSegment, parse_route_segments, site_const};
 
 #[derive(Debug, Clone, Copy)]
 pub struct NestId(pub usize);
@@ -61,27 +61,17 @@ impl Nest {
         self.segments.iter().filter_map(|seg| seg.name())
     }
 
-    pub fn write(&self) -> TokenStream {
-        let write_segments = self.segments.iter().map(|s| s.write_segment());
-
-        quote! {
-            {
-                #(#write_segments)*
-            }
-        }
+    pub fn site_ident(&self) -> Ident {
+        format_ident!("__SITE_NEST_{}", self.index)
     }
 
-    pub fn error_ident(&self) -> Ident {
-        format_ident!("Nest{}ParseError", self.index)
-    }
-
-    pub fn error_variant(&self) -> Ident {
-        format_ident!("Nest{}", self.index)
-    }
-
-    pub fn error_type(&self) -> TokenStream {
-        let error_name = self.error_ident();
-
-        create_error_type(&self.route, error_name, &self.segments, None)
+    pub fn site_def(&self, error_type: &Ident) -> TokenStream {
+        site_const(
+            &self.site_ident(),
+            error_type,
+            "Nest",
+            &format!("Nest{}ParseError", self.index),
+            &self.route,
+        )
     }
 }
