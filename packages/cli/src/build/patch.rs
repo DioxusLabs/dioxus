@@ -386,6 +386,13 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
         }
     }
 
+    tracing::debug!(
+        "Windows jump table: {} of {} patch symbols matched against {} symbols in the running binary",
+        map.len(),
+        new_name_to_addr.len(),
+        old_name_to_addr.len()
+    );
+
     let new_base_address = new_name_to_addr
         .get("main")
         .cloned()
