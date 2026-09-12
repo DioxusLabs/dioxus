@@ -172,10 +172,56 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     where
         T: Copy,
     {
-        let mut i = 0;
-        while i < other.len() {
-            self.push(other[i]);
-            i += 1;
+        let len = self.len as usize;
+        if other.len() > MAX_SIZE - len {
+            panic!("const vec capacity exceeded");
+        }
+        // SAFETY: `MaybeUninit<T>` has the same layout as `T`, the destination range
+        // `len..len + other.len()` is in bounds, and `other` cannot alias `self.memory`
+        // because `self` is borrowed mutably.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                other.as_ptr(),
+                self.memory.as_mut_ptr().add(len) as *mut T,
+                other.len(),
+            );
+        }
+        self.len += other.len() as u32;
+    }
+
+    /// Overwrite `src.len()` elements starting at `index` with the contents of `src`.
+    ///
+    /// This panics if `index + src.len()` is greater than the current length.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus_const_vec::ConstVec;
+    /// const VEC: ConstVec<u8> = {
+    ///     let mut vec = ConstVec::new();
+    ///     vec.extend(&[0, 0, 0, 0]);
+    ///     vec.copy_from_slice_at(1, &[1, 2]);
+    ///     vec
+    /// };
+    /// assert_eq!(VEC.as_ref(), &[0, 1, 2, 0]);
+    /// ```
+    pub const fn copy_from_slice_at(&mut self, index: usize, src: &[T])
+    where
+        T: Copy,
+    {
+        let len = self.len as usize;
+        if index > len || src.len() > len - index {
+            panic!("const vec index out of bounds");
+        }
+        // SAFETY: `MaybeUninit<T>` has the same layout as `T`, the destination range
+        // `index..index + src.len()` is initialized and in bounds, and `src` cannot alias
+        // `self.memory` because `self` is borrowed mutably.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                src.as_ptr(),
+                self.memory.as_mut_ptr().add(index) as *mut T,
+                src.len(),
+            );
         }
     }
 
@@ -426,6 +472,22 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
 }
 
 impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
+    /// Create a [`ConstVec`] filled to its maximum size with zero bytes.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus_const_vec::ConstVec;
+    /// const ZEROED: ConstVec<u8, 4> = ConstVec::zeroed();
+    /// assert_eq!(ZEROED.as_ref(), &[0, 0, 0, 0]);
+    /// ```
+    pub const fn zeroed() -> Self {
+        Self {
+            memory: [MaybeUninit::new(0); MAX_SIZE],
+            len: MAX_SIZE as u32,
+        }
+    }
+
     /// Convert the [`ConstVec`] into a [`ConstReadBuffer`].
     ///
     /// # Example
