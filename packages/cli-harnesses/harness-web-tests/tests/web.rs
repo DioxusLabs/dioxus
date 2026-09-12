@@ -22,7 +22,7 @@ fn renders() {
     dom.rebuild_in_place();
 }
 
-#[dioxus_test_harness::test]
+#[dioxus_test_harness::test(platforms = [web])]
 fn fails() {
     assert_eq!(std::hint::black_box(1) + 1, 3);
 }
