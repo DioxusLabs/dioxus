@@ -9,10 +9,11 @@
 # Breaking crates get a second look against their last crates.io release. If main was
 # *already* incompatible with crates.io, the break is reported but allowed (main has
 # diverged, the door is already shut). If main was still compatible, this PR is the one
-# closing the door and the job fails. Add the `breaking` label to the PR to acknowledge
-# that and turn the failure into a warning.
+# closing the door and the job fails. Add the `allow-breaking` label to the PR to
+# acknowledge that and turn the failure into a warning.
 #
-# The report lands in the job summary and as a sticky PR comment.
+# The verdict is applied to the PR as one of the `semver: breaking` / `semver: expanding` /
+# `semver: compatible` labels; the detailed report is in the job log and job summary.
 
 name: Semver
 
@@ -41,7 +42,10 @@ env:
 
 jobs:
   semver:
-    if: github.event.pull_request.draft == false
+    # Re-run on label events only for the acknowledgement label, not for the labels this job applies.
+    if: |
+      github.event.pull_request.draft == false &&
+      (!contains(fromJSON('["labeled", "unlabeled"]'), github.event.action) || github.event.label.name == 'allow-breaking')
     name: "Semver | Classify API changes"
     runs-on: warp-ubuntu-latest-x64-8x
     permissions:
@@ -86,29 +90,39 @@ jobs:
           python3 .github/scripts/semver-check.py \
             --baseline-root "$GITHUB_WORKSPACE/../baseline" \
             --json semver-report.json \
-            ${{ contains(github.event.pull_request.labels.*.name, 'breaking') && '--allow-breaking' || '' }}
+            ${{ contains(github.event.pull_request.labels.*.name, 'allow-breaking') && '--allow-breaking' || '' }}
 
-      - name: Comment on PR
+      - name: Label PR
         if: always() && steps.check.outcome != 'skipped' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const marker = '<!-- semver-report -->';
-            let body;
+            const labels = {
+              'fresh-break': { name: 'semver: breaking',   color: 'b60205', description: 'Breaking public API change' },
+              'breaking':    { name: 'semver: breaking',   color: 'b60205', description: 'Breaking public API change' },
+              'expanding':   { name: 'semver: expanding',  color: '0e8a16', description: 'Adds public API (not backportable in a patch)' },
+              'compatible':  { name: 'semver: compatible', color: 'c5def5', description: 'No public API changes' },
+            };
+            let verdict;
             try {
-              body = JSON.parse(fs.readFileSync('semver-report.json', 'utf8')).report;
+              verdict = JSON.parse(fs.readFileSync('semver-report.json', 'utf8')).verdict;
             } catch {
-              body = '## Semver report\n\ncargo-semver-checks did not produce a report; see the job log.';
+              core.warning('no semver report produced; leaving labels untouched');
+              return;
             }
-            body = `${marker}\n${body}`;
+            const want = labels[verdict];
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
-            const existing = comments.find(c => c.user.type === 'Bot' && c.body.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            const current = (await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number })).data.map(l => l.name);
+            for (const stale of current.filter(n => n.startsWith('semver: ') && n !== want.name)) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: stale });
             }
+            if (current.includes(want.name)) return;
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: want.name });
+            } catch {
+              await github.rest.issues.createLabel({ owner, repo, ...want });
+            }
+            await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [want.name] });
