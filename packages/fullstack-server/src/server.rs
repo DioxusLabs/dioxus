@@ -67,11 +67,12 @@ pub trait DioxusRouterExt {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_dioxus_application<M: 'static>(
+    fn serve_dioxus_application<M: 'static, S>(
         self,
         cfg: ServeConfig,
         app: impl ComponentFunction<(), M> + Send + Sync,
-    ) -> Router<()>;
+    ) -> Router<S> where
+        S: Clone + Send + Sync + 'static;
 
     /// Registers server functions with the default handler.
     ///
@@ -161,11 +162,12 @@ impl DioxusRouterExt for Router<FullstackState> {
             .with_state(FullstackState::new(cfg, app))
     }
 
-    fn serve_dioxus_application<M: 'static>(
+    fn serve_dioxus_application<M: 'static, S>(
         self,
         cfg: ServeConfig,
         app: impl ComponentFunction<(), M> + Send + Sync,
-    ) -> Router<()> {
+    ) -> Router<S> where
+        S: Clone + Send + Sync + 'static {
         self.register_server_functions()
             .serve_static_assets()
             .fallback(get(FullstackState::render_handler))
