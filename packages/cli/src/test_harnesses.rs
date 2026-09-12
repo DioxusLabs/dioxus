@@ -364,7 +364,14 @@ fn fails() {
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Web);
                 assert_eq!(t.client.triple, "wasm32-unknown-unknown".parse().unwrap());
-            }),
+            })
+            .asrt(
+                r#"dx test --message-format json --junit out.xml --partition count:1/2 --tag ui"#,
+                |targets| async move {
+                    let t = targets.unwrap();
+                    assert_eq!(t.client.bundle, BundleFormat::Web);
+                },
+            ),
     ])
     .await;
 }

@@ -40,6 +40,10 @@
       "description": "Unified permissions configuration.\nPermissions declared here are automatically mapped to platform-specific\nidentifiers (AndroidManifest.xml, Info.plist, etc.)",
       "$ref": "#/$defs/PermissionsConfig"
     },
+    "test": {
+      "description": "`dx test` defaults.",
+      "$ref": "#/$defs/TestConfig"
+    },
     "web": {
       "$ref": "#/$defs/WebConfig"
     },
@@ -2264,6 +2268,58 @@
       "required": [
         "description"
       ]
+    },
+    "TestConfig": {
+      "description": "`[test]` section of `Dioxus.toml` - defaults for `dx test`.\n\nCLI flags always take precedence over these values.",
+      "type": "object",
+      "properties": {
+        "browser": {
+          "description": "Browser executable used for web tests.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fail_fast": {
+          "description": "Stop scheduling new tests after the first failure (default true).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "junit": {
+          "description": "Default JUnit XML output path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retries": {
+          "description": "Retry failing tests this many times.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "test_threads": {
+          "description": "Number of tests to run concurrently.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "timeout": {
+          "description": "Per-test timeout, e.g. `\"60s\"`, `\"250ms\"`, `\"2m\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     },
     "WasmOptConfig": {
       "description": "The wasm-opt configuration",
