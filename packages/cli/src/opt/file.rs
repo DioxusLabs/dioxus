@@ -10,6 +10,24 @@ use super::{
     json::process_json,
 };
 
+/// Copy a `public/` file verbatim so it is served as-is, bypassing the asset optimizer.
+///
+/// Optimizing a worker entry would inline its imports and shift `import.meta.url`, breaking the
+/// runtime module re-import that `wasm-bindgen-rayon` uses to spawn its pool.
+pub(crate) fn copy_file_verbatim(source: &Path, output_path: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create directory")?;
+    }
+    std::fs::copy(source, output_path).with_context(|| {
+        format!(
+            "Failed to copy {} to {}",
+            source.display(),
+            output_path.display()
+        )
+    })?;
+    Ok(())
+}
+
 /// Process a specific file asset with the given options reading from the source and writing to the output path
 pub(crate) fn process_file_to(
     options: &AssetOptions,
@@ -142,5 +160,28 @@ fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
         }
         _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::default()),
         _ => ResolvedAssetType::File,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::copy_file_verbatim;
+
+    /// A `public/` module reaches the output untouched, including its imports and ES exports, and
+    /// nested output directories are created.
+    #[test]
+    fn public_js_module_is_copied_byte_for_byte() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("loader.js");
+        let output = dir.path().join("nested/out/loader.js");
+        let contents = r#"import init, { initThreadPool } from "./worker.js";
+export * from "./worker.js";
+export { default } from "./worker.js";
+"#;
+        std::fs::write(&source, contents).unwrap();
+
+        copy_file_verbatim(&source, &output).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), contents);
     }
 }

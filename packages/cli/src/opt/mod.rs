@@ -12,7 +12,7 @@ mod image;
 mod js;
 mod json;
 
-pub(crate) use file::process_file_to;
+pub(crate) use file::{copy_file_verbatim, process_file_to};
 pub(crate) use hash::add_hash_to_asset;
 pub(crate) use js::js_is_module;
 
