@@ -310,7 +310,7 @@ base16 = "0.2.1"
 digest = "0.10.7"
 sha2 = "0.10.9"
 walrus = { version = "0.27.2", features = ["parallel"] }
-id-arena = "2.2.1"
+id-arena = "2.3.0"
 async-compression = { version = "0.4", features = [
     "futures-io",
     "gzip",
@@ -318,7 +318,7 @@ async-compression = { version = "0.4", features = [
 ] }
 getrandom = { version = "0.3.3" }
 async-once-cell = { version = "0.5.4" }
-rayon = "1.10.0"
+rayon = "1.11.0"
 wasmparser = "0.235.0"
 itertools = "0.14.0"
 object = { version = "0.37.1" }
