@@ -35,6 +35,7 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     quote! {
+        #platform_cfg
         #func
 
         #platform_cfg
