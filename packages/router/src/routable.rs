@@ -255,7 +255,13 @@ where
         query_name: &str,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
-        write!(f, "{}={}", query_name, self)
+        // if there is no value, do not include it in the query string
+        let value = self.to_string();
+        if value.is_empty() {
+            Ok(())
+        } else {
+            write!(f, "{}={}", query_name, value)
+        }
     }
 }
 
