@@ -3,12 +3,12 @@
 use crate::{Outlet, OutletContext, Routable};
 use dioxus_core::{Element, provide_context, try_consume_context, use_hook};
 use dioxus_core_macro::{Props, component, rsx};
+use std::sync::Arc;
 
 /// Maps a child route into the root router and vice versa
-// NOTE: Currently child routers only support simple static prefixes, but this
-// API could be expanded to support dynamic prefixes as well
+// `Arc<dyn Fn>` rather than a fn pointer so the derive macro can capture parent dynamic-segment values
 pub(crate) struct ChildRouteMapping<R> {
-    format_route_as_root_route: fn(R) -> String,
+    format_route_as_root_route: Arc<dyn Fn(R) -> String>,
     parse_route_from_root_route: fn(&str) -> Option<R>,
 }
 
@@ -27,10 +27,25 @@ pub(crate) fn consume_child_route_mapping<R: Routable>() -> Option<ChildRouteMap
     try_consume_context()
 }
 
+/// Parse an absolute URL into `R`, walking any outer `ChildRouteMapping<R>` chain.
+pub fn parse_route_via_chain<R: Routable>(route: &str) -> Option<R> {
+    consume_child_route_mapping::<R>()
+        .and_then(|outer| outer.parse_route_from_root_route(route))
+        .or_else(|| route.parse().ok())
+}
+
+/// Format `value` as an absolute URL, walking any outer `ChildRouteMapping<R>` chain.
+pub fn format_route_via_chain<R: Routable>(value: R) -> String {
+    match consume_child_route_mapping::<R>() {
+        Some(outer) => outer.format_route_as_root_route(value),
+        None => value.to_string(),
+    }
+}
+
 impl<R> Clone for ChildRouteMapping<R> {
     fn clone(&self) -> Self {
         Self {
-            format_route_as_root_route: self.format_route_as_root_route,
+            format_route_as_root_route: Arc::clone(&self.format_route_as_root_route),
             parse_route_from_root_route: self.parse_route_from_root_route,
         }
     }
@@ -44,7 +59,7 @@ pub struct ChildRouterProps<R: Routable> {
     /// Take a parent route and return a child route or none if the route is not part of the child
     parse_route_from_root_route: fn(&str) -> Option<R>,
     /// Take a child route and return a parent route
-    format_route_as_root_route: fn(R) -> String,
+    format_route_as_root_route: Arc<dyn Fn(R) -> String>,
 }
 
 impl<R: Routable> PartialEq for ChildRouterProps<R> {
