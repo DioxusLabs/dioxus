@@ -221,8 +221,9 @@ impl BundleContext<'_> {
     ///    under `/usr/lib/<product-name>/...`.
     /// 6. Copy configured sidecar binaries into `/usr/bin` so RPM payloads match the
     ///    other Linux formats.
-    /// 7. Reuse Debian-style custom files and maintainer scripts where applicable.
-    /// 8. Attach runtime dependency declarations from the Debian settings.
+    /// 7. Add custom files and maintainer scripts from `[bundle.rpm]`.
+    /// 8. Attach `Requires`, `Recommends`, `Provides`, `Conflicts`, and `Obsoletes`
+    ///    from `[bundle.rpm]`.
     /// 9. Serialize the final package to disk and remove the temporary staging area.
     ///
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
@@ -254,9 +255,8 @@ impl BundleContext<'_> {
             )
             .context("Failed to add binary to RPM")?;
 
-        let deb_settings = self.deb();
-        let desktop_content =
-            self.generate_linux_desktop_file(deb_settings.desktop_template.as_deref())?;
+        let rpm_settings = self.rpm();
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_dest = format!("/usr/share/applications/{name}.desktop");
 
         let temp_dir = output_dir.join("_rpm_temp");
@@ -369,7 +369,7 @@ impl BundleContext<'_> {
         }
 
         let crate_dir = self.crate_dir();
-        for (dest_path, src_path) in &deb_settings.files {
+        for (dest_path, src_path) in &rpm_settings.files {
             let src = if src_path.is_absolute() {
                 src_path.clone()
             } else {
@@ -388,28 +388,28 @@ impl BundleContext<'_> {
             }
         }
 
-        if let Some(script_path) = &deb_settings.pre_install_script {
+        if let Some(script_path) = &rpm_settings.pre_install_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read pre-install script: {}", path.display())
             })?;
             builder = builder.pre_install_script(content);
         }
-        if let Some(script_path) = &deb_settings.post_install_script {
+        if let Some(script_path) = &rpm_settings.post_install_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read post-install script: {}", path.display())
             })?;
             builder = builder.post_install_script(content);
         }
-        if let Some(script_path) = &deb_settings.pre_remove_script {
+        if let Some(script_path) = &rpm_settings.pre_remove_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read pre-uninstall script: {}", path.display())
             })?;
             builder = builder.pre_uninstall_script(content);
         }
-        if let Some(script_path) = &deb_settings.post_remove_script {
+        if let Some(script_path) = &rpm_settings.post_remove_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read post-uninstall script: {}", path.display())
@@ -417,9 +417,29 @@ impl BundleContext<'_> {
             builder = builder.post_uninstall_script(content);
         }
 
-        if let Some(deps) = &deb_settings.depends {
-            for dep in deps {
-                builder = builder.requires(rpm::Dependency::any(dep));
+        if let Some(requires) = &rpm_settings.requires {
+            for require in requires {
+                builder = builder.requires(rpm::Dependency::any(require));
+            }
+        }
+        if let Some(recommends) = &rpm_settings.recommends {
+            for recommend in recommends {
+                builder = builder.recommends(rpm::Dependency::any(recommend));
+            }
+        }
+        if let Some(provides) = &rpm_settings.provides {
+            for provide in provides {
+                builder = builder.provides(rpm::Dependency::any(provide));
+            }
+        }
+        if let Some(conflicts) = &rpm_settings.conflicts {
+            for conflict in conflicts {
+                builder = builder.conflicts(rpm::Dependency::any(conflict));
+            }
+        }
+        if let Some(obsoletes) = &rpm_settings.obsoletes {
+            for obsolete in obsoletes {
+                builder = builder.obsoletes(rpm::Dependency::any(obsolete));
             }
         }
 
@@ -499,9 +519,7 @@ impl BundleContext<'_> {
         let desktop_dir = data_dir.join("usr/share/applications");
         fs::create_dir_all(&desktop_dir)?;
 
-        let deb_settings = self.deb();
-        let desktop_content =
-            self.generate_linux_desktop_file(deb_settings.desktop_template.as_deref())?;
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_path = desktop_dir.join(format!("{bin_name}.desktop"));
         fs::write(&desktop_path, &desktop_content)?;
 
@@ -567,11 +585,11 @@ impl BundleContext<'_> {
     }
 
     /// Generate the contents of a .desktop file for the given bundle context.
-    fn generate_linux_desktop_file(&self, desktop_template: Option<&Path>) -> Result<String> {
+    fn generate_linux_desktop_file(&self) -> Result<String> {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(false);
 
-        let template = match desktop_template {
+        let template = match self.linux().desktop_template.as_deref() {
             // Path to template
             Some(path) => fs::read_to_string(path)
                 .with_context(|| format!("Failed to read desktop template: {}", path.display()))?,
