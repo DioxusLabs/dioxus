@@ -76,6 +76,44 @@ where
     fn append_to(self, target: Target) -> Self::Output;
 }
 
+/// A dynamic attribute slot whose values were pushed ahead of the view.
+///
+/// `rsx!` evaluates every dynamic attribute into the body's [`DynamicValues`] before the typed
+/// view (see [`push_dyn_attrs`] and [`push_element_attrs`]) and marks its template position with
+/// this zero-sized view, so the view itself never carries runtime attribute values and
+/// [`View::push`] is never instantiated for it.
+#[doc(hidden)]
+pub struct DynamicAttributeSlot;
+
+impl ViewTemplate for DynamicAttributeSlot {
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::DynamicAttr;
+    const HAS_DYNAMIC: bool = false;
+}
+
+impl View for DynamicAttributeSlot {}
+
+/// Push an already boxed attribute list onto `dynamic`, filling the next
+/// [`DynamicAttributeSlot`] of the body's template in order.
+#[doc(hidden)]
+#[inline]
+pub fn push_dyn_attrs(dynamic: &mut DynamicValues, attrs: Box<[Attribute]>) {
+    dynamic.push_attrs(attrs);
+}
+
+/// Push the single attribute a generated attribute method appended to an empty element onto
+/// `dynamic`, filling the next [`DynamicAttributeSlot`] of the body's template in order.
+///
+/// `rsx!` calls this with `html::div.class(value)` so the attribute method still resolves the
+/// attribute's name, namespace and value conversion; only the tag marker is generic here.
+#[doc(hidden)]
+#[inline]
+pub fn push_element_attrs<Tag>(
+    dynamic: &mut DynamicValues,
+    element: ElementBuilder<Tag, ((), DynamicAttributesBuilder), ()>,
+) {
+    dynamic.push_attrs(element.attrs.1.attrs);
+}
+
 /// A dynamic attribute slot.
 pub struct DynamicAttributesBuilder {
     attrs: Box<[Attribute]>,

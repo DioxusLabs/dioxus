@@ -127,36 +127,52 @@ fn into_vnode_with_template_and_values<V: View>(
 
 /// Runtime values for an `rsx!` body, sized for its dynamic node and attribute counts.
 ///
-/// `rsx!` pushes the body's dynamic node values into this (see
-/// [`push_dyn_node`](super::push_dyn_node)) before building the view, then hands both to
-/// [`vnode_from_tree`] / [`into_vnode_with_capacity`].
+/// `rsx!` pushes the body's dynamic node and attribute values into this (see
+/// [`push_dyn_node`](super::push_dyn_node) and [`push_dyn_attrs`](super::push_dyn_attrs)) before
+/// building the view, then hands both to [`vnode_from_tree`] / [`vnode_with_capacity`].
 #[doc(hidden)]
 #[inline]
 pub fn dynamic_values(dynamic_nodes: usize, dynamic_attributes: usize) -> DynamicValues {
     DynamicValues::with_capacity(dynamic_nodes, dynamic_attributes)
 }
 
+/// Set the root key of an `rsx!` body whose values are pushed ahead of the view.
+#[doc(hidden)]
+#[inline]
+pub fn set_key(dynamic: &mut DynamicValues, key: Option<String>) {
+    dynamic.set_key(key);
+}
+
 /// The static template tree of a view value's type.
 ///
-/// This and [`push_view`] are the only per-site generic code the debug `rsx!` expansion
-/// instantiates; everything else runs through the non-generic [`vnode_from_tree`].
+/// This is the only per-site generic code the debug `rsx!` expansion instantiates; everything
+/// else runs through the non-generic [`vnode_from_tree`].
 #[doc(hidden)]
 #[inline]
 pub fn template_tree<V: ViewTemplate>(_: &V) -> &'static TemplateRawTree {
     V::TEMPLATE_TREE
 }
 
-/// Push a view's runtime values (dynamic attributes and key) onto `dynamic`.
+/// Build a [`VNode`] for a view type whose runtime values were all pushed onto `dynamic` ahead
+/// of the view, using template capacities resolved at the call site.
 ///
-/// Dynamic nodes are pushed ahead of the view by `rsx!` (see
-/// [`push_dyn_node`](super::push_dyn_node)) and never live in it, so for the common body with
-/// only static attributes this is a no-op on a zero-sized view.
+/// The view value only fixes `V`; nothing is pushed from it, so no [`View::push`] is
+/// instantiated. Release `rsx!` expansions use this; debug ones use [`vnode_from_tree`].
 #[doc(hidden)]
 #[inline]
-pub fn push_view<V: View>(view: V, dynamic: &mut DynamicValues) {
-    if V::HAS_DYNAMIC {
-        view.push(dynamic);
-    }
+pub fn vnode_with_capacity<
+    const OPS_CAP: usize,
+    const STRING_CAP: usize,
+    const DYNAMIC_CAP: usize,
+    V: ViewTemplate,
+>(
+    _: &V,
+    dynamic: DynamicValues,
+) -> VNode {
+    VNode::new(
+        *StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
+        dynamic,
+    )
 }
 
 /// Build a [`VNode`] from a debug-only lazy template cached per raw tree.
@@ -164,7 +180,7 @@ pub fn push_view<V: View>(view: V, dynamic: &mut DynamicValues) {
 /// In dev builds the optimized template is lowered once at runtime from the view's
 /// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
 /// debug compile time) and cached by the tree's address, so a site needs no `static` of its own.
-/// Release builds use [`into_vnode_with_capacity`] and its const template instead.
+/// Release builds use [`vnode_with_capacity`] and its const template instead.
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 #[inline(never)]
@@ -197,23 +213,6 @@ fn runtime_template(tree: &'static TemplateRawTree) -> Template {
         .get_or_insert_default()
         .entry(key)
         .or_insert_with(|| dioxus_core_template::build_runtime_template(tree))
-}
-
-/// Convert a view into a [`VNode`] using template capacities resolved at the call site.
-pub fn into_vnode_with_capacity<
-    const OPS_CAP: usize,
-    const STRING_CAP: usize,
-    const DYNAMIC_CAP: usize,
-    V: View,
->(
-    view: V,
-    dynamic: DynamicValues,
-) -> VNode {
-    into_vnode_with_template_and_values(
-        view,
-        dynamic,
-        StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
-    )
 }
 
 impl View for () {}

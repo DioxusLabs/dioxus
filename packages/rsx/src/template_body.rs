@@ -141,6 +141,11 @@ impl ToTokens for TemplateBody {
         // First normalize the template body for rendering
         let node = self.normalized();
 
+        if let Some(static_text) = node.static_text_tokens() {
+            tokens.append_all(static_text);
+            return;
+        }
+
         let key_warnings = self.check_for_duplicate_keys();
 
         // Build the typed view once: the release tree, the capacities, and (in debug) the
@@ -148,14 +153,15 @@ impl ToTokens for TemplateBody {
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
         let raw_view_expr = &pieces.view;
-        // Dynamic node values are pushed into `__dynamic` (in template order) before the builder
-        // chain so that any borrows they take are released before the chain moves captured values
-        // into event-handler closures. This intentionally matches the 0.6 dynamic-node-before-
-        // attribute evaluation order instead of the more straightforward typed-builder evaluation
-        // order. It also keeps node values out of the typed view, which then only carries dynamic
-        // attributes and is zero-sized for most bodies. The key is bound first because it may
-        // borrow a value that one of those dynamic nodes moves.
+        // Every runtime value is pushed into `__dynamic` (in template order) before the view is
+        // built: the key first because it may borrow a value that a dynamic node moves, then the
+        // dynamic nodes, then the dynamic attributes so that any borrows the nodes take are
+        // released before the attributes move captured values into event-handler closures. This
+        // intentionally matches the 0.6 dynamic-node-before-attribute evaluation order. The typed
+        // view then carries no runtime value at all: it is a zero-sized value whose type fixes the
+        // template, so no `View::push` is ever instantiated for a body.
         let node_pushes = &pieces.node_pushes;
+        let attr_pushes = &pieces.attr_pushes;
         let node_count = pieces.dynamic_node_count;
         let attr_count = pieces.dynamic_attr_count;
         let implicit_key = node.implicit_key();
@@ -168,18 +174,17 @@ impl ToTokens for TemplateBody {
             && implicit_key.is_none()
             && !has_literal_pool;
         let dynamic_values = quote! { dioxus_core::view::dynamic_values(#node_count, #attr_count) };
-        let view_expr = match implicit_key {
-            Some(key) => quote! {{
-                use dioxus_core::view::ViewKeyExt as _;
-                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
+        let value_pushes = match implicit_key {
+            Some(key) => quote! {
                 let __key = Some(#key.to_string());
                 #(#node_pushes)*
-                #raw_view_expr.key(__key)
-            }},
-            None => quote! {{
+                #(#attr_pushes)*
+                dioxus_core::view::set_key(&mut __dynamic, __key);
+            },
+            None => quote! {
                 #(#node_pushes)*
-                #raw_view_expr
-            }},
+                #(#attr_pushes)*
+            },
         };
         let dynamic_text = pieces.dynamic_text_tokens.iter();
 
@@ -189,12 +194,12 @@ impl ToTokens for TemplateBody {
         let template_dynamic_cap = template_stats.anchors;
         let release_vnode = |dynamic: TokenStream2| {
             quote! {
-                dioxus_core::view::into_vnode_with_capacity::<
+                dioxus_core::view::vnode_with_capacity::<
                     #template_ops_cap,
                     #template_string_cap,
                     #template_dynamic_cap,
                     _,
-                >(__view, #dynamic)
+                >(&__view, #dynamic)
             }
         };
 
@@ -213,7 +218,7 @@ impl ToTokens for TemplateBody {
             // so the body needs no `DynamicValues` binding and no per-render hot-reload state.
             let release = release_vnode(dynamic_values);
             quote! {
-                let __view = #view_expr;
+                let __view = #raw_view_expr;
 
                 #[cfg(not(debug_assertions))]
                 {
@@ -229,17 +234,6 @@ impl ToTokens for TemplateBody {
                 }
             }
         } else {
-            // Only the debug path mutates `__dynamic` after the node pushes (`push_view`).
-            let dynamic_binding = if node_pushes.is_empty() {
-                quote! {
-                    #[cfg(debug_assertions)]
-                    let mut __dynamic = #dynamic_values;
-                    #[cfg(not(debug_assertions))]
-                    let __dynamic = #dynamic_values;
-                }
-            } else {
-                quote! { let mut __dynamic = #dynamic_values; }
-            };
             let release = release_vnode(quote! { __dynamic });
             let debug_render = if has_literal_pool {
                 quote! { __hot_reload_site.finish(__tree, __dynamic) }
@@ -247,8 +241,9 @@ impl ToTokens for TemplateBody {
                 quote! { dioxus_signals::render_site(#site, #hot_reload_meta, __tree, __dynamic) }
             };
             quote! {
-                #dynamic_binding
-                let __view = #view_expr;
+                let mut __dynamic = #dynamic_values;
+                #value_pushes
+                let __view = #raw_view_expr;
 
                 #[cfg(not(debug_assertions))]
                 {
@@ -258,7 +253,6 @@ impl ToTokens for TemplateBody {
                 #[cfg(debug_assertions)]
                 {
                     let __tree = dioxus_core::view::template_tree(&__view);
-                    dioxus_core::view::push_view(__view, &mut __dynamic);
                     #debug_render
                 }
             }
@@ -300,6 +294,7 @@ pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
     node_pushes: Vec<TokenStream2>,
+    attr_pushes: Vec<TokenStream2>,
     template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
@@ -309,8 +304,9 @@ pub(crate) struct ViewBuilderPieces {
 }
 
 impl ViewBuilderPieces {
+    /// A standalone element view that carries its own dynamic attribute values.
     fn from_element(element: &Element) -> Self {
-        let mut builder = ViewBuilder::new();
+        let mut builder = ViewBuilder::new(false);
         let template_stats = element_storage_stats(element);
         let view = builder.visit_element_with_diagnostics(element, true, false);
         builder.finish(view, template_stats)
@@ -319,7 +315,7 @@ impl ViewBuilderPieces {
     /// Walk all roots of a body into a single tuple `View` expression, carrying out the
     /// hot-reload tables and dynamic text pool gathered along the way.
     fn from_body(body: &TemplateBody) -> Self {
-        let mut builder = ViewBuilder::new();
+        let mut builder = ViewBuilder::new(true);
         let template_stats = sibling_storage_stats(&body.roots);
         let views = builder.visit_sibling_nodes(&body.roots, true);
         let view = group_sibling_views(views);
@@ -372,6 +368,11 @@ enum SiblingContext {
 struct ViewBuilder {
     definitions: Vec<TokenStream2>,
     node_pushes: Vec<TokenStream2>,
+    /// Whether dynamic attribute values are pushed onto `__dynamic` ahead of the view (in
+    /// template order, into `attr_pushes`) and replaced by a zero-sized slot in the view, or
+    /// stay in the view as `DynamicAttributesBuilder`s for a standalone element value.
+    hoist_dynamic_attrs: bool,
+    attr_pushes: Vec<TokenStream2>,
     dynamic_node_count: usize,
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
@@ -385,10 +386,12 @@ struct ViewBuilder {
 }
 
 impl ViewBuilder {
-    fn new() -> Self {
+    fn new(hoist_dynamic_attrs: bool) -> Self {
         Self {
             definitions: Vec::new(),
             node_pushes: Vec::new(),
+            hoist_dynamic_attrs,
+            attr_pushes: Vec::new(),
             dynamic_node_count: 0,
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
@@ -418,6 +421,7 @@ impl ViewBuilder {
             definitions: self.definitions,
             view,
             node_pushes: self.node_pushes,
+            attr_pushes: self.attr_pushes,
             template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
@@ -475,7 +479,7 @@ impl ViewBuilder {
 
         let mut attrs = TokenStream2::new();
         for attr in &element.merged_attributes {
-            attrs.extend(element.typed_builder_attribute(attr, self));
+            attrs.extend(element.typed_builder_attribute(&tag, attr, self));
         }
 
         // Allocate the key's formatted segments before the children's. The canonical fill order
@@ -542,10 +546,24 @@ impl ViewBuilder {
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
-        quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) }
+        if !self.hoist_dynamic_attrs {
+            return quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) };
+        }
+        self.attr_pushes.push(quote! {
+            dioxus_core::view::push_dyn_attrs(&mut __dynamic, #attrs);
+        });
+        quote! { .attribute(dioxus_core::view::DynamicAttributeSlot) }
     }
 
-    fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
+    /// A dynamic attribute set through the element's generated attribute method, which resolves
+    /// its name, namespace and value conversion. When hoisted, the method is called on an empty
+    /// element of the same tag ahead of the view and the view only keeps the slot.
+    fn dynamic_builder_attr(
+        &mut self,
+        tag: &TokenStream2,
+        attr: &Attribute,
+        method: Ident,
+    ) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attr_value = &attr.value;
         let method = if attr.name.is_likely_event() {
@@ -554,7 +572,13 @@ impl ViewBuilder {
             method
         };
         let value = quote! { #attr_value };
-        quote! { .#method(#value) }
+        if !self.hoist_dynamic_attrs {
+            return quote! { .#method(#value) };
+        }
+        self.attr_pushes.push(quote! {
+            dioxus_core::view::push_element_attrs(&mut __dynamic, #tag.#method(#value));
+        });
+        quote! { .attribute(dioxus_core::view::DynamicAttributeSlot) }
     }
 
     fn track_dynamic_attr(&mut self, attr: &Attribute) {
@@ -675,13 +699,18 @@ impl Element {
         ViewBuilderPieces::from_element(self)
     }
 
-    fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
+    fn typed_builder_attribute(
+        &self,
+        tag: &TokenStream2,
+        attr: &Attribute,
+        builder: &mut ViewBuilder,
+    ) -> TokenStream2 {
         if matches!(self.name, ElementName::Ident(_))
             && let AttributeName::BuiltIn(method) = &attr.name
             && !attr.name.is_likely_key()
         {
             if attr.name.is_likely_event() {
-                return builder.dynamic_builder_attr(attr, method.clone());
+                return builder.dynamic_builder_attr(tag, attr, method.clone());
             }
 
             if let Some((_, value)) = attr.as_static_str_literal() {
@@ -695,7 +724,7 @@ impl Element {
                 };
             }
 
-            return builder.dynamic_builder_attr(attr, method.clone());
+            return builder.dynamic_builder_attr(tag, attr, method.clone());
         }
 
         let Some((name, value)) = attr.as_static_str_literal() else {
@@ -867,6 +896,73 @@ impl TemplateBody {
 
     pub fn is_empty(&self) -> bool {
         self.roots.is_empty()
+    }
+
+    /// The expansion of a body made only of static text (`Link { to: "/", "Home" }` children, for
+    /// instance), or `None` for any other body.
+    ///
+    /// Such a body has no dynamic values, no literal pool and no names to resolve through the
+    /// element vocabulary, so its template tree is written out directly instead of going through
+    /// a typed view: no per-site string table, no per-site generic `template_tree` instantiation
+    /// and (in release) no per-site generic `vnode_with_capacity`. The tree, the release
+    /// template and the debug hot-reload path are exactly what the typed view would lower to.
+    fn static_text_tokens(&self) -> Option<TokenStream2> {
+        let texts = self
+            .roots
+            .iter()
+            .map(|root| match root {
+                BodyNode::Text(text) if text.is_static() => Some(text),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        if texts.is_empty() {
+            return None;
+        }
+
+        let nodes = texts.iter().map(|text| {
+            let value = text.input.to_static().unwrap();
+            quote_spanned! { text.input.span() =>
+                &dioxus_core::internal::TemplateRawTree::StaticText(#value)
+            }
+        });
+        // A single root lowers to its own node, several to a sequence (as tuple views do).
+        let tree = if texts.len() == 1 {
+            quote! { #(#nodes)* }
+        } else {
+            quote! { &dioxus_core::internal::TemplateRawTree::Sequence(&[#(#nodes),*]) }
+        };
+
+        let template_stats = sibling_storage_stats(&self.roots);
+        let template_ops_cap = template_stats.ops;
+        let template_string_cap = template_stats.strings;
+        let template_dynamic_cap = template_stats.anchors;
+        let index = self.template_idx.get();
+        let diagnostics = &self.diagnostics;
+
+        Some(quote! {
+            dioxus_core::Element::Ok({
+                #diagnostics
+
+                const __TREE: &'static dioxus_core::internal::TemplateRawTree = #tree;
+
+                #[cfg(not(debug_assertions))]
+                {
+                    const __TEMPLATE: &'static dioxus_core::Template =
+                        &dioxus_core::internal::TemplateStorage::<
+                            #template_ops_cap,
+                            #template_string_cap,
+                            #template_dynamic_cap,
+                        >::build_from_tree(__TREE)
+                        .as_template();
+                    dioxus_core::VNode::new(*__TEMPLATE, dioxus_core::view::dynamic_values(0, 0))
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    dioxus_signals::render_static_site(file!(), line!(), column!(), #index, __TREE)
+                }
+            })
+        })
     }
 
     pub fn implicit_key(&self) -> Option<&AttributeValue> {
