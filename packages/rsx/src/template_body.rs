@@ -14,20 +14,28 @@ use syn::parse_quote;
 /// than this are emitted as several tuples joined structurally (see `group_sibling_views`).
 const MAX_TUPLE_VIEW_ARITY: usize = 128;
 
-/// Group per-sibling typed views into `<= MAX_TUPLE_VIEW_ARITY`-wide tuples.
+/// Join per-sibling typed views into one tuple view.
 ///
 /// A sibling list wider than [`MAX_TUPLE_VIEW_ARITY`] cannot be a single tuple, so it is split into
-/// several. The split is transparent to the lowered template: each tuple lowers to a `Sequence`,
-/// and nested sequences flatten to exactly the same ops and dynamic-slot order as one flat list.
-/// The caller joins multiple groups with `.child(..)` on an element or `fragment()`.
-fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
-    views
-        .chunks(MAX_TUPLE_VIEW_ARITY)
-        .map(|chunk| {
-            let chunk = chunk.iter();
-            quote! { (#(#chunk,)*) }
-        })
-        .collect()
+/// several, which are in turn grouped until one tuple remains. The split is transparent to the
+/// lowered template: each tuple lowers to a `Sequence`, and nested sequences flatten to exactly the
+/// same ops and dynamic-slot order as one flat list.
+fn group_sibling_views(mut views: Vec<TokenStream2>) -> TokenStream2 {
+    if views.is_empty() {
+        return quote! { () };
+    }
+    loop {
+        views = views
+            .chunks(MAX_TUPLE_VIEW_ARITY)
+            .map(|chunk| {
+                let chunk = chunk.iter();
+                quote! { (#(#chunk,)*) }
+            })
+            .collect();
+        if views.len() == 1 {
+            return views.pop().unwrap();
+        }
+    }
 }
 
 /// Drives a [`TemplateStatsBuilder`] from a canonical fill-order walk so the predicted op/string/
@@ -150,19 +158,17 @@ impl ToTokens for TemplateBody {
         let node_pushes = &pieces.node_pushes;
         let node_count = pieces.dynamic_node_count;
         let attr_count = pieces.dynamic_attr_count;
+        let implicit_key = node.implicit_key();
+        // Only bodies with formatted text or component literals read from the hot-reload literal
+        // pool while the view evaluates; every other body defers the hot-reload read to the site.
+        let has_literal_pool =
+            !pieces.dynamic_text_tokens.is_empty() || !pieces.component_value_tokens.is_empty();
+        let is_static = node_pushes.is_empty()
+            && attr_count == 0
+            && implicit_key.is_none()
+            && !has_literal_pool;
         let dynamic_values = quote! { dioxus_core::view::dynamic_values(#node_count, #attr_count) };
-        // Only the debug path mutates `__dynamic` after the node pushes (`push_view`).
-        let dynamic_binding = if node_pushes.is_empty() {
-            quote! {
-                #[cfg(debug_assertions)]
-                let mut __dynamic = #dynamic_values;
-                #[cfg(not(debug_assertions))]
-                let __dynamic = #dynamic_values;
-            }
-        } else {
-            quote! { let mut __dynamic = #dynamic_values; }
-        };
-        let view_expr = match node.implicit_key() {
+        let view_expr = match implicit_key {
             Some(key) => quote! {{
                 use dioxus_core::view::ViewKeyExt as _;
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
@@ -181,6 +187,83 @@ impl ToTokens for TemplateBody {
         let template_ops_cap = template_stats.ops;
         let template_string_cap = template_stats.strings;
         let template_dynamic_cap = template_stats.anchors;
+        let release_vnode = |dynamic: TokenStream2| {
+            quote! {
+                dioxus_core::view::into_vnode_with_capacity::<
+                    #template_ops_cap,
+                    #template_string_cap,
+                    #template_dynamic_cap,
+                    _,
+                >(__view, #dynamic)
+            }
+        };
+
+        // In release the optimized template is the const `&'static Template` built through the
+        // type system. In debug builds that per-site const evaluation dominates compile time, so
+        // the identical template is lowered once at runtime and cached per site.
+        let vnode = if is_static {
+            // Nothing runs between building the zero-sized view and handing its tree to the site,
+            // so the body needs no `DynamicValues` binding and no per-render hot-reload state.
+            let release = release_vnode(dynamic_values);
+            quote! {
+                let __view = #view_expr;
+
+                #[cfg(not(debug_assertions))]
+                {
+                    #release
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    __RSX_SITE.render_static(dioxus_core::view::template_tree(&__view))
+                }
+            }
+        } else {
+            // Only the debug path mutates `__dynamic` after the node pushes (`push_view`).
+            let dynamic_binding = if node_pushes.is_empty() {
+                quote! {
+                    #[cfg(debug_assertions)]
+                    let mut __dynamic = #dynamic_values;
+                    #[cfg(not(debug_assertions))]
+                    let __dynamic = #dynamic_values;
+                }
+            } else {
+                quote! { let mut __dynamic = #dynamic_values; }
+            };
+            let release = release_vnode(quote! { __dynamic });
+            let debug_render = if has_literal_pool {
+                quote! { __hot_reload_site.finish(__tree, __dynamic) }
+            } else {
+                quote! { __RSX_SITE.render(__tree, __dynamic) }
+            };
+            quote! {
+                #dynamic_binding
+                let __view = #view_expr;
+
+                #[cfg(not(debug_assertions))]
+                {
+                    #release
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    let __tree = dioxus_core::view::template_tree(&__view);
+                    dioxus_core::view::push_view(__view, &mut __dynamic);
+                    #debug_render
+                }
+            }
+        };
+
+        // The site's hot-reload read and literal pool must be in scope before the view is built:
+        // component literal props pull their hot-reloaded value from the site while the view
+        // expression evaluates. The read guard stays alive until `finish`.
+        let hot_reload_site = has_literal_pool.then(|| {
+            quote! {
+                #[cfg(debug_assertions)]
+                let __hot_reload_site =
+                    dioxus_signals::HotReloadSite::new(&__RSX_SITE, vec![ #( #dynamic_text ),* ]);
+            }
+        });
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
@@ -207,51 +290,9 @@ impl ToTokens for TemplateBody {
                     #hot_reload_meta,
                 );
 
-                // The site's hot-reload read and literal pool must be in scope before the view is
-                // built: component literal props pull their hot-reloaded value from the site while
-                // the view expression evaluates. The read guard stays alive until `finish`.
-                #[cfg(debug_assertions)]
-                let __hot_reload_site =
-                    dioxus_signals::HotReloadSite::new(&__RSX_SITE, vec![ #( #dynamic_text ),* ]);
+                #hot_reload_site
 
-                // In release the optimized template is the const `&'static Template` built through
-                // the type system. In debug builds that per-site const evaluation dominates compile
-                // time, so the identical template is lowered once at runtime and cached per site.
-                let __vnode = {
-                    #dynamic_binding
-                    let __view = #view_expr;
-
-                    #[cfg(not(debug_assertions))]
-                    {
-                        dioxus_core::view::into_vnode_with_capacity::<
-                            #template_ops_cap,
-                            #template_string_cap,
-                            #template_dynamic_cap,
-                            _,
-                        >(__view, __dynamic)
-                    }
-
-                    #[cfg(debug_assertions)]
-                    {
-                        let __tree = dioxus_core::view::template_tree(&__view);
-                        dioxus_core::view::push_view(__view, &mut __dynamic);
-                        dioxus_core::view::vnode_from_cached_template(
-                            &__RSX_SITE.template,
-                            __tree,
-                            __dynamic,
-                        )
-                    }
-                };
-
-                #[cfg(not(debug_assertions))]
-                {
-                    __vnode
-                }
-
-                #[cfg(debug_assertions)]
-                {
-                    __hot_reload_site.finish(__vnode)
-                }
+                #vnode
             })
         });
     }
@@ -283,15 +324,7 @@ impl ViewBuilderPieces {
         let mut builder = ViewBuilder::new();
         let template_stats = sibling_storage_stats(&body.roots);
         let views = builder.visit_sibling_nodes(&body.roots, true);
-        // Roots have no enclosing element, so they group through a `fragment()` rather than an
-        // element builder's `.child(..)`. A single group is just the tuple itself.
-        let groups = group_sibling_views(views);
-        let view = if groups.len() == 1 {
-            groups.into_iter().next().unwrap()
-        } else {
-            let groups = groups.iter();
-            quote! { dioxus_core::view::fragment() #(.child_view(#groups))* }
-        };
+        let view = group_sibling_views(views);
         builder.finish(view, template_stats)
     }
 
@@ -462,13 +495,8 @@ impl ViewBuilder {
         let view = if element.children.is_empty() {
             quote! { #tag #attrs }
         } else {
-            let children = self.visit_sibling_nodes(&element.children, false);
-            // The first group seeds the element's children; any further groups (only when there are
-            // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
-            let groups = group_sibling_views(children);
-            let (first, rest) = groups.split_first().expect("at least one group");
-            let rest = rest.iter();
-            quote! { #tag #attrs.child_view(#first) #(.child_view(#rest))* }
+            let children = group_sibling_views(self.visit_sibling_nodes(&element.children, false));
+            quote! { dioxus_core::view::ElementWithChildren(#tag #attrs, #children) }
         };
 
         if emit_diagnostics {

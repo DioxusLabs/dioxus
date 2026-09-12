@@ -20,6 +20,7 @@ rsx! {
     div { id: "root", class: "old-class",
         h1 { title: "{label}", "Hello {label}" }
         Greeting { name: "old-literal", times: 1 }
+        Card { strong { "static child" } }
         p { hidden: count > 5, "count: {count}" }
         ul {
             for i in 0..count {
@@ -34,6 +35,7 @@ const APP_RSX_OLD: &str = r#"
     div { id: "root", class: "old-class",
         h1 { title: "{label}", "Hello {label}" }
         Greeting { name: "old-literal", times: 1 }
+        Card { strong { "static child" } }
         p { hidden: count > 5, "count: {count}" }
         ul {
             for i in 0..count {
@@ -44,12 +46,14 @@ const APP_RSX_OLD: &str = r#"
 "#;
 
 // Static text/attribute edits, a formatted dynamic attribute edit, a component literal edit, a
-// dynamic node reorder, and text and key edits inside a nested (`for` body) template.
+// dynamic node reorder, text and key edits inside a nested (`for` body) template, and an edit
+// inside a fully static nested (component children) template.
 const APP_RSX_NEW: &str = r#"
     div { id: "root", class: "new-class",
         p { hidden: count > 5, "count: {count}" }
         h1 { title: "t-{label}", "Hi {label}!" }
         Greeting { name: "new-literal", times: 2 }
+        Card { strong { "edited child" } }
         ul {
             for i in 0..count {
                 li { key: "k{i}", "row {i}" }
@@ -62,6 +66,14 @@ const APP_RSX_NEW: &str = r#"
 fn Greeting(name: String, times: i32) -> Element {
     rsx! {
         span { "{name}x{times}" }
+    }
+}
+
+// A body with a dynamic node but no formatted text or component literals.
+#[component]
+fn Card(children: Element) -> Element {
+    rsx! {
+        section { {children} }
     }
 }
 
@@ -93,8 +105,8 @@ fn hot_reload_app(dom: &VirtualDom) {
         }
     });
     assert_eq!(
-        applied, 2,
-        "the root and the `for` body templates should be hot reloaded"
+        applied, 3,
+        "the root, the `Card` children and the `for` body templates should be hot reloaded"
     );
 }
 
@@ -104,14 +116,14 @@ fn renders_hot_reloaded_template() {
     dom.rebuild_in_place();
     assert_eq!(
         dioxus_ssr::render(&dom),
-        r#"<div id="root" class="old-class"><h1 title="world">Hello world</h1><span>old-literalx1</span><p>count: 2</p><ul><li>item 0</li><li>item 1</li></ul></div>"#
+        r#"<div id="root" class="old-class"><h1 title="world">Hello world</h1><span>old-literalx1</span><section><strong>static child</strong></section><p>count: 2</p><ul><li>item 0</li><li>item 1</li></ul></div>"#
     );
 
     hot_reload_app(&dom);
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
     assert_eq!(
         dioxus_ssr::render(&dom),
-        r#"<div id="root" class="new-class"><p>count: 2</p><h1 title="t-world">Hi world!</h1><span>new-literalx2</span><ul><li>row 0</li><li>row 1</li></ul></div>"#
+        r#"<div id="root" class="new-class"><p>count: 2</p><h1 title="t-world">Hi world!</h1><span>new-literalx2</span><section><strong>edited child</strong></section><ul><li>row 0</li><li>row 1</li></ul></div>"#
     );
 
     // Re-rendering without a new template keeps the hot-reloaded output.
@@ -119,6 +131,6 @@ fn renders_hot_reloaded_template() {
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
     assert_eq!(
         dioxus_ssr::render(&dom),
-        r#"<div id="root" class="new-class"><p>count: 2</p><h1 title="t-world">Hi world!</h1><span>new-literalx2</span><ul><li>row 0</li><li>row 1</li></ul></div>"#
+        r#"<div id="root" class="new-class"><p>count: 2</p><h1 title="t-world">Hi world!</h1><span>new-literalx2</span><section><strong>edited child</strong></section><ul><li>row 0</li><li>row 1</li></ul></div>"#
     );
 }

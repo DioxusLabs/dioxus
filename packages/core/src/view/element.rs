@@ -19,9 +19,9 @@ pub trait ElementTag {
 
 /// A typed element view.
 pub struct ElementBuilder<Tag, Attributes, Children> {
-    attrs: Attributes,
-    children: Children,
-    _tag: PhantomData<Tag>,
+    pub(super) attrs: Attributes,
+    pub(super) children: Children,
+    pub(super) _tag: PhantomData<Tag>,
 }
 
 /// Create an empty typed element for a tag marker.
@@ -63,21 +63,38 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
             _tag: PhantomData,
         }
     }
+}
 
-    /// Append one child that is already a typed view.
-    ///
-    /// `rsx!` uses this instead of [`Self::child`]: its children are always views, so the
-    /// [`IntoViewChild`] marker inference (and its per-call-site instantiation) is skipped.
+/// A childless typed element paired with its children.
+///
+/// `rsx!` attaches children with this struct literal rather than [`ElementBuilder::child`]: the
+/// children are always typed views, so no per-element method instantiation is needed to join them,
+/// and the pair lowers exactly like the equivalent `ElementBuilder<Tag, Attributes, Children>`.
+#[doc(hidden)]
+pub struct ElementWithChildren<Element, Children>(pub Element, pub Children);
+
+impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
+    for ElementWithChildren<ElementBuilder<Tag, Attributes, ()>, Children>
+{
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Element {
+        tag: Tag::NAME,
+        namespace: Tag::NAMESPACE,
+        attrs: Attributes::TEMPLATE_TREE,
+        children: Children::TEMPLATE_TREE,
+    };
+    const HAS_DYNAMIC: bool = Attributes::HAS_DYNAMIC || Children::HAS_DYNAMIC;
+}
+
+impl<Tag: ElementTag, Attributes: View, Children: View> View
+    for ElementWithChildren<ElementBuilder<Tag, Attributes, ()>, Children>
+{
     #[inline]
-    #[doc(hidden)]
-    pub fn child_view<Child: View>(
-        self,
-        child: Child,
-    ) -> ElementBuilder<Tag, Attributes, (Children, Child)> {
-        ElementBuilder {
-            attrs: self.attrs,
-            children: (self.children, child),
-            _tag: PhantomData,
+    fn push(self, dynamic: &mut DynamicValues) {
+        if Attributes::HAS_DYNAMIC {
+            self.0.attrs.push(dynamic);
+        }
+        if Children::HAS_DYNAMIC {
+            self.1.push(dynamic);
         }
     }
 }

@@ -126,7 +126,16 @@ impl<Tag, Attributes, Children> AttributeBuilderTarget
 
     #[inline]
     fn append_attribute(self, attr: Attribute) -> Self::Output {
-        self.attribute(dynamic_attributes_builder(Box::new([attr])))
+        ElementBuilder {
+            attrs: (
+                self.attrs,
+                DynamicAttributesBuilder {
+                    attrs: Box::new([attr]),
+                },
+            ),
+            children: self.children,
+            _tag: PhantomData,
+        }
     }
 }
 
@@ -178,6 +187,10 @@ where
 
     #[inline]
     fn append_to(self, target: ElementBuilder<Tag, Attributes, Children>) -> Self::Output {
-        target.attribute(StaticAttributeBuilder(PhantomData))
+        ElementBuilder {
+            attrs: (target.attrs, StaticAttributeBuilder(PhantomData)),
+            children: target.children,
+            _tag: PhantomData,
+        }
     }
 }

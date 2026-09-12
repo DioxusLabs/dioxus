@@ -10,11 +10,8 @@ use super::{IntoViewChild, View, ViewTemplate};
 ///
 /// Like [`ElementBuilder`](super::ElementBuilder) it collects children into a cons list via
 /// [`FragmentBuilder::child`], but it contributes no node of its own - it lowers to exactly its
-/// children, in order. That makes it the container for a template's roots and for grouping more
-/// siblings than a single tuple can hold: `View`/`ViewTemplate` are only implemented for tuples up
-/// to arity 128, so wider lists are split into several tuple groups joined through `.child(..)`.
-/// Nested fragments and tuples flatten transparently into the surrounding template, so the grouping
-/// leaves no trace in the lowered ops or dynamic-slot order.
+/// children, in order. Nested fragments and tuples flatten transparently into the surrounding
+/// template, so grouping leaves no trace in the lowered ops or dynamic-slot order.
 pub struct FragmentBuilder<Children> {
     children: Children,
 }
@@ -37,16 +34,6 @@ impl<Children> FragmentBuilder<Children> {
     {
         FragmentBuilder {
             children: (self.children, child.into_child()),
-        }
-    }
-
-    /// Append one child that is already a typed view (see
-    /// [`ElementBuilder::child_view`](super::ElementBuilder::child_view)).
-    #[inline]
-    #[doc(hidden)]
-    pub fn child_view<Child: View>(self, child: Child) -> FragmentBuilder<(Children, Child)> {
-        FragmentBuilder {
-            children: (self.children, child),
         }
     }
 }

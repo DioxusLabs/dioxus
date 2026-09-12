@@ -374,6 +374,36 @@ impl RsxSite {
             meta,
         }
     }
+
+    /// Render a site whose body has no formatted text and no component literals: nothing needs
+    /// to be read from a literal pool, so the hot-reload slot is consulted only once the
+    /// [`VNode`](dioxus_core::VNode) is built.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn render(
+        &'static self,
+        tree: &'static dioxus_core::internal::TemplateRawTree,
+        dynamic: dioxus_core::DynamicValues,
+    ) -> dioxus_core::VNode {
+        let read = read_hot_reload_template(&self.signal);
+        let vnode = dioxus_core::view::vnode_from_cached_template(&self.template, tree, dynamic);
+        dioxus_core::internal::render_hot_reloaded(
+            vnode,
+            hot_reload_template(&read),
+            dioxus_core::internal::DynamicLiteralPool::new(Vec::new()),
+            &self.meta,
+        )
+    }
+
+    /// [`RsxSite::render`] for a fully static body.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn render_static(
+        &'static self,
+        tree: &'static dioxus_core::internal::TemplateRawTree,
+    ) -> dioxus_core::VNode {
+        self.render(tree, dioxus_core::view::dynamic_values(0, 0))
+    }
 }
 
 /// Initial value of every [`RsxSite`] hot-reload slot: one shared function rather than a closure
@@ -387,6 +417,7 @@ fn no_hot_reload_template() -> Option<dioxus_core::internal::HotReloadedTemplate
 ///
 /// `rsx!` creates this before evaluating the view (component literal props read through it) and
 /// hands the finished [`VNode`](dioxus_core::VNode) back to [`HotReloadSite::finish`].
+#[cfg(debug_assertions)]
 #[doc(hidden)]
 pub struct HotReloadSite {
     site: &'static RsxSite,
@@ -394,6 +425,7 @@ pub struct HotReloadSite {
     literal_pool: dioxus_core::internal::DynamicLiteralPool,
 }
 
+#[cfg(debug_assertions)]
 impl HotReloadSite {
     /// Read the site's hot-reload slot and build its literal pool from `dynamic_text`.
     #[doc(hidden)]
@@ -414,9 +446,16 @@ impl HotReloadSite {
         }
     }
 
-    /// Render `vnode` through the hot-reload pools, falling back to the site's original template.
+    /// Build the site's [`VNode`](dioxus_core::VNode) from its cached template and render it
+    /// through the hot-reload pools, falling back to the site's original template.
     #[doc(hidden)]
-    pub fn finish(self, vnode: dioxus_core::VNode) -> dioxus_core::VNode {
+    pub fn finish(
+        self,
+        tree: &'static dioxus_core::internal::TemplateRawTree,
+        dynamic: dioxus_core::DynamicValues,
+    ) -> dioxus_core::VNode {
+        let vnode =
+            dioxus_core::view::vnode_from_cached_template(&self.site.template, tree, dynamic);
         dioxus_core::internal::render_hot_reloaded(
             vnode,
             hot_reload_template(&self.read),
