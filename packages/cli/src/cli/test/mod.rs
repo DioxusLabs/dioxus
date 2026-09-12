@@ -104,7 +104,7 @@ pub(crate) struct TestArgs {
     #[clap(long)]
     pub(crate) browser: Option<String>,
 
-    /// Per-test timeout (e.g. `60s`, `250ms`). Defaults to the [test] timeout in
+    /// Per-test timeout (e.g. `60s`, `250ms`). Defaults to the \[test\] timeout in
     /// Dioxus.toml, then `60s`.
     #[clap(long)]
     pub(crate) timeout: Option<String>,
@@ -457,7 +457,7 @@ pub(crate) fn matches_filters(name: &str, filters: &[String], exact: bool) -> bo
     })
 }
 
-/// `cargo metadata` doesn't expose `harness`, so `harness = false` [[test]]
+/// `cargo metadata` doesn't expose `harness`, so `harness = false` \[\[test\]\]
 /// targets are detected by parsing the package manifest directly.
 pub(crate) fn is_harness_false(manifest: PathBuf, name: &str) -> Result<bool> {
     let text = std::fs::read_to_string(manifest)?;

@@ -10,7 +10,7 @@ use std::{path::PathBuf, process::Stdio, time::Instant};
 pub(crate) struct TestBinary {
     pub(crate) request: BuildRequest,
     pub(crate) exe: PathBuf,
-    /// `harness = false` [[test]] targets speak our JSON discovery protocol.
+    /// `harness = false` \[\[test\]\] targets speak our JSON discovery protocol.
     pub(crate) custom_harness: bool,
 }
 

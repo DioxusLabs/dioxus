@@ -36,7 +36,7 @@ struct Routes {
     senders: Mutex<HashMap<String, mpsc::UnboundedSender<Value>>>,
 }
 
-/// Select `harness = false` [[test]] targets, build them for wasm32, run
+/// Select `harness = false` \[\[test\]\] targets, build them for wasm32, run
 /// wasm-bindgen, and start one event server per binary.
 pub(crate) async fn build(args: &TestArgs, requests: &[BuildRequest]) -> Result<WebSuite> {
     let mut selected = Vec::new();
