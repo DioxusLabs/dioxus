@@ -321,6 +321,30 @@ impl GlobalLazyContext {
     }
 }
 
+/// The hot-reload template slot every `rsx!` site reads in debug builds.
+#[doc(hidden)]
+pub type HotReloadTemplateSignal = GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>>;
+
+/// Read guard over a [`HotReloadTemplateSignal`].
+#[doc(hidden)]
+pub type HotReloadTemplateRead = ReadableRef<'static, HotReloadTemplateSignal>;
+
+/// Read an `rsx!` site's hot-reload slot, if a runtime is active.
+#[doc(hidden)]
+pub fn read_hot_reload_template(
+    signal: &'static HotReloadTemplateSignal,
+) -> Option<HotReloadTemplateRead> {
+    Runtime::try_current().map(|_| signal.read())
+}
+
+/// Borrow the hot-reloaded template out of a [`read_hot_reload_template`] result.
+#[doc(hidden)]
+pub fn hot_reload_template(
+    read: &Option<HotReloadTemplateRead>,
+) -> Option<&dioxus_core::internal::HotReloadedTemplate> {
+    read.as_ref().and_then(|read| read.as_ref())
+}
+
 /// Get the global context for signals
 pub fn get_global_context() -> GlobalLazyContext {
     let rt = Runtime::current();

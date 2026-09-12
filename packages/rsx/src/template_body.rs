@@ -185,25 +185,23 @@ impl ToTokens for TemplateBody {
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable. The file path is normalized to
                     // forward slashes lazily inside `Global`.
-                    use dioxus_signals::ReadableExt;
+                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::HotReloadTemplateSignal =
+                        dioxus_signals::GlobalSignal::with_location(
+                            || None,
+                            file!(),
+                            line!(),
+                            column!(),
+                            #index
+                        );
 
-                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        file!(),
-                        line!(),
-                        column!(),
-                        #index
-                    );
-
-                    dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
+                    dioxus_signals::read_hot_reload_template(&__HOT_RELOAD_TEMPLATE)
                 };
 
                 // The hot-reloaded template, if this site has one. Borrows the read guard
                 // above, which stays alive until `render_with` at the end of this block.
                 #[cfg(debug_assertions)]
-                let __hot_reload_template = __hot_reload_template_read
-                    .as_ref()
-                    .and_then(|__template_read| __template_read.as_ref());
+                let __hot_reload_template =
+                    dioxus_signals::hot_reload_template(&__hot_reload_template_read);
 
                 // The literal pool and hot-reload read must be in scope before the view is built:
                 // component literal props pull their hot-reloaded value from the pool while the view
@@ -351,9 +349,10 @@ struct ViewBuilder {
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
-    /// Static literal contents -> marker type, deduplicated per template body.
-    static_text_markers: HashMap<String, Ident>,
-    static_attr_value_markers: HashMap<String, Ident>,
+    /// Static text and attribute-value literals, deduplicated into one per-body string table
+    /// that the view refers to by index.
+    static_strings: Vec<TokenStream2>,
+    static_string_indices: HashMap<String, usize>,
     hot_reload_key: Option<TokenStream2>,
     next_marker: usize,
 }
@@ -367,14 +366,27 @@ impl ViewBuilder {
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
             component_value_tokens: Vec::new(),
-            static_text_markers: HashMap::new(),
-            static_attr_value_markers: HashMap::new(),
+            static_strings: Vec::new(),
+            static_string_indices: HashMap::new(),
             hot_reload_key: None,
             next_marker: 0,
         }
     }
 
-    fn finish(self, view: TokenStream2, template_stats: TemplateStorageStats) -> ViewBuilderPieces {
+    fn finish(
+        mut self,
+        view: TokenStream2,
+        template_stats: TemplateStorageStats,
+    ) -> ViewBuilderPieces {
+        if !self.static_strings.is_empty() {
+            let strings = &self.static_strings;
+            self.definitions.push(quote! {
+                struct __DioxusStrings;
+                impl dioxus_core::view::StaticStrings for __DioxusStrings {
+                    const STRINGS: &'static [&'static str] = &[#(#strings),*];
+                }
+            });
+        }
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
@@ -473,25 +485,25 @@ impl ViewBuilder {
         }
     }
 
-    fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
-        let value = text.input.to_static().unwrap();
-        let marker = match self.static_text_markers.get(value.as_str()) {
-            Some(marker) => marker.clone(),
+    /// The marker type for a static literal: its index into the per-body string table.
+    fn static_string(&mut self, span: proc_macro2::Span, value: String) -> TokenStream2 {
+        let index = match self.static_string_indices.get(value.as_str()) {
+            Some(index) => *index,
             None => {
-                let marker = self.next_ident("__DioxusText");
-                self.static_text_markers
-                    .insert(value.clone(), marker.clone());
-                self.definitions.push(quote_spanned! { text.input.span() =>
-                    struct #marker;
-                    impl dioxus_core::view::StaticText for #marker {
-                        const TEXT: &'static str = #value;
-                    }
-                });
-                marker
+                let index = self.static_strings.len();
+                self.static_strings.push(quote_spanned! { span => #value });
+                self.static_string_indices.insert(value, index);
+                index
             }
         };
+        quote! { dioxus_core::view::Str::<__DioxusStrings, #index> }
+    }
+
+    fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
+        let span = text.input.span();
+        let marker = self.static_string(span, text.input.to_static().unwrap());
         quote_spanned! {
-            text.input.span() =>
+            span =>
             dioxus_core::view::StaticTextBuilder::<#marker>(::core::marker::PhantomData)
         }
     }
@@ -655,23 +667,7 @@ impl Element {
             }
 
             if let Some((_, value)) = attr.as_static_str_literal() {
-                let value = value.to_static().unwrap();
-                let marker = match builder.static_attr_value_markers.get(value.as_str()) {
-                    Some(marker) => marker.clone(),
-                    None => {
-                        let marker = builder.next_ident("__DioxusAttrValue");
-                        builder
-                            .static_attr_value_markers
-                            .insert(value.clone(), marker.clone());
-                        builder.definitions.push(quote_spanned! { attr.span() =>
-                            struct #marker;
-                            impl dioxus_core::view::StaticAttributeValue for #marker {
-                                const VALUE: &'static str = #value;
-                            }
-                        });
-                        marker
-                    }
-                };
+                let marker = builder.static_string(attr.span(), value.to_static().unwrap());
                 return quote! {
                     .#method(
                         dioxus_core::view::StaticAttributeValueBuilder::<#marker>(
