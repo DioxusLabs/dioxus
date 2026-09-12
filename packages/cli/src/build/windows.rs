@@ -84,10 +84,7 @@ impl BuildRequest {
             None => (version_str, version),
         };
 
-        let productname = match self.config.application.name.as_ref() {
-            Some(n) => n,
-            None => &self.bundled_app_name(),
-        };
+        let productname = self.bundled_app_name();
 
         let binding = package.description.clone().unwrap_or_default();
         let description = match bundle.short_description.as_ref() {
@@ -102,7 +99,7 @@ impl BuildRequest {
         winres
             .set(Properties::ProductVersion, version_str)
             .set(Properties::FileVersion, file_version_str)
-            .set(Properties::ProductName, productname)
+            .set(Properties::ProductName, &productname)
             .set(Properties::FileDescription, description);
 
         if let Some(value) = &bundle.original_file_name {
