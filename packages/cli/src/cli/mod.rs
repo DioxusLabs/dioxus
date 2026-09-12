@@ -16,6 +16,8 @@ pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod shell_completions;
 pub(crate) mod target;
+pub(crate) mod test;
+pub(crate) mod test_web;
 pub(crate) mod translate;
 pub(crate) mod update;
 pub(crate) mod verbosity;
@@ -106,6 +108,10 @@ pub(crate) enum Commands {
     /// Check the project for any issues.
     #[clap(name = "check")]
     Check(check::Check),
+
+    /// Build and run tests through the dx build pipeline.
+    #[clap(name = "test")]
+    Test(test::TestArgs),
 
     /// Dioxus config file controls.
     #[clap(subcommand)]

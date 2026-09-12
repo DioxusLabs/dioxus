@@ -4281,6 +4281,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-test-harness"
+version = "0.8.0-alpha.1"
+dependencies = [
+ "dioxus-test-harness-macro",
+ "futures-util",
+ "inventory",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "dioxus-test-harness-macro"
+version = "0.8.0-alpha.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "dioxus-vdom-fuzz"
 version = "0.8.0-alpha.1"
 dependencies = [
@@ -6407,6 +6432,16 @@ name = "harness-simple-web"
 version = "0.0.1"
 dependencies = [
  "dioxus",
+]
+
+[[package]]
+name = "harness-web-tests"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-signals",
+ "dioxus-test-harness",
 ]
 
 [[package]]

@@ -863,6 +863,7 @@ impl TraceController {
                     "package": cmd.package.is_some(),
                 }),
             ),
+            Commands::Test(cmd) => ("test".to_string(), cmd.anonymized()),
             Commands::Check(cmd) => (
                 "check".to_string(),
                 json!({
