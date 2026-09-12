@@ -3226,6 +3226,14 @@
         }
       }
     },
+    "WixInstallScope": {
+      "description": "MSI `InstallScope`. Defaults to `PerUser`.",
+      "type": "string",
+      "enum": [
+        "PerMachine",
+        "PerUser"
+      ]
+    },
     "WixSettings": {
       "type": "object",
       "properties": {
@@ -3276,6 +3284,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "install_scope": {
+          "description": "MSI install scope. Defaults to `PerUser` (`%LOCALAPPDATA%\\Programs`, no\nelevation). `PerMachine` installs under `ProgramFiles` and requires\nelevation.\n\nThis value must stay the same across updates because Windows Installer\ncannot perform a major upgrade across per-user and per-machine scopes.",
+          "$ref": "#/$defs/WixInstallScope"
         },
         "language": {
           "type": "array",
