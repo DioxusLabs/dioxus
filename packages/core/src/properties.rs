@@ -325,6 +325,66 @@ where
     }
 }
 
+/// Typestate slot for a prop with a default: `()` when unset, `(T,)` when set.
+#[doc(hidden)]
+pub trait OptionalProp<T> {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
+}
+impl<T> OptionalProp<T> for () {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
+        default()
+    }
+}
+impl<T> OptionalProp<T> for (T,) {
+    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
+        self.0
+    }
+}
+
+/// Typestate slot for a required prop. `Name` is a per-field marker type whose name is the prop name,
+/// so the diagnostic reads "missing required prop `foo`".
+#[doc(hidden)]
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "missing required prop `{Name}`",
+        label = "the prop `{Name}` must be set before this component can be built",
+        note = "props without a default value are required",
+    )
+)]
+pub trait RequiredProp<T, Name> {
+    fn into_value(self) -> T;
+}
+impl<T, Name> RequiredProp<T, Name> for (T,) {
+    fn into_value(self) -> T {
+        self.0
+    }
+}
+
+/// Autoref-specialization fallback used by generated `memoize` code: `&T` never compares equal.
+#[doc(hidden)]
+pub trait NonPartialEq: Sized {
+    fn compare(&self, other: &Self) -> bool;
+}
+
+impl<T> NonPartialEq for &&T {
+    fn compare(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+/// Autoref-specialization winner used by generated `memoize` code: `T: PartialEq` compares by value.
+#[doc(hidden)]
+pub trait CanPartialEq: PartialEq {
+    fn compare(&self, other: &Self) -> bool;
+}
+
+impl<T: PartialEq> CanPartialEq for T {
+    fn compare(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 /// A enhanced version of the `Into` trait that allows with more flexibility.
 pub trait SuperInto<O, M = ()> {
     /// Convert from a type to another type.
