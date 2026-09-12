@@ -42,7 +42,8 @@ pub fn run() {
                         "{}",
                         serde_json::json!({
                             "name": display_name(case.name), "file": case.file,
-                            "line": case.line, "ignore": case.ignore, "tags": case.tags
+                            "line": case.line, "ignore": case.ignore,
+                            "should_panic": case.should_panic, "tags": case.tags
                         })
                     );
                 }

@@ -17,7 +17,6 @@ pub(crate) mod serve;
 pub(crate) mod shell_completions;
 pub(crate) mod target;
 pub(crate) mod test;
-pub(crate) mod test_web;
 pub(crate) mod translate;
 pub(crate) mod update;
 pub(crate) mod verbosity;
