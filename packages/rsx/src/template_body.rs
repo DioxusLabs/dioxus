@@ -204,10 +204,11 @@ impl ToTokens for TemplateBody {
         };
 
         let index = node.template_idx.get();
-        // The site is keyed by its location and template index; the hot-reload slot lives in the
-        // runtime's global-signal context and the lowered template in a per-tree cache, so a site
-        // emits no `static` of its own. Only referenced inside `#[cfg(debug_assertions)]` blocks.
-        let site = quote! { file!(), line!(), column!(), #index };
+        // The site is keyed by the `rsx!` call's location (bound once per call by `CallBody`) and
+        // this body's template index; the hot-reload slot lives in the runtime's global-signal
+        // context and the lowered template in a per-tree cache, so a site emits no `static` of its
+        // own. Only referenced inside `#[cfg(debug_assertions)]` blocks.
+        let site = quote! { __rsx_location, #index };
         let hot_reload_meta = pieces.hot_reload_meta_tokens();
 
         // In release the optimized template is the const `&'static Template` built through the
@@ -260,7 +261,14 @@ impl ToTokens for TemplateBody {
 
         // The site's hot-reload read and literal pool must be in scope before the view is built:
         // component literal props pull their hot-reloaded value from the site while the view
-        // expression evaluates. The read guard stays alive until `finish`.
+        // expression evaluates. The read guard stays alive until `finish`. In release the same
+        // name is a no-op stand-in so the literal props need no `#[cfg]` of their own.
+        let release_site = (!pieces.component_value_tokens.is_empty()).then(|| {
+            quote! {
+                #[cfg(not(debug_assertions))]
+                let __hot_reload_site = dioxus_core::internal::NoHotReload;
+            }
+        });
         let hot_reload_site = has_literal_pool.then(|| {
             quote! {
                 #[cfg(debug_assertions)]
@@ -269,6 +277,7 @@ impl ToTokens for TemplateBody {
                     #hot_reload_meta,
                     vec![ #( #dynamic_text ),* ],
                 );
+                #release_site
             }
         });
 
@@ -959,7 +968,7 @@ impl TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
-                    dioxus_signals::render_static_site(file!(), line!(), column!(), #index, __TREE)
+                    dioxus_signals::render_static_site(__rsx_location, #index, __TREE)
                 }
             })
         })

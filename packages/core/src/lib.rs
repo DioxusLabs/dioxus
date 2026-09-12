@@ -65,8 +65,21 @@ pub mod internal {
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral, HotReloadLiteralMeta,
         HotReloadSiteMeta, HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute,
-        TemplateGlobalKey, render_hot_reloaded,
+        RsxLocation, TemplateGlobalKey, render_hot_reloaded,
     };
+
+    /// The stand-in for a debug `HotReloadSite` in release builds: component literal props are
+    /// written as `__hot_reload_site.component_property_or(id, literal)` in both profiles so the
+    /// expansion needs no per-literal `#[cfg]` pair, and here that just yields the literal.
+    #[derive(Clone, Copy)]
+    pub struct NoHotReload;
+
+    impl NoHotReload {
+        #[inline(always)]
+        pub fn component_property_or<T>(&self, _id: usize, value: T) -> T {
+            value
+        }
+    }
 
     pub use anyhow::__anyhow;
 

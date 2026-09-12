@@ -286,32 +286,19 @@ impl Component {
         let mut dynamic_literal_index = 0;
         let mut tokens = TokenStream2::new();
         for attribute in self.component_props() {
-            let release_value = attribute.value.to_token_stream();
-
-            // In debug mode, we try to grab the value from the dynamic literal pool if possible
+            // Literal props read through the enclosing body's hot-reload site: in debug that is
+            // the site's literal pool, in release a no-op that yields the literal itself.
             let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
                 let idx = literal_ids
                     .get(dynamic_literal_index)
                     .copied()
                     .unwrap_or(usize::MAX);
                 dynamic_literal_index += 1;
-                let debug_value = quote! {
-                    __hot_reload_site.component_property_or(#idx, #literal)
-                };
                 quote! {
-                    {
-                        #[cfg(debug_assertions)]
-                        {
-                            #debug_value
-                        }
-                        #[cfg(not(debug_assertions))]
-                        {
-                            #release_value
-                        }
-                    }
+                    __hot_reload_site.component_property_or(#idx, #literal)
                 }
             } else {
-                release_value
+                attribute.value.to_token_stream()
             };
 
             match &attribute.name {

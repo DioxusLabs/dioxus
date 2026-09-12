@@ -1,4 +1,4 @@
-use dioxus_core::{Runtime, ScopeId, Subscribers};
+use dioxus_core::{Runtime, ScopeId, Subscribers, internal::RsxLocation};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -338,22 +338,26 @@ pub type HotReloadTemplateSignal = GlobalSignal<Option<dioxus_core::internal::Ho
 #[doc(hidden)]
 pub type HotReloadTemplateRead = ReadableRef<'static, HotReloadTemplateSignal>;
 
-/// Read the hot-reload slot of the `rsx!` site at `file:line:column`, template `index`, if a
-/// runtime is active.
+/// Read the hot-reload slot of the `rsx!` site at `location`, template `index`, if a runtime
+/// is active.
 ///
 /// The slot itself lives in the runtime's global-signal context keyed by location, so the site
 /// needs no `static` of its own: the key is rebuilt from the call-site literals on every render.
 #[doc(hidden)]
 pub fn read_hot_reload_template(
-    file: &'static str,
-    line: u32,
-    column: u32,
+    location: RsxLocation,
     index: usize,
 ) -> Option<HotReloadTemplateRead> {
     Runtime::try_current().map(|_| {
         // The guard borrows the signal's generational box, not the transient `Global` key.
-        HotReloadTemplateSignal::with_location(no_hot_reload_template, file, line, column, index)
-            .read_unchecked()
+        HotReloadTemplateSignal::with_location(
+            no_hot_reload_template,
+            location.file,
+            location.line,
+            location.column,
+            index,
+        )
+        .read_unchecked()
     })
 }
 
@@ -371,21 +375,19 @@ fn no_hot_reload_template() -> Option<dioxus_core::internal::HotReloadedTemplate
     None
 }
 
-/// Render the `rsx!` site at `file:line:column`, template `index`, whose body has no formatted
-/// text and no component literals: nothing needs to be read from a literal pool, so the
-/// hot-reload slot is consulted only once the [`VNode`](dioxus_core::VNode) is built.
+/// Render the `rsx!` site at `location`, template `index`, whose body has no formatted text and
+/// no component literals: nothing needs to be read from a literal pool, so the hot-reload slot
+/// is consulted only once the [`VNode`](dioxus_core::VNode) is built.
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub fn render_site(
-    file: &'static str,
-    line: u32,
-    column: u32,
+    location: RsxLocation,
     index: usize,
     meta: dioxus_core::internal::HotReloadSiteMeta,
     tree: &'static dioxus_core::internal::TemplateRawTree,
     dynamic: dioxus_core::DynamicValues,
 ) -> dioxus_core::VNode {
-    let read = read_hot_reload_template(file, line, column, index);
+    let read = read_hot_reload_template(location, index);
     let vnode = dioxus_core::view::vnode_from_tree(tree, dynamic);
     dioxus_core::internal::render_hot_reloaded(
         vnode,
@@ -399,16 +401,12 @@ pub fn render_site(
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub fn render_static_site(
-    file: &'static str,
-    line: u32,
-    column: u32,
+    location: RsxLocation,
     index: usize,
     tree: &'static dioxus_core::internal::TemplateRawTree,
 ) -> dioxus_core::VNode {
     render_site(
-        file,
-        line,
-        column,
+        location,
         index,
         dioxus_core::internal::HotReloadSiteMeta::STATIC,
         tree,
@@ -432,19 +430,17 @@ pub struct HotReloadSite {
 
 #[cfg(debug_assertions)]
 impl HotReloadSite {
-    /// Read the hot-reload slot of the site at `file:line:column`, template `index`, and build its
+    /// Read the hot-reload slot of the site at `location`, template `index`, and build its
     /// literal pool from `dynamic_text`.
     #[doc(hidden)]
     pub fn new(
-        file: &'static str,
-        line: u32,
-        column: u32,
+        location: RsxLocation,
         index: usize,
         meta: dioxus_core::internal::HotReloadSiteMeta,
         dynamic_text: Vec<String>,
     ) -> Self {
         Self {
-            read: read_hot_reload_template(file, line, column, index),
+            read: read_hot_reload_template(location, index),
             meta,
             literal_pool: dioxus_core::internal::DynamicLiteralPool::new(dynamic_text),
         }

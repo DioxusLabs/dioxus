@@ -254,6 +254,23 @@ impl DynamicLiteralPool {
     }
 }
 
+/// The source location of an `rsx!` invocation, bound once per invocation in debug builds and
+/// shared by every template body nested in it (they differ only by template index).
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RsxLocation {
+    pub file: &'static str,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl RsxLocation {
+    /// `rsx!` calls this with `file!(), line!(), column!()`.
+    pub const fn new(file: &'static str, line: u32, column: u32) -> Self {
+        Self { file, line, column }
+    }
+}
+
 /// A component literal as `rsx!` records it in a site's static [`HotReloadSiteMeta`].
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq)]
