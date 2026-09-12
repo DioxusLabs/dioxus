@@ -238,15 +238,18 @@ impl Component {
         ));
 
         if !self.children.is_empty() {
-            let children = &self.children;
+            // Always a `Vec<Element>`, one entry per top-level child. This call site can't see
+            // the callee's declared field type, so which shape it actually wants is resolved on
+            // the other side, through `SuperInto`.
+            let children = self.children.to_vec_tokens();
             // If the props don't accept children, attach the error to the first child
             if manual_props.is_some() {
                 tokens.append_all(
-                    quote_spanned! { children.first_root_span() => __manual_props.children = #children; },
+                    quote_spanned! { self.children.first_root_span() => __manual_props.children = dioxus_core::SuperInto::super_into(#children); },
                 )
             } else {
                 tokens.append_all(
-                    quote_spanned! { children.first_root_span() => .children( #children ) },
+                    quote_spanned! { self.children.first_root_span() => .children( #children ) },
                 )
             }
         }

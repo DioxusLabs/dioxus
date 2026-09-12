@@ -172,7 +172,10 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
+    use crate::props::{
+        looks_like_store_type, looks_like_write_type, type_from_inside_option,
+        type_is_vec_of_elements,
+    };
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -204,10 +207,24 @@ mod field_info {
                 let strip_option_auto = builder_attr.strip_option
                     || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
 
-                // children field is automatically defaulted to an empty VNode unless it is marked as optional (in which case it defaults to None)
-                if name == "children" && !strip_option_auto {
-                    builder_attr.default =
-                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
+                if name == "children" {
+                    // The call site always builds a `Vec<Element>` (see `dioxus-rsx`'s
+                    // `component.rs`), so the setter takes `impl SuperInto<_>` like
+                    // `#[props(into)]` does - that's what lets the field declare either
+                    // `Element` or `Vec<Element>` and still accept the same call-site syntax.
+                    builder_attr.auto_into = true;
+
+                    // children is automatically defaulted to an empty VNode - or an empty Vec,
+                    // for a `children: Vec<Element>` field - unless it is marked as optional (in
+                    // which case it defaults to None)
+                    if !strip_option_auto {
+                        let default = if type_is_vec_of_elements(&field.ty) {
+                            quote!(::std::vec::Vec::new())
+                        } else {
+                            quote!(dioxus_core::VNode::empty())
+                        };
+                        builder_attr.default = Some(syn::parse(default.into()).unwrap());
+                    }
                 }
 
                 // String fields automatically use impl Display
@@ -495,6 +512,31 @@ mod field_info {
             }
         }
     }
+}
+
+/// Whether this is a `Vec<Element>`, however `Vec` and `Element` are spelled or pathed
+fn type_is_vec_of_elements(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+
+    let Some(seg) = type_path.path.segments.last() else {
+        return false;
+    };
+
+    if seg.ident != "Vec" {
+        return false;
+    }
+
+    let Some(Type::Path(inner)) = extract_inner_type_from_segment(seg) else {
+        return false;
+    };
+
+    inner
+        .path
+        .segments
+        .last()
+        .is_some_and(|seg| seg.ident == "Element")
 }
 
 fn type_from_inside_option(ty: &Type) -> Option<&Type> {
