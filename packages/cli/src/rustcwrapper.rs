@@ -188,9 +188,7 @@ fn has_linking_args() -> bool {
                 // Handle both UTF-8 and UTF-16LE encodings for response files.
                 let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
                     let binary_u16le: Vec<u16> = file_binary
-                        .as_chunks::<2>()
-                        .0
-                        .iter()
+                        .chunks_exact(2)
                         .map(|a| u16::from_le_bytes([a[0], a[1]]))
                         .collect();
                     String::from_utf16_lossy(&binary_u16le)

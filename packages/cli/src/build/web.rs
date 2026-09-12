@@ -435,7 +435,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             writeln!(
                 &mut head_resources,
                 "<link rel=\"stylesheet\" href=\"{}\">",
-                style.to_str().unwrap(),
+                &style.to_str().unwrap(),
             )?;
         }
 
@@ -444,7 +444,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             writeln!(
                 &mut head_resources,
                 "<script src=\"{}\"></script>",
-                script.to_str().unwrap(),
+                &script.to_str().unwrap(),
             )?;
         }
 

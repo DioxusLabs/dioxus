@@ -1065,7 +1065,7 @@ mod struct_info {
                 // the builder only implements this one marker "super trait". `html` blankets the
                 // umbrella and gated attribute extension traits over it, granting every method.
                 let spread_marker_name = Ident::new(
-                    format!("{camel_name}SpreadTarget").as_str(),
+                    format!("{}SpreadTarget", &camel_name).as_str(),
                     path.span(),
                 );
                 quote! {

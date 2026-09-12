@@ -1851,85 +1851,76 @@ impl BuildRequest {
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
-        // Link-only args below don't apply to check builds, which never reach a link step.
-        if !is_check {
-            // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
-            if matches!(self.bundle, BundleFormat::Windows)
-                && !self
-                    .rustflags
-                    .flags
-                    .iter()
-                    .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
-            {
-                let subsystem = self
-                    .windows_subsystem
-                    .clone()
-                    .unwrap_or_else(|| "WINDOWS".to_string());
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
+        if matches!(self.bundle, BundleFormat::Windows)
+            && !self
+                .rustflags
+                .flags
+                .iter()
+                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+        {
+            let subsystem = self
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
 
-                cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
-                // We also need to set the entry point to mainCRTStartup to avoid windows looking
-                // for a WinMain function
-                cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
+            cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
+        }
+
+        // The bundle splitter needs relocation data to create a call-graph.
+        // This will automatically be erased by wasm-opt during the optimization step.
+        if self.bundle == BundleFormat::Web && self.wasm_split {
+            cargo_args.push("-Clink-args=--emit-relocs".to_string());
+        }
+
+        // dx links android, thin builds, and fat builds with a custom linker.
+        // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
+        // frameworks that load at runtime, not linked statically into the binary.
+        // The link-only args are harmless for check builds, which never reach a link step.
+        let use_dx_linker = !matches!(build_mode, BuildMode::Check { .. })
+            && (self.custom_linker.is_some()
+                || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
+
+        if use_dx_linker {
+            cargo_args.push(format!(
+                "-Clinker={}",
+                Workspace::path_to_dx().expect("can't find dx").display()
+            ));
+        }
+
+        // for debuggability, we need to make sure android studio can properly understand our build
+        // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
+        if self.bundle == BundleFormat::Android {
+            cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
+        }
+
+        // Handle frameworks/dylibs by setting the rpath
+        // This is dependent on the bundle structure - iOS uses a flat structure while macOS uses nested
+        // todo: we need to figure out what to do for windows
+        match self.triple.operating_system {
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } => {
+                // macOS: App.app/Contents/MacOS/exe -> ../Frameworks/
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
-
-            // The bundle splitter needs relocation data to create a call-graph.
-            // This will automatically be erased by wasm-opt during the optimization step.
-            if self.bundle == BundleFormat::Web && self.wasm_split {
-                cargo_args.push("-Clink-args=--emit-relocs".to_string());
+            OperatingSystem::IOS(_) => {
+                // iOS: App.app/exe -> Frameworks/ (flat bundle structure)
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
-
-            // dx links android, thin builds, and fat builds with a custom linker.
-            // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
-            // frameworks that load at runtime, not linked statically into the binary.
-            let use_dx_linker = !matches!(build_mode, BuildMode::Check { .. })
-                && (self.custom_linker.is_some()
-                    || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
-
-            if use_dx_linker {
-                cargo_args.push(format!(
-                    "-Clinker={}",
-                    Workspace::path_to_dx().expect("can't find dx").display()
-                ));
+            OperatingSystem::Linux => {
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
-
-            // for debuggability, we need to make sure android studio can properly understand our build
-            // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
-            if self.bundle == BundleFormat::Android {
-                cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
-            }
-
-            // Handle frameworks/dylibs by setting the rpath
-            // This is dependent on the bundle structure - iOS uses a flat structure while macOS uses nested
-            // todo: we need to figure out what to do for windows
-            match self.triple.operating_system {
-                OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } => {
-                    // macOS: App.app/Contents/MacOS/exe -> ../Frameworks/
-                    cargo_args
-                        .push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
-                    cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+            OperatingSystem::Windows => {
+                if let Some((search_path, link_spec)) = self.winres_linker_args() {
+                    cargo_args.extend(["-L".to_string(), search_path, "-l".to_string(), link_spec]);
                 }
-                OperatingSystem::IOS(_) => {
-                    // iOS: App.app/exe -> Frameworks/ (flat bundle structure)
-                    cargo_args
-                        .push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
-                    cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
-                }
-                OperatingSystem::Linux => {
-                    cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
-                    cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
-                }
-                OperatingSystem::Windows => {
-                    if let Some((search_path, link_spec)) = self.winres_linker_args() {
-                        cargo_args.extend([
-                            "-L".to_string(),
-                            search_path,
-                            "-l".to_string(),
-                            link_spec,
-                        ]);
-                    }
-                }
-                _ => {}
             }
+            _ => {}
         }
 
         // Our fancy hot-patching engine needs a lot of customization to work properly.
@@ -2335,9 +2326,9 @@ impl BuildRequest {
     pub(crate) fn load_bundle_manifest(&self) -> Result<AppManifest> {
         let manifest_path = self.bundle_manifest_file();
         let manifest_data = std::fs::read_to_string(&manifest_path)
-            .with_context(|| format!("Failed to read manifest at {:?}", manifest_path))?;
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
         let manifest: AppManifest = serde_json::from_str(&manifest_data)
-            .with_context(|| format!("Failed to parse manifest at {:?}", manifest_path))?;
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
         Ok(manifest)
     }
 
