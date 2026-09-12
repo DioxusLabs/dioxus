@@ -294,6 +294,100 @@ async fn test_harnesses() {
                 assert_eq!(t.client.features.iter().map(|s| s.as_str()).collect::<HashSet<_>>(), ["dioxus/web", "other"].into_iter().collect::<HashSet<_>>());
                 assert!(t.server.is_none());
             }),
+        TestHarnessBuilder::new("harness-simple-desktop-tests")
+            .deps(r#"dioxus = { workspace = true, features = ["desktop"] }"#)
+            .asrt(r#"dx check"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert_eq!(t.client.triple, Triple::host());
+                assert!(t.server.is_none());
+            })
+            .asrt(r#"dx test"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert!(t.server.is_none());
+
+                // The rustc-wrapper scope dir must differ across build kinds so check/test
+                // captures never overwrite the fat/base captures used for hotpatch replay.
+                let mut req = t.client.clone();
+                let build = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
+                req.kind = crate::BuildKind::Check;
+                let check = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
+                req.kind = crate::BuildKind::Test;
+                let test = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
+                assert_ne!(build, check);
+                assert_ne!(build, test);
+                assert_ne!(check, test);
+            })
+            .asrt(r#"dx test --lib --exact foo --no-fail-fast -j 4"#, |targets| async move {
+                assert!(targets.is_ok());
+            }),
+        TestHarnessBuilder::new("harness-web-tests")
+            .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
+            .manifest_tail(
+                r#"
+[dev-dependencies]
+dioxus-test-harness = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-signals = { workspace = true }
+
+[[test]]
+name = "web"
+harness = false
+"#,
+            )
+            .file(
+                "tests/web.rs",
+                r#"dioxus_test_harness::main!();
+
+#[dioxus_test_harness::test]
+fn adds() {
+    assert_eq!(std::hint::black_box(1) + 1, 2);
+}
+
+#[dioxus_test_harness::test]
+async fn async_ok() {}
+
+#[dioxus_test_harness::test(ignore)]
+fn skipped() {}
+
+#[dioxus_test_harness::test(should_panic)]
+fn panics() {
+    panic!("expected panic");
+}
+
+#[dioxus_test_harness::test(tags = ["ui"])]
+fn renders() {
+    let mut dom = dioxus::prelude::VirtualDom::new(|| dioxus::prelude::rsx! { "hello" });
+    dom.rebuild_in_place();
+}
+
+// web-only so plain `cargo test` on the workspace never runs the
+// intentionally-failing case.
+#[dioxus_test_harness::test(platforms = [web])]
+fn fails() {
+    assert_eq!(std::hint::black_box(1) + 1, 3);
+}
+"#,
+            )
+            .asrt(r#"dx test --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.triple, "wasm32-unknown-unknown".parse().unwrap());
+            })
+            .asrt(
+                r#"dx test --message-format json --junit out.xml --partition count:1/2 --tag ui"#,
+                |targets| async move {
+                    let t = targets.unwrap();
+                    assert_eq!(t.client.bundle, BundleFormat::Web);
+                },
+            ),
     ])
     .await;
 }
@@ -303,6 +397,8 @@ struct TestHarnessBuilder {
     name: String,
     dependencies: String,
     features: String,
+    manifest_tail: String,
+    files: Vec<(String, String)>,
     futures: Vec<TestHarnessTestCase>,
 }
 
@@ -316,9 +412,7 @@ impl TestHarnessBuilder {
     fn new(name: &str) -> Self {
         Self {
             name: name.into(),
-            dependencies: Default::default(),
-            features: Default::default(),
-            futures: Default::default(),
+            ..Default::default()
         }
     }
 
@@ -331,6 +425,18 @@ impl TestHarnessBuilder {
     /// Add a feature to the test harness.
     fn fetr(mut self, features: impl Into<String>) -> Self {
         writeln!(&mut self.features, "{}", features.into()).unwrap();
+        self
+    }
+
+    /// Append extra manifest sections (dev-dependencies, `[[test]]` targets, ...).
+    fn manifest_tail(mut self, manifest_tail: impl Into<String>) -> Self {
+        self.manifest_tail = manifest_tail.into();
+        self
+    }
+
+    /// Write an extra file into the harness (eg `tests/web.rs`).
+    fn file(mut self, path: impl Into<String>, contents: impl Into<String>) -> Self {
+        self.files.push((path.into(), contents.into()));
         self
     }
 
@@ -355,6 +461,7 @@ impl TestHarnessBuilder {
         let name = self.name.clone();
         let dependencies = self.dependencies.clone();
         let features = self.features.clone();
+        let manifest_tail = self.manifest_tail.clone();
 
         let test_dir = harness_dir.join(&name);
 
@@ -377,10 +484,11 @@ publish = false
 [dependencies]
 {dependencies}
 [features]
-{features}"#,
+{features}{manifest_tail}"#,
             name = name,
             dependencies = dependencies,
-            features = features
+            features = features,
+            manifest_tail = manifest_tail
         );
 
         std::fs::write(test_dir.join("Cargo.toml"), cargo_toml).unwrap();
@@ -399,6 +507,12 @@ fn main() {
         };
 
         std::fs::write(test_dir.join("src/main.rs"), contents).unwrap();
+
+        for (path, contents) in &self.files {
+            let path = test_dir.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, contents).unwrap();
+        }
     }
 
     async fn run(harnesses: Vec<Self>) {
@@ -456,8 +570,11 @@ fn main() {
                     escaped.push(harness.name.clone());
                 }
                 let args = Cli::try_parse_from(escaped).unwrap();
-                let Commands::Build(build_args) = args.action else {
-                    panic!("Expected build command");
+                let build_args = match args.action {
+                    Commands::Build(build_args) => build_args,
+                    Commands::Check(check) => check.build_args,
+                    Commands::Test(test) => test.build_args,
+                    _ => panic!("Expected build/check/test command"),
                 };
 
                 futures.push(async move {

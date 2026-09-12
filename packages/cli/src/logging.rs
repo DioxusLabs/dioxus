@@ -172,8 +172,23 @@ impl TraceController {
             true
         });
 
+        // `dx test --message-format json` emits machine-readable events on stdout,
+        // so all tracing output must go to stderr there.
+        let logs_to_stderr = matches!(
+            &args.action,
+            Commands::Test(test) if test.message_format == Some(crate::cli::test::MessageFormat::Json)
+        );
+        let fmt_writer = move || -> Box<dyn std::io::Write> {
+            if logs_to_stderr {
+                Box::new(std::io::stderr())
+            } else {
+                Box::new(std::io::stdout())
+            }
+        };
+
         // We complete filter out a few fields that are not relevant to the user, like `dx_src` and `json`
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_writer(fmt_writer)
             .with_target(false)
             .fmt_fields(
                 format::debug_fn(move |writer, field, value| {
@@ -863,6 +878,7 @@ impl TraceController {
                     "package": cmd.package.is_some(),
                 }),
             ),
+            Commands::Test(cmd) => ("test".to_string(), cmd.anonymized()),
             Commands::Check(cmd) => (
                 "check".to_string(),
                 json!({

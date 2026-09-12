@@ -1855,7 +1855,7 @@ impl AppBuilder {
         Ok(())
     }
 
-    async fn get_android_device_transport_id(
+    pub(crate) async fn get_android_device_transport_id(
         adb: &PathBuf,
         device_name_query: Option<&str>,
     ) -> Vec<String> {
