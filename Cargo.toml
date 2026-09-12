@@ -309,7 +309,7 @@ tracing-wasm = "0.2.1"
 base16 = "0.2.1"
 digest = "0.10.7"
 sha2 = "0.10.9"
-walrus = { version = "0.23.3", features = ["parallel"] }
+walrus = { version = "0.27.2", features = ["parallel"] }
 id-arena = "2.2.1"
 async-compression = { version = "0.4", features = [
     "futures-io",
