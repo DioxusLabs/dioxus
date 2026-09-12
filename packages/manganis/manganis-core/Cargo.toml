@@ -24,3 +24,6 @@ manganis = { workspace = true }
 
 [features]
 dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

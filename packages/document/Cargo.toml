@@ -27,3 +27,6 @@ lazy-js-bundle = { workspace = true }
 [dev-dependencies]
 dioxus = { workspace = true }
 dioxus-core-template = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

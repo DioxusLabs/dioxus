@@ -13,3 +13,6 @@ rust-version = "1.85.0"
 [dependencies]
 async-once-cell = { workspace = true, features = ["std"] }
 wasm-split-macro = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

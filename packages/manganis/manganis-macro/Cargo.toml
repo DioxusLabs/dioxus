@@ -29,3 +29,6 @@ default = []
 [dev-dependencies]
 manganis = { workspace = true }
 tempfile = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -16,3 +16,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
