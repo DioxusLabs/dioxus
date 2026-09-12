@@ -73,8 +73,8 @@ impl ToTokens for EventExtensions {
                 fn #name<__Marker>(
                     self,
                     event_handler: impl super::EventHandlerValue<#data, __Marker>,
-                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output {
-                    ::dioxus_core::view::AttributeBuilderTarget::append_attribute(
+                ) -> <Self as ::dioxus_core::view::AppendAttribute>::Output {
+                    ::dioxus_core::view::AppendAttribute::append_attribute(
                         self,
                         super::event_attribute::<#data, __Marker>(#on_name, event_handler),
                     )
@@ -86,7 +86,7 @@ impl ToTokens for EventExtensions {
                 fn #explicit_closure<__Marker, __Return>(
                     self,
                     event_handler: impl FnMut(::dioxus_core::Event<#data>) -> __Return + 'static,
-                ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget>::Output
+                ) -> <Self as ::dioxus_core::view::AppendAttribute>::Output
                 where
                     __Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
                 {
@@ -98,13 +98,13 @@ impl ToTokens for EventExtensions {
 
         tokens.append_all(quote! {
             /// Event handler extension methods for typed HTML builders.
-            pub trait EventsExtension: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+            pub trait EventsExtension: ::dioxus_core::view::AppendAttribute {
                 #(#methods)*
             }
 
             impl<Target> EventsExtension for Target
             where
-                Target: ::dioxus_core::view::AttributeBuilderTarget,
+                Target: ::dioxus_core::view::AppendAttribute,
             {
             }
         });

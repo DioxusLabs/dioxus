@@ -89,35 +89,37 @@ impl Component {
 
         // Create props either from manual props or from the builder approach
         let props = self.create_props(literal_ids);
-        let component = if self.manual_props().is_some() {
-            quote! {
-                ({
-                    #props
-                }).into_vcomponent(
-                    #name #generics,
-                )
-            }
-        } else {
-            quote! {
-                ({
-                    #props
-                }).into_vcomponent()
-            }
-        };
-
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
 
-        quote! {
-            dioxus_core::DynamicNode::Component({
-
-                // todo: ensure going through the trait actually works
-                // we want to avoid importing traits
-                use dioxus_core::Properties;
-                let __comp = #component;
-                #diagnostics
-                __comp
-            })
+        // Spread props go through `Properties::into_vcomponent`; built props through the inherent
+        // method on `ComponentBuilderOutput`, which needs no trait in scope (and the body is
+        // usually the plain builder chain, so most sites emit no block at all).
+        if self.manual_props().is_some() {
+            quote! {
+                dioxus_core::DynamicNode::Component({
+                    use dioxus_core::Properties;
+                    let __comp = ({
+                        #props
+                    }).into_vcomponent(
+                        #name #generics,
+                    );
+                    #diagnostics
+                    __comp
+                })
+            }
+        } else if diagnostics.is_empty() {
+            quote! {
+                dioxus_core::DynamicNode::Component(#props.into_vcomponent())
+            }
+        } else {
+            quote! {
+                dioxus_core::DynamicNode::Component({
+                    let __comp = #props.into_vcomponent();
+                    #diagnostics
+                    __comp
+                })
+            }
         }
     }
 
@@ -286,32 +288,19 @@ impl Component {
         let mut dynamic_literal_index = 0;
         let mut tokens = TokenStream2::new();
         for attribute in self.component_props() {
-            let release_value = attribute.value.to_token_stream();
-
-            // In debug mode, we try to grab the value from the dynamic literal pool if possible
+            // Literal props read through the enclosing body's hot-reload site: in debug that is
+            // the site's literal pool, in release a no-op that yields the literal itself.
             let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
                 let idx = literal_ids
                     .get(dynamic_literal_index)
                     .copied()
                     .unwrap_or(usize::MAX);
                 dynamic_literal_index += 1;
-                let debug_value = quote! {
-                    __dynamic_literal_pool.component_property_or(#idx, __hot_reload_template, #literal)
-                };
                 quote! {
-                    {
-                        #[cfg(debug_assertions)]
-                        {
-                            #debug_value
-                        }
-                        #[cfg(not(debug_assertions))]
-                        {
-                            #release_value
-                        }
-                    }
+                    __hot_reload_site.component_property_or(#idx, #literal)
                 }
             } else {
-                release_value
+                attribute.value.to_token_stream()
             };
 
             match &attribute.name {

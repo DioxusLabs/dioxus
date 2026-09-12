@@ -6,7 +6,7 @@ use crate::{
     hash::HashFragment,
     nest::NestId,
     query::QuerySegment,
-    segment::{RouteSegment, create_error_type, parse_route_segments},
+    segment::{RouteSegment, parse_route_segments, site_const},
 };
 
 #[derive(Debug)]
@@ -21,18 +21,18 @@ pub(crate) struct Redirect {
 }
 
 impl Redirect {
-    pub fn error_ident(&self) -> Ident {
-        format_ident!("Redirect{}ParseError", self.index)
+    pub fn site_ident(&self) -> Ident {
+        format_ident!("__SITE_REDIRECT_{}", self.index)
     }
 
-    pub fn error_variant(&self) -> Ident {
-        format_ident!("Redirect{}", self.index)
-    }
-
-    pub fn error_type(&self) -> TokenStream {
-        let error_name = self.error_ident();
-
-        create_error_type(&self.route.value(), error_name, &self.segments, None)
+    pub fn site_def(&self, error_type: &Ident) -> TokenStream {
+        site_const(
+            &self.site_ident(),
+            error_type,
+            "Redirect",
+            &format!("Redirect{}ParseError", self.index),
+            &self.route.value(),
+        )
     }
 
     pub fn parse_query(&self) -> TokenStream {

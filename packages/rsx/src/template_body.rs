@@ -14,20 +14,28 @@ use syn::parse_quote;
 /// than this are emitted as several tuples joined structurally (see `group_sibling_views`).
 const MAX_TUPLE_VIEW_ARITY: usize = 128;
 
-/// Group per-sibling typed views into `<= MAX_TUPLE_VIEW_ARITY`-wide tuples.
+/// Join per-sibling typed views into one tuple view.
 ///
 /// A sibling list wider than [`MAX_TUPLE_VIEW_ARITY`] cannot be a single tuple, so it is split into
-/// several. The split is transparent to the lowered template: each tuple lowers to a `Sequence`,
-/// and nested sequences flatten to exactly the same ops and dynamic-slot order as one flat list.
-/// The caller joins multiple groups with `.child(..)` on an element or `fragment()`.
-fn group_sibling_views(views: Vec<TokenStream2>) -> Vec<TokenStream2> {
-    views
-        .chunks(MAX_TUPLE_VIEW_ARITY)
-        .map(|chunk| {
-            let chunk = chunk.iter();
-            quote! { (#(#chunk,)*) }
-        })
-        .collect()
+/// several, which are in turn grouped until one tuple remains. The split is transparent to the
+/// lowered template: each tuple lowers to a `Sequence`, and nested sequences flatten to exactly the
+/// same ops and dynamic-slot order as one flat list.
+fn group_sibling_views(mut views: Vec<TokenStream2>) -> TokenStream2 {
+    if views.is_empty() {
+        return quote! { () };
+    }
+    loop {
+        views = views
+            .chunks(MAX_TUPLE_VIEW_ARITY)
+            .map(|chunk| {
+                let chunk = chunk.iter();
+                quote! { (#(#chunk,)*) }
+            })
+            .collect();
+        if views.len() == 1 {
+            return views.pop().unwrap();
+        }
+    }
 }
 
 /// Drives a [`TemplateStatsBuilder`] from a canonical fill-order walk so the predicted op/string/
@@ -133,6 +141,11 @@ impl ToTokens for TemplateBody {
         // First normalize the template body for rendering
         let node = self.normalized();
 
+        if let Some(static_text) = node.static_text_tokens() {
+            tokens.append_all(static_text);
+            return;
+        }
+
         let key_warnings = self.check_for_duplicate_keys();
 
         // Build the typed view once: the release tree, the capacities, and (in debug) the
@@ -140,24 +153,38 @@ impl ToTokens for TemplateBody {
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
         let raw_view_expr = &pieces.view;
-        // Dynamic node values are bound to locals before the builder chain so that any borrows they
-        // take are released before the chain moves captured values into event-handler closures. This
-        // intentionally matches the 0.6 dynamic-node-before-attribute evaluation order instead of
-        // the more straightforward typed-builder evaluation order. The key is bound first because it
-        // may borrow a value that one of those dynamic nodes moves.
-        let node_hoists = &pieces.node_hoists;
-        let view_expr = match node.implicit_key() {
-            Some(key) => quote! {{
-                use dioxus_core::view::ViewKeyExt as _;
-                // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
+        // Every runtime value is pushed into `__dynamic` (in template order) before the view is
+        // built: the key first because it may borrow a value that a dynamic node moves, then the
+        // dynamic nodes, then the dynamic attributes so that any borrows the nodes take are
+        // released before the attributes move captured values into event-handler closures. This
+        // intentionally matches the 0.6 dynamic-node-before-attribute evaluation order. The typed
+        // view then carries no runtime value at all: it is a zero-sized value whose type fixes the
+        // template, so no `View::push` is ever instantiated for a body.
+        let node_pushes = &pieces.node_pushes;
+        let attr_pushes = &pieces.attr_pushes;
+        let node_count = pieces.dynamic_node_count;
+        let attr_count = pieces.dynamic_attr_count;
+        let implicit_key = node.implicit_key();
+        // Only bodies with formatted text or component literals read from the hot-reload literal
+        // pool while the view evaluates; every other body defers the hot-reload read to the site.
+        let has_literal_pool =
+            !pieces.dynamic_text_tokens.is_empty() || !pieces.component_value_tokens.is_empty();
+        let is_static = node_pushes.is_empty()
+            && attr_count == 0
+            && implicit_key.is_none()
+            && !has_literal_pool;
+        let dynamic_values = quote! { dioxus_core::view::dynamic_values(#node_count, #attr_count) };
+        let value_pushes = match implicit_key {
+            Some(key) => quote! {
                 let __key = Some(#key.to_string());
-                #(#node_hoists)*
-                #raw_view_expr.key(__key)
-            }},
-            None => quote! {{
-                #(#node_hoists)*
-                #raw_view_expr
-            }},
+                #(#node_pushes)*
+                #(#attr_pushes)*
+                dioxus_core::view::set_key(&mut __dynamic, __key);
+            },
+            None => quote! {
+                #(#node_pushes)*
+                #(#attr_pushes)*
+            },
         };
         let dynamic_text = pieces.dynamic_text_tokens.iter();
 
@@ -165,12 +192,96 @@ impl ToTokens for TemplateBody {
         let template_ops_cap = template_stats.ops;
         let template_string_cap = template_stats.strings;
         let template_dynamic_cap = template_stats.anchors;
+        let release_vnode = |dynamic: TokenStream2| {
+            quote! {
+                dioxus_core::view::vnode_with_capacity::<
+                    #template_ops_cap,
+                    #template_string_cap,
+                    #template_dynamic_cap,
+                    _,
+                >(&__view, #dynamic)
+            }
+        };
+
+        let index = node.template_idx.get();
+        // The site is keyed by the `rsx!` call's location (bound once per call by `CallBody`) and
+        // this body's template index; the hot-reload slot lives in the runtime's global-signal
+        // context and the lowered template in a per-tree cache, so a site emits no `static` of its
+        // own. Only referenced inside `#[cfg(debug_assertions)]` blocks.
+        let site = quote! { __rsx_location, #index };
+        let hot_reload_meta = pieces.hot_reload_meta_tokens();
+
+        // In release the optimized template is the const `&'static Template` built through the
+        // type system. In debug builds that per-site const evaluation dominates compile time, so
+        // the identical template is lowered once at runtime and cached per tree.
+        let vnode = if is_static {
+            // Nothing runs between building the zero-sized view and handing its tree to the site,
+            // so the body needs no `DynamicValues` binding and no per-render hot-reload state.
+            let release = release_vnode(dynamic_values);
+            quote! {
+                let __view = #raw_view_expr;
+
+                #[cfg(not(debug_assertions))]
+                {
+                    #release
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    dioxus_signals::render_static_site(
+                        #site,
+                        dioxus_core::view::template_tree(&__view),
+                    )
+                }
+            }
+        } else {
+            let release = release_vnode(quote! { __dynamic });
+            let debug_render = if has_literal_pool {
+                quote! { __hot_reload_site.finish(__tree, __dynamic) }
+            } else {
+                quote! { dioxus_signals::render_site(#site, #hot_reload_meta, __tree, __dynamic) }
+            };
+            quote! {
+                let mut __dynamic = #dynamic_values;
+                #value_pushes
+                let __view = #raw_view_expr;
+
+                #[cfg(not(debug_assertions))]
+                {
+                    #release
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    let __tree = dioxus_core::view::template_tree(&__view);
+                    #debug_render
+                }
+            }
+        };
+
+        // The site's hot-reload read and literal pool must be in scope before the view is built:
+        // component literal props pull their hot-reloaded value from the site while the view
+        // expression evaluates. The read guard stays alive until `finish`. In release the same
+        // name is a no-op stand-in so the literal props need no `#[cfg]` of their own.
+        let release_site = (!pieces.component_value_tokens.is_empty()).then(|| {
+            quote! {
+                #[cfg(not(debug_assertions))]
+                let __hot_reload_site = dioxus_core::internal::NoHotReload;
+            }
+        });
+        let hot_reload_site = has_literal_pool.then(|| {
+            quote! {
+                #[cfg(debug_assertions)]
+                let __hot_reload_site = dioxus_signals::HotReloadSite::new(
+                    #site,
+                    #hot_reload_meta,
+                    vec![ #( #dynamic_text ),* ],
+                );
+                #release_site
+            }
+        });
 
         let diagnostics = &node.diagnostics;
-        let index = node.template_idx.get();
-        // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block. The
-        // base template is the const `&'static Template` built by the shared typed view expansion.
-        let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { *__vnode.template() });
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -180,83 +291,9 @@ impl ToTokens for TemplateBody {
 
                 #(#view_definitions)*
 
-                #[cfg(debug_assertions)]
-                let __hot_reload_template_read = {
-                    // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable. The file path is normalized to
-                    // forward slashes lazily inside `Global`.
-                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::HotReloadTemplateSignal =
-                        dioxus_signals::GlobalSignal::with_location(
-                            || None,
-                            file!(),
-                            line!(),
-                            column!(),
-                            #index
-                        );
+                #hot_reload_site
 
-                    dioxus_signals::read_hot_reload_template(&__HOT_RELOAD_TEMPLATE)
-                };
-
-                // The hot-reloaded template, if this site has one. Borrows the read guard
-                // above, which stays alive until `render_with` at the end of this block.
-                #[cfg(debug_assertions)]
-                let __hot_reload_template =
-                    dioxus_signals::hot_reload_template(&__hot_reload_template_read);
-
-                // The literal pool and hot-reload read must be in scope before the view is built:
-                // component literal props pull their hot-reloaded value from the pool while the view
-                // expression evaluates.
-                #[cfg(debug_assertions)]
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                    vec![ #( #dynamic_text ),* ],
-                );
-
-                // Build the vnode from the typed view. In release the optimized template is the
-                // const `&'static Template` built through the type system (stable across hot reloads
-                // with no cache). In debug builds that per-site const evaluation dominates compile
-                // time, so the template is lowered once at runtime and cached per site instead,
-                // keeping dev rebuilds fast while producing the identical template.
-                let __vnode = {
-                    let __view = #view_expr;
-
-                    #[cfg(not(debug_assertions))]
-                    {
-                        dioxus_core::view::into_vnode_with_capacity::<
-                            #template_ops_cap,
-                            #template_string_cap,
-                            #template_dynamic_cap,
-                            _,
-                        >(__view)
-                    }
-
-                    #[cfg(debug_assertions)]
-                    {
-                        static __RUNTIME_TEMPLATE: ::std::sync::OnceLock<dioxus_core::Template> =
-                            ::std::sync::OnceLock::new();
-                        dioxus_core::view::into_vnode_cached(__view, &__RUNTIME_TEMPLATE)
-                    }
-                };
-
-                #[cfg(not(debug_assertions))]
-                {
-                    __vnode
-                }
-
-                #[cfg(debug_assertions)]
-                #[allow(clippy::let_and_return)]
-                {
-                    let __original_template = #hot_reload_mapping;
-                    // If the template has not been hot reloaded, we always use the original template
-                    // Templates nested within macros may be merged because they have the same file-line-column-index
-                    // They cannot be hot reloaded, so this prevents incorrect rendering
-                    let __template_read = __hot_reload_template.unwrap_or(&__original_template);
-
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
-                        &__vnode,
-                        __dynamic_literal_pool
-                    );
-                    __dynamic_value_pool.render_with(__template_read)
-                }
+                #vnode
             })
         });
     }
@@ -265,7 +302,8 @@ impl ToTokens for TemplateBody {
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
-    node_hoists: Vec<TokenStream2>,
+    node_pushes: Vec<TokenStream2>,
+    attr_pushes: Vec<TokenStream2>,
     template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
@@ -275,8 +313,9 @@ pub(crate) struct ViewBuilderPieces {
 }
 
 impl ViewBuilderPieces {
+    /// A standalone element view that carries its own dynamic attribute values.
     fn from_element(element: &Element) -> Self {
-        let mut builder = ViewBuilder::new();
+        let mut builder = ViewBuilder::new(false);
         let template_stats = element_storage_stats(element);
         let view = builder.visit_element_with_diagnostics(element, true, false);
         builder.finish(view, template_stats)
@@ -285,18 +324,10 @@ impl ViewBuilderPieces {
     /// Walk all roots of a body into a single tuple `View` expression, carrying out the
     /// hot-reload tables and dynamic text pool gathered along the way.
     fn from_body(body: &TemplateBody) -> Self {
-        let mut builder = ViewBuilder::new();
+        let mut builder = ViewBuilder::new(true);
         let template_stats = sibling_storage_stats(&body.roots);
         let views = builder.visit_sibling_nodes(&body.roots, true);
-        // Roots have no enclosing element, so they group through a `fragment()` rather than an
-        // element builder's `.child(..)`. A single group is just the tuple itself.
-        let groups = group_sibling_views(views);
-        let view = if groups.len() == 1 {
-            groups.into_iter().next().unwrap()
-        } else {
-            let groups = groups.iter();
-            quote! { dioxus_core::view::fragment() #(.child(#groups))* }
-        };
+        let view = group_sibling_views(views);
         builder.finish(view, template_stats)
     }
 
@@ -308,11 +339,13 @@ impl ViewBuilderPieces {
         &self.view
     }
 
-    /// Emit the hot-reload template constructor from the tables gathered while building the view.
+    /// Emit the site's original-template metadata (a `HotReloadSiteMeta` initializer) from the
+    /// tables gathered while building the view. Everything in it is a literal, so the slices it
+    /// borrows are promoted to `'static` and the value itself is a handful of words to build.
     ///
     /// Callers must only reference the result inside a `#[cfg(debug_assertions)]` block so release
     /// expansions contain no hot-reload tokens.
-    fn hot_reload_template_tokens(&self, template: TokenStream2) -> TokenStream2 {
+    fn hot_reload_meta_tokens(&self) -> TokenStream2 {
         let key = self
             .hot_reload_key
             .as_ref()
@@ -325,13 +358,12 @@ impl ViewBuilderPieces {
         let component_values = self.component_value_tokens.iter();
 
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::from_dynamic_counts(
-                #key,
-                #node_count,
-                #attr_count,
-                vec![ #( #component_values ),* ],
-                #template,
-            )
+            dioxus_core::internal::HotReloadSiteMeta {
+                key: #key,
+                dynamic_nodes: #node_count,
+                dynamic_attributes: #attr_count,
+                component_values: &[ #( #component_values ),* ],
+            }
         }
     }
 }
@@ -344,7 +376,12 @@ enum SiblingContext {
 
 struct ViewBuilder {
     definitions: Vec<TokenStream2>,
-    node_hoists: Vec<TokenStream2>,
+    node_pushes: Vec<TokenStream2>,
+    /// Whether dynamic attribute values are pushed onto `__dynamic` ahead of the view (in
+    /// template order, into `attr_pushes`) and replaced by a zero-sized slot in the view, or
+    /// stay in the view as `DynamicAttributesBuilder`s for a standalone element value.
+    hoist_dynamic_attrs: bool,
+    attr_pushes: Vec<TokenStream2>,
     dynamic_node_count: usize,
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
@@ -358,10 +395,12 @@ struct ViewBuilder {
 }
 
 impl ViewBuilder {
-    fn new() -> Self {
+    fn new(hoist_dynamic_attrs: bool) -> Self {
         Self {
             definitions: Vec::new(),
-            node_hoists: Vec::new(),
+            node_pushes: Vec::new(),
+            hoist_dynamic_attrs,
+            attr_pushes: Vec::new(),
             dynamic_node_count: 0,
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
@@ -390,7 +429,8 @@ impl ViewBuilder {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
-            node_hoists: self.node_hoists,
+            node_pushes: self.node_pushes,
+            attr_pushes: self.attr_pushes,
             template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
@@ -446,10 +486,11 @@ impl ViewBuilder {
     ) -> TokenStream2 {
         let tag = self.element_tag(element);
 
-        let mut attrs = TokenStream2::new();
-        for attr in &element.merged_attributes {
-            attrs.extend(element.typed_builder_attribute(attr, self));
-        }
+        let attrs = element
+            .merged_attributes
+            .iter()
+            .map(|attr| element.typed_builder_attribute(&tag, attr, self))
+            .collect::<Vec<_>>();
 
         // Allocate the key's formatted segments before the children's. The canonical fill order
         // (and the hot-reload `LastBuildState` pool) is attributes, key, then children, so the
@@ -462,17 +503,15 @@ impl ViewBuilder {
             }
         }
 
+        // Attributes and children are flat tuples of views next to the bare tag, so the element
+        // type stays shallow and no builder method is instantiated to join them.
         let diagnostics = &element.diagnostics;
-        let view = if element.children.is_empty() {
-            quote! { #tag #attrs }
+        let view = if attrs.is_empty() && element.children.is_empty() {
+            tag
         } else {
-            let children = self.visit_sibling_nodes(&element.children, false);
-            // The first group seeds the element's children; any further groups (only when there are
-            // more siblings than a tuple can hold) are appended as transparent `.child(..)` groups.
-            let groups = group_sibling_views(children);
-            let (first, rest) = groups.split_first().expect("at least one group");
-            let rest = rest.iter();
-            quote! { #tag #attrs.child(#first) #(.child(#rest))* }
+            let attrs = group_sibling_views(attrs);
+            let children = group_sibling_views(self.visit_sibling_nodes(&element.children, false));
+            quote! { dioxus_core::view::ElementParts(#tag, #attrs, #children) }
         };
 
         if emit_diagnostics {
@@ -509,25 +548,35 @@ impl ViewBuilder {
     }
 
     fn dynamic_node(&mut self, tokens: TokenStream2) -> TokenStream2 {
-        let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
-        // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
-        // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
-        // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
-        // captured values into event-handler closures. The `IntoDynNode` marker is still inferred
-        // from the bound value's type.
-        let node = format_ident!("__dyn_node_{id}");
-        self.node_hoists.push(quote! { let #node = #tokens; });
-        quote! { dioxus_core::view::dynamic_node_builder(#node) }
+        // The `IntoDynNode` marker is inferred from the value's type.
+        self.node_pushes.push(quote! {
+            dioxus_core::view::push_dyn_node(&mut __dynamic, #tokens);
+        });
+        quote! { dioxus_core::view::DynamicNodeSlot }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
-        quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) }
+        if !self.hoist_dynamic_attrs {
+            return quote! { dioxus_core::view::dynamic_attributes_builder(#attrs) };
+        }
+        self.attr_pushes.push(quote! {
+            dioxus_core::view::push_dyn_attrs(&mut __dynamic, #attrs);
+        });
+        quote! { dioxus_core::view::DynamicAttributeSlot }
     }
 
-    fn dynamic_builder_attr(&mut self, attr: &Attribute, method: Ident) -> TokenStream2 {
+    /// A dynamic attribute set through the element's generated attribute method, which resolves
+    /// its name, namespace and value conversion. When hoisted, the method is called on an empty
+    /// element of the same tag ahead of the view and the view only keeps the slot.
+    fn dynamic_builder_attr(
+        &mut self,
+        tag: &TokenStream2,
+        attr: &Attribute,
+        method: Ident,
+    ) -> TokenStream2 {
         self.track_dynamic_attr(attr);
         let attr_value = &attr.value;
         let method = if attr.name.is_likely_event() {
@@ -536,7 +585,13 @@ impl ViewBuilder {
             method
         };
         let value = quote! { #attr_value };
-        quote! { .#method(#value) }
+        if !self.hoist_dynamic_attrs {
+            return quote! { dioxus_core::view::element_attribute(#tag.#method(#value)) };
+        }
+        self.attr_pushes.push(quote! {
+            dioxus_core::view::push_element_attrs(&mut __dynamic, #tag.#method(#value));
+        });
+        quote! { dioxus_core::view::DynamicAttributeSlot }
     }
 
     fn track_dynamic_attr(&mut self, attr: &Attribute) {
@@ -567,16 +622,16 @@ impl ViewBuilder {
             let hot_literal = match literal {
                 HotLiteral::Fmted(fmted) => {
                     let fmted = self.allocate_formatted(fmted);
-                    quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#fmted) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Fmted(#fmted) }
                 }
                 HotLiteral::Float(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Float(#value as _) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Float(#value as _) }
                 }
                 HotLiteral::Int(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Int(#value as _) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Int(#value as _) }
                 }
                 HotLiteral::Bool(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Bool(#value) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Bool(#value) }
                 }
             };
 
@@ -618,8 +673,7 @@ impl ViewBuilder {
                 const VALUE: &'static str = #value;
             }
         });
-        let attr = quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() };
-        quote! { .attribute(#attr) }
+        quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() }
     }
 
     fn element_tag(&mut self, element: &Element) -> TokenStream2 {
@@ -657,19 +711,26 @@ impl Element {
         ViewBuilderPieces::from_element(self)
     }
 
-    fn typed_builder_attribute(&self, attr: &Attribute, builder: &mut ViewBuilder) -> TokenStream2 {
+    fn typed_builder_attribute(
+        &self,
+        tag: &TokenStream2,
+        attr: &Attribute,
+        builder: &mut ViewBuilder,
+    ) -> TokenStream2 {
         if matches!(self.name, ElementName::Ident(_))
             && let AttributeName::BuiltIn(method) = &attr.name
             && !attr.name.is_likely_key()
         {
             if attr.name.is_likely_event() {
-                return builder.dynamic_builder_attr(attr, method.clone());
+                return builder.dynamic_builder_attr(tag, attr, method.clone());
             }
 
+            // The attribute method on the `Static` tag resolves the descriptor and yields the
+            // zero-sized attribute view directly.
             if let Some((_, value)) = attr.as_static_str_literal() {
                 let marker = builder.static_string(attr.span(), value.to_static().unwrap());
                 return quote! {
-                    .#method(
+                    dioxus_core::view::Static(#tag).#method(
                         dioxus_core::view::StaticAttributeValueBuilder::<#marker>(
                             ::core::marker::PhantomData
                         )
@@ -677,7 +738,7 @@ impl Element {
                 };
             }
 
-            return builder.dynamic_builder_attr(attr, method.clone());
+            return builder.dynamic_builder_attr(tag, attr, method.clone());
         }
 
         let Some((name, value)) = attr.as_static_str_literal() else {
@@ -849,6 +910,84 @@ impl TemplateBody {
 
     pub fn is_empty(&self) -> bool {
         self.roots.is_empty()
+    }
+
+    /// The expansion of a body made only of static text (`Link { to: "/", "Home" }` children, for
+    /// instance), or `None` for any other body.
+    ///
+    /// Such a body has no dynamic values, no literal pool and no names to resolve through the
+    /// element vocabulary, so its template tree is written out directly instead of going through
+    /// a typed view: no per-site string table, no per-site generic `template_tree` instantiation
+    /// and (in release) no per-site generic `vnode_with_capacity`. The tree, the release
+    /// template and the debug hot-reload path are exactly what the typed view would lower to.
+    fn static_text_tokens(&self) -> Option<TokenStream2> {
+        let texts = self
+            .roots
+            .iter()
+            .map(|root| match root {
+                BodyNode::Text(text) if text.is_static() => Some(text),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        if texts.is_empty() {
+            return None;
+        }
+
+        let values = texts
+            .iter()
+            .map(|text| {
+                let value = text.input.to_static().unwrap();
+                quote_spanned! { text.input.span() => #value }
+            })
+            .collect::<Vec<_>>();
+        let nodes = values
+            .iter()
+            .map(|value| quote! { &dioxus_core::internal::TemplateRawTree::StaticText(#value) });
+        // A single root lowers to its own node, several to a sequence (as tuple views do).
+        let tree = if texts.len() == 1 {
+            quote! { #(#nodes)* }
+        } else {
+            quote! { &dioxus_core::internal::TemplateRawTree::Sequence(&[#(#nodes),*]) }
+        };
+
+        let template_stats = sibling_storage_stats(&self.roots);
+        let template_ops_cap = template_stats.ops;
+        let template_string_cap = template_stats.strings;
+        let template_dynamic_cap = template_stats.anchors;
+        let index = self.template_idx.get();
+        let diagnostics = &self.diagnostics;
+
+        // In debug the tree is only a cache key for the runtime-lowered template, so a single
+        // text needs no tree at all and several are a promoted literal: neither is a `const`
+        // item, which would cost its own typeck, borrowck and const-eval per site.
+        let debug = if let [value] = values.as_slice() {
+            quote! { dioxus_signals::render_static_text(__rsx_location, #index, #value) }
+        } else {
+            quote! { dioxus_signals::render_static_site(__rsx_location, #index, #tree) }
+        };
+
+        Some(quote! {
+            dioxus_core::Element::Ok({
+                #diagnostics
+
+                #[cfg(not(debug_assertions))]
+                {
+                    const __TEMPLATE: &'static dioxus_core::Template =
+                        &dioxus_core::internal::TemplateStorage::<
+                            #template_ops_cap,
+                            #template_string_cap,
+                            #template_dynamic_cap,
+                        >::build_from_tree(#tree)
+                        .as_template();
+                    dioxus_core::VNode::new(*__TEMPLATE, dioxus_core::view::dynamic_values(0, 0))
+                }
+
+                #[cfg(debug_assertions)]
+                {
+                    #debug
+                }
+            })
+        })
     }
 
     pub fn implicit_key(&self) -> Option<&AttributeValue> {

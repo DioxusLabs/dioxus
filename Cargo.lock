@@ -4118,10 +4118,14 @@ dependencies = [
 name = "dioxus-rsx-hotreload"
 version = "0.8.0-alpha.1"
 dependencies = [
+ "dioxus",
  "dioxus-core",
  "dioxus-core-template",
  "dioxus-core-types",
+ "dioxus-html",
  "dioxus-rsx",
+ "dioxus-signals",
+ "dioxus-ssr",
  "internment",
  "proc-macro2",
  "proc-macro2-diagnostics",

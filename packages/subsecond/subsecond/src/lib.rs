@@ -305,6 +305,38 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 
     Some(unsafe { &*ptr })
 }
+/// Look up the patched address of the function at `real` in the jump table.
+///
+/// Shared by every `HotFunction` instantiation so the lookup, including the Android pointer-tag
+/// handling, is compiled once instead of once per function signature.
+fn patched_fn_ptr(real: usize) -> Option<usize> {
+    let jump_table = unsafe { get_jump_table() }?;
+
+    // Android implements MTE / pointer tagging and we need to preserve the tag.
+    // If we leave the tag, then indexing our jump table will fail and patching won't work (or crash!)
+    // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
+    // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
+    #[cfg(all(target_pointer_width = "64", target_os = "android"))]
+    let nibble = real as u64 & 0xFF00_0000_0000_0000;
+    #[cfg(all(target_pointer_width = "64", target_os = "android"))]
+    let real = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
+
+    // The host always writes 64-bit addresses, even for 32-bit targets
+    let ptr = jump_table.map.get(&(real as u64)).cloned()?;
+
+    // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
+    #[cfg(all(target_pointer_width = "64", target_os = "android"))]
+    let ptr = ptr | nibble;
+
+    Some(ptr as usize)
+}
+
+/// Look up the patched address of the `HotFunction::call_it` shim at `known_fn_ptr`.
+fn patched_call_it(known_fn_ptr: usize) -> Option<u64> {
+    let jump_table = unsafe { get_jump_table() }?;
+    jump_table.map.get(&(known_fn_ptr as u64)).cloned()
+}
+
 unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
@@ -394,13 +426,7 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
-        if let Some(jump_table) = unsafe { get_jump_table() }
-            && let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned()
-        {
-            return HotFnPtr(ptr);
-        }
-
-        HotFnPtr(known_fn_ptr as u64)
+        HotFnPtr(patched_call_it(known_fn_ptr).unwrap_or(known_fn_ptr as u64))
     }
 
     /// Attempt to call the function with the given arguments.
@@ -426,14 +452,12 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             //
             // For non-zst (trait object) types, then there might be an issue. The real call function
             // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
-            if let Some(jump_table) = get_jump_table() {
-                let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as u64;
-                if let Some(ptr) = jump_table.map.get(&known_fn_ptr).cloned() {
-                    // The type sig of the cast should match the call_it function
-                    // Technically function pointers need to be aligned, but that alignment is 1 so we're good
-                    let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr as _);
-                    return Ok(call_it(&self.inner, args));
-                }
+            let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
+            if let Some(ptr) = patched_call_it(known_fn_ptr) {
+                // The type sig of the cast should match the call_it function
+                // Technically function pointers need to be aligned, but that alignment is 1 so we're good
+                let call_it = transmute::<*const (), fn(&F, A) -> F::Return>(ptr as _);
+                return Ok(call_it(&self.inner, args));
             }
 
             Ok(self.inner.call_it(args))
@@ -901,40 +925,12 @@ macro_rules! impl_hot_function {
 
                 unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
-                        if let Some(jump_table) = get_jump_table() {
-                            let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
-
-                            // Android implements MTE / pointer tagging and we need to preserve the tag.
-                            // If we leave the tag, then indexing our jump table will fail and patching won't work (or crash!)
-                            // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
-                            // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
-                            #[cfg(all(target_pointer_width = "64", target_os = "android"))] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
-                            #[cfg(all(target_pointer_width = "64", target_os = "android"))] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
-
-                            #[cfg(target_pointer_width = "64")] let real  = real as u64;
-
-                            // No nibble on 32-bit platforms, but we still need to assume u64 since the host always writes 64-bit addresses
-                            #[cfg(target_pointer_width = "32")] let real = real as u64;
-
-                            if let Some(ptr) = jump_table.map.get(&real).cloned() {
-                                // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
-                                #[cfg(all(target_pointer_width = "64", target_os = "android"))] let ptr: u64 = ptr | nibble;
-
-                                #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr;
-                                #[cfg(target_pointer_width = "32")] let ptr: u32 = ptr as u32;
-
-                                // Macro-rules requires unpacking the tuple before we call it
-                                #[allow(non_snake_case)]
-                                let ( $($arg,)* ) = args;
-
-
-                                #[cfg(target_pointer_width = "64")]
-                                type PtrWidth = u64;
-                                #[cfg(target_pointer_width = "32")]
-                                type PtrWidth = u32;
-
-                                return std::mem::transmute::<PtrWidth, Self::Real>(ptr)($($arg),*);
-                            }
+                        let real = std::mem::transmute_copy::<Self, Self::Real>(&self) as *const ();
+                        if let Some(ptr) = patched_fn_ptr(real as usize) {
+                            // Macro-rules requires unpacking the tuple before we call it
+                            #[allow(non_snake_case)]
+                            let ( $($arg,)* ) = args;
+                            return std::mem::transmute::<usize, Self::Real>(ptr)($($arg),*);
                         }
 
                         self.call_it(args)

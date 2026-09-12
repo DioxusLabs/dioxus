@@ -2443,8 +2443,22 @@ where
 {
 }
 
+impl<Tag, Attributes, Children> GlobalAttributesExtension
+    for dioxus_core::view::Static<dioxus_core::view::ElementBuilder<Tag, Attributes, Children>>
+where
+    Tag: GlobalAttributesElement,
+{
+}
+
 impl<Tag, Attributes, Children> SvgAttributesExtension
     for dioxus_core::view::ElementBuilder<Tag, Attributes, Children>
+where
+    Tag: SvgAttributesElement,
+{
+}
+
+impl<Tag, Attributes, Children> SvgAttributesExtension
+    for dioxus_core::view::Static<dioxus_core::view::ElementBuilder<Tag, Attributes, Children>>
 where
     Tag: SvgAttributesElement,
 {

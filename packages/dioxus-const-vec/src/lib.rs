@@ -488,6 +488,32 @@ impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
         }
     }
 
+    /// Convert a full [`ConstVec`] into a fixed-size byte array.
+    ///
+    /// Panics if the vector is not filled to its maximum size.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus_const_vec::ConstVec;
+    /// const BYTES: [u8; 4] = {
+    ///     let mut vec = ConstVec::zeroed();
+    ///     vec.copy_from_slice_at(0, &[1, 2]);
+    ///     vec.into_array()
+    /// };
+    /// assert_eq!(BYTES, [1, 2, 0, 0]);
+    /// ```
+    pub const fn into_array(self) -> [u8; MAX_SIZE] {
+        if self.len as usize != MAX_SIZE {
+            panic!("const vec is not full");
+        }
+        // SAFETY: every element is initialized because `len == MAX_SIZE`, and
+        // `[MaybeUninit<u8>; MAX_SIZE]` has the same layout as `[u8; MAX_SIZE]`.
+        unsafe {
+            (&self.memory as *const [MaybeUninit<u8>; MAX_SIZE] as *const [u8; MAX_SIZE]).read()
+        }
+    }
+
     /// Convert the [`ConstVec`] into a [`ConstReadBuffer`].
     ///
     /// # Example

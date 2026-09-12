@@ -172,7 +172,7 @@ impl DynamicLiteralPool {
 
     /// Get a component property of a specific type at the component property index
     pub fn component_property<T: 'static>(
-        &mut self,
+        &self,
         id: usize,
         hot_reload: &HotReloadedTemplate,
         // We pass in the original value for better type inference
@@ -237,7 +237,7 @@ impl DynamicLiteralPool {
     /// Get a component property, falling back to the original value when the template
     /// has not been hot reloaded.
     pub fn component_property_or<T: 'static>(
-        &mut self,
+        &self,
         id: usize,
         hot_reload: Option<&HotReloadedTemplate>,
         value: T,
@@ -252,6 +252,112 @@ impl DynamicLiteralPool {
     fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
+}
+
+/// The source location of an `rsx!` invocation, bound once per invocation in debug builds and
+/// shared by every template body nested in it (they differ only by template index).
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RsxLocation {
+    pub file: &'static str,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl RsxLocation {
+    /// `rsx!` calls this with `file!(), line!(), column!()`.
+    pub const fn new(file: &'static str, line: u32, column: u32) -> Self {
+        Self { file, line, column }
+    }
+}
+
+/// A component literal as `rsx!` records it in a site's static [`HotReloadSiteMeta`].
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HotReloadLiteralMeta {
+    /// A formatted string literal.
+    Fmted(&'static [FmtSegment]),
+    /// A floating point literal.
+    Float(f64),
+    /// An integer literal.
+    Int(i64),
+    /// A boolean literal.
+    Bool(bool),
+}
+
+impl HotReloadLiteralMeta {
+    fn to_literal(self) -> HotReloadLiteral {
+        match self {
+            Self::Fmted(segments) => HotReloadLiteral::Fmted(FmtedSegments::new(segments.to_vec())),
+            Self::Float(value) => HotReloadLiteral::Float(value),
+            Self::Int(value) => HotReloadLiteral::Int(value),
+            Self::Bool(value) => HotReloadLiteral::Bool(value),
+        }
+    }
+}
+
+/// Everything the original (not yet hot-reloaded) template of one `rsx!` site needs beyond its
+/// [`Template`]. `rsx!` emits one of these as a `static` per site so the debug expansion carries no
+/// code for it; it is only lowered into a [`HotReloadedTemplate`] when the site renders.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HotReloadSiteMeta {
+    /// Formatted segments of the root key, if the site is keyed.
+    pub key: Option<&'static [FmtSegment]>,
+    /// Number of dynamic nodes; they are always `Dynamic(0..n)` in order.
+    pub dynamic_nodes: usize,
+    /// Number of dynamic attributes; they are always `Dynamic(0..n)` in order.
+    pub dynamic_attributes: usize,
+    /// Component literal values in allocation order.
+    pub component_values: &'static [HotReloadLiteralMeta],
+}
+
+impl HotReloadSiteMeta {
+    /// The metadata of a fully static body: no key, no dynamic values, no component literals.
+    pub const STATIC: Self = Self {
+        key: None,
+        dynamic_nodes: 0,
+        dynamic_attributes: 0,
+        component_values: &[],
+    };
+
+    /// Lower into the original hot-reload template for `template`.
+    pub fn to_template(&self, template: Template) -> HotReloadedTemplate {
+        HotReloadedTemplate::from_dynamic_counts(
+            self.key.map(|key| FmtedSegments::new(key.to_vec())),
+            self.dynamic_nodes,
+            self.dynamic_attributes,
+            self.component_values
+                .iter()
+                .map(|value| value.to_literal())
+                .collect(),
+            template,
+        )
+    }
+}
+
+/// Re-render `vnode` through the hot-reload pools: with `hot_reload` when the site has been hot
+/// reloaded, otherwise with the site's original template described by `meta`.
+#[doc(hidden)]
+pub fn render_hot_reloaded(
+    vnode: VNode,
+    hot_reload: Option<&HotReloadedTemplate>,
+    literal_pool: DynamicLiteralPool,
+    meta: &HotReloadSiteMeta,
+) -> VNode {
+    let original;
+    // If the template has not been hot reloaded, we always use the original template. Templates
+    // nested within macros may be merged because they have the same file-line-column-index; they
+    // cannot be hot reloaded, so this prevents incorrect rendering.
+    let template = match hot_reload {
+        Some(template) => template,
+        None => {
+            original = meta.to_template(*vnode.template());
+            &original
+        }
+    };
+    let mut pool = DynamicValuePool::from_vnode(&vnode, literal_pool);
+    pool.render_with(template)
 }
 #[doc(hidden)]
 pub struct DynamicValuePool {

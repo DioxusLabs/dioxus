@@ -4,7 +4,7 @@
 //! Currently the additional tooling doesn't do much.
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::ToTokens;
+use quote::{ToTokens, TokenStreamExt, quote};
 use std::{cell::Cell, fmt::Debug};
 use syn::{
     Result,
@@ -40,7 +40,16 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out: &mut TokenStream2) {
-        self.body.to_tokens(out)
+        let body = &self.body;
+        // Every template body in this call shares the call's `file!()`/`line!()`/`column!()`
+        // (nested bodies are told apart by template index), so the debug hot-reload location is
+        // bound once here rather than expanded per body.
+        out.append_all(quote! {{
+            #[cfg(debug_assertions)]
+            let __rsx_location =
+                dioxus_core::internal::RsxLocation::new(file!(), line!(), column!());
+            #body
+        }})
     }
 }
 

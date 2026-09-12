@@ -117,9 +117,9 @@ pub use path::{
 pub use raw::TemplateRawTree;
 #[cfg(feature = "serialize")]
 pub use serialization::{deserialize_option_leaky, deserialize_string_leaky};
-#[cfg(debug_assertions)]
-pub use storage::build_runtime_template;
 pub use storage::{
     RuntimeTemplateBuilder, TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_MAX_CAP,
     TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP, TemplateLoweringCursor, TemplateStorage,
 };
+#[cfg(debug_assertions)]
+pub use storage::{build_runtime_template, build_runtime_text_template};

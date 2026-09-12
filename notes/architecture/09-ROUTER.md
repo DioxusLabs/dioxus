@@ -236,14 +236,19 @@ impl Routable for Route {
 }
 ```
 
-### Error Type Generation
+### Error Reporting
 
-Each route generates detailed error enum:
+`FromStr::Err` is `RouteParseError<route_match::RouteMatchError>`, a shared runtime type in
+`packages/router/src/route_match.rs`. The derive emits one `const RouteMatchSite` per route,
+redirect and nest (name, kind and route string) and the generated parser reports failures
+against those sites via `RouteSegments::{dynamic, catch_all, child}` and
+`RouteMatchSite::{static_segment, extra_segments}`, so no per-variant error enum is generated:
 ```rust
-pub enum RouteMatchError {
-    Home(HomeParseError),
-    Blog(BlogParseError),
-    BlogIdParseError(ParseIntError),
+const __SITE_ROUTE_Blog: &RouteMatchSite = &RouteMatchSite { kind: "Route", name: "Blog", route: "/blog/:blog_id", .. };
+
+match __segments.dynamic::<u64>(1, __SITE_ROUTE_Blog, "blog_id", "u64") {
+    Ok(blog_id) => if __segments.ends_at(2) { return Ok(Self::Blog { blog_id }) } else { .. }
+    Err(err) => __errors.push(err),
 }
 ```
 

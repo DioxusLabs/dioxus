@@ -495,26 +495,27 @@ impl ElementDef {
 
             quote! {
                 #[allow(non_snake_case)]
-                fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
+                #[inline(always)]
+                fn #ident<__DioxusAttributeValue, __DioxusAttributeMarker>(
                     self,
                     value: __DioxusAttributeValue,
-                ) -> <__DioxusAttributeValue as #core::view::IntoAttributeBuilderValue<
-                    Self,
+                ) -> <Self as #core::view::AttributeBuilderTarget<
                     #descriptor,
+                    __DioxusAttributeValue,
                     __DioxusAttributeMarker,
                 >>::Output
                 where
-                    __DioxusAttributeValue: #core::view::IntoAttributeBuilderValue<
-                        Self,
+                    Self: #core::view::AttributeBuilderTarget<
                         #descriptor,
+                        __DioxusAttributeValue,
                         __DioxusAttributeMarker,
                     >,
                 {
-                    <__DioxusAttributeValue as #core::view::IntoAttributeBuilderValue<
-                        Self,
+                    <Self as #core::view::AttributeBuilderTarget<
                         #descriptor,
+                        __DioxusAttributeValue,
                         __DioxusAttributeMarker,
-                    >>::append_to(value, self)
+                    >>::with_attribute(self, value)
                 }
             }
         });
@@ -558,12 +559,19 @@ impl ElementDef {
                         #core::view::element_builder::<#tag>();
                 }
 
-                pub trait #extension_name: #core::view::AttributeBuilderTarget + Sized {
+                pub trait #extension_name: #core::view::AttributeTarget {
                     #(#methods)*
                 }
 
                 impl<__DioxusAttributes, __DioxusChildren> #extension_name
                     for #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>
+                {
+                }
+
+                impl<__DioxusAttributes, __DioxusChildren> #extension_name
+                    for #core::view::Static<
+                        #core::view::ElementBuilder<#tag, __DioxusAttributes, __DioxusChildren>,
+                    >
                 {
                 }
 
@@ -574,8 +582,7 @@ impl ElementDef {
 
                 impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
                 where
-                    __DioxusSpreadTarget:
-                        #spread_marker + #core::view::AttributeBuilderTarget,
+                    __DioxusSpreadTarget: #spread_marker + #core::view::AttributeTarget,
                 {
                 }
             }

@@ -97,94 +97,69 @@ impl ToTokens for ImplExtensionAttributes {
                     format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
                     ident.span(),
                 );
+                attribute_method(ident, &descriptor)
+            });
+        let gated_extensions = self
+            .attrs
+            .iter()
+            .filter(|attr| attr.is_gated_by(&gated_attributes))
+            .map(|attr| {
+                let ident = &attr.name;
+                let attr_camel_name = ident_to_upper_camel(ident);
+                let descriptor = Ident::new(
+                    format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
+                    ident.span(),
+                );
+                let extension_name = Ident::new(
+                    format!("{camel_name}{attr_camel_name}Extension").as_str(),
+                    ident.span(),
+                );
+                let marker = Ident::new(
+                    format!("{camel_name}{attr_camel_name}Element").as_str(),
+                    ident.span(),
+                );
+
+                let method = attribute_method(ident, &descriptor);
+
                 quote! {
-                    #[allow(non_snake_case)]
-                    fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
-                        self,
-                        value: __DioxusAttributeValue,
-                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                        Self,
-                        #descriptor,
-                        __DioxusAttributeMarker,
-                    >>::Output
+                    pub trait #extension_name: ::dioxus_core::view::AttributeTarget {
+                        #method
+                    }
+
+                    impl<__DioxusTag, __DioxusAttributes, __DioxusChildren> #extension_name
+                        for ::dioxus_core::view::ElementBuilder<
+                            __DioxusTag,
+                            __DioxusAttributes,
+                            __DioxusChildren,
+                        >
                     where
-                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
-                            Self,
-                            #descriptor,
-                            __DioxusAttributeMarker,
-                        >,
+                        __DioxusTag: #group_marker + crate::#marker,
                     {
-                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                            Self,
-                            #descriptor,
-                            __DioxusAttributeMarker,
-                        >>::append_to(value, self)
+                    }
+
+                    impl<__DioxusTag, __DioxusAttributes, __DioxusChildren> #extension_name
+                        for ::dioxus_core::view::Static<
+                            ::dioxus_core::view::ElementBuilder<
+                                __DioxusTag,
+                                __DioxusAttributes,
+                                __DioxusChildren,
+                            >,
+                        >
+                    where
+                        __DioxusTag: #group_marker + crate::#marker,
+                    {
+                    }
+
+                    // Spread targets accept every attribute in the group, so they get
+                    // gated attributes unconditionally (no per-element marker required).
+                    impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
+                    where
+                        __DioxusSpreadTarget:
+                            crate::#spread_marker + ::dioxus_core::view::AttributeTarget,
+                    {
                     }
                 }
             });
-        let gated_extensions = self.attrs.iter().filter(|attr| attr.is_gated_by(&gated_attributes)).map(|attr| {
-            let ident = &attr.name;
-            let attr_camel_name = ident_to_upper_camel(ident);
-            let descriptor = Ident::new(
-                format!("{camel_name}{attr_camel_name}AttributeDescriptor").as_str(),
-                ident.span(),
-            );
-            let extension_name = Ident::new(
-                format!("{camel_name}{attr_camel_name}Extension").as_str(),
-                ident.span(),
-            );
-            let marker = Ident::new(
-                format!("{camel_name}{attr_camel_name}Element").as_str(),
-                ident.span(),
-            );
-
-            quote! {
-                pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
-                    #[allow(non_snake_case)]
-                    fn #ident<__DioxusAttributeMarker, __DioxusAttributeValue>(
-                        self,
-                        value: __DioxusAttributeValue,
-                    ) -> <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                        Self,
-                        #descriptor,
-                        __DioxusAttributeMarker,
-                    >>::Output
-                    where
-                        __DioxusAttributeValue: ::dioxus_core::view::IntoAttributeBuilderValue<
-                            Self,
-                            #descriptor,
-                            __DioxusAttributeMarker,
-                        >,
-                    {
-                        <__DioxusAttributeValue as ::dioxus_core::view::IntoAttributeBuilderValue<
-                            Self,
-                            #descriptor,
-                            __DioxusAttributeMarker,
-                        >>::append_to(value, self)
-                    }
-                }
-
-                impl<__DioxusTag, __DioxusAttributes, __DioxusChildren> #extension_name
-                    for ::dioxus_core::view::ElementBuilder<
-                        __DioxusTag,
-                        __DioxusAttributes,
-                        __DioxusChildren,
-                    >
-                where
-                    __DioxusTag: #group_marker + crate::#marker,
-                {
-                }
-
-                // Spread targets accept every attribute in the group, so they get
-                // gated attributes unconditionally (no per-element marker required).
-                impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
-                where
-                    __DioxusSpreadTarget:
-                        crate::#spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
-                {
-                }
-            }
-        });
         tokens.append_all(quote! {
             #(#descriptors)*
 
@@ -193,7 +168,7 @@ impl ToTokens for ImplExtensionAttributes {
             /// implements this marker to receive the group's full attribute extension methods.
             pub trait #spread_marker {}
 
-            pub trait #extension_name: ::dioxus_core::view::AttributeBuilderTarget + Sized {
+            pub trait #extension_name: ::dioxus_core::view::AttributeTarget {
                 #(#impls)*
             }
 
@@ -201,13 +176,43 @@ impl ToTokens for ImplExtensionAttributes {
             // umbrella extension through the marker as well.
             impl<__DioxusSpreadTarget> #extension_name for __DioxusSpreadTarget
             where
-                __DioxusSpreadTarget:
-                    #spread_marker + ::dioxus_core::view::AttributeBuilderTarget,
+                __DioxusSpreadTarget: #spread_marker + ::dioxus_core::view::AttributeTarget,
             {
             }
 
             #(#gated_extensions)*
         });
+    }
+}
+
+/// One generated attribute method. The receiver picks the `AttributeBuilderTarget` impl, so the
+/// call resolves with a single candidate whether it appends to an element, builds a static
+/// attribute view or pushes onto a spread builder.
+fn attribute_method(ident: &Ident, descriptor: &Ident) -> TokenStream2 {
+    quote! {
+        #[allow(non_snake_case)]
+        #[inline(always)]
+        fn #ident<__DioxusAttributeValue, __DioxusAttributeMarker>(
+            self,
+            value: __DioxusAttributeValue,
+        ) -> <Self as ::dioxus_core::view::AttributeBuilderTarget<
+            #descriptor,
+            __DioxusAttributeValue,
+            __DioxusAttributeMarker,
+        >>::Output
+        where
+            Self: ::dioxus_core::view::AttributeBuilderTarget<
+                #descriptor,
+                __DioxusAttributeValue,
+                __DioxusAttributeMarker,
+            >,
+        {
+            <Self as ::dioxus_core::view::AttributeBuilderTarget<
+                #descriptor,
+                __DioxusAttributeValue,
+                __DioxusAttributeMarker,
+            >>::with_attribute(self, value)
+        }
     }
 }
 

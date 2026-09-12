@@ -88,6 +88,14 @@ pub fn build_runtime_template(tree: &'static TemplateRawTree) -> Template {
     builder.finish()
 }
 
+/// [`build_runtime_template`] for a body that is a single static text node.
+#[cfg(debug_assertions)]
+pub fn build_runtime_text_template(text: &'static str) -> Template {
+    let mut builder = RuntimeTemplateBuilder::new();
+    builder.static_text(text);
+    builder.finish()
+}
+
 /// Runtime mirror of [`lower_raw_tree`] that drives the non-generic [`RuntimeTemplateBuilder`].
 ///
 /// Mirrors the const lowering arm-for-arm so it produces the identical op tape, strings, anchors,

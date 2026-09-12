@@ -8,7 +8,7 @@ use crate::{
     nest::{Nest, NestId},
     redirect::Redirect,
     route::{Route, RouteType},
-    segment::{RouteSegment, static_segment_idx},
+    segment::RouteSegment,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -126,7 +126,7 @@ impl<'a> ParseRouteTree<'a> {
                 let segments_iter = nest.segments.iter();
 
                 // Add all static segments of the nest
-                'o: for (index, segment) in segments_iter.enumerate() {
+                'o: for segment in segments_iter {
                     match segment {
                         RouteSegment::Static(segment) => {
                             // Check if the segment already exists
@@ -151,11 +151,7 @@ impl<'a> ParseRouteTree<'a> {
                             let static_segment = RouteTreeSegmentData::Static {
                                 segment,
                                 children: Vec::new(),
-                                error_variant: StaticErrorVariant {
-                                    variant_parse_error: nest.error_ident(),
-                                    enum_variant: nest.error_variant(),
-                                },
-                                index,
+                                site: nest.site_ident(),
                             };
 
                             // If it doesn't, add the segment to the current route
@@ -200,7 +196,7 @@ impl<'a> ParseRouteTree<'a> {
 
             match route.next_static_segment() {
                 // If there is a static segment, check if it already exists in the tree
-                Some((i, segment)) => {
+                Some(segment) => {
                     let current_children = current_route
                         .map(|id| self.children(id))
                         .unwrap_or_else(|| segments.clone());
@@ -224,9 +220,8 @@ impl<'a> ParseRouteTree<'a> {
                             // If it doesn't exist, add the route as a new segment
                             let data = RouteTreeSegmentData::Static {
                                 segment,
-                                error_variant: route.error_variant(),
+                                site: route.site.clone(),
                                 children: self.construct(vec![route]),
-                                index: i,
                             };
                             let id = self.entries.insert(data);
                             let current_children_mut = current_route
@@ -251,19 +246,14 @@ impl<'a> ParseRouteTree<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StaticErrorVariant {
-    variant_parse_error: Ident,
-    enum_variant: Ident,
-}
-
 // First deduplicate the routes by the static part of the route
 #[derive(Debug, Clone)]
 pub(crate) enum RouteTreeSegmentData<'a> {
     Static {
         segment: &'a str,
-        error_variant: StaticErrorVariant,
-        index: usize,
+        /// The `RouteMatchSite` const a mismatch is reported against: the first route (or
+        /// nest) that introduced this segment into the tree.
+        site: Ident,
         children: Vec<usize>,
     },
     Nest {
@@ -275,30 +265,27 @@ pub(crate) enum RouteTreeSegmentData<'a> {
 }
 
 impl RouteTreeSegmentData<'_> {
+    /// Emit the parser for this node. `depth` is the index into `__segments` of the next
+    /// segment to consume; every static or dynamic segment matched on the way here consumed one.
     pub fn to_tokens(
         &self,
         nests: &[Nest],
         tree: &ParseRouteTree,
         enum_name: syn::Ident,
-        error_enum_name: syn::Ident,
+        depth: usize,
     ) -> TokenStream {
         match self {
             RouteTreeSegmentData::Static {
                 segment,
                 children,
-                index,
-                error_variant:
-                    StaticErrorVariant {
-                        variant_parse_error,
-                        enum_variant,
-                    },
+                site,
+                ..
             } => {
-                let children = children.iter().map(|child| {
-                    let child = tree.get(*child).unwrap();
-                    child.to_tokens(nests, tree, enum_name.clone(), error_enum_name.clone())
-                });
-
                 if segment.is_empty() {
+                    let children = children.iter().map(|child| {
+                        let child = tree.get(*child).unwrap();
+                        child.to_tokens(nests, tree, enum_name.clone(), depth)
+                    });
                     return quote! {
                         {
                             #(#children)*
@@ -306,26 +293,24 @@ impl RouteTreeSegmentData<'_> {
                     };
                 }
 
-                let error_ident = static_segment_idx(*index);
+                let children = children.iter().map(|child| {
+                    let child = tree.get(*child).unwrap();
+                    child.to_tokens(nests, tree, enum_name.clone(), depth + 1)
+                });
 
                 quote! {
-                    {
-                        let mut segments = segments.clone();
-                        let segment = segments.next();
-                        if let Some(segment) = segment.as_deref() {
-                            if #segment == segment {
-                                #(#children)*
-                            } else {
-                                errors.push(#error_enum_name::#enum_variant(#variant_parse_error::#error_ident(segment.to_string())))
-                            }
+                    if let Some(__segment) = __segments.get(#depth) {
+                        if __segment == #segment {
+                            #(#children)*
+                        } else {
+                            __errors.push(#site.static_segment(#segment, __segment));
                         }
                     }
                 }
             }
             RouteTreeSegmentData::Route(route) => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let variant_parse_error = route.error_ident();
-                let enum_variant = &route.route_name;
+                let site = route.site_ident();
 
                 let route_segments = route
                     .segments
@@ -335,7 +320,9 @@ impl RouteTreeSegmentData<'_> {
                     .filter(|(i, _)| {
                         // Don't add any trailing static segments. We strip them during parsing so that routes can accept either `/route/` and `/route`
                         !is_trailing_static_segment(&route.segments, *i)
-                    });
+                    })
+                    .map(|(_, seg)| seg)
+                    .collect::<Vec<_>>();
 
                 let construct_variant = route.construct(nests, enum_name);
                 let parse_query = route.parse_query();
@@ -351,19 +338,19 @@ impl RouteTreeSegmentData<'_> {
                 };
 
                 let print_route_segment = print_route_segment(
-                    route_segments.peekable(),
-                    return_constructed(
-                        insure_not_trailing,
-                        construct_variant,
-                        &error_enum_name,
-                        enum_variant,
-                        &variant_parse_error,
-                        parse_query,
-                        parse_hash,
-                    ),
-                    &error_enum_name,
-                    enum_variant,
-                    &variant_parse_error,
+                    &route_segments,
+                    depth,
+                    &|depth| {
+                        return_constructed(
+                            insure_not_trailing,
+                            depth,
+                            construct_variant.clone(),
+                            &site,
+                            parse_query.clone(),
+                            parse_hash.clone(),
+                        )
+                    },
+                    &site,
                 );
 
                 match &route.ty {
@@ -372,25 +359,12 @@ impl RouteTreeSegmentData<'_> {
                         let child_name = &child.ident;
 
                         quote! {
-                            let mut trailing = String::from("/");
-                            for seg in segments.clone() {
-                                trailing += &*seg;
-                                trailing += "/";
-                            }
-                            if !raw_query.is_empty() {
-                                trailing.push('?');
-                                trailing.push_str(raw_query);
-                            }
-                            if !raw_hash.is_empty() {
-                                trailing.push('#');
-                                trailing.push_str(raw_hash);
-                            }
-                            match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_variant(#variant_parse_error::ChildRoute(err))) {
+                            match __segments.child::<#ty>(#depth, raw_query, raw_hash, #site) {
                                 Ok(#child_name) => {
                                     #print_route_segment
                                 }
                                 Err(err) => {
-                                    errors.push(err);
+                                    __errors.push(err);
                                 }
                             }
                         }
@@ -400,41 +374,38 @@ impl RouteTreeSegmentData<'_> {
             }
             Self::Nest { nest, children } => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let variant_parse_error: Ident = nest.error_ident();
-                let enum_variant = nest.error_variant();
+                let site = nest.site_ident();
 
                 let route_segments = nest
                     .segments
                     .iter()
-                    .enumerate()
-                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
-
-                let parse_children = children
-                    .iter()
-                    .map(|child| {
-                        let child = tree.get(*child).unwrap();
-                        child.to_tokens(nests, tree, enum_name.clone(), error_enum_name.clone())
-                    })
-                    .collect();
+                    .skip_while(|seg| matches!(seg, RouteSegment::Static(_)))
+                    .collect::<Vec<_>>();
 
                 print_route_segment(
-                    route_segments.peekable(),
-                    parse_children,
-                    &error_enum_name,
-                    &enum_variant,
-                    &variant_parse_error,
+                    &route_segments,
+                    depth,
+                    &|depth| {
+                        children
+                            .iter()
+                            .map(|child| {
+                                let child = tree.get(*child).unwrap();
+                                child.to_tokens(nests, tree, enum_name.clone(), depth)
+                            })
+                            .collect()
+                    },
+                    &site,
                 )
             }
             Self::Redirect(redirect) => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let variant_parse_error = redirect.error_ident();
-                let enum_variant = &redirect.error_variant();
+                let site = redirect.site_ident();
 
                 let route_segments = redirect
                     .segments
                     .iter()
-                    .enumerate()
-                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
+                    .skip_while(|seg| matches!(seg, RouteSegment::Static(_)))
+                    .collect::<Vec<_>>();
 
                 let parse_query = redirect.parse_query();
                 let parse_hash = redirect.parse_hash();
@@ -458,82 +429,58 @@ impl RouteTreeSegmentData<'_> {
                 };
 
                 print_route_segment(
-                    route_segments.peekable(),
-                    return_constructed(
-                        insure_not_trailing,
-                        return_redirect,
-                        &error_enum_name,
-                        enum_variant,
-                        &variant_parse_error,
-                        parse_query,
-                        parse_hash,
-                    ),
-                    &error_enum_name,
-                    enum_variant,
-                    &variant_parse_error,
+                    &route_segments,
+                    depth,
+                    &|depth| {
+                        return_constructed(
+                            insure_not_trailing,
+                            depth,
+                            return_redirect.clone(),
+                            &site,
+                            parse_query.clone(),
+                            parse_hash.clone(),
+                        )
+                    },
+                    &site,
                 )
             }
         }
     }
 }
 
-fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
-    mut s: std::iter::Peekable<I>,
-    success_tokens: TokenStream,
-    error_enum_name: &Ident,
-    enum_variant: &Ident,
-    variant_parse_error: &Ident,
+/// Nest the parsers for `segments` starting at `depth`, with `success` emitted innermost at the
+/// depth reached once every segment matched.
+fn print_route_segment(
+    segments: &[&RouteSegment],
+    depth: usize,
+    success: &dyn Fn(usize) -> TokenStream,
+    site: &Ident,
 ) -> TokenStream {
-    if let Some((i, route)) = s.next() {
-        let children = print_route_segment(
-            s,
-            success_tokens,
-            error_enum_name,
-            enum_variant,
-            variant_parse_error,
-        );
-
-        route.try_parse(
-            i,
-            error_enum_name,
-            enum_variant,
-            variant_parse_error,
-            children,
-        )
-    } else {
-        quote! {
-            #success_tokens
+    match segments.split_first() {
+        Some((segment, rest)) => {
+            let children = print_route_segment(rest, depth + 1, success, site);
+            segment.try_parse(depth, site, children)
         }
+        None => success(depth),
     }
 }
 
 fn return_constructed(
     insure_not_trailing: bool,
+    depth: usize,
     construct_variant: TokenStream,
-    error_enum_name: &Ident,
-    enum_variant: &Ident,
-    variant_parse_error: &Ident,
+    site: &Ident,
     parse_query: TokenStream,
     parse_hash: TokenStream,
 ) -> TokenStream {
     if insure_not_trailing {
         quote! {
-            let remaining_segments = segments.clone();
-            let mut segments_clone = segments.clone();
-            let next_segment = segments_clone.next();
-            // This is the last segment, return the parsed route
-            if next_segment.is_none() {
+            if __segments.ends_at(#depth) {
                 #parse_query
                 #parse_hash
                 return Ok(#construct_variant);
             } else {
-                let mut trailing = String::new();
-                for seg in remaining_segments {
-                    trailing += &*seg;
-                    trailing += "/";
-                }
-                trailing.pop();
-                errors.push(#error_enum_name::#enum_variant(#variant_parse_error::ExtraSegments(trailing)))
+                __errors.push(#site.extra_segments(__segments.trailing(#depth)));
             }
         }
     } else {
@@ -550,8 +497,7 @@ pub struct PathIter<'a> {
     active_nests: &'a [NestId],
     all_nests: &'a [Nest],
     segments: &'a [RouteSegment],
-    error_ident: Ident,
-    error_variant: Ident,
+    site: Ident,
     nest_index: usize,
     static_segment_index: usize,
 }
@@ -562,8 +508,7 @@ impl<'a> PathIter<'a> {
             final_segment: RouteTreeSegmentData::Route(route),
             active_nests: &*route.nests,
             segments: &*route.segments,
-            error_ident: route.error_ident(),
-            error_variant: route.route_name.clone(),
+            site: route.site_ident(),
             all_nests: nests,
             nest_index: 0,
             static_segment_index: 0,
@@ -575,8 +520,7 @@ impl<'a> PathIter<'a> {
             final_segment: RouteTreeSegmentData::Redirect(redirect),
             active_nests: &*redirect.nests,
             segments: &*redirect.segments,
-            error_ident: redirect.error_ident(),
-            error_variant: redirect.error_variant(),
+            site: redirect.site_ident(),
             all_nests: nests,
             nest_index: 0,
             static_segment_index: 0,
@@ -591,7 +535,7 @@ impl<'a> PathIter<'a> {
         Some(nest)
     }
 
-    fn next_static_segment(&mut self) -> Option<(usize, &'a str)> {
+    fn next_static_segment(&mut self) -> Option<&'a str> {
         let idx = self.static_segment_index;
         let segment = self.segments.get(idx)?;
         // Don't add any trailing static segments. We strip them during parsing so that routes can accept either `/route/` and `/route`
@@ -601,16 +545,9 @@ impl<'a> PathIter<'a> {
         match segment {
             RouteSegment::Static(segment) => {
                 self.static_segment_index += 1;
-                Some((idx, segment))
+                Some(segment)
             }
             _ => None,
-        }
-    }
-
-    fn error_variant(&self) -> StaticErrorVariant {
-        StaticErrorVariant {
-            variant_parse_error: self.error_ident.clone(),
-            enum_variant: self.error_variant.clone(),
         }
     }
 }

@@ -16,8 +16,9 @@ use crate::nest::Nest;
 use crate::nest::NestId;
 use crate::query::QuerySegment;
 use crate::segment::RouteSegment;
-use crate::segment::create_error_type;
 use crate::segment::parse_route_segments;
+use crate::segment::site_const;
+use crate::segment::write_segments;
 
 struct RouteArgs {
     route: LitStr,
@@ -171,10 +172,17 @@ impl Route {
         let write_query: Option<TokenStream2> = self.query.as_ref().map(|q| q.write());
         let write_hash = self.hash.as_ref().map(|q| q.write());
 
+        // Nest segments come first, then the route's own segments; static runs across the
+        // boundary collapse into one literal.
+        let write_path = write_segments(
+            self.nests
+                .iter()
+                .flat_map(|id| nests[id.0].segments.iter())
+                .chain(self.segments.iter()),
+        );
+
         match &self.ty {
             RouteType::Child(field) => {
-                let write_nests = self.nests.iter().map(|id| nests[id.0].write());
-                let write_segments = self.segments.iter().map(|s| s.write_segment());
                 let child = field.ident.as_ref().unwrap();
                 quote! {
                     Self::#name { #(#dynamic_segments,)* #child } => {
@@ -183,8 +191,7 @@ impl Route {
                         let mut route = String::new();
                         {
                             let f = &mut route;
-                            #(#write_nests)*
-                            #(#write_segments)*
+                            #write_path
                         }
                         if route.ends_with('/') {
                             route.pop();
@@ -195,12 +202,9 @@ impl Route {
                 }
             }
             RouteType::Leaf { .. } => {
-                let write_nests = self.nests.iter().map(|id| nests[id.0].write());
-                let write_segments = self.segments.iter().map(|s| s.write_segment());
                 quote! {
                     Self::#name { #(#dynamic_segments,)* } => {
-                        #(#write_nests)*
-                        #(#write_segments)*
+                        #write_path
                         #write_query
                         #write_hash
                     }
@@ -430,18 +434,19 @@ impl Route {
         }
     }
 
-    pub(crate) fn error_ident(&self) -> Ident {
-        format_ident!("{}ParseError", self.route_name)
+    /// The `RouteMatchSite` const parse failures of this route are reported against.
+    pub(crate) fn site_ident(&self) -> Ident {
+        format_ident!("__SITE_ROUTE_{}", self.route_name)
     }
 
-    pub(crate) fn error_type(&self) -> TokenStream2 {
-        let error_name = self.error_ident();
-        let child_type = match &self.ty {
-            RouteType::Child(field) => Some(&field.ty),
-            RouteType::Leaf { .. } => None,
-        };
-
-        create_error_type(&self.route, error_name, &self.segments, child_type)
+    pub(crate) fn site_def(&self, error_type: &Ident) -> TokenStream2 {
+        site_const(
+            &self.site_ident(),
+            error_type,
+            "Route",
+            &self.route_name.to_string(),
+            &self.route,
+        )
     }
 
     pub(crate) fn parse_query(&self) -> TokenStream2 {

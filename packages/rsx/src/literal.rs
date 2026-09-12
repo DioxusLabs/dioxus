@@ -155,7 +155,10 @@ impl Parse for HotReloadFormattedSegment {
 
 impl ToTokens for HotReloadFormattedSegment {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        tokens.extend(self.quote_with_dynamic_ids(&[]));
+        let segments = self.quote_with_dynamic_ids(&[]);
+        tokens.extend(quote! {
+            dioxus_core::internal::FmtedSegments::new(#segments.to_vec())
+        });
     }
 }
 
@@ -167,6 +170,7 @@ impl HotReloadFormattedSegment {
             .count()
     }
 
+    /// The segments as a `&'static [FmtSegment]` expression suitable for a `static` initializer.
     pub(crate) fn quote_with_dynamic_ids(&self, dynamic_ids: &[usize]) -> TokenStream2 {
         let mut next_dynamic = 0usize;
         let segments = self.segments.iter().map(|segment| match segment {
@@ -182,9 +186,7 @@ impl HotReloadFormattedSegment {
             }
         });
 
-        quote! {
-            dioxus_core::internal::FmtedSegments::new(vec![ #(#segments),* ])
-        }
+        quote! { &[ #(#segments),* ] }
     }
 }
 

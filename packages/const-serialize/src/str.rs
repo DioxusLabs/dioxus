@@ -64,17 +64,11 @@ unsafe impl SerializeConst for ConstStr {
 impl ConstStr {
     /// Create a new constant string
     pub const fn new(s: &str) -> Self {
-        let str_bytes = s.as_bytes();
-        let mut bytes = [MaybeUninit::uninit(); MAX_STR_SIZE];
-        let mut i = 0;
-        while i < str_bytes.len() {
-            bytes[i] = MaybeUninit::new(str_bytes[i]);
-            i += 1;
-        }
         Self {
-            bytes,
-            len: str_bytes.len() as u32,
+            bytes: [MaybeUninit::uninit(); MAX_STR_SIZE],
+            len: 0,
         }
+        .push_str(s)
     }
 
     /// Get the bytes of the initialized portion of the string
@@ -127,10 +121,15 @@ impl ConstStr {
         );
         let str_bytes = str.as_bytes();
         let new_len = len as usize + str_bytes.len();
-        let mut i = 0;
-        while i < str_bytes.len() {
-            bytes[len as usize + i] = MaybeUninit::new(str_bytes[i]);
-            i += 1;
+        // SAFETY: `MaybeUninit<u8>` has the same layout as `u8`, the destination range
+        // `len..new_len` is in bounds (checked above), and `str` cannot alias `bytes`
+        // because `bytes` is a local copy.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                str_bytes.as_ptr(),
+                bytes.as_mut_ptr().add(len as usize) as *mut u8,
+                str_bytes.len(),
+            );
         }
         Self {
             bytes,

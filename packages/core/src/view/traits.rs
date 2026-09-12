@@ -6,14 +6,18 @@ use dioxus_core_template::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
     TemplateRawTree, TemplateStorage,
 };
+#[cfg(debug_assertions)]
+use std::collections::HashMap;
 use std::marker::PhantomData;
+#[cfg(debug_assertions)]
+use std::sync::RwLock;
 
 /// A type that contributes static template structure.
 pub trait ViewTemplate {
     /// The static tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
 
-    /// Whether this view contributes any runtime dynamic nodes or attributes.
+    /// Whether [`View::push`] on this view contributes any runtime dynamic nodes or attributes.
     ///
     /// Composite views only call [`View::push`] on parts where this is `true`, so fully static
     /// subtrees never instantiate `push` at all. Defaults to `true`, which is always sound.
@@ -104,51 +108,132 @@ impl<V: View> ViewExt for V {
 /// Convert a view into a [`VNode`] using a prepared template.
 #[inline]
 fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
-    let mut dynamic = DynamicValues::new();
-    view.push(&mut dynamic);
-    VNode::new(*template, dynamic)
+    into_vnode_with_template_and_values(view, DynamicValues::new(), template)
 }
 
-/// Convert a view into a [`VNode`] using a debug-only lazy template cached per call site.
-///
-/// In dev builds the optimized template is lowered once at runtime from the view's
-/// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
-/// debug compile time) and cached in `cache`. Release builds use [`into_vnode_with_capacity`] and
-/// its const template instead.
-#[cfg(debug_assertions)]
-#[doc(hidden)]
+/// Convert a view into a [`VNode`] using a prepared template, pushing its runtime values onto
+/// `dynamic` (which already holds any values the caller filled in ahead of the view).
 #[inline]
-pub fn into_vnode_cached<V: View>(view: V, cache: &std::sync::OnceLock<Template>) -> VNode {
-    let template = cached_runtime_template(cache, V::TEMPLATE_TREE);
-    let mut dynamic = DynamicValues::new();
+fn into_vnode_with_template_and_values<V: View>(
+    view: V,
+    mut dynamic: DynamicValues,
+    template: &Template,
+) -> VNode {
     if V::HAS_DYNAMIC {
         view.push(&mut dynamic);
     }
     VNode::new(*template, dynamic)
 }
 
-#[cfg(debug_assertions)]
-#[inline(never)]
-fn cached_runtime_template<'a>(
-    cache: &'a std::sync::OnceLock<Template>,
-    tree: &'static dioxus_core_template::TemplateRawTree,
-) -> &'a Template {
-    cache.get_or_init(|| dioxus_core_template::build_runtime_template(tree))
+/// Runtime values for an `rsx!` body, sized for its dynamic node and attribute counts.
+///
+/// `rsx!` pushes the body's dynamic node and attribute values into this (see
+/// [`push_dyn_node`](super::push_dyn_node) and [`push_dyn_attrs`](super::push_dyn_attrs)) before
+/// building the view, then hands both to [`vnode_from_tree`] / [`vnode_with_capacity`].
+#[doc(hidden)]
+#[inline]
+pub fn dynamic_values(dynamic_nodes: usize, dynamic_attributes: usize) -> DynamicValues {
+    DynamicValues::with_capacity(dynamic_nodes, dynamic_attributes)
 }
 
-/// Convert a view into a [`VNode`] using template capacities resolved at the call site.
-pub fn into_vnode_with_capacity<
+/// Set the root key of an `rsx!` body whose values are pushed ahead of the view.
+#[doc(hidden)]
+#[inline]
+pub fn set_key(dynamic: &mut DynamicValues, key: Option<String>) {
+    dynamic.set_key(key);
+}
+
+/// The static template tree of a view value's type.
+///
+/// This is the only per-site generic code the debug `rsx!` expansion instantiates; everything
+/// else runs through the non-generic [`vnode_from_tree`].
+#[doc(hidden)]
+#[inline]
+pub fn template_tree<V: ViewTemplate>(_: &V) -> &'static TemplateRawTree {
+    V::TEMPLATE_TREE
+}
+
+/// Build a [`VNode`] for a view type whose runtime values were all pushed onto `dynamic` ahead
+/// of the view, using template capacities resolved at the call site.
+///
+/// The view value only fixes `V`; nothing is pushed from it, so no [`View::push`] is
+/// instantiated. Release `rsx!` expansions use this; debug ones use [`vnode_from_tree`].
+#[doc(hidden)]
+#[inline]
+pub fn vnode_with_capacity<
     const OPS_CAP: usize,
     const STRING_CAP: usize,
     const DYNAMIC_CAP: usize,
-    V: View,
+    V: ViewTemplate,
 >(
-    view: V,
+    _: &V,
+    dynamic: DynamicValues,
 ) -> VNode {
-    into_vnode_with_template(
-        view,
-        StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
+    VNode::new(
+        *StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
+        dynamic,
     )
+}
+
+/// Build a [`VNode`] from a debug-only lazy template cached per raw tree.
+///
+/// In dev builds the optimized template is lowered once at runtime from the view's
+/// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
+/// debug compile time) and cached by the tree's address, so a site needs no `static` of its own.
+/// Release builds use [`vnode_with_capacity`] and its const template instead.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+#[inline(never)]
+pub fn vnode_from_tree(tree: &'static TemplateRawTree, dynamic: DynamicValues) -> VNode {
+    let key = (tree as *const TemplateRawTree as usize, usize::MAX);
+    VNode::new(
+        runtime_template(key, || dioxus_core_template::build_runtime_template(tree)),
+        dynamic,
+    )
+}
+
+/// [`vnode_from_tree`] for a body that is a single static text node, so such a body (a
+/// component's `"label"` children, typically) needs no tree of its own.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+#[inline(never)]
+pub fn vnode_from_static_text(text: &'static str) -> VNode {
+    let key = (text.as_ptr() as usize, text.len());
+    VNode::new(
+        runtime_template(key, || {
+            dioxus_core_template::build_runtime_text_template(text)
+        }),
+        DynamicValues::new(),
+    )
+}
+
+/// The runtime-lowered template cached under `key`, lowered by `build` on first use.
+///
+/// Trees are keyed by address (with `usize::MAX` as the length); text by address and length,
+/// since a literal may be a prefix of another literal it shares storage with (and an empty one
+/// may share its address with anything). Distinct trees never share an address, and lowering an
+/// identical tree reached through two addresses only costs a duplicate cache entry, so the
+/// address is a sound key.
+#[cfg(debug_assertions)]
+fn runtime_template(key: (usize, usize), build: impl FnOnce() -> Template) -> Template {
+    static TEMPLATES: RwLock<Option<HashMap<(usize, usize), Template>>> = RwLock::new(None);
+
+    let cached = TEMPLATES
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+        .and_then(|templates| templates.get(&key).copied());
+    if let Some(template) = cached {
+        return template;
+    }
+
+    let mut templates = TEMPLATES
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *templates
+        .get_or_insert_default()
+        .entry(key)
+        .or_insert_with(build)
 }
 
 impl View for () {}
