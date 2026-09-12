@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use crate::DynamicValues;
 use dioxus_core_template::TemplateRawTree;
 
-use super::{IntoViewChild, View, ViewTemplate};
+use super::{DynamicAttributesBuilder, IntoViewChild, View, ViewTemplate};
 
 /// A static element tag marker.
 pub trait ElementTag {
@@ -65,16 +65,17 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
     }
 }
 
-/// A childless typed element paired with its children.
+/// An empty typed element (`html::div`) paired with its attribute views and its children.
 ///
-/// `rsx!` attaches children with this struct literal rather than [`ElementBuilder::child`]: the
-/// children are always typed views, so no per-element method instantiation is needed to join them,
-/// and the pair lowers exactly like the equivalent `ElementBuilder<Tag, Attributes, Children>`.
+/// `rsx!` builds elements with this struct literal rather than a chain of attribute and
+/// [`ElementBuilder::child`] calls: attributes and children are tuples of typed views, so no
+/// per-element method instantiation is needed to join them and the element type stays flat.
+/// It lowers exactly like the equivalent `ElementBuilder<Tag, Attributes, Children>`.
 #[doc(hidden)]
-pub struct ElementWithChildren<Element, Children>(pub Element, pub Children);
+pub struct ElementParts<Element, Attributes, Children>(pub Element, pub Attributes, pub Children);
 
 impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate
-    for ElementWithChildren<ElementBuilder<Tag, Attributes, ()>, Children>
+    for ElementParts<ElementBuilder<Tag, (), ()>, Attributes, Children>
 {
     const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::Element {
         tag: Tag::NAME,
@@ -86,17 +87,27 @@ impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemp
 }
 
 impl<Tag: ElementTag, Attributes: View, Children: View> View
-    for ElementWithChildren<ElementBuilder<Tag, Attributes, ()>, Children>
+    for ElementParts<ElementBuilder<Tag, (), ()>, Attributes, Children>
 {
     #[inline]
     fn push(self, dynamic: &mut DynamicValues) {
         if Attributes::HAS_DYNAMIC {
-            self.0.attrs.push(dynamic);
-        }
-        if Children::HAS_DYNAMIC {
             self.1.push(dynamic);
         }
+        if Children::HAS_DYNAMIC {
+            self.2.push(dynamic);
+        }
     }
+}
+
+/// The single runtime attribute a generated attribute method appended to an empty element, as a
+/// standalone attribute view for an [`ElementParts`] attribute tuple.
+#[doc(hidden)]
+#[inline(always)]
+pub fn element_attribute<Tag>(
+    element: ElementBuilder<Tag, ((), DynamicAttributesBuilder), ()>,
+) -> DynamicAttributesBuilder {
+    element.attrs.1
 }
 
 impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate

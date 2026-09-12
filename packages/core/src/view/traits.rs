@@ -185,18 +185,39 @@ pub fn vnode_with_capacity<
 #[doc(hidden)]
 #[inline(never)]
 pub fn vnode_from_tree(tree: &'static TemplateRawTree, dynamic: DynamicValues) -> VNode {
-    VNode::new(runtime_template(tree), dynamic)
+    let key = (tree as *const TemplateRawTree as usize, usize::MAX);
+    VNode::new(
+        runtime_template(key, || dioxus_core_template::build_runtime_template(tree)),
+        dynamic,
+    )
 }
 
-/// The runtime-lowered template for `tree`, lowered on first use and cached by address.
-///
-/// Distinct trees never share an address, and lowering an identical tree reached through two
-/// addresses only costs a duplicate cache entry, so the address is a sound key.
+/// [`vnode_from_tree`] for a body that is a single static text node, so such a body (a
+/// component's `"label"` children, typically) needs no tree of its own.
 #[cfg(debug_assertions)]
-fn runtime_template(tree: &'static TemplateRawTree) -> Template {
-    static TEMPLATES: RwLock<Option<HashMap<usize, Template>>> = RwLock::new(None);
+#[doc(hidden)]
+#[inline(never)]
+pub fn vnode_from_static_text(text: &'static str) -> VNode {
+    let key = (text.as_ptr() as usize, text.len());
+    VNode::new(
+        runtime_template(key, || {
+            dioxus_core_template::build_runtime_text_template(text)
+        }),
+        DynamicValues::new(),
+    )
+}
 
-    let key = tree as *const TemplateRawTree as usize;
+/// The runtime-lowered template cached under `key`, lowered by `build` on first use.
+///
+/// Trees are keyed by address (with `usize::MAX` as the length); text by address and length,
+/// since a literal may be a prefix of another literal it shares storage with (and an empty one
+/// may share its address with anything). Distinct trees never share an address, and lowering an
+/// identical tree reached through two addresses only costs a duplicate cache entry, so the
+/// address is a sound key.
+#[cfg(debug_assertions)]
+fn runtime_template(key: (usize, usize), build: impl FnOnce() -> Template) -> Template {
+    static TEMPLATES: RwLock<Option<HashMap<(usize, usize), Template>>> = RwLock::new(None);
+
     let cached = TEMPLATES
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -212,7 +233,7 @@ fn runtime_template(tree: &'static TemplateRawTree) -> Template {
     *templates
         .get_or_insert_default()
         .entry(key)
-        .or_insert_with(|| dioxus_core_template::build_runtime_template(tree))
+        .or_insert_with(build)
 }
 
 impl View for () {}

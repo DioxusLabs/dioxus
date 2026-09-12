@@ -486,10 +486,11 @@ impl ViewBuilder {
     ) -> TokenStream2 {
         let tag = self.element_tag(element);
 
-        let mut attrs = TokenStream2::new();
-        for attr in &element.merged_attributes {
-            attrs.extend(element.typed_builder_attribute(&tag, attr, self));
-        }
+        let attrs = element
+            .merged_attributes
+            .iter()
+            .map(|attr| element.typed_builder_attribute(&tag, attr, self))
+            .collect::<Vec<_>>();
 
         // Allocate the key's formatted segments before the children's. The canonical fill order
         // (and the hot-reload `LastBuildState` pool) is attributes, key, then children, so the
@@ -502,12 +503,15 @@ impl ViewBuilder {
             }
         }
 
+        // Attributes and children are flat tuples of views next to the bare tag, so the element
+        // type stays shallow and no builder method is instantiated to join them.
         let diagnostics = &element.diagnostics;
-        let view = if element.children.is_empty() {
-            quote! { #tag #attrs }
+        let view = if attrs.is_empty() && element.children.is_empty() {
+            tag
         } else {
+            let attrs = group_sibling_views(attrs);
             let children = group_sibling_views(self.visit_sibling_nodes(&element.children, false));
-            quote! { dioxus_core::view::ElementWithChildren(#tag #attrs, #children) }
+            quote! { dioxus_core::view::ElementParts(#tag, #attrs, #children) }
         };
 
         if emit_diagnostics {
@@ -556,12 +560,12 @@ impl ViewBuilder {
         self.track_dynamic_attr(attr);
         let attrs = attr.rendered_as_dynamic_attr();
         if !self.hoist_dynamic_attrs {
-            return quote! { .attribute(dioxus_core::view::dynamic_attributes_builder(#attrs)) };
+            return quote! { dioxus_core::view::dynamic_attributes_builder(#attrs) };
         }
         self.attr_pushes.push(quote! {
             dioxus_core::view::push_dyn_attrs(&mut __dynamic, #attrs);
         });
-        quote! { .attribute(dioxus_core::view::DynamicAttributeSlot) }
+        quote! { dioxus_core::view::DynamicAttributeSlot }
     }
 
     /// A dynamic attribute set through the element's generated attribute method, which resolves
@@ -582,12 +586,12 @@ impl ViewBuilder {
         };
         let value = quote! { #attr_value };
         if !self.hoist_dynamic_attrs {
-            return quote! { .#method(#value) };
+            return quote! { dioxus_core::view::element_attribute(#tag.#method(#value)) };
         }
         self.attr_pushes.push(quote! {
             dioxus_core::view::push_element_attrs(&mut __dynamic, #tag.#method(#value));
         });
-        quote! { .attribute(dioxus_core::view::DynamicAttributeSlot) }
+        quote! { dioxus_core::view::DynamicAttributeSlot }
     }
 
     fn track_dynamic_attr(&mut self, attr: &Attribute) {
@@ -669,8 +673,7 @@ impl ViewBuilder {
                 const VALUE: &'static str = #value;
             }
         });
-        let attr = quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() };
-        quote! { .attribute(#attr) }
+        quote_spanned! { span => dioxus_core::view::static_attribute::<#marker>() }
     }
 
     fn element_tag(&mut self, element: &Element) -> TokenStream2 {
@@ -722,10 +725,12 @@ impl Element {
                 return builder.dynamic_builder_attr(tag, attr, method.clone());
             }
 
+            // The attribute method on the `Static` tag resolves the descriptor and yields the
+            // zero-sized attribute view directly.
             if let Some((_, value)) = attr.as_static_str_literal() {
                 let marker = builder.static_string(attr.span(), value.to_static().unwrap());
                 return quote! {
-                    .#method(
+                    dioxus_core::view::Static(#tag).#method(
                         dioxus_core::view::StaticAttributeValueBuilder::<#marker>(
                             ::core::marker::PhantomData
                         )
@@ -928,12 +933,16 @@ impl TemplateBody {
             return None;
         }
 
-        let nodes = texts.iter().map(|text| {
-            let value = text.input.to_static().unwrap();
-            quote_spanned! { text.input.span() =>
-                &dioxus_core::internal::TemplateRawTree::StaticText(#value)
-            }
-        });
+        let values = texts
+            .iter()
+            .map(|text| {
+                let value = text.input.to_static().unwrap();
+                quote_spanned! { text.input.span() => #value }
+            })
+            .collect::<Vec<_>>();
+        let nodes = values
+            .iter()
+            .map(|value| quote! { &dioxus_core::internal::TemplateRawTree::StaticText(#value) });
         // A single root lowers to its own node, several to a sequence (as tuple views do).
         let tree = if texts.len() == 1 {
             quote! { #(#nodes)* }
@@ -948,11 +957,18 @@ impl TemplateBody {
         let index = self.template_idx.get();
         let diagnostics = &self.diagnostics;
 
+        // In debug the tree is only a cache key for the runtime-lowered template, so a single
+        // text needs no tree at all and several are a promoted literal: neither is a `const`
+        // item, which would cost its own typeck, borrowck and const-eval per site.
+        let debug = if let [value] = values.as_slice() {
+            quote! { dioxus_signals::render_static_text(__rsx_location, #index, #value) }
+        } else {
+            quote! { dioxus_signals::render_static_site(__rsx_location, #index, #tree) }
+        };
+
         Some(quote! {
             dioxus_core::Element::Ok({
                 #diagnostics
-
-                const __TREE: &'static dioxus_core::internal::TemplateRawTree = #tree;
 
                 #[cfg(not(debug_assertions))]
                 {
@@ -961,14 +977,14 @@ impl TemplateBody {
                             #template_ops_cap,
                             #template_string_cap,
                             #template_dynamic_cap,
-                        >::build_from_tree(__TREE)
+                        >::build_from_tree(#tree)
                         .as_template();
                     dioxus_core::VNode::new(*__TEMPLATE, dioxus_core::view::dynamic_values(0, 0))
                 }
 
                 #[cfg(debug_assertions)]
                 {
-                    dioxus_signals::render_static_site(__rsx_location, #index, __TREE)
+                    #debug
                 }
             })
         })

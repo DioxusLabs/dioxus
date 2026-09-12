@@ -414,6 +414,23 @@ pub fn render_static_site(
     )
 }
 
+/// [`render_site`] for a body that is a single static text node.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn render_static_text(
+    location: RsxLocation,
+    index: usize,
+    text: &'static str,
+) -> dioxus_core::VNode {
+    let read = read_hot_reload_template(location, index);
+    dioxus_core::internal::render_hot_reloaded(
+        dioxus_core::view::vnode_from_static_text(text),
+        hot_reload_template(&read),
+        dioxus_core::internal::DynamicLiteralPool::new(Vec::new()),
+        &dioxus_core::internal::HotReloadSiteMeta::STATIC,
+    )
+}
+
 /// The debug-build hot-reload state of one `rsx!` site for one render: the site's hot-reload
 /// slot read, its original-template metadata, and the dynamic text pool its literals are
 /// rendered from.
