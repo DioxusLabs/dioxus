@@ -1532,7 +1532,9 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 /// wasm-bindgen panics (`descriptor.rs: index out of bounds: the len is 0`).
 ///
 /// Re-target every direct call to the wrapper at the import itself, then delete the wrapper, so
-/// the module looks like what wasm-bindgen expects from an optimized build.
+/// the module looks like what wasm-bindgen expects from an optimized build. The wrapper is only
+/// ever called from `wbg_cast::breaks_if_inlined` descriptor functions, so only those (a couple
+/// dozen tiny functions) are visited rather than the whole module.
 fn inline_describe_generic_import_shims(module: &mut Module) -> Result<()> {
     let Some(import_func) = module.imports.iter().find_map(|i| match i.kind {
         ImportKind::Function(id) if i.name == "__wbindgen_describe_generic_import" => Some(id),
@@ -1582,10 +1584,22 @@ fn inline_describe_generic_import_shims(module: &mut Module) -> Result<()> {
         }
     }
 
-    for (id, local) in module.funcs.iter_local_mut() {
-        if shims.contains(&id) {
-            continue;
-        }
+    let callers = module
+        .funcs
+        .iter_local()
+        .filter(|(id, _)| {
+            module
+                .funcs
+                .get(*id)
+                .name
+                .as_deref()
+                .is_some_and(|name| name.contains("breaks_if_inlined"))
+        })
+        .map(|(id, _)| id)
+        .collect::<Vec<_>>();
+
+    for id in callers {
+        let local = module.funcs.get_mut(id).kind.unwrap_local_mut();
         let entry = local.entry_block();
         dfs_pre_order_mut(
             &mut Redirect {
