@@ -678,7 +678,7 @@ impl BuildRequest {
         }
 
         fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
-            format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
+            format!("CARGO_TARGET_{}_{}", triple.replace('-', "_"), key).to_uppercase()
         }
 
         fn clang_target(rust_target: &str, api_level: u8) -> String {
@@ -766,7 +766,7 @@ impl BuildRequest {
         let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
         let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
         let bindgen_clang_args_key =
-            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
+            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", triple.replace('-', "_"));
 
         let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
         let target_cc = tools.target_cc();
@@ -812,13 +812,13 @@ impl BuildRequest {
 
         let extra_include: String = format!(
             "{}/usr/include/{}",
-            &cargo_ndk_sysroot_path.display(),
-            &cargo_ndk_sysroot_target
+            cargo_ndk_sysroot_path.display(),
+            cargo_ndk_sysroot_target
         );
 
         let bindgen_args = format!(
             "--sysroot={} -I{}",
-            &cargo_ndk_sysroot_path.display(),
+            cargo_ndk_sysroot_path.display(),
             extra_include
         );
 

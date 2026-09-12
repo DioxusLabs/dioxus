@@ -1976,6 +1976,7 @@ impl AppBuilder {
                     BuildMode::Base => "base",
                     BuildMode::Fat => "fat",
                     BuildMode::Thin { .. } => "thin",
+                    BuildMode::Check { .. } => "check",
                 },
                 "blah": 123,
                 "triple": self.build.triple.to_string(),
@@ -2011,6 +2012,7 @@ impl AppBuilder {
                 BuildMode::Base => "base",
                 BuildMode::Fat => "fat",
                 BuildMode::Thin { .. } => "thin",
+                BuildMode::Check { .. } => "check",
             },
             time_taken
         );

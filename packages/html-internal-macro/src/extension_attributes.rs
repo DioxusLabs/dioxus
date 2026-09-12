@@ -43,7 +43,7 @@ impl ToTokens for ImplExtensionAttributes {
             .strip_prefix("r#")
             .unwrap_or(&name_string)
             .to_case(Case::UpperCamel);
-        let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
+        let extension_name = Ident::new(format!("{camel_name}Extension").as_str(), name.span());
         let group_marker = Ident::new(format!("{camel_name}Element").as_str(), name.span());
         // Marker for catch-all attribute targets (e.g. `#[props(extends = ...)]` spread
         // builders) that accept every attribute in this group, gated ones included.

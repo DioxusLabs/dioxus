@@ -195,8 +195,8 @@
 
 use super::HotpatchModuleCache;
 use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DX_RUSTC_WRAPPER_ENV_VAR, DioxusConfig,
-    LinkAction, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
+    AndroidTools, BuildContext, BuildId, BundleFormat, DX_CLIPPY_ENV_VAR, DX_RUSTC_WRAPPER_ENV_VAR,
+    DioxusConfig, LinkAction, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
 };
 use crate::{
     WorkspaceRustcArgs,
@@ -272,6 +272,9 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+
+    /// Arguments forwarded to clippy-driver via `CLIPPY_ARGS` when running a `dx clippy` build.
+    pub(crate) clippy_args: Vec<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -297,6 +300,14 @@ pub enum BuildMode {
 
     /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
     Fat,
+
+    /// A metadata-only build generated using `cargo rustc --profile check`.
+    ///
+    /// When `clippy` is true, clippy-driver is run in the rustc wrapper instead of rustc.
+    Check {
+        /// Run clippy-driver in the rustc wrapper instead of rustc.
+        clippy: bool,
+    },
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
     Thin {
@@ -921,6 +932,7 @@ impl BuildRequest {
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
+            clippy_args: vec![],
         })
     }
 
@@ -973,6 +985,9 @@ impl BuildRequest {
         match &ctx.mode {
             // In hotpatch mode, we use the dedicated hotpatch flow
             BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
+
+            // In check mode, we only run the cargo build - there's no executable to post-process
+            BuildMode::Check { .. } => self.cargo_check(&ctx).await,
 
             // In base/fat mode, we do the full chain with a root `cargo rustc`
             BuildMode::Base | BuildMode::Fat => {
@@ -1044,6 +1059,105 @@ impl BuildRequest {
             _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
+        let output_location = self.run_cargo_build(ctx, crate_count).await?;
+
+        // If there's any warnings from the linker, we should print them out
+        self.print_linker_warnings(&output_location);
+
+        // Load the captured rustc args from the rustc_workspace_wrapper
+        let workspace_rustc_args = self.load_rustc_argset()?;
+
+        // Ensure the final exe exists - throw if it doesn't
+        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
+
+        // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
+        if matches!(ctx.mode, BuildMode::Fat) {
+            self.run_fat_link(ctx, &exe, &workspace_rustc_args).await?;
+        }
+
+        // Asset extraction is starts bundle
+        ctx.status_start_bundle();
+
+        // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
+        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
+
+        let time_end = SystemTime::now();
+        let mode = ctx.mode.clone();
+
+        // Rustc writes dep-info paths relative to its cwd. Modern cargo invokes rustc from the
+        // workspace root (not the crate manifest dir), so we can't just guess — use the cwd the
+        // rustcwrapper captured at interception time. For Thin mode we also explicitly spawn
+        // rustc with that same cwd, so this stays consistent. Fall back to workspace_dir if the
+        // tip's args weren't captured (shouldn't happen in practice, but be defensive).
+        let dep_info_cwd = workspace_rustc_args
+            .rustc_args
+            .get(&format!("{}.bin", self.tip_crate_name()))
+            .map(|args| args.cwd.clone())
+            .filter(|cwd| !cwd.as_os_str().is_empty())
+            .unwrap_or_else(|| self.workspace_dir());
+
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d"))
+            .unwrap_or_default()
+            .canonicalize(dep_info_cwd);
+
+        // Stream the tip's source-file list so the runner can extend its filemap / watch set
+        // before this build is even bundled.
+        ctx.status_dep_info_discovered(depinfo.files.clone());
+
+        Ok(BuildArtifacts {
+            time_end,
+            exe,
+            workspace_rustc: workspace_rustc_args,
+            time_start,
+            assets,
+            mode,
+            depinfo,
+            root_dir: self.root_dir(),
+            patch_cache: None,
+            build_id: ctx.build_id,
+        })
+    }
+
+    /// Run a metadata-only `cargo rustc --profile check` build.
+    ///
+    /// When the mode is `BuildMode::Check { clippy: true }`, the rustc workspace wrapper execs
+    /// clippy-driver instead of rustc so the build emits clippy lints. There's no link step and
+    /// no final executable, so none of the post-processing in [`BuildRequest::cargo_build`] runs.
+    pub async fn cargo_check(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+        let time_start = SystemTime::now();
+
+        _ = self.bust_fingerprint(ctx);
+
+        let crate_count = self.get_unit_count_estimate(&ctx.mode).await;
+
+        _ = self.run_cargo_build(ctx, crate_count).await?;
+
+        let time_end = SystemTime::now();
+
+        Ok(BuildArtifacts {
+            root_dir: self.root_dir(),
+            exe: PathBuf::new(),
+            workspace_rustc: self
+                .load_rustc_argset()
+                .unwrap_or_else(|_| WorkspaceRustcArgs::new(vec![])),
+            time_start,
+            time_end,
+            assets: AppManifest::new(),
+            mode: ctx.mode.clone(),
+            patch_cache: None,
+            depinfo: Default::default(),
+            build_id: ctx.build_id,
+        })
+    }
+
+    /// Spawn the `cargo rustc` / `rustc` command and pump its json message stream, driving build
+    /// progress on the [`BuildContext`]. Returns the path of the final linked artifact, if the
+    /// build produced one (check builds only emit `.rmeta` and return `None`).
+    async fn run_cargo_build(
+        &self,
+        ctx: &BuildContext,
+        crate_count: usize,
+    ) -> Result<Option<PathBuf>> {
         // Spawn the `cargo rustc` or `rustc` command
         let mut child = self
             .cargo_build_command(&ctx.mode)?
@@ -1157,61 +1271,7 @@ impl BuildRequest {
             }
         }
 
-        // If there's any warnings from the linker, we should print them out
-        self.print_linker_warnings(&output_location);
-
-        // Load the captured rustc args from the rustc_workspace_wrapper
-        let workspace_rustc_args = self.load_rustc_argset()?;
-
-        // Ensure the final exe exists - throw if it doesn't
-        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
-
-        // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
-        if matches!(ctx.mode, BuildMode::Fat) {
-            self.run_fat_link(ctx, &exe, &workspace_rustc_args).await?;
-        }
-
-        // Asset extraction is starts bundle
-        ctx.status_start_bundle();
-
-        // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
-        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
-
-        let time_end = SystemTime::now();
-        let mode = ctx.mode.clone();
-
-        // Rustc writes dep-info paths relative to its cwd. Modern cargo invokes rustc from the
-        // workspace root (not the crate manifest dir), so we can't just guess — use the cwd the
-        // rustcwrapper captured at interception time. For Thin mode we also explicitly spawn
-        // rustc with that same cwd, so this stays consistent. Fall back to workspace_dir if the
-        // tip's args weren't captured (shouldn't happen in practice, but be defensive).
-        let dep_info_cwd = workspace_rustc_args
-            .rustc_args
-            .get(&format!("{}.bin", self.tip_crate_name()))
-            .map(|args| args.cwd.clone())
-            .filter(|cwd| !cwd.as_os_str().is_empty())
-            .unwrap_or_else(|| self.workspace_dir());
-
-        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d"))
-            .unwrap_or_default()
-            .canonicalize(dep_info_cwd);
-
-        // Stream the tip's source-file list so the runner can extend its filemap / watch set
-        // before this build is even bundled.
-        ctx.status_dep_info_discovered(depinfo.files.clone());
-
-        Ok(BuildArtifacts {
-            time_end,
-            exe,
-            workspace_rustc: workspace_rustc_args,
-            time_start,
-            assets,
-            mode,
-            depinfo,
-            root_dir: self.root_dir(),
-            patch_cache: None,
-            build_id: ctx.build_id,
-        })
+        Ok(output_location)
     }
 
     /// with our hotpatching setup since it uses linker interception.
@@ -1676,9 +1736,46 @@ impl BuildRequest {
                 // the RUSTC_WORKSPACE_WRAPPER value *in the artifact hash*)
                 cmd.env("RUSTC_WORKSPACE_WRAPPER", Workspace::path_to_dx()?);
 
+                if let BuildMode::Check { clippy: true } = build_mode {
+                    // Tell the dx wrapper to exec clippy-driver instead of rustc
+                    cmd.env(DX_CLIPPY_ENV_VAR, "1");
+
+                    // Cargo hashes the *textual* RUSTC_WORKSPACE_WRAPPER path into each workspace
+                    // unit's metadata hash. Using a textually distinct path to the same binary keeps
+                    // clippy and check units apart (like cargo-clippy vs cargo-check) while still
+                    // sharing dependency `.rmeta` artifacts, which aren't wrapped.
+                    cmd.env("RUSTC_WORKSPACE_WRAPPER", Self::clippy_wrapper_path()?);
+
+                    // clippy-driver reads CLIPPY_ARGS, splits on this literal separator, and appends
+                    // the args to the rustc invocation (this is how cargo-clippy passes `-D warnings`).
+                    cmd.env("CLIPPY_ARGS", self.clippy_args.join("__CLIPPY_HACKERY__"));
+
+                    if let Ok((width, _)) = crossterm::terminal::size() {
+                        cmd.env("CLIPPY_TERMINAL_WIDTH", width.to_string());
+                    }
+
+                    cmd.env("CLIPPY_CONF_DIR", self.write_clippy_config()?);
+                }
+
                 Ok(cmd)
             }
         }
+    }
+
+    /// A textually distinct path to the current dx binary, for use as the clippy workspace wrapper.
+    ///
+    /// Returns `<dx_dir>/../<dx_dir_name>/<dx_file_name>`. Path hashing normalizes `.` components but
+    /// not `..`, so this resolves to the same binary while hashing differently. If the path doesn't
+    /// have a normal parent dir (eg filesystem root), we fall back to the plain path.
+    fn clippy_wrapper_path() -> Result<PathBuf> {
+        let dx = Workspace::path_to_dx()?;
+        let (Some(parent), Some(file_name)) = (dx.parent(), dx.file_name()) else {
+            return Ok(dx);
+        };
+        let Some(parent_name) = parent.file_name() else {
+            return Ok(dx);
+        };
+        Ok(parent.join("..").join(parent_name).join(file_name))
     }
 
     /// Create a list of arguments for cargo builds
@@ -1689,12 +1786,21 @@ impl BuildRequest {
     pub(crate) fn cargo_build_arguments(&self, build_mode: &BuildMode) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
 
-        // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
-        cargo_args.extend(self.profile_args());
+        let is_check = matches!(build_mode, BuildMode::Check { .. });
 
-        // Add required profile flags. --release overrides any custom profiles.
-        cargo_args.push("--profile".to_string());
-        cargo_args.push(self.profile.to_string());
+        if is_check {
+            // `check` is a reserved profile name - cargo rejects `--config profile.check.*` flags,
+            // so we skip profile_args entirely and just select the profile directly.
+            cargo_args.push("--profile".to_string());
+            cargo_args.push("check".to_string());
+        } else {
+            // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
+            cargo_args.extend(self.profile_args());
+
+            // Add required profile flags. --release overrides any custom profiles.
+            cargo_args.push("--profile".to_string());
+            cargo_args.push(self.profile.to_string());
+        }
 
         // Pass the appropriate target to cargo. We *always* specify a target which is somewhat helpful for preventing thrashing
         cargo_args.push("--target".to_string());
@@ -1745,74 +1851,85 @@ impl BuildRequest {
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
-        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
-        if matches!(self.bundle, BundleFormat::Windows)
-            && !self
-                .rustflags
-                .flags
-                .iter()
-                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
-        {
-            let subsystem = self
-                .windows_subsystem
-                .clone()
-                .unwrap_or_else(|| "WINDOWS".to_string());
+        // Link-only args below don't apply to check builds, which never reach a link step.
+        if !is_check {
+            // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
+            if matches!(self.bundle, BundleFormat::Windows)
+                && !self
+                    .rustflags
+                    .flags
+                    .iter()
+                    .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+            {
+                let subsystem = self
+                    .windows_subsystem
+                    .clone()
+                    .unwrap_or_else(|| "WINDOWS".to_string());
 
-            cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
-            // We also need to set the entry point to mainCRTStartup to avoid windows looking
-            // for a WinMain function
-            cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
-        }
-
-        // The bundle splitter needs relocation data to create a call-graph.
-        // This will automatically be erased by wasm-opt during the optimization step.
-        if self.bundle == BundleFormat::Web && self.wasm_split {
-            cargo_args.push("-Clink-args=--emit-relocs".to_string());
-        }
-
-        // dx links android, thin builds, and fat builds with a custom linker.
-        // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
-        // frameworks that load at runtime, not linked statically into the binary.
-        let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
-
-        if use_dx_linker {
-            cargo_args.push(format!(
-                "-Clinker={}",
-                Workspace::path_to_dx().expect("can't find dx").display()
-            ));
-        }
-
-        // for debuggability, we need to make sure android studio can properly understand our build
-        // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
-        if self.bundle == BundleFormat::Android {
-            cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
-        }
-
-        // Handle frameworks/dylibs by setting the rpath
-        // This is dependent on the bundle structure - iOS uses a flat structure while macOS uses nested
-        // todo: we need to figure out what to do for windows
-        match self.triple.operating_system {
-            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } => {
-                // macOS: App.app/Contents/MacOS/exe -> ../Frameworks/
-                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
-                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+                cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+                // We also need to set the entry point to mainCRTStartup to avoid windows looking
+                // for a WinMain function
+                cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
             }
-            OperatingSystem::IOS(_) => {
-                // iOS: App.app/exe -> Frameworks/ (flat bundle structure)
-                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
-                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+
+            // The bundle splitter needs relocation data to create a call-graph.
+            // This will automatically be erased by wasm-opt during the optimization step.
+            if self.bundle == BundleFormat::Web && self.wasm_split {
+                cargo_args.push("-Clink-args=--emit-relocs".to_string());
             }
-            OperatingSystem::Linux => {
-                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
-                cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
+
+            // dx links android, thin builds, and fat builds with a custom linker.
+            // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
+            // frameworks that load at runtime, not linked statically into the binary.
+            let use_dx_linker = !matches!(build_mode, BuildMode::Check { .. })
+                && (self.custom_linker.is_some()
+                    || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
+
+            if use_dx_linker {
+                cargo_args.push(format!(
+                    "-Clinker={}",
+                    Workspace::path_to_dx().expect("can't find dx").display()
+                ));
             }
-            OperatingSystem::Windows => {
-                if let Some((search_path, link_spec)) = self.winres_linker_args() {
-                    cargo_args.extend(["-L".to_string(), search_path, "-l".to_string(), link_spec]);
+
+            // for debuggability, we need to make sure android studio can properly understand our build
+            // https://stackoverflow.com/questions/68481401/debugging-a-prebuilt-shared-library-in-android-studio
+            if self.bundle == BundleFormat::Android {
+                cargo_args.push("-Clink-arg=-Wl,--build-id=sha1".to_string());
+            }
+
+            // Handle frameworks/dylibs by setting the rpath
+            // This is dependent on the bundle structure - iOS uses a flat structure while macOS uses nested
+            // todo: we need to figure out what to do for windows
+            match self.triple.operating_system {
+                OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } => {
+                    // macOS: App.app/Contents/MacOS/exe -> ../Frameworks/
+                    cargo_args
+                        .push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
+                    cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
                 }
+                OperatingSystem::IOS(_) => {
+                    // iOS: App.app/exe -> Frameworks/ (flat bundle structure)
+                    cargo_args
+                        .push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
+                    cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+                }
+                OperatingSystem::Linux => {
+                    cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
+                    cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
+                }
+                OperatingSystem::Windows => {
+                    if let Some((search_path, link_spec)) = self.winres_linker_args() {
+                        cargo_args.extend([
+                            "-L".to_string(),
+                            search_path,
+                            "-l".to_string(),
+                            link_spec,
+                        ]);
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
 
         // Our fancy hot-patching engine needs a lot of customization to work properly.
@@ -1944,8 +2061,9 @@ impl BuildRequest {
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
         // frameworks that load at runtime, not linked statically into the binary.
-        let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
+        let use_dx_linker = !matches!(build_mode, BuildMode::Check { .. })
+            && (self.custom_linker.is_some()
+                || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat));
 
         if use_dx_linker {
             // For Android, we pass the actual linker so cargo can still link normally.
@@ -2217,9 +2335,9 @@ impl BuildRequest {
     pub(crate) fn load_bundle_manifest(&self) -> Result<AppManifest> {
         let manifest_path = self.bundle_manifest_file();
         let manifest_data = std::fs::read_to_string(&manifest_path)
-            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+            .with_context(|| format!("Failed to read manifest at {:?}", manifest_path))?;
         let manifest: AppManifest = serde_json::from_str(&manifest_data)
-            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+            .with_context(|| format!("Failed to parse manifest at {:?}", manifest_path))?;
         Ok(manifest)
     }
 
