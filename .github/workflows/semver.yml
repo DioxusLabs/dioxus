@@ -79,8 +79,12 @@ jobs:
       - name: Check semver
         id: check
         run: |
+          # The baseline checkout can't live inside the PR workspace: cargo-semver-checks
+          # would discover duplicate package manifests (e.g. baseline/packages/* shadows
+          # packages/*) and fail with "package is ambiguous". Move it next to the workspace.
+          mv "$GITHUB_WORKSPACE/baseline" "$GITHUB_WORKSPACE/../baseline"
           python3 .github/scripts/semver-check.py \
-            --baseline-root "$GITHUB_WORKSPACE/baseline" \
+            --baseline-root "$GITHUB_WORKSPACE/../baseline" \
             --json semver-report.json \
             ${{ contains(github.event.pull_request.labels.*.name, 'breaking') && '--allow-breaking' || '' }}
 
