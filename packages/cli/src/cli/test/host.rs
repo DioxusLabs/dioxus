@@ -1,10 +1,167 @@
 use super::config::Resolved;
 use super::report::{DiscoveredTest, Outcome, Platform, TestId, TestOutcome};
 use super::{TestArgs, is_harness_false};
-use crate::{AppBuilder, BuildId, BuildKind, BuildMode, BuildRequest, Result};
+use crate::{AppBuilder, BuildId, BuildKind, BuildMode, BuildRequest, BundleFormat, Result};
 use anyhow::{Context, bail};
 use krates::cm::TargetKind;
-use std::{path::PathBuf, process::Stdio, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+    time::Instant,
+};
+use tokio::process::Command;
+
+/// How a built test binary is executed: directly on the host, pushed to an
+/// Android device over adb, or spawned inside an iOS simulator.
+#[derive(Clone)]
+pub(crate) enum Executor {
+    Local,
+    Adb {
+        adb: PathBuf,
+        /// adb `-t` transport id pinning the device (from `--device`).
+        transport_id: Option<String>,
+        /// Remote dir binaries are pushed to.
+        remote_dir: String,
+    },
+    /// `xcrun simctl spawn <device>` - `booted` or a simulator uuid.
+    Simctl {
+        device: String,
+    },
+}
+
+impl Executor {
+    pub(crate) fn platform(&self) -> Platform {
+        match self {
+            Executor::Local => Platform::Host,
+            Executor::Adb { .. } => Platform::Android,
+            Executor::Simctl { .. } => Platform::Ios,
+        }
+    }
+
+    /// Push the binary to the device if needed and return the path the
+    /// executor should run. Host-visible executors return the local path.
+    pub(crate) async fn stage(&self, exe: &Path, package: &str) -> Result<String> {
+        let Executor::Adb { remote_dir, .. } = self else {
+            return Ok(exe.display().to_string());
+        };
+
+        let file = exe
+            .file_name()
+            .context("test binary has no file name")?
+            .to_string_lossy();
+        let remote_dir = format!("{remote_dir}/{package}");
+        let remote = format!("{remote_dir}/{file}");
+
+        self.adb(&["shell", "mkdir", "-p", &remote_dir])
+            .output()
+            .await
+            .context("Failed to create remote test dir")?;
+        let status = self
+            .adb(&["push"])
+            .arg(exe)
+            .arg(&remote)
+            .output()
+            .await
+            .context("Failed to push test binary to device")?;
+        if !status.status.success() {
+            bail!(
+                "adb push {} failed: {}",
+                exe.display(),
+                String::from_utf8_lossy(&status.stderr)
+            );
+        }
+        self.adb(&["shell", "chmod", "755", &remote])
+            .output()
+            .await
+            .context("Failed to chmod remote test binary")?;
+        Ok(remote)
+    }
+
+    /// Build the command that runs `staged` with `args` and `env`.
+    pub(crate) fn command(
+        &self,
+        staged: &str,
+        args: &[String],
+        env: &[(String, String)],
+    ) -> Command {
+        match self {
+            Executor::Local => {
+                let mut cmd = Command::new(staged);
+                cmd.args(args).envs(env.iter().cloned());
+                cmd
+            }
+            Executor::Adb { .. } => {
+                let path = Path::new(staged);
+                let dir = path
+                    .parent()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_default();
+                let file = path
+                    .file_name()
+                    .map(|file| file.to_string_lossy().to_string())
+                    .unwrap_or_else(|| staged.to_string());
+                let env_prefix = match env.is_empty() {
+                    true => String::new(),
+                    false => format!(
+                        "env {} ",
+                        env.iter()
+                            .map(|(key, value)| format!("{key}={}", shell_quote(value)))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    ),
+                };
+                let args = args
+                    .iter()
+                    .map(|arg| shell_quote(arg))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let mut cmd = self.adb(&["shell"]);
+                cmd.arg(format!("cd {dir} && {env_prefix}./{file} {args}"));
+                cmd
+            }
+            Executor::Simctl { device } => {
+                let mut cmd = Command::new("xcrun");
+                cmd.args(["simctl", "spawn", device]).arg(staged).args(args);
+                for (key, value) in env {
+                    cmd.env(format!("SIMCTL_CHILD_{key}"), value);
+                }
+                cmd
+            }
+        }
+    }
+
+    fn adb(&self, args: &[&str]) -> Command {
+        let Executor::Adb {
+            adb, transport_id, ..
+        } = self
+        else {
+            unreachable!()
+        };
+        let mut cmd = Command::new(adb);
+        if let Some(id) = transport_id {
+            cmd.args(["-t", id]);
+        }
+        cmd.args(args);
+        cmd
+    }
+
+    /// Best-effort kill of a test binary still running on the device after a
+    /// timeout. The adb client is already dead at this point.
+    pub(crate) async fn kill_remote(&self, staged: &str) {
+        if let Executor::Adb { .. } = self {
+            let file = Path::new(staged)
+                .file_name()
+                .map(|file| file.to_string_lossy().to_string())
+                .unwrap_or_else(|| staged.to_string());
+            _ = self.adb(&["shell", "pkill", "-f", &file]).output().await;
+        }
+    }
+}
+
+/// Quote a string for `adb shell`: single-quote, escaping embedded quotes.
+pub(crate) fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
 
 /// A built test binary and the request that produced it.
 pub(crate) struct TestBinary {
@@ -12,23 +169,81 @@ pub(crate) struct TestBinary {
     pub(crate) exe: PathBuf,
     /// `harness = false` \[\[test\]\] targets speak our JSON discovery protocol.
     pub(crate) custom_harness: bool,
+    pub(crate) executor: Executor,
+    /// Path the executor runs: the local exe, or the on-device path for adb.
+    pub(crate) staged: String,
+}
+
+impl TestBinary {
+    fn platform(&self) -> Platform {
+        self.executor.platform()
+    }
 }
 
 pub(crate) struct HostSuite {
     pub(crate) binaries: Vec<TestBinary>,
 }
 
+/// Pick the executor for a request: adb push for Android, `simctl spawn` for
+/// the iOS simulator, direct execution otherwise.
+async fn executor_for(req: &BuildRequest) -> Result<Executor> {
+    match req.bundle {
+        BundleFormat::Android => {
+            let adb = req
+                .workspace
+                .android_tools()
+                .context("Failed to get android tools")?
+                .adb
+                .clone();
+            let transport =
+                AppBuilder::get_android_device_transport_id(&adb, req.device_name.as_deref()).await;
+            let transport_id = match transport.as_slice() {
+                [_, id] => Some(id.clone()),
+                _ => None,
+            };
+            Ok(Executor::Adb {
+                adb,
+                transport_id,
+                remote_dir: "/data/local/tmp/dx/tests".to_string(),
+            })
+        }
+        BundleFormat::Ios => {
+            // `--device` selects a physical iOS device which needs a signed app.
+            if req.device_name.is_some() {
+                bail!(
+                    "dx test on physical iOS devices requires a signed app bundle; run on the simulator (`--ios`) instead"
+                );
+            }
+            Ok(Executor::Simctl {
+                device: "booted".to_string(),
+            })
+        }
+        _ => Ok(Executor::Local),
+    }
+}
+
 /// Enumerate testable targets and build them with `BuildKind::Test`.
 pub(crate) async fn build(args: &TestArgs, requests: &[BuildRequest]) -> Result<HostSuite> {
     let mut selected = vec![];
+    let mut executors = vec![];
     for req in requests {
+        let mut executor = None;
         for target in args.select_targets(req)? {
             let custom_harness = target.kind.contains(&TargetKind::Test)
                 && is_harness_false(req.crate_dir().join("Cargo.toml"), &target.name)?;
             let mut r = req.clone();
             r.kind = BuildKind::Test;
             r.crate_target = target;
-            selected.push((r, custom_harness));
+            // One executor per request; probed only when a target is selected.
+            let executor_idx = match executor {
+                Some(idx) => idx,
+                None => {
+                    executors.push(executor_for(req).await?);
+                    executor = Some(executors.len() - 1);
+                    executors.len() - 1
+                }
+            };
+            selected.push((r, custom_harness, executor_idx));
         }
     }
 
@@ -40,12 +255,12 @@ pub(crate) async fn build(args: &TestArgs, requests: &[BuildRequest]) -> Result<
     // private dir so subsequent builds can't overwrite the harness underneath us.
     let stable_dir = selected
         .first()
-        .map(|(r, _)| r.target_dir.join("dx").join("test-binaries"));
+        .map(|(r, ..)| r.target_dir.join("dx").join("test-binaries"));
     if let Some(dir) = &stable_dir {
         std::fs::create_dir_all(dir).context("Failed to create test binary dir")?;
     }
     let mut binaries = vec![];
-    for (idx, (req, custom_harness)) in selected.iter().enumerate() {
+    for (idx, (req, custom_harness, executor_idx)) in selected.iter().enumerate() {
         tracing::debug!("Building test target {} ...", req.executable_name());
         let artifacts = AppBuilder::started(req, BuildMode::Base, BuildId::PRIMARY)?
             .finish_build()
@@ -58,11 +273,21 @@ pub(crate) async fn build(args: &TestArgs, requests: &[BuildRequest]) -> Result<
                 exe = stable;
             }
         }
+        let executor = executors
+            .get(*executor_idx)
+            .context("missing executor")?
+            .clone();
+        let staged = executor
+            .stage(&exe, &req.package().name)
+            .await
+            .context("Failed to stage test binary")?;
         tracing::debug!("Built test binary {}", exe.display());
         binaries.push(TestBinary {
             request: req.clone(),
             exe,
             custom_harness: *custom_harness,
+            executor,
+            staged,
         });
     }
     Ok(HostSuite { binaries })
@@ -105,26 +330,30 @@ fn test_id(binary: &TestBinary, name: String) -> TestId {
     TestId {
         package: binary.request.package().name.clone(),
         target: binary.request.executable_name().to_string(),
-        platform: Platform::Host,
+        platform: binary.platform(),
         name,
     }
 }
 
 /// The environment `cargo test` sets for the test binaries it spawns.
-fn test_env_vars(req: &BuildRequest) -> Vec<(&'static str, String)> {
-    vec![
+fn test_env_vars(req: &BuildRequest) -> Vec<(String, String)> {
+    [
         ("CARGO_MANIFEST_DIR", req.crate_dir().display().to_string()),
         ("CARGO_PKG_NAME", req.package().name.clone()),
         ("CARGO_PKG_VERSION", req.crate_version()),
         ("CARGO_CRATE_NAME", req.executable_name().replace('-', "_")),
     ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value))
+    .collect()
 }
 
 async fn list_terse(binary: &TestBinary) -> Result<Vec<String>> {
-    let output = tokio::process::Command::new(&binary.exe)
-        .args(["--list", "--format", "terse"])
+    let args = ["--list", "--format", "terse"].map(str::to_string);
+    let output = binary
+        .executor
+        .command(&binary.staged, &args, &test_env_vars(&binary.request))
         .current_dir(binary.request.crate_dir())
-        .envs(test_env_vars(&binary.request))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -154,10 +383,11 @@ pub(super) fn parse_test_list(stdout: &str) -> Vec<String> {
 /// `{"name","file","line","ignore","should_panic","tags"}` object per line.
 /// Returns `Ok(None)` when the output doesn't parse (not our harness).
 async fn list_json(binary: &TestBinary) -> Result<Option<Vec<DiscoveredTest>>> {
-    let output = tokio::process::Command::new(&binary.exe)
-        .args(["--list", "--format", "json"])
+    let args = ["--list", "--format", "json"].map(str::to_string);
+    let output = binary
+        .executor
+        .command(&binary.staged, &args, &test_env_vars(&binary.request))
         .current_dir(binary.request.crate_dir())
-        .envs(test_env_vars(&binary.request))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -223,18 +453,24 @@ pub(crate) async fn run_case(
     let started = Instant::now();
     let mut attempts = 0;
     loop {
-        let mut cmd = tokio::process::Command::new(&binary.exe);
-        cmd.args(["--exact", &case.id.name, "--nocapture"])
-            .current_dir(binary.request.crate_dir())
-            .envs(test_env_vars(&binary.request))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        let mut args = vec![
+            "--exact".to_string(),
+            case.id.name.clone(),
+            "--nocapture".to_string(),
+        ];
         if resolved.include_ignored {
-            cmd.arg("--include-ignored");
+            args.push("--include-ignored".to_string());
         }
         if resolved.ignored {
-            cmd.arg("--ignored");
+            args.push("--ignored".to_string());
         }
+        let mut cmd =
+            binary
+                .executor
+                .command(&binary.staged, &args, &test_env_vars(&binary.request));
+        cmd.current_dir(binary.request.crate_dir())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         let child = cmd
             .kill_on_drop(true)
@@ -245,6 +481,9 @@ pub(crate) async fn run_case(
                 output.with_context(|| format!("Failed to run {}", binary.exe.display()))?
             }
             Err(_) => {
+                // The local client process is dead; the device-side binary
+                // may still be running - best-effort kill it.
+                binary.executor.kill_remote(&binary.staged).await;
                 attempts += 1;
                 if attempts > resolved.retries + 1 {
                     return Ok(Some(TestOutcome {
@@ -257,6 +496,8 @@ pub(crate) async fn run_case(
                             resolved.timeout.as_secs_f64()
                         )),
                         output: String::new(),
+                        artifacts: vec![],
+                        artifacts_dir: None,
                         elapsed: started.elapsed(),
                     }));
                 }
@@ -284,6 +525,8 @@ pub(crate) async fn run_case(
                 attempts,
                 message: None,
                 output: text,
+                artifacts: vec![],
+                artifacts_dir: None,
                 elapsed: started.elapsed(),
             }));
         }
@@ -339,4 +582,122 @@ pub(super) fn parse_run_outcome(success: bool, output: &str) -> Outcome {
 
     // No summary line - trust the exit code.
     Outcome::Passed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(cmd: &Command) -> Vec<String> {
+        cmd.as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn shell_quote_escapes() {
+        assert_eq!(shell_quote("a b"), "'a b'");
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
+        assert_eq!(shell_quote(""), "''");
+    }
+
+    #[test]
+    fn adb_command_renders_remote_shell() {
+        let executor = Executor::Adb {
+            adb: PathBuf::from("/sdk/adb"),
+            transport_id: Some("3".to_string()),
+            remote_dir: "/data/local/tmp/dx/tests".to_string(),
+        };
+        let cmd = executor.command(
+            "/data/local/tmp/dx/tests/pkg/0-mytest",
+            &["--exact".to_string(), "it's a test".to_string()],
+            &[("A".to_string(), "1".to_string())],
+        );
+        let args = args(&cmd);
+        assert_eq!(cmd.as_std().get_program(), Path::new("/sdk/adb"));
+        assert_eq!(args[0..3], ["-t", "3", "shell"]);
+        assert_eq!(
+            args[3],
+            "cd /data/local/tmp/dx/tests/pkg && env A='1' ./0-mytest '--exact' 'it'\\''s a test'"
+        );
+    }
+
+    #[test]
+    fn simctl_command_spawns_with_child_env() {
+        let executor = Executor::Simctl {
+            device: "booted".to_string(),
+        };
+        let cmd = executor.command(
+            "/bin/mytest",
+            &["--list".to_string()],
+            &[("A".to_string(), "1".to_string())],
+        );
+        assert_eq!(cmd.as_std().get_program(), Path::new("xcrun"));
+        assert_eq!(
+            args(&cmd),
+            ["simctl", "spawn", "booted", "/bin/mytest", "--list"]
+        );
+        assert!(cmd.as_std().get_envs().any(|(key, value)| {
+            key == "SIMCTL_CHILD_A" && value.map(|v| v == "1").unwrap_or_default()
+        }));
+    }
+
+    /// The adb executor talks to a fake adb script; verifies the staging
+    /// sequence (mkdir/push/chmod) and the run command round-trips.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn adb_executor_against_fake_adb() {
+        let dir = std::env::temp_dir().join(format!("dx-fake-adb-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("calls.log");
+        let adb = dir.join("adb");
+        std::fs::write(
+            &adb,
+            indoc::formatdoc! {"
+                #!/bin/sh
+                echo \"$@\" >> {log}
+                exit 0
+            ", log = log.display()},
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&adb, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let exe = dir.join("mytest");
+        std::fs::write(&exe, "binary").unwrap();
+
+        let executor = Executor::Adb {
+            adb: adb.clone(),
+            transport_id: None,
+            remote_dir: "/data/local/tmp/dx/tests".to_string(),
+        };
+        let staged = executor.stage(&exe, "mypkg").await.unwrap();
+        assert_eq!(staged, "/data/local/tmp/dx/tests/mypkg/mytest");
+
+        executor
+            .command(&staged, &["--exact".to_string()], &[])
+            .output()
+            .await
+            .unwrap();
+        executor.kill_remote(&staged).await;
+
+        let calls = std::fs::read_to_string(&log).unwrap();
+        let calls = calls.lines().collect::<Vec<_>>();
+        assert_eq!(
+            calls,
+            [
+                "shell mkdir -p /data/local/tmp/dx/tests/mypkg",
+                &format!(
+                    "push {} /data/local/tmp/dx/tests/mypkg/mytest",
+                    exe.display()
+                ),
+                "shell chmod 755 /data/local/tmp/dx/tests/mypkg/mytest",
+                "shell cd /data/local/tmp/dx/tests/mypkg && ./mytest '--exact'",
+                "shell pkill -f mytest",
+            ]
+        );
+
+        _ = std::fs::remove_dir_all(&dir);
+    }
 }

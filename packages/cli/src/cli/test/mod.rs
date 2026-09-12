@@ -109,6 +109,11 @@ pub(crate) struct TestArgs {
     #[clap(long)]
     pub(crate) timeout: Option<String>,
 
+    /// Directory failure artifacts (test output, captured DOM) are written to.
+    /// Defaults to `target/dx/test-artifacts/<timestamp>`.
+    #[clap(long)]
+    pub(crate) artifacts_dir: Option<PathBuf>,
+
     /// Information about the target to test
     #[clap(flatten)]
     pub(crate) build_args: CommandWithPlatformOverrides<BuildArgs>,
@@ -136,6 +141,7 @@ impl Anonymized for TestArgs {
             "junit": self.junit.is_some(),
             "browser": self.browser.is_some(),
             "timeout": self.timeout,
+            "artifacts_dir": self.artifacts_dir.is_some(),
             "build_args": self.build_args.anonymized(),
         }}
     }
@@ -154,27 +160,40 @@ impl TestArgs {
         }
 
         let resolved = config::resolve(&self, requests.first().map(|req| &req.config.test))?;
+        let artifacts_root = resolved.artifacts_dir.clone().or_else(|| {
+            requests.first().map(|req| {
+                req.target_dir.join("dx").join("test-artifacts").join(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|dur| dur.as_secs().to_string())
+                        .unwrap_or_default(),
+                )
+            })
+        });
 
         // Split requests by what can run them: web bundles get the browser
-        // runner, host triples get the process runner, everything else warns.
+        // runner, host/android/ios get the process runner, everything else warns.
         let host = Triple::host();
         let mut host_requests = vec![];
         let mut web_requests = vec![];
         for req in requests {
             if req.bundle == BundleFormat::Web {
                 web_requests.push(req);
-            } else if req.triple == host {
+            } else if req.bundle == BundleFormat::Android
+                || req.bundle == BundleFormat::Ios
+                || req.triple == host
+            {
                 host_requests.push(req);
             } else {
                 tracing::warn!(
-                    "Skipping {} [{}]: dx test only supports host and web targets",
+                    "Skipping {} [{}]: dx test only supports host, web, android and ios targets",
                     req.package,
                     req.triple
                 );
             }
         }
         if host_requests.is_empty() && web_requests.is_empty() {
-            bail!("No host or web targets to test");
+            bail!("No testable targets: dx test supports host, web, android and ios targets");
         }
 
         // Build all suites first so `--no-run` never launches a browser.
@@ -213,7 +232,7 @@ impl TestArgs {
         // Reporters: human or json on stdout, junit writes a file at the end.
         let mut reporters: Vec<Box<dyn Reporter>> = vec![match resolved.message_format {
             MessageFormat::Json => Box::new(JsonReporter::new()),
-            MessageFormat::Human => Box::new(HumanReporter),
+            MessageFormat::Human => Box::new(HumanReporter::default()),
         }];
         if let Some(path) = &resolved.junit {
             reporters.push(Box::new(JunitWriter::new(path.clone())));
@@ -226,7 +245,12 @@ impl TestArgs {
 
         let mut outcomes = vec![];
         let mut fail_fast = false;
-        for platform in [Platform::Host, Platform::Web] {
+        for platform in [
+            Platform::Host,
+            Platform::Android,
+            Platform::Ios,
+            Platform::Web,
+        ] {
             let cases = selected
                 .iter()
                 .filter(|case| case.id.platform == platform)
@@ -234,7 +258,16 @@ impl TestArgs {
             if cases.is_empty() {
                 continue;
             }
-            let threads = resolved.test_threads;
+            // Devices can't run test binaries in parallel - one shell at a time.
+            let threads = match platform {
+                Platform::Android | Platform::Ios => {
+                    if resolved.test_threads > 1 {
+                        tracing::debug!("forcing --test-threads=1 for {} tests", platform.as_str());
+                    }
+                    1
+                }
+                _ => resolved.test_threads,
+            };
             let no_fail_fast = resolved.no_fail_fast;
             let semaphore = Arc::new(Semaphore::new(threads));
             let mut pending: VecDeque<&DiscoveredTest> = cases.into_iter().collect();
@@ -249,16 +282,21 @@ impl TestArgs {
                         }
                         let fut: std::pin::Pin<Box<dyn Future<Output = Result<Option<TestOutcome>>>>> =
                             match platform {
-                                Platform::Host => Box::pin(host::run_case(&host_suite, case, &resolved)),
                                 Platform::Web => Box::pin(web::run_case(&web_suite, case, browser.as_deref().unwrap_or(""), &resolved)),
+                                _ => Box::pin(host::run_case(&host_suite, case, &resolved)),
                             };
                         running.push(async move { fut.await.map(|outcome| (case.id.clone(), outcome)) });
                     }
                     Some(res) = running.next() => {
                         let (_id, outcome) = res.context("test task failed")?;
-                        let Some(result) = outcome else { continue };
+                        let Some(mut result) = outcome else { continue };
                         if result.outcome.failed() {
                             fail_fast = true;
+                            if let Some(root) = &artifacts_root {
+                                if let Err(err) = write_artifacts(root, &mut result) {
+                                    tracing::warn!("Failed to write test artifacts: {err}");
+                                }
+                            }
                         }
                         for reporter in reporters.iter_mut() {
                             reporter.test_finished(&result);
@@ -473,6 +511,30 @@ pub(crate) fn is_harness_false(manifest: PathBuf, name: &str) -> Result<bool> {
         }))
 }
 
+/// Write a failing test's output, message and captured artifacts into
+/// `<root>/<package>__<target>__<platform>__<name (with :: -> __)>/`.
+fn write_artifacts(root: &std::path::Path, outcome: &mut TestOutcome) -> Result<PathBuf> {
+    let dir = root.join(format!(
+        "{}__{}__{}__{}",
+        outcome.id.package,
+        outcome.id.target,
+        outcome.id.platform.as_str(),
+        outcome.id.name.replace("::", "__")
+    ));
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("Failed to create artifacts dir {}", dir.display()))?;
+    std::fs::write(dir.join("output.txt"), &outcome.output)?;
+    std::fs::write(
+        dir.join("message.txt"),
+        outcome.message.as_deref().unwrap_or_default(),
+    )?;
+    for (name, bytes) in &outcome.artifacts {
+        std::fs::write(dir.join(name), bytes)?;
+    }
+    outcome.artifacts_dir = Some(dir.clone());
+    Ok(dir)
+}
+
 /// Whether tag filters select this discovered test. Factored out for testing.
 #[cfg(test)]
 fn tag_selected(case: &DiscoveredTest, tags: &[String], skip: &[String]) -> bool {
@@ -539,6 +601,49 @@ mod tests {
         assert!(!matches_filters("my_tests::adds_more", &filters, true));
 
         assert!(matches_filters("anything", &[], false));
+    }
+
+    #[test]
+    fn failure_artifacts_written() {
+        let root = std::env::temp_dir().join(format!("dx-artifacts-{}", std::process::id()));
+        _ = std::fs::remove_dir_all(&root);
+        let mut outcome = TestOutcome {
+            id: TestId {
+                package: "pkg".into(),
+                target: "lib".into(),
+                platform: Platform::Web,
+                name: "tests::fails".into(),
+            },
+            outcome: Outcome::Failed,
+            flaky: false,
+            attempts: 1,
+            message: Some("boom".into()),
+            output: "stdout here".into(),
+            artifacts: vec![("dom.html".to_string(), b"<html/>".to_vec())],
+            artifacts_dir: None,
+            elapsed: std::time::Duration::from_millis(1),
+        };
+        let dir = write_artifacts(&root, &mut outcome).unwrap();
+        assert_eq!(dir, root.join("pkg__lib__web__tests__fails"));
+        assert_eq!(
+            std::fs::read_to_string(dir.join("output.txt")).unwrap(),
+            "stdout here"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("message.txt")).unwrap(),
+            "boom"
+        );
+        assert_eq!(std::fs::read(dir.join("dom.html")).unwrap(), b"<html/>");
+        assert_eq!(outcome.artifacts_dir.as_deref(), Some(dir.as_path()));
+
+        // The JSON reporter surfaces the artifacts dir on failures.
+        let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut reporter = JsonReporter::capturing(lines.clone());
+        reporter.test_finished(&outcome);
+        let event: serde_json::Value = serde_json::from_str(&lines.lock().unwrap()[0]).unwrap();
+        assert_eq!(event["artifacts_dir"], dir.display().to_string());
+
+        _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

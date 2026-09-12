@@ -12,6 +12,7 @@ pub(crate) struct Resolved {
     pub(crate) no_fail_fast: bool,
     pub(crate) browser: Option<String>,
     pub(crate) junit: Option<PathBuf>,
+    pub(crate) artifacts_dir: Option<PathBuf>,
     pub(crate) message_format: MessageFormat,
     pub(crate) list_format: ListFormat,
     pub(crate) include_ignored: bool,
@@ -129,6 +130,7 @@ pub(crate) fn resolve(args: &TestArgs, config: Option<&TestConfig>) -> Result<Re
         .clone()
         .or_else(|| config.browser.map(|p| p.display().to_string()));
     let junit = args.junit.clone().or(config.junit);
+    let artifacts_dir = args.artifacts_dir.clone().or(config.artifacts_dir);
 
     let list_format = match args.format.as_deref() {
         None | Some("terse") => ListFormat::Terse,
@@ -149,6 +151,7 @@ pub(crate) fn resolve(args: &TestArgs, config: Option<&TestConfig>) -> Result<Re
         no_fail_fast,
         browser,
         junit,
+        artifacts_dir,
         message_format: args.message_format.unwrap_or(MessageFormat::Human),
         list_format,
         include_ignored: args.include_ignored,

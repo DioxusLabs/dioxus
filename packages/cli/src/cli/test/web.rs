@@ -275,6 +275,7 @@ pub(crate) async fn run_case(
     }
     let events = browse(binary, browser, resolved, &case.id.name, query).await;
 
+    let mut dom_artifact: Option<String> = None;
     let finished = events.iter().find(|event| {
         event.get("event").and_then(Value::as_str) == Some("finished")
             && event.get("name").and_then(Value::as_str) == Some(case.id.name.as_str())
@@ -293,6 +294,9 @@ pub(crate) async fn run_case(
                 .get("message")
                 .and_then(Value::as_str)
                 .map(str::to_string);
+            if let Some(dom) = event.get("dom").and_then(Value::as_str) {
+                dom_artifact = Some(dom.to_string());
+            }
             match (
                 event.get("outcome").and_then(Value::as_str),
                 case.should_panic,
@@ -312,6 +316,10 @@ pub(crate) async fn run_case(
         attempts: 1,
         output: message.clone().unwrap_or_default(),
         message,
+        artifacts: dom_artifact
+            .map(|dom| vec![("dom.html".to_string(), dom.into_bytes())])
+            .unwrap_or_default(),
+        artifacts_dir: None,
         elapsed: started.elapsed(),
     }))
 }
@@ -353,7 +361,7 @@ fn encode_query(value: &str) -> String {
 const INDEX_HTML: &str = r#"<!doctype html><html><body><script type="module">
 import init from "./test.js";
 const post = (o) => fetch("/__dx_test/event", {method:"POST", body: JSON.stringify(o), keepalive:true});
-const failed = (reason) => post({event:"finished", name:new URL(location).searchParams.get("test") ?? "unknown", outcome:"failed", message:globalThis.__dx_panic_message ?? String(reason), exec_time:0}).then(() => post({event:"done"}));
+const failed = (reason) => post({event:"finished", name:new URL(location).searchParams.get("test") ?? "unknown", outcome:"failed", message:globalThis.__dx_panic_message ?? String(reason), dom:document.documentElement.outerHTML.slice(0,1048576), exec_time:0}).then(() => post({event:"done"}));
 window.addEventListener("error", (e) => failed(e.error ?? e.message));
 window.addEventListener("unhandledrejection", (e) => failed(e.reason));
 try { await init(); } catch (e) { await failed(e); }

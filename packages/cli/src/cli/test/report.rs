@@ -6,6 +6,8 @@ use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 pub(crate) enum Platform {
     Host,
     Web,
+    Android,
+    Ios,
 }
 
 impl Platform {
@@ -13,6 +15,8 @@ impl Platform {
         match self {
             Platform::Host => "host",
             Platform::Web => "web",
+            Platform::Android => "android",
+            Platform::Ios => "ios",
         }
     }
 }
@@ -75,6 +79,10 @@ pub(crate) struct TestOutcome {
     pub(crate) attempts: u32,
     pub(crate) message: Option<String>,
     pub(crate) output: String,
+    /// Extra failure artifacts to write (eg `dom.html` for web tests).
+    pub(crate) artifacts: Vec<(String, Vec<u8>)>,
+    /// Set by the orchestrator once failure artifacts have been written.
+    pub(crate) artifacts_dir: Option<PathBuf>,
     pub(crate) elapsed: Duration,
 }
 
@@ -108,7 +116,10 @@ pub(crate) trait Reporter {
 }
 
 /// The interactive reporter: PASS/FAIL/SKIP/FLAKY/TIMEOUT lines plus a summary.
-pub(crate) struct HumanReporter;
+#[derive(Default)]
+pub(crate) struct HumanReporter {
+    artifact_dirs: std::collections::BTreeSet<PathBuf>,
+}
 
 impl Reporter for HumanReporter {
     fn suite_started(&mut self, _tests: &[DiscoveredTest]) {}
@@ -139,6 +150,10 @@ impl Reporter for HumanReporter {
                 println!("    {line}");
             }
         }
+        if let Some(dir) = &result.artifacts_dir {
+            self.artifact_dirs.insert(dir.clone());
+            println!("    artifacts: {}", dir.display());
+        }
     }
 
     fn suite_finished(&mut self, summary: &Summary) {
@@ -157,6 +172,9 @@ impl Reporter for HumanReporter {
                 println!("    {}::{}", id.target, id.name);
             }
         }
+        for dir in &self.artifact_dirs {
+            println!("Artifacts written to {}", dir.display());
+        }
     }
 }
 
@@ -173,7 +191,7 @@ impl JsonReporter {
     }
 
     #[cfg(test)]
-    fn capturing(lines: std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> Self {
+    pub(crate) fn capturing(lines: std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> Self {
         Self {
             emit: Box::new(move |line| lines.lock().unwrap().push(line)),
         }
@@ -215,6 +233,9 @@ impl Reporter for JsonReporter {
                 false => serde_json::json!(result.output),
                 true => serde_json::json!(result.message.as_deref().unwrap_or("")),
             };
+            if let Some(dir) = &result.artifacts_dir {
+                event["artifacts_dir"] = serde_json::json!(dir.display().to_string());
+            }
         }
         self.event(event);
     }
@@ -301,6 +322,12 @@ impl JunitWriter {
                         outcome.attempts
                     ));
                 }
+                if let Some(dir) = &outcome.artifacts_dir {
+                    xml.push_str(&format!(
+                        "      <system-out>artifacts: {}</system-out>\n",
+                        escape_xml(&dir.display().to_string())
+                    ));
+                }
                 xml.push_str("    </testcase>\n");
             }
             xml.push_str("  </testsuite>\n");
@@ -328,6 +355,8 @@ impl Reporter for JunitWriter {
             attempts: result.attempts,
             message: result.message.clone(),
             output: result.output.clone(),
+            artifacts: result.artifacts.clone(),
+            artifacts_dir: result.artifacts_dir.clone(),
             elapsed: result.elapsed,
         });
     }
@@ -372,6 +401,8 @@ mod tests {
             attempts: 1,
             message: message.map(str::to_string),
             output: message.unwrap_or_default().to_string(),
+            artifacts: vec![],
+            artifacts_dir: None,
             elapsed: Duration::from_millis(12),
         }
     }

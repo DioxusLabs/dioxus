@@ -24,4 +24,7 @@ pub(crate) struct TestConfig {
 
     /// Default JUnit XML output path.
     pub(crate) junit: Option<PathBuf>,
+
+    /// Directory failure artifacts are written to.
+    pub(crate) artifacts_dir: Option<PathBuf>,
 }
