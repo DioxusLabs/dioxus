@@ -69,7 +69,7 @@ pub mod internal {
 
     pub use anyhow::__anyhow;
 
-    pub use crate::properties::{CanPartialEq, NonPartialEq, OptionalProp, RequiredProp};
+    pub use crate::properties::{CanPartialEq, NonPartialEq, RequiredProp, Set};
 
     pub use dioxus_core_template::{TemplateRawTree, TemplateStorage};
 

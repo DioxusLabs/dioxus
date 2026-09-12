@@ -20,20 +20,21 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
             syn::Fields::Named(fields) => {
                 let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
                 let builder_creation = struct_info.builder_creation_impl()?;
-                let fields = struct_info
-                    .included_fields()
+                let required_setters = struct_info
+                    .required_fields()
                     .map(|f| struct_info.field_impl(f))
                     .collect::<Result<Vec<_>, _>>()?;
+                let optional_setters = struct_info.optional_setters_impl()?;
                 let extends = struct_info
                     .extend_fields()
                     .map(|f| struct_info.extends_impl(f))
                     .collect::<Result<Vec<_>, _>>()?;
-                let fields = quote!(#(#fields)*).into_iter();
                 let build_method = struct_info.build_method_impl();
 
                 quote! {
                     #builder_creation
-                    #( #fields )*
+                    #( #required_setters )*
+                    #optional_setters
                     #( #extends )*
                     #build_method
                 }
@@ -249,23 +250,18 @@ mod field_info {
             }
         }
 
+        /// Required props have no default and must be set before `build`; they are the only
+        /// fields tracked in the builder's typestate tuple.
+        pub fn is_required(&self) -> bool {
+            self.builder_attr.default.is_none() && self.builder_attr.extends.is_empty()
+        }
+
         pub fn generic_ty_param(&self) -> syn::GenericParam {
             syn::GenericParam::Type(self.generic_ident.clone().into())
         }
 
         pub fn type_ident(&self) -> syn::Type {
             ident_to_type(self.generic_ident.clone())
-        }
-
-        pub fn tuplized_type_ty_param(&self) -> syn::Type {
-            let mut types = syn::punctuated::Punctuated::default();
-            types.push(self.ty.clone());
-            types.push_punct(Default::default());
-            syn::TypeTuple {
-                paren_token: Default::default(),
-                elems: types,
-            }
-            .into()
         }
 
         pub fn extends_vec_ident(&self) -> Option<syn::Ident> {
@@ -572,6 +568,42 @@ mod struct_info {
                 .filter(|f| !f.builder_attr.extends.is_empty())
         }
 
+        pub fn required_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
+            self.included_fields().filter(|f| f.is_required())
+        }
+
+        /// Optional (defaulted / extends) props live in the builder as an `Option<T>` tuple
+        /// that setters overwrite in place, so they never touch the typestate.
+        pub fn optional_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
+            self.included_fields().filter(|f| !f.is_required())
+        }
+
+        /// Position of an included field in the builder's `values` tuple.
+        fn value_index(&self, field: &FieldInfo) -> syn::Index {
+            let position = self
+                .included_fields()
+                .position(|f| f.ordinal == field.ordinal)
+                .expect("included field must be in the values tuple");
+            syn::Index::from(position)
+        }
+
+        /// `(Option<T0>, Option<T1>, ..)` over every included field. Values live here rather
+        /// than in the typestate tuple, so setters overwrite one slot instead of moving every
+        /// field through a destructure/rebuild.
+        fn values_tuple_type(&self) -> syn::TypeTuple {
+            type_tuple(self.included_fields().map(|f| {
+                let ty = f.ty;
+                parse_quote!(::core::option::Option<#ty>)
+            }))
+        }
+
+        fn values_tuple_none(&self) -> TokenStream {
+            let nones = self
+                .included_fields()
+                .map(|_| quote!(::core::option::Option::None));
+            quote!(( #(#nones,)* ))
+        }
+
         pub fn new(
             ast: &'a syn::DeriveInput,
             fields: impl Iterator<Item = &'a syn::Field>,
@@ -822,7 +854,9 @@ mod struct_info {
                 let field_param_index = Self::insert_component_builder_params(g);
                 g.params.insert(field_param_index, all_fields_param.clone());
             });
-            let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
+            let empties_tuple = type_tuple(self.required_fields().map(|_| empty_type()));
+            let values_tuple_type = self.values_tuple_type();
+            let values_tuple_none = self.values_tuple_none();
             let component_generics_with_empty =
                 modify_types_generics_hack(&b_initial_generics, |args| {
                     Self::insert_component_builder_type_args(
@@ -856,6 +890,9 @@ mod struct_info {
             };
 
             let (_, _, b_generics_where_extras_predicates) = b_generics.split_for_impl();
+            // The builder stores each prop as `Option<T>`, so it needs the struct's own bounds
+            // (e.g. `T: 'static` for a `ReadSignal<T>` field) to be well-formed.
+            let b_struct_where = b_generics_where_extras_predicates;
             let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
                 where Self: Clone
             })?;
@@ -897,10 +934,11 @@ mod struct_info {
                 #[must_use]
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-                #vis struct #builder_name #b_generics {
+                #vis struct #builder_name #b_generics #b_struct_where {
                     render_fn: __RenderFn,
                     #(#global_fields,)*
-                    fields: #all_fields_param,
+                    values: #values_tuple_type,
+                    state: ::core::marker::PhantomData<#all_fields_param>,
                     _marker: ::core::marker::PhantomData<fn() -> __ComponentMarker>,
                     _phantom: (#( #phantom_generics ),*),
                 }
@@ -916,7 +954,8 @@ mod struct_info {
                         #builder_name {
                             render_fn,
                             #(#global_fields_value,)*
-                            fields: #empties_tuple,
+                            values: #values_tuple_none,
+                            state: ::core::marker::PhantomData,
                             _marker: ::core::marker::PhantomData,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -937,65 +976,35 @@ mod struct_info {
             })
         }
 
+        /// Generics for an impl that applies to every typestate: the struct's own generics plus
+        /// `__RenderFn, __ComponentMarker, TypedBuilderFields`, with the matching type args.
+        fn any_state_generics(&self) -> (syn::Generics, Vec<syn::GenericArgument>) {
+            let generics = self.modify_generics(|g| {
+                let field_param_index = Self::insert_component_builder_params(g);
+                g.params.insert(
+                    field_param_index,
+                    syn::GenericParam::Type(
+                        syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site())
+                            .into(),
+                    ),
+                );
+            });
+            let mut ty_generics = self.generic_args();
+            Self::insert_component_builder_vec_args(
+                &mut ty_generics,
+                parse_quote!(TypedBuilderFields),
+            );
+            (generics, ty_generics)
+        }
+
         pub fn extends_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
                 ref builder_name, ..
             } = *self;
 
             let field_name = field.extends_vec_ident().unwrap();
-
-            let destructuring = self.included_fields().map(|f| {
-                let name = f.name;
-                quote!(#name)
-            });
-            let reconstructing = self.included_fields().map(|f| f.name);
-
-            let mut ty_generics: Vec<syn::GenericArgument> = self.generic_args();
-            let mut target_generics_tuple = empty_type_tuple();
-            let mut ty_generics_tuple = empty_type_tuple();
-            let generics = self.modify_generics(|g| {
-                let field_param_index = Self::insert_component_builder_params(g);
-                for f in self.included_fields() {
-                    if f.ordinal == field.ordinal {
-                        g.params.insert(
-                            field_param_index,
-                            syn::GenericParam::Type(self.generic_builder_param(f)),
-                        );
-                        let generic_argument: syn::Type = f.type_ident();
-                        ty_generics_tuple.elems.push_value(generic_argument.clone());
-                        target_generics_tuple
-                            .elems
-                            .push_value(f.tuplized_type_ty_param());
-                    } else {
-                        g.params.insert(field_param_index, f.generic_ty_param());
-                        let generic_argument: syn::Type = f.type_ident();
-                        ty_generics_tuple.elems.push_value(generic_argument.clone());
-                        target_generics_tuple.elems.push_value(generic_argument);
-                    }
-                    ty_generics_tuple.elems.push_punct(Default::default());
-                    target_generics_tuple.elems.push_punct(Default::default());
-                }
-            });
-            let mut target_generics = ty_generics.clone();
-            Self::insert_component_builder_vec_args(
-                &mut target_generics,
-                syn::GenericArgument::Type(target_generics_tuple.into()),
-            );
-            Self::insert_component_builder_vec_args(
-                &mut ty_generics,
-                syn::GenericArgument::Type(ty_generics_tuple.into()),
-            );
+            let (generics, ty_generics) = self.any_state_generics();
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-
-            let forward_extended_fields = self.extend_fields().map(|f| {
-                let name = f.extends_vec_ident();
-                quote!(#name: self.#name)
-            });
-
-            let forward_owner = self
-                .has_child_owned_fields
-                .then(|| quote!(owner: self.owner))
-                .into_iter();
 
             let extends_impl = field.builder_attr.extends.iter().map(|path| {
                 let name_str = path_to_single_string(path).unwrap();
@@ -1023,7 +1032,6 @@ mod struct_info {
                         ____attr: impl dioxus_core::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
-                        let ( #(#destructuring,)* ) = self.fields;
                         self.#field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
@@ -1032,14 +1040,7 @@ mod struct_info {
                                 ____volatile,
                             )
                         );
-                        #builder_name {
-                            render_fn: self.render_fn,
-                            #(#forward_extended_fields,)*
-                            #(#forward_owner,)*
-                            fields: ( #(#reconstructing,)* ),
-                            _marker: self._marker,
-                            _phantom: self._phantom,
-                        }
+                        self
                     }
                 }
 
@@ -1047,46 +1048,111 @@ mod struct_info {
             })
         }
 
-        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
-            let FieldInfo {
-                name: field_name, ..
-            } = field;
-            if *field_name == "key" {
+        /// The setter's `<__Marker>` generic (if any), argument type and the expression that
+        /// converts the argument into the stored field value.
+        fn setter_signature(
+            &self,
+            field: &FieldInfo,
+        ) -> (Option<syn::Ident>, TokenStream, TokenStream) {
+            let field_name = field.name;
+            let arg_type = field.ty;
+            let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+            if field.child_owned {
+                (
+                    Some(marker_ident.clone()),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
+                    // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
+                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
+                )
+            } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
+                (
+                    Some(marker_ident.clone()),
+                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
+                    quote!(dioxus_core::SuperInto::super_into(#field_name)),
+                )
+            } else if field.builder_attr.from_displayable {
+                (
+                    None,
+                    quote!(impl ::core::fmt::Display),
+                    quote!(#field_name.to_string()),
+                )
+            } else {
+                (None, quote!(#arg_type), quote!(#field_name))
+            }
+        }
+
+        fn check_field_name(field: &FieldInfo) -> Result<(), Error> {
+            if *field.name == "key" {
                 return Err(Error::new_spanned(
-                    field_name,
+                    field.name,
                     "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys",
                 ));
             }
+            Ok(())
+        }
+
+        /// One impl block holding every optional setter. Optional props are stored as
+        /// `Option<T>` in the `values` tuple, so the setter mutates in place and returns
+        /// `Self`; no typestate transition and no per-field impl block.
+        pub fn optional_setters_impl(&self) -> Result<TokenStream, Error> {
             let StructInfo {
                 ref builder_name, ..
             } = *self;
 
-            let destructuring = self.included_fields().map(|f| {
-                if f.ordinal == field.ordinal {
-                    quote!(_)
-                } else {
-                    let name = f.name;
-                    quote!(#name)
-                }
-            });
-            let reconstructing = self.included_fields().map(|f| f.name);
+            let setters = self
+                .optional_fields()
+                .map(|field| {
+                    Self::check_field_name(field)?;
+                    let field_name = field.name;
+                    let docs = &field.builder_attr.docs;
+                    let index = self.value_index(field);
+                    let (marker, arg_type, arg_expr) = self.setter_signature(field);
+                    Ok(quote! {
+                        #( #docs )*
+                        pub fn #field_name < #marker > (mut self, #field_name: #arg_type) -> Self {
+                            self.values.#index = ::core::option::Option::Some(#arg_expr);
+                            self
+                        }
+                    })
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
 
-            let FieldInfo {
-                name: field_name,
-                ty: field_type,
-                ..
-            } = field;
+            if setters.is_empty() {
+                return Ok(TokenStream::new());
+            }
+
+            let (generics, ty_generics) = self.any_state_generics();
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
+
+            Ok(quote! {
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
+                    #( #setters )*
+                }
+            })
+        }
+
+        /// A required setter: flips this field's typestate slot from `()` to `Set` and stores the
+        /// value in the `values` tuple. The generics list is proportional to the number of
+        /// required props, but the body is constant-size regardless of prop count.
+        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            Self::check_field_name(field)?;
+            let StructInfo {
+                ref builder_name, ..
+            } = *self;
+
+            let field_name = field.name;
             let mut ty_generics: Vec<syn::GenericArgument> = self.generic_args();
             let mut target_generics_tuple = empty_type_tuple();
             let mut ty_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
                 let field_param_index = Self::insert_component_builder_params(g);
-                for f in self.included_fields() {
+                for f in self.required_fields() {
                     if f.ordinal == field.ordinal {
                         ty_generics_tuple.elems.push_value(empty_type());
                         target_generics_tuple
                             .elems
-                            .push_value(f.tuplized_type_ty_param());
+                            .push_value(parse_quote!(dioxus_core::internal::Set));
                     } else {
                         g.params.insert(field_param_index, f.generic_ty_param());
                         let generic_argument: syn::Type = f.type_ident();
@@ -1109,33 +1175,8 @@ mod struct_info {
 
             let (impl_generics, _, where_clause) = generics.split_for_impl();
             let docs = &field.builder_attr.docs;
-
-            let arg_type = field_type;
-            // If the field is auto_into, we need to add a generic parameter to the builder for specialization
-            let mut marker = None;
-            let (arg_type, arg_expr) = if field.child_owned {
-                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
-                marker = Some(marker_ident.clone());
-                (
-                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
-                    // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
-                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
-                )
-            } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
-                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
-                marker = Some(marker_ident.clone());
-                (
-                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
-                    quote!(dioxus_core::SuperInto::super_into(#field_name)),
-                )
-            } else if field.builder_attr.from_displayable {
-                (
-                    quote!(impl ::core::fmt::Display),
-                    quote!(#field_name.to_string()),
-                )
-            } else {
-                (quote!(#arg_type), quote!(#field_name))
-            };
+            let index = self.value_index(field);
+            let (marker, arg_type, arg_expr) = self.setter_signature(field);
 
             let forward_fields = self
                 .extend_fields()
@@ -1153,28 +1194,19 @@ mod struct_info {
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #( #docs )*
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
-                        let #field_name = (#arg_expr,);
-                        let ( #(#destructuring,)* ) = self.fields;
+                    pub fn #field_name < #marker > (mut self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
+                        self.values.#index = ::core::option::Option::Some(#arg_expr);
                         #builder_name {
                             render_fn: self.render_fn,
                             #(#forward_fields,)*
-                            fields: ( #(#reconstructing,)* ),
+                            values: self.values,
+                            state: ::core::marker::PhantomData,
                             _marker: self._marker,
                             _phantom: self._phantom,
                         }
                     }
                 }
             })
-        }
-
-        fn generic_builder_param(&self, field: &FieldInfo) -> syn::TypeParam {
-            let field_ty = field.ty;
-            let trait_ref: syn::TraitBound =
-                parse_quote!(dioxus_core::internal::OptionalProp<#field_ty>);
-            let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
-            generic_param.bounds.push(trait_ref.into());
-            generic_param
         }
 
         pub fn build_method_impl(&self) -> TokenStream {
@@ -1190,10 +1222,10 @@ mod struct_info {
                     .iter()
                     .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
                     .count();
-                for field in self.included_fields() {
-                    // Every included field gets an unbounded `__p` type param here; the
-                    // `RequiredProp`/`OptionalProp` bounds live on the `build` method's where
-                    // clause so a single impl covers every field-set combination.
+                for field in self.required_fields() {
+                    // Every required field gets an unbounded `__p` type param here; the
+                    // `RequiredProp` bounds live on the `build` method's where clause so a
+                    // single impl covers every field-set combination.
                     g.params
                         .insert(index_after_lifetime_in_generics, field.generic_ty_param());
                 }
@@ -1204,7 +1236,7 @@ mod struct_info {
                 Self::insert_component_builder_type_args(
                     args,
                     syn::GenericArgument::Type(
-                        type_tuple(self.included_fields().map(|field| field.type_ident())).into(),
+                        type_tuple(self.required_fields().map(|field| field.type_ident())).into(),
                     ),
                     parse_quote!(__RenderFn),
                     parse_quote!(__ComponentMarker),
@@ -1225,13 +1257,10 @@ mod struct_info {
                 .chain(self.has_child_owned_fields.then(|| quote!(owner)))
                 .collect::<Vec<_>>();
 
-            // Required fields are checked by a `RequiredProp<T, FieldName>` bound on `build`,
+            // Required fields are checked by a `RequiredProp<FieldName>` bound on `build`,
             // where `FieldName` is a marker type named after the prop so the diagnostic reads
             // "missing required prop `foo`".
-            let required_fields: Vec<&FieldInfo> = self
-                .included_fields()
-                .filter(|f| f.builder_attr.default.is_none() && f.builder_attr.extends.is_empty())
-                .collect();
+            let required_fields: Vec<&FieldInfo> = self.required_fields().collect();
             let fields_mod_name =
                 syn::Ident::new(&format!("__{builder_name}_required_fields"), name.span());
             let required_marker_name = |f: &FieldInfo| f.name.clone();
@@ -1245,17 +1274,12 @@ mod struct_info {
                     }
                 }
             });
-            let build_where_predicates: Vec<TokenStream> = self
-                .included_fields()
+            let build_where_predicates: Vec<TokenStream> = required_fields
+                .iter()
                 .map(|f| {
                     let generic_ident = &f.generic_ident;
-                    let ty = f.ty;
-                    if f.builder_attr.default.is_none() && f.builder_attr.extends.is_empty() {
-                        let marker = required_marker_name(f);
-                        quote!(#generic_ident: dioxus_core::internal::RequiredProp<#ty, #fields_mod_name::#marker>)
-                    } else {
-                        quote!(#generic_ident: dioxus_core::internal::OptionalProp<#ty>)
-                    }
+                    let marker = required_marker_name(f);
+                    quote!(#generic_ident: dioxus_core::internal::RequiredProp<#fields_mod_name::#marker>)
                 })
                 .collect();
             let build_where_clause = if build_where_predicates.is_empty() {
@@ -1276,7 +1300,7 @@ mod struct_info {
                 let name = &field.name;
                 if let Some(extends_vec) = field.extends_vec_ident() {
                     quote!{
-                        let mut #name = dioxus_core::internal::OptionalProp::into_value(#name, || ::core::default::Default::default());
+                        let mut #name = ::core::option::Option::unwrap_or_else(#name, || ::core::default::Default::default());
                         #name.extend(#extends_vec);
                     }
                 } else if let Some(ref default) = field.builder_attr.default {
@@ -1304,13 +1328,14 @@ mod struct_info {
                     if field.builder_attr.skip {
                         quote!(let #name = #body;)
                     } else if is_child_owned_type {
-                        quote!(let #name = dioxus_core::internal::OptionalProp::into_value(#name, || dioxus_core::with_owner(owner.clone(), move || #body));)
+                        quote!(let #name = ::core::option::Option::unwrap_or_else(#name, || dioxus_core::with_owner(owner.clone(), move || #body));)
                     } else {
-                        quote!(let #name = dioxus_core::internal::OptionalProp::into_value(#name, || #body);)
+                        quote!(let #name = ::core::option::Option::unwrap_or_else(#name, || #body);)
                     }
                 } else {
                     let marker = required_marker_name(field);
-                    quote!(let #name = dioxus_core::internal::RequiredProp::<_, #fields_mod_name::#marker>::into_value(#name);)
+                    let generic_ident = &field.generic_ident;
+                    quote!(let #name = <#generic_ident as dioxus_core::internal::RequiredProp<#fields_mod_name::#marker>>::take(#name);)
                 }
             })
                 .collect::<Vec<_>>();
@@ -1420,11 +1445,12 @@ mod struct_info {
                             let #builder_name {
                                 render_fn,
                                 #(#global_field_names,)*
-                                fields,
+                                values,
+                                state: _,
                                 _marker: _,
                                 _phantom: _,
                             } = self;
-                            let ( #(#destructuring,)* ) = fields;
+                            let ( #(#destructuring,)* ) = values;
                             #( #assignments )*
                             let props =
                                 #name {
@@ -1454,11 +1480,12 @@ mod struct_info {
                             let #builder_name {
                                 render_fn,
                                 #(#global_field_names,)*
-                                fields,
+                                values,
+                                state: _,
                                 _marker: _,
                                 _phantom: _,
                             } = self;
-                            let ( #(#destructuring,)* ) = fields;
+                            let ( #(#destructuring,)* ) = values;
                             #( #assignments )*
                             let props =
                                 #name {

@@ -325,24 +325,15 @@ where
     }
 }
 
-/// Typestate slot for a prop with a default: `()` when unset, `(T,)` when set.
+/// Typestate marker for a required prop that has been set. Unset slots are `()`.
 #[doc(hidden)]
-pub trait OptionalProp<T> {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
-}
-impl<T> OptionalProp<T> for () {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
-        default()
-    }
-}
-impl<T> OptionalProp<T> for (T,) {
-    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
-        self.0
-    }
-}
+pub struct Set;
 
-/// Typestate slot for a required prop. `Name` is a per-field marker type whose name is the prop name,
-/// so the diagnostic reads "missing required prop `foo`".
+/// Bound checked by the generated `build` for every required prop. `Name` is a per-field marker
+/// type whose name is the prop name, so the diagnostic reads "missing required prop `foo`".
+///
+/// Prop values are stored as `Option<T>` in the builder; the typestate proves the slot was
+/// filled, so `take` never observes `None`.
 #[doc(hidden)]
 #[rustversion::attr(
     since(1.78.0),
@@ -352,12 +343,16 @@ impl<T> OptionalProp<T> for (T,) {
         note = "props without a default value are required",
     )
 )]
-pub trait RequiredProp<T, Name> {
-    fn into_value(self) -> T;
+pub trait RequiredProp<Name> {
+    fn take<T>(value: Option<T>) -> T;
 }
-impl<T, Name> RequiredProp<T, Name> for (T,) {
-    fn into_value(self) -> T {
-        self.0
+impl<Name> RequiredProp<Name> for Set {
+    #[inline]
+    fn take<T>(value: Option<T>) -> T {
+        match value {
+            Some(value) => value,
+            None => unreachable!("required prop typestate was set without a value"),
+        }
     }
 }
 
