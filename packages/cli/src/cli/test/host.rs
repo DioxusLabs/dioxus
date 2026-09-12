@@ -423,13 +423,7 @@ pub(super) fn parse_discovered_json(
     id: TestId,
     value: &serde_json::Value,
 ) -> Option<DiscoveredTest> {
-    if value
-        .get("name")
-        .and_then(serde_json::Value::as_str)
-        .is_none()
-    {
-        return None;
-    }
+    value.get("name").and_then(serde_json::Value::as_str)?;
     Some(DiscoveredTest {
         id,
         binary: 0,
