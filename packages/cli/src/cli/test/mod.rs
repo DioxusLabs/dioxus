@@ -225,6 +225,7 @@ impl TestArgs {
         let started = Instant::now();
 
         let mut outcomes = vec![];
+        let mut fail_fast = false;
         for platform in [Platform::Host, Platform::Web] {
             let cases = selected
                 .iter()
@@ -238,7 +239,6 @@ impl TestArgs {
             let semaphore = Arc::new(Semaphore::new(threads));
             let mut pending: VecDeque<&DiscoveredTest> = cases.into_iter().collect();
             let mut running = FuturesUnordered::new();
-            let mut fail_fast = false;
             loop {
                 tokio::select! {
                     permit = semaphore.clone().acquire_owned(), if !pending.is_empty() && (!fail_fast || no_fail_fast) => {
@@ -255,7 +255,7 @@ impl TestArgs {
                         running.push(async move { fut.await.map(|outcome| (case.id.clone(), outcome)) });
                     }
                     Some(res) = running.next() => {
-                        let (id, outcome) = res.context("test task failed")?;
+                        let (_id, outcome) = res.context("test task failed")?;
                         let Some(result) = outcome else { continue };
                         if result.outcome.failed() {
                             fail_fast = true;
@@ -263,7 +263,6 @@ impl TestArgs {
                         for reporter in reporters.iter_mut() {
                             reporter.test_finished(&result);
                         }
-                        let _ = id;
                         outcomes.push(result);
                     }
                     else => break,
