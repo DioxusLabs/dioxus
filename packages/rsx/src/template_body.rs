@@ -198,9 +198,16 @@ impl ToTokens for TemplateBody {
             }
         };
 
+        let index = node.template_idx.get();
+        // The site is keyed by its location and template index; the hot-reload slot lives in the
+        // runtime's global-signal context and the lowered template in a per-tree cache, so a site
+        // emits no `static` of its own. Only referenced inside `#[cfg(debug_assertions)]` blocks.
+        let site = quote! { file!(), line!(), column!(), #index };
+        let hot_reload_meta = pieces.hot_reload_meta_tokens();
+
         // In release the optimized template is the const `&'static Template` built through the
         // type system. In debug builds that per-site const evaluation dominates compile time, so
-        // the identical template is lowered once at runtime and cached per site.
+        // the identical template is lowered once at runtime and cached per tree.
         let vnode = if is_static {
             // Nothing runs between building the zero-sized view and handing its tree to the site,
             // so the body needs no `DynamicValues` binding and no per-render hot-reload state.
@@ -215,7 +222,10 @@ impl ToTokens for TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
-                    __RSX_SITE.render_static(dioxus_core::view::template_tree(&__view))
+                    dioxus_signals::render_static_site(
+                        #site,
+                        dioxus_core::view::template_tree(&__view),
+                    )
                 }
             }
         } else {
@@ -234,7 +244,7 @@ impl ToTokens for TemplateBody {
             let debug_render = if has_literal_pool {
                 quote! { __hot_reload_site.finish(__tree, __dynamic) }
             } else {
-                quote! { __RSX_SITE.render(__tree, __dynamic) }
+                quote! { dioxus_signals::render_site(#site, #hot_reload_meta, __tree, __dynamic) }
             };
             quote! {
                 #dynamic_binding
@@ -260,15 +270,15 @@ impl ToTokens for TemplateBody {
         let hot_reload_site = has_literal_pool.then(|| {
             quote! {
                 #[cfg(debug_assertions)]
-                let __hot_reload_site =
-                    dioxus_signals::HotReloadSite::new(&__RSX_SITE, vec![ #( #dynamic_text ),* ]);
+                let __hot_reload_site = dioxus_signals::HotReloadSite::new(
+                    #site,
+                    #hot_reload_meta,
+                    vec![ #( #dynamic_text ),* ],
+                );
             }
         });
 
         let diagnostics = &node.diagnostics;
-        let index = node.template_idx.get();
-        // Only referenced inside the `#[cfg(debug_assertions)]` block.
-        let hot_reload_meta = pieces.hot_reload_meta_tokens();
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -277,18 +287,6 @@ impl ToTokens for TemplateBody {
                 #key_warnings
 
                 #(#view_definitions)*
-
-                // The one static per site: its hot-reload slot (keyed by location so it stays
-                // stable across renders), the lazily lowered runtime template, and the
-                // original-template metadata hot reload falls back to.
-                #[cfg(debug_assertions)]
-                static __RSX_SITE: dioxus_signals::RsxSite = dioxus_signals::RsxSite::new(
-                    file!(),
-                    line!(),
-                    column!(),
-                    #index,
-                    #hot_reload_meta,
-                );
 
                 #hot_reload_site
 
@@ -337,8 +335,8 @@ impl ViewBuilderPieces {
     }
 
     /// Emit the site's original-template metadata (a `HotReloadSiteMeta` initializer) from the
-    /// tables gathered while building the view. Everything in it is a constant, so the site stores
-    /// it in a `static` rather than rebuilding it on every render.
+    /// tables gathered while building the view. Everything in it is a literal, so the slices it
+    /// borrows are promoted to `'static` and the value itself is a handful of words to build.
     ///
     /// Callers must only reference the result inside a `#[cfg(debug_assertions)]` block so release
     /// expansions contain no hot-reload tokens.

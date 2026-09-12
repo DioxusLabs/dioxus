@@ -26,7 +26,6 @@ impl<T> InitializeFromFunction<T> for T {
 pub struct Global<T, R = T> {
     constructor: fn() -> R,
     key: GlobalKey<'static>,
-    normalized_file: std::sync::OnceLock<&'static str>,
     phantom: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -123,7 +122,6 @@ where
         Self {
             constructor,
             key: GlobalKey::new(key),
-            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -141,7 +139,6 @@ where
                 column: 0,
                 index: 0,
             },
-            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -165,15 +162,14 @@ where
                 column: column as _,
                 index: index as _,
             },
-            normalized_file: std::sync::OnceLock::new(),
             phantom: std::marker::PhantomData,
         }
     }
 
     /// The key with its file path normalized to forward slashes, matching the compile-time
     /// `const_format` normalization the CLI applies (`file!()` may contain backslashes on
-    /// Windows). The normalized path is computed at most once per call site and only when the
-    /// raw path actually contains a backslash.
+    /// Windows). The normalized path is computed at most once per distinct file and only when
+    /// the raw path actually contains a backslash.
     fn normalized_key(&self) -> GlobalKey<'static> {
         let GlobalKey::File {
             file,
@@ -188,17 +184,8 @@ where
         if !file.contains('\\') {
             return self.key.clone();
         }
-        // Match `str_replace!(file!(), "\\\\", "/")` then `str_replace!(PATH, '\\', "/")`:
-        // escaped backslashes are collapsed first, then single backslashes.
-        let file = *self.normalized_file.get_or_init(|| {
-            Box::leak(
-                file.replace("\\\\", "/")
-                    .replace('\\', "/")
-                    .into_boxed_str(),
-            )
-        });
         GlobalKey::File {
-            file,
+            file: normalized_file(file),
             line,
             column,
             index,
@@ -251,6 +238,28 @@ where
     pub fn origin_scope(&self) -> ScopeId {
         ScopeId::ROOT
     }
+}
+
+/// `file` with backslashes replaced by forward slashes, leaked once per distinct path.
+///
+/// Matches `str_replace!(file!(), "\\\\", "/")` then `str_replace!(PATH, '\\', "/")`: escaped
+/// backslashes are collapsed first, then single backslashes.
+fn normalized_file(file: &'static str) -> &'static str {
+    static NORMALIZED: std::sync::Mutex<Option<HashMap<&'static str, &'static str>>> =
+        std::sync::Mutex::new(None);
+    let mut normalized = NORMALIZED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    normalized
+        .get_or_insert_default()
+        .entry(file)
+        .or_insert_with(|| {
+            Box::leak(
+                file.replace("\\\\", "/")
+                    .replace('\\', "/")
+                    .into_boxed_str(),
+            )
+        })
 }
 
 /// The context for global signals
@@ -329,12 +338,23 @@ pub type HotReloadTemplateSignal = GlobalSignal<Option<dioxus_core::internal::Ho
 #[doc(hidden)]
 pub type HotReloadTemplateRead = ReadableRef<'static, HotReloadTemplateSignal>;
 
-/// Read an `rsx!` site's hot-reload slot, if a runtime is active.
+/// Read the hot-reload slot of the `rsx!` site at `file:line:column`, template `index`, if a
+/// runtime is active.
+///
+/// The slot itself lives in the runtime's global-signal context keyed by location, so the site
+/// needs no `static` of its own: the key is rebuilt from the call-site literals on every render.
 #[doc(hidden)]
 pub fn read_hot_reload_template(
-    signal: &'static HotReloadTemplateSignal,
+    file: &'static str,
+    line: u32,
+    column: u32,
+    index: usize,
 ) -> Option<HotReloadTemplateRead> {
-    Runtime::try_current().map(|_| signal.read())
+    Runtime::try_current().map(|_| {
+        // The guard borrows the signal's generational box, not the transient `Global` key.
+        HotReloadTemplateSignal::with_location(no_hot_reload_template, file, line, column, index)
+            .read_unchecked()
+    })
 }
 
 /// Borrow the hot-reloaded template out of a [`read_hot_reload_template`] result.
@@ -345,94 +365,87 @@ pub fn hot_reload_template(
     read.as_ref().and_then(|read| read.as_ref())
 }
 
-/// The debug-build `static` state of one `rsx!` site: its hot-reload slot, the lazily lowered
-/// runtime [`Template`](dioxus_core::Template), and the original-template metadata hot reload
-/// falls back to. `rsx!` emits exactly one of these per site so a site costs a single item.
-#[doc(hidden)]
-pub struct RsxSite {
-    /// The hot-reload template slot every render of the site reads.
-    pub signal: HotReloadTemplateSignal,
-    /// The runtime template, lowered from the view type on first render.
-    pub template: std::sync::OnceLock<dioxus_core::Template>,
-    /// The site's original-template metadata.
-    pub meta: dioxus_core::internal::HotReloadSiteMeta,
-}
-
-impl RsxSite {
-    /// Create the site state for the `rsx!` call at `file:line:column`, template `index`.
-    #[doc(hidden)]
-    pub const fn new(
-        file: &'static str,
-        line: u32,
-        column: u32,
-        index: usize,
-        meta: dioxus_core::internal::HotReloadSiteMeta,
-    ) -> Self {
-        Self {
-            signal: GlobalSignal::with_location(no_hot_reload_template, file, line, column, index),
-            template: std::sync::OnceLock::new(),
-            meta,
-        }
-    }
-
-    /// Render a site whose body has no formatted text and no component literals: nothing needs
-    /// to be read from a literal pool, so the hot-reload slot is consulted only once the
-    /// [`VNode`](dioxus_core::VNode) is built.
-    #[cfg(debug_assertions)]
-    #[doc(hidden)]
-    pub fn render(
-        &'static self,
-        tree: &'static dioxus_core::internal::TemplateRawTree,
-        dynamic: dioxus_core::DynamicValues,
-    ) -> dioxus_core::VNode {
-        let read = read_hot_reload_template(&self.signal);
-        let vnode = dioxus_core::view::vnode_from_cached_template(&self.template, tree, dynamic);
-        dioxus_core::internal::render_hot_reloaded(
-            vnode,
-            hot_reload_template(&read),
-            dioxus_core::internal::DynamicLiteralPool::new(Vec::new()),
-            &self.meta,
-        )
-    }
-
-    /// [`RsxSite::render`] for a fully static body.
-    #[cfg(debug_assertions)]
-    #[doc(hidden)]
-    pub fn render_static(
-        &'static self,
-        tree: &'static dioxus_core::internal::TemplateRawTree,
-    ) -> dioxus_core::VNode {
-        self.render(tree, dioxus_core::view::dynamic_values(0, 0))
-    }
-}
-
-/// Initial value of every [`RsxSite`] hot-reload slot: one shared function rather than a closure
-/// per site.
+/// Initial value of every `rsx!` hot-reload slot: one shared function rather than a closure per
+/// site.
 fn no_hot_reload_template() -> Option<dioxus_core::internal::HotReloadedTemplate> {
     None
 }
 
+/// Render the `rsx!` site at `file:line:column`, template `index`, whose body has no formatted
+/// text and no component literals: nothing needs to be read from a literal pool, so the
+/// hot-reload slot is consulted only once the [`VNode`](dioxus_core::VNode) is built.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn render_site(
+    file: &'static str,
+    line: u32,
+    column: u32,
+    index: usize,
+    meta: dioxus_core::internal::HotReloadSiteMeta,
+    tree: &'static dioxus_core::internal::TemplateRawTree,
+    dynamic: dioxus_core::DynamicValues,
+) -> dioxus_core::VNode {
+    let read = read_hot_reload_template(file, line, column, index);
+    let vnode = dioxus_core::view::vnode_from_tree(tree, dynamic);
+    dioxus_core::internal::render_hot_reloaded(
+        vnode,
+        hot_reload_template(&read),
+        dioxus_core::internal::DynamicLiteralPool::new(Vec::new()),
+        &meta,
+    )
+}
+
+/// [`render_site`] for a fully static body.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn render_static_site(
+    file: &'static str,
+    line: u32,
+    column: u32,
+    index: usize,
+    tree: &'static dioxus_core::internal::TemplateRawTree,
+) -> dioxus_core::VNode {
+    render_site(
+        file,
+        line,
+        column,
+        index,
+        dioxus_core::internal::HotReloadSiteMeta::STATIC,
+        tree,
+        dioxus_core::view::dynamic_values(0, 0),
+    )
+}
+
 /// The debug-build hot-reload state of one `rsx!` site for one render: the site's hot-reload
-/// slot read plus the dynamic text pool its literals are rendered from.
+/// slot read, its original-template metadata, and the dynamic text pool its literals are
+/// rendered from.
 ///
 /// `rsx!` creates this before evaluating the view (component literal props read through it) and
-/// hands the finished [`VNode`](dioxus_core::VNode) back to [`HotReloadSite::finish`].
+/// hands the finished view back to [`HotReloadSite::finish`].
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub struct HotReloadSite {
-    site: &'static RsxSite,
     read: Option<HotReloadTemplateRead>,
+    meta: dioxus_core::internal::HotReloadSiteMeta,
     literal_pool: dioxus_core::internal::DynamicLiteralPool,
 }
 
 #[cfg(debug_assertions)]
 impl HotReloadSite {
-    /// Read the site's hot-reload slot and build its literal pool from `dynamic_text`.
+    /// Read the hot-reload slot of the site at `file:line:column`, template `index`, and build its
+    /// literal pool from `dynamic_text`.
     #[doc(hidden)]
-    pub fn new(site: &'static RsxSite, dynamic_text: Vec<String>) -> Self {
+    pub fn new(
+        file: &'static str,
+        line: u32,
+        column: u32,
+        index: usize,
+        meta: dioxus_core::internal::HotReloadSiteMeta,
+        dynamic_text: Vec<String>,
+    ) -> Self {
         Self {
-            site,
-            read: read_hot_reload_template(&site.signal),
+            read: read_hot_reload_template(file, line, column, index),
+            meta,
             literal_pool: dioxus_core::internal::DynamicLiteralPool::new(dynamic_text),
         }
     }
@@ -454,13 +467,12 @@ impl HotReloadSite {
         tree: &'static dioxus_core::internal::TemplateRawTree,
         dynamic: dioxus_core::DynamicValues,
     ) -> dioxus_core::VNode {
-        let vnode =
-            dioxus_core::view::vnode_from_cached_template(&self.site.template, tree, dynamic);
+        let vnode = dioxus_core::view::vnode_from_tree(tree, dynamic);
         dioxus_core::internal::render_hot_reloaded(
             vnode,
             hot_reload_template(&self.read),
             self.literal_pool,
-            &self.site.meta,
+            &self.meta,
         )
     }
 }
@@ -480,12 +492,6 @@ mod tests {
 
     /// Test that keys of global signals are correctly generated and different from one another.
     /// We don't want signals to merge, but we also want them to use both string IDs and memory addresses.
-    // GlobalSignal contains a OnceLock for lazy file normalization, which trips the interior
-    // mutability const lints; consts are intentional here (see the comment in the body).
-    #[allow(
-        clippy::declare_interior_mutable_const,
-        clippy::borrow_interior_mutable_const
-    )]
     #[test]
     fn test_global_keys() {
         // we're using consts since it's harder than statics due to merging - these won't be merged
@@ -508,10 +514,6 @@ mod tests {
 
     /// The runtime file normalization must match the compile-time `const_format` normalization
     /// that was previously emitted per `rsx!` site: `\\` collapses to `/` first, then `\` to `/`.
-    #[allow(
-        clippy::declare_interior_mutable_const,
-        clippy::borrow_interior_mutable_const
-    )]
     #[test]
     fn test_normalized_file_key() {
         const WINDOWS: GlobalSignal<i32> =
@@ -534,5 +536,12 @@ mod tests {
             panic!("expected a file key")
         };
         assert_eq!(file, "C:/Users/x/main.rs");
+
+        // Normalization is cached per distinct path, so re-keying the same location on every
+        // render (as `rsx!` sites do) never leaks a fresh string.
+        let GlobalKey::File { file: again, .. } = SINGLE.key() else {
+            panic!("expected a file key")
+        };
+        assert_eq!(file.as_ptr(), again.as_ptr());
     }
 }

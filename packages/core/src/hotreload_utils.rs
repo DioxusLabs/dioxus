@@ -296,6 +296,14 @@ pub struct HotReloadSiteMeta {
 }
 
 impl HotReloadSiteMeta {
+    /// The metadata of a fully static body: no key, no dynamic values, no component literals.
+    pub const STATIC: Self = Self {
+        key: None,
+        dynamic_nodes: 0,
+        dynamic_attributes: 0,
+        component_values: &[],
+    };
+
     /// Lower into the original hot-reload template for `template`.
     pub fn to_template(&self, template: Template) -> HotReloadedTemplate {
         HotReloadedTemplate::from_dynamic_counts(

@@ -697,8 +697,6 @@ impl FfiBridgeParser {
             &plugin_hash,
             "__ASSETS__",
             quote! { manganis::android::metadata::serialize_android_metadata },
-            quote! { manganis::android::macro_helpers::copy_bytes },
-            quote! { manganis::android::metadata::AndroidMetadataBuffer },
         );
 
         quote! {
@@ -1048,8 +1046,6 @@ impl FfiBridgeParser {
             &plugin_hash,
             "__ASSETS__",
             quote! { manganis::darwin::metadata::serialize_swift_metadata },
-            quote! { manganis::darwin::macro_helpers::copy_bytes },
-            quote! { manganis::darwin::metadata::SwiftMetadataBuffer },
         );
 
         quote! {

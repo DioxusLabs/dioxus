@@ -6,7 +6,11 @@ use dioxus_core_template::{
     TEMPLATE_STORAGE_DYNAMIC_CAP, TEMPLATE_STORAGE_OPS_CAP, TEMPLATE_STORAGE_STRING_CAP,
     TemplateRawTree, TemplateStorage,
 };
+#[cfg(debug_assertions)]
+use std::collections::HashMap;
 use std::marker::PhantomData;
+#[cfg(debug_assertions)]
+use std::sync::RwLock;
 
 /// A type that contributes static template structure.
 pub trait ViewTemplate {
@@ -125,7 +129,7 @@ fn into_vnode_with_template_and_values<V: View>(
 ///
 /// `rsx!` pushes the body's dynamic node values into this (see
 /// [`push_dyn_node`](super::push_dyn_node)) before building the view, then hands both to
-/// [`vnode_from_cached_template`] / [`into_vnode_with_capacity`].
+/// [`vnode_from_tree`] / [`into_vnode_with_capacity`].
 #[doc(hidden)]
 #[inline]
 pub fn dynamic_values(dynamic_nodes: usize, dynamic_attributes: usize) -> DynamicValues {
@@ -135,7 +139,7 @@ pub fn dynamic_values(dynamic_nodes: usize, dynamic_attributes: usize) -> Dynami
 /// The static template tree of a view value's type.
 ///
 /// This and [`push_view`] are the only per-site generic code the debug `rsx!` expansion
-/// instantiates; everything else runs through the non-generic [`vnode_from_cached_template`].
+/// instantiates; everything else runs through the non-generic [`vnode_from_tree`].
 #[doc(hidden)]
 #[inline]
 pub fn template_tree<V: ViewTemplate>(_: &V) -> &'static TemplateRawTree {
@@ -155,22 +159,44 @@ pub fn push_view<V: View>(view: V, dynamic: &mut DynamicValues) {
     }
 }
 
-/// Build a [`VNode`] from a debug-only lazy template cached per call site.
+/// Build a [`VNode`] from a debug-only lazy template cached per raw tree.
 ///
 /// In dev builds the optimized template is lowered once at runtime from the view's
 /// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
-/// debug compile time) and cached in `cache`. Release builds use [`into_vnode_with_capacity`] and
-/// its const template instead.
+/// debug compile time) and cached by the tree's address, so a site needs no `static` of its own.
+/// Release builds use [`into_vnode_with_capacity`] and its const template instead.
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 #[inline(never)]
-pub fn vnode_from_cached_template(
-    cache: &std::sync::OnceLock<Template>,
-    tree: &'static TemplateRawTree,
-    dynamic: DynamicValues,
-) -> VNode {
-    let template = cache.get_or_init(|| dioxus_core_template::build_runtime_template(tree));
-    VNode::new(*template, dynamic)
+pub fn vnode_from_tree(tree: &'static TemplateRawTree, dynamic: DynamicValues) -> VNode {
+    VNode::new(runtime_template(tree), dynamic)
+}
+
+/// The runtime-lowered template for `tree`, lowered on first use and cached by address.
+///
+/// Distinct trees never share an address, and lowering an identical tree reached through two
+/// addresses only costs a duplicate cache entry, so the address is a sound key.
+#[cfg(debug_assertions)]
+fn runtime_template(tree: &'static TemplateRawTree) -> Template {
+    static TEMPLATES: RwLock<Option<HashMap<usize, Template>>> = RwLock::new(None);
+
+    let key = tree as *const TemplateRawTree as usize;
+    let cached = TEMPLATES
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+        .and_then(|templates| templates.get(&key).copied());
+    if let Some(template) = cached {
+        return template;
+    }
+
+    let mut templates = TEMPLATES
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *templates
+        .get_or_insert_default()
+        .entry(key)
+        .or_insert_with(|| dioxus_core_template::build_runtime_template(tree))
 }
 
 /// Convert a view into a [`VNode`] using template capacities resolved at the call site.
