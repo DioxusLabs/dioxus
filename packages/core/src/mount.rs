@@ -229,8 +229,16 @@ impl Mount {
         self.anchor_count as usize
     }
 
+    /// Bounds-checked, because an edge scan (see [`crate::diff::node::EdgeScan`]) can reach a
+    /// sibling mount mid-diff, before it has that many dynamic slots. Every reader of this treats
+    /// the result as optional anyway, and an empty slot is indistinguishable from a mount that
+    /// renders nothing. The write paths below stay unchecked - a bad index there is a real
+    /// invariant violation.
     fn dynamic_slot(&self, idx: usize) -> PackedMountedSlot {
-        self.slots[self.dynamic_offset() + idx]
+        self.slots
+            .get(self.dynamic_offset() + idx)
+            .copied()
+            .unwrap_or(PackedMountedSlot::empty())
     }
 
     fn dynamic_slot_mut(&mut self, idx: usize) -> &mut PackedMountedSlot {
