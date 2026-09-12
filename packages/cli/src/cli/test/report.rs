@@ -54,6 +54,8 @@ pub(crate) enum Outcome {
     Failed,
     Ignored,
     TimedOut,
+    /// The test's `platforms` list doesn't cover this build target.
+    NotRunnable,
 }
 
 impl Outcome {
@@ -61,13 +63,18 @@ impl Outcome {
         match self {
             Outcome::Passed => "ok",
             Outcome::Failed => "failed",
-            Outcome::Ignored => "ignored",
+            Outcome::Ignored | Outcome::NotRunnable => "ignored",
             Outcome::TimedOut => "timeout",
         }
     }
 
     pub(crate) fn failed(&self) -> bool {
         matches!(self, Outcome::Failed | Outcome::TimedOut)
+    }
+
+    /// Ignored in the summary sense: skipped or not runnable.
+    pub(crate) fn ignored(&self) -> bool {
+        matches!(self, Outcome::Ignored | Outcome::NotRunnable)
     }
 }
 
@@ -95,6 +102,10 @@ pub(crate) struct DiscoveredTest {
     pub(crate) ignore: bool,
     pub(crate) should_panic: bool,
     pub(crate) tags: Vec<String>,
+    /// Platforms the test is declared for (empty = all); libtest targets are empty.
+    pub(crate) platforms: Vec<String>,
+    /// Whether this build target can run the test (libtest targets are always runnable).
+    pub(crate) runnable: bool,
 }
 
 #[derive(Default)]
@@ -131,11 +142,18 @@ impl Reporter for HumanReporter {
             Outcome::Passed if result.flaky => console::style("FLAKY").magenta(),
             Outcome::Passed => console::style("PASS").green(),
             Outcome::Ignored => console::style("SKIP").yellow(),
+            Outcome::NotRunnable => console::style("SKIP").yellow(),
             Outcome::Failed => console::style("FAIL").red(),
             Outcome::TimedOut => console::style("TIMEOUT").red(),
         };
+        let suffix = match result.outcome {
+            Outcome::NotRunnable => {
+                format!(" (not runnable on {})", result.id.platform.as_str())
+            }
+            _ => String::new(),
+        };
         println!(
-            "{label} [{:>8.3}s] {}::{}  {}",
+            "{label} [{:>8.3}s] {}::{}  {}{suffix}",
             result.elapsed.as_secs_f64(),
             result.id.package,
             result.id.target,
@@ -237,6 +255,9 @@ impl Reporter for JsonReporter {
                 event["artifacts_dir"] = serde_json::json!(dir.display().to_string());
             }
         }
+        if result.outcome == Outcome::NotRunnable {
+            event["reason"] = serde_json::json!("not_runnable");
+        }
         self.event(event);
     }
 
@@ -289,10 +310,7 @@ impl JunitWriter {
                 .iter()
                 .filter(|o| o.outcome == Outcome::Failed || o.outcome == Outcome::TimedOut)
                 .count();
-            let skipped = outcomes
-                .iter()
-                .filter(|o| o.outcome == Outcome::Ignored)
-                .count();
+            let skipped = outcomes.iter().filter(|o| o.outcome.ignored()).count();
             let time: f64 = outcomes.iter().map(|o| o.elapsed.as_secs_f64()).sum();
             xml.push_str(&format!(
                 "  <testsuite name=\"{}\" tests=\"{tests}\" failures=\"{failures}\" skipped=\"{skipped}\" time=\"{time:.3}\">\n",
@@ -315,6 +333,12 @@ impl JunitWriter {
                 }
                 if outcome.outcome == Outcome::Ignored {
                     xml.push_str("      <skipped/>\n");
+                }
+                if outcome.outcome == Outcome::NotRunnable {
+                    xml.push_str(&format!(
+                        "      <skipped message=\"{}\"/>\n",
+                        escape_xml(&format!("not runnable on {}", outcome.id.platform.as_str()))
+                    ));
                 }
                 if outcome.flaky {
                     xml.push_str(&format!(
@@ -418,6 +442,8 @@ mod tests {
                 ignore: false,
                 should_panic: false,
                 tags: vec![],
+                platforms: vec![],
+                runnable: true,
             })
             .collect()
     }
@@ -494,5 +520,30 @@ mod tests {
         );
         assert!(xml.contains("message=\"1 &lt; 2\""), "{xml}");
         assert!(xml.contains("<skipped/>"), "{xml}");
+    }
+
+    #[test]
+    fn not_runnable_json_and_junit() {
+        let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut reporter = JsonReporter::capturing(lines.clone());
+        let mut result = outcome("a", Outcome::NotRunnable, None);
+        result.attempts = 0;
+        reporter.test_finished(&result);
+        let event: serde_json::Value = serde_json::from_str(&lines.lock().unwrap()[0]).unwrap();
+        assert_eq!(event["event"], "ignored");
+        assert_eq!(event["reason"], "not_runnable");
+        assert_eq!(event["attempts"], 0);
+
+        let path = std::env::temp_dir().join(format!("dx-junit-nr-{}", std::process::id()));
+        let mut writer = JunitWriter::new(path.clone());
+        writer.test_finished(&result);
+        writer.suite_finished(&Summary::default());
+        let xml = std::fs::read_to_string(&path).unwrap();
+        _ = std::fs::remove_file(&path);
+        assert!(
+            xml.contains("<skipped message=\"not runnable on host\"/>"),
+            "{xml}"
+        );
+        assert!(xml.contains("skipped=\"1\""), "{xml}");
     }
 }

@@ -22,6 +22,8 @@ fn renders() {
     dom.rebuild_in_place();
 }
 
+// web-only so plain `cargo test` on the workspace never runs the
+// intentionally-failing case.
 #[dioxus_test_harness::test(platforms = [web])]
 fn fails() {
     assert_eq!(std::hint::black_box(1) + 1, 3);

@@ -26,19 +26,40 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
         None => quote!(None),
     };
     let tags = args.tags.iter().map(|tag| quote!(#tag)).collect::<Vec<_>>();
+    let platforms = args
+        .platforms
+        .iter()
+        .map(|platform| quote!(#platform))
+        .collect::<Vec<_>>();
     let platform_cfg = args.platform_cfg();
 
+    // A non-capturing closure coerces to the `run` fn pointer; the cast keeps
+    // `Some(#run)` well-typed through the `let` in `run_init`.
     let run = if is_async {
-        quote!(|| ::std::boxed::Box::pin(async move { #name().await }))
+        quote!((|| ::std::boxed::Box::pin(async move { #name().await }))
+            as dioxus_test_harness::TestFn)
     } else {
-        quote!(|| ::std::boxed::Box::pin(async move { #name() }))
+        quote!((|| ::std::boxed::Box::pin(async move { #name() }))
+            as dioxus_test_harness::TestFn)
+    };
+
+    // The metadata is always registered; only the test body is platform-gated,
+    // so `run` is `None` on targets the test isn't declared for.
+    let run_init = match args.platform_predicate() {
+        Some(pred) => quote!({
+            #[cfg(#pred)]
+            let __dx_test_run = Some(#run);
+            #[cfg(not(#pred))]
+            let __dx_test_run = None;
+            __dx_test_run
+        }),
+        None => quote!(Some(#run)),
     };
 
     quote! {
         #platform_cfg
         #func
 
-        #platform_cfg
         dioxus_test_harness::inventory::submit! {
             dioxus_test_harness::TestCase {
                 name: ::core::concat!(::core::module_path!(), "::", ::core::stringify!(#name)),
@@ -48,7 +69,8 @@ pub fn test(args: TokenStream, input: TokenStream) -> TokenStream {
                 should_panic: #should_panic,
                 timeout_ms: #timeout_ms,
                 tags: &[#(#tags),*],
-                run: #run,
+                platforms: &[#(#platforms),*],
+                run: #run_init,
             }
         }
     }
@@ -64,10 +86,10 @@ struct TestArgs {
 }
 
 impl TestArgs {
-    /// The cfg gate for the inventory submission, or `None` when `platforms` wasn't given.
-    fn platform_cfg(&self) -> proc_macro2::TokenStream {
+    /// The cfg predicate (`any(..)`) matching the declared platforms.
+    fn platform_predicate(&self) -> Option<proc_macro2::TokenStream> {
         if self.platforms.is_empty() {
-            return quote!();
+            return None;
         }
 
         let cfgs = self
@@ -86,7 +108,14 @@ impl TestArgs {
                 }
                 _ => quote!(all()),
             });
-        quote!(#[cfg(any(#(#cfgs),*))])
+        Some(quote!(any(#(#cfgs),*)))
+    }
+
+    /// The cfg gate for the test function itself.
+    fn platform_cfg(&self) -> proc_macro2::TokenStream {
+        self.platform_predicate()
+            .map(|pred| quote!(#[cfg(#pred)]))
+            .unwrap_or_default()
     }
 }
 

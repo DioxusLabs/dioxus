@@ -314,6 +314,8 @@ pub(crate) async fn discover(suite: &HostSuite) -> Result<Vec<DiscoveredTest>> {
                     ignore: false,
                     should_panic: false,
                     tags: vec![],
+                    platforms: vec![],
+                    runnable: true,
                 })
                 .collect();
         } else {
@@ -406,38 +408,73 @@ async fn list_json(binary: &TestBinary) -> Result<Option<Vec<DiscoveredTest>>> {
         let Some(name) = value.get("name").and_then(serde_json::Value::as_str) else {
             return Ok(None);
         };
-        tests.push(DiscoveredTest {
-            id: test_id(binary, name.to_string()),
-            binary: 0,
-            file: value
-                .get("file")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string),
-            line: value
-                .get("line")
-                .and_then(serde_json::Value::as_u64)
-                .map(|line| line as u32),
-            ignore: value
-                .get("ignore")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or_default(),
-            should_panic: value
-                .get("should_panic")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or_default(),
-            tags: value
-                .get("tags")
-                .and_then(serde_json::Value::as_array)
-                .map(|tags| {
-                    tags.iter()
-                        .filter_map(serde_json::Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-                .unwrap_or_default(),
-        });
+        let id = test_id(binary, name.to_string());
+        let Some(test) = parse_discovered_json(id, &value) else {
+            return Ok(None);
+        };
+        tests.push(test);
     }
     Ok(Some(tests))
+}
+
+/// One `{"name","file","line","ignore","should_panic","tags","platforms",
+/// "runnable"}` line from `--list --format json`.
+pub(super) fn parse_discovered_json(
+    id: TestId,
+    value: &serde_json::Value,
+) -> Option<DiscoveredTest> {
+    if value
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+    {
+        return None;
+    }
+    Some(DiscoveredTest {
+        id,
+        binary: 0,
+        file: value
+            .get("file")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        line: value
+            .get("line")
+            .and_then(serde_json::Value::as_u64)
+            .map(|line| line as u32),
+        ignore: value
+            .get("ignore")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
+        should_panic: value
+            .get("should_panic")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
+        tags: value
+            .get("tags")
+            .and_then(serde_json::Value::as_array)
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        platforms: value
+            .get("platforms")
+            .and_then(serde_json::Value::as_array)
+            .map(|platforms| {
+                platforms
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        runnable: value
+            .get("runnable")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true),
+    })
 }
 
 /// Run a single test in its own process, retrying up to `retries` times.
@@ -587,6 +624,34 @@ pub(super) fn parse_run_outcome(success: bool, output: &str) -> Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_list_json_with_platform_fields() {
+        let id = TestId {
+            package: "p".into(),
+            target: "t".into(),
+            platform: Platform::Host,
+            name: "tests::web_only".into(),
+        };
+        let value = serde_json::json!({
+            "name": "tests::web_only", "file": "tests/web.rs", "line": 12,
+            "ignore": false, "should_panic": true, "tags": ["ui"],
+            "platforms": ["web"], "runnable": false
+        });
+        let test = parse_discovered_json(id.clone(), &value).unwrap();
+        assert_eq!(test.id.name, "tests::web_only");
+        assert_eq!(test.platforms, vec!["web"]);
+        assert!(!test.runnable);
+        assert!(test.should_panic);
+
+        // Missing fields default to runnable-on-everything (libtest shape).
+        let sparse = serde_json::json!({"name": "tests::plain"});
+        let test = parse_discovered_json(id.clone(), &sparse).unwrap();
+        assert!(test.platforms.is_empty());
+        assert!(test.runnable);
+
+        assert!(parse_discovered_json(id.clone(), &serde_json::json!({})).is_none());
+    }
 
     fn args(cmd: &Command) -> Vec<String> {
         cmd.as_std()

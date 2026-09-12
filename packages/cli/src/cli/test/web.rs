@@ -254,6 +254,21 @@ pub(crate) async fn discover(
                             .collect()
                     })
                     .unwrap_or_default(),
+                platforms: test
+                    .get("platforms")
+                    .and_then(Value::as_array)
+                    .map(|platforms| {
+                        platforms
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_string)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                runnable: test
+                    .get("runnable")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true),
             });
         }
     }

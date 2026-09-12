@@ -12,6 +12,8 @@ struct TestInfo {
     ignore: bool,
     should_panic: bool,
     tags: &'static [&'static str],
+    platforms: &'static [&'static str],
+    runnable: bool,
 }
 
 pub fn run() {
@@ -39,6 +41,8 @@ pub fn run() {
                     ignore: case.ignore,
                     should_panic: case.should_panic,
                     tags: case.tags,
+                    platforms: case.platforms,
+                    runnable: case.run.is_some(),
                 })
                 .collect::<Vec<_>>();
             post(Event::List { tests }).await;
@@ -54,6 +58,16 @@ pub fn run() {
             {
                 continue;
             }
+            if case.run.is_none() {
+                post(Event::Finished {
+                    name,
+                    outcome: "ignored",
+                    message: Some("not runnable on web".to_string()),
+                    exec_time: 0.0,
+                })
+                .await;
+                continue;
+            }
             if case.ignore && !include_ignored {
                 post(Event::Finished {
                     name,
@@ -67,7 +81,7 @@ pub fn run() {
             post(Event::Started { name: name.clone() }).await;
             let start = performance_now();
             // The async test closure is polled by a local task so both sync and async tests work.
-            let future = (case.run)();
+            let future = (case.run.expect("not runnable on web"))();
             future.await;
             post(Event::Finished {
                 name,

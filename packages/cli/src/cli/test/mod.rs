@@ -280,6 +280,25 @@ impl TestArgs {
                         for reporter in reporters.iter_mut() {
                             reporter.test_started(&case.id);
                         }
+                        // Platform-gated tests never spawn a process/browser page.
+                        if !case.runnable {
+                            let result = TestOutcome {
+                                id: case.id.clone(),
+                                outcome: Outcome::NotRunnable,
+                                flaky: false,
+                                attempts: 0,
+                                message: None,
+                                output: String::new(),
+                                artifacts: vec![],
+                                artifacts_dir: None,
+                                elapsed: std::time::Duration::ZERO,
+                            };
+                            for reporter in reporters.iter_mut() {
+                                reporter.test_finished(&result);
+                            }
+                            outcomes.push(result);
+                            continue;
+                        }
                         let fut: std::pin::Pin<Box<dyn Future<Output = Result<Option<TestOutcome>>>>> =
                             match platform {
                                 Platform::Web => Box::pin(web::run_case(&web_suite, case, browser.as_deref().unwrap_or(""), &resolved)),
@@ -315,10 +334,7 @@ impl TestArgs {
                 .filter(|o| o.outcome == Outcome::Passed)
                 .count(),
             failed: outcomes.iter().filter(|o| o.outcome.failed()).count(),
-            ignored: outcomes
-                .iter()
-                .filter(|o| o.outcome == Outcome::Ignored)
-                .count(),
+            ignored: outcomes.iter().filter(|o| o.outcome.ignored()).count(),
             filtered_out: total_discovered - selected.len(),
             elapsed: started.elapsed(),
             failing: outcomes
@@ -367,7 +383,17 @@ impl TestArgs {
         for case in selected {
             match resolved.list_format {
                 ListFormat::Terse => {
-                    println!("{}::{}  {}", case.id.package, case.id.target, case.id.name)
+                    let mut suffix = String::new();
+                    if !case.platforms.is_empty() {
+                        suffix += &format!("  [platforms: {}]", case.platforms.join(", "));
+                    }
+                    if !case.runnable {
+                        suffix += " (not runnable)";
+                    }
+                    println!(
+                        "{}::{}  {}{suffix}",
+                        case.id.package, case.id.target, case.id.name
+                    )
                 }
                 ListFormat::Json => println!(
                     "{}",
@@ -381,6 +407,8 @@ impl TestArgs {
                         "ignore": case.ignore,
                         "should_panic": case.should_panic,
                         "tags": case.tags,
+                        "platforms": case.platforms,
+                        "runnable": case.runnable,
                     })
                 ),
             }
@@ -661,6 +689,8 @@ mod tests {
             ignore: false,
             should_panic: false,
             tags: tags.iter().map(|t| t.to_string()).collect(),
+            platforms: vec![],
+            runnable: true,
         };
         let ui = vec!["ui".to_string()];
 

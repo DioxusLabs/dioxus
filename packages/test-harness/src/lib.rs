@@ -2,6 +2,8 @@
 
 use std::{future::Future, pin::Pin};
 
+pub type TestFn = fn() -> Pin<Box<dyn Future<Output = ()>>>;
+
 pub struct TestCase {
     pub name: &'static str,
     pub file: &'static str,
@@ -10,7 +12,10 @@ pub struct TestCase {
     pub should_panic: bool,
     pub timeout_ms: Option<u64>,
     pub tags: &'static [&'static str],
-    pub run: fn() -> Pin<Box<dyn Future<Output = ()>>>,
+    /// Platforms the test is declared for; empty = all.
+    pub platforms: &'static [&'static str],
+    /// `None` when this build target can't run the test (platform mismatch).
+    pub run: Option<TestFn>,
 }
 
 inventory::collect!(TestCase);

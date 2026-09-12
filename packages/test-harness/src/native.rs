@@ -43,7 +43,8 @@ pub fn run() {
                         serde_json::json!({
                             "name": display_name(case.name), "file": case.file,
                             "line": case.line, "ignore": case.ignore,
-                            "should_panic": case.should_panic, "tags": case.tags
+                            "should_panic": case.should_panic, "tags": case.tags,
+                            "platforms": case.platforms, "runnable": case.run.is_some()
                         })
                     );
                 }
@@ -71,6 +72,18 @@ pub fn run() {
 
     for case in selected.iter().copied() {
         let name = display_name(case.name).to_string();
+        if case.run.is_none() {
+            if format == "json" {
+                println!(
+                    "{}",
+                    serde_json::json!({"type":"test", "event":"ignored", "name":name, "reason":"not_runnable"})
+                );
+            } else {
+                println!("test {name} ... ignored, not runnable on this target");
+            }
+            results.push(Outcome::Ignored);
+            continue;
+        }
         if case.ignore && !include_ignored {
             emit_json_or_pretty(format, &name, Outcome::Ignored, None, 0.0, false);
             results.push(Outcome::Ignored);
@@ -148,7 +161,7 @@ fn run_case(case: &TestCase) -> (Outcome, Option<String>) {
 
     let runtime = Builder::new_current_thread().enable_time().build();
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        let future = (case.run)();
+        let future = (case.run.expect("not runnable on this target"))();
         runtime.as_ref().expect("runtime").block_on(async {
             if let Some(timeout) = case.timeout_ms {
                 tokio::time::timeout(std::time::Duration::from_millis(timeout), future)
