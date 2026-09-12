@@ -29,14 +29,17 @@ use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
+use std::sync::{Condvar, Mutex};
 use std::{
     collections::HashMap,
     net::IpAddr,
     sync::{Arc, RwLock},
 };
 use tokio::sync::Notify;
+
+#[cfg(test)]
+mod resume_tests;
 
 /// This handles communication between the requests that the webview makes and the interpreter.
 ///
@@ -145,23 +148,21 @@ impl WryQueue {
         poll
     }
 
-    /// Get the websocket path that the webview should connect to in order to receive edits
-    pub(crate) fn edits_path(&self) -> String {
-        let WebviewWebsocketLocation {
-            webview_id, server, ..
-        } = &self.inner.borrow().location;
-        let server = server.lock().unwrap();
-        let port = server.port;
-        let key = &server.client_key;
-        let key_hex = encode_key_string(key);
-        format!("ws://127.0.0.1:{port}/{webview_id}/{key_hex}")
-    }
-
-    /// Get the key the client should expect from the server when connecting to the websocket.
-    pub(crate) fn required_server_key(&self) -> String {
-        let server = &self.inner.borrow().location.server;
-        let server = server.lock().unwrap();
-        encode_key_string(&server.server_key)
+    /// Read the endpoint and server key together so an iOS listener restart
+    /// cannot mix credentials from two generations of the server.
+    pub(crate) fn connection_details(&self) -> (String, String) {
+        let inner = self.inner.borrow();
+        let location = &inner.location;
+        let server = location.server.lock().unwrap();
+        (
+            format!(
+                "ws://127.0.0.1:{}/{}/{}",
+                server.port,
+                location.webview_id,
+                encode_key_string(&server.client_key)
+            ),
+            encode_key_string(&server.server_key),
+        )
     }
 }
 
@@ -221,7 +222,7 @@ pub(crate) fn start_server() -> (ServerLocation, TcpListener) {
 pub(crate) struct EditWebsocket {
     current_location: Arc<Mutex<ServerLocation>>,
     max_webview_id: Arc<AtomicU32>,
-    connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
+    connections: Arc<RwLock<HashMap<u32, Arc<WebviewConnection>>>>,
     server_location: Arc<Notify>,
 }
 
@@ -256,7 +257,7 @@ impl EditWebsocket {
         notify: Arc<Notify>,
         mut server: TcpListener,
         current_location: Arc<Mutex<ServerLocation>>,
-        connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
+        connections: Arc<RwLock<HashMap<u32, Arc<WebviewConnection>>>>,
     ) {
         loop {
             // Accept connections until we hit an error
@@ -271,8 +272,8 @@ impl EditWebsocket {
             // The client may try to reconnect to the old port that is now being used by an attacker who steals the client
             // key and uses it to read the edits from the new port.
             let (location, new_server) = start_server();
-            notify.notify_waiters();
             *current_location.lock().unwrap() = location;
+            notify.notify_waiters();
             server = new_server;
         }
     }
@@ -280,7 +281,7 @@ impl EditWebsocket {
     fn handle_connection(
         stream: TcpStream,
         server_location: Arc<Mutex<ServerLocation>>,
-        connections: Arc<RwLock<HashMap<u32, WebviewConnectionState>>>,
+        connections: Arc<RwLock<HashMap<u32, Arc<WebviewConnection>>>>,
     ) {
         use tungstenite::handshake::server::{Request, Response};
 
@@ -342,93 +343,85 @@ impl EditWebsocket {
             }
         };
 
-        // Immediately send the key to authenticate the server
-        websocket
+        // Authenticate before taking ownership of this webview's update queue.
+        if websocket
             .send(tungstenite::Message::Text(hex_encoded_server_key.into()))
-            .unwrap();
-
-        let location = match location {
-            Some(loc) => loc,
-            None => {
-                tracing::error!("WebSocket connection without a valid webview ID");
-                return;
-            }
+            .is_err()
+        {
+            return;
+        }
+        let Some(location) = location else { return };
+        let connection = connections
+            .write()
+            .unwrap()
+            .entry(location.webview_id)
+            .or_default()
+            .clone();
+        let Ok(socket) = websocket.get_ref().try_clone() else {
+            return;
         };
+        let generation = {
+            let mut state = connection.state.lock().unwrap();
+            // iOS can reconnect before the old worker notices suspension. Replace
+            // that worker, while keeping its unacknowledged edits in this queue.
+            if let Some(previous) = state.socket.replace(socket) {
+                _ = previous.shutdown(std::net::Shutdown::Both);
+            }
+            state.generation += 1;
+            state.generation
+        };
+        connection.ready.notify_all();
 
-        // Handle the websocket connection in a separate thread
-        let (edits_outgoing, edits_incoming_rx) = std::sync::mpsc::channel::<MsgPair>();
-
-        let connections_ = connections.clone();
-        // Spawn a task to handle the websocket connection
         std::thread::spawn(move || {
-            let mut queued_message = None;
-            // Wait until there are edits ready to send
-            'connection: while let Ok(msg) = edits_incoming_rx.recv() {
-                let data = msg.edits.clone();
-                queued_message = Some(msg);
-                // Send the edits to the webview
-                if let Err(e) = websocket.send(tungstenite::Message::Binary(data.into())) {
-                    tracing::error!("Error sending edits to webview: {}", e);
-                    break 'connection;
-                }
-
-                // Wait for the webview to apply the edits
-                while let Ok(ws_msg) = websocket.read() {
-                    match ws_msg {
-                        // We expect the webview to send a binary message when it has applied the edits
-                        // This is a signal that we can continue processing
-                        tungstenite::Message::Binary(_) => break,
-                        // If the websocket closes, switch back to the pending state and
-                        // re-queue the edits that haven't been acknowledged yet
-                        tungstenite::Message::Close(_) => {
+            'connection: loop {
+                let (sequence, data) = {
+                    let mut state = connection.state.lock().unwrap();
+                    loop {
+                        if state.generation != generation {
                             break 'connection;
                         }
+                        if let Some(message) = state.pending.front() {
+                            break (message.sequence, message.edits.clone());
+                        }
+                        state = connection.ready.wait(state).unwrap();
+                    }
+                };
+                let mut frame = sequence.to_le_bytes().to_vec();
+                frame.extend_from_slice(&data);
+                if websocket
+                    .send(tungstenite::Message::Binary(frame.into()))
+                    .is_err()
+                {
+                    break;
+                }
+                loop {
+                    match websocket.read() {
+                        Ok(tungstenite::Message::Binary(ack))
+                            if ack.as_ref() == sequence.to_le_bytes() =>
+                        {
+                            break;
+                        }
+                        Ok(tungstenite::Message::Close(_)) | Err(_) => break 'connection,
                         _ => {}
                     }
                 }
-
-                let msg = queued_message.take().expect("Message should be set here");
-
-                // Notify that the edits have been applied
-                _ = msg.response.send(());
-            }
-            tracing::trace!("Webview {} closed the connection", location.webview_id);
-            let mut connection = WebviewConnectionState::default();
-            if let Some(msg) = queued_message {
-                connection.add_message_pair(msg);
-            }
-            connections_
-                .write()
-                .unwrap()
-                .insert(location.webview_id, connection);
-        });
-
-        let mut connections = connections.write().unwrap();
-        match connections.remove(&location.webview_id) {
-            // If there are pending edits, send them to the new connection
-            Some(WebviewConnectionState::Pending { mut pending }) => {
-                while let Some(pair) = pending.pop_front() {
-                    _ = edits_outgoing.send(pair);
+                let mut state = connection.state.lock().unwrap();
+                if state.generation != generation {
+                    break;
                 }
+                let message = state
+                    .pending
+                    .pop_front()
+                    .expect("acknowledged edit is queued");
+                _ = message.response.send(());
             }
-
-            // If the webview was already connected, never send edits from the old connection to
-            // the new connection. This should never happen
-            Some(WebviewConnectionState::Connected { .. }) => {
-                tracing::error!(
-                    "Webview {} was already connected. Rejecting new connection.",
-                    location.webview_id
-                );
-                return;
+            let mut state = connection.state.lock().unwrap();
+            if state.generation == generation {
+                state.socket = None;
             }
-
-            None => {}
-        }
-
-        connections.insert(
-            location.webview_id,
-            WebviewConnectionState::Connected { edits_outgoing },
-        );
+            // The next connection replays the front edit with the same sequence.
+            // The webview deduplicates it if only its acknowledgement was lost.
+        });
     }
 
     pub(crate) fn create_queue(&self) -> WryQueue {
@@ -450,59 +443,49 @@ impl EditWebsocket {
     }
 
     fn send_edits(&mut self, webview: u32, edits: Vec<u8>) -> oneshot::Receiver<()> {
-        let mut connections_mut = self.connections.write().unwrap();
-        let connection = connections_mut.entry(webview).or_default();
-        connection.add_message(edits)
-    }
-}
-
-/// The state of a webview websocket connection. This may be pending while the webview is booting.
-/// If it is, we queue up edits until the webview is ready to receive them.
-enum WebviewConnectionState {
-    Pending {
-        pending: VecDeque<MsgPair>,
-    },
-    Connected {
-        edits_outgoing: std::sync::mpsc::Sender<MsgPair>,
-    },
-}
-
-impl Default for WebviewConnectionState {
-    fn default() -> Self {
-        WebviewConnectionState::Pending {
-            pending: VecDeque::new(),
+        let connection = self
+            .connections
+            .write()
+            .unwrap()
+            .entry(webview)
+            .or_default()
+            .clone();
+        let (response, receiver) = oneshot::channel();
+        {
+            let mut state = connection.state.lock().unwrap();
+            state.next_sequence += 1;
+            let sequence = state.next_sequence;
+            state.pending.push_back(MsgPair {
+                sequence,
+                edits,
+                response,
+            });
         }
+        connection.ready.notify_all();
+        receiver
     }
 }
 
-impl WebviewConnectionState {
-    /// Add a message to the active connection or queue and return a receiver that will be resolved
-    /// when the webview has applied the edits.
-    fn add_message(&mut self, edits: Vec<u8>) -> oneshot::Receiver<()> {
-        let (response_sender, response_receiver) = oneshot::channel();
-        let pair = MsgPair {
-            edits,
-            response: response_sender,
-        };
-        self.add_message_pair(pair);
-        response_receiver
-    }
+/// The outbox belongs to the webview, not to a particular TCP connection.
+/// Each binary frame starts with an eight-byte little-endian sequence number;
+/// the webview echoes that header only after applying (or deduplicating) the edit.
+/// See `NativeInterpreter.waitForRequest` for the receiving half of the protocol.
+#[derive(Default)]
+struct WebviewConnection {
+    state: Mutex<WebviewConnectionState>,
+    ready: Condvar,
+}
 
-    /// Add a message pair to the connection state. The receiver in the message pair will be resolved
-    /// when the webview has applied the edits.
-    fn add_message_pair(&mut self, pair: MsgPair) {
-        match self {
-            WebviewConnectionState::Pending { pending: queue } => {
-                queue.push_back(pair);
-            }
-            WebviewConnectionState::Connected { edits_outgoing } => {
-                _ = edits_outgoing.send(pair);
-            }
-        }
-    }
+#[derive(Default)]
+struct WebviewConnectionState {
+    pending: VecDeque<MsgPair>,
+    next_sequence: u64,
+    generation: u64,
+    socket: Option<TcpStream>,
 }
 
 struct MsgPair {
+    sequence: u64,
     edits: Vec<u8>,
     response: oneshot::Sender<()>,
 }
