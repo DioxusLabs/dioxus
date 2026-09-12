@@ -45,3 +45,6 @@ dioxus = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

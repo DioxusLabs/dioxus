@@ -382,6 +382,43 @@ shell-words = "1.1.0"
 # native
 keyboard-types = { version = "0.7", default-features = false }
 
+# cargo-semver-checks lints that are off by default. These are all "minor" (API-expanding)
+# changes: they never fail CI, but surface additions that couldn't be backported in a patch
+# release. Consumed by .github/scripts/semver-check.py; packages opt in with
+# `[package.metadata.cargo-semver-checks.lints] workspace = true`.
+[workspace.metadata.cargo-semver-checks.lints]
+auto_trait_impl_added = "warn"
+enum_must_use_removed = "warn"
+enum_no_longer_non_exhaustive = "warn"
+enum_non_exhaustive_struct_variant_field_added = "warn"
+enum_non_exhaustive_tuple_variant_field_added = "warn"
+enum_repr_int_added = "warn"
+enum_variant_no_longer_non_exhaustive = "warn"
+exhaustive_enum_added = "warn"
+exhaustive_struct_added = "warn"
+exhaustive_struct_with_doc_hidden_fields_added = "warn"
+exhaustive_struct_with_private_fields_added = "warn"
+feature_newly_enables_feature = "warn"
+function_must_use_removed = "warn"
+function_no_longer_unsafe = "warn"
+function_now_const = "warn"
+inherent_associated_pub_const_added = "warn"
+inherent_method_added = "warn"
+inherent_method_must_use_removed = "warn"
+inherent_method_no_longer_unsafe = "warn"
+inherent_method_now_const = "warn"
+non_exhaustive_enum_added = "warn"
+non_exhaustive_struct_added = "warn"
+pub_const_added = "warn"
+pub_static_added = "warn"
+repr_c_added = "warn"
+struct_must_use_removed = "warn"
+struct_no_longer_has_non_pub_fields = "warn"
+struct_no_longer_non_exhaustive = "warn"
+trait_must_use_removed = "warn"
+union_added = "warn"
+union_must_use_removed = "warn"
+
 # reduce debug symbols to line tables only - speeds up compiles and shrinks artifacts
 # backtraces still show file:line, but debugger can't inspect variables
 [profile.dev]

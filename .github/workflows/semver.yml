@@ -1,0 +1,110 @@
+# Classifies the public-API impact of a PR with cargo-semver-checks.
+#
+# Every publishable library crate is compared against main (the PR's merge-base) and
+# sorted into one of three buckets:
+#   - compatible: no public API changes
+#   - expanding:  API was added (fine, but can't be backported in a patch release)
+#   - breaking:   API was removed or changed
+#
+# Breaking crates get a second look against their last crates.io release. If main was
+# *already* incompatible with crates.io, the break is reported but allowed (main has
+# diverged, the door is already shut). If main was still compatible, this PR is the one
+# closing the door and the job fails. Add the `breaking` label to the PR to acknowledge
+# that and turn the failure into a warning.
+#
+# The report lands in the job summary and as a sticky PR comment.
+
+name: Semver
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    branches:
+      - main
+    paths:
+      - "packages/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/semver.yml"
+      - ".github/scripts/semver-check.py"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # cargo-semver-checks builds rustdoc for every crate in its own placeholder project. Pinning
+  # the target dir makes all of them (and the baseline checkout) share one dependency build.
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target
+
+jobs:
+  semver:
+    if: github.event.pull_request.draft == false
+    name: "Semver | Classify API changes"
+    runs-on: warp-ubuntu-latest-x64-8x
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout baseline (main)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.94.0
+
+      - uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-semver-checks
+        run: cargo binstall cargo-semver-checks -y --force --locked
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-provider: "warpbuild"
+          workspaces: ". -> target"
+
+      - name: Check semver
+        id: check
+        run: |
+          python3 .github/scripts/semver-check.py \
+            --baseline-root "$GITHUB_WORKSPACE/baseline" \
+            --json semver-report.json \
+            ${{ contains(github.event.pull_request.labels.*.name, 'breaking') && '--allow-breaking' || '' }}
+
+      - name: Comment on PR
+        if: always() && steps.check.outcome != 'skipped' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- semver-report -->';
+            let body;
+            try {
+              body = JSON.parse(fs.readFileSync('semver-report.json', 'utf8')).report;
+            } catch {
+              body = '## Semver report\n\ncargo-semver-checks did not produce a report; see the job log.';
+            }
+            body = `${marker}\n${body}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

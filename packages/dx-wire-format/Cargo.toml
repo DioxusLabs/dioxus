@@ -17,3 +17,6 @@ serde_json = { workspace = true }
 cargo_metadata = { workspace = true }
 manganis-core = { workspace = true }
 subsecond-types = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
