@@ -301,8 +301,13 @@ async fn test_harnesses() {
                 assert_eq!(t.client.bundle, BundleFormat::host());
                 assert_eq!(t.client.triple, Triple::host());
                 assert!(t.server.is_none());
+            })
+            .asrt(r#"dx test"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::host());
+                assert!(t.server.is_none());
 
-                // The rustc-wrapper scope dir must differ across build kinds so check
+                // The rustc-wrapper scope dir must differ across build kinds so check/test
                 // captures never overwrite the fat/base captures used for hotpatch replay.
                 let mut req = t.client.clone();
                 let build = req
@@ -312,7 +317,16 @@ async fn test_harnesses() {
                 let check = req
                     .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
                     .unwrap();
+                req.kind = crate::BuildKind::Test;
+                let test = req
+                    .rustc_wrapper_scope_dir_name(&crate::BuildMode::Base)
+                    .unwrap();
                 assert_ne!(build, check);
+                assert_ne!(build, test);
+                assert_ne!(check, test);
+            })
+            .asrt(r#"dx test --lib --exact foo --no-fail-fast -j 4"#, |targets| async move {
+                assert!(targets.is_ok());
             }),
         TestHarnessBuilder::new("harness-web-tests")
             .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
@@ -557,7 +571,8 @@ fn main() {
                 let build_args = match args.action {
                     Commands::Build(build_args) => build_args,
                     Commands::Check(check) => check.build_args,
-                    _ => panic!("Expected build/check command"),
+                    Commands::Test(test) => test.build_args,
+                    _ => panic!("Expected build/check/test command"),
                 };
 
                 futures.push(async move {

@@ -282,7 +282,6 @@ pub(crate) enum BuildKind {
     #[default]
     Build,
     Check,
-    #[allow(dead_code)]
     Test,
 }
 
@@ -1160,12 +1159,13 @@ impl BuildRequest {
                         target_name,
                         artifact.fresh,
                     );
-                    // Only record the artifact for the tip target - other units must not
-                    // overwrite it.
+                    // Only record the artifact for the tip target - other units (like bins built
+                    // as a side effect of `--test NAME`) must not overwrite it.
                     let tip_kind = match self.executable_type() {
                         TargetKind::Bin => Some(cargo_metadata::TargetKind::Bin),
                         TargetKind::Lib => Some(cargo_metadata::TargetKind::Lib),
                         TargetKind::Example => Some(cargo_metadata::TargetKind::Example),
+                        TargetKind::Test => Some(cargo_metadata::TargetKind::Test),
                         _ => None,
                     };
                     if artifact.target.name == self.executable_name()
@@ -1175,12 +1175,25 @@ impl BuildRequest {
                             Some(exe) => output_location = Some(exe.into()),
                             None => {
                                 if let Some(rmeta) = artifact.filenames.first() {
-                                    // `cargo check` emits no executable - the primary output is
-                                    // `deps/libX-<hash>.rmeta` (even for bins). The dep-info
-                                    // lives at the sibling `deps/X-<hash>.d`, so record the
-                                    // stripped path and let `with_extension("d")` find it.
-                                    if self.kind == BuildKind::Check {
-                                        output_location = Some(deps_sibling_exe_from_rmeta(rmeta));
+                                    match self.kind {
+                                        // `cargo check` emits no executable - the primary output is
+                                        // `deps/libX-<hash>.rmeta` (even for bins). The dep-info
+                                        // lives at the sibling `deps/X-<hash>.d`, so record the
+                                        // stripped path and let `with_extension("d")` find it.
+                                        BuildKind::Check => {
+                                            output_location =
+                                                Some(deps_sibling_exe_from_rmeta(rmeta));
+                                        }
+                                        // `cargo rustc --lib -- --test` emits rmeta as the primary
+                                        // output; the harness binary is the sibling without the
+                                        // `lib` prefix and extension.
+                                        BuildKind::Test
+                                            if self.executable_type() == TargetKind::Lib =>
+                                        {
+                                            output_location =
+                                                Some(deps_sibling_exe_from_rmeta(rmeta));
+                                        }
+                                        _ => {}
                                     }
                                 }
                             }
@@ -1791,6 +1804,10 @@ impl BuildRequest {
                 cargo_args.push("--example".to_string());
                 cargo_args.push(self.executable_name().to_string());
             }
+            TargetKind::Test => {
+                cargo_args.push("--test".to_string());
+                cargo_args.push(self.executable_name().to_string());
+            }
             _ => {}
         }
 
@@ -1817,6 +1834,14 @@ impl BuildRequest {
 
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
+
+        // `-- --test` turns a bin/lib rustc invocation into a libtest harness build. Test targets
+        // are already in test mode, so this only applies to bin/lib tips.
+        if self.kind == BuildKind::Test
+            && matches!(self.executable_type(), TargetKind::Bin | TargetKind::Lib)
+        {
+            cargo_args.push("--test".to_string());
+        }
 
         // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
         if self.kind == BuildKind::Build
@@ -3256,8 +3281,8 @@ impl BuildRequest {
 }
 
 /// Derive the sibling path cargo/rustc actually writes next to a `deps/libX-<hash>.rmeta`
-/// primary output: `deps/X-<hash>` (`.exe` on Windows). For `cargo check` that's the stem
-/// the `.d` dep-info is written under.
+/// primary output: `deps/X-<hash>` (`.exe` on Windows). For `--lib -- --test` that's the
+/// libtest harness binary; for `cargo check` it's the stem the `.d` dep-info is written under.
 fn deps_sibling_exe_from_rmeta(rmeta: &cargo_metadata::camino::Utf8Path) -> PathBuf {
     let stem = rmeta.file_stem().unwrap_or_default();
     let stem = stem.strip_prefix("lib").unwrap_or(stem);
