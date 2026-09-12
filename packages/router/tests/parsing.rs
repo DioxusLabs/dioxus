@@ -221,3 +221,80 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+#[test]
+fn empty_query_serializes_without_question_mark() {
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct SearchParams {
+        search: Option<String>,
+    }
+
+    impl From<&str> for SearchParams {
+        fn from(query: &str) -> Self {
+            let search = query
+                .split('&')
+                .filter_map(|segment| segment.split_once('='))
+                .find(|(key, _)| *key == "search")
+                .map(|(_, value)| value.to_string())
+                .filter(|value| !value.is_empty());
+            Self { search }
+        }
+    }
+
+    impl Display for SearchParams {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match &self.search {
+                Some(search) => write!(f, "search={}", search),
+                None => Ok(()),
+            }
+        }
+    }
+
+    #[component]
+    fn Spread(params: SearchParams) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Optional(query: Option<u64>) -> Element {
+        unimplemented!()
+    }
+
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/spread?:..params")]
+        Spread { params: SearchParams },
+        #[route("/optional?:query")]
+        Optional { query: Option<u64> },
+    }
+
+    // A spread query whose Display renders empty leaves no `?` behind.
+    let spread_empty = Route::Spread {
+        params: SearchParams::default(),
+    };
+    assert_eq!(spread_empty.to_string(), "/spread");
+    assert_eq!(Route::from_str("/spread").unwrap(), spread_empty);
+
+    let spread_filled = Route::Spread {
+        params: SearchParams {
+            search: Some("zone".to_string()),
+        },
+    };
+    assert_eq!(spread_filled.to_string(), "/spread?search=zone");
+    assert_eq!(
+        Route::from_str(&spread_filled.to_string()).unwrap(),
+        spread_filled
+    );
+
+    // A named query whose only argument is None leaves no `?` behind either.
+    let optional_none = Route::Optional { query: None };
+    assert_eq!(optional_none.to_string(), "/optional");
+    assert_eq!(Route::from_str("/optional").unwrap(), optional_none);
+
+    let optional_some = Route::Optional { query: Some(5) };
+    assert_eq!(optional_some.to_string(), "/optional?query=5");
+    assert_eq!(
+        Route::from_str(&optional_some.to_string()).unwrap(),
+        optional_some
+    );
+}
