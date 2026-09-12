@@ -42,6 +42,32 @@ where
     }
 }
 
+/// A dynamic node slot whose value is pushed into the [`DynamicValues`] up front rather than
+/// carried through the typed view.
+///
+/// `rsx!` lowers every dynamic node to this: it evaluates the node values in template order into
+/// the [`DynamicValues`] before building the view, so the view itself only carries dynamic
+/// attributes and stays a zero-sized type for the common all-static-attribute body.
+#[derive(Clone, Copy)]
+pub struct DynamicNodeSlot;
+
+impl ViewTemplate for DynamicNodeSlot {
+    const TEMPLATE_TREE: &'static TemplateRawTree = &TemplateRawTree::DynamicNode;
+    const HAS_DYNAMIC: bool = false;
+}
+
+impl View for DynamicNodeSlot {}
+
+/// Push a dynamic node value for the next [`DynamicNodeSlot`] in template order.
+#[inline]
+#[doc(hidden)]
+pub fn push_dyn_node<N, Marker>(dynamic: &mut DynamicValues, node: N)
+where
+    N: IntoDynNode<Marker>,
+{
+    dynamic.push_node(node.into_dyn_node());
+}
+
 /// Marker for child values that are already typed views.
 #[doc(hidden)]
 pub struct ViewChildMarker;

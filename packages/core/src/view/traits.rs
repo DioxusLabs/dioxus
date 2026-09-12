@@ -13,7 +13,7 @@ pub trait ViewTemplate {
     /// The static tree for this view type.
     const TEMPLATE_TREE: &'static TemplateRawTree;
 
-    /// Whether this view contributes any runtime dynamic nodes or attributes.
+    /// Whether [`View::push`] on this view contributes any runtime dynamic nodes or attributes.
     ///
     /// Composite views only call [`View::push`] on parts where this is `true`, so fully static
     /// subtrees never instantiate `push` at all. Defaults to `true`, which is always sound.
@@ -104,12 +104,58 @@ impl<V: View> ViewExt for V {
 /// Convert a view into a [`VNode`] using a prepared template.
 #[inline]
 fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
-    let mut dynamic = DynamicValues::new();
-    view.push(&mut dynamic);
+    into_vnode_with_template_and_values(view, DynamicValues::new(), template)
+}
+
+/// Convert a view into a [`VNode`] using a prepared template, pushing its runtime values onto
+/// `dynamic` (which already holds any values the caller filled in ahead of the view).
+#[inline]
+fn into_vnode_with_template_and_values<V: View>(
+    view: V,
+    mut dynamic: DynamicValues,
+    template: &Template,
+) -> VNode {
+    if V::HAS_DYNAMIC {
+        view.push(&mut dynamic);
+    }
     VNode::new(*template, dynamic)
 }
 
-/// Convert a view into a [`VNode`] using a debug-only lazy template cached per call site.
+/// Runtime values for an `rsx!` body, sized for its dynamic node and attribute counts.
+///
+/// `rsx!` pushes the body's dynamic node values into this (see
+/// [`push_dyn_node`](super::push_dyn_node)) before building the view, then hands both to
+/// [`vnode_from_cached_template`] / [`into_vnode_with_capacity`].
+#[doc(hidden)]
+#[inline]
+pub fn dynamic_values(dynamic_nodes: usize, dynamic_attributes: usize) -> DynamicValues {
+    DynamicValues::with_capacity(dynamic_nodes, dynamic_attributes)
+}
+
+/// The static template tree of a view value's type.
+///
+/// This and [`push_view`] are the only per-site generic code the debug `rsx!` expansion
+/// instantiates; everything else runs through the non-generic [`vnode_from_cached_template`].
+#[doc(hidden)]
+#[inline]
+pub fn template_tree<V: ViewTemplate>(_: &V) -> &'static TemplateRawTree {
+    V::TEMPLATE_TREE
+}
+
+/// Push a view's runtime values (dynamic attributes and key) onto `dynamic`.
+///
+/// Dynamic nodes are pushed ahead of the view by `rsx!` (see
+/// [`push_dyn_node`](super::push_dyn_node)) and never live in it, so for the common body with
+/// only static attributes this is a no-op on a zero-sized view.
+#[doc(hidden)]
+#[inline]
+pub fn push_view<V: View>(view: V, dynamic: &mut DynamicValues) {
+    if V::HAS_DYNAMIC {
+        view.push(dynamic);
+    }
+}
+
+/// Build a [`VNode`] from a debug-only lazy template cached per call site.
 ///
 /// In dev builds the optimized template is lowered once at runtime from the view's
 /// [`ViewTemplate::TEMPLATE_TREE`] (skipping the per-`rsx!`-site const evaluation that dominates
@@ -117,23 +163,14 @@ fn into_vnode_with_template<V: View>(view: V, template: &Template) -> VNode {
 /// its const template instead.
 #[cfg(debug_assertions)]
 #[doc(hidden)]
-#[inline]
-pub fn into_vnode_cached<V: View>(view: V, cache: &std::sync::OnceLock<Template>) -> VNode {
-    let template = cached_runtime_template(cache, V::TEMPLATE_TREE);
-    let mut dynamic = DynamicValues::new();
-    if V::HAS_DYNAMIC {
-        view.push(&mut dynamic);
-    }
-    VNode::new(*template, dynamic)
-}
-
-#[cfg(debug_assertions)]
 #[inline(never)]
-fn cached_runtime_template<'a>(
-    cache: &'a std::sync::OnceLock<Template>,
-    tree: &'static dioxus_core_template::TemplateRawTree,
-) -> &'a Template {
-    cache.get_or_init(|| dioxus_core_template::build_runtime_template(tree))
+pub fn vnode_from_cached_template(
+    cache: &std::sync::OnceLock<Template>,
+    tree: &'static TemplateRawTree,
+    dynamic: DynamicValues,
+) -> VNode {
+    let template = cache.get_or_init(|| dioxus_core_template::build_runtime_template(tree));
+    VNode::new(*template, dynamic)
 }
 
 /// Convert a view into a [`VNode`] using template capacities resolved at the call site.
@@ -144,9 +181,11 @@ pub fn into_vnode_with_capacity<
     V: View,
 >(
     view: V,
+    dynamic: DynamicValues,
 ) -> VNode {
-    into_vnode_with_template(
+    into_vnode_with_template_and_values(
         view,
+        dynamic,
         StaticViewTemplate::<V, OPS_CAP, STRING_CAP, DYNAMIC_CAP>::TEMPLATE,
     )
 }

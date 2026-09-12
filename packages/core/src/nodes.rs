@@ -56,10 +56,15 @@ impl DynamicValues {
 
     /// Create an empty dynamic node/attribute payload.
     pub(crate) fn new() -> Self {
+        Self::with_capacity(0, 0)
+    }
+
+    /// Create an empty dynamic node/attribute payload with room for the given slot counts.
+    pub(crate) fn with_capacity(dynamic_nodes: usize, dynamic_attrs: usize) -> Self {
         Self {
             key: None,
-            dynamic_nodes: Vec::new(),
-            dynamic_attrs: Vec::new(),
+            dynamic_nodes: Vec::with_capacity(dynamic_nodes),
+            dynamic_attrs: Vec::with_capacity(dynamic_attrs),
         }
     }
 

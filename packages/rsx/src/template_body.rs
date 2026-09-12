@@ -140,22 +140,38 @@ impl ToTokens for TemplateBody {
         let pieces = ViewBuilderPieces::from_body(&node);
         let view_definitions = pieces.definitions.iter();
         let raw_view_expr = &pieces.view;
-        // Dynamic node values are bound to locals before the builder chain so that any borrows they
-        // take are released before the chain moves captured values into event-handler closures. This
-        // intentionally matches the 0.6 dynamic-node-before-attribute evaluation order instead of
-        // the more straightforward typed-builder evaluation order. The key is bound first because it
-        // may borrow a value that one of those dynamic nodes moves.
-        let node_hoists = &pieces.node_hoists;
+        // Dynamic node values are pushed into `__dynamic` (in template order) before the builder
+        // chain so that any borrows they take are released before the chain moves captured values
+        // into event-handler closures. This intentionally matches the 0.6 dynamic-node-before-
+        // attribute evaluation order instead of the more straightforward typed-builder evaluation
+        // order. It also keeps node values out of the typed view, which then only carries dynamic
+        // attributes and is zero-sized for most bodies. The key is bound first because it may
+        // borrow a value that one of those dynamic nodes moves.
+        let node_pushes = &pieces.node_pushes;
+        let node_count = pieces.dynamic_node_count;
+        let attr_count = pieces.dynamic_attr_count;
+        let dynamic_values = quote! { dioxus_core::view::dynamic_values(#node_count, #attr_count) };
+        // Only the debug path mutates `__dynamic` after the node pushes (`push_view`).
+        let dynamic_binding = if node_pushes.is_empty() {
+            quote! {
+                #[cfg(debug_assertions)]
+                let mut __dynamic = #dynamic_values;
+                #[cfg(not(debug_assertions))]
+                let __dynamic = #dynamic_values;
+            }
+        } else {
+            quote! { let mut __dynamic = #dynamic_values; }
+        };
         let view_expr = match node.implicit_key() {
             Some(key) => quote! {{
                 use dioxus_core::view::ViewKeyExt as _;
                 // The key needs to be created before the dynamic nodes as it might depend on a borrowed value which gets moved into the dynamic nodes.
                 let __key = Some(#key.to_string());
-                #(#node_hoists)*
+                #(#node_pushes)*
                 #raw_view_expr.key(__key)
             }},
             None => quote! {{
-                #(#node_hoists)*
+                #(#node_pushes)*
                 #raw_view_expr
             }},
         };
@@ -168,9 +184,8 @@ impl ToTokens for TemplateBody {
 
         let diagnostics = &node.diagnostics;
         let index = node.template_idx.get();
-        // The hot-reload map is only referenced inside the `#[cfg(debug_assertions)]` block. The
-        // base template is the const `&'static Template` built by the shared typed view expansion.
-        let hot_reload_mapping = pieces.hot_reload_template_tokens(quote! { *__vnode.template() });
+        // Only referenced inside the `#[cfg(debug_assertions)]` block.
+        let hot_reload_meta = pieces.hot_reload_meta_tokens();
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -180,43 +195,30 @@ impl ToTokens for TemplateBody {
 
                 #(#view_definitions)*
 
+                // The one static per site: its hot-reload slot (keyed by location so it stays
+                // stable across renders), the lazily lowered runtime template, and the
+                // original-template metadata hot reload falls back to.
                 #[cfg(debug_assertions)]
-                let __hot_reload_template_read = {
-                    // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable. The file path is normalized to
-                    // forward slashes lazily inside `Global`.
-                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::HotReloadTemplateSignal =
-                        dioxus_signals::GlobalSignal::with_location(
-                            || None,
-                            file!(),
-                            line!(),
-                            column!(),
-                            #index
-                        );
-
-                    dioxus_signals::read_hot_reload_template(&__HOT_RELOAD_TEMPLATE)
-                };
-
-                // The hot-reloaded template, if this site has one. Borrows the read guard
-                // above, which stays alive until `render_with` at the end of this block.
-                #[cfg(debug_assertions)]
-                let __hot_reload_template =
-                    dioxus_signals::hot_reload_template(&__hot_reload_template_read);
-
-                // The literal pool and hot-reload read must be in scope before the view is built:
-                // component literal props pull their hot-reloaded value from the pool while the view
-                // expression evaluates.
-                #[cfg(debug_assertions)]
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                    vec![ #( #dynamic_text ),* ],
+                static __RSX_SITE: dioxus_signals::RsxSite = dioxus_signals::RsxSite::new(
+                    file!(),
+                    line!(),
+                    column!(),
+                    #index,
+                    #hot_reload_meta,
                 );
 
-                // Build the vnode from the typed view. In release the optimized template is the
-                // const `&'static Template` built through the type system (stable across hot reloads
-                // with no cache). In debug builds that per-site const evaluation dominates compile
-                // time, so the template is lowered once at runtime and cached per site instead,
-                // keeping dev rebuilds fast while producing the identical template.
+                // The site's hot-reload read and literal pool must be in scope before the view is
+                // built: component literal props pull their hot-reloaded value from the site while
+                // the view expression evaluates. The read guard stays alive until `finish`.
+                #[cfg(debug_assertions)]
+                let __hot_reload_site =
+                    dioxus_signals::HotReloadSite::new(&__RSX_SITE, vec![ #( #dynamic_text ),* ]);
+
+                // In release the optimized template is the const `&'static Template` built through
+                // the type system. In debug builds that per-site const evaluation dominates compile
+                // time, so the identical template is lowered once at runtime and cached per site.
                 let __vnode = {
+                    #dynamic_binding
                     let __view = #view_expr;
 
                     #[cfg(not(debug_assertions))]
@@ -226,14 +228,18 @@ impl ToTokens for TemplateBody {
                             #template_string_cap,
                             #template_dynamic_cap,
                             _,
-                        >(__view)
+                        >(__view, __dynamic)
                     }
 
                     #[cfg(debug_assertions)]
                     {
-                        static __RUNTIME_TEMPLATE: ::std::sync::OnceLock<dioxus_core::Template> =
-                            ::std::sync::OnceLock::new();
-                        dioxus_core::view::into_vnode_cached(__view, &__RUNTIME_TEMPLATE)
+                        let __tree = dioxus_core::view::template_tree(&__view);
+                        dioxus_core::view::push_view(__view, &mut __dynamic);
+                        dioxus_core::view::vnode_from_cached_template(
+                            &__RSX_SITE.template,
+                            __tree,
+                            __dynamic,
+                        )
                     }
                 };
 
@@ -243,19 +249,8 @@ impl ToTokens for TemplateBody {
                 }
 
                 #[cfg(debug_assertions)]
-                #[allow(clippy::let_and_return)]
                 {
-                    let __original_template = #hot_reload_mapping;
-                    // If the template has not been hot reloaded, we always use the original template
-                    // Templates nested within macros may be merged because they have the same file-line-column-index
-                    // They cannot be hot reloaded, so this prevents incorrect rendering
-                    let __template_read = __hot_reload_template.unwrap_or(&__original_template);
-
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
-                        &__vnode,
-                        __dynamic_literal_pool
-                    );
-                    __dynamic_value_pool.render_with(__template_read)
+                    __hot_reload_site.finish(__vnode)
                 }
             })
         });
@@ -265,7 +260,7 @@ impl ToTokens for TemplateBody {
 pub(crate) struct ViewBuilderPieces {
     definitions: Vec<TokenStream2>,
     view: TokenStream2,
-    node_hoists: Vec<TokenStream2>,
+    node_pushes: Vec<TokenStream2>,
     template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
@@ -295,7 +290,7 @@ impl ViewBuilderPieces {
             groups.into_iter().next().unwrap()
         } else {
             let groups = groups.iter();
-            quote! { dioxus_core::view::fragment() #(.child(#groups))* }
+            quote! { dioxus_core::view::fragment() #(.child_view(#groups))* }
         };
         builder.finish(view, template_stats)
     }
@@ -308,11 +303,13 @@ impl ViewBuilderPieces {
         &self.view
     }
 
-    /// Emit the hot-reload template constructor from the tables gathered while building the view.
+    /// Emit the site's original-template metadata (a `HotReloadSiteMeta` initializer) from the
+    /// tables gathered while building the view. Everything in it is a constant, so the site stores
+    /// it in a `static` rather than rebuilding it on every render.
     ///
     /// Callers must only reference the result inside a `#[cfg(debug_assertions)]` block so release
     /// expansions contain no hot-reload tokens.
-    fn hot_reload_template_tokens(&self, template: TokenStream2) -> TokenStream2 {
+    fn hot_reload_meta_tokens(&self) -> TokenStream2 {
         let key = self
             .hot_reload_key
             .as_ref()
@@ -325,13 +322,12 @@ impl ViewBuilderPieces {
         let component_values = self.component_value_tokens.iter();
 
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::from_dynamic_counts(
-                #key,
-                #node_count,
-                #attr_count,
-                vec![ #( #component_values ),* ],
-                #template,
-            )
+            dioxus_core::internal::HotReloadSiteMeta {
+                key: #key,
+                dynamic_nodes: #node_count,
+                dynamic_attributes: #attr_count,
+                component_values: &[ #( #component_values ),* ],
+            }
         }
     }
 }
@@ -344,7 +340,7 @@ enum SiblingContext {
 
 struct ViewBuilder {
     definitions: Vec<TokenStream2>,
-    node_hoists: Vec<TokenStream2>,
+    node_pushes: Vec<TokenStream2>,
     dynamic_node_count: usize,
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
@@ -361,7 +357,7 @@ impl ViewBuilder {
     fn new() -> Self {
         Self {
             definitions: Vec::new(),
-            node_hoists: Vec::new(),
+            node_pushes: Vec::new(),
             dynamic_node_count: 0,
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
@@ -390,7 +386,7 @@ impl ViewBuilder {
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
-            node_hoists: self.node_hoists,
+            node_pushes: self.node_pushes,
             template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
@@ -472,7 +468,7 @@ impl ViewBuilder {
             let groups = group_sibling_views(children);
             let (first, rest) = groups.split_first().expect("at least one group");
             let rest = rest.iter();
-            quote! { #tag #attrs.child(#first) #(.child(#rest))* }
+            quote! { #tag #attrs.child_view(#first) #(.child_view(#rest))* }
         };
 
         if emit_diagnostics {
@@ -509,16 +505,12 @@ impl ViewBuilder {
     }
 
     fn dynamic_node(&mut self, tokens: TokenStream2) -> TokenStream2 {
-        let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
-        // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
-        // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
-        // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
-        // captured values into event-handler closures. The `IntoDynNode` marker is still inferred
-        // from the bound value's type.
-        let node = format_ident!("__dyn_node_{id}");
-        self.node_hoists.push(quote! { let #node = #tokens; });
-        quote! { dioxus_core::view::dynamic_node_builder(#node) }
+        // The `IntoDynNode` marker is inferred from the value's type.
+        self.node_pushes.push(quote! {
+            dioxus_core::view::push_dyn_node(&mut __dynamic, #tokens);
+        });
+        quote! { dioxus_core::view::DynamicNodeSlot }
     }
 
     fn dynamic_attr(&mut self, attr: &Attribute) -> TokenStream2 {
@@ -567,16 +559,16 @@ impl ViewBuilder {
             let hot_literal = match literal {
                 HotLiteral::Fmted(fmted) => {
                     let fmted = self.allocate_formatted(fmted);
-                    quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#fmted) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Fmted(#fmted) }
                 }
                 HotLiteral::Float(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Float(#value as _) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Float(#value as _) }
                 }
                 HotLiteral::Int(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Int(#value as _) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Int(#value as _) }
                 }
                 HotLiteral::Bool(value) => {
-                    quote! { dioxus_core::internal::HotReloadLiteral::Bool(#value) }
+                    quote! { dioxus_core::internal::HotReloadLiteralMeta::Bool(#value) }
                 }
             };
 

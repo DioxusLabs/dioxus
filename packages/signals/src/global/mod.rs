@@ -345,6 +345,87 @@ pub fn hot_reload_template(
     read.as_ref().and_then(|read| read.as_ref())
 }
 
+/// The debug-build `static` state of one `rsx!` site: its hot-reload slot, the lazily lowered
+/// runtime [`Template`](dioxus_core::Template), and the original-template metadata hot reload
+/// falls back to. `rsx!` emits exactly one of these per site so a site costs a single item.
+#[doc(hidden)]
+pub struct RsxSite {
+    /// The hot-reload template slot every render of the site reads.
+    pub signal: HotReloadTemplateSignal,
+    /// The runtime template, lowered from the view type on first render.
+    pub template: std::sync::OnceLock<dioxus_core::Template>,
+    /// The site's original-template metadata.
+    pub meta: dioxus_core::internal::HotReloadSiteMeta,
+}
+
+impl RsxSite {
+    /// Create the site state for the `rsx!` call at `file:line:column`, template `index`.
+    #[doc(hidden)]
+    pub const fn new(
+        file: &'static str,
+        line: u32,
+        column: u32,
+        index: usize,
+        meta: dioxus_core::internal::HotReloadSiteMeta,
+    ) -> Self {
+        Self {
+            signal: GlobalSignal::with_location(no_hot_reload_template, file, line, column, index),
+            template: std::sync::OnceLock::new(),
+            meta,
+        }
+    }
+}
+
+/// Initial value of every [`RsxSite`] hot-reload slot: one shared function rather than a closure
+/// per site.
+fn no_hot_reload_template() -> Option<dioxus_core::internal::HotReloadedTemplate> {
+    None
+}
+
+/// The debug-build hot-reload state of one `rsx!` site for one render: the site's hot-reload
+/// slot read plus the dynamic text pool its literals are rendered from.
+///
+/// `rsx!` creates this before evaluating the view (component literal props read through it) and
+/// hands the finished [`VNode`](dioxus_core::VNode) back to [`HotReloadSite::finish`].
+#[doc(hidden)]
+pub struct HotReloadSite {
+    site: &'static RsxSite,
+    read: Option<HotReloadTemplateRead>,
+    literal_pool: dioxus_core::internal::DynamicLiteralPool,
+}
+
+impl HotReloadSite {
+    /// Read the site's hot-reload slot and build its literal pool from `dynamic_text`.
+    #[doc(hidden)]
+    pub fn new(site: &'static RsxSite, dynamic_text: Vec<String>) -> Self {
+        Self {
+            site,
+            read: read_hot_reload_template(&site.signal),
+            literal_pool: dioxus_core::internal::DynamicLiteralPool::new(dynamic_text),
+        }
+    }
+
+    /// Get component literal `id`, falling back to `value` when the site has not been hot reloaded.
+    #[doc(hidden)]
+    pub fn component_property_or<T: 'static>(&self, id: usize, value: T) -> T {
+        match hot_reload_template(&self.read) {
+            Some(template) => self.literal_pool.component_property(id, template, value),
+            None => value,
+        }
+    }
+
+    /// Render `vnode` through the hot-reload pools, falling back to the site's original template.
+    #[doc(hidden)]
+    pub fn finish(self, vnode: dioxus_core::VNode) -> dioxus_core::VNode {
+        dioxus_core::internal::render_hot_reloaded(
+            vnode,
+            hot_reload_template(&self.read),
+            self.literal_pool,
+            &self.site.meta,
+        )
+    }
+}
+
 /// Get the global context for signals
 pub fn get_global_context() -> GlobalLazyContext {
     let rt = Runtime::current();

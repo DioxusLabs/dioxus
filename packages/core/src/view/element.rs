@@ -63,6 +63,23 @@ impl<Tag, Attributes, Children> ElementBuilder<Tag, Attributes, Children> {
             _tag: PhantomData,
         }
     }
+
+    /// Append one child that is already a typed view.
+    ///
+    /// `rsx!` uses this instead of [`Self::child`]: its children are always views, so the
+    /// [`IntoViewChild`] marker inference (and its per-call-site instantiation) is skipped.
+    #[inline]
+    #[doc(hidden)]
+    pub fn child_view<Child: View>(
+        self,
+        child: Child,
+    ) -> ElementBuilder<Tag, Attributes, (Children, Child)> {
+        ElementBuilder {
+            attrs: self.attrs,
+            children: (self.children, child),
+            _tag: PhantomData,
+        }
+    }
 }
 
 impl<Tag: ElementTag, Attributes: ViewTemplate, Children: ViewTemplate> ViewTemplate

@@ -39,6 +39,16 @@ impl<Children> FragmentBuilder<Children> {
             children: (self.children, child.into_child()),
         }
     }
+
+    /// Append one child that is already a typed view (see
+    /// [`ElementBuilder::child_view`](super::ElementBuilder::child_view)).
+    #[inline]
+    #[doc(hidden)]
+    pub fn child_view<Child: View>(self, child: Child) -> FragmentBuilder<(Children, Child)> {
+        FragmentBuilder {
+            children: (self.children, child),
+        }
+    }
 }
 
 impl<Children: ViewTemplate> ViewTemplate for FragmentBuilder<Children> {

@@ -63,8 +63,9 @@ mod hotreload_utils;
 pub mod internal {
     pub use crate::hotreload_utils::{
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
-        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
-        HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute, TemplateGlobalKey,
+        HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral, HotReloadLiteralMeta,
+        HotReloadSiteMeta, HotReloadTemplateWithLocation, HotReloadedTemplate, NamedAttribute,
+        TemplateGlobalKey, render_hot_reloaded,
     };
 
     pub use anyhow::__anyhow;

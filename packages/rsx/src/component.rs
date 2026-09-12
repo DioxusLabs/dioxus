@@ -296,7 +296,7 @@ impl Component {
                     .unwrap_or(usize::MAX);
                 dynamic_literal_index += 1;
                 let debug_value = quote! {
-                    __dynamic_literal_pool.component_property_or(#idx, __hot_reload_template, #literal)
+                    __hot_reload_site.component_property_or(#idx, #literal)
                 };
                 quote! {
                     {
