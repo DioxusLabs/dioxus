@@ -149,7 +149,8 @@ impl BuildRequest {
         // Replay the rustcs for all modified workspace crates. This is not the final tip binary.
         // Note that the final tip might include itself as a lib (lib.rs + main.rs) which gets covered here.
         ctx.profile_phase("Workspace hotpatch replay");
-        let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
+        let replayed_crates =
+            self.workspace_hotpatch_replay_order(modified_crates, workspace_rustc_args)?;
         tracing::debug!("replaying crates: {replayed_crates:?}");
         for crate_name in &replayed_crates {
             let rustc_args = self
@@ -684,20 +685,43 @@ impl BuildRequest {
     ///
     /// The caller (builder) already guarantees that every crate in `modified_crates`
     /// transitively reaches the tip. This function excludes the tip crate itself — it
-    /// gets compiled separately via `cargo_build` after the replay. The remaining lib
-    /// crates are ordered so dependencies compile before dependents (Kahn's algorithm).
-    /// Ties are broken lexicographically for determinism.
+    /// gets compiled separately via `cargo_build` after the replay — UNLESS the tip
+    /// package also has a lib target, see below. The remaining lib crates are ordered so
+    /// dependencies compile before dependents (Kahn's algorithm). Ties are broken
+    /// lexicographically for determinism.
     fn workspace_hotpatch_replay_order(
         &self,
         modified_crates: &HashSet<String>,
+        workspace_rustc_args: &WorkspaceRustcArgs,
     ) -> Result<Vec<String>> {
         // Exclude the tip crate — it's compiled separately via cargo_build after replay.
         // Modified crates are tracked by *package* name, which can differ from the bin
         // target name (`tip_crate_name()`), e.g. package `browser` with `[[bin]] name = "blitz"`.
         let tip = self.tip_package_name();
+
+        // ...except when the tip PACKAGE ships a lib target as well as its bin
+        // (`[lib]` + `[[bin]]` in one Cargo.toml, with `main.rs` a thin shell over
+        // `lib.rs`). `cargo_build` only recompiles the bin, so for such a package the
+        // exclusion means an edit to lib code is replayed by nobody: the replay set
+        // comes back empty, `workspace_hotpatch_link_rlibs` therefore contributes no
+        // rlibs, and the patch is linked from the bin's unchanged objects alone. The
+        // result is an EMPTY patch that reports success — the CLI logs a hotpatch, the
+        // app dlopens it, and none of the edited code is in it.
+        //
+        // The tip's lib is a normal replay target: its captured rustc args are keyed
+        // `{tip}.lib` (which `workspace_hotpatch_replay_args` already prefers over
+        // `{tip}.bin`), and nothing in the workspace depends on the tip, so the topo
+        // sort below simply orders it after whatever it depends on.
+        //
+        // Gate on the captured args rather than on the package manifest so the key we
+        // check is exactly the key the replay and the rlib lookup will ask for.
+        let tip_has_lib = workspace_rustc_args
+            .rustc_args
+            .contains_key(&format!("{tip}.lib"));
+
         let crates: HashSet<&String> = modified_crates
             .iter()
-            .filter(|name| **name != tip)
+            .filter(|name| tip_has_lib || **name != tip)
             .collect();
 
         // Build the subgraph: edge A→B means "A must compile before B".
