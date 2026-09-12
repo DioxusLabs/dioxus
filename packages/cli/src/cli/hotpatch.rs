@@ -79,6 +79,7 @@ impl HotpatchTip {
                 args: rustc_args,
                 envs: rustc_envs,
                 cwd,
+                strip: None,
             },
         );
 
