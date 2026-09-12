@@ -33,7 +33,7 @@ impl PartialEq for LaunchedRootProps {
 
 #[allow(non_snake_case)]
 fn LaunchedRoot(props: LaunchedRootProps) -> Element {
-    (props.root)()
+    props.root.rebuild(())
 }
 
 #[allow(non_snake_case)]
