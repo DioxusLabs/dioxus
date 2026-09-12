@@ -146,6 +146,8 @@ impl AssetOptionsBuilder<JsAssetOptions> {
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Js(self.variant),
+            fetch_priority: self.fetch_priority,
+            preload_order: self.preload_order,
         }
     }
 }
