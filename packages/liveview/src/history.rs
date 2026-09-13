@@ -214,7 +214,7 @@ impl LiveviewHistory {
                     let init_eval = create_eval(
                         r#"
                         return [
-                          document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                          document.location.pathname + document.location.search + document.location.hash,
                           history.state,
                           JSON.parse(sessionStorage.getItem("liveview")),
                           history.length,
@@ -243,7 +243,7 @@ impl LiveviewHistory {
 
                         window.addEventListener("popstate", (event) => {{
                           dioxus.send([
-                            document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                            document.location.pathname + document.location.search + document.location.hash,
                             event.state,
                           ]);
                         }});
