@@ -1824,13 +1824,25 @@ impl BuildRequest {
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
         if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+            let is_wasm = matches!(
+                self.triple.architecture,
+                target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
+            ) || self.triple.operating_system == OperatingSystem::Wasi;
+
             // rustc gives us some portable flags required:
-            // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
-            cargo_args.extend_from_slice(&[
-                "-Csave-temps=true".to_string(),
-                "-Clink-dead-code".to_string(),
-            ]);
+            // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
+            //
+            // We don't pass link-dead-code on wasm: `--no-gc-sections` below already keeps every
+            // symbol alive, and link-dead-code additionally switches rustc to eager, globally-shared
+            // instantiation of `#[inline(always)]` functions. That leaves wasm-bindgen's
+            // `describe_generic_import` wrapper (which the wasm-bindgen CLI assumes is *always*
+            // inlined into its callers) as a standalone function, which the CLI then misidentifies
+            // as an empty descriptor and panics on.
+            cargo_args.push("-Csave-temps=true".to_string());
+            if !is_wasm {
+                cargo_args.push("-Clink-dead-code".to_string());
+            }
 
             // We need to set some extra args that ensure all symbols make it into the final output
             // and that the linker doesn't strip them out.
@@ -1880,11 +1892,7 @@ impl BuildRequest {
             // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
             //
             // It's fine that these exist in the base module but not in the patch.
-            if matches!(
-                self.triple.architecture,
-                target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
-            ) || self.triple.operating_system == OperatingSystem::Wasi
-            {
+            if is_wasm {
                 // cargo_args.push("-Ctarget-cpu=mvp".into()); // disabled due to changes in wasm-bindgne
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
