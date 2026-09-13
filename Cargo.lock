@@ -3343,7 +3343,6 @@ dependencies = [
  "uuid",
  "walkdir",
  "walrus",
- "wasm-encoder 0.245.1",
  "wasm-split-cli",
  "wasmparser 0.235.0",
  "which",
