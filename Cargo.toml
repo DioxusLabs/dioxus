@@ -320,6 +320,7 @@ getrandom = { version = "0.3.3" }
 async-once-cell = { version = "0.5.4" }
 rayon = "1.11.0"
 wasmparser = "0.235.0"
+wasm-encoder = "0.245.1"
 itertools = "0.14.0"
 object = { version = "0.37.1" }
 inventory = { version = "0.3" }

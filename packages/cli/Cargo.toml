@@ -141,6 +141,7 @@ unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
 walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
+wasm-encoder = { workspace = true }
 
 # bundler dependencies
 icns = { workspace = true }

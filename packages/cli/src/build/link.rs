@@ -29,6 +29,7 @@ use std::process::Stdio;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     ffi::OsString,
+    io::Read,
 };
 use std::{
     path::{Path, PathBuf},
@@ -924,7 +925,17 @@ impl BuildRequest {
         // Check if we already have a cached object file
         let out_ar_path = exe.with_file_name(format!("libdeps-{hash_id}.a",));
         let out_rlibs_list = exe.with_file_name(format!("rlibs-{hash_id}.txt"));
-        let mut archive_has_contents = out_ar_path.exists();
+        let out_wraps_list = exe.with_file_name(format!("wraps-{hash_id}.txt"));
+        let is_wasm_lld = self.linker_flavor() == LinkerFlavor::WasmLld;
+        let mut archive_has_contents =
+            out_ar_path.exists() && (!is_wasm_lld || out_wraps_list.exists());
+
+        // wasm-bindgen's `describe_generic_import` wrappers that we redirect with `--wrap` so the
+        // fat module looks like an optimized build to wasm-bindgen (see `patch.rs`).
+        let mut wrapped_shims = std::fs::read_to_string(&out_wraps_list)
+            .ok()
+            .map(|s| s.lines().map(str::to_string).collect::<BTreeSet<_>>())
+            .unwrap_or_default();
 
         // Use the rlibs list if it exists
         let mut compiler_rlibs = std::fs::read_to_string(&out_rlibs_list)
@@ -942,6 +953,7 @@ impl BuildRequest {
         // the archive since their hash might not change, but the logic might.
         if !archive_has_contents || cfg!(debug_assertions) {
             compiler_rlibs.clear();
+            wrapped_shims.clear();
 
             let mut bytes = vec![];
             let mut out_ar = ar::Builder::new(&mut bytes);
@@ -962,8 +974,10 @@ impl BuildRequest {
                 let rlib_contents = std::fs::read(rlib)?;
                 let mut reader = ar::Archive::new(std::io::Cursor::new(rlib_contents));
                 let mut keep_linker_rlib = false;
-                while let Some(Ok(object_file)) = reader.next_entry() {
-                    let name = std::str::from_utf8(object_file.header().identifier()).unwrap();
+                while let Some(Ok(mut object_file)) = reader.next_entry() {
+                    let name = std::str::from_utf8(object_file.header().identifier())
+                        .unwrap()
+                        .to_string();
                     if name.ends_with(".rmeta") {
                         continue;
                     }
@@ -987,8 +1001,22 @@ impl BuildRequest {
                     }
 
                     archive_has_contents = true;
+                    let header = object_file.header().clone();
+                    let mut object_bytes = Vec::with_capacity(header.size() as usize);
+                    object_file
+                        .read_to_end(&mut object_bytes)
+                        .context("Failed to read object file from rlib")?;
+
+                    if is_wasm_lld {
+                        super::collect_describe_generic_import_shims(
+                            &object_bytes,
+                            &mut wrapped_shims,
+                        )
+                        .with_context(|| format!("Failed to read symbols of {name} in {rlib:?}"))?;
+                    }
+
                     out_ar
-                        .append(&object_file.header().clone(), object_file)
+                        .append(&header, &object_bytes[..])
                         .context("Failed to add object file to archive")?;
                 }
 
@@ -1002,6 +1030,11 @@ impl BuildRequest {
             let bytes = out_ar.into_inner().context("Failed to finalize archive")?;
             std::fs::write(&out_ar_path, bytes).context("Failed to write archive")?;
             tracing::debug!("Wrote fat archive to {:?}", out_ar_path);
+
+            if is_wasm_lld {
+                std::fs::write(&out_wraps_list, wrapped_shims.iter().join("\n"))
+                    .context("Failed to write wrapped symbols list")?;
+            }
 
             // Run the ranlib command to index the archive. This slows down this process a bit,
             // but is necessary for some linkers to work properly.
@@ -1082,7 +1115,33 @@ impl BuildRequest {
                 // Export `main` so subsecond can use it for a reference point
                 args.push("/EXPORT:main".to_string());
             }
-            LinkerFlavor::WasmLld | LinkerFlavor::Unsupported => {}
+            LinkerFlavor::WasmLld => {
+                // The tip crate's objects aren't part of the cached archive, so scan them every time.
+                for object in set.link_args.iter().filter(|arg| arg.ends_with(".o")) {
+                    let object_bytes = std::fs::read(object)
+                        .with_context(|| format!("Failed to read object file {object}"))?;
+                    super::collect_describe_generic_import_shims(&object_bytes, &mut wrapped_shims)
+                        .with_context(|| format!("Failed to read symbols of {object}"))?;
+                }
+
+                if !wrapped_shims.is_empty() {
+                    let stub = exe.with_file_name("libwbg-describe-wrap.o");
+                    let wasm64 = self.triple.architecture == Architecture::Wasm64;
+                    std::fs::write(
+                        &stub,
+                        super::describe_generic_import_wrap_stub(&wrapped_shims, wasm64),
+                    )
+                    .context("Failed to write wasm-bindgen wrap stub")?;
+
+                    tracing::debug!(
+                        "Wrapping {} describe_generic_import shim(s) onto the wasm-bindgen import",
+                        wrapped_shims.len()
+                    );
+                    args.extend(wrapped_shims.iter().map(|shim| format!("--wrap={shim}")));
+                    args.push(stub.display().to_string());
+                }
+            }
+            LinkerFlavor::Unsupported => {}
         }
 
         // We also need to remove the `-o` flag since we want the linker output to end up in the

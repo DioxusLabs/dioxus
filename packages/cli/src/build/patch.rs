@@ -8,7 +8,7 @@ use object::{
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Read,
     ops::Range,
     path::Path,
@@ -21,7 +21,6 @@ use thiserror::Error;
 use walrus::{
     ConstExpr, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind,
     ImportKind, Module, ModuleConfig, TableId,
-    ir::{Call, VisitorMut, dfs_pre_order_mut},
 };
 use wasmparser::{
     BinaryReader, BinaryReaderError, Linking, LinkingSectionReader, Payload, SymbolInfo,
@@ -1446,7 +1445,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    inline_describe_generic_import_shims(&mut module)?;
+    stub_describe_generic_import_shims(&mut module)?;
 
     for (name, index) in symbols.code_symbol_map.iter() {
         if name_is_bindgen_symbol(name) {
@@ -1521,28 +1520,109 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
-/// Remove wasm-bindgen's `describe::describe_generic_import` passthrough shim.
+/// The wasm-bindgen marker import that terminates a `wbg_cast`/generic-import descriptor.
+const DESCRIBE_GENERIC_IMPORT: &str = "__wbindgen_describe_generic_import";
+const WBINDGEN_PLACEHOLDER: &str = "__wbindgen_placeholder__";
+
+/// `wasm_bindgen::describe::describe_generic_import` in either mangling scheme.
 ///
-/// Since wasm-bindgen 0.2.128, `wbg_cast`'s `breaks_if_inlined` descriptor functions terminate by
-/// calling `describe_generic_import`, a plain Rust wrapper around the
-/// `__wbindgen_describe_generic_import` import that the compiler is expected to inline. The
-/// wasm-bindgen CLI then interprets *every* local function that directly calls the import as a
-/// descriptor and decodes its output. In the unoptimized fat build the wrapper survives as its own
-/// function whose only body is `call $import`, so interpreting it yields an empty descriptor and
-/// wasm-bindgen panics (`descriptor.rs: index out of bounds: the len is 0`).
+/// Since wasm-bindgen 0.2.128 this is an `#[inline(always)]` wrapper around the
+/// `__wbindgen_describe_generic_import` import, and the CLI discovers descriptor functions by
+/// looking for local functions that *directly* call that import. `-Clink-dead-code` makes rustc
+/// instantiate `#[inline(always)]` functions as globally shared symbols in their own CGU, so in the
+/// fat build the wrapper is never inlined: it survives as a local passthrough that wasm-bindgen
+/// then misidentifies as a (descriptor-less) descriptor and panics on.
+fn name_is_describe_generic_import_shim(name: &str) -> bool {
+    name.contains("wasm_bindgen8describe23describe_generic_import")
+}
+
+/// Collect the linker symbols of every `describe_generic_import` wrapper defined in a wasm object
+/// file, so the fat link can `--wrap` them onto the import itself.
+pub(crate) fn collect_describe_generic_import_shims(
+    bytes: &[u8],
+    shims: &mut BTreeSet<String>,
+) -> Result<()> {
+    let file = File::parse(bytes)?;
+    for symbol in file.symbols() {
+        if symbol.is_definition() && symbol.kind() == SymbolKind::Text {
+            let name = symbol.name()?;
+            if name_is_describe_generic_import_shim(name) {
+                shims.insert(name.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Build the wasm object file that resolves `--wrap=<shim>` for every `describe_generic_import`
+/// wrapper collected by [`collect_describe_generic_import_shims`].
 ///
-/// Re-target every direct call to the wrapper at the import itself, then delete the wrapper, so
-/// the module looks like what wasm-bindgen expects from an optimized build. The wrapper is only
-/// ever called from `wbg_cast::breaks_if_inlined` descriptor functions, so only those (a couple
-/// dozen tiny functions) are visited rather than the whole module.
-fn inline_describe_generic_import_shims(module: &mut Module) -> Result<()> {
-    let Some(import_func) = module.imports.iter().find_map(|i| match i.kind {
-        ImportKind::Function(id) if i.name == "__wbindgen_describe_generic_import" => Some(id),
-        _ => None,
-    }) else {
-        return Ok(());
+/// wasm-ld's `--wrap=sym` redirects every reference to `sym` at `__wrap_sym`. This object declares
+/// each `__wrap_<shim>` as an undefined function symbol whose import is
+/// `__wbindgen_placeholder__.__wbindgen_describe_generic_import` — the very import the wrapper
+/// forwards to. wasm-ld de-duplicates imports by (module, name, signature), so every former call
+/// to a wrapper becomes a direct call to the one marker import, exactly as if rustc had inlined
+/// it, and the wrappers themselves are left with no callers.
+pub(crate) fn describe_generic_import_wrap_stub(shims: &BTreeSet<String>, wasm64: bool) -> Vec<u8> {
+    use wasm_encoder::{
+        EntityType, ImportSection, LinkingSection, Module, SymbolTable, TypeSection, ValType,
     };
-    let import_ty = module.funcs.get(import_func).ty();
+
+    // `fn(func: *const (), prims: *const ()) -> *const ()`
+    let ptr = if wasm64 { ValType::I64 } else { ValType::I32 };
+    let mut types = TypeSection::new();
+    types.ty().function([ptr, ptr], [ptr]);
+
+    let mut imports = ImportSection::new();
+    let mut symbols = SymbolTable::new();
+    for (index, shim) in shims.iter().enumerate() {
+        imports.import(
+            WBINDGEN_PLACEHOLDER,
+            DESCRIBE_GENERIC_IMPORT,
+            EntityType::Function(0),
+        );
+        symbols.function(
+            SymbolTable::WASM_SYM_UNDEFINED | SymbolTable::WASM_SYM_EXPLICIT_NAME,
+            index as u32,
+            Some(&format!("__wrap_{shim}")),
+        );
+    }
+
+    let mut linking = LinkingSection::new();
+    linking.symbol_table(&symbols);
+
+    let mut module = Module::new();
+    module.section(&types);
+    module.section(&imports);
+    module.section(&linking);
+    module.finish()
+}
+
+/// Neutralize the (now unreferenced) `describe_generic_import` wrappers left behind by the fat
+/// link's `--wrap` redirection so wasm-bindgen no longer sees them as descriptor functions.
+///
+/// The link only redirects the *callers*; the wrapper bodies themselves still `call` the marker
+/// import, which is all wasm-bindgen's discovery pass looks at. Replacing the body with a single
+/// `unreachable` (the same trick used for stray `env` imports above) leaves a dead, un-exported
+/// local function that wasm-bindgen's GC then drops.
+fn stub_describe_generic_import_shims(module: &mut Module) -> Result<()> {
+    let markers = module
+        .imports
+        .iter()
+        .filter(|i| {
+            i.module == WBINDGEN_PLACEHOLDER
+                && i.name == DESCRIBE_GENERIC_IMPORT
+                && matches!(i.kind, ImportKind::Function(_))
+        })
+        .count();
+
+    // wasm-bindgen only honors the last such import, so if wasm-ld didn't fold the wrap stub's
+    // imports into the original one, some `wbg_cast` descriptors would silently go unbound.
+    if markers > 1 {
+        return Err(PatchError::InvalidModule(format!(
+            "expected a single `{WBINDGEN_PLACEHOLDER}.{DESCRIBE_GENERIC_IMPORT}` import, found {markers}"
+        )));
+    }
 
     let shims = module
         .funcs
@@ -1556,87 +1636,20 @@ fn inline_describe_generic_import_shims(module: &mut Module) -> Result<()> {
                 .is_some_and(name_is_describe_generic_import_shim)
         })
         .map(|(id, _)| id)
-        .collect::<HashSet<_>>();
-
-    if shims.is_empty() {
-        return Ok(());
-    }
-
-    for shim in shims.iter() {
-        if module.funcs.get(*shim).ty() != import_ty {
-            return Err(PatchError::InvalidModule(format!(
-                "describe_generic_import shim {:?} does not match the import signature",
-                module.funcs.get(*shim).name
-            )));
-        }
-    }
-
-    struct Redirect<'a> {
-        shims: &'a HashSet<FunctionId>,
-        target: FunctionId,
-    }
-
-    impl VisitorMut for Redirect<'_> {
-        fn visit_call_mut(&mut self, instr: &mut Call) {
-            if self.shims.contains(&instr.func) {
-                instr.func = self.target;
-            }
-        }
-    }
-
-    let callers = module
-        .funcs
-        .iter_local()
-        .filter(|(id, _)| {
-            module
-                .funcs
-                .get(*id)
-                .name
-                .as_deref()
-                .is_some_and(|name| name.contains("breaks_if_inlined"))
-        })
-        .map(|(id, _)| id)
         .collect::<Vec<_>>();
-
-    for id in callers {
-        let local = module.funcs.get_mut(id).kind.unwrap_local_mut();
-        let entry = local.entry_block();
-        dfs_pre_order_mut(
-            &mut Redirect {
-                shims: &shims,
-                target: import_func,
-            },
-            local,
-            entry,
-        );
-    }
-
-    for segment in module.elements.iter_mut() {
-        if let ElementItems::Functions(ids) = &mut segment.items {
-            ids.retain(|id| !shims.contains(id));
-        }
-    }
-
-    let export_ids = module
-        .exports
-        .iter()
-        .filter(|e| matches!(e.item, walrus::ExportItem::Function(id) if shims.contains(&id)))
-        .map(|e| e.id())
-        .collect::<Vec<_>>();
-    for id in export_ids {
-        module.exports.delete(id);
-    }
 
     for shim in shims {
-        module.funcs.delete(shim);
+        let ty = module.types.get(module.funcs.get(shim).ty());
+        let params = ty.params().to_vec();
+        let results = ty.results().to_vec();
+        let locals: Vec<_> = params.iter().map(|ty| module.locals.add(*ty)).collect();
+
+        let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
+        builder.func_body().unreachable();
+        module.funcs.get_mut(shim).kind = FunctionKind::Local(builder.local_func(locals));
     }
 
     Ok(())
-}
-
-/// `wasm_bindgen::describe::describe_generic_import` in either mangling scheme.
-fn name_is_describe_generic_import_shim(name: &str) -> bool {
-    name.contains("wasm_bindgen8describe23describe_generic_import")
 }
 
 /// Check if the name is a wasm-bindgen symbol
