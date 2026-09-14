@@ -109,7 +109,9 @@ impl VirtualDom {
         match node {
             Err(RenderError::Error(e)) => {
                 tracing::error!("Error while rendering component `{}`: {e}", scope.name);
-                self.runtime.throw_error(scope.id, e.clone());
+                // A boundary catches errors from its children, not its own render.
+                let parent = scope.parent_id().unwrap_or(scope.id);
+                self.runtime.throw_error(parent, e.clone());
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
