@@ -222,6 +222,77 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
 
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5792
+#[test]
+fn empty_query_omits_question_mark() {
+    use dioxus_router::routable::FromQuery;
+
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct Params {
+        search: Option<String>,
+    }
+
+    impl Display for Params {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match &self.search {
+                Some(search) => write!(f, "search={search}"),
+                None => Ok(()),
+            }
+        }
+    }
+
+    impl FromQuery for Params {
+        fn from_query(query: &str) -> Self {
+            let search = query
+                .split('&')
+                .filter_map(|segment| segment.split_once('='))
+                .find(|(key, _)| *key == "search")
+                .map(|(_, value)| value.to_owned())
+                .filter(|value| !value.is_empty());
+            Self { search }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/translations?:..params")]
+        Translations { params: Params },
+        #[route("/reset?:token")]
+        Reset { token: Option<String> },
+    }
+
+    #[component]
+    fn Translations(params: Params) -> Element {
+        rsx! {}
+    }
+
+    #[component]
+    fn Reset(token: Option<String>) -> Element {
+        rsx! {}
+    }
+
+    let empty = Route::Translations {
+        params: Params::default(),
+    };
+    let filled = Route::Translations {
+        params: Params {
+            search: Some("zone".to_owned()),
+        },
+    };
+    let reset_none = Route::Reset { token: None };
+
+    assert_eq!(empty.to_string(), "/translations");
+    assert_eq!(filled.to_string(), "/translations?search=zone");
+    assert_eq!(reset_none.to_string(), "/reset");
+
+    assert_eq!(Route::from_str(&empty.to_string()).unwrap(), empty);
+    assert_eq!(Route::from_str(&filled.to_string()).unwrap(), filled);
+    assert_eq!(
+        Route::from_str(&reset_none.to_string()).unwrap(),
+        reset_none
+    );
+}
+
 #[test]
 fn single_optional_query_segment_omits_question_mark() {
     #[derive(Routable, Clone, PartialEq, Debug)]

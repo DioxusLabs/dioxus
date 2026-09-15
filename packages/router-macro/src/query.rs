@@ -140,7 +140,9 @@ impl FullQuerySegment {
         quote! {
             {
                 let as_string = #ident.to_string();
-                write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                if !as_string.is_empty() {
+                    write!(f, "?{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                }
             }
         }
     }
