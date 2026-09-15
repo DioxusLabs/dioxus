@@ -39,11 +39,22 @@ impl QuerySegment {
             QuerySegment::Single(segment) => segment.write(),
             QuerySegment::Segments(segments) => {
                 let mut tokens = TokenStream2::new();
-                tokens.extend(quote! { write!(f, "?")?; });
                 for (i, segment) in segments.iter().enumerate() {
                     tokens.extend(segment.write(i == segments.len() - 1));
                 }
-                tokens
+                quote! {
+                    {
+                        let mut query_string = String::new();
+                        {
+                            use std::fmt::Write as _;
+                            let f = &mut query_string;
+                            #tokens
+                        }
+                        if !query_string.is_empty() {
+                            write!(f, "?{}", query_string)?;
+                        }
+                    }
+                }
             }
         }
     }

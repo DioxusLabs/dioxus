@@ -221,3 +221,37 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+#[test]
+fn single_optional_query_segment_omits_question_mark() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[route("/doc/:doc_id?:folder_id")]
+        Doc {
+            doc_id: String,
+            folder_id: Option<u64>,
+        },
+    }
+
+    #[component]
+    fn Doc(doc_id: String, folder_id: Option<u64>) -> Element {
+        unimplemented!()
+    }
+
+    let route = Route::Doc {
+        doc_id: "abc".to_string(),
+        folder_id: None,
+    };
+    assert_eq!(route.to_string(), "/doc/abc");
+    assert_eq!(Route::from_str(&route.to_string()).unwrap(), route);
+
+    let route_with_folder = Route::Doc {
+        doc_id: "abc".to_string(),
+        folder_id: Some(10),
+    };
+    assert_eq!(route_with_folder.to_string(), "/doc/abc?folder_id=10");
+    assert_eq!(
+        Route::from_str(&route_with_folder.to_string()).unwrap(),
+        route_with_folder
+    );
+}
