@@ -221,3 +221,111 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5792
+#[test]
+fn empty_query_omits_question_mark() {
+    use dioxus_router::routable::FromQuery;
+
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct Params {
+        search: Option<String>,
+    }
+
+    impl Display for Params {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match &self.search {
+                Some(search) => write!(f, "search={search}"),
+                None => Ok(()),
+            }
+        }
+    }
+
+    impl FromQuery for Params {
+        fn from_query(query: &str) -> Self {
+            let search = query
+                .split('&')
+                .filter_map(|segment| segment.split_once('='))
+                .find(|(key, _)| *key == "search")
+                .map(|(_, value)| value.to_owned())
+                .filter(|value| !value.is_empty());
+            Self { search }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/translations?:..params")]
+        Translations { params: Params },
+        #[route("/doc/:doc_id?:folder_id&:page")]
+        Doc {
+            doc_id: String,
+            folder_id: Option<u64>,
+            page: Option<u64>,
+        },
+    }
+
+    #[component]
+    fn Translations(params: Params) -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Doc(doc_id: String, folder_id: Option<u64>, page: Option<u64>) -> Element {
+        unimplemented!()
+    }
+
+    let cases = [
+        (
+            Route::Translations {
+                params: Params::default(),
+            },
+            "/translations",
+        ),
+        (
+            Route::Translations {
+                params: Params {
+                    search: Some("zone".to_owned()),
+                },
+            },
+            "/translations?search=zone",
+        ),
+        (
+            Route::Doc {
+                doc_id: "abc".to_string(),
+                folder_id: None,
+                page: None,
+            },
+            "/doc/abc",
+        ),
+        (
+            Route::Doc {
+                doc_id: "abc".to_string(),
+                folder_id: Some(10),
+                page: None,
+            },
+            "/doc/abc?folder_id=10",
+        ),
+        (
+            Route::Doc {
+                doc_id: "abc".to_string(),
+                folder_id: None,
+                page: Some(2),
+            },
+            "/doc/abc?page=2",
+        ),
+        (
+            Route::Doc {
+                doc_id: "abc".to_string(),
+                folder_id: Some(10),
+                page: Some(2),
+            },
+            "/doc/abc?folder_id=10&page=2",
+        ),
+    ];
+
+    for (route, expected) in cases {
+        assert_eq!(route.to_string(), expected);
+        assert_eq!(Route::from_str(expected).unwrap(), route);
+    }
+}
