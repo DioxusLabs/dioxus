@@ -200,7 +200,7 @@ use crate::{
 };
 use crate::{
     WorkspaceRustcArgs,
-    opt::{AppManifest, process_file_to},
+    opt::{AppManifest, copy_file_verbatim, process_file_to},
 };
 use anyhow::{Context, bail};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -1528,7 +1528,8 @@ impl BuildRequest {
                 .unwrap_or(to.as_path());
 
             tracing::debug!("Copying asset {from_:?} to {to_:?}");
-            assets_to_transfer.push((from, to, *bundled.options()));
+            let verbatim = self.path_is_in_public_dir(&from);
+            assets_to_transfer.push((from, to, *bundled.options(), verbatim));
         }
 
         let asset_count = assets_to_transfer.len();
@@ -1544,14 +1545,18 @@ impl BuildRequest {
         tokio::task::spawn_blocking(move || {
             assets_to_transfer
                 .par_iter()
-                .try_for_each(|(from, to, options)| {
+                .try_for_each(|(from, to, options, verbatim)| {
                     let processing = started_processing.fetch_add(1, Ordering::SeqCst);
                     let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
                     tracing::trace!(
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
+                    let res = if *verbatim {
+                        copy_file_verbatim(from, to)
+                    } else {
+                        process_file_to(options, from, to, esbuild_path.as_deref())
+                    };
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
