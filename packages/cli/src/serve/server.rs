@@ -21,7 +21,7 @@ use axum::{
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
-    StreamExt, future,
+    StreamExt,
     stream::{self, FuturesUnordered},
 };
 use hyper::HeaderMap;
@@ -131,63 +131,68 @@ impl WebServer {
     }
 
     /// Wait for new clients to be connected and then save them
+    ///
+    /// Socket bookkeeping that produces no `ServeUpdate` loops instead of parking. This future
+    /// holds `&mut self`, so parking here stops `new_hot_reload_sockets` from being polled until
+    /// another branch of the serve loop fires, and a client that reconnects in the meantime
+    /// (a browser refresh closes one socket and opens another) never gets the hot-patch state
+    /// it missed.
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
-        let mut new_build_status_socket = self.new_build_status_sockets.next();
-        let mut new_message = self
-            .hot_reload_sockets
-            .iter_mut()
-            .enumerate()
-            .map(|(idx, socket)| async move { (idx, socket.socket.next().await) })
-            .collect::<FuturesUnordered<_>>();
+        loop {
+            let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
+            let mut new_build_status_socket = self.new_build_status_sockets.next();
+            let mut new_message = self
+                .hot_reload_sockets
+                .iter_mut()
+                .enumerate()
+                .map(|(idx, socket)| async move { (idx, socket.socket.next().await) })
+                .collect::<FuturesUnordered<_>>();
 
-        tokio::select! {
-            new_hot_reload_socket = &mut new_hot_reload_socket => {
-                if let Some(new_socket) = new_hot_reload_socket {
-                    let aslr_reference = new_socket.aslr_reference;
-                    let pid = new_socket.pid;
-                    let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
+            tokio::select! {
+                new_hot_reload_socket = &mut new_hot_reload_socket => {
+                    if let Some(new_socket) = new_hot_reload_socket {
+                        let aslr_reference = new_socket.aslr_reference;
+                        let pid = new_socket.pid;
+                        let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
 
-                    drop(new_message);
-                    self.hot_reload_sockets.push(new_socket);
-
-                    return ServeUpdate::NewConnection { aslr_reference, id, pid };
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            new_build_status_socket = &mut new_build_status_socket => {
-                if let Some(mut new_socket) = new_build_status_socket {
-                    drop(new_message);
-
-                    // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
-                    if project_info.send_to(&mut new_socket.socket).await.is_ok() {
-                        _ = self.build_status.send_to(&mut new_socket.socket).await;
-                        self.build_status_sockets.push(new_socket);
-                    }
-                    return future::pending::<ServeUpdate>().await;
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            Some((idx, message)) = new_message.next() => {
-                match message {
-                    Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
-                    _ => {
                         drop(new_message);
-                        let socket = self.hot_reload_sockets.remove(idx);
-                        tracing::warn!(
-                            "Devtools websocket disconnected (build_id: {:?}, pid: {:?}) - this client will no longer receive hot-reloads or hot-patches",
-                            socket.build_id,
-                            socket.pid
-                        );
+                        self.hot_reload_sockets.push(new_socket);
+
+                        return ServeUpdate::NewConnection { aslr_reference, id, pid };
+                    } else {
+                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                    }
+                }
+                new_build_status_socket = &mut new_build_status_socket => {
+                    if let Some(mut new_socket) = new_build_status_socket {
+                        drop(new_message);
+
+                        // Update the socket with project info and current build status
+                        let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), bundle: self.bundle });
+                        if project_info.send_to(&mut new_socket.socket).await.is_ok() {
+                            _ = self.build_status.send_to(&mut new_socket.socket).await;
+                            self.build_status_sockets.push(new_socket);
+                        }
+                    } else {
+                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                    }
+                }
+                Some((idx, message)) = new_message.next() => {
+                    match message {
+                        Some(Ok(msg)) => return ServeUpdate::WsMessage { msg, bundle: BundleFormat::Web },
+                        _ => {
+                            drop(new_message);
+                            let socket = self.hot_reload_sockets.remove(idx);
+                            tracing::warn!(
+                                "Devtools websocket disconnected (build_id: {:?}, pid: {:?}) - this client will no longer receive hot-reloads or hot-patches",
+                                socket.build_id,
+                                socket.pid
+                            );
+                        }
                     }
                 }
             }
         }
-
-        future::pending().await
     }
 
     pub(crate) async fn shutdown(&mut self) {
