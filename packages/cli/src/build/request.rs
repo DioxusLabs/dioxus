@@ -755,7 +755,13 @@ impl BuildRequest {
             }
         }
 
-        // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
+        // Make sure to take into account the CARGO_ENCODED_RUSTFLAGS, RUSTFLAGS and
+        // CARGO_TARGET_<triple>_RUSTFLAGS env vars
+        if let Ok(flags) = std::env::var("CARGO_ENCODED_RUSTFLAGS") {
+            rustflags
+                .flags
+                .extend(cargo_config2::Flags::from_encoded(&flags).flags);
+        }
         for env in [
             "RUSTFLAGS".to_string(),
             format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
@@ -777,6 +783,7 @@ impl BuildRequest {
         // When we do android builds we need to make sure we link against the android libraries
         // We also `--export-dynamic` to make sure we can do shenanigans like `dlsym` the `main` symbol
         if matches!(bundle, BundleFormat::Android) {
+            let android_tools = workspace.android_tools()?;
             rustflags.flags.extend([
                 "-Clink-arg=-landroid".to_string(),
                 "-Clink-arg=-llog".to_string(),
@@ -785,9 +792,12 @@ impl BuildRequest {
                 "-Clink-arg=-Wl,--export-dynamic".to_string(),
                 format!(
                     "-Clink-arg=-Wl,--sysroot={}",
-                    workspace.android_tools()?.sysroot().display()
+                    android_tools.sysroot().display()
                 ),
             ]);
+            rustflags
+                .flags
+                .extend(android_tools.clang_rt_builtins_rustflags(&triple));
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
@@ -1930,12 +1940,15 @@ impl BuildRequest {
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
         let rust_flags = self.rustflags.clone();
 
-        // Set the rust flags for the build if they're not empty.
+        // Set the rust flags for the build if they're not empty. We use the `\x1f`-separated
+        // CARGO_ENCODED_RUSTFLAGS form (which cargo prefers over RUSTFLAGS) so that flags
+        // containing spaces, such as paths to an SDK/NDK installed in a directory with a space,
+        // round-trip correctly.
         if !rust_flags.flags.is_empty() {
             env_vars.push((
-                "RUSTFLAGS".into(),
+                "CARGO_ENCODED_RUSTFLAGS".into(),
                 rust_flags
-                    .encode_space_separated()
+                    .encode()
                     .context("Failed to encode RUSTFLAGS")?
                     .into(),
             ));
