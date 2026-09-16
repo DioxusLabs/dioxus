@@ -2923,7 +2923,7 @@ impl BuildRequest {
     /// Blow away the fingerprint for this package, forcing rustc to recompile it.
     ///
     /// This prevents rustc from using the cached version of the binary, which can cause issues
-    /// Find workspace crates that directly depend on the given crate.
+    /// Find workspace crates in this build that directly depend on the given crate.
     ///
     /// Returns underscore-normalized crate names of workspace members that have `crate_name`
     /// as a dependency. Used for cascade detection — when a dep's public symbols change,
@@ -2946,23 +2946,16 @@ impl BuildRequest {
         };
 
         // Use krates' direct_dependents to find reverse deps, filter to workspace members
-        let workspace_names: HashSet<String> = krates
-            .workspace_members()
-            .filter_map(|m| {
-                if let krates::Node::Krate { krate, .. } = m {
-                    Some(krate.name.replace('-', "_"))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // that are part of this build.
+        let mut in_build: HashSet<String> = self.workspace_crate_dep_names().into_iter().collect();
+        in_build.insert(self.tip_package_name());
 
         krates
             .direct_dependents(target_nid)
             .into_iter()
             .filter_map(|dep| {
                 let name = dep.krate.name.replace('-', "_");
-                if workspace_names.contains(&name) {
+                if in_build.contains(&name) {
                     Some(name)
                 } else {
                     None
