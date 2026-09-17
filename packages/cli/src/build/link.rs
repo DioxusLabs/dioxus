@@ -226,7 +226,7 @@ impl BuildRequest {
                 &self.triple,
                 *aslr_reference,
             )
-            .expect("failed to resolve patch symbols");
+            .context("Failed to resolve patch symbols")?;
 
             // Currently we're dropping stub.o in the exe dir, but should probably just move to a tempfile?
             let patch_file = self.main_exe().with_file_name("stub.o");
@@ -291,6 +291,7 @@ impl BuildRequest {
             .args(out_args)
             .env_clear()
             .envs(command_envs)
+            .kill_on_drop(true)
             .output()
             .await?;
 
@@ -306,6 +307,12 @@ impl BuildRequest {
                 tracing::trace!("Linker output during thin linking: {}", errs.trim());
             }
         }
+
+        ensure!(
+            res.status.success(),
+            "Patch linker exited with {}",
+            res.status
+        );
 
         // For some really weird reason that I think is because of dlopen caching, future loads of the
         // jump library will fail if we don't remove the original fat file. I think this could be
@@ -594,6 +601,7 @@ impl BuildRequest {
         let mut child = cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()
             .context("Failed to spawn rustc replay")?;
 
@@ -1163,6 +1171,7 @@ impl BuildRequest {
             .args(out_args)
             .env_clear()
             .envs(command_envs)
+            .kill_on_drop(true)
             .output()
             .await?;
 
