@@ -17,6 +17,33 @@ impl Writer<'_> {
 const MARKER: &str = "𝕣𝕤𝕩";
 const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 
+/// Zero-based indices of the lines in `src` that continue a multi-line string literal.
+///
+/// The leading whitespace on those lines belongs to the string's value, so they must not be
+/// re-indented: doing so changes the string, and since the next run reads the added whitespace
+/// back as source, the indentation grows every time the file is formatted.
+pub(crate) fn string_literal_continuation_lines(src: &str) -> std::collections::HashSet<usize> {
+    fn collect(tokens: proc_macro2::TokenStream, lines: &mut std::collections::HashSet<usize>) {
+        for token in tokens {
+            match token {
+                proc_macro2::TokenTree::Group(group) => collect(group.stream(), lines),
+                proc_macro2::TokenTree::Literal(literal) => {
+                    // `LineColumn` lines are one-based, so this range holds the zero-based
+                    // indices of every line after the literal's first one.
+                    lines.extend(literal.span().start().line..literal.span().end().line);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut lines = std::collections::HashSet::new();
+    if let Ok(tokens) = src.parse::<proc_macro2::TokenStream>() {
+        collect(tokens, &mut lines);
+    }
+    lines
+}
+
 pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
         src: &'a str,
@@ -57,12 +84,15 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
                 // Push out the indent level of the formatted block if it's multiline
                 if multiline || formatted.contains('\n') {
+                    let string_lines = string_literal_continuation_lines(&formatted);
                     formatted = formatted
                         .lines()
-                        .map(|line| {
+                        .enumerate()
+                        .map(|(index, line)| {
                             // Don't add indentation to blank lines (avoid trailing whitespace)
-                            if line.is_empty() {
-                                String::new()
+                            // or to lines inside a string literal (the whitespace is its value)
+                            if line.is_empty() || string_lines.contains(&index) {
+                                line.to_string()
                             } else {
                                 format!("{}{line}", self.cfg.indent_str())
                             }
@@ -114,11 +144,13 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
             }
         }
 
+        let string_lines = string_literal_continuation_lines(&fmted);
         let mut lines = fmted.lines().enumerate().peekable();
 
-        while let Some((_idx, fmt_line)) = lines.next() {
-            // Push the indentation (but not for blank lines - avoid trailing whitespace)
-            if is_multiline && !fmt_line.is_empty() {
+        while let Some((idx, fmt_line)) = lines.next() {
+            // Push the indentation (but not for blank lines - avoid trailing whitespace - or
+            // for lines inside a string literal, whose whitespace is part of its value)
+            if is_multiline && !fmt_line.is_empty() && !string_lines.contains(&idx) {
                 out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
             }
 
@@ -195,13 +227,22 @@ pub fn unparse_pat(pat: &syn::Pat) -> String {
 
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
-    let mut o = raw
+    let body = raw
         .strip_prefix("fn main() {\n")
         .unwrap()
         .strip_suffix("}\n")
-        .unwrap()
+        .unwrap();
+    let string_lines = string_literal_continuation_lines(body);
+    let mut o = body
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
+        .enumerate()
+        .map(|(index, line)| {
+            if string_lines.contains(&index) {
+                line
+            } else {
+                line.strip_prefix("    ").unwrap_or_default() // todo: set this to tab level
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
