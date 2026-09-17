@@ -501,7 +501,7 @@ fn set_attribute_inner(
     match value {
         None => docm.clear_attribute(node_id, name),
         Some(value) => {
-            if local_name == "checked" && is_falsy {
+            if is_falsy && is_bool_attr(local_name) {
                 docm.clear_attribute(node_id, name);
             } else if local_name == "dangerous_inner_html" {
                 docm.set_inner_html(node_id, value);
@@ -509,5 +509,117 @@ fn set_attribute_inner(
                 docm.set_attribute(node_id, name, value);
             }
         }
+    }
+}
+
+/// HTML boolean attributes are "on" whenever they are present, regardless of their value, so a
+/// falsy value (e.g. `disabled: false`) must remove the attribute rather than write `"false"`.
+///
+/// Mirrors `BOOL_ATTRS` in `dioxus-ssr` and `isBoolAttr` in the web interpreter.
+fn is_bool_attr(name: &str) -> bool {
+    matches!(
+        name,
+        "allowfullscreen"
+            | "allowpaymentrequest"
+            | "async"
+            | "autofocus"
+            | "autoplay"
+            | "checked"
+            | "controls"
+            | "default"
+            | "defer"
+            | "disabled"
+            | "formnovalidate"
+            | "hidden"
+            | "inert"
+            | "ismap"
+            | "itemscope"
+            | "loop"
+            | "multiple"
+            | "muted"
+            | "nomodule"
+            | "novalidate"
+            | "open"
+            | "playsinline"
+            | "readonly"
+            | "required"
+            | "reversed"
+            | "selected"
+            | "truespeed"
+            | "webkitdirectory"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{DioxusDocument, DocumentConfig};
+    use blitz_dom::LocalName;
+    use dioxus::prelude::*;
+
+    fn build(app: fn() -> Element) -> DioxusDocument {
+        let mut doc = DioxusDocument::new(VirtualDom::new(app), DocumentConfig::default());
+        doc.initial_build();
+        doc
+    }
+
+    fn attr(doc: &DioxusDocument, selector: &str, name: &str) -> Option<String> {
+        let inner = doc.inner.borrow();
+        let node_id = inner
+            .query_selector(selector)
+            .unwrap()
+            .unwrap_or_else(|| panic!("no node matches {selector}"));
+        inner
+            .get_node(node_id)
+            .unwrap()
+            .attr(LocalName::from(name))
+            .map(str::to_owned)
+    }
+
+    #[test]
+    fn falsy_boolean_attributes_are_removed() {
+        fn app() -> Element {
+            let off = false;
+            let on = true;
+            rsx! {
+                input {
+                    id: "off",
+                    r#type: "checkbox",
+                    disabled: off,
+                    readonly: off,
+                    required: off,
+                    checked: off,
+                    title: "false",
+                }
+                input { id: "literal", r#type: "checkbox", disabled: false }
+                input { id: "on", r#type: "checkbox", disabled: on, required: on }
+                details { id: "details", open: off }
+                select {
+                    id: "select",
+                    multiple: off,
+                    option { id: "option", selected: off }
+                }
+            }
+        }
+
+        let doc = build(app);
+
+        for name in ["disabled", "readonly", "required", "checked"] {
+            assert_eq!(
+                attr(&doc, "#off", name),
+                None,
+                "`{name}: false` should be absent"
+            );
+        }
+        assert_eq!(attr(&doc, "#literal", "disabled"), None);
+        assert_eq!(attr(&doc, "#details", "open"), None);
+        assert_eq!(attr(&doc, "#select", "multiple"), None);
+        assert_eq!(attr(&doc, "#option", "selected"), None);
+
+        // Truthy boolean attributes are still present.
+        assert_eq!(attr(&doc, "#on", "disabled").as_deref(), Some("true"));
+        assert_eq!(attr(&doc, "#on", "required").as_deref(), Some("true"));
+
+        // Non-boolean attributes keep their falsy-looking value.
+        assert_eq!(attr(&doc, "#off", "title").as_deref(), Some("false"));
     }
 }
