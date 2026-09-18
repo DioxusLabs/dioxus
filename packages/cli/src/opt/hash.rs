@@ -10,6 +10,7 @@ use crate::opt::{
     css::hash_scss,
     file::{ResolvedAssetType, resolve_asset_options},
     js::hash_js,
+    try_create_bundled_asset,
 };
 use manganis::{AssetOptions, BundledAsset};
 
@@ -126,7 +127,7 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
 }
 
 /// Add a hash to the asset, or log an error if it fails
-pub(crate) fn add_hash_to_asset(asset: &mut BundledAsset) {
+pub(crate) fn add_hash_to_asset(asset: &mut BundledAsset) -> anyhow::Result<()> {
     let source = asset.absolute_source_path();
     match AssetHash::hash_file_contents(asset.options(), source) {
         Ok(hash) => {
@@ -136,7 +137,7 @@ pub(crate) fn add_hash_to_asset(asset: &mut BundledAsset) {
             let source_path = PathBuf::from(source);
             let Some(file_name) = source_path.file_name() else {
                 tracing::error!("Failed to get file name from path: {source}");
-                return;
+                return Ok(());
             };
 
             // The output extension path is the extension set by the options
@@ -173,10 +174,12 @@ pub(crate) fn add_hash_to_asset(asset: &mut BundledAsset) {
 
             let bundled_path = bundled_path.to_string_lossy().to_string();
 
-            *asset = BundledAsset::new(source, &bundled_path, options);
+            *asset = try_create_bundled_asset(source, &bundled_path, options)?;
         }
         Err(err) => {
             tracing::error!("Failed to hash asset {source}: {err}");
         }
     }
+
+    Ok(())
 }
