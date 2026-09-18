@@ -1298,13 +1298,15 @@ pub struct WindowsSignCommand {
 /// Example:
 /// ```toml
 /// [linux]
-/// identifier = "com.example.myapp.linux"  # Override bundle.identifier for Linux
+/// identifier = "com.example.myapp.linux"
 /// categories = ["Utility"]
+/// desktop_template = "linux.desktop"
 ///
-/// # Debian package settings (previously in [bundle.deb])
-/// [linux.deb]
-/// depends = ["libwebkit2gtk-4.0-37"]
-/// section = "utils"
+/// [bundle.deb]
+/// depends = ["libwebkit2gtk-4.1-0"]
+///
+/// [bundle.rpm]
+/// requires = ["webkit2gtk4.1"]
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxConfig {
@@ -1349,10 +1351,11 @@ pub struct LinuxConfig {
     #[serde(default)]
     pub long_description: Option<String>,
 
-    // === Debian package settings (previously in bundle.deb) ===
-    /// Debian-specific package settings.
+    /// Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.
+    ///
+    /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
     #[serde(default)]
-    pub deb: Option<LinuxDebSettings>,
+    pub desktop_template: Option<PathBuf>,
 
     // === Linux-specific settings ===
     /// Flatpak sandbox permissions.
@@ -1374,66 +1377,6 @@ pub struct LinuxConfig {
     /// MIME types the app can handle.
     #[serde(default)]
     pub mime_types: Vec<String>,
-}
-
-/// Debian package settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub struct LinuxDebSettings {
-    /// Package dependencies.
-    #[serde(default)]
-    pub depends: Option<Vec<String>>,
-
-    /// Recommended packages.
-    #[serde(default)]
-    pub recommends: Option<Vec<String>>,
-
-    /// Packages this provides.
-    #[serde(default)]
-    pub provides: Option<Vec<String>>,
-
-    /// Package conflicts.
-    #[serde(default)]
-    pub conflicts: Option<Vec<String>>,
-
-    /// Packages this replaces.
-    #[serde(default)]
-    pub replaces: Option<Vec<String>>,
-
-    /// Additional files to include. Maps package path to source path.
-    #[serde(default)]
-    pub files: HashMap<PathBuf, PathBuf>,
-
-    /// Path to custom desktop template.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
-
-    /// Debian section (e.g., "utils", "web").
-    #[serde(default)]
-    pub section: Option<String>,
-
-    /// Package priority ("required", "important", "standard", "optional", "extra").
-    #[serde(default)]
-    pub priority: Option<String>,
-
-    /// Path to changelog file.
-    #[serde(default)]
-    pub changelog: Option<PathBuf>,
-
-    /// Pre-install script path.
-    #[serde(default)]
-    pub pre_install_script: Option<PathBuf>,
-
-    /// Post-install script path.
-    #[serde(default)]
-    pub post_install_script: Option<PathBuf>,
-
-    /// Pre-remove script path.
-    #[serde(default)]
-    pub pre_remove_script: Option<PathBuf>,
-
-    /// Post-remove script path.
-    #[serde(default)]
-    pub post_remove_script: Option<PathBuf>,
 }
 
 // ============================================================================

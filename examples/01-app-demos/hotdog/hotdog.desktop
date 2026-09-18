@@ -1,0 +1,12 @@
+[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+Name={{name}}
+Terminal=false
+Type=Application
+# Test-only id; CI greps packaged .desktop files for this value.
+X-Desktop-Template-Test-Id=hotdog-desktop-template-test-id

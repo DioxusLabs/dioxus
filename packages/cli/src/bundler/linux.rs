@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use image::{GenericImageView, ImageFormat};
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{Path, PathBuf},
@@ -221,8 +222,9 @@ impl BundleContext<'_> {
     ///    under `/usr/lib/<product-name>/...`.
     /// 6. Copy configured sidecar binaries into `/usr/bin` so RPM payloads match the
     ///    other Linux formats.
-    /// 7. Reuse Debian-style custom files and maintainer scripts where applicable.
-    /// 8. Attach runtime dependency declarations from the Debian settings.
+    /// 7. Add custom files and maintainer scripts from `[bundle.rpm]`.
+    /// 8. Attach `Requires`, `Recommends`, `Provides`, `Conflicts`, and `Obsoletes`
+    ///    from `[bundle.rpm]`.
     /// 9. Serialize the final package to disk and remove the temporary staging area.
     ///
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
@@ -254,9 +256,8 @@ impl BundleContext<'_> {
             )
             .context("Failed to add binary to RPM")?;
 
-        let deb_settings = self.deb();
-        let desktop_content =
-            self.generate_linux_desktop_file(deb_settings.desktop_template.as_deref())?;
+        let rpm_settings = self.rpm();
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_dest = format!("/usr/share/applications/{name}.desktop");
 
         let temp_dir = output_dir.join("_rpm_temp");
@@ -369,47 +370,30 @@ impl BundleContext<'_> {
         }
 
         let crate_dir = self.crate_dir();
-        for (dest_path, src_path) in &deb_settings.files {
-            let src = if src_path.is_absolute() {
-                src_path.clone()
-            } else {
-                crate_dir.join(src_path)
-            };
-            if src.exists() {
-                let dest = dest_path.to_string_lossy().to_string();
-                let dest = if dest.starts_with('/') {
-                    dest
-                } else {
-                    format!("/{dest}")
-                };
-                builder = builder
-                    .with_file(&src, rpm::FileOptions::new(&dest).permissions(0o644))
-                    .context("Failed to add custom file to RPM")?;
-            }
-        }
+        builder = add_custom_rpm_files(builder, &crate_dir, &rpm_settings.files)?;
 
-        if let Some(script_path) = &deb_settings.pre_install_script {
+        if let Some(script_path) = &rpm_settings.pre_install_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read pre-install script: {}", path.display())
             })?;
             builder = builder.pre_install_script(content);
         }
-        if let Some(script_path) = &deb_settings.post_install_script {
+        if let Some(script_path) = &rpm_settings.post_install_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read post-install script: {}", path.display())
             })?;
             builder = builder.post_install_script(content);
         }
-        if let Some(script_path) = &deb_settings.pre_remove_script {
+        if let Some(script_path) = &rpm_settings.pre_remove_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read pre-uninstall script: {}", path.display())
             })?;
             builder = builder.pre_uninstall_script(content);
         }
-        if let Some(script_path) = &deb_settings.post_remove_script {
+        if let Some(script_path) = &rpm_settings.post_remove_script {
             let path = resolve_path(&crate_dir, script_path);
             let content = fs::read_to_string(&path).with_context(|| {
                 format!("Failed to read post-uninstall script: {}", path.display())
@@ -417,9 +401,29 @@ impl BundleContext<'_> {
             builder = builder.post_uninstall_script(content);
         }
 
-        if let Some(deps) = &deb_settings.depends {
-            for dep in deps {
-                builder = builder.requires(rpm::Dependency::any(dep));
+        if let Some(requires) = &rpm_settings.requires {
+            for require in requires {
+                builder = builder.requires(rpm::Dependency::any(require));
+            }
+        }
+        if let Some(recommends) = &rpm_settings.recommends {
+            for recommend in recommends {
+                builder = builder.recommends(rpm::Dependency::any(recommend));
+            }
+        }
+        if let Some(provides) = &rpm_settings.provides {
+            for provide in provides {
+                builder = builder.provides(rpm::Dependency::any(provide));
+            }
+        }
+        if let Some(conflicts) = &rpm_settings.conflicts {
+            for conflict in conflicts {
+                builder = builder.conflicts(rpm::Dependency::any(conflict));
+            }
+        }
+        if let Some(obsoletes) = &rpm_settings.obsoletes {
+            for obsolete in obsoletes {
+                builder = builder.obsoletes(rpm::Dependency::any(obsolete));
             }
         }
 
@@ -499,9 +503,7 @@ impl BundleContext<'_> {
         let desktop_dir = data_dir.join("usr/share/applications");
         fs::create_dir_all(&desktop_dir)?;
 
-        let deb_settings = self.deb();
-        let desktop_content =
-            self.generate_linux_desktop_file(deb_settings.desktop_template.as_deref())?;
+        let desktop_content = self.generate_linux_desktop_file()?;
         let desktop_path = desktop_dir.join(format!("{bin_name}.desktop"));
         fs::write(&desktop_path, &desktop_content)?;
 
@@ -567,11 +569,11 @@ impl BundleContext<'_> {
     }
 
     /// Generate the contents of a .desktop file for the given bundle context.
-    fn generate_linux_desktop_file(&self, desktop_template: Option<&Path>) -> Result<String> {
+    fn generate_linux_desktop_file(&self) -> Result<String> {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(false);
 
-        let template = match desktop_template {
+        let template = match self.linux().desktop_template.as_deref() {
             // Path to template
             Some(path) => fs::read_to_string(path)
                 .with_context(|| format!("Failed to read desktop template: {}", path.display()))?,
@@ -1149,5 +1151,68 @@ fn resolve_path(crate_dir: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         crate_dir.join(path)
+    }
+}
+
+fn add_custom_rpm_files(
+    mut builder: rpm::PackageBuilder,
+    crate_dir: &Path,
+    files: &HashMap<PathBuf, PathBuf>,
+) -> Result<rpm::PackageBuilder> {
+    for (dest_path, src_path) in files {
+        let src = resolve_path(crate_dir, src_path);
+        let dest = dest_path.to_string_lossy().to_string();
+        let dest = if dest.starts_with('/') {
+            dest
+        } else {
+            format!("/{dest}")
+        };
+        builder = builder
+            .with_file(&src, rpm::FileOptions::new(&dest).permissions(0o644))
+            .with_context(|| {
+                format!(
+                    "Failed to add configured RPM file {} as {}",
+                    src.display(),
+                    dest
+                )
+            })?;
+    }
+    Ok(builder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_custom_rpm_file_fails_with_source_and_destination() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let destination = PathBuf::from("/usr/share/example/required.txt");
+        let source = crate_dir.path().join("required.txt");
+        let files = HashMap::from([(destination.clone(), PathBuf::from("required.txt"))]);
+        let builder = rpm::PackageBuilder::new("example", "1.0.0", "MIT", "noarch", "example");
+
+        let error = add_custom_rpm_files(builder, crate_dir.path(), &files)
+            .err()
+            .expect("missing configured file must fail");
+        let message = error.to_string();
+        assert!(message.contains(&source.display().to_string()));
+        assert!(message.contains(&destination.display().to_string()));
+    }
+
+    #[test]
+    fn custom_rpm_file_is_in_package() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        fs::write(crate_dir.path().join("required.txt"), "required content").unwrap();
+        let destination = PathBuf::from("/usr/share/example/required.txt");
+        let files = HashMap::from([(destination.clone(), PathBuf::from("required.txt"))]);
+        let builder = rpm::PackageBuilder::new("example", "1.0.0", "MIT", "noarch", "example");
+
+        let package = add_custom_rpm_files(builder, crate_dir.path(), &files)
+            .unwrap()
+            .build()
+            .unwrap();
+        let entries = package.metadata.get_file_entries().unwrap();
+        assert!(entries.iter().any(|entry| entry.path == destination));
     }
 }
