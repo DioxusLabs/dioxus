@@ -325,6 +325,61 @@ where
     }
 }
 
+/// Typestate marker for a required prop that has been set. Unset slots are `()`.
+#[doc(hidden)]
+pub struct Set;
+
+/// Bound checked by the generated `build` for every required prop. `Name` is a per-field marker
+/// type whose name is the prop name, so the diagnostic reads "missing required prop `foo`".
+///
+/// Prop values are stored as `Option<T>` in the builder; the typestate proves the slot was
+/// filled, so `take` never observes `None`.
+#[doc(hidden)]
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "missing required prop `{Name}`",
+        label = "the prop `{Name}` must be set before this component can be built",
+        note = "props without a default value are required",
+    )
+)]
+pub trait RequiredProp<Name> {
+    fn take<T>(value: Option<T>) -> T;
+}
+impl<Name> RequiredProp<Name> for Set {
+    #[inline]
+    fn take<T>(value: Option<T>) -> T {
+        match value {
+            Some(value) => value,
+            None => unreachable!("required prop typestate was set without a value"),
+        }
+    }
+}
+
+/// Autoref-specialization fallback used by generated `memoize` code: `&T` never compares equal.
+#[doc(hidden)]
+pub trait NonPartialEq: Sized {
+    fn compare(&self, other: &Self) -> bool;
+}
+
+impl<T> NonPartialEq for &&T {
+    fn compare(&self, _other: &Self) -> bool {
+        false
+    }
+}
+
+/// Autoref-specialization winner used by generated `memoize` code: `T: PartialEq` compares by value.
+#[doc(hidden)]
+pub trait CanPartialEq: PartialEq {
+    fn compare(&self, other: &Self) -> bool;
+}
+
+impl<T: PartialEq> CanPartialEq for T {
+    fn compare(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 /// A enhanced version of the `Into` trait that allows with more flexibility.
 pub trait SuperInto<O, M = ()> {
     /// Convert from a type to another type.
