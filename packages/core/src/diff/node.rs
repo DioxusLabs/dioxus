@@ -304,9 +304,21 @@ impl VNode {
         self.find_element_in_roots(
             mount,
             dom,
-            dom.current_render_target_id(),
+            EdgeScan::live(dom.current_render_target_id()),
             ElementEdge::First,
         )
+    }
+
+    /// Like [`Self::find_first_element`], but reads the committed component mount view instead of
+    /// trusting every live mount - for sibling scans during placement, where a neighboring
+    /// component may be mid-diff and its live mount state transiently incoherent (see
+    /// [`EdgeScan`]).
+    pub(crate) fn find_first_element_committed(
+        &self,
+        mount: MountId,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
+        self.find_element_in_roots(mount, dom, EdgeScan::placement(dom), ElementEdge::First)
     }
 
     fn find_static_anchor_in_target(
@@ -323,32 +335,31 @@ impl VNode {
             .map(MountedElementId::element_id)
     }
 
-    pub(crate) fn find_last_element(&self, mount: MountId, dom: &VirtualDom) -> Option<ElementId> {
-        self.find_element_in_roots(
-            mount,
-            dom,
-            dom.current_render_target_id(),
-            ElementEdge::Last,
-        )
+    /// See [`Self::find_first_element_committed`]. There is no live counterpart to this - every
+    /// last-edge lookup is a sibling scan.
+    pub(crate) fn find_last_element_committed(
+        &self,
+        mount: MountId,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
+        self.find_element_in_roots(mount, dom, EdgeScan::placement(dom), ElementEdge::Last)
     }
 
     pub(super) fn find_element_in_roots(
         &self,
         mount: MountId,
         dom: &VirtualDom,
-        target_id: crate::RenderTargetId,
+        scan: EdgeScan,
         edge: ElementEdge,
     ) -> Option<ElementId> {
         match edge {
             ElementEdge::First => self
                 .children()
-                .find_map(|child| self.root_child_edge_element(child, mount, target_id, dom, edge)),
+                .find_map(|child| self.root_child_edge_element(child, mount, scan, dom, edge)),
             ElementEdge::Last => {
                 let mut found = None;
                 for child in self.children() {
-                    if let Some(id) =
-                        self.root_child_edge_element(child, mount, target_id, dom, edge)
-                    {
+                    if let Some(id) = self.root_child_edge_element(child, mount, scan, dom, edge) {
                         found = Some(id);
                     }
                 }
@@ -361,24 +372,24 @@ impl VNode {
         &self,
         child: VNodeChild<'_>,
         mount: MountId,
-        target_id: crate::RenderTargetId,
+        scan: EdgeScan,
         dom: &VirtualDom,
         edge: ElementEdge,
     ) -> Option<ElementId> {
         match child {
             VNodeChild::Dynamic(anchor) => {
-                self.dynamic_anchor_edge_element(anchor, mount, dom, target_id, edge)
+                self.dynamic_anchor_edge_element(anchor, mount, dom, scan, edge)
             }
             VNodeChild::Element(element) => self.find_static_anchor_in_target(
                 element.anchor_index().expect("root element"),
                 mount,
-                target_id,
+                scan.target_id,
                 dom,
             ),
             VNodeChild::Text(text) => self.find_static_anchor_in_target(
                 text.anchor_index().expect("root text"),
                 mount,
-                target_id,
+                scan.target_id,
                 dom,
             ),
         }
@@ -389,10 +400,9 @@ impl VNode {
         anchor: DynamicAnchor<'_>,
         mount: MountId,
         dom: &VirtualDom,
-        target_id: crate::RenderTargetId,
+        scan: EdgeScan,
         edge: ElementEdge,
     ) -> Option<ElementId> {
-        let scan = EdgeScan::live(target_id);
         match edge {
             ElementEdge::First => anchor.nodes().find_map(|slot| {
                 self.dynamic_node_edge_element(mount, slot.index(), dom, scan, edge)
@@ -627,21 +637,23 @@ impl VNode {
                 .try_with_mounted_fragment_children(mount, idx, nodes.len(), |child_mounts| {
                     edge.find_map(nodes.len(), |i| {
                         let child_mount = child_mounts[i];
-                        nodes[i].find_element_in_roots(child_mount, dom, target_id, edge)
+                        nodes[i].find_element_in_roots(child_mount, dom, scan, edge)
                     })
                 })
                 .flatten(),
             Component(_) => {
                 // Placement scans read the committed mount view, which is stable while a sibling
-                // component is mid-diff; the live edge walk reads the scope's current render output.
+                // component is mid-diff; the live edge walk reads the scope's current render
+                // output. Recursing with the whole `scan` keeps that choice in force however
+                // deeply fragments and components nest below this one.
                 if committed_component_view {
                     let root_mount = dom.mounted_dynamic_component_root_mount(mount, idx)?;
                     let view = dom.current_mounted_view(root_mount)?;
-                    view.find_element_in_roots(root_mount, dom, target_id, edge)
+                    view.find_element_in_roots(root_mount, dom, scan, edge)
                 } else {
                     let scope_id = dom.unchecked_mounted_dynamic_component_scope(mount, idx);
                     let root = live_component_root(dom, scope_id)?;
-                    root.find_element_in_roots(root.mount(), dom, target_id, edge)
+                    root.find_element_in_roots(root.mount(), dom, scan, edge)
                 }
             }
         }
