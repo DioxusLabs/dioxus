@@ -16,6 +16,7 @@ mod windows;
 
 mod assets;
 mod builder;
+mod clippy;
 mod context;
 mod link;
 mod patch;

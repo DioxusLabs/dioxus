@@ -67,6 +67,7 @@ async fn main() -> ExitCode {
                 Commands::Config(opts) => opts.config().await,
                 Commands::Autoformat(opts) => opts.autoformat().await,
                 Commands::Check(opts) => opts.check().await,
+                Commands::Clippy(opts) => opts.clippy().await,
                 Commands::Build(opts) => opts.build().await,
                 Commands::Bundle(opts) => opts.bundle().await,
                 Commands::Run(opts) => opts.run().await,
