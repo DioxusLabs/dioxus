@@ -941,13 +941,10 @@ impl<'a> Splitter<'a> {
             .collect();
 
         let mut old_to_new = HashMap::new();
-        let mut new_call_graph: HashMap<Node, HashSet<Node>> = HashMap::new();
 
         for (new_name, new_func) in new_names.iter() {
             if let Some(old_func) = old_names.get(new_name) {
                 old_to_new.insert(*old_func, new_func);
-            } else {
-                new_call_graph.insert(Node::Function(*new_func), HashSet::new());
             }
         }
 
@@ -1025,9 +1022,14 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        // We're going to attach the recovered children to the main function
+        // We're going to attach the recovered children to the main function.
+        //
+        // This has to land in `self.call_graph` - the graph reachability is actually computed
+        // from. It used to be written to a local map that nothing ever read or merged in, so
+        // neither the recovered children nor the truly-new shims below were ever really rooted in
+        // main, and anything only they kept alive could be pruned out from under them.
         let main_fn = self.source_module.funcs.by_name("main").context("Failed to find `main` function - was this built with LTO, --emit-relocs, and debug symbols?")?;
-        let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
+        let main_fn_entry = self.call_graph.entry(Node::Function(main_fn)).or_default();
         main_fn_entry.extend(recovered_children);
 
         // Also attach any truly new symbols to the main function. Usually these are the shim functions
