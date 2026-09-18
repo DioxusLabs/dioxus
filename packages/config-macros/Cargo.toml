@@ -15,3 +15,6 @@ rust-version = "1.85.0"
 [features]
 default = []
 wasm-split = []
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

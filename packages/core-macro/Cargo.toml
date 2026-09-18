@@ -31,3 +31,6 @@ default = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
