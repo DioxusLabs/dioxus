@@ -42,7 +42,20 @@ impl DioxusNativeWindowRenderer {
         Self::with_inner_renderer(vello_renderer)
     }
 
-    #[cfg(any(feature = "vello-hybrid", feature = "vello"))]
+    // Gated on the renderer the `cfg_if` above actually selected, not on
+    // whichever renderer features happen to be enabled. `vello-hybrid` being
+    // enabled does not mean it is selected: it is last in the chain, and it is
+    // a default feature, so any downstream crate that also asks for
+    // `vello-cpu-*` or `skia` has both. `Features`, `Limits` and
+    // `InnerRendererOptions` only exist in the two wgpu arms.
+    #[cfg(any(
+        feature = "vello",
+        all(
+            feature = "vello-hybrid",
+            not(feature = "vello-cpu-base"),
+            not(feature = "skia")
+        )
+    ))]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
         let mut options = InnerRendererOptions::default();
         options.features = features;
