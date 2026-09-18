@@ -27,16 +27,18 @@ impl VisitHooks {
 }
 
 /// Checks a Dioxus file for issues.
-pub fn check_file(path: PathBuf, file_content: &str) -> IssueReport {
-    let file = syn::parse_file(file_content).unwrap();
+///
+/// Returns `None` when the file fails to parse - rustc will have already reported the syntax error.
+pub fn check_file(path: PathBuf, file_content: &str) -> Option<IssueReport> {
+    let file = syn::parse_file(file_content).ok()?;
     let mut visit_hooks = VisitHooks::new();
     visit_hooks.visit_file(&file);
-    IssueReport::new(
+    Some(IssueReport::new(
         path,
         std::env::current_dir().unwrap_or_default(),
         file_content.to_string(),
         visit_hooks.issues,
-    )
+    ))
 }
 
 #[allow(unused)]
@@ -310,7 +312,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -326,7 +328,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -339,7 +341,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("use_thing.rs".into(), contents);
+        let report = check_file("use_thing.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -358,7 +360,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -374,7 +376,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -424,7 +426,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -471,7 +473,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -487,7 +489,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -531,7 +533,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -575,7 +577,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -616,7 +618,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -631,7 +633,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -647,7 +649,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -688,7 +690,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -720,7 +722,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(report.issues, vec![]);
     }
@@ -733,7 +735,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -774,7 +776,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,
@@ -843,7 +845,7 @@ mod tests {
             }
         "#};
 
-        let report = check_file("app.rs".into(), contents);
+        let report = check_file("app.rs".into(), contents).unwrap();
 
         assert_eq!(
             report.issues,

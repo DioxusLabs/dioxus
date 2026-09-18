@@ -4,7 +4,7 @@
 //! <https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs>
 
 use super::*;
-use crate::BuildRequest;
+use crate::{AppBuilder, BuildId, BuildKind, BuildMode};
 use anyhow::{Context, anyhow};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::path::Path;
@@ -22,27 +22,45 @@ pub(crate) struct Check {
 }
 
 impl Check {
-    // Todo: check the entire crate
     pub(crate) async fn check(self) -> Result<StructuredOutput> {
-        let BuildTargets { client, server } = self.build_args.into_targets().await?;
-
         match self.file {
-            // Default to checking the project
+            // Default to checking the project through `cargo check` plus the syn lints, scoped to
+            // the exact files rustc reported in its dep-info.
             None => {
-                check_project_and_report(&client)
-                    .await
-                    .context("error checking project")?;
+                let BuildTargets { client, server } = self.build_args.into_targets().await?;
 
+                let mut requests = vec![(client, BuildId::PRIMARY)];
                 if let Some(server) = server {
-                    if server.package != client.package {
-                        check_project_and_report(&server)
-                            .await
-                            .context("error checking project")?;
+                    if server.package != requests[0].0.package {
+                        requests.push((server, BuildId::SECONDARY));
                     }
                 }
+
+                let mut files = vec![];
+                for (mut req, build_id) in requests {
+                    req.kind = BuildKind::Check;
+                    tracing::info!("Checking {} [{}]...", req.package, req.triple);
+                    let artifacts = AppBuilder::started(&req, BuildMode::Base, build_id)?
+                        .finish_build()
+                        .await?;
+
+                    files.extend(
+                        artifacts
+                            .depinfo
+                            .files
+                            .iter()
+                            .filter(|f| {
+                                f.starts_with(req.crate_dir())
+                                    && f.extension().is_some_and(|e| e == "rs")
+                            })
+                            .cloned(),
+                    );
+                }
+
+                check_files_and_report(files).await?;
             }
             Some(file) => {
-                check_file_and_report(file)
+                check_files_and_report(vec![file])
                     .await
                     .context("error checking file")?;
             }
@@ -50,28 +68,6 @@ impl Check {
 
         Ok(StructuredOutput::Success)
     }
-}
-
-async fn check_file_and_report(path: PathBuf) -> Result<()> {
-    check_files_and_report(vec![path]).await
-}
-
-/// Read every .rs file accessible when considering the .gitignore and check it
-///
-/// Runs using Tokio for multithreading, so it should be really really fast
-///
-/// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
-async fn check_project_and_report(build: &BuildRequest) -> Result<()> {
-    let dioxus_crate = build
-        .workspace
-        .find_main_package(Some(build.package.clone()))?;
-    let dioxus_crate = &build.workspace.krates[dioxus_crate];
-    let mut files_to_check = vec![];
-    collect_rs_files(
-        dioxus_crate.manifest_path.parent().unwrap().as_std_path(),
-        &mut files_to_check,
-    );
-    check_files_and_report(files_to_check).await
 }
 
 /// Check a list of files and report the issues.
@@ -101,6 +97,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
     // remove error results which we've already printed
     let issue_reports = issue_reports
         .into_iter()
+        .flatten()
         .flatten()
         .flatten()
         .collect::<Vec<_>>();
