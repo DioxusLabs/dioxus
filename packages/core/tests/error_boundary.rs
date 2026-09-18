@@ -3,6 +3,105 @@
 use dioxus::{CapturedError, prelude::*};
 
 #[test]
+fn handler_errors_reach_parent_boundary() {
+    use std::{cell::Cell, rc::Rc};
+
+    #[derive(Clone, Default)]
+    struct Calls(Rc<Cell<usize>>);
+
+    fn App() -> Element {
+        rsx! {
+            ErrorBoundary {
+                handle_error: |error: ErrorContext| rsx! { "Outer: {error.error().unwrap()}" },
+                ErrorBoundary {
+                    handle_error: |error: ErrorContext| {
+                        let calls = consume_context::<Calls>();
+                        calls.0.set(calls.0.get() + 1);
+                        // Stop a self-catching boundary without hanging the test runner.
+                        if calls.0.get() > 8 {
+                            return rsx! { "Repeated handler" };
+                        }
+                        Err(error.error().unwrap().into())
+                    },
+                    ThrowChild {}
+                }
+            }
+        }
+    }
+
+    let calls = Calls::default();
+    let mut dom = VirtualDom::new(App).with_root_context(calls.clone());
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    for _ in 0..10 {
+        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    }
+    assert_eq!(calls.0.get(), 1);
+    assert_eq!(dioxus_ssr::render(&dom), "Outer: asd");
+}
+
+#[test]
+fn handler_errors_reach_default_boundary() {
+    use std::{cell::Cell, rc::Rc};
+
+    #[derive(Clone, Default)]
+    struct Calls(Rc<Cell<usize>>);
+
+    fn App() -> Element {
+        rsx! {
+            ErrorBoundary {
+                handle_error: |error: ErrorContext| {
+                    let calls = consume_context::<Calls>();
+                    calls.0.set(calls.0.get() + 1);
+                    if calls.0.get() > 8 {
+                        return rsx! { "Repeated handler" };
+                    }
+                    Err(error.error().unwrap().into())
+                },
+                ThrowChild {}
+            }
+        }
+    }
+
+    let calls = Calls::default();
+    let mut dom = VirtualDom::new(App).with_root_context(calls.clone());
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    assert_eq!(calls.0.get(), 1);
+    assert_eq!(
+        dioxus_ssr::render(&dom),
+        "<div style=\"color:red;\"><pre>asd</pre></div>"
+    );
+}
+
+#[test]
+fn explicit_throw_uses_current_scope_boundary() {
+    fn App() -> Element {
+        let error = use_hook(|| provide_context(ErrorContext::new(None)));
+        use_hook(|| {
+            dioxus_core::Runtime::current()
+                .throw_error(ScopeId::APP, CapturedError::from_display("local error"));
+        });
+        rsx! { "{error.error().unwrap()}" }
+    }
+
+    let mut dom = VirtualDom::new(App);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    assert_eq!(dioxus_ssr::render(&dom), "local error");
+}
+
+#[test]
+fn root_errors_reach_default_boundary() {
+    let mut dom = VirtualDom::new(ThrowChild);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    assert_eq!(
+        dioxus_ssr::render(&dom),
+        "<div style=\"color:red;\"><pre>asd</pre></div>"
+    );
+}
+
+#[test]
 fn catches_panic() {
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
