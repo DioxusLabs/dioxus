@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use image::{GenericImageView, ImageFormat};
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{Path, PathBuf},
@@ -369,24 +370,7 @@ impl BundleContext<'_> {
         }
 
         let crate_dir = self.crate_dir();
-        for (dest_path, src_path) in &rpm_settings.files {
-            let src = if src_path.is_absolute() {
-                src_path.clone()
-            } else {
-                crate_dir.join(src_path)
-            };
-            if src.exists() {
-                let dest = dest_path.to_string_lossy().to_string();
-                let dest = if dest.starts_with('/') {
-                    dest
-                } else {
-                    format!("/{dest}")
-                };
-                builder = builder
-                    .with_file(&src, rpm::FileOptions::new(&dest).permissions(0o644))
-                    .context("Failed to add custom file to RPM")?;
-            }
-        }
+        builder = add_custom_rpm_files(builder, &crate_dir, &rpm_settings.files)?;
 
         if let Some(script_path) = &rpm_settings.pre_install_script {
             let path = resolve_path(&crate_dir, script_path);
@@ -1167,5 +1151,68 @@ fn resolve_path(crate_dir: &Path, path: &Path) -> PathBuf {
         path.to_path_buf()
     } else {
         crate_dir.join(path)
+    }
+}
+
+fn add_custom_rpm_files(
+    mut builder: rpm::PackageBuilder,
+    crate_dir: &Path,
+    files: &HashMap<PathBuf, PathBuf>,
+) -> Result<rpm::PackageBuilder> {
+    for (dest_path, src_path) in files {
+        let src = resolve_path(crate_dir, src_path);
+        let dest = dest_path.to_string_lossy().to_string();
+        let dest = if dest.starts_with('/') {
+            dest
+        } else {
+            format!("/{dest}")
+        };
+        builder = builder
+            .with_file(&src, rpm::FileOptions::new(&dest).permissions(0o644))
+            .with_context(|| {
+                format!(
+                    "Failed to add configured RPM file {} as {}",
+                    src.display(),
+                    dest
+                )
+            })?;
+    }
+    Ok(builder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_custom_rpm_file_fails_with_source_and_destination() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        let destination = PathBuf::from("/usr/share/example/required.txt");
+        let source = crate_dir.path().join("required.txt");
+        let files = HashMap::from([(destination.clone(), PathBuf::from("required.txt"))]);
+        let builder = rpm::PackageBuilder::new("example", "1.0.0", "MIT", "noarch", "example");
+
+        let error = add_custom_rpm_files(builder, crate_dir.path(), &files)
+            .err()
+            .expect("missing configured file must fail");
+        let message = error.to_string();
+        assert!(message.contains(&source.display().to_string()));
+        assert!(message.contains(&destination.display().to_string()));
+    }
+
+    #[test]
+    fn custom_rpm_file_is_in_package() {
+        let crate_dir = tempfile::tempdir().unwrap();
+        fs::write(crate_dir.path().join("required.txt"), "required content").unwrap();
+        let destination = PathBuf::from("/usr/share/example/required.txt");
+        let files = HashMap::from([(destination.clone(), PathBuf::from("required.txt"))]);
+        let builder = rpm::PackageBuilder::new("example", "1.0.0", "MIT", "noarch", "example");
+
+        let package = add_custom_rpm_files(builder, crate_dir.path(), &files)
+            .unwrap()
+            .build()
+            .unwrap();
+        let entries = package.metadata.get_file_entries().unwrap();
+        assert!(entries.iter().any(|entry| entry.path == destination));
     }
 }
