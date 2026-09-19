@@ -274,13 +274,8 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
-        // Add more search paths for the linker
-        let mut command_envs = args.envs.clone();
-
-        // On linux, we need to set a more complete PATH for the linker to find its libraries
-        if cfg!(target_os = "linux") {
-            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
-        }
+        // Replay with the env rustc gave the linker, falling back to the rustc env
+        let command_envs = link_replay_envs(&artifacts.workspace_rustc, &args);
 
         // Run the linker directly!
         //
@@ -1150,13 +1145,8 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
-        // Add more search paths for the linker
-        let mut command_envs = rustc_args.envs.clone();
-
-        // On linux, we need to set a more complete PATH for the linker to find its libraries
-        if cfg!(target_os = "linux") {
-            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
-        }
+        // Replay with the env rustc gave the linker, falling back to the rustc env
+        let command_envs = link_replay_envs(set, rustc_args);
 
         // Run the linker directly!
         let res = Command::new(linker)
@@ -1533,4 +1523,84 @@ fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
     let out_dir = out_dir?;
     let crate_name = crate_name?;
     Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
+}
+
+/// The env to replay the tip crate's link with.
+///
+/// rustc gives its linker child vars that the rustc process itself never sees: `LIB`/`INCLUDE`/`PATH`
+/// from MSVC tool discovery on windows, the sysroot tool dirs on `PATH`, `LC_ALL`/`VSLANG`. Prefer
+/// that captured env. Fall back to the rustc env (plus our own `PATH` on linux) for caches written
+/// before the link env was recorded.
+fn link_replay_envs(set: &WorkspaceRustcArgs, rustc_args: &RustcArgs) -> Vec<(String, String)> {
+    if !set.link_envs.is_empty() {
+        return set.link_envs.clone();
+    }
+
+    let mut command_envs = rustc_args.envs.clone();
+
+    // On linux, we need to set a more complete PATH for the linker to find its libraries
+    if cfg!(target_os = "linux") {
+        command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+    }
+
+    command_envs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rustc_args(envs: &[(&str, &str)]) -> RustcArgs {
+        RustcArgs {
+            args: vec![],
+            envs: envs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            cwd: PathBuf::new(),
+        }
+    }
+
+    #[test]
+    fn link_replay_prefers_env_captured_from_the_linker_child() {
+        // Outside a VS developer prompt, `LIB` only ever exists in the env rustc gives its linker.
+        let rustc = rustc_args(&[("PATH", "C:\\rust\\bin")]);
+        let mut set = WorkspaceRustcArgs::new(vec!["kernel32.lib".into()]);
+        set.link_envs = vec![
+            ("PATH".into(), "C:\\msvc\\bin;C:\\rust\\bin".into()),
+            ("LIB".into(), "C:\\msvc\\lib;C:\\sdk\\lib".into()),
+        ];
+
+        let envs = link_replay_envs(&set, &rustc);
+
+        assert_eq!(envs, set.link_envs);
+        assert!(envs.iter().any(|(k, v)| k == "LIB" && v.contains("sdk")));
+    }
+
+    #[test]
+    fn link_replay_falls_back_to_rustc_env_without_a_capture() {
+        let rustc = rustc_args(&[("CARGO", "cargo"), ("PATH", "/usr/bin")]);
+        let set = WorkspaceRustcArgs::new(vec![]);
+
+        let envs = link_replay_envs(&set, &rustc);
+
+        assert_eq!(&envs[..2], &rustc.envs[..]);
+        assert!(!envs.iter().any(|(k, _)| k == "LIB"));
+    }
+
+    #[test]
+    fn link_envs_round_trip_and_empty_file_means_no_capture() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("link_env.json");
+
+        std::fs::write(&path, "").unwrap();
+        assert!(crate::read_link_envs(&path).is_empty());
+
+        let envs = vec![
+            ("LIB".to_string(), "C:\\sdk\\lib".to_string()),
+            ("VSLANG".to_string(), "1033".to_string()),
+        ];
+        crate::write_link_envs(&path, envs.clone()).unwrap();
+        assert_eq!(crate::read_link_envs(&path), envs);
+    }
 }

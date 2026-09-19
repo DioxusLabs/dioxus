@@ -11,6 +11,9 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceRustcArgs {
     pub link_args: Vec<String>,
+    /// The env rustc gave the tip crate's linker invocation. Empty if the link step was not
+    /// intercepted, in which case replays fall back to the tip crate's rustc env.
+    pub link_envs: Vec<(String, String)>,
     pub rustc_args: HashMap<String, RustcArgs>,
 }
 
@@ -18,6 +21,7 @@ impl WorkspaceRustcArgs {
     pub fn new(link_args: Vec<String>) -> Self {
         Self {
             link_args,
+            link_envs: Default::default(),
             rustc_args: Default::default(),
         }
     }
