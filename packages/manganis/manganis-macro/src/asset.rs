@@ -76,6 +76,9 @@ impl ToTokens for AssetParser {
 impl AssetParser {
     pub(crate) fn expand_asset_tokens(&self, asset: &Path) -> proc_macro2::TokenStream {
         let asset_string = asset.to_string_lossy();
+        if let Some(error) = asset_path_length_error(&asset_string) {
+            return syn::Error::new(self.path_expr.span(), error).into_compile_error();
+        }
         let mut asset_str = proc_macro2::Literal::string(&asset_string);
         asset_str.set_span(self.path_expr.span());
 
@@ -142,5 +145,51 @@ impl AssetParser {
     fn error_tokens(&self, err: &AssetParseError) -> proc_macro2::TokenStream {
         let err = err.to_string();
         quote! { compile_error!(#err) }
+    }
+}
+
+fn asset_path_length_error(asset_path: &str) -> Option<String> {
+    let actual = asset_path.len();
+    let maximum = manganis_core::BundledAsset::MAX_PATH_LEN;
+    if actual <= maximum {
+        return None;
+    }
+
+    let excess = actual - maximum;
+    let unit = if excess == 1 { "byte" } else { "bytes" };
+    Some(format!(
+        "Asset path is {actual} bytes long, exceeding the {maximum}-byte limit by {excess} {unit}"
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asset_path_at_maximum_length_is_valid() {
+        let path = "a".repeat(manganis_core::BundledAsset::MAX_PATH_LEN);
+        assert_eq!(asset_path_length_error(&path), None);
+    }
+
+    #[test]
+    fn asset_path_over_maximum_length_has_actionable_error() {
+        let maximum = manganis_core::BundledAsset::MAX_PATH_LEN;
+        let actual = maximum + 1;
+        let path = "a".repeat(actual);
+        let expected = format!(
+            "Asset path is {actual} bytes long, exceeding the {maximum}-byte limit by 1 byte"
+        );
+
+        assert_eq!(asset_path_length_error(&path), Some(expected.clone()));
+
+        let parser = AssetParser {
+            path_expr: quote::quote!("/assets/asset.txt"),
+            asset: Ok(path.clone().into()),
+            options: TokenStream2::new(),
+        };
+        let expanded = parser.expand_asset_tokens(Path::new(&path)).to_string();
+        assert!(expanded.contains("compile_error"));
+        assert!(expanded.contains(&expected));
     }
 }
