@@ -696,15 +696,6 @@ impl BuildRequest {
                 _ => rust_target,
             }) as _
         }
-        fn rt_builtins(rust_target: &str) -> &str {
-            (match rust_target {
-                "armv7-linux-androideabi" => "arm",
-                "aarch64-linux-android" => "aarch64",
-                "i686-linux-android" => "i686",
-                "x86_64-linux-android" => "x86_64",
-                _ => rust_target,
-            }) as _
-        }
 
         let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
 
@@ -764,7 +755,6 @@ impl BuildRequest {
 
         // Environment variables for cargo
         let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
-        let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
         let bindgen_clang_args_key =
             format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
 
@@ -790,25 +780,6 @@ impl BuildRequest {
             .join(cargo_ndk_sysroot_target);
         let target_ar = tools.ar_path();
         let target_ranlib = tools.ranlib();
-        let clang_folder = tools.clang_folder();
-
-        // choose the clang target with the highest version
-        // Should we filter for only numbers?
-        let clang_rt = std::fs::read_dir(&clang_folder)
-            .map(|dir| {
-                let clang_builtins_target = dir
-                    .filter_map(|a| a.ok())
-                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-                    .map(|s| s.path())
-                    .unwrap_or_else(|| clang_folder.join("clang"));
-
-                format!(
-                    "-L{} -lstatic=clang_rt.builtins-{}-android",
-                    clang_builtins_target.join("lib").join("linux").display(),
-                    rt_builtins(&triple)
-                )
-            })
-            .unwrap_or_default();
 
         let extra_include: String = format!(
             "{}/usr/include/{}",
@@ -853,7 +824,6 @@ impl BuildRequest {
                 cargo_ndk_sysroot_target_key.to_string(),
                 cargo_ndk_sysroot_target.into(),
             ),
-            (cargo_rust_flags_key, clang_rt.into()),
             (bindgen_clang_args_key, bindgen_args.into()),
             (
                 "ANDROID_NATIVE_API_LEVEL".to_string(),
@@ -1229,6 +1199,39 @@ impl AndroidTools {
             .unwrap()
             .join("lib")
             .join("clang")
+    }
+
+    /// Rustflags that link the NDK's `clang_rt.builtins` static library for the given target,
+    /// picking the highest clang version available in the NDK.
+    ///
+    /// Returned as separate flags so paths containing spaces survive `CARGO_ENCODED_RUSTFLAGS`.
+    pub(crate) fn clang_rt_builtins_rustflags(&self, triple: &Triple) -> Vec<String> {
+        let arch = match triple.to_string().as_str() {
+            "armv7-linux-androideabi" => "arm".to_string(),
+            "aarch64-linux-android" => "aarch64".to_string(),
+            "i686-linux-android" => "i686".to_string(),
+            "x86_64-linux-android" => "x86_64".to_string(),
+            other => other.to_string(),
+        };
+
+        let clang_folder = self.clang_folder();
+        let Ok(dir) = std::fs::read_dir(&clang_folder) else {
+            return vec![];
+        };
+
+        let clang_builtins_target = dir
+            .filter_map(|a| a.ok())
+            .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+            .map(|s| s.path())
+            .unwrap_or_else(|| clang_folder.join("clang"));
+
+        vec![
+            format!(
+                "-L{}",
+                clang_builtins_target.join("lib").join("linux").display()
+            ),
+            format!("-lstatic=clang_rt.builtins-{arch}-android"),
+        ]
     }
 
     fn ranlib(&self) -> PathBuf {
