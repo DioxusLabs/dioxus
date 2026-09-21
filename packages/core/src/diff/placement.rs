@@ -237,7 +237,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
                 .filter(|(_, m)| **m != mount)
                 .find_map(|(child, &m)| {
                     child
-                        .find_first_element(m, self.dom)
+                        .find_first_element_committed(m, self.dom)
                         .map(InsertionSite::before)
                 })
         };
@@ -251,7 +251,7 @@ impl<'dom, 'ctx> PlacementResolver<'dom, 'ctx> {
                 .filter(|(_, m)| **m != mount)
                 .find_map(|(child, &m)| {
                     child
-                        .find_last_element(m, self.dom)
+                        .find_last_element_committed(m, self.dom)
                         .map(InsertionSite::after)
                 })
         };
