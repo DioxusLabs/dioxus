@@ -336,13 +336,11 @@ impl<'a> Splitter<'a> {
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table(&mut out);
-        let segment_start = self
-            .expand_ifunc_table_max(
-                &mut out,
-                ifunc_table_id,
-                self.split_points.len() + shared_funcs.len(),
-            )
-            .unwrap();
+        let segment_start = self.expand_ifunc_table_max(
+            &mut out,
+            ifunc_table_id,
+            self.split_points.len() + shared_funcs.len(),
+        );
 
         self.convert_shared_to_imports(&mut out, segment_start, &shared_funcs, &symbols_to_import);
 
@@ -402,13 +400,11 @@ impl<'a> Splitter<'a> {
         out.exports.add("__indirect_function_table", ifunc_table);
 
         // Expand the ifunc table to accommodate the new ifuncs
-        let segment_start = self
-            .expand_ifunc_table_max(
-                out,
-                ifunc_table,
-                self.split_points.len() + self.shared_symbols.len(),
-            )
-            .expect("failed to expand ifunc table");
+        let segment_start = self.expand_ifunc_table_max(
+            out,
+            ifunc_table,
+            self.split_points.len() + self.shared_symbols.len(),
+        );
 
         // Delete the split import functions and replace them with local functions
         //
@@ -630,9 +626,11 @@ impl<'a> Splitter<'a> {
         ifuncs: &Vec<Node>,
     ) {
         let ifunc_table_id = self.load_funcref_table(out);
-        let segment_start = self
-            .expand_ifunc_table_max(out, ifunc_table_id, self.split_points.len() + ifuncs.len())
-            .unwrap();
+        let segment_start = self.expand_ifunc_table_max(
+            out,
+            ifunc_table_id,
+            self.split_points.len() + ifuncs.len(),
+        );
 
         // Make sure to re-export the split func
         out.exports.add(&split_export_name, split_export_func);
@@ -837,24 +835,25 @@ impl<'a> Splitter<'a> {
         FunctionKind::Local(builder.local_func(args))
     }
 
-    /// Expand the ifunc table to accommodate the new ifuncs
+    /// Expand the ifunc table to accommodate the new ifuncs.
     ///
-    /// returns the old maximum
-    fn expand_ifunc_table_max(
-        &self,
-        out: &mut Module,
-        table: TableId,
-        num_ifuncs: usize,
-    ) -> Option<usize> {
+    /// Returns the offset the new ifuncs should be written at - the
+    /// table's previous size.
+    fn expand_ifunc_table_max(&self, out: &mut Module, table: TableId, num_ifuncs: usize) -> usize {
         let ifunc_table_ = out.tables.get_mut(table);
 
         if let Some(max) = ifunc_table_.maximum {
             ifunc_table_.maximum = Some(max + num_ifuncs as u64);
             ifunc_table_.initial += num_ifuncs as u64;
-            return Some(max as usize);
+            return max as usize;
         }
 
-        None
+        // A table built with `--growable-table` (a flag `--wasm-split`
+        // itself requires) has no maximum at all - there's no ceiling to
+        // raise, so just grow `initial`, the only size the table has.
+        let start = ifunc_table_.initial as usize;
+        ifunc_table_.initial += num_ifuncs as u64;
+        start
     }
 
     // only keep the target-features and names section so wasm-opt can use it to optimize the output
