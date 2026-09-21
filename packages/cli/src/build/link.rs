@@ -1439,6 +1439,7 @@ impl BuildRequest {
         struct RustcWrapperScope {
             version: u8,
             capture_mode: &'static str,
+            kind: String,
             bundle: String,
             triple: String,
             profile: String,
@@ -1456,6 +1457,7 @@ impl BuildRequest {
         let scope = RustcWrapperScope {
             version: 1,
             capture_mode: self.rustc_wrapper_capture_mode(build_mode),
+            kind: format!("{:?}", self.kind),
             bundle: self.bundle.to_string(),
             triple: self.triple.to_string(),
             profile: self.profile.clone(),
