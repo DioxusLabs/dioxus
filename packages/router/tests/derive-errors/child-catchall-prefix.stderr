@@ -1,0 +1,5 @@
+error: invalid catch-all `:..rest` in #[child("/:..rest")]; a catch-all drains the whole remaining path, leaving nothing for the child to match. Use a static #[child] prefix, or put the catch-all on a #[route] variant instead
+  --> tests/derive-errors/child-catchall-prefix.rs:16:13
+   |
+16 |     #[child("/:..rest")]
+   |             ^^^^^^^^^^
