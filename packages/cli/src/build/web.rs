@@ -428,6 +428,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             script_list.extend(resources.dev.script.iter().cloned());
         }
 
+        // Every preload tag of the document goes through this list, which is rendered ahead of
+        // the rest of the head below. A preload written straight into `head_resources` instead
+        // would be discovered after the render blocking stylesheets and scripts it has to beat.
+        let preloads = asset_preloads(assets);
+
         let mut head_resources = String::new();
 
         // Add all styles to the head
@@ -455,53 +460,33 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
 
-        // Inject any resources from manganis into the head
+        // Inject the manganis assets that asked to be written into the head directly
         for asset in assets.unique_assets() {
             let asset_path = asset.bundled_path();
             match asset.options().variant() {
-                AssetVariant::Css(css_options) => {
-                    if css_options.preloaded() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
-                    if css_options.static_head() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
-                        );
-                    }
-                }
-                AssetVariant::Image(image_options) if image_options.preloaded() => {
+                AssetVariant::Css(css_options) if css_options.static_head() => {
                     _ = write!(
                         head_resources,
-                        r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
                     );
                 }
-                AssetVariant::Js(js_options) => {
-                    if js_options.preloaded() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
-                    if js_options.static_head() {
-                        let source = std::path::Path::new(asset.absolute_source_path());
-                        let module_attr = if js_is_module(js_options, source) {
-                            r#" type="module""#
-                        } else {
-                            ""
-                        };
-                        _ = write!(
-                            head_resources,
-                            r#"<script{module_attr} src="/{{base_path}}/assets/{asset_path}"></script>"#
-                        );
-                    }
+                AssetVariant::Js(js_options) if js_options.static_head() => {
+                    let source = std::path::Path::new(asset.absolute_source_path());
+                    let module_attr = if js_is_module(js_options, source) {
+                        r#" type="module""#
+                    } else {
+                        ""
+                    };
+                    _ = write!(
+                        head_resources,
+                        r#"<script{module_attr} src="/{{base_path}}/assets/{asset_path}"></script>"#
+                    );
                 }
                 _ => {}
             }
         }
+
+        let head_resources = render_preloads(preloads) + head_resources.as_str();
 
         // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
         // And if they do not match then Safari downloads the wasm file twice.
@@ -608,8 +593,159 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 }
 
+/// A `<link rel="preload">` tag of the document head, and where it sits among the other preload
+/// tags.
+struct Preload {
+    /// Tags are written in ascending order of this value. The zero that [`AssetOptions`] defaults
+    /// to is the middle of the range, so a resource the first render waits on takes a negative
+    /// order to be discovered ahead of the rest.
+    order: i32,
+    /// Tie breaker between tags that share an order, so the head is stable across builds
+    key: String,
+    /// The rendered tag
+    tag: String,
+}
+
+/// Collect a [`Preload`] for every asset in the manifest that asked to be preloaded
+fn asset_preloads(assets: &AppManifest) -> Vec<Preload> {
+    let mut preloads = Vec::new();
+
+    for asset in assets.unique_assets() {
+        let options = asset.options();
+
+        // The value of the `as` attribute, which tells the browser what kind of resource this is
+        let kind = match options.variant() {
+            AssetVariant::Css(css_options) if css_options.preloaded() => "style",
+            AssetVariant::Image(image_options) if image_options.preloaded() => "image",
+            AssetVariant::Js(js_options) if js_options.preloaded() => "script",
+            _ => continue,
+        };
+
+        let path = asset.bundled_path();
+        let fetch_priority = match options.fetch_priority().attribute_value() {
+            Some(priority) => format!(r#" fetchpriority="{priority}""#),
+            None => String::new(),
+        };
+
+        preloads.push(Preload {
+            order: options.preload_order(),
+            key: path.to_string(),
+            tag: format!(
+                r#"<link rel="preload" as="{kind}" href="/{{base_path}}/assets/{path}"{fetch_priority} crossorigin>"#
+            ),
+        });
+    }
+
+    preloads
+}
+
+/// Render preload tags in ascending [`Preload::order`], breaking ties by [`Preload::key`].
+///
+/// Browsers fetch resources of the same computed priority in the order they discover them, so this
+/// order is what lets a user put the assets the first render depends on in front of the rest. It
+/// also keeps `index.html` byte identical between builds of an unchanged app.
+fn render_preloads(mut preloads: Vec<Preload>) -> String {
+    preloads.sort_unstable_by(|a, b| a.order.cmp(&b.order).then_with(|| a.key.cmp(&b.key)));
+    preloads.into_iter().map(|preload| preload.tag).collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{asset_preloads, render_preloads};
+    use crate::opt::AppManifest;
+    use manganis::{AssetOptions, BundledAsset, FetchPriority};
+
+    /// Render the preload tags the given manifest produces
+    fn preload_links_of(assets: &AppManifest) -> String {
+        render_preloads(asset_preloads(assets))
+    }
+
+    /// Build a manifest out of `(source, bundled, options)` triples, inserted in the given order
+    fn manifest_of(assets: &[(&str, &str, AssetOptions)]) -> AppManifest {
+        let mut manifest = AppManifest::new();
+        for (source, bundled, options) in assets {
+            manifest.insert_asset(BundledAsset::new(source, bundled, *options));
+        }
+        manifest
+    }
+
+    #[test]
+    fn preload_links_are_ordered_and_carry_the_fetch_priority() {
+        let assets = [
+            (
+                "/app/assets/late.css",
+                "late.css",
+                AssetOptions::css()
+                    .with_preload(true)
+                    .with_preload_order(1)
+                    .into_asset_options(),
+            ),
+            (
+                "/app/assets/hero.png",
+                "hero.png",
+                AssetOptions::image()
+                    .with_preload(true)
+                    .with_fetch_priority(FetchPriority::High)
+                    .with_preload_order(-1)
+                    .into_asset_options(),
+            ),
+            (
+                "/app/assets/script.js",
+                "script.js",
+                AssetOptions::js()
+                    .with_preload(true)
+                    .with_fetch_priority(FetchPriority::Low)
+                    .into_asset_options(),
+            ),
+            (
+                "/app/assets/not-preloaded.css",
+                "not-preloaded.css",
+                AssetOptions::css().into_asset_options(),
+            ),
+        ];
+
+        assert_eq!(
+            preload_links_of(&manifest_of(&assets)),
+            concat!(
+                r#"<link rel="preload" as="image" href="/{base_path}/assets/hero.png" fetchpriority="high" crossorigin>"#,
+                r#"<link rel="preload" as="script" href="/{base_path}/assets/script.js" fetchpriority="low" crossorigin>"#,
+                r#"<link rel="preload" as="style" href="/{base_path}/assets/late.css" crossorigin>"#,
+            )
+        );
+    }
+
+    #[test]
+    fn preload_links_do_not_depend_on_hash_set_ordering() {
+        // Assets that share a source path are stored in one hash set, so the manifest has to sort
+        // them itself to produce the same head on every build
+        let preloaded = AssetOptions::css().with_preload(true).into_asset_options();
+        let assets: Vec<_> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|name| {
+                (
+                    "/app/assets/style.css",
+                    format!("style-{name}.css"),
+                    preloaded,
+                )
+            })
+            .collect();
+        let assets: Vec<_> = assets
+            .iter()
+            .map(|(source, bundled, options)| (*source, bundled.as_str(), *options))
+            .collect();
+
+        let expected: String = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|name| {
+                format!(
+                    r#"<link rel="preload" as="style" href="/{{base_path}}/assets/style-{name}.css" crossorigin>"#
+                )
+            })
+            .collect();
+
+        assert_eq!(preload_links_of(&manifest_of(&assets)), expected);
+    }
+
     #[test]
     fn dev_templates_do_not_request_google_fonts() {
         const DEV_INDEX: &str = include_str!("../../assets/web/dev.index.html");
