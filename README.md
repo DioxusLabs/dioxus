@@ -82,7 +82,7 @@ fn app() -> Element {
 }
 ```
 
-## ⭐️ Unique features:
+## ⭐️ Unique features
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
@@ -109,8 +109,6 @@ Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support o
   <img src="./notes/ebou2.avif">
 </div>
 
-
-
 ## Truly fullstack applications
 
 Dioxus deeply integrates with [axum](https://github.com/tokio-rs/axum) to provide powerful fullstack capabilities for both clients and servers. Pick from a wide array of built-in batteries like WebSockets, SSE, Streaming, File Upload/Download, Server-Side-Rendering, Forms, Middleware, and Hot-Reload, or go fully custom and integrate your existing axum backend.
@@ -126,7 +124,6 @@ Render using web-sys, webview, server-side-rendering, liveview, or even with our
 <div align="center">
   <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/native-blitz-wgpu.webp">
 </div>
-
 
 ## First-party primitive components
 
@@ -144,8 +141,6 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
   <img src="./notes/android_and_ios2.avif" width="500">
 </div>
 
-
-
 ## Bundle for web, desktop, and mobile
 
 Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.7/tutorial/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
@@ -154,7 +149,6 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
   <img src="./notes/bundle.gif">
 </div>
 
-
 ## Fantastic documentation
 
 We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.7/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
@@ -162,7 +156,6 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 <div align="center">
   <img src="./notes/docs.avif">
 </div>
-
 
 ## Community
 
