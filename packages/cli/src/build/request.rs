@@ -832,11 +832,7 @@ impl BuildRequest {
             );
         }
 
-        let target_dir = std::env::var("CARGO_TARGET_DIR")
-            .ok()
-            .map(PathBuf::from)
-            .or_else(|| cargo_config.build.target_dir.clone())
-            .unwrap_or_else(|| workspace.workspace_root().join("target"));
+        let target_dir = workspace.target_dir.clone();
 
         // If the user provided a profile and wasm_split is enabled, we should check that LTO=true and debug=true
         if args.wasm_split {
