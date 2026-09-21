@@ -221,3 +221,136 @@ fn child_route_preserves_query_and_hash() {
     assert_eq!(reserved.to_string(), "/search?query=a%23b&word_count=1");
     assert_eq!(Route::from_str(&reserved.to_string()).unwrap(), reserved);
 }
+
+#[test]
+fn empty_query_arguments_are_omitted() {
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/?:first&:middle&:last")]
+        Index {
+            first: Option<u64>,
+            middle: String,
+            last: String,
+        },
+    }
+
+    #[component]
+    fn Index(first: Option<u64>, middle: String, last: String) -> Element {
+        rsx! {
+            h1 { "Index" }
+        }
+    }
+
+    let empty = Route::Index {
+        first: None,
+        middle: String::new(),
+        last: String::new(),
+    };
+    assert_eq!(empty.to_string(), "/");
+    assert_eq!("/".parse::<Route>().unwrap(), empty);
+    // and the url the old serialization produced still parses to the same
+    assert_eq!("/?middle=&last=".parse::<Route>().unwrap(), empty);
+
+    // an empty argument at the end leaves no dangling `&`
+    let only_first = Route::Index {
+        first: Some(1),
+        middle: String::new(),
+        last: String::new(),
+    };
+    assert_eq!(only_first.to_string(), "/?first=1");
+    assert_eq!("/?first=1".parse::<Route>().unwrap(), only_first);
+
+    // nor does one in the middle
+    let first_and_last = Route::Index {
+        first: Some(1),
+        middle: String::new(),
+        last: "z".to_string(),
+    };
+    assert_eq!(first_and_last.to_string(), "/?first=1&last=z");
+    assert_eq!("/?first=1&last=z".parse::<Route>().unwrap(), first_and_last);
+
+    // nor does one at the start put a `&` first
+    let only_last = Route::Index {
+        first: None,
+        middle: String::new(),
+        last: "z".to_string(),
+    };
+    assert_eq!(only_last.to_string(), "/?last=z");
+    assert_eq!("/?last=z".parse::<Route>().unwrap(), only_last);
+}
+
+// Also verify a spread query (`?:..query`) -- empty has no ?
+#[test]
+fn empty_spread_query_is_omitted() {
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct Query(String);
+
+    impl From<&str> for Query {
+        fn from(query: &str) -> Self {
+            Query(query.to_string())
+        }
+    }
+
+    impl Display for Query {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    #[component]
+    fn Index(query: Query) -> Element {
+        rsx! {
+            h1 { "Index" }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/?:..query")]
+        Index { query: Query },
+    }
+
+    let empty = Route::Index {
+        query: Query::default(),
+    };
+    assert_eq!(empty.to_string(), "/");
+    assert_eq!("/".parse::<Route>().unwrap(), empty);
+
+    let full = Route::Index {
+        query: Query("id=10".to_string()),
+    };
+    assert_eq!(full.to_string(), "/?id=10");
+    assert_eq!("/?id=10".parse::<Route>().unwrap(), full);
+}
+
+// Make sure a route with both a query string and a hash look as desired
+#[test]
+fn query_and_hash_are_each_omitted_when_empty() {
+    #[derive(Debug, Clone, PartialEq, Routable)]
+    enum Route {
+        #[route("/reset/?:next#:code")]
+        Reset { next: String, code: String },
+    }
+
+    #[component]
+    fn Reset(next: String, code: String) -> Element {
+        rsx! {
+            h1 { "Reset" }
+        }
+    }
+
+    let cases = [
+        ("/reset/", "", ""),
+        ("/reset/?next=/home", "/home", ""),
+        ("/reset/#abc", "", "abc"),
+        ("/reset/?next=/home#abc", "/home", "abc"),
+    ];
+    for (url, next, code) in cases {
+        let route = Route::Reset {
+            next: next.to_string(),
+            code: code.to_string(),
+        };
+        assert_eq!(route.to_string(), url);
+        assert_eq!(url.parse::<Route>().unwrap(), route, "{url}");
+    }
+}
