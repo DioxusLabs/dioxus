@@ -36,6 +36,12 @@ pub struct RustcArgs {
 /// separate file in this directory: `{dir}/{crate_name}.json`.
 pub const DX_RUSTC_WRAPPER_ENV_VAR: &str = "DX_RUSTC";
 
+/// The environment variable indicating that the wrapper should run clippy-driver instead of rustc.
+///
+/// Set by `dx clippy` builds; when present, `run_rustc` still captures the rustc args but delegates
+/// the actual compilation to clippy-driver.
+pub const DX_CLIPPY_ENV_VAR: &str = "DX_CLIPPY";
+
 /// Is `dx` being used as a rustc wrapper?
 ///
 /// This is primarily used to intercept cargo, enabling fast hot-patching by caching the environment
@@ -80,7 +86,7 @@ pub fn run_rustc() -> ExitCode {
 
     // Run the actual rustc command.
     // We want all stdout/stderr to be inherited, so the user sees the compiler output.
-    let mut cmd = std::process::Command::new("rustc");
+    let mut cmd = std::process::Command::new(rustc_program());
 
     // The first argument in `captured_args` is the rustc path, which we need to skip
     // when passing arguments to the `rustc` command we are spawning.
@@ -93,6 +99,37 @@ pub fn run_rustc() -> ExitCode {
     // Spawn the process and propagate its exit code.
     let status = cmd.status().expect("Failed to execute rustc command");
     std::process::exit(status.code().unwrap_or(1)); // Exit with 1 if process was killed by signal
+}
+
+/// The compiler the wrapper should exec.
+///
+/// Normally this is `rustc`, but `dx clippy` builds set [`DX_CLIPPY_ENV_VAR`] and need clippy-driver
+/// instead. clippy-driver is located via the running toolchain - first by looking next to `rustc`
+/// on PATH, then through `rustup which` (rustup respects `RUSTUP_TOOLCHAIN`, which cargo sets for
+/// the wrapper).
+fn rustc_program() -> PathBuf {
+    if std::env::var(DX_CLIPPY_ENV_VAR).is_err() {
+        return "rustc".into();
+    }
+
+    if let Ok(path) = which::which("clippy-driver") {
+        return path;
+    }
+
+    if let Ok(output) = std::process::Command::new("rustup")
+        .args(["which", "clippy-driver"])
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return PathBuf::from(path);
+            }
+        }
+    }
+
+    eprintln!("error: dx clippy requires the clippy component: run `rustup component add clippy`");
+    std::process::exit(1);
 }
 
 fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
