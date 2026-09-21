@@ -640,7 +640,7 @@
         "deb": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DebianSettings"
+              "$ref": "#/$defs/DebSettings"
             },
             {
               "type": "null"
@@ -713,6 +713,16 @@
           "items": {
             "type": "string"
           }
+        },
+        "rpm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RpmSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "short_description": {
           "type": [
@@ -808,7 +818,7 @@
         "args"
       ]
     },
-    "DebianSettings": {
+    "DebSettings": {
       "type": "object",
       "properties": {
         "changelog": {
@@ -837,13 +847,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "desktop_template": {
-          "description": "Path to a custom desktop file Handlebars template.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "files": {
           "description": "List of custom files to add to the deb package.\nMaps the path on the debian package to the path of the file to include (relative to the current working directory).",
@@ -1249,7 +1252,7 @@
       ]
     },
     "LinuxConfig": {
-      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux\ncategories = [\"Utility\"]\n\n# Debian package settings (previously in [bundle.deb])\n[linux.deb]\ndepends = [\"libwebkit2gtk-4.0-37\"]\nsection = \"utils\"\n```",
+      "description": "Linux-specific configuration.\n\nExample:\n```toml\n[linux]\nidentifier = \"com.example.myapp.linux\"\ncategories = [\"Utility\"]\ndesktop_template = \"linux.desktop\"\n\n[bundle.deb]\ndepends = [\"libwebkit2gtk-4.1-0\"]\n\n[bundle.rpm]\nrequires = [\"webkit2gtk4.1\"]\n```",
       "type": "object",
       "properties": {
         "categories": {
@@ -1280,15 +1283,11 @@
             "type": "string"
           }
         },
-        "deb": {
-          "description": "Debian-specific package settings.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LinuxDebSettings"
-            },
-            {
-              "type": "null"
-            }
+        "desktop_template": {
+          "description": "Custom `.desktop` file Handlebars template used by `.deb`, `.rpm`, and AppImage.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
+          "type": [
+            "string",
+            "null"
           ]
         },
         "flatpak_permissions": {
@@ -1355,125 +1354,6 @@
         },
         "short_description": {
           "description": "Short description.\nOverrides `bundle.short_description` for Linux builds.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
-    "LinuxDebSettings": {
-      "description": "Debian package settings.",
-      "type": "object",
-      "properties": {
-        "changelog": {
-          "description": "Path to changelog file.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "conflicts": {
-          "description": "Package conflicts.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "depends": {
-          "description": "Package dependencies.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "desktop_template": {
-          "description": "Path to custom desktop template.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "files": {
-          "description": "Additional files to include. Maps package path to source path.",
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "post_install_script": {
-          "description": "Post-install script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "post_remove_script": {
-          "description": "Post-remove script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_install_script": {
-          "description": "Pre-install script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pre_remove_script": {
-          "description": "Pre-remove script path.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "priority": {
-          "description": "Package priority (\"required\", \"important\", \"standard\", \"optional\", \"extra\").",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "provides": {
-          "description": "Packages this provides.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "recommends": {
-          "description": "Recommended packages.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "replaces": {
-          "description": "Packages this replaces.",
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "section": {
-          "description": "Debian section (e.g., \"utils\", \"web\").",
           "type": [
             "string",
             "null"
@@ -2226,6 +2106,96 @@
       "required": [
         "description"
       ]
+    },
+    "RpmSettings": {
+      "type": "object",
+      "properties": {
+        "conflicts": {
+          "description": "RPM package `Conflicts`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "Extra files to add to the RPM payload.\nMaps the path in the package to the source path (relative to the crate directory).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "obsoletes": {
+          "description": "RPM package `Obsoletes`. Closest equivalent of Debian `Replaces`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "post_install_script": {
+          "description": "Script run after the package is installed (`%post`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_remove_script": {
+          "description": "Script run after the package is removed (`%postun`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_install_script": {
+          "description": "Script run before the package is installed (`%pre`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_remove_script": {
+          "description": "Script run before the package is removed (`%preun`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provides": {
+          "description": "RPM package `Provides`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "RPM package `Recommends`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires": {
+          "description": "RPM package `Requires`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "SimplePermission": {
       "description": "Simple permission with just a description.",

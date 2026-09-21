@@ -24,7 +24,9 @@ pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) external_bin: Option<Vec<String>>,
     #[serde(default)]
-    pub(crate) deb: Option<DebianSettings>,
+    pub(crate) deb: Option<DebSettings>,
+    #[serde(default)]
+    pub(crate) rpm: Option<RpmSettings>,
     #[serde(default)]
     pub(crate) macos: Option<MacOsSettings>,
     #[serde(default)]
@@ -42,7 +44,7 @@ pub(crate) struct BundleConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
-pub(crate) struct DebianSettings {
+pub(crate) struct DebSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
     #[serde(default)]
@@ -63,11 +65,6 @@ pub(crate) struct DebianSettings {
     /// Maps the path on the debian package to the path of the file to include (relative to the current working directory).
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
-    /// Path to a custom desktop file Handlebars template.
-    ///
-    /// Available variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.
-    #[serde(default)]
-    pub desktop_template: Option<PathBuf>,
     /// Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>
     #[serde(default)]
     pub section: Option<String>,
@@ -93,6 +90,41 @@ pub(crate) struct DebianSettings {
     pub pre_remove_script: Option<PathBuf>,
     /// Path to script that will be executed after the package is removed. See
     /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
+    #[serde(default)]
+    pub post_remove_script: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub(crate) struct RpmSettings {
+    /// RPM package `Requires`.
+    #[serde(default)]
+    pub requires: Option<Vec<String>>,
+    /// RPM package `Recommends`.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
+    /// RPM package `Provides`.
+    #[serde(default)]
+    pub provides: Option<Vec<String>>,
+    /// RPM package `Conflicts`.
+    #[serde(default)]
+    pub conflicts: Option<Vec<String>>,
+    /// RPM package `Obsoletes`. Closest equivalent of Debian `Replaces`.
+    #[serde(default)]
+    pub obsoletes: Option<Vec<String>>,
+    /// Extra files to add to the RPM payload.
+    /// Maps the path in the package to the source path (relative to the crate directory).
+    #[serde(default)]
+    pub files: HashMap<PathBuf, PathBuf>,
+    /// Script run before the package is installed (`%pre`).
+    #[serde(default)]
+    pub pre_install_script: Option<PathBuf>,
+    /// Script run after the package is installed (`%post`).
+    #[serde(default)]
+    pub post_install_script: Option<PathBuf>,
+    /// Script run before the package is removed (`%preun`).
+    #[serde(default)]
+    pub pre_remove_script: Option<PathBuf>,
+    /// Script run after the package is removed (`%postun`).
     #[serde(default)]
     pub post_remove_script: Option<PathBuf>,
 }
