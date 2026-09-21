@@ -124,7 +124,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with: # speed things up a bit
           large-packages: false
           docker-images: false
@@ -166,7 +166,7 @@ jobs:
   #         cache-all-crates: "true"
 
   #     - name: Free Disk Space (Ubuntu)
-  #       uses: jlumbroso/free-disk-space@v1.3.1
+  #       uses: jlumbroso/free-disk-space@v2.0.0
   #       with: # speed things up a bit
   #         large-packages: false
   #         docker-images: false
