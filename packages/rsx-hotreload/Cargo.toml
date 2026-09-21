@@ -20,3 +20,6 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mu
 tracing = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

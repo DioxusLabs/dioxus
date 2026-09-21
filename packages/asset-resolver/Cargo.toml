@@ -39,3 +39,6 @@ serde_json = { workspace = true }
 default = []
 web = ["dep:web-sys", "dep:js-sys", "dep:wasm-bindgen-futures"]
 native = ["dep:http", "dep:percent-encoding", "dep:infer", "dep:dioxus-cli-config", "dep:tokio"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

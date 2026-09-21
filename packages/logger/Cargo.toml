@@ -28,3 +28,6 @@ tracing-subscriber = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

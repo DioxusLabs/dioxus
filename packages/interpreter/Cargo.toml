@@ -44,3 +44,6 @@ webonly = [
 ]
 binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types", "dep:dioxus-html"]
 minimal_bindings = []
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
