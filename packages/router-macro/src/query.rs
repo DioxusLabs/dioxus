@@ -25,7 +25,21 @@ impl QuerySegment {
             QuerySegment::Single(segment) => segment.parse(),
             QuerySegment::Segments(segments) => {
                 let mut tokens = TokenStream2::new();
-                tokens.extend(quote! { let split_query: std::collections::HashMap<&str, &str> = query.split('&').filter_map(|s| s.split_once('=')).collect(); });
+                tokens.extend(quote! {
+                    let split_query: std::collections::HashMap<_, _> = raw_query
+                        .split('&')
+                        .filter_map(|segment| {
+                            let (key, value) = segment.split_once('=')?;
+                            let key = dioxus_router::exports::percent_encoding::percent_decode_str(key)
+                                .decode_utf8()
+                                .unwrap_or(key.into());
+                            let value = dioxus_router::exports::percent_encoding::percent_decode_str(value)
+                                .decode_utf8()
+                                .unwrap_or(value.into());
+                            Some((key, value))
+                        })
+                        .collect();
+                });
                 for segment in segments {
                     tokens.extend(segment.parse());
                 }
@@ -149,7 +163,7 @@ impl QueryArgument {
             let #ident = match split_query.get(stringify!(#ident)) {
                 Some(query_argument) => {
                     use dioxus_router::routable::FromQueryArgument;
-                    <#ty>::from_query_argument(query_argument).unwrap_or_default()
+                    <#ty>::from_query_argument(query_argument.as_ref()).unwrap_or_default()
                 },
                 None => <#ty as Default>::default(),
             };
@@ -166,7 +180,7 @@ impl QueryArgument {
         quote! {
             {
                 let as_string = dioxus_router::routable::DisplayQueryArgument::new(stringify!(#ident), #ident).to_string();
-                write!(f, "{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ASCII_SET))?;
+                write!(f, "{}", dioxus_router::exports::percent_encoding::utf8_percent_encode(&as_string, dioxus_router::exports::QUERY_ARGUMENT_ASCII_SET))?;
                 #write_ampersand
             }
         }

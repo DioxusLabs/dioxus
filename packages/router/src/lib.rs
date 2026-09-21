@@ -109,6 +109,9 @@ pub(crate) mod query_sets {
         .add(b'<')
         .add(b'>');
 
+    /// The ASCII set that must be escaped in segmented query arguments.
+    pub const QUERY_ARGUMENT_ASCII_SET: &AsciiSet = &QUERY_ASCII_SET.add(b'%').add(b'&');
+
     /// The ASCII set that must be escaped in path segments.
     pub const PATH_ASCII_SET: &AsciiSet = &QUERY_ASCII_SET
         .add(b'?')
