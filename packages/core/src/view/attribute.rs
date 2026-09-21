@@ -40,6 +40,7 @@ where
         value: Value::VALUE,
         namespace: Descriptor::NAMESPACE,
     };
+    const HAS_DYNAMIC: bool = false;
 }
 
 impl<Descriptor, Value> View for StaticAttributeBuilder<Descriptor, Value>

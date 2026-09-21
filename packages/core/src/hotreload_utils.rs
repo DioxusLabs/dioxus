@@ -234,6 +234,20 @@ impl DynamicLiteralPool {
         }
     }
 
+    /// Get a component property, falling back to the original value when the template
+    /// has not been hot reloaded.
+    pub fn component_property_or<T: 'static>(
+        &mut self,
+        id: usize,
+        hot_reload: Option<&HotReloadedTemplate>,
+        value: T,
+    ) -> T {
+        match hot_reload {
+            Some(template) => self.component_property(id, template, value),
+            None => value,
+        }
+    }
+
     /// Render formatted segments using the current dynamic text pool.
     fn render_formatted(&self, segments: &FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
@@ -397,6 +411,27 @@ impl HotReloadedTemplate {
             component_values,
             template,
         }
+    }
+
+    /// Hot-reload data for a template whose dynamic nodes and attributes are all `Dynamic(i)` in order.
+    pub fn from_dynamic_counts(
+        key: Option<FmtedSegments>,
+        dynamic_nodes: usize,
+        dynamic_attributes: usize,
+        component_values: Vec<HotReloadLiteral>,
+        template: Template,
+    ) -> Self {
+        Self::from_template(
+            key,
+            (0..dynamic_nodes)
+                .map(HotReloadDynamicNode::Dynamic)
+                .collect(),
+            (0..dynamic_attributes)
+                .map(HotReloadDynamicAttribute::Dynamic)
+                .collect(),
+            component_values,
+            template,
+        )
     }
 
     /// Return the number of root positions in the template.
