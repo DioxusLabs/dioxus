@@ -144,10 +144,6 @@ pub(crate) fn proxy_to(
             return super::proxy_ws::proxy_websocket(parts, req, &url).await;
         }
 
-        if nocache {
-            crate::serve::insert_no_cache_headers(req.headers_mut());
-        }
-
         let uri = req.uri().clone();
 
         // Set Host header for backend (send_with_retry handles TCP connection via url)
@@ -177,7 +173,11 @@ pub(crate) fn proxy_to(
                     tracing::info!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", res.status().as_u16(), uri);
                 }
 
-                Ok(res.into_response())
+                let mut res = res.into_response();
+                if nocache {
+                    crate::serve::insert_no_cache_headers(res.headers_mut());
+                }
+                Ok(res)
             }
             Err(err) => {
                 tracing::error!(dx_src = ?TraceSrc::App(crate::BundleFormat::Server), "[{}] {}", err.status().as_u16(), uri);
@@ -285,6 +285,64 @@ mod test {
                 .unwrap(),
             "backend: /api/subpath"
         );
+    }
+
+    async fn proxy_response_cache_control(nocache: bool) -> Option<String> {
+        let backend_router =
+            Router::new().route(
+                "/{*path}",
+                any(|request: axum::extract::Request| async move {
+                    format!("backend: {}", request.uri())
+                }),
+            );
+        let backend_handle = Handle::new();
+        let backend_handle_ = backend_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(backend_handle_)
+                .serve(backend_router.into_make_service())
+                .await
+                .unwrap();
+        });
+        let backend_addr = backend_handle.listening().await.unwrap();
+
+        let router = Router::new().fallback_service(super::proxy_to(
+            format!("http://{backend_addr}").parse().unwrap(),
+            nocache,
+            super::handle_proxy_error,
+        ));
+        let server_handle = Handle::new();
+        let server_handle_ = server_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(server_handle_)
+                .serve(router.into_make_service())
+                .await
+                .unwrap();
+        });
+        let server_addr = server_handle.listening().await.unwrap();
+
+        let response = reqwest::get(format!("http://{server_addr}/wasm/app_bg.wasm"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        response
+            .headers()
+            .get("cache-control")
+            .map(|value| value.to_str().unwrap().to_string())
+    }
+
+    #[tokio::test]
+    async fn proxied_app_responses_are_not_cached() {
+        assert_eq!(
+            proxy_response_cache_control(true).await.as_deref(),
+            Some("no-cache")
+        );
+    }
+
+    #[tokio::test]
+    async fn proxied_backend_responses_keep_their_cache_headers() {
+        assert_eq!(proxy_response_cache_control(false).await, None);
     }
 
     #[tokio::test]
