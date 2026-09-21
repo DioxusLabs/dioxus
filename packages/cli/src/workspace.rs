@@ -14,6 +14,7 @@ use tokio::process::Command;
 
 pub struct Workspace {
     pub(crate) krates: Krates,
+    pub(crate) target_dir: PathBuf,
     pub(crate) settings: CliSettings,
     pub(crate) wasm_opt: Option<PathBuf>,
     pub(crate) sysroot: PathBuf,
@@ -46,9 +47,12 @@ impl Workspace {
             let mut cmd = Cmd::new();
             cmd.lock_opts(lock_options);
 
+            let metadata = krates::cm::MetadataCommand::from(cmd).exec()?;
+            let target_dir = metadata.target_directory.clone().into_std_path_buf();
+
             let mut builder = krates::Builder::new();
             builder.workspace(true);
-            let res = builder.build(cmd, |_| {})?;
+            let res = builder.build_with_metadata(metadata, |_| {})?;
 
             if !lock_options.offline {
                 if let Ok(res) = std::env::var("SIMULATE_SLOW_NETWORK") {
@@ -56,7 +60,7 @@ impl Workspace {
                 }
             }
 
-            Ok(res) as Result<Krates, krates::Error>
+            Ok((res, target_dir)) as Result<(Krates, PathBuf), krates::Error>
         });
 
         let spin_future = async move {
@@ -73,7 +77,7 @@ impl Workspace {
             }
         };
 
-        let krates = tokio::select! {
+        let (krates, target_dir) = tokio::select! {
             f = krates_future => {
                 let res = f?;
                 if let Err(krates::Error::Metadata(e)) = res {
@@ -105,6 +109,7 @@ impl Workspace {
 
         let workspace = Arc::new(Self {
             krates,
+            target_dir,
             settings,
             wasm_opt,
             sysroot: sysroot.trim().into(),
@@ -119,10 +124,12 @@ impl Workspace {
                • sysroot: {sysroot}
                • rustc version: {rustc_version}
                • workspace root: {workspace_root}
+               • target dir: {target_dir}
                • dioxus versions: [{dioxus_versions:?}]"#,
             sysroot = workspace.sysroot.display(),
             rustc_version = workspace.rustc_version,
             workspace_root = workspace.workspace_root().display(),
+            target_dir = workspace.target_dir.display(),
             dioxus_versions = workspace
                 .dioxus_versions()
                 .iter()
