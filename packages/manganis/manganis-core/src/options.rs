@@ -50,6 +50,7 @@ impl AssetOptions {
             AssetVariant::Js(_) => Some("js"),
             AssetVariant::Folder(_) => None,
             AssetVariant::Unknown => None,
+            AssetVariant::File => None,
         }
     }
 
@@ -94,6 +95,19 @@ impl AssetOptionsBuilder<()> {
     /// Create a default asset options builder
     pub const fn default() -> Self {
         Self::new()
+    }
+
+    /// Create asset options for a plain file that is copied verbatim without any image/css/js
+    /// optimization. The file keeps its original path (no hash suffix is added).
+    ///
+    /// This is used for assets in the `public` directory which are documented to be copied as-is
+    /// rather than processed by the asset pipeline. Re-encoding images here (for example animated
+    /// or lossy WebP files) would discard frames or bloat the file size.
+    pub const fn into_file_asset_options(self) -> AssetOptions {
+        AssetOptions {
+            add_hash: false,
+            variant: AssetVariant::File,
+        }
     }
 
     /// Convert the builder into asset options with the given variant
@@ -171,4 +185,8 @@ pub enum AssetVariant {
     Js(JsAssetOptions),
     /// An unknown asset
     Unknown,
+    /// A plain file that is copied verbatim without any image/css/js optimization. This is used
+    /// for assets in the `public` directory which are documented to be copied as-is rather than
+    /// processed by the asset pipeline.
+    File,
 }
