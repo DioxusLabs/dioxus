@@ -269,6 +269,7 @@ pub(crate) struct BuildRequest {
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
+    pub(crate) appstore: bool,
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
@@ -719,7 +720,7 @@ impl BuildRequest {
 
         // Determine if we should codesign
         let should_codesign =
-            args.codesign || device.is_some() || args.apple_entitlements.is_some();
+            args.codesign || args.appstore || device.is_some() || args.apple_entitlements.is_some();
 
         // Determining release mode is based on the profile, actually, so we need to check that
         let release = workspace.is_release_profile(&profile);
@@ -919,6 +920,7 @@ impl BuildRequest {
             inject_loading_scripts: args.inject_loading_scripts,
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
+            appstore: args.appstore,
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
         })
