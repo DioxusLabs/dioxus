@@ -20,10 +20,17 @@ To use this dev container locally, make sure Docker is installed and in VSCode i
 [Codespaces Setup](https://docs.github.com/en/codespaces/developing-in-codespaces/creating-a-codespace-for-a-repository#creating-a-codespace-for-a-repository)
 
 ### Playwright Tests
-The dev container comes with Playwright dependencies pre-installed.
+
+The dev container installs Node.js 24, the Playwright Chromium browser selected
+by `packages/playwright-tests/package-lock.json`, and all required browser system
+libraries. The matching npm dependencies are installed automatically when the
+container is first created.
+
 You can run the tests located in `packages/playwright-tests` by using the VSCode extension or by executing commands such as:
 
 ```bash
+cd packages/playwright-tests
+
 # Run all tests
 npx playwright test
 
