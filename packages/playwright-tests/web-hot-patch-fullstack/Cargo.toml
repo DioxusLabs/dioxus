@@ -8,7 +8,8 @@ publish = false
 
 [dependencies]
 dioxus = { path = "../../dioxus", features = ["fullstack"] }
-# This fixture has its own lockfile; use the version validated by the Dioxus workspace.
+# This standalone workspace cannot inherit the root dependency or lockfile.
+# Pin wasm-bindgen to the version in the root lockfile.
 wasm-bindgen = { version = "=0.2.121" }
 
 [features]
