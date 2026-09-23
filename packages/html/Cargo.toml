@@ -51,7 +51,6 @@ serialize = [
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
-    "bytes/serde"
 ]
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []

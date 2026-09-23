@@ -347,14 +347,12 @@ export class BaseInterpreter {
     node.setAttribute("data-dioxus-id", `${id}`);
 
     if (event_name === "mounted") {
-      (window as any).ipc.postMessage(
-        this.sendSerializedEvent({
-          name: event_name,
-          element: id,
-          data: null,
-          bubbles,
-        }),
-      );
+      this.sendSerializedEvent({
+        name: event_name,
+        element: id,
+        data: null,
+        bubbles,
+      });
     } else {
       this.createListener(event_name, node, bubbles);
     }

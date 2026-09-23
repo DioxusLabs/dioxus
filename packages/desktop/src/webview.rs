@@ -1,7 +1,7 @@
 use crate::WeakDesktopContext;
 use crate::desktop_context::{PendingDesktopWindow, PendingWindowCancellation};
 use crate::desktop_state::DesktopAppContext;
-use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
+use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
     DesktopContext, DesktopService, WindowConfig, assets::AssetHandlerRegistry, edits::WryQueue,
@@ -11,7 +11,7 @@ use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{RenderTargetId, Runtime, VirtualDom};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
+use dioxus_html::{HtmlEvent, PlatformEventData};
 use std::rc::Rc;
 use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
@@ -154,66 +154,19 @@ impl WebviewEdits {
                 let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
-            dioxus_html::EventData::Form(form) => {
-                Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
-                    value: form.value,
-                    valid: form.valid,
-                    values: form
-                        .values
-                        .into_iter()
-                        .map(|obj| {
-                            if let Some(text) = obj.text {
-                                return (obj.key, FormValue::Text(text));
-                            }
-
-                            if let Some(file_data) = obj.file {
-                                if file_data.path.capacity() == 0 {
-                                    return (obj.key, FormValue::File(None));
-                                }
-
-                                return (
-                                    obj.key,
-                                    FormValue::File(Some(FileData::new(DesktopFileData(
-                                        file_data.path,
-                                    )))),
-                                );
-                            };
-
-                            (obj.key, FormValue::Text(String::new()))
-                        })
-                        .collect(),
-                })))
-            }
+            dioxus_html::EventData::Form(form) => Rc::new(PlatformEventData::new(Box::new(
+                DesktopFormData::from(form),
+            ))),
             // Which also includes drops...
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
                 let full_file_paths = hovered_file.current_paths();
 
-                let xfer_data = drag.data_transfer.clone();
-                let new_file_data = xfer_data
-                    .files
-                    .iter()
-                    .map(|f| {
-                        let new_path = full_file_paths
-                            .iter()
-                            .find(|p| p.ends_with(&f.path))
-                            .unwrap_or(&f.path);
-                        SerializedFileData {
-                            path: new_path.clone(),
-                            ..f.clone()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let new_xfer_data = dioxus_html::SerializedDataTransfer {
-                    files: new_file_data,
-                    ..xfer_data
-                };
-
-                Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                    mouse: drag.mouse.clone(),
-                    data_transfer: new_xfer_data,
-                    files: full_file_paths,
-                })))
+                Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent::new(
+                    drag.mouse.clone(),
+                    drag.data_transfer.clone(),
+                    full_file_paths,
+                ))))
             }
             _ => data.into_any(),
         };

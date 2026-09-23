@@ -12,120 +12,282 @@ export type SerializedEvent = {
   [key: string]: any;
 };
 
-export function serializeEvent(
-  event: Event,
-  target: EventTarget
-): SerializedEvent {
-  let contents = {};
+export class EventSerializer {
+  // Native dialogs supply metadata for the placeholder files kept in desktop inputs.
+  private desktopFiles = new WeakMap<File, SerializedFileData>();
 
-  // merge the object into the contents
-  let extend = (obj: SerializedEvent) => (contents = { ...contents, ...obj });
+  constructor(private readonly interpreter: { liveview: boolean }) {}
 
-  if (event instanceof WheelEvent) {
-    extend(serializeWheelEvent(event));
-  }
-  if (event instanceof MouseEvent) {
-    extend(serializeMouseEvent(event));
-  }
-  if (event instanceof KeyboardEvent) {
-    extend(serializeKeyboardEvent(event));
+  registerDesktopFile(file: File, metadata: SerializedFileData): void {
+    this.desktopFiles.set(file, metadata);
   }
 
-  if (event instanceof InputEvent) {
-    extend(serializeInputEvent(event, target));
-    if (event.type === "beforeinput") {
-      extend({
-        input_type: event.inputType,
-        is_composing: event.isComposing,
-        data: event.data,
-      });
+  serializeEvent(
+    event: Event,
+    target: EventTarget,
+    files: File[] = []
+  ): SerializedEvent {
+    let contents = {};
+
+    // merge the object into the contents
+    let extend = (obj: SerializedEvent) => (contents = { ...contents, ...obj });
+
+    if (event instanceof WheelEvent) {
+      extend(serializeWheelEvent(event));
     }
-  }
-  if (event instanceof PointerEvent) {
-    extend(serializePointerEvent(event));
-  }
-  if (event instanceof AnimationEvent) {
-    extend(serializeAnimationEvent(event));
-  }
-  if (event instanceof TransitionEvent) {
-    extend({
-      property_name: event.propertyName,
-      elapsed_time: event.elapsedTime,
-      pseudo_element: event.pseudoElement,
-    });
-  }
-  if (event instanceof CompositionEvent) {
-    extend({ data: event.data });
-  }
-  if (event instanceof DragEvent) {
-    extend(serializeDragEvent(event));
-  }
-  if (event instanceof FocusEvent) {
-    extend({});
-  }
-  if (event instanceof ClipboardEvent) {
-    extend({
-      data_transfer: serializeDataTransfer(
-        event.clipboardData || new DataTransfer()
-      ),
-    });
-  }
-
-  if (
-    event.type === "select" ||
-    event.type === "selectstart" ||
-    event.type === "selectionchange"
-  ) {
-    extend(serializeSelectionEvent(event, target));
-  }
-
-  if (event instanceof CustomEvent) {
-    const detail = event.detail;
-    if (detail instanceof ResizeObserverEntry) {
-      extend(serializeResizeEventDetail(detail));
-    } else if (detail instanceof IntersectionObserverEntry) {
-      extend(serializeIntersectionEventDetail(detail));
+    if (event instanceof MouseEvent) {
+      extend(serializeMouseEvent(event));
     }
-  }
+    if (event instanceof KeyboardEvent) {
+      extend(serializeKeyboardEvent(event));
+    }
 
-  // safari is quirky and doesn't have TouchEvent
-  if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
-    extend(serializeTouchEvent(event));
-  }
-
-  if (
-    event.type === "submit" ||
-    event.type === "reset" ||
-    event.type === "click" ||
-    event.type === "change" ||
-    event.type === "input"
-  ) {
-    extend(serializeInputEvent(event as InputEvent, target));
-  }
-
-  // If there's any files, we need to serialize them
-  if (event instanceof DragEvent) {
-    let files: SerializedFormObject[] = [];
-    if (event.dataTransfer && event.dataTransfer.files) {
-      for (let i = 0; i < event.dataTransfer.files.length; i++) {
-        let file = event.dataTransfer.files[i];
-        let data: SerializedFileData = {
-          path: file.name,
-          size: file.size,
-          last_modified: file.lastModified,
-          content_type: file.type,
-        }
-        files.push({ key: file.name, file: data });
+    if (event instanceof InputEvent) {
+      extend(this.serializeInputEvent(event, target, files));
+      if (event.type === "beforeinput") {
+        extend({
+          input_type: event.inputType,
+          is_composing: event.isComposing,
+          data: event.data,
+        });
       }
     }
-    extend({ files });
+    if (event instanceof PointerEvent) {
+      extend(serializePointerEvent(event));
+    }
+    if (event instanceof AnimationEvent) {
+      extend(serializeAnimationEvent(event));
+    }
+    if (event instanceof TransitionEvent) {
+      extend({
+        property_name: event.propertyName,
+        elapsed_time: event.elapsedTime,
+        pseudo_element: event.pseudoElement,
+      });
+    }
+    if (event instanceof CompositionEvent) {
+      extend({ data: event.data });
+    }
+    if (event instanceof DragEvent) {
+      extend(this.serializeDragEvent(event));
+    }
+    if (event instanceof FocusEvent) {
+      extend({});
+    }
+    if (event instanceof ClipboardEvent) {
+      extend({
+        data_transfer: this.serializeDataTransfer(
+          event.clipboardData || new DataTransfer()
+        ),
+      });
+    }
+
+    if (
+      event.type === "select" ||
+      event.type === "selectstart" ||
+      event.type === "selectionchange"
+    ) {
+      extend(serializeSelectionEvent(event, target));
+    }
+
+    if (event instanceof CustomEvent) {
+      const detail = event.detail;
+      if (detail instanceof ResizeObserverEntry) {
+        extend(serializeResizeEventDetail(detail));
+      } else if (detail instanceof IntersectionObserverEntry) {
+        extend(serializeIntersectionEventDetail(detail));
+      }
+    }
+
+    // safari is quirky and doesn't have TouchEvent
+    if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+      extend(serializeTouchEvent(event));
+    }
+
+    if (!(event instanceof InputEvent) && (
+      event.type === "submit" ||
+      event.type === "reset" ||
+      event.type === "click" ||
+      event.type === "change" ||
+      event.type === "input"
+    )) {
+      extend(this.serializeInputEvent(event as InputEvent, target, files));
+    }
+
+    // If there's any files, we need to serialize them
+    if (event instanceof DragEvent) {
+      let files: SerializedFormObject[] = [];
+      if (event.dataTransfer && event.dataTransfer.files) {
+        for (let i = 0; i < event.dataTransfer.files.length; i++) {
+          let file = event.dataTransfer.files[i];
+          files.push({ key: file.name, file: this.serializeFile(file) });
+        }
+      }
+      extend({ files });
+    }
+
+    if (event.type === "scroll" || event.type === "scrollend") {
+      extend(serializeScrollEvent(event));
+    }
+
+    return contents;
   }
 
-  if (event.type === "scroll" || event.type === "scrollend") {
-    extend(serializeScrollEvent(event));
+  private serializeInputEvent(
+    event: InputEvent,
+    target: EventTarget,
+    files: File[]
+  ): SerializedEvent {
+    let contents: SerializedEvent = {};
+
+    // Attempt to retrieve the values from the form
+    if (target instanceof HTMLElement) {
+      let values = this.extractSerializedFormValues(event, target, files);
+      contents.values = values.values;
+      contents.valid = values.valid;
+    }
+
+    if (event.target instanceof HTMLInputElement) {
+      let target = event.target;
+      let value = target.value ?? target.textContent ?? "";
+
+      if (target.type === "checkbox") {
+        value = target.checked ? "true" : "false";
+      } else if (target.type === "radio") {
+        value = target.value;
+      }
+
+      contents.value = value;
+    }
+
+    if (event.target instanceof HTMLTextAreaElement) {
+      contents.value = event.target.value;
+    }
+
+    if (event.target instanceof HTMLSelectElement) {
+      contents.value = retrieveSelectValue(event.target).join(",");
+    }
+
+    // Contenteditable / generic targets: mirror the wasm renderer, which falls
+    // back to textContent for any HTMLElement that isn't a form control
+    // (see packages/web/src/events/before_input.rs WebBeforeInputData::value
+    // and packages/web/src/events/form.rs WebFormData::value).
+    if (contents.value === undefined) {
+      if (event.target instanceof HTMLElement) {
+        contents.value = event.target.textContent ?? "";
+      } else {
+        contents.value = "";
+      }
+    }
+
+    return contents;
   }
 
-  return contents;
+  // Serialize the DataTransfer shared by drag-and-drop and clipboard events.
+  private serializeDataTransfer(data_transfer: DataTransfer): SerializedEvent {
+    let items = [];
+    let files = [];
+    let effect_allowed = data_transfer.effectAllowed;
+    let drop_effect = data_transfer.dropEffect;
+
+    for (let i = 0; i < data_transfer.items.length; i++) {
+      let item = data_transfer.items[i];
+      let data;
+      if (item.kind === "string") {
+        // we can only get the data if we do this synchronously
+        // which is a bit sad, but oh well.
+        data = data_transfer.getData(item.type);
+      } else {
+        data = item.getAsFile()?.name || "";
+      }
+
+      items.push({
+        kind: item.kind,
+        type_: item.type,
+        data
+      });
+    }
+
+    for (let i = 0; i < data_transfer.files.length; i++) {
+      let file = data_transfer.files[i];
+      files.push(this.serializeFile(file));
+    }
+
+    return {
+      items,
+      files,
+      effect_allowed,
+      drop_effect,
+    };
+  }
+
+  private serializeDragEvent(event: DragEvent): SerializedEvent {
+    return {
+      mouse: {
+        alt_key: event.altKey,
+        ctrl_key: event.ctrlKey,
+        meta_key: event.metaKey,
+        shift_key: event.shiftKey,
+        ...serializeMouseEvent(event),
+      },
+      data_transfer: this.serializeDataTransfer(event.dataTransfer || new DataTransfer()),
+    };
+  }
+
+  private extractSerializedFormValues(
+    event: Event,
+    target: HTMLElement,
+    files: File[] = []
+  ): SerializedFormData {
+    const values: SerializedFormObject[] = [];
+    if (!["input", "change", "submit", "reset", "click"].includes(event.type)) {
+      return { values };
+    }
+
+    const form = target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+      ? target.form
+      : target.closest("form");
+    const entries = form ? Array.from(new FormData(form).entries()) : [];
+    if (target instanceof HTMLInputElement && target.type === "file" && (!form || !target.name)) {
+      for (const file of Array.from(target.files || [])) {
+        entries.push([target.name, file]);
+      }
+      if (!target.files?.length && target.name) {
+        values.push({ key: target.name });
+      }
+    }
+
+    for (const [key, value] of entries) {
+      if (!(value instanceof File)) {
+        values.push({ key, text: value });
+      } else if (value.name === "" && value.size === 0) {
+        values.push({ key });
+      } else {
+        values.push({
+          key,
+          file: this.serializeFile(value),
+        });
+        files.push(value);
+      }
+    }
+    return { valid: form?.checkValidity(), values };
+  }
+
+  private serializeFile(file: File): SerializedFileData {
+    if (!this.interpreter.liveview) {
+      const metadata = this.desktopFiles.get(file);
+      if (metadata) return metadata;
+    }
+
+    return {
+      name: file.name,
+      path: "",
+      size: file.size,
+      last_modified: file.lastModified,
+      content_type: file.type,
+    };
+  }
 }
 
 function toSerializableResizeObserverSize(
@@ -182,55 +344,6 @@ export function serializeIntersectionEventDetail(
     // this *might* become an issue longer term
     time_ms: Math.floor(Date.now() + detail.time),
   }
-}
-
-function serializeInputEvent(
-  event: InputEvent,
-  target: EventTarget
-): SerializedEvent {
-  let contents: SerializedEvent = {};
-
-  // Attempt to retrieve the values from the form
-  if (target instanceof HTMLElement) {
-    let values = extractSerializedFormValues(event, target);
-    contents.values = values.values;
-    contents.valid = values.valid;
-  }
-
-  if (event.target instanceof HTMLInputElement) {
-    let target = event.target;
-    let value = target.value ?? target.textContent ?? "";
-
-    if (target.type === "checkbox") {
-      value = target.checked ? "true" : "false";
-    } else if (target.type === "radio") {
-      value = target.value;
-    }
-
-    contents.value = value;
-  }
-
-  if (event.target instanceof HTMLTextAreaElement) {
-    contents.value = event.target.value;
-  }
-
-  if (event.target instanceof HTMLSelectElement) {
-    contents.value = retrieveSelectValue(event.target).join(",");
-  }
-
-  // Contenteditable / generic targets: mirror the wasm renderer, which falls
-  // back to textContent for any HTMLElement that isn't a form control
-  // (see packages/web/src/events/before_input.rs WebBeforeInputData::value
-  // and packages/web/src/events/form.rs WebFormData::value).
-  if (contents.value === undefined) {
-    if (event.target instanceof HTMLElement) {
-      contents.value = event.target.textContent ?? "";
-    } else {
-      contents.value = "";
-    }
-  }
-
-  return contents;
 }
 
 function serializeWheelEvent(event: WheelEvent): SerializedEvent {
@@ -346,65 +459,6 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
   };
 }
 
-// Serialize a `DataTransfer` (shared by drag-and-drop and clipboard events) into the shape
-// expected by the Rust `SerializedDataTransfer`.
-function serializeDataTransfer(data_transfer: DataTransfer): SerializedEvent {
-  let items = [];
-  let files = [];
-  let effect_allowed = data_transfer.effectAllowed;
-  let drop_effect = data_transfer.dropEffect;
-
-  for (let i = 0; i < data_transfer.items.length; i++) {
-    let item = data_transfer.items[i];
-    let data;
-    if (item.kind === "string") {
-      // we can only get the data if we do this synchronously
-      // which is a bit sad, but oh well.
-      data = data_transfer.getData(item.type);
-    } else {
-      data = item.getAsFile()?.name || "";
-    }
-
-    items.push({
-      kind: item.kind,
-      type_: item.type,
-      data
-    });
-  }
-
-  for (let i = 0; i < data_transfer.files.length; i++) {
-    let file = data_transfer.files[i];
-    files.push({
-      name: file.name,
-      path: file.name,
-      size: file.size,
-      last_modified: file.lastModified,
-      content_type: file.type,
-      contents: undefined, // we don't serialize contents here
-    });
-  }
-
-  return {
-    items,
-    files,
-    effect_allowed,
-    drop_effect,
-  };
-}
-
-function serializeDragEvent(event: DragEvent): SerializedEvent {
-  return {
-    mouse: {
-      alt_key: event.altKey,
-      ctrl_key: event.ctrlKey,
-      meta_key: event.metaKey,
-      shift_key: event.shiftKey,
-      ...serializeMouseEvent(event),
-    },
-    data_transfer: serializeDataTransfer(event.dataTransfer || new DataTransfer()),
-  };
-}
-
 function serializeScrollEvent(event: Event): SerializedEvent {
   let scrollLeft = 0;
   let scrollTop = 0;
@@ -471,7 +525,6 @@ function textControlTarget(
   return null;
 }
 
-
 export type SerializedFormData = {
   valid?: boolean;
   values: SerializedFormObject[];
@@ -483,64 +536,12 @@ export type SerializedFormObject = {
   file?: SerializedFileData;
 }
 export type SerializedFileData = {
-  // we store the real path of the file as the name.
-  // This makes it possible to simply read the file during event handling
+  name: string;
   path: string;
   size?: number;
   last_modified?: number;
   content_type?: string;
-  contents?: string; // base64 encoded, if present. not required to br present
 };
-
-export function extractSerializedFormValues(event: Event, target: HTMLElement): SerializedFormData {
-  let contents: SerializedFormData = {
-    values: []
-  };
-
-  // If there's a form...
-  let form = target.closest("form");
-
-  // If the target is an input, and the event is input or change, we want to get the value without going through the form
-  if (form) {
-    if (
-      event.type === "input"
-      || event.type === "change"
-      || event.type === "submit"
-      || event.type === "reset"
-      || event.type === "click"
-    ) {
-      contents = retrieveFormValues(form);
-    }
-  }
-
-  return contents;
-}
-
-// todo: maybe encode spaces or something?
-// We encode select multiple as a comma separated list which breaks... when there's commas in the values
-function retrieveFormValues(form: HTMLFormElement): SerializedFormData {
-  const formData = new FormData(form);
-  const contents: SerializedFormObject[] = [];
-
-  formData.forEach((value, key) => {
-    if (value instanceof File) {
-      let fileData: SerializedFileData = {
-        path: value.name,
-        size: value.size,
-        last_modified: value.lastModified,
-        content_type: value.type,
-      };
-      contents.push({ key, file: fileData });
-    } else {
-      contents.push({ key, text: value });
-    }
-  });
-
-  return {
-    valid: form.checkValidity(),
-    values: contents
-  };
-}
 
 export function retrieveSelectValue(target: HTMLSelectElement): string[] {
   // there might be multiple...

@@ -9,14 +9,27 @@ pub use adapters::*;
 mod element;
 pub mod pool;
 mod query;
+mod upload;
 use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 mod config;
 mod document;
 mod events;
+mod file_data;
+mod file_transfer;
 mod history;
 pub use config::*;
+
+/// The default cap on declared bytes in unread, incoming, and retained files per connection.
+pub const DEFAULT_UPLOAD_STORAGE_LIMIT: u64 = 1024 * 1024 * 1024;
+
+/// The default cap on unread, incoming, and retained files per LiveView connection.
+pub const DEFAULT_UPLOAD_FILE_LIMIT: usize = 1024;
+
+/// How long a file transfer requested by a read may wait for its HTTP request by default.
+pub const DEFAULT_UPLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
 #[cfg(feature = "axum")]
 pub mod launch;
 
@@ -36,43 +49,6 @@ pub enum LiveViewError {
 fn handle_edits_code() -> String {
     use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 
-    let serialize_file_uploads = r#"if (
-        target.tagName === "INPUT" &&
-        (event.type === "change" || event.type === "input")
-      ) {
-        const type = target.getAttribute("type");
-        if (type === "file") {
-          async function read_files() {
-            const files = target.files;
-            const file_contents = {};
-
-            for (let i = 0; i < files.length; i++) {
-              const file = files[i];
-
-              file_contents[file.name] = Array.from(
-                new Uint8Array(await file.arrayBuffer())
-              );
-            }
-            let file_engine = {
-              files: file_contents,
-            };
-            contents.files = file_engine;
-
-            if (realId === null) {
-              return;
-            }
-            const message = window.interpreter.sendSerializedEvent({
-              name: name,
-              element: parseInt(realId),
-              data: contents,
-              bubbles,
-            });
-            window.ipc.postMessage(message);
-          }
-          read_files();
-          return;
-        }
-      }"#;
     let mut interpreter = format!(
         r#"
     // Bring the sledgehammer code
@@ -82,7 +58,6 @@ fn handle_edits_code() -> String {
     {NATIVE_JS}
     "#
     )
-    .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
     .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]

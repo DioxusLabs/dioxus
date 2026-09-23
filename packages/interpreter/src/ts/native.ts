@@ -4,7 +4,7 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent, SerializedFileData, extractSerializedFormValues, SerializedFormObject } from "./serialize";
+import { EventSerializer, SerializedFormObject } from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -26,6 +26,7 @@ export class NativeInterpreter extends JSChannel_ {
   headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
+  private serializer = new EventSerializer(this);
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
   // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
@@ -71,8 +72,12 @@ export class NativeInterpreter extends JSChannel_ {
       false
     );
 
-    // attach a listener to the route that listens for clicks and prevents the default file dialog
+    // Desktop needs a native dialog to get filesystem paths.
     window.addEventListener("click", (event) => {
+      if (this.liveview) {
+        return;
+      }
+
       const target = event.target;
       if (
         target instanceof HTMLInputElement &&
@@ -90,7 +95,7 @@ export class NativeInterpreter extends JSChannel_ {
             // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
             event.preventDefault();
 
-            const contents = serializeEvent(event, target);
+            const contents = this.serializer.serializeEvent(event, target);
 
             const target_name = target.getAttribute("name") || "";
 
@@ -111,13 +116,13 @@ export class NativeInterpreter extends JSChannel_ {
               // Create a new DataTransfer to hold the files
               const dataTransfer = new DataTransfer();
 
-              // We name the file the path, so we can just use the path as the name later on.
               for (let formObject of formObjects) {
                 if (formObject.key == target_name && formObject.file != null) {
-                  const file = new File([], formObject.file.path, {
+                  const file = new File([], formObject.file.name, {
                     type: formObject.file.content_type,
                     lastModified: formObject.file.last_modified,
                   });
+                  this.serializer.registerDesktopFile(file, formObject.file);
                   dataTransfer.items.add(file);
                 }
               }
@@ -173,11 +178,6 @@ export class NativeInterpreter extends JSChannel_ {
         "x-dioxus-data": base64data
       }
     });
-  }
-
-  sendIpcMessage(method: string, params = {}) {
-    const body = JSON.stringify({ method, params });
-    this.ipc.postMessage(body);
   }
 
   scrollTo(id: NodeId, options: ScrollIntoViewOptions): boolean {
@@ -328,59 +328,60 @@ export class NativeInterpreter extends JSChannel_ {
   handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const element = getTargetId(target)!;
-    const contents = serializeEvent(event, target);
+    const files: File[] = [];
+    const contents = this.serializer.serializeEvent(event, target, files);
 
-    // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
-    // Some listeners
-    let body = {
+    const body: SerializedHtmlEvent = {
       name,
       data: contents,
       element,
       bubbles,
     };
 
-    // liveview does not have synchronous event handling, so we need to send the event to the host
-    if (
-      this.liveview &&
-      target instanceof HTMLInputElement &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      if (target.getAttribute("type") === "file") {
-        this.readFiles(target, contents, bubbles, element, name);
-        return;
-      }
+    const response = this.sendSerializedEvent(body, files);
+    if (!response) {
+      return;
     }
 
-    const response = this.sendSerializedEvent(body);
-    // capture/prevent default of the event if the virtualdom wants to
-    if (response) {
-      if (response.preventDefault) {
-        event.preventDefault();
-      } else {
-        // Attempt to intercept if the event is a click and the default action was not prevented
-        if (target instanceof Element && event.type === "click") {
-          this.handleClickNavigate(event, target);
-        }
-      }
+    if (response.preventDefault) {
+      event.preventDefault();
+    } else if (target instanceof Element && event.type === "click") {
+      this.handleClickNavigate(event, target);
+    }
 
-      if (response.stopPropagation) {
-        event.stopPropagation();
-      }
+    if (response.stopPropagation) {
+      event.stopPropagation();
     }
   }
 
-  sendSerializedEvent(body: {
-    name: string;
-    element: number;
-    data: any;
-    bubbles: boolean;
-  }): EventSyncResult | void {
+  sendSerializedEvent(body: SerializedHtmlEvent, files: File[] = []): EventSyncResult | void {
     if (this.liveview) {
-      this.sendIpcMessage("user_event", body);
-    } else {
-      // Run the event handler on the virtualdom
-      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
+      return this.sendLiveviewEvent(body, files);
     }
+
+    return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
+  }
+
+  private sendLiveviewEvent(body: SerializedHtmlEvent, files: File[]): void {
+    const isFormEvent = body.name === "submit" || body.name === "reset" ||
+      body.name === "input" || body.name === "change";
+    const fileIds = isFormEvent ? files.map((file) => this.ipc.retainFile(file)) : [];
+    try {
+      // Events arrive immediately; reading a retained FileData requests its bytes later.
+      if (fileIds.length > 0) {
+        this.sendIpcMessage("file_event", { event: body, file_ids: fileIds });
+      } else {
+        this.sendIpcMessage("user_event", body);
+      }
+    } catch (error) {
+      for (const id of fileIds) this.ipc.releaseFile(id);
+      console.error("Failed to send LiveView event", error);
+    }
+  }
+
+  sendIpcMessage(method: string, params = {}) {
+    const body = JSON.stringify({ method, params });
+    this.ipc.postMessage(body);
   }
 
   handleClickNavigate(event: Event, target: Element) {
@@ -495,49 +496,21 @@ export class NativeInterpreter extends JSChannel_ {
       sheet.href = `${url}?${queryParams}`;
     }
   }
-
-  //  A liveview only function
-  // Desktop will intercept the event before it hits this
-  async readFiles(
-    target: HTMLInputElement,
-    contents: SerializedEvent,
-    bubbles: boolean,
-    realId: NodeId,
-    name: string
-  ) {
-    let files = target.files!;
-    let file_contents: { [name: string]: number[] } = {};
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      file_contents[file.name] = Array.from(
-        new Uint8Array(await file.arrayBuffer())
-      );
-    }
-
-    contents.files = { files: file_contents };
-
-    const message = this.sendSerializedEvent({
-      name: name,
-      element: realId,
-      data: contents,
-      bubbles,
-    });
-
-    this.ipc.postMessage(message);
-  }
 }
+
+type SerializedHtmlEvent = {
+  name: string;
+  element: number;
+  data: any;
+  bubbles: boolean;
+};
 
 type EventSyncResult = {
   preventDefault: boolean;
   stopPropagation: boolean;
 };
 
-// This function sends the event to the virtualdom and then waits for the virtualdom to process it
-//
-// However, it's not really suitable for liveview, because it's synchronous and will block the main thread
-// We should definitely consider using a websocket if we want to block... or just not block on liveview
-// Liveview is a little bit of a tricky beast
+// Desktop events are synchronous so their handlers can control browser defaults.
 function handleVirtualdomEventSync(
   endpoint: string,
   contents: string

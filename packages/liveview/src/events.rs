@@ -65,7 +65,7 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
 
     fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
         event
-            .downcast::<SerializedFormData>()
+            .downcast::<crate::file_data::LiveviewFormData>()
             .cloned()
             .unwrap()
             .into()

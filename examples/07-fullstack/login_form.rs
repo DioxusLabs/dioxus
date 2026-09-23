@@ -42,7 +42,7 @@ fn app() -> Element {
 
                 // Extract the form values into our `LoginForm` struct. The `.parsed_values` method
                 // is provided by Dioxus and works with any form element that has `name` attributes.
-                let values: LoginForm = evt.parsed_values().unwrap();
+                let values: LoginForm = evt.deserialize_values().unwrap();
 
                 // Call our server function with the form values wrapped in `Form`. The `SetHeader`
                 // response will set a cookie in the browser if the login is successful.
