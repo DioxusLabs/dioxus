@@ -93,14 +93,17 @@ fn parse_element(stream: ParseStream) -> syn::Result<BodyNode> {
         Ok(())
     })?;
 
-    Ok(BodyNode::Element(Element::from_parts(
+    let mut element = Element::from_parts(
         name,
         attributes,
         spreads,
         children,
         Some(brace),
         Diagnostics::new(),
-    )))
+    );
+    element.tag_syntax = true;
+
+    Ok(BodyNode::Element(element))
 }
 
 fn parse_component(stream: ParseStream) -> syn::Result<BodyNode> {
@@ -126,7 +129,7 @@ fn parse_component(stream: ParseStream) -> syn::Result<BodyNode> {
         Ok(())
     })?;
 
-    Ok(BodyNode::Component(Component::from_parts(
+    let mut component = Component::from_parts(
         name,
         generics,
         fields,
@@ -134,7 +137,10 @@ fn parse_component(stream: ParseStream) -> syn::Result<BodyNode> {
         children,
         Some(brace),
         Diagnostics::new(),
-    )))
+    );
+    component.tag_syntax = true;
+
+    Ok(BodyNode::Component(component))
 }
 
 /// Parse the attributes of an open tag, stopping at `/>` or `>`

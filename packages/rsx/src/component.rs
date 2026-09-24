@@ -37,6 +37,11 @@ pub struct Component {
     pub brace: Option<token::Brace>,
     pub children: TemplateBody,
     pub diagnostics: Diagnostics,
+
+    /// Whether this component was written using the JSX/XML-like tag syntax (`<MyComponent />`)
+    ///
+    /// Used by autofmt to print the component back out in the same style it was written in
+    pub tag_syntax: bool,
 }
 
 impl Parse for Component {
@@ -131,6 +136,7 @@ impl Component {
             brace,
             spreads,
             diagnostics,
+            tag_syntax: false,
         };
 
         // We've received a valid rsx block, but it's not necessarily a valid component
@@ -392,6 +398,7 @@ impl Component {
             spreads: vec![],
             children: TemplateBody::new(vec![]),
             diagnostics,
+            tag_syntax: false,
         }
     }
 }
