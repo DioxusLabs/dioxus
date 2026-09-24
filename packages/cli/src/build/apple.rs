@@ -340,6 +340,16 @@ impl BuildRequest {
             }
         }
 
+        // Nested code is signed first, since the app's signature seals it
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS) {
+            sign_embedded_frameworks(
+                || Command::new("codesign"),
+                app_dev_name,
+                &self.frameworks_folder(),
+            )
+            .await?;
+        }
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
@@ -2005,5 +2015,135 @@ fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
             output
         }
         serde_json::Value::Null => String::new(),
+    }
+}
+
+/// Sign every framework and dylib in `frameworks_dir` with `identity`, before the app itself is signed.
+///
+/// Devices refuse an app whose nested code is unsigned, and signing the app does not sign what it contains. Symlinks are skipped, since in dev builds they point at dylibs outside the bundle that dx does not own.
+async fn sign_embedded_frameworks(
+    codesign: impl Fn() -> Command,
+    identity: &str,
+    frameworks_dir: &Path,
+) -> Result<()> {
+    if !frameworks_dir.exists() {
+        return Ok(());
+    }
+
+    let mut nested = Vec::new();
+    for entry in std::fs::read_dir(frameworks_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let is_code = matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("framework" | "dylib")
+        );
+        if is_code && !entry.file_type()?.is_symlink() {
+            nested.push(path);
+        }
+    }
+    nested.sort();
+
+    for path in nested {
+        let output = codesign()
+            .args(["--force", "--sign", identity])
+            .arg(&path)
+            .output()
+            .await
+            .context("Failed to run `codesign` - is `codesign` in your path?")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to codesign {}: {}",
+                path.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::sign_embedded_frameworks;
+    use std::path::Path;
+    use tokio::process::Command;
+
+    /// A stand-in `codesign` that appends its arguments to `log`, or fails when `fail` is set.
+    ///
+    /// The script is run through `sh` so no test ever executes a file it has just written.
+    fn fake_codesign(dir: &Path, log: &Path, fail: bool) -> impl Fn() -> Command + use<> {
+        let script = dir.join("codesign.sh");
+        let body = if fail {
+            "echo 'errSecInternalComponent' >&2\nexit 1\n".to_string()
+        } else {
+            format!("echo \"$@\" >> '{}'\n", log.display())
+        };
+        std::fs::write(&script, body).unwrap();
+        move || {
+            let mut command = Command::new("sh");
+            command.arg(&script);
+            command
+        }
+    }
+
+    #[tokio::test]
+    async fn signs_each_framework_and_dylib_but_nothing_else() {
+        let temp = tempfile::tempdir().unwrap();
+        let log = temp.path().join("codesign.log");
+        let codesign = fake_codesign(temp.path(), &log, false);
+
+        let frameworks = temp.path().join("App.app/Frameworks");
+        std::fs::create_dir_all(frameworks.join("DioxusSwiftPlugins.framework")).unwrap();
+        std::fs::write(frameworks.join("libswiftCore.dylib"), b"").unwrap();
+        std::fs::write(frameworks.join(".DS_Store"), b"").unwrap();
+
+        // Dev builds link dylibs from outside the bundle, which must not be re-signed in place
+        let outside = temp.path().join("libvendored.dylib");
+        std::fs::write(&outside, b"").unwrap();
+        std::os::unix::fs::symlink(&outside, frameworks.join("libvendored.dylib")).unwrap();
+
+        sign_embedded_frameworks(&codesign, "Apple Development: dev", &frameworks)
+            .await
+            .unwrap();
+
+        let expected = format!(
+            "--force --sign Apple Development: dev {}\n--force --sign Apple Development: dev {}\n",
+            frameworks.join("DioxusSwiftPlugins.framework").display(),
+            frameworks.join("libswiftCore.dylib").display(),
+        );
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn app_without_frameworks_needs_no_signing() {
+        let temp = tempfile::tempdir().unwrap();
+        let log = temp.path().join("codesign.log");
+        let codesign = fake_codesign(temp.path(), &log, false);
+
+        sign_embedded_frameworks(&codesign, "dev", &temp.path().join("App.app/Frameworks"))
+            .await
+            .unwrap();
+
+        assert!(!log.exists());
+    }
+
+    #[tokio::test]
+    async fn codesign_failure_names_the_framework() {
+        let temp = tempfile::tempdir().unwrap();
+        let codesign = fake_codesign(temp.path(), &temp.path().join("unused.log"), true);
+
+        let frameworks = temp.path().join("App.app/Frameworks");
+        let framework = frameworks.join("DioxusSwiftPlugins.framework");
+        std::fs::create_dir_all(&framework).unwrap();
+
+        let error = sign_embedded_frameworks(&codesign, "dev", &frameworks)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains(&framework.display().to_string()), "{error}");
+        assert!(error.contains("errSecInternalComponent"), "{error}");
     }
 }
