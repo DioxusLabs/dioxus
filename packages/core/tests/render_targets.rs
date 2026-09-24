@@ -1,10 +1,12 @@
 use dioxus::prelude::*;
 use dioxus_core::{
     ElementId, MultiWriter, Mutation, Mutations, Portal, RenderTargetId, Runtime, VirtualDom,
+    WriteMutations,
 };
+use dioxus_renderer_oracle::{RendererOracle, SnapshotNode};
 use std::{
     any::Any,
-    cell::Cell,
+    cell::{Cell, RefCell},
     collections::BTreeMap,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
@@ -26,24 +28,25 @@ fn render_immediate_to_targeted_vec(dom: &mut VirtualDom) -> BTreeMap<RenderTarg
     drain_targets(writer.into_targets())
 }
 
-struct CollectingTargetWriter {
-    targets: BTreeMap<RenderTargetId, Mutations>,
+/// One writer per render target, created the first time the diff writes to it.
+struct CollectingTargetWriter<W = Mutations> {
+    targets: BTreeMap<RenderTargetId, W>,
 }
 
-impl CollectingTargetWriter {
+impl<W> CollectingTargetWriter<W> {
     fn new() -> Self {
         Self { targets: BTreeMap::new() }
     }
 
-    fn into_targets(self) -> BTreeMap<RenderTargetId, Mutations> {
+    fn into_targets(self) -> BTreeMap<RenderTargetId, W> {
         self.targets
     }
 }
 
-impl MultiWriter for CollectingTargetWriter {
-    type Writer = Mutations;
+impl<W: WriteMutations + Default> MultiWriter for CollectingTargetWriter<W> {
+    type Writer = W;
 
-    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut Mutations> {
+    fn writer_for(&mut self, id: RenderTargetId) -> Option<&mut W> {
         Some(self.targets.entry(id).or_default())
     }
 }
@@ -909,4 +912,229 @@ fn portal_under_suspense_keeps_state_and_updates_target_on_resolve() {
             // The live portal subtree was reused, not re-created from scratch.
             assert_eq!(PORTAL_STATE_INITS.load(Ordering::SeqCst), 1);
         });
+}
+
+// A renderer that lost a target's nodes, such as a reloaded webview page, gets it back from
+// `remount_render_target` without any component running.
+
+fn all_text(nodes: &[SnapshotNode]) -> Vec<String> {
+    fn walk(nodes: &[SnapshotNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                SnapshotNode::Element { children, .. } => walk(children, out),
+                SnapshotNode::Text(text) => out.push(text.clone()),
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(nodes, &mut out);
+    out
+}
+
+fn assert_stacks_clean(oracles: &CollectingTargetWriter<RendererOracle>) {
+    for oracle in oracles.targets.values() {
+        oracle.assert_stack_clean();
+    }
+}
+
+thread_local! {
+    static RENDERS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[component]
+fn Counter(label: &'static str) -> Element {
+    RENDERS.set(RENDERS.get() + 1);
+    let mut count = use_signal(|| 0);
+    rsx! {
+        h1 { "{label} {count}" }
+        button { id: "{label}", onclick: move |_| count += 1, "inc" }
+        ul {
+            for i in 0..count() {
+                li { key: "{i}", "item {i}" }
+            }
+        }
+        if count() % 2 == 0 {
+            p { "even" }
+        }
+    }
+}
+
+fn root_app() -> Element {
+    rsx! {
+        Counter { label: "root" }
+        "trailing text"
+    }
+}
+
+#[test]
+fn remounting_the_root_target_restores_the_tree_and_keeps_state() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(root_app);
+    let mut lost = RendererOracle::new();
+    lost.rebuild(&mut dom);
+
+    let button = lost.element_id_by_attr("id", "root");
+    dom.runtime().handle_event("click", click_event(), button);
+    lost.render(&mut dom);
+    assert!(all_text(&lost.snapshot()).contains(&"root 1".to_string()));
+
+    let renders = RENDERS.get();
+    let mut fresh = RendererOracle::new();
+    dom.remount_render_target(RenderTargetId::ROOT, &mut fresh);
+    fresh.assert_stack_clean();
+    assert_eq!(
+        RENDERS.get(),
+        renders,
+        "remounting must not re-run components"
+    );
+    assert_eq!(fresh.snapshot(), lost.snapshot());
+    fresh.assert_matches_vdom(&dom);
+
+    // Listeners and later diffs address the ids the fresh renderer was given.
+    let button = fresh.element_id_by_attr("id", "root");
+    dom.runtime().handle_event("click", click_event(), button);
+    fresh.render(&mut dom);
+    fresh.assert_matches_vdom(&dom);
+    let text = all_text(&fresh.snapshot());
+    assert!(text.contains(&"root 2".to_string()), "{text:?}");
+    assert!(text.contains(&"item 1".to_string()), "{text:?}");
+    assert!(text.contains(&"even".to_string()), "{text:?}");
+}
+
+thread_local! {
+    static TARGETS: Cell<Option<(RenderTargetId, RenderTargetId)>> = const { Cell::new(None) };
+}
+
+fn window_app() -> Element {
+    let (window, nested) = use_hook(|| {
+        let runtime = Runtime::current();
+        let targets = (
+            runtime.create_render_target(),
+            runtime.create_render_target(),
+        );
+        TARGETS.set(Some(targets));
+        targets
+    });
+    rsx! {
+        p { "outside the window" }
+        Portal { target: window,
+            Counter { label: "window" }
+            Portal { target: nested,
+                span { "nested" }
+                Counter { label: "nested" }
+            }
+        }
+    }
+}
+
+#[test]
+fn remounting_a_portal_target_leaves_other_targets_consistent() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(window_app);
+    let mut oracles = CollectingTargetWriter::new();
+    dom.rebuild(&mut oracles);
+    assert_stacks_clean(&oracles);
+    let (window, nested) = TARGETS.get().unwrap();
+
+    for (target, label) in [(window, "window"), (nested, "nested")] {
+        let button = oracles.targets[&target].element_id_by_attr("id", label);
+        dom.runtime()
+            .handle_event_for_target(target, "click", click_event(), button);
+        dom.render_immediate(&mut oracles);
+    }
+    assert_stacks_clean(&oracles);
+
+    let root_before = oracles.targets[&RenderTargetId::ROOT].snapshot();
+    let root_edits_before = oracles.targets[&RenderTargetId::ROOT].last_edit_summary();
+    let window_before = oracles.targets[&window].snapshot();
+    let nested_before = oracles.targets[&nested].snapshot();
+
+    // The window's renderer lost its nodes. The other renderers keep theirs.
+    let lost = oracles
+        .targets
+        .insert(window, RendererOracle::new())
+        .unwrap();
+    let renders = RENDERS.get();
+    dom.remount_render_target(window, &mut oracles);
+    assert_stacks_clean(&oracles);
+    assert_eq!(
+        RENDERS.get(),
+        renders,
+        "remounting must not re-run components"
+    );
+    assert_eq!(oracles.targets[&window].snapshot(), lost.snapshot());
+    assert_eq!(oracles.targets[&window].snapshot(), window_before);
+    assert_eq!(oracles.targets[&nested].snapshot(), nested_before);
+    assert_eq!(
+        oracles.targets[&RenderTargetId::ROOT].last_edit_summary(),
+        root_edits_before,
+        "the root target must not receive writes"
+    );
+    assert_eq!(
+        oracles.targets[&RenderTargetId::ROOT].snapshot(),
+        root_before
+    );
+
+    for (target, label, expected) in [
+        (window, "window", "window 2"),
+        (nested, "nested", "nested 2"),
+    ] {
+        let button = oracles.targets[&target].element_id_by_attr("id", label);
+        dom.runtime()
+            .handle_event_for_target(target, "click", click_event(), button);
+        dom.render_immediate(&mut oracles);
+        assert_stacks_clean(&oracles);
+        let text = all_text(&oracles.targets[&target].snapshot());
+        assert!(text.contains(&expected.to_string()), "{text:?}");
+        assert!(text.contains(&"item 1".to_string()), "{text:?}");
+    }
+}
+
+thread_local! {
+    static RESUME: RefCell<Option<tokio::sync::oneshot::Receiver<()>>> =
+        const { RefCell::new(None) };
+}
+
+#[component]
+fn Suspended() -> Element {
+    let resumed = use_resource(|| async {
+        let resume = RESUME.take().expect("the test hands over a receiver");
+        let _ = resume.await;
+    });
+    resumed.suspend()?;
+    rsx! { Counter { label: "resolved" } }
+}
+
+fn suspense_app() -> Element {
+    rsx! {
+        h2 { "outside" }
+        SuspenseBoundary { fallback: |_| rsx! { "loading" },
+            Suspended {}
+        }
+    }
+}
+
+#[tokio::test]
+async fn remounting_a_suspended_boundary_keeps_the_fallback_until_it_resolves() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    let (resume, receiver) = tokio::sync::oneshot::channel();
+    RESUME.set(Some(receiver));
+    let mut dom = VirtualDom::new(suspense_app);
+    let mut lost = RendererOracle::new();
+    lost.rebuild(&mut dom);
+    assert!(all_text(&lost.snapshot()).contains(&"loading".to_string()));
+
+    let mut fresh = RendererOracle::new();
+    dom.remount_render_target(RenderTargetId::ROOT, &mut fresh);
+    fresh.assert_stack_clean();
+    assert_eq!(fresh.snapshot(), lost.snapshot());
+
+    resume.send(()).unwrap();
+    fresh.wait_and_render(&mut dom).await;
+    fresh.assert_matches_vdom(&dom);
+    let button = fresh.element_id_by_attr("id", "resolved");
+    dom.runtime().handle_event("click", click_event(), button);
+    fresh.render(&mut dom);
+    fresh.assert_matches_vdom(&dom);
+    assert!(all_text(&fresh.snapshot()).contains(&"resolved 1".to_string()));
 }

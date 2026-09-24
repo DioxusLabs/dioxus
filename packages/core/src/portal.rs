@@ -214,6 +214,11 @@ pub fn Portal(_: PortalProps) -> Element {
 /// target instead of mounting at the scope's slot.
 struct PortalDriver;
 
+/// Whether `driver` renders a [`Portal`] scope.
+pub(crate) fn is_portal_driver(driver: &dyn RenderDriver) -> bool {
+    driver.as_any().is::<PortalDriver>()
+}
+
 fn portal_props(dom: &VirtualDom, scope_id: ScopeId) -> (RenderTargetId, LastRenderedNode) {
     let props = dom.scopes[scope_id.index()]
         .props

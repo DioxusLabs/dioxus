@@ -145,8 +145,29 @@ impl WryQueue {
         poll
     }
 
+    /// The script that makes `page` open its edits connection, and does nothing in any other page.
+    pub(crate) fn connect_script(&self, page: u32) -> String {
+        format!(
+            "if (window.dioxusPage === {page}) window.interpreter.waitForRequest(\"{}\", \"{}\");",
+            self.edits_path(),
+            self.required_server_key()
+        )
+    }
+
+    /// Serve a page that replaced the previous one, on a fresh connection id and mutation channel
+    /// because the new page cannot read the old page's pending edits or interned strings.
+    pub(crate) fn start_new_page(&self) {
+        let mut inner = self.inner.borrow_mut();
+        let old_webview_id = inner.location.webview_id;
+        inner.location.webview_id = inner.websocket.next_webview_id();
+        inner.websocket.forget_webview(old_webview_id);
+        inner.mutation_state = MutationState::default();
+        inner.edits_in_progress = None;
+        inner.touched = false;
+    }
+
     /// Get the websocket path that the webview should connect to in order to receive edits
-    pub(crate) fn edits_path(&self) -> String {
+    fn edits_path(&self) -> String {
         let WebviewWebsocketLocation {
             webview_id, server, ..
         } = &self.inner.borrow().location;
@@ -158,7 +179,7 @@ impl WryQueue {
     }
 
     /// Get the key the client should expect from the server when connecting to the websocket.
-    pub(crate) fn required_server_key(&self) -> String {
+    fn required_server_key(&self) -> String {
         let server = &self.inner.borrow().location.server;
         let server = server.lock().unwrap();
         encode_key_string(&server.server_key)
@@ -400,14 +421,14 @@ impl EditWebsocket {
                 _ = msg.response.send(());
             }
             tracing::trace!("Webview {} closed the connection", location.webview_id);
-            let mut connection = WebviewConnectionState::default();
-            if let Some(msg) = queued_message {
-                connection.add_message_pair(msg);
+            let mut connections = connections_.write().unwrap();
+            // A forgotten webview has no page left to reconnect and take the unacknowledged edits.
+            if let Some(connection) = connections.get_mut(&location.webview_id) {
+                *connection = WebviewConnectionState::default();
+                if let Some(msg) = queued_message {
+                    connection.add_message_pair(msg);
+                }
             }
-            connections_
-                .write()
-                .unwrap()
-                .insert(location.webview_id, connection);
         });
 
         let mut connections = connections.write().unwrap();
@@ -438,10 +459,19 @@ impl EditWebsocket {
         );
     }
 
+    /// Allocate an id no webview connection has used.
+    fn next_webview_id(&self) -> u32 {
+        self.max_webview_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Drop the queued edits and the connection of a webview whose page is gone.
+    fn forget_webview(&self, webview: u32) {
+        self.connections.write().unwrap().remove(&webview);
+    }
+
     pub(crate) fn create_queue(&self) -> WryQueue {
-        let webview_id = self
-            .max_webview_id
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let webview_id = self.next_webview_id();
         let server = self.current_location.clone();
         let server_location = self.server_location.clone();
         WryQueue {
