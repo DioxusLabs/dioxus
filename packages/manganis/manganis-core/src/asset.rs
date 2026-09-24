@@ -157,10 +157,19 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        let bundled = self.bundled();
+
         #[cfg(feature = "dioxus")]
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {
-            return PathBuf::from(self.bundled().absolute_source_path.as_str());
+            return PathBuf::from(bundled.absolute_source_path.as_str());
+        }
+
+        // If the bundled path is still the placeholder, the CLI never processed this binary.
+        // Fall back to the absolute source path so assets resolve correctly when running
+        // a `cargo build` artifact directly (without `cargo run` or `dx`).
+        if bundled.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
+            return PathBuf::from(bundled.absolute_source_path.as_str());
         }
 
         #[cfg(feature = "dioxus")]
@@ -180,7 +189,7 @@ impl Asset {
 
         // Otherwise presumably we're bundled and we can use the bundled path
         bundle_root.join(PathBuf::from(
-            self.bundled().bundled_path.as_str().trim_start_matches('/'),
+            bundled.bundled_path.as_str().trim_start_matches('/'),
         ))
     }
 }
@@ -198,7 +207,18 @@ impl From<Asset> for Option<String> {
 
 impl std::fmt::Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.resolve().display())
+        let path = self.resolve();
+        // Convert the path to a URL-compatible string with forward slashes.
+        // On Windows, PathBuf::display() uses backslashes which are not valid in URLs.
+        let path_str = path.to_string_lossy();
+        let path_str = path_str.replace('\\', "/");
+        // Ensure the path starts with `/` for use as an absolute URL path.
+        // On Windows, absolute paths like `C:/Users/...` need a leading `/`.
+        if path_str.starts_with('/') {
+            write!(f, "{path_str}")
+        } else {
+            write!(f, "/{path_str}")
+        }
     }
 }
 
