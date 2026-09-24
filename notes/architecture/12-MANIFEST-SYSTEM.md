@@ -149,6 +149,8 @@ target_sdk = 34
 features = ["android.hardware.location.gps"]
 url_schemes = ["myapp-android"]  # Platform-specific URL schemes
 foreground_service_types = ["location", "mediaPlayback"]
+manifest = "android/AndroidManifest.xml"  # Merged into the generated manifest
+resources = ["android/xml/data_extraction_rules.xml"]  # Becomes @xml/data_extraction_rules
 
 # Intent filters for deep linking
 [[android.intent_filters]]
@@ -172,6 +174,10 @@ packages = ["com.other.app"]
 [android.raw]
 manifest = """
 <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+"""
+application_attrs = 'android:dataExtractionRules="@xml/data_extraction_rules"'
+application = """
+<meta-data android:name="com.example.flag" android:value="true" />
 """
 ```
 
