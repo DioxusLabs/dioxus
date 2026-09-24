@@ -28,6 +28,7 @@ const ALL_SERVERS = [
   { specs: ["web-hash-routing.spec.js"], port: 2021, cwd: "web-hash-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 2021` },
   { specs: ["fullstack.spec.js"], port: 3333, cwd: "fullstack", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 3333 --release` },
   { specs: ["fullstack-errors.spec.js"], port: 3232, cwd: "fullstack-errors", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 3232` },
+  { specs: ["fullstack-headers.spec.js"], port: 3636, cwd: "fullstack-headers", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 3636` },
   { specs: ["fullstack-mounted.spec.js"], port: 7777, cwd: "fullstack-mounted", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 7777` },
   { specs: ["fullstack-routing.spec.js"], port: 8888, cwd: "fullstack-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 8888` },
   { specs: ["fullstack-spread.spec.js"], port: 7980, cwd: "fullstack-spread", command: `${dx} run --verbose --force-sequential --web --addr 127.0.0.1 --port 7980` },
