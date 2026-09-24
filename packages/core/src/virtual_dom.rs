@@ -589,7 +589,7 @@ impl VirtualDom {
         }
     }
 
-    fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
+    pub(crate) fn rebuild_with_writer(&mut self, to: &mut dyn WriteMutations) {
         let driver = self.runtime.get_state(ScopeId::ROOT).render_driver();
         append_children_to(to, ElementId::ROOT, self.runtime.clone(), |to| {
             self.runtime.clone().while_rendering(|| {

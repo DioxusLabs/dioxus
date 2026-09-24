@@ -21,6 +21,12 @@ impl DesktopDocument {
         let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
         Self { desktop_ctx }
     }
+
+    fn create_head_element(&self, script: String) {
+        if let Some(ctx) = self.desktop_ctx.upgrade() {
+            ctx.create_head_element(script);
+        }
+    }
 }
 
 impl Document for DesktopDocument {
@@ -43,7 +49,7 @@ impl Document for DesktopDocument {
     fn create_meta(&self, props: MetaProps) {
         let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+            myself.create_head_element(create_element_in_head("meta", &props.attributes(), None));
         });
     }
 
@@ -51,7 +57,7 @@ impl Document for DesktopDocument {
     fn create_script(&self, props: ScriptProps) {
         let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
+            myself.create_head_element(create_element_in_head(
                 "script",
                 &props.attributes(),
                 props.script_contents().ok(),
@@ -63,7 +69,7 @@ impl Document for DesktopDocument {
     fn create_style(&self, props: StyleProps) {
         let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head(
+            myself.create_head_element(create_element_in_head(
                 "style",
                 &props.attributes(),
                 props.style_contents().ok(),
@@ -75,7 +81,7 @@ impl Document for DesktopDocument {
     fn create_link(&self, props: LinkProps) {
         let myself = self.clone();
         queue_effect(move || {
-            myself.eval(create_element_in_head("link", &props.attributes(), None));
+            myself.create_head_element(create_element_in_head("link", &props.attributes(), None));
         });
     }
 }
