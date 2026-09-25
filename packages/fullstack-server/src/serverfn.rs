@@ -87,6 +87,7 @@ impl ServerFunction {
                     let request = axum::extract::Request::from_parts(parts, body);
 
                     // store Accepts and Referrer in case we need them for redirect (below)
+                    let is_post = request.method() == Method::POST;
                     let referrer = request.headers().get(REFERER).cloned();
                     let accepts_html = request
                         .headers()
@@ -113,11 +114,13 @@ impl ServerFunction {
                                 response.headers_mut().extend(headers);
                             }
 
-                            // If the response is successful and accepts text/html (i.e., is a
-                            // plain form post) and doesn't already have a Location set, then
-                            // redirect to Referer. Only redirect on success so that error
-                            // responses (4xx, 5xx) propagate correctly to the client.
-                            if accepts_html && response.status().is_success()
+                            // If the response is successful and the request is a plain form
+                            // post (a POST that accepts text/html) and doesn't already have a
+                            // Location set, then redirect to Referer. Only redirect on success so
+                            // that error responses (4xx, 5xx) propagate correctly to the client.
+                            // A GET that accepts text/html is a browser navigation (a link, a
+                            // download, an OAuth callback), so it gets the response itself.
+                            if is_post && accepts_html && response.status().is_success()
                                 && let Some(referrer) = referrer {
                                     let has_location = response.headers().get(LOCATION).is_some();
                                     if !has_location {
@@ -152,5 +155,59 @@ impl inventory::Collect for ServerFunction {
     fn registry() -> &'static inventory::Registry {
         static REGISTRY: inventory::Registry = inventory::Registry::new();
         &REGISTRY
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{Router, body::to_bytes};
+    use http::header::{ACCEPT, LOCATION, REFERER};
+    use tower::ServiceExt;
+
+    const REFERER_PAGE: &str = "http://localhost:8080/page";
+
+    fn ok_handler(
+        _: State<FullstackContext>,
+        _: Request,
+    ) -> Pin<Box<dyn Future<Output = Response>>> {
+        Box::pin(async { Response::new(Body::from("payload")) })
+    }
+
+    /// Call a server function the way a browser does when it navigates or submits a plain form:
+    /// with `Accept: text/html` and the page it came from in `Referer`.
+    async fn browser_request(method: Method) -> Response {
+        let router = Router::new()
+            .route(
+                "/api/file",
+                ServerFunction::make_handler(method.clone(), ok_handler),
+            )
+            .with_state(FullstackState::headless());
+        let request = Request::builder()
+            .method(method)
+            .uri("/api/file")
+            .header(ACCEPT, "text/html,application/xhtml+xml,*/*;q=0.8")
+            .header(REFERER, REFERER_PAGE)
+            .body(Body::empty())
+            .unwrap();
+        router.oneshot(request).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn get_navigation_returns_the_response_instead_of_redirecting_to_referer() {
+        let response = browser_request(Method::GET).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().get(LOCATION).is_none());
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&body[..], b"payload");
+    }
+
+    #[tokio::test]
+    async fn plain_form_post_still_redirects_to_referer() {
+        let response = browser_request(Method::POST).await;
+
+        assert_eq!(response.status(), StatusCode::FOUND);
+        assert_eq!(response.headers().get(LOCATION).unwrap(), REFERER_PAGE);
     }
 }
