@@ -6,6 +6,7 @@
 //!
 //! - `signals`: (default) re-exports `dioxus-signals`
 //! - `macro`: (default) re-exports `dioxus-macro`
+//! - `config-macros`: (default) re-exports internal configuration macros; also enabled by `macro`, `router`, and `wasm-split`
 //! - `html`: (default) exports `dioxus-html` as the default elements to use in rsx
 //! - `hooks`: (default) re-exports `dioxus-hooks`
 //! - `hot-reload`: (default) enables hot rsx reloading in all renderers that support it
@@ -128,6 +129,8 @@ pub use dioxus_ssr as ssr;
 #[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
 pub use warnings;
 
+#[cfg(feature = "config-macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "config-macros")))]
 pub use dioxus_config_macros as config_macros;
 
 #[cfg(feature = "wasm-split")]
