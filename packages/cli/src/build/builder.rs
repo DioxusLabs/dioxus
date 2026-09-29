@@ -6,6 +6,7 @@ use crate::{BuildPhaseProfile, opt::process_file_to};
 use anyhow::{Context, Error, bail};
 use futures_util::{FutureExt, future::OptionFuture, pin_mut};
 use itertools::Itertools;
+use send_ctrlc::{Interruptible, InterruptibleCommand, tokio::InterruptibleChild};
 use std::{
     collections::HashSet,
     env,
@@ -20,7 +21,7 @@ use subsecond_types::JumpTable;
 use target_lexicon::Architecture;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
-    process::{Child, ChildStderr, ChildStdout, Command},
+    process::{ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -72,7 +73,7 @@ pub(crate) struct AppBuilder {
     pub runtime_asset_dir: Option<PathBuf>,
 
     // These might be None if the app died or the user did not specify a server
-    pub child: Option<Child>,
+    pub child: Option<InterruptibleChild>,
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
@@ -708,7 +709,8 @@ impl AppBuilder {
 
     /// Gracefully kill the process and all of its children
     ///
-    /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
+    /// Uses `send_ctrlc` to send `SIGTERM` on unix and `CTRL_BREAK_EVENT` on windows, to cleanly
+    /// shut down the child process.
     /// This complex logic is necessary for things like window state preservation to work properly.
     ///
     /// Also wipes away the entropy executables if they exist.
@@ -720,26 +722,14 @@ impl AppBuilder {
             return;
         };
 
-        let Some(pid) = process.id() else {
+        if process.id().is_none() {
             _ = process.kill().await;
             return;
-        };
-
-        // on unix, we can send a signal to the process to shut down
-        #[cfg(unix)]
-        {
-            _ = Command::new("kill")
-                .args(["-s", "TERM", &pid.to_string()])
-                .spawn();
         }
 
-        // on windows, use the `taskkill` command
-        #[cfg(windows)]
-        {
-            _ = Command::new("taskkill")
-                .args(["/PID", &pid.to_string()])
-                .spawn();
-        }
+        // Ask the child to shut down gracefully; `kill_on_drop(true)` at spawn time is the
+        // forceful fallback if it doesn't exit within the timeout below.
+        _ = process.terminate();
 
         // join the wait with a 100ms timeout
         futures_util::select! {
@@ -1008,7 +998,7 @@ impl AppBuilder {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn_interruptible()?;
 
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let stderr = BufReader::new(child.stderr.take().unwrap());
@@ -1070,7 +1060,7 @@ impl AppBuilder {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn_interruptible()?;
 
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let stderr = BufReader::new(child.stderr.take().unwrap());
