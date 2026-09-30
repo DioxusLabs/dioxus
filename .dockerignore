@@ -1,0 +1,5 @@
+.git
+target
+**/node_modules
+packages/playwright-tests/playwright-report
+packages/playwright-tests/test-results
