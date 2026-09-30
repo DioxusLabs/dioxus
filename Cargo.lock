@@ -3477,6 +3477,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
+ "ctrlc",
  "dioxus",
  "dioxus-asset-resolver",
  "dioxus-cli-config",

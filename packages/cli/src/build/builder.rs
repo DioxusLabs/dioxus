@@ -722,16 +722,52 @@ impl AppBuilder {
             return;
         };
 
-        if process.id().is_none() {
+        let Some(pid) = process.id() else {
             _ = process.kill().await;
             return;
-        }
+        };
 
         // Ask the child to shut down gracefully; `kill_on_drop(true)` at spawn time is the
         // forceful fallback if it doesn't exit within the timeout below.
         _ = process.terminate();
 
-        // join the wait with a 100ms timeout
+        // `CTRL_BREAK_EVENT` only reaches processes attached to a console, and desktop apps
+        // save their window state on `WM_CLOSE`.
+        //
+        // We call `taskkill` without `/F` so that it sends `WM_CLOSE`.
+        #[cfg(windows)]
+        tokio::spawn(async move {
+            let Ok(output) = Command::new("taskkill")
+                .args(["/PID", &pid.to_string()])
+                .stdin(Stdio::null())
+                .output()
+                .await
+            else {
+                return;
+            };
+
+            // When terminating a child process during development, `taskkill` outputs
+            // "SUCCESS: Sent termination signal ..." when it sends `WM_CLOSE`,
+            // and "ERROR: The process ... not found." when the child has already exited from
+            // `CTRL_BREAK_EVENT`.
+            //
+            // These are expected output and dirty the console, so we filter them out of the logs.
+            let log_taskkill_output = |bytes: &[u8], is_expected: fn(&str) -> bool| {
+                String::from_utf8_lossy(bytes)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty() && !is_expected(line))
+                    .for_each(|line| tracing::warn!("taskkill: {line}"));
+            };
+            log_taskkill_output(&output.stdout, |line| {
+                line.starts_with("SUCCESS: Sent termination signal")
+                    || (line.starts_with("ERROR: The process") && line.ends_with("not found."))
+            });
+        });
+        #[cfg(not(windows))]
+        let _ = pid;
+
+        // join the wait with a 1 second timeout
         futures_util::select! {
             _ = process.wait().fuse() => {}
             _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
