@@ -60,7 +60,7 @@ webbrowser = { workspace = true }
 signal-hook = "0.3.18"
 
 [target.'cfg(windows)'.dependencies]
-ctrlc = { version = "3.4", features = ["termination"] }
+ctrlc = { version = "3.4.7", features = ["termination"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 wry = { workspace = true, features = ["os-webview", "protocol", "linux-body"] }
