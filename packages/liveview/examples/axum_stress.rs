@@ -27,6 +27,7 @@ async fn main() {
 
     let view = dioxus_liveview::LiveViewPool::new();
 
+    let websocket_view = view.clone();
     let app = Router::new()
         .route(
             "/",
@@ -47,10 +48,15 @@ async fn main() {
         .route(
             "/ws",
             get(move |ws: WebSocketUpgrade| async move {
+                let view = websocket_view.clone();
                 ws.on_upgrade(move |socket| async move {
                     _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
                 })
             }),
+        )
+        .route(
+            "/ws/upload/{token}",
+            dioxus_liveview::axum_file_upload(view),
         );
 
     println!("Listening on http://{addr}");
