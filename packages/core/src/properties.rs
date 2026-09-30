@@ -356,6 +356,48 @@ where
     }
 }
 
+/// Marker used to merge the `Vec<Element>` an `rsx!` body compiles its children to back into a
+/// single [`Element`], for a component that declares `children: Element`. Together with the
+/// `Vec<Element>` shape passing straight through, this is what makes both declarations accept the
+/// exact same call-site syntax.
+#[doc(hidden)]
+pub struct VecElementFromMarker;
+
+/// `None` only for a genuinely empty list, never for a render error - `IntoDynNode for Element`
+/// already treats an `Err` as "nothing" rather than propagating it
+fn merge_vnodes(input: Vec<Element>) -> Option<VNode> {
+    let mut nodes: Vec<VNode> = input.into_iter().map(IntoVNode::into_vnode).collect();
+    match nodes.len() {
+        0 => None,
+        // One child, the common case, keeps exactly the VNode shape `children: Element` has
+        1 => Some(nodes.pop().unwrap()),
+        // 2+ separately built VNodes share no static Template, so they can only be combined at
+        // runtime, through the same dynamic-node slot a `for` loop's output already uses
+        _ => {
+            use crate::view::{ViewExt, dynamic_node_builder};
+            Some(dynamic_node_builder::<_, ()>(DynamicNode::Fragment(nodes)).into_vnode())
+        }
+    }
+}
+
+impl SuperFrom<Vec<Element>, VecElementFromMarker> for Element {
+    fn super_from(input: Vec<Element>) -> Self {
+        // An empty list lands on `VNode::empty()`, the `children: Element` default
+        Ok(merge_vnodes(input).unwrap_or_default())
+    }
+}
+
+/// Marker used to merge a `Vec<Element>` into `Option<Element>`, for a component whose `children`
+/// is itself optional - `None` for an empty list, same as that field's own default.
+#[doc(hidden)]
+pub struct VecElementFromOptionMarker;
+
+impl SuperFrom<Vec<Element>, VecElementFromOptionMarker> for Option<Element> {
+    fn super_from(input: Vec<Element>) -> Self {
+        merge_vnodes(input).map(Ok)
+    }
+}
+
 /// Marker used to convert `&str` into `Option<String>` through [`SuperFrom`].
 #[doc(hidden)]
 pub struct OptionStringFromMarker;
