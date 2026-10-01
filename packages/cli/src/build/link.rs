@@ -265,9 +265,10 @@ impl BuildRequest {
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
+            let linker_flavor = self.linker_flavor();
             let cmd_contents: String = out_args
                 .iter()
-                .map(|s| format!("\"{}\"", s.to_string_lossy()))
+                .map(|s| quote_linker_command_file_argument(&s.to_string_lossy(), &linker_flavor))
                 .join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
@@ -1144,7 +1145,11 @@ impl BuildRequest {
         // Handle windows command files
         let mut out_args = args.clone();
         if cfg!(windows) {
-            let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
+            let linker_flavor = self.linker_flavor();
+            let cmd_contents: String = out_args
+                .iter()
+                .map(|arg| quote_linker_command_file_argument(arg, &linker_flavor))
+                .join(" ");
             std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
             out_args = vec![format!("@{}", self.windows_command_file().display())];
@@ -1482,6 +1487,45 @@ impl BuildRequest {
             self.profile,
             &scope_hash[..16]
         ))
+    }
+}
+
+fn quote_linker_command_file_argument(arg: &str, linker_flavor: &LinkerFlavor) -> String {
+    let arg = if linker_flavor == &LinkerFlavor::Msvc {
+        arg.to_owned()
+    } else {
+        arg.replace('\\', "\\\\").replace('"', "\\\"")
+    };
+    format!("\"{arg}\"")
+}
+
+#[cfg(test)]
+mod linker_response_file_tests {
+    use super::*;
+
+    #[test]
+    fn response_file_arguments_use_the_target_linker_quoting() {
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\Users\me\objects with spaces\file.o"#,
+                &LinkerFlavor::Gnu,
+            ),
+            r#""C:\\Users\\me\\objects with spaces\\file.o""#
+        );
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\path\with spaces "quoted".o"#,
+                &LinkerFlavor::Darwin,
+            ),
+            r#""C:\\path\\with spaces \"quoted\".o""#
+        );
+        assert_eq!(
+            quote_linker_command_file_argument(
+                r#"C:\Users\me\objects with spaces\file.o"#,
+                &LinkerFlavor::Msvc,
+            ),
+            r#""C:\Users\me\objects with spaces\file.o""#
+        );
     }
 }
 
