@@ -83,6 +83,22 @@ where
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
+            let status = res.status();
+
+            if !status.is_success() {
+                let ErrorPayload::<serde_json::Value> {
+                    message,
+                    code,
+                    data,
+                } = res.json().await?;
+
+                return Err(ServerFnError::ServerError {
+                    message,
+                    code,
+                    details: data,
+                });
+            }
+
             let mut parts = res.make_parts();
             let a = A::from_response_parts(&mut parts)?;
             let b = B::from_response(res).await?;
@@ -99,6 +115,22 @@ where
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
+            let status = res.status();
+
+            if !status.is_success() {
+                let ErrorPayload::<serde_json::Value> {
+                    message,
+                    code,
+                    data,
+                } = res.json().await?;
+
+                return Err(ServerFnError::ServerError {
+                    message,
+                    code,
+                    details: data,
+                });
+            }
+
             let mut parts = res.make_parts();
             let a = A::from_response_parts(&mut parts)?;
             let b = B::from_response_parts(&mut parts)?;
@@ -285,6 +317,78 @@ mod test {
             let error = result.unwrap_err();
             assert_eq!(
                 error,
+                ServerFnError::ServerError {
+                    message: "qwerty".to_string(),
+                    code: 400,
+                    details: None
+                }
+            );
+        });
+    }
+
+    #[test]
+    fn tuple_two_path_decodes_ok_on_2xx() {
+        futures::executor::block_on(async {
+            let response = build_response(200, "".to_string());
+            let result = <(TestFromResponse, TestFromResponse)>::from_response(response).await;
+            assert!(
+                result.is_ok(),
+                "expected Ok(..) for HTTP 200 success case, got: {:?}",
+                result
+            );
+        });
+    }
+
+    #[test]
+    fn tuple_two_parses_error_payload_on_http_error() {
+        futures::executor::block_on(async {
+            let body = r#"{
+                "message": "qwerty",
+                "code": 400
+            }"#;
+            let response = build_response(400, body.to_string());
+            let result = <(TestFromResponse, TestFromResponse)>::from_response(response).await;
+            assert!(result.is_err(), "expected Err(..) for HTTP 400 failed case");
+            assert_eq!(
+                result.unwrap_err(),
+                ServerFnError::ServerError {
+                    message: "qwerty".to_string(),
+                    code: 400,
+                    details: None
+                }
+            );
+        });
+    }
+
+    #[test]
+    fn tuple_three_path_decodes_ok_on_2xx() {
+        futures::executor::block_on(async {
+            let response = build_response(200, "".to_string());
+            let result =
+                <(TestFromResponse, TestFromResponse, TestFromResponse)>::from_response(response)
+                    .await;
+            assert!(
+                result.is_ok(),
+                "expected Ok(..) for HTTP 200 success case, got: {:?}",
+                result
+            );
+        });
+    }
+
+    #[test]
+    fn tuple_three_parses_error_payload_on_http_error() {
+        futures::executor::block_on(async {
+            let body = r#"{
+                "message": "qwerty",
+                "code": 400
+            }"#;
+            let response = build_response(400, body.to_string());
+            let result =
+                <(TestFromResponse, TestFromResponse, TestFromResponse)>::from_response(response)
+                    .await;
+            assert!(result.is_err(), "expected Err(..) for HTTP 400 failed case");
+            assert_eq!(
+                result.unwrap_err(),
                 ServerFnError::ServerError {
                     message: "qwerty".to_string(),
                     code: 400,
