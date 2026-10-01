@@ -193,6 +193,8 @@ impl FullstackContext {
     }
 
     /// Add a header to the response. This will be sent to the client when the response is committed.
+    /// Set-Cookie headers will be appended to any existing Set-Cookie headers (compliance with RFC 6265),
+    /// while all other headers will overwrite any existing header with the same name.
     pub fn add_response_header(
         &self,
         key: impl Into<http::header::HeaderName>,
@@ -200,7 +202,12 @@ impl FullstackContext {
     ) {
         let mut lock = self.lock.write();
         if let Some(headers) = lock.response_headers.as_mut() {
-            headers.insert(key.into(), value.into());
+            let key_into = key.into();
+            if key_into == http::header::SET_COOKIE {
+                headers.append(key_into, value.into());
+            } else {
+                headers.insert(key_into, value.into());
+            }
         }
     }
 
