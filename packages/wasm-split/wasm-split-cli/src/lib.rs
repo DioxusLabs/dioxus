@@ -492,6 +492,22 @@ impl<'a> Splitter<'a> {
             out.exports.delete(split.export_id);
         }
 
+        // Data symbols can overlap: wasm-ld tail-merges identical suffixes of byte constants, so a
+        // short dead blob can be a byte-for-byte suffix of a longer, still-live one and share its
+        // storage. Zeroing a dead symbol's declared range is only safe where no live symbol also
+        // claims those bytes, so mark what's live first (segment 0 only - the only one zeroed).
+        let segment_len = out.data.iter().next().map(|d| d.value.len()).unwrap_or(0);
+        let mut live_bytes = vec![false; segment_len];
+        for (id, symbol) in self.data_symbols.iter() {
+            if symbol.which_data_segment != 0 || unused_symbols.contains(&Node::DataSymbol(*id)) {
+                continue;
+            }
+
+            let start = symbol.segment_offset.min(segment_len);
+            let end = (symbol.segment_offset + symbol.symbol_size).min(segment_len);
+            live_bytes[start..end].fill(true);
+        }
+
         // And then any actual symbols from the callgraph
         for symbol in unused_symbols.iter().cloned() {
             match symbol {
@@ -517,6 +533,10 @@ impl<'a> Splitter<'a> {
                         let data_id = out.data.iter().nth(symbol.which_data_segment).unwrap().id();
                         let data = out.data.get_mut(data_id);
                         for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
+                            // Don't stomp bytes a live, overlapping symbol shares with this one.
+                            if live_bytes.get(i).copied().unwrap_or(false) {
+                                continue;
+                            }
                             data.value[i] = 0;
                         }
                     }
