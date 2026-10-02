@@ -432,7 +432,7 @@ impl BlitzBackend<'_> {
         // Set/unset custom widget for <object data>
         if local_name == "data" {
             let element_name = self.docm.element_name(node_id).unwrap();
-            if element_name.local.as_ref() == "object" {
+            if element_name.local.as_str() == "object" {
                 match value {
                     AttributeValue::Any(value) => {
                         if let Some(value) = value
