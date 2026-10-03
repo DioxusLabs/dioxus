@@ -120,6 +120,7 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> Re
         AssetVariant::CssModule(css) => ResolvedAssetType::CssModule(*css),
         AssetVariant::Js(js) => ResolvedAssetType::Js(*js),
         AssetVariant::Folder(folder) => ResolvedAssetType::Folder(*folder),
+        AssetVariant::File => ResolvedAssetType::File,
         AssetVariant::Unknown => resolve_unknown_asset_options(source),
         _ => {
             tracing::warn!(
@@ -142,5 +143,67 @@ fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
         }
         _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::default()),
         _ => ResolvedAssetType::File,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manganis_core::AssetOptions;
+    use sha2::{Digest, Sha256};
+    use std::path::Path;
+
+    fn sha256(path: &Path) -> Vec<u8> {
+        let bytes = std::fs::read(path).expect("failed to read fixture");
+        Sha256::digest(bytes).to_vec()
+    }
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    }
+
+    /// Public directory assets must be copied byte-for-byte. Any re-encoding would discard frames
+    /// from animated WebP or bloat lossy WebP files, which is the bug reported in #5656.
+    #[test]
+    fn public_assets_copied_verbatim_preserve_webp() {
+        for name in ["animated.webp", "lossy.webp"] {
+            let src = fixture(name);
+            let dir = tempfile::tempdir().expect("failed to create temp dir");
+            let dst = dir.path().join(name);
+
+            let options = AssetOptions::builder().into_file_asset_options();
+            process_file_to(&options, &src, &dst, None).expect("failed to copy asset");
+
+            assert!(
+                dst.exists(),
+                "public asset {name} should be written to the output path"
+            );
+            assert_eq!(
+                sha256(&src),
+                sha256(&dst),
+                "public asset {name} must be copied byte-for-byte (SHA-256 must match)"
+            );
+        }
+    }
+
+    /// `asset!()` assets must still go through the image optimizer. This guards against the fix
+    /// accidentally disabling optimization for the intended path.
+    #[test]
+    fn asset_macro_webp_still_optimized() {
+        let src = fixture("lossy.webp");
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let dst = dir.path().join("lossy.webp");
+
+        // Default options (as produced by `asset!()`) resolve `.webp` to the image optimizer.
+        let options = AssetOptions::builder().into_asset_options();
+        process_file_to(&options, &src, &dst, None).expect("failed to process asset");
+
+        assert_ne!(
+            sha256(&src),
+            sha256(&dst),
+            "asset!() webp should be re-encoded by the image optimizer, not copied verbatim"
+        );
     }
 }
