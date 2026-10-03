@@ -64,13 +64,19 @@ use anyhow::{Context, bail};
 use itertools::Itertools;
 use manganis_core::AndroidArtifactMetadata;
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::OsString};
 use target_lexicon::{
     Aarch64Architecture, Architecture, ArmArchitecture, Triple, X86_32Architecture,
 };
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+
+/// How many trailing lines of emulator output to include when reporting that it exited with an error.
+const EMULATOR_LOG_TAIL_LINES: usize = 20;
 
 impl BuildRequest {
     /// Assemble the android app dir.
@@ -581,19 +587,47 @@ impl BuildRequest {
             if let Some(avd) = avd {
                 tracing::info!("Booting Android emulator: \"{avd}\"");
 
-                // Use `status` rather than `output` here: `output` forces stdout/stderr to be piped
-                // and buffers everything the (long-running, noisy) emulator prints in memory.
-                let res = Command::new(&emulator)
+                // The emulator is long-running and noisy, so only keep the tail of its output (to
+                // report if it fails) rather than collecting it all in memory with `output`.
+                // Don't forward each line to `tracing`: the TUI's log channel is unbounded.
+                let mut child = match Command::new(&emulator)
                     .arg("-avd")
                     .arg(avd)
                     .args(["-netdelay", "none", "-netspeed", "full"])
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .status()
-                    .await;
-                if let Err(err) = res {
-                    tracing::warn!("Failed to boot Android emulator using {emulator:?}: {err}");
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                {
+                    Ok(child) => child,
+                    Err(err) => {
+                        tracing::warn!("Failed to boot Android emulator using {emulator:?}: {err}");
+                        return;
+                    }
+                };
+
+                let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+                let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
+                let mut last_lines = VecDeque::with_capacity(EMULATOR_LOG_TAIL_LINES);
+                loop {
+                    let line = tokio::select! {
+                        Ok(Some(line)) = stdout.next_line() => line,
+                        Ok(Some(line)) = stderr.next_line() => line,
+                        else => break,
+                    };
+                    if last_lines.len() == EMULATOR_LOG_TAIL_LINES {
+                        last_lines.pop_front();
+                    }
+                    last_lines.push_back(line);
+                }
+
+                match child.wait().await {
+                    Ok(status) if !status.success() => tracing::warn!(
+                        "Android emulator exited with {status}:\n{}",
+                        last_lines.iter().join("\n")
+                    ),
+                    Ok(_) => {}
+                    Err(err) => tracing::warn!("Failed to wait for Android emulator: {err}"),
                 }
             } else {
                 tracing::warn!(
