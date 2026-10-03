@@ -13,3 +13,6 @@ keywords = ["dom", "ui", "gui", "react", ]
 serde = { workspace = true, features = ["derive"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 subsecond-types = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

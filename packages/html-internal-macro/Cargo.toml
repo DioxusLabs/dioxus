@@ -26,3 +26,6 @@ path = "tests/progress.rs"
 
 [dev-dependencies]
 trybuild = { workspace = true, features = ["diff"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

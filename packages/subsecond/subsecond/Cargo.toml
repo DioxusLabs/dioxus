@@ -27,3 +27,6 @@ memmap2 = { workspace = true}
 
 [target.'cfg(target_os = "android")'.dependencies]
 memfd = { workspace = true}
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

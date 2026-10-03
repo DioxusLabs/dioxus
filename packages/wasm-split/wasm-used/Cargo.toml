@@ -13,3 +13,6 @@ keywords = ["wasm", "wasm-used", "wasm-split", "dioxus" ]
 walrus = { workspace = true, features = ["parallel"] }
 id-arena = { workspace = true }
 tracing = { workspace = true }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

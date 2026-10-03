@@ -125,3 +125,6 @@ anyrender_vello_cpu = { workspace = true, features = ["pixels_window_renderer"]}
 
 [package.metadata.docs.rs]
 all-features = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

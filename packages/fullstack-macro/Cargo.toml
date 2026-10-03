@@ -28,3 +28,6 @@ axum = { workspace = true }
 
 [lib]
 proc-macro = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

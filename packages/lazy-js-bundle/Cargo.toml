@@ -9,3 +9,6 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://docs.rs/dioxus"
 keywords = ["ts", "codegen", "typescript", "javascript", "wasm"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

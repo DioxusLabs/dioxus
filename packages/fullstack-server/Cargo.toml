@@ -103,3 +103,6 @@ server = []
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 features = ["axum", "web", "aws-lc-rs"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

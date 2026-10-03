@@ -11,3 +11,6 @@ readme = "../README.md"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

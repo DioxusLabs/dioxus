@@ -11,3 +11,6 @@ keywords = ["const", "vec"]
 rust-version = "1.85.0"
 
 [dependencies]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

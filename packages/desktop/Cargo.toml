@@ -152,3 +152,6 @@ harness = false
 name = "check_multiwindow"
 path = "headless_tests/multiwindow.rs"
 harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

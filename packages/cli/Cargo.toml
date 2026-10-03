@@ -199,3 +199,6 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

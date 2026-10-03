@@ -27,3 +27,10 @@ large-path = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
+# `Store<T, Lens>` has several inherent impl blocks (slice, HashMap, BTreeMap) that define a
+# method named `get` with different receivers. cargo-semver-checks matches methods by
+# type + name only, so it reports a receiver change even when nothing moved.
+method_receiver_ref_became_owned = "allow"
