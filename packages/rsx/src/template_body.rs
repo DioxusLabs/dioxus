@@ -7,6 +7,7 @@ use dioxus_core_template::{TEMPLATE_SLOT_PATH_MAX_PATH_BITS, TEMPLATE_STORAGE_MA
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote, quote_spanned};
+use std::collections::HashMap;
 use syn::parse_quote;
 
 /// `View`/`ViewTemplate` are only implemented for tuples up to this arity, so sibling lists wider
@@ -182,31 +183,32 @@ impl ToTokens for TemplateBody {
                 #[cfg(debug_assertions)]
                 let __hot_reload_template_read = {
                     // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable
-                    static __NORMALIZED_FILE: &'static str = {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
-                    };
+                    // But the key is what's keeping it stable. The file path is normalized to
+                    // forward slashes lazily inside `Global`.
+                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::HotReloadTemplateSignal =
+                        dioxus_signals::GlobalSignal::with_location(
+                            || None,
+                            file!(),
+                            line!(),
+                            column!(),
+                            #index
+                        );
 
-                    use dioxus_signals::ReadableExt;
-
-                    static __HOT_RELOAD_TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        __NORMALIZED_FILE,
-                        line!(),
-                        column!(),
-                        #index
-                    );
-
-                    dioxus_core::Runtime::try_current().map(|_| __HOT_RELOAD_TEMPLATE.read())
+                    dioxus_signals::read_hot_reload_template(&__HOT_RELOAD_TEMPLATE)
                 };
+
+                // The hot-reloaded template, if this site has one. Borrows the read guard
+                // above, which stays alive until `render_with` at the end of this block.
+                #[cfg(debug_assertions)]
+                let __hot_reload_template =
+                    dioxus_signals::hot_reload_template(&__hot_reload_template_read);
 
                 // The literal pool and hot-reload read must be in scope before the view is built:
                 // component literal props pull their hot-reloaded value from the pool while the view
                 // expression evaluates.
                 #[cfg(debug_assertions)]
                 let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                    vec![ #( #dynamic_text.to_string() ),* ],
+                    vec![ #( #dynamic_text ),* ],
                 );
 
                 // Build the vnode from the typed view. In release the optimized template is the
@@ -247,10 +249,7 @@ impl ToTokens for TemplateBody {
                     // If the template has not been hot reloaded, we always use the original template
                     // Templates nested within macros may be merged because they have the same file-line-column-index
                     // They cannot be hot reloaded, so this prevents incorrect rendering
-                    let __template_read = match __hot_reload_template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
-                        Some(Some(__template_read)) => &__template_read,
-                        _ => &__original_template,
-                    };
+                    let __template_read = __hot_reload_template.unwrap_or(&__original_template);
 
                     let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::from_vnode(
                         &__vnode,
@@ -270,8 +269,8 @@ pub(crate) struct ViewBuilderPieces {
     template_stats: TemplateStorageStats,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
-    hot_reload_dynamic_nodes: Vec<TokenStream2>,
-    hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    dynamic_node_count: usize,
+    dynamic_attr_count: usize,
     hot_reload_key: Option<TokenStream2>,
 }
 
@@ -319,15 +318,17 @@ impl ViewBuilderPieces {
             .as_ref()
             .map(|key| quote! { Some(#key) })
             .unwrap_or_else(|| quote! { None });
-        let dynamic_nodes = self.hot_reload_dynamic_nodes.iter();
-        let dyn_attrs = self.hot_reload_dynamic_attrs.iter();
+        // Dynamic nodes/attributes are always `Dynamic(0..n)` in order, so only the
+        // counts cross the expansion boundary.
+        let node_count = self.dynamic_node_count;
+        let attr_count = self.dynamic_attr_count;
         let component_values = self.component_value_tokens.iter();
 
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::from_template(
+            dioxus_core::internal::HotReloadedTemplate::from_dynamic_counts(
                 #key,
-                vec![ #( #dynamic_nodes ),* ],
-                vec![ #( #dyn_attrs ),* ],
+                #node_count,
+                #attr_count,
                 vec![ #( #component_values ),* ],
                 #template,
             )
@@ -348,8 +349,10 @@ struct ViewBuilder {
     dynamic_attr_count: usize,
     dynamic_text_tokens: Vec<TokenStream2>,
     component_value_tokens: Vec<TokenStream2>,
-    hot_reload_dynamic_nodes: Vec<TokenStream2>,
-    hot_reload_dynamic_attrs: Vec<TokenStream2>,
+    /// Static text and attribute-value literals, deduplicated into one per-body string table
+    /// that the view refers to by index.
+    static_strings: Vec<TokenStream2>,
+    static_string_indices: HashMap<String, usize>,
     hot_reload_key: Option<TokenStream2>,
     next_marker: usize,
 }
@@ -363,14 +366,27 @@ impl ViewBuilder {
             dynamic_attr_count: 0,
             dynamic_text_tokens: Vec::new(),
             component_value_tokens: Vec::new(),
-            hot_reload_dynamic_nodes: Vec::new(),
-            hot_reload_dynamic_attrs: Vec::new(),
+            static_strings: Vec::new(),
+            static_string_indices: HashMap::new(),
             hot_reload_key: None,
             next_marker: 0,
         }
     }
 
-    fn finish(self, view: TokenStream2, template_stats: TemplateStorageStats) -> ViewBuilderPieces {
+    fn finish(
+        mut self,
+        view: TokenStream2,
+        template_stats: TemplateStorageStats,
+    ) -> ViewBuilderPieces {
+        if !self.static_strings.is_empty() {
+            let strings = &self.static_strings;
+            self.definitions.push(quote! {
+                struct __DioxusStrings;
+                impl dioxus_core::view::StaticStrings for __DioxusStrings {
+                    const STRINGS: &'static [&'static str] = &[#(#strings),*];
+                }
+            });
+        }
         ViewBuilderPieces {
             definitions: self.definitions,
             view,
@@ -378,8 +394,8 @@ impl ViewBuilder {
             template_stats,
             dynamic_text_tokens: self.dynamic_text_tokens,
             component_value_tokens: self.component_value_tokens,
-            hot_reload_dynamic_nodes: self.hot_reload_dynamic_nodes,
-            hot_reload_dynamic_attrs: self.hot_reload_dynamic_attrs,
+            dynamic_node_count: self.dynamic_node_count,
+            dynamic_attr_count: self.dynamic_attr_count,
             hot_reload_key: self.hot_reload_key,
         }
     }
@@ -469,17 +485,25 @@ impl ViewBuilder {
         }
     }
 
-    fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
-        let marker = self.next_ident("__DioxusText");
-        let value = text.input.to_static().unwrap();
-        self.definitions.push(quote_spanned! { text.input.span() =>
-            struct #marker;
-            impl dioxus_core::view::StaticText for #marker {
-                const TEXT: &'static str = #value;
+    /// The marker type for a static literal: its index into the per-body string table.
+    fn static_string(&mut self, span: proc_macro2::Span, value: String) -> TokenStream2 {
+        let index = match self.static_string_indices.get(value.as_str()) {
+            Some(index) => *index,
+            None => {
+                let index = self.static_strings.len();
+                self.static_strings.push(quote_spanned! { span => #value });
+                self.static_string_indices.insert(value, index);
+                index
             }
-        });
+        };
+        quote! { dioxus_core::view::Str::<__DioxusStrings, #index> }
+    }
+
+    fn static_text(&mut self, text: &TextNode) -> TokenStream2 {
+        let span = text.input.span();
+        let marker = self.static_string(span, text.input.to_static().unwrap());
         quote_spanned! {
-            text.input.span() =>
+            span =>
             dioxus_core::view::StaticTextBuilder::<#marker>(::core::marker::PhantomData)
         }
     }
@@ -487,8 +511,6 @@ impl ViewBuilder {
     fn dynamic_node(&mut self, tokens: TokenStream2) -> TokenStream2 {
         let id = self.dynamic_node_count;
         self.dynamic_node_count += 1;
-        self.hot_reload_dynamic_nodes
-            .push(quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) });
         // Bind the node value to a local before the builder chain. This matches the 0.6 evaluation
         // order where dynamic nodes are evaluated before dynamic attributes, releasing any borrow
         // the value takes (e.g. a `"{var}"` interpolation) before the surrounding chain moves
@@ -518,10 +540,7 @@ impl ViewBuilder {
     }
 
     fn track_dynamic_attr(&mut self, attr: &Attribute) {
-        let id = self.dynamic_attr_count;
         self.dynamic_attr_count += 1;
-        self.hot_reload_dynamic_attrs
-            .push(quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) });
         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
             self.allocate_formatted(lit);
         }
@@ -575,8 +594,7 @@ impl ViewBuilder {
             if let Segment::Formatted(segment) = segment {
                 let id = self.dynamic_text_tokens.len();
                 dynamic_ids.push(id);
-                self.dynamic_text_tokens
-                    .push(quote! { #segment.to_string() });
+                self.dynamic_text_tokens.push(quote! { #segment });
             }
         }
         formatted.quote_with_dynamic_ids(&dynamic_ids)
@@ -649,14 +667,7 @@ impl Element {
             }
 
             if let Some((_, value)) = attr.as_static_str_literal() {
-                let marker = builder.next_ident("__DioxusAttrValue");
-                let value = value.to_static().unwrap();
-                builder.definitions.push(quote_spanned! { attr.span() =>
-                    struct #marker;
-                    impl dioxus_core::view::StaticAttributeValue for #marker {
-                        const VALUE: &'static str = #value;
-                    }
-                });
+                let marker = builder.static_string(attr.span(), value.to_static().unwrap());
                 return quote! {
                     .#method(
                         dioxus_core::view::StaticAttributeValueBuilder::<#marker>(

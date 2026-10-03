@@ -11,13 +11,10 @@ use manganis_core::{
 /// This is a generic utility that works with any byte slice and can be used
 /// in const contexts to create fixed-size arrays from dynamic slices.
 pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
-    let mut out = [0; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = bytes[i];
-        i += 1;
+    match bytes.first_chunk::<N>() {
+        Some(chunk) => *chunk,
+        None => panic!("slice is shorter than the requested buffer size"),
     }
-    out
 }
 
 /// Serialize a SymbolData value into a const buffer
@@ -123,11 +120,8 @@ pub mod dx_macro_helpers {
         value: &impl SerializeConst,
     ) -> ConstVec<u8, MAX_SIZE> {
         let serialized = const_serialize::serialize_const(value, ConstVec::new());
-        let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-        data.extend(serialized.as_ref());
-        while data.len() < MAX_SIZE {
-            data.push(0);
-        }
+        let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::zeroed();
+        data.copy_from_slice_at(0, serialized.as_ref());
         data
     }
 }
