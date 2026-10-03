@@ -120,8 +120,6 @@ impl<'a> Splitter<'a> {
     ///
     /// This returns the list of chunks, an import map, and some javascript to link everything together.
     pub fn emit(self) -> Result<OutputModules> {
-        tracing::info!("Emitting split modules.");
-
         let chunks = (0..self.chunks.len())
             .into_par_iter()
             .map(|idx| self.emit_split_chunk(idx))
@@ -167,11 +165,11 @@ impl<'a> Splitter<'a> {
         //    When the side modules load, they will initialize functions into the table where the "holes" are.
         self.replace_segments_with_holes(&mut out, &unused_symbols);
 
-        // 2. Wipe away the unused functions and data symbols
-        self.prune_main_symbols(&mut out, &unused_symbols)?;
-
-        // 3. Change the functions called from split modules to be local functions that call the indirect function
+        // 2. Reserve typed table entries before deleting route-only functions.
         self.create_ifunc_table(&mut out);
+
+        // 3. Wipe away the unused functions and data symbols.
+        self.prune_main_symbols(&mut out, &unused_symbols)?;
 
         // 4. Re-export the memories, globals, and other stuff
         self.re_export_items(&mut out);
@@ -246,6 +244,7 @@ impl<'a> Splitter<'a> {
         let shared_funcs = self
             .shared_symbols
             .iter()
+            .filter(|node| matches!(node, Node::Function(_)))
             .map(|f| self.remap_id(&ids_to_fns, f))
             .collect::<Vec<_>>();
 
@@ -299,27 +298,28 @@ impl<'a> Splitter<'a> {
 
         let unique_symbols = &self.chunks[idx];
 
-        // The functions we'll need to import
-        let symbols_to_import: HashSet<_> = unique_symbols
-            .intersection(&self.main_graph)
-            .cloned()
-            .collect();
+        let (retained_symbols, symbols_to_import, relies_on_chunks) =
+            self.residual_chunk_symbols(idx);
 
-        // Delete everything except the symbols that are reachable from this module
         let symbols_to_delete: HashSet<_> = self
             .main_graph
-            .difference(unique_symbols)
-            .cloned()
+            .difference(&retained_symbols)
+            .copied()
             .collect();
 
         // Make sure to remap any ids from the main module to this module
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
 
         // Remap the graph to our module's IDs
+        // The main module reserves one table slot for every shared function in this
+        // exact order. Keep that complete, remapped list here: narrowing it to a
+        // chunk's direct dependencies shifts subsequent slots and can install a
+        // deleted function ID into an element segment.
         let shared_funcs = self
             .shared_symbols
             .iter()
-            .map(|f| self.remap_id(&ids_to_fns, f))
+            .filter(|node| matches!(node, Node::Function(_)))
+            .map(|node| self.remap_id(&ids_to_fns, node))
             .collect::<Vec<_>>();
 
         let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
@@ -345,6 +345,13 @@ impl<'a> Splitter<'a> {
             .unwrap();
 
         self.convert_shared_to_imports(&mut out, segment_start, &shared_funcs, &symbols_to_import);
+        self.install_residual_initializers(
+            &mut out,
+            ifunc_table_id,
+            segment_start,
+            &unique_symbols,
+            &shared_funcs,
+        );
 
         // Make sure we haven't deleted anything important....
         self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
@@ -359,9 +366,53 @@ impl<'a> Splitter<'a> {
             bytes: out.emit_wasm(),
             module_name: "split".to_string(),
             component_name: None,
-            relies_on_chunks: Default::default(),
+            relies_on_chunks,
             hash_id: None,
         })
+    }
+
+    fn residual_chunk_symbols(&self, idx: usize) -> (HashSet<Node>, HashSet<Node>, HashSet<usize>) {
+        // Retain the local transitive closure, but stop at symbols owned by another
+        // residual chunk. Those chunks install their functions into the shared table
+        // and own their data segments, so keeping either here would duplicate them.
+        let mut retained_symbols = self.chunks[idx].clone();
+        let mut symbols_to_import = HashSet::new();
+        let mut relies_on_chunks = HashSet::new();
+        let mut pending = retained_symbols.iter().copied().collect::<Vec<_>>();
+        while let Some(symbol) = pending.pop() {
+            if let Some(dependencies) = self.call_graph.get(&symbol) {
+                for dependency in dependencies {
+                    if self.main_graph.contains(dependency) {
+                        if retained_symbols.insert(*dependency) {
+                            pending.push(*dependency);
+                        }
+                        continue;
+                    }
+
+                    if let Some(owner) = self
+                        .chunks
+                        .iter()
+                        .enumerate()
+                        .find_map(|(owner, chunk)| {
+                            (owner != idx && chunk.contains(dependency)).then_some(owner)
+                        })
+                    {
+                        relies_on_chunks.insert(owner);
+                        if matches!(dependency, Node::Function(_)) {
+                            symbols_to_import.insert(*dependency);
+                        }
+                        continue;
+                    }
+
+                    if retained_symbols.insert(*dependency) {
+                        pending.push(*dependency);
+                    }
+                }
+            }
+        }
+
+        symbols_to_import.extend(retained_symbols.intersection(&self.main_graph).copied());
+        (retained_symbols, symbols_to_import, relies_on_chunks)
     }
 
     /// Convert functions coming in from outside the module to indirect calls to the ifunc table created in the main module
@@ -376,6 +427,7 @@ impl<'a> Splitter<'a> {
 
         let mut idx = self.split_points.len();
         for node in ifuncs {
+
             if let Node::Function(ifunc) = node {
                 if symbols_to_import.contains(node) {
                     let ty_id = out.funcs.get(*ifunc).ty();
@@ -398,55 +450,36 @@ impl<'a> Splitter<'a> {
     fn create_ifunc_table(&self, out: &mut Module) {
         let ifunc_table = self.load_funcref_table(out);
         let dummy_func = self.make_dummy_func(out);
-
         out.exports.add("__indirect_function_table", ifunc_table);
 
-        // Expand the ifunc table to accommodate the new ifuncs
+        let function_shared_count = self
+            .shared_symbols
+            .iter()
+            .filter(|node| matches!(node, Node::Function(_)))
+            .count();
+        let ifunc_count = self.split_points.len() + function_shared_count;
         let segment_start = self
-            .expand_ifunc_table_max(
-                out,
-                ifunc_table,
-                self.split_points.len() + self.shared_symbols.len(),
-            )
+            .expand_ifunc_table_max(out, ifunc_table, ifunc_count)
             .expect("failed to expand ifunc table");
 
-        // Delete the split import functions and replace them with local functions
-        //
-        // Start by pushing all the shared imports into the list
-        // These don't require an additional stub function
         let mut ifuncs = vec![];
-
-        // Push the split import functions into the list - after we've pushed in the shared imports
         for idx in 0..self.split_points.len() {
-            // this is okay since we're in the main module
             let import_func = self.split_points[idx].import_func;
             let import_id = self.split_points[idx].import_id;
             let ty_id = out.funcs.get(import_func).ty();
             let stub_idx = segment_start + ifuncs.len();
-
-            // Replace the import function with a local function that calls the indirect function
             out.funcs.get_mut(import_func).kind =
                 self.make_stub_funcs(out, ifunc_table, ty_id, stub_idx as _);
-
-            // And remove the corresponding import
             out.imports.delete(import_id);
-
-            // Push into the list the properly typed dummy func so the entry is populated
-            // unclear if the typing is important here
             ifuncs.push(dummy_func);
         }
 
-        // Add the stub functions to the ifunc table
-        // The callers of these functions will call the stub instead of the import
-        let mut _idx = 0;
         for func in self.shared_symbols.iter() {
             if let Node::Function(id) = func {
                 ifuncs.push(*id);
-                _idx += 1;
             }
         }
 
-        // Now add segments to the ifunc table
         out.tables
             .get_mut(ifunc_table)
             .elem_segments
@@ -455,7 +488,10 @@ impl<'a> Splitter<'a> {
                     table: ifunc_table,
                     offset: ConstExpr::Value(ir::Value::I32(segment_start as _)),
                 },
-                ElementItems::Functions(ifuncs),
+                ElementItems::Expressions(
+                    RefType::Funcref,
+                    ifuncs.into_iter().map(ConstExpr::RefFunc).collect(),
+                ),
             ));
     }
 
@@ -476,13 +512,6 @@ impl<'a> Splitter<'a> {
             out.exports.add(&global_name, global.id());
         }
 
-        // Export any tables
-        for (idx, table) in out.tables.iter().enumerate() {
-            if table.element_ty != RefType::Funcref {
-                let table_name = format!("__imported_table_{}", idx);
-                out.exports.add(&table_name, table.id());
-            }
-        }
     }
 
     fn prune_main_symbols(&self, out: &mut Module, unused_symbols: &HashSet<Node>) -> Result<()> {
@@ -572,19 +601,25 @@ impl<'a> Splitter<'a> {
                     for (idx, id) in vec.iter().enumerate() {
                         if unique_symbols.contains(&Node::Function(*id)) {
                             initializers
-                                .insert(*offset + idx as i32, ElementItems::Functions(vec![*id]));
+                                .insert(
+                                    *offset + idx as i32,
+                                    ElementItems::Expressions(
+                                        RefType::Funcref,
+                                        vec![ConstExpr::RefFunc(*id)],
+                                    ),
+                                );
                         }
                     }
                 }
 
-                ElementItems::Expressions(ref_type, const_exprs) => {
+                ElementItems::Expressions(_, const_exprs) => {
                     for (idx, expr) in const_exprs.iter().enumerate() {
                         if let ConstExpr::RefFunc(id) = expr {
                             if unique_symbols.contains(&Node::Function(*id)) {
                                 initializers.insert(
                                     *offset + idx as i32,
                                     ElementItems::Expressions(
-                                        *ref_type,
+                                        RefType::Funcref,
                                         vec![ConstExpr::RefFunc(*id)],
                                     ),
                                 );
@@ -646,7 +681,7 @@ impl<'a> Splitter<'a> {
                     table: ifunc_table_id,
                     offset: ConstExpr::Value(ir::Value::I32((segment_start + split_idx) as i32)),
                 },
-                ElementItems::Functions(vec![split_export_func]),
+                ElementItems::Expressions(RefType::Funcref, vec![ConstExpr::RefFunc(split_export_func)]),
             ));
 
         self.convert_shared_to_imports(out, segment_start, ifuncs, symbols_to_import);
@@ -655,9 +690,7 @@ impl<'a> Splitter<'a> {
     fn delete_main_funcs_from_split(&self, out: &mut Module, symbols_to_delete: &HashSet<Node>) {
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
-                // if out.exports.get_exported_func(id).is_none() {
                 out.funcs.delete(id);
-                // }
             }
         }
     }
@@ -734,6 +767,34 @@ impl<'a> Splitter<'a> {
         let mut b = FunctionBuilder::new(&mut out.types, &[], &[]);
         b.name("dummy".into()).func_body().unreachable();
         b.finish(vec![], &mut out.funcs)
+    }
+
+
+    /// Install the residual chunk's function bodies in the slots main reserved for them.
+    fn install_residual_initializers(
+        &self,
+        out: &mut Module,
+        table: TableId,
+        segment_start: usize,
+        unique_symbols: &HashSet<Node>,
+        shared_symbols: &[Node],
+    ) {
+        let mut function_slot = 0;
+        for node in shared_symbols {
+            let Node::Function(function) = node else { continue };
+            if unique_symbols.contains(node) {
+                out.tables.get_mut(table).elem_segments.insert(out.elements.add(
+                    ElementKind::Active {
+                        table,
+                        offset: ConstExpr::Value(ir::Value::I32(
+                            (segment_start + self.split_points.len() + function_slot) as i32,
+                        )),
+                    },
+                    ElementItems::Expressions(RefType::Funcref, vec![ConstExpr::RefFunc(*function)]),
+                ));
+            }
+            function_slot += 1;
+        }
     }
 
     fn clear_data_segments(&self, out: &mut Module, unique_symbols: &HashSet<Node>) {
@@ -882,23 +943,38 @@ impl<'a> Splitter<'a> {
     ///
     /// Todo: we could chunk up the main module itself! Not going to now but it would enable parallel downloads of the main chunk
     fn build_split_chunks(&mut self) {
-        // create a single chunk that contains all functions used by multiple modules
-        let mut funcs_used_by_chunks: HashMap<Node, HashSet<usize>> = HashMap::new();
-        for split in self.split_points.iter() {
-            for item in split.reachable_graph.iter() {
+        let mut symbols_by_users: HashMap<Vec<usize>, HashSet<Node>> = HashMap::new();
+        let mut users_by_symbol: HashMap<Node, HashSet<usize>> = HashMap::new();
+
+        for split in &self.split_points {
+            for item in &split.reachable_graph {
                 if self.main_graph.contains(item) {
                     continue;
                 }
+                users_by_symbol
+                    .entry(*item)
+                    .or_default()
+                    .insert(split.index);
             }
         }
 
-        // Only consider funcs that are used by multiple modules - otherwise they can just stay in their respective module
-        funcs_used_by_chunks.retain(|_, v| v.len() > 1);
+        for (symbol, users) in users_by_symbol {
+            if users.len() > 1 {
+                let mut key = users.into_iter().collect::<Vec<_>>();
+                key.sort_unstable();
+                symbols_by_users.entry(key).or_default().insert(symbol);
+            }
+        }
 
-        // todo: break down this chunk if it exceeds a certain size (100kb?) by identifying different groups
-
-        self.chunks
-            .push(funcs_used_by_chunks.keys().cloned().collect());
+        for symbols in symbols_by_users.into_values() {
+            self.shared_symbols.extend(
+                symbols
+                    .iter()
+                    .filter(|node| matches!(node, Node::Function(_)))
+                    .copied(),
+            );
+            self.chunks.push(symbols);
+        }
     }
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
@@ -906,6 +982,11 @@ impl<'a> Splitter<'a> {
             .iter()
             .flat_map(|split| split.reachable_graph.iter())
             .filter(|sym| {
+                // Symbols owned by residual chunks are installed through the shared table.
+                if self.chunks.iter().any(|chunk| chunk.contains(sym)) {
+                    return false;
+                }
+
                 // Make sure the symbol isn't in the main graph
                 if self.main_graph.contains(sym) {
                     return false;
@@ -1546,4 +1627,174 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         symbols,
         data_symbols,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_function(module: &mut Module, name: &str) -> FunctionId {
+        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+        builder.name(name.into());
+        builder.func_body().unreachable();
+        builder.finish(vec![], &mut module.funcs)
+    }
+
+    #[test]
+    fn gc_preserves_function_referenced_by_residual_expression_element() {
+        let mut module = Module::default();
+        let (table, _) = module.add_import_table(
+            "env",
+            "table",
+            false,
+            1,
+            None,
+            RefType::Funcref,
+        );
+        let function = test_function(&mut module, "residual_function");
+
+        let element = module.elements.add(
+            ElementKind::Active {
+                table,
+                offset: ConstExpr::Value(ir::Value::I32(0)),
+            },
+            ElementItems::Expressions(
+                RefType::Funcref,
+                vec![ConstExpr::RefFunc(function)],
+            ),
+        );
+        module.tables.get_mut(table).elem_segments.insert(element);
+
+        walrus::passes::gc::run(&mut module);
+
+        assert_eq!(
+            module.funcs.get(function).name.as_deref(),
+            Some("residual_function")
+        );
+        assert!(!module.emit_wasm().is_empty());
+    }
+
+    #[test]
+    fn shared_function_and_data_symbol_are_owned_by_residual_chunk() {
+        let mut source_module = Module::default();
+        let ty = source_module.types.add(&[], &[]);
+        let (imported_func, import_id) = source_module.add_import_func("__test", "route_a", ty);
+        let export_id = source_module.exports.add("route_a", imported_func);
+        let shared = test_function(&mut source_module, "shared_helper");
+        let main = test_function(&mut source_module, "main_only");
+        let route_a_only = test_function(&mut source_module, "route_a_only");
+        let route_b_only = test_function(&mut source_module, "route_b_only");
+
+        let shared_data = Node::DataSymbol(7);
+        let shared_function = Node::Function(shared);
+        let main_only = Node::Function(main);
+        let route_a_only = Node::Function(route_a_only);
+        let route_b_only = Node::Function(route_b_only);
+
+        let route_a_graph = [shared_function, shared_data, main_only, route_a_only]
+            .into_iter()
+            .collect();
+        let route_b_graph = [shared_function, shared_data, main_only, route_b_only]
+            .into_iter()
+            .collect();
+
+        let mut splitter = Splitter {
+            source_module,
+            original: &[],
+            bindgened: &[],
+            fns_to_ids: HashMap::new(),
+            _ids_to_fns: Vec::new(),
+            shared_symbols: BTreeSet::new(),
+            split_points: vec![
+                SplitPoint {
+                    module_name: "route_a".into(),
+                    import_id,
+                    export_id,
+                    import_func: imported_func,
+                    export_func: imported_func,
+                    component_name: "route_a".into(),
+                    index: 0,
+                    reachable_graph: route_a_graph,
+                    hash_name: "a".into(),
+                    import_name: "route_a".into(),
+                    export_name: "route_a".into(),
+                },
+                SplitPoint {
+                    module_name: "route_b".into(),
+                    import_id,
+                    export_id,
+                    import_func: imported_func,
+                    export_func: imported_func,
+                    component_name: "route_b".into(),
+                    index: 1,
+                    reachable_graph: route_b_graph,
+                    hash_name: "b".into(),
+                    import_name: "route_b".into(),
+                    export_name: "route_b".into(),
+                },
+            ],
+            chunks: Vec::new(),
+            data_symbols: BTreeMap::new(),
+            main_graph: [main_only].into_iter().collect(),
+            call_graph: HashMap::new(),
+            parent_graph: HashMap::new(),
+        };
+
+        splitter.build_split_chunks();
+
+        assert_eq!(splitter.chunks.len(), 1);
+        let residual = &splitter.chunks[0];
+        assert!(
+            residual.contains(&shared_function),
+            "shared Function must be present in residual chunk; got {residual:?}"
+        );
+        assert!(
+            residual.contains(&shared_data),
+            "shared DataSymbol must be present in residual chunk; got {residual:?}"
+        );
+        assert!(
+            !splitter.shared_symbols.contains(&shared_data),
+            "DataSymbol must not consume an indirect-function slot"
+        );
+        assert!(!residual.contains(&main_only));
+        assert!(!residual.contains(&route_a_only));
+        assert!(!residual.contains(&route_b_only));
+    }
+    #[test]
+    fn residual_chunk_classifies_foreign_owned_dependencies_without_retaining_them() {
+        let mut source_module = Module::default();
+        let local = Node::Function(test_function(&mut source_module, "local"));
+        let foreign_function = Node::Function(test_function(&mut source_module, "foreign_function"));
+        let main = Node::Function(test_function(&mut source_module, "main"));
+        let foreign_data = Node::DataSymbol(9);
+
+        let splitter = Splitter {
+            source_module,
+            original: &[],
+            bindgened: &[],
+            fns_to_ids: HashMap::new(),
+            _ids_to_fns: Vec::new(),
+            shared_symbols: BTreeSet::new(),
+            split_points: Vec::new(),
+            chunks: vec![
+                [local].into_iter().collect(),
+                [foreign_function, foreign_data].into_iter().collect(),
+            ],
+            data_symbols: BTreeMap::new(),
+            main_graph: [main].into_iter().collect(),
+            call_graph: HashMap::from([(
+                local,
+                [foreign_function, foreign_data, main].into_iter().collect(),
+            )]),
+            parent_graph: HashMap::new(),
+        };
+
+        let (retained, imports, relies_on_chunks) = splitter.residual_chunk_symbols(0);
+
+        assert_eq!(retained, [local, main].into_iter().collect());
+        assert_eq!(imports, [foreign_function, main].into_iter().collect());
+        assert_eq!(relies_on_chunks, [1].into_iter().collect());
+    }
+
+
 }

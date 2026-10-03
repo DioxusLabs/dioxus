@@ -26,6 +26,14 @@ enum Route {
     Home,
     #[route("/child")]
     ChildSplit,
+    #[route("/shared-a")]
+    SharedRouteA,
+    #[route("/shared-b")]
+    SharedRouteB,
+    #[route("/shared-c")]
+    SharedRouteC,
+    #[route("/shared-d")]
+    SharedRouteD,
 }
 
 fn Nav() -> Element {
@@ -33,6 +41,10 @@ fn Nav() -> Element {
         div {
             Link { id: "link-home", to: Route::Home, "Home" }
             Link { id: "link-child", to: Route::ChildSplit, "Child" }
+            Link { id: "link-shared-a", to: Route::SharedRouteA, "Shared A" }
+            Link { id: "link-shared-b", to: Route::SharedRouteB, "Shared B" }
+            Link { id: "link-shared-c", to: Route::SharedRouteC, "Shared C" }
+            Link { id: "link-shared-d", to: Route::SharedRouteD, "Shared D" }
             Outlet::<Route> {}
         }
     }
@@ -206,6 +218,61 @@ fn LazyComponent(abc: i32) -> Element {
             "This is a lazy component! {abc}"
         }
     }
+}
+
+static SHARED_ROUTE_PREFIX: &str = "shared-";
+
+#[inline(never)]
+fn shared_route_helper(label: &'static str) -> String {
+    let mut value = String::from(SHARED_ROUTE_PREFIX);
+    for index in 0..32 {
+        value.push_str(label);
+        value.push_str(&index.to_string());
+    }
+    value
+}
+
+#[component(lazy)]
+fn SharedRouteA() -> Element {
+    let marker = format!("{}|{}", shared_ab_helper("a"), shared_all_helper("a"));
+    rsx! {
+        h1 { id: "shared-a-marker", "Shared route A: {marker}" }
+    }
+}
+
+#[component(lazy)]
+fn SharedRouteB() -> Element {
+    let marker = format!("{}|{}", shared_ab_helper("b"), shared_all_helper("b"));
+    rsx! {
+        h1 { id: "shared-b-marker", "Shared route B: {marker}" }
+    }
+}
+
+#[inline(never)]
+fn shared_ab_helper(label: &'static str) -> String {
+    format!("ab-{label}-{}", shared_route_helper(label))
+}
+
+#[inline(never)]
+fn shared_cd_helper(label: &'static str) -> String {
+    format!("cd-{label}-{}", shared_route_helper(label))
+}
+
+#[inline(never)]
+fn shared_all_helper(label: &'static str) -> String {
+    format!("all-{label}-{}", shared_route_helper(label))
+}
+
+#[component(lazy)]
+fn SharedRouteC() -> Element {
+    let marker = format!("{}|{}", shared_cd_helper("c"), shared_all_helper("c"));
+    rsx! { h1 { id: "shared-c-marker", "Shared route C: {marker}" } }
+}
+
+#[component(lazy)]
+fn SharedRouteD() -> Element {
+    let marker = format!("{}|{}", shared_cd_helper("d"), shared_all_helper("d"));
+    rsx! { h1 { id: "shared-d-marker", "Shared route D: {marker}" } }
 }
 
 fn ChildSplit() -> Element {

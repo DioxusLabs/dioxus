@@ -115,11 +115,18 @@ fn emit_js(chunks: &[SplitModule], modules: &[SplitModule]) -> String {
 
     for (idx, chunk) in chunks.iter().enumerate() {
         tracing::debug!("emitting chunk: {:?}", chunk.module_name);
+        let deps = chunk
+            .relies_on_chunks
+            .iter()
+            .map(|idx| format!("() => __wasm_split_load_chunk_{idx}()"))
+            .collect::<Vec<_>>()
+            .join(", ");
         writeln!(
-                glue,
-                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/harness/split/chunk_{idx}_{module}.wasm\", [], fusedImports, initSync);",
-                module = chunk.module_name
-            ).expect("failed to write to string");
+            glue,
+            "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/harness/split/chunk_{idx}_{module}.wasm\", [{deps}], fusedImports, initSync);",
+            module = chunk.module_name
+        )
+        .expect("failed to write to string");
     }
 
     // Now write the modules
@@ -144,6 +151,24 @@ fn emit_js(chunks: &[SplitModule], modules: &[SplitModule]) -> String {
     }
 
     glue
+}
+#[cfg(test)]
+mod tests {
+    use super::emit_js;
+    use std::collections::HashSet;
+    use wasm_split_cli::SplitModule;
+
+    #[test]
+    fn emits_residual_dependencies_as_invoked_loader_callbacks() {
+        let mut relies_on_chunks = HashSet::new();
+        relies_on_chunks.insert(1);
+        let chunks = vec![
+            SplitModule { module_name: "local".into(), hash_id: None, component_name: None, bytes: Vec::new(), relies_on_chunks },
+            SplitModule { module_name: "foreign".into(), hash_id: None, component_name: None, bytes: Vec::new(), relies_on_chunks: HashSet::new() },
+        ];
+        let js = emit_js(&chunks, &[]);
+        assert!(js.contains("makeLoad(\"/harness/split/chunk_0_local.wasm\", [() => __wasm_split_load_chunk_1()]"));
+    }
 }
 
 #[derive(Parser)]
