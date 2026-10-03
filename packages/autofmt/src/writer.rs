@@ -240,11 +240,14 @@ impl<'a> Writer<'a> {
             self.write_block_body(&then_branch.roots, then_brace.into())?;
 
             if let Some(else_if_branch) = else_if_branch {
-                write!(self.out, "}} else ")?;
+                write!(self.out, "}}")?;
+                self.write_else(then_brace, else_if_branch.if_token.span())?;
                 branch = Some(else_if_branch);
             } else if let Some(else_branch) = else_branch {
-                write!(self.out, "}} else {{")?;
                 let else_brace = else_brace.unwrap_or_default();
+                write!(self.out, "}}")?;
+                self.write_else(then_brace, else_brace.span.span())?;
+                write!(self.out, "{{")?;
                 self.write_block_body(&else_branch.roots, (&else_brace).into())?;
                 branch = None;
             } else {
@@ -255,6 +258,32 @@ impl<'a> Writer<'a> {
         write!(self.out, "}}")?;
 
         Ok(())
+    }
+
+    /// Writes the `else` that follows the closing brace of a branch, up to what comes `next`
+    ///
+    /// Comments can't go on the same line as the `else`, so if there are any between the brace
+    /// and `next` then they are left where they are, with the `else` on a line of its own.
+    fn write_else(&mut self, then_brace: &Brace, next: Span) -> Result {
+        let close = then_brace.span.span().end();
+
+        let inline_comment = self.inline_comment(close, 0);
+        let comments: Vec<&str> = (close.line..next.start().line.saturating_sub(1))
+            .filter_map(|idx| self.src.get(idx).map(|line| line.trim()))
+            .filter(|line| line.starts_with("//"))
+            .collect();
+
+        if inline_comment.is_none() && comments.is_empty() {
+            return write!(self.out, " else ");
+        }
+
+        self.write_inline_comments(close, 0)?;
+        for comment in comments {
+            self.out.tabbed_line()?;
+            write!(self.out, "{comment}")?;
+        }
+        self.out.tabbed_line()?;
+        write!(self.out, "else ")
     }
 
     /// Writes the body of a `for` or `if` block, from after its opening brace up to its closing

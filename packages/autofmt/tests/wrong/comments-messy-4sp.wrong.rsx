@@ -89,6 +89,19 @@ fn control_flow() -> Element {
         if a {
         } else {
         }
+        if a { "a" }
+              // above an else if
+        else if b { "b" } // after the closing brace of the else if
+        // above an else
+
+
+        else
+        // between an else and its opening brace
+        {
+            "c"
+        }
+        Comp { footer: rsx! { // after the opening brace of a nested macro
+            "text" } }
         div {
         for a in b {
         if a {

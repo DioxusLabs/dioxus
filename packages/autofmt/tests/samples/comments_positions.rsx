@@ -23,6 +23,35 @@ fn after_open_text() -> Element {
     }
 }
 
+// A comment after the opening brace of a macro that is nested in an expression
+fn after_open_nested() -> Element {
+    rsx! {
+        Comp {
+            header: rsx! { // after the opening brace of an empty macro
+            },
+            footer: rsx! { // after the opening brace, before a single text node
+                "text"
+            },
+            body: rsx! { // after the opening brace
+                div { "x" }
+                // before the closing brace
+            },
+            other: rsx! { "text" },
+        }
+        {items.iter().map(|i| rsx! { // after the opening brace, in a closure
+            "{i}"
+        })}
+        {
+            let a = rsx! { // after the opening brace, in a statement
+                "a"
+            };
+            rsx! { // after the opening brace, in a tail expression
+                {a}
+            }
+        }
+    }
+}
+
 // Comments above a macro are not part of it
 fn above_macro() -> Element {
     // above a macro that fits on one line

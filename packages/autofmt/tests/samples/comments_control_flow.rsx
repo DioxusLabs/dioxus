@@ -52,6 +52,19 @@ rsx! {
         // only a comment
     } // after the closing brace of an else if
 
+    // Comments between a closing brace and an else stay where they are
+    if a {
+        div { "a" }
+    }
+    // above an else if
+    else if b {
+        div { "b" }
+    } // after the closing brace of the else if
+    // above an else
+    else { // after the opening brace of the else
+        div { "c" }
+    }
+
     // Bodies without comments stay empty
     for i in 0..10 {}
     if a {} else if b {} else {}
