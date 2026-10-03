@@ -46,4 +46,5 @@ twoway!("comments-messy-4sp" => comments_messy_4sp (IndentOptions::new(IndentTyp
 twoway!("comments-messy-tab" => comments_messy_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
 twoway!("comments-constructs-4sp" => comments_constructs_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("comments-constructs-tab" => comments_constructs_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
+twoway!("jsx-4sp" => jsx_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("jsx-comments" => jsx_comments (IndentOptions::new(IndentType::Spaces, 4, false)));

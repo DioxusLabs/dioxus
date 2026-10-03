@@ -191,6 +191,10 @@ impl<'a> Writer<'a> {
         let delimiters =
             BodyDelimiters::new(delimiter, name.span().end()).ok_or(std::fmt::Error)?;
 
+        if delimiters.is_tag {
+            return self.write_tag(&name.to_string(), attributes, spreads, children, delimiters);
+        }
+
         write!(self.out, "{name} ")?;
         self.write_rsx_block(attributes, spreads, children, delimiters)?;
 
@@ -209,25 +213,203 @@ impl<'a> Writer<'a> {
             ..
         }: &Component,
     ) -> Result {
-        // Write the path by to_tokensing it and then removing all whitespace
-        let mut name = path.to_token_stream().to_string();
-        name.retain(|c| !c.is_whitespace());
-        write!(self.out, "{name}")?;
-
-        // Same idea with generics, write those via the to_tokens method and then remove all whitespace
-        if let Some(generics) = generics {
-            let mut written = generics.to_token_stream().to_string();
-            written.retain(|c| !c.is_whitespace());
-            write!(self.out, "{written}")?;
-        }
-
-        write!(self.out, " ")?;
         let name_end = match generics {
             Some(generics) => generics.gt_token.span().end(),
             None => path.span().end(),
         };
         let delimiters = BodyDelimiters::new(delimiter, name_end).ok_or(std::fmt::Error)?;
+
+        // Write the path by to_tokensing it and then removing all whitespace
+        let mut name = path.to_token_stream().to_string();
+        name.retain(|c| !c.is_whitespace());
+
+        // Same idea with generics, write those via the to_tokens method and then remove all whitespace
+        if let Some(generics) = generics {
+            let mut written = generics.to_token_stream().to_string();
+            written.retain(|c| !c.is_whitespace());
+
+            // The tag syntax doesn't use the turbofish: `<Outlet<R>>`
+            if delimiters.is_tag {
+                written = written.trim_start_matches("::").to_string();
+            }
+
+            name.push_str(&written);
+        }
+
+        if delimiters.is_tag {
+            return self.write_tag(&name, fields, spreads, &children.roots, delimiters);
+        }
+
+        write!(self.out, "{name} ")?;
         self.write_rsx_block(fields, spreads, &children.roots, delimiters)?;
+
+        Ok(())
+    }
+
+    /// Write an element or component that was written in the tag syntax, keeping it in that
+    /// syntax: `<div class="a">"hello"</div>` or `<img src="..." />`
+    fn write_tag(
+        &mut self,
+        name: &str,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+        children: &[BodyNode],
+        delimiters: BodyDelimiters,
+    ) -> Result {
+        enum AttrType<'a> {
+            Attr(&'a Attribute),
+            Spread(&'a Spread),
+        }
+
+        write!(self.out, "<{name}")?;
+
+        let attrs: Vec<_> = attributes
+            .iter()
+            .map(AttrType::Attr)
+            .chain(spreads.iter().map(AttrType::Spread))
+            .collect();
+
+        // The start and end of each attribute in the source, which is where its comments are
+        let attr_spans: Vec<_> = attrs
+            .iter()
+            .map(|attr| match attr {
+                AttrType::Attr(attr) => (attr.span().start(), self.end_of_attr(attr, delimiters)),
+                AttrType::Spread(spread) => (
+                    self.start_of_tag_spread(spread),
+                    self.end_of_spread(spread, delimiters),
+                ),
+            })
+            .collect();
+        let has_attr_comments = attr_spans.iter().any(|(start, end)| {
+            self.has_leading_comments(*start) || self.inline_comment(*end, 0).is_some()
+        });
+
+        // Decide if the attributes fit in the open tag or need to be split across lines.
+        // Comments on attributes can only be kept if each attribute is on its own line.
+        let attr_len = self.is_short_attrs(attributes, spreads);
+        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80
+            && !self.out.indent.split_line_attributes()
+            && !has_attr_comments;
+
+        for (attr, (start, end)) in attrs.iter().zip(attr_spans) {
+            if is_short_attr_list {
+                write!(self.out, " ")?;
+            } else {
+                self.out.new_line()?;
+
+                if self.current_span_is_primary(start) {
+                    self.out.indent_level += 1;
+                    self.write_comments(start)?;
+                    self.out.indent_level -= 1;
+                }
+
+                self.out.indented_tab()?;
+            }
+
+            match attr {
+                AttrType::Attr(attr) => self.write_tag_attribute(attr, !is_short_attr_list)?,
+                AttrType::Spread(spread) => {
+                    write!(self.out, "{{")?;
+                    self.write_spread_attribute(&spread.expr)?;
+                    write!(self.out, "}}")?;
+                }
+            }
+
+            if !is_short_attr_list {
+                self.write_inline_comments(end, 0)?;
+            }
+        }
+
+        // The `>` or `/>` goes on its own line if the attributes are split across lines
+        if !is_short_attr_list {
+            self.out.tabbed_line()?;
+        }
+
+        let has_open_tag_comment = self.brace_has_trailing_comments(delimiters);
+
+        if children.is_empty() {
+            // Self-closing tags
+            if !self.body_has_comments(delimiters) {
+                if is_short_attr_list {
+                    write!(self.out, " ")?;
+                }
+                write!(self.out, "/>")?;
+                return Ok(());
+            }
+
+            // A body that only has comments in it
+            write!(self.out, ">")?;
+            self.write_comment_only_body(delimiters)?;
+            write!(self.out, "</{name}>")?;
+            return Ok(());
+        }
+
+        write!(self.out, ">")?;
+
+        // Inline a single short child: `<h1>"hello"</h1>`
+        let children_len = self
+            .is_short_children(children)
+            .map_err(|_| std::fmt::Error)?;
+        let is_small_children = is_short_attr_list
+            && !has_open_tag_comment
+            && !self.has_trailing_comments(children, delimiters)
+            && children_len.is_some_and(|len| {
+                len + attr_len + name.len() * 2 + self.out.indent_level * 4 < 100
+            });
+
+        if is_small_children {
+            for child in children {
+                self.write_ident(child)?;
+            }
+        } else {
+            self.write_inline_comments(delimiters.open, 1)?;
+            self.out.new_line()?;
+            self.write_body_indented(children)?;
+            self.write_closing_line(delimiters)?;
+        }
+
+        write!(self.out, "</{name}>")?;
+
+        Ok(())
+    }
+
+    /// Write an attribute in the tag syntax: `name`, `name="literal"` or `name={expr}`
+    fn write_tag_attribute(&mut self, attr: &Attribute, on_own_line: bool) -> Result {
+        match &attr.name {
+            // Dashed custom attributes don't need to be quoted in the tag syntax: `data-count="1"`
+            AttributeName::Custom(name)
+                if name
+                    .value()
+                    .split('-')
+                    .all(|seg| syn::parse_str::<syn::Ident>(seg).is_ok()) =>
+            {
+                write!(self.out, "{}", name.value())?
+            }
+            name => self.write_attribute_name(name)?,
+        }
+
+        if attr.can_be_shorthand() {
+            return Ok(());
+        }
+
+        write!(self.out, "=")?;
+
+        match &attr.value {
+            AttributeValue::AttrLiteral(value) => write!(self.out, "{value}")?,
+            // The lines of a multiline if chain are indented relative to the attribute
+            value @ AttributeValue::IfExpr(_) if on_own_line => {
+                write!(self.out, "{{")?;
+                self.out.indent_level += 1;
+                self.write_attribute_value(value)?;
+                self.out.indent_level -= 1;
+                write!(self.out, "}}")?;
+            }
+            value => {
+                write!(self.out, "{{")?;
+                self.write_attribute_value(value)?;
+                write!(self.out, "}}")?;
+            }
+        }
 
         Ok(())
     }
@@ -931,6 +1113,17 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    /// The start of a spread in the tag syntax, including the brace it is wrapped in: `{..spread}`
+    fn start_of_tag_spread(&self, spread: &Spread) -> LineColumn {
+        let mut start = spread.span().start();
+        if let Some(before) = self.text_before(start)
+            && before.trim_end().ends_with('{')
+        {
+            start.column = before.trim_end().chars().count() - 1;
+        }
+        start
+    }
+
     fn write_inline_comments(&mut self, final_span: LineColumn, offset: usize) -> Result {
         if let Some(comment) = self.inline_comment(final_span, offset) {
             write!(self.out, " {comment}")?;
@@ -1162,6 +1355,18 @@ impl<'a> Writer<'a> {
             self.out.new_line()?;
         }
         self.out.tab()
+    }
+
+    /// Whether a body with no attributes or children has comments in it
+    fn body_has_comments(&self, delimiters: BodyDelimiters) -> bool {
+        let BodyDelimiters { open, close, .. } = delimiters;
+
+        self.brace_has_trailing_comments(delimiters)
+            || (open.line..close.line.saturating_sub(1)).any(|idx| {
+                self.src
+                    .get(idx)
+                    .is_some_and(|line| line.trim().starts_with("//"))
+            })
     }
 
     /// Starts the line of a closing delimiter, first writing the comments on the lines above it
