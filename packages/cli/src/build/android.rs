@@ -569,24 +569,32 @@ impl BuildRequest {
         let tools = self.workspace.android_tools()?;
         tokio::spawn(async move {
             let emulator = tools.emulator();
-            let avds = Command::new(&emulator)
-                .arg("-list-avds")
-                .output()
-                .await
-                .unwrap();
+            let avds = match Command::new(&emulator).arg("-list-avds").output().await {
+                Ok(avds) => avds,
+                Err(err) => {
+                    tracing::warn!("Failed to list Android emulators using {emulator:?}: {err}");
+                    return;
+                }
+            };
             let avds = String::from_utf8_lossy(&avds.stdout);
             let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
             if let Some(avd) = avd {
                 tracing::info!("Booting Android emulator: \"{avd}\"");
-                Command::new(&emulator)
+
+                // Use `status` rather than `output` here: `output` forces stdout/stderr to be piped
+                // and buffers everything the (long-running, noisy) emulator prints in memory.
+                let res = Command::new(&emulator)
                     .arg("-avd")
                     .arg(avd)
                     .args(["-netdelay", "none", "-netspeed", "full"])
-                    .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                    .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                    .output()
-                    .await
-                    .unwrap();
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .await;
+                if let Err(err) = res {
+                    tracing::warn!("Failed to boot Android emulator using {emulator:?}: {err}");
+                }
             } else {
                 tracing::warn!(
                     "No Android emulators found. Please create one using `emulator -avd <name>`"
