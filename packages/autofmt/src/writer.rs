@@ -10,6 +10,30 @@ use std::{
 };
 use syn::{Expr, spanned::Spanned, token::Brace};
 
+/// The source locations of the delimiters around a body: the braces of an element, a component,
+/// or a `for`/`if` block
+///
+/// Comments are not part of the parsed rsx, so they are recovered by looking at the source text
+/// around these locations.
+#[derive(Debug, Clone, Copy)]
+struct BodyDelimiters {
+    /// The start of the token that opens the body
+    open: LineColumn,
+
+    /// The end of the token that closes the body
+    close: LineColumn,
+}
+
+impl From<&Brace> for BodyDelimiters {
+    fn from(brace: &Brace) -> Self {
+        let span = brace.span.span();
+        Self {
+            open: span.start(),
+            close: span.end(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Writer<'a> {
     pub raw_src: &'a str,
@@ -113,7 +137,8 @@ impl<'a> Writer<'a> {
         } = el;
 
         write!(self.out, "{name} ")?;
-        self.write_rsx_block(attributes, spreads, children, &brace.unwrap_or_default())?;
+        let delimiters = BodyDelimiters::from(&brace.unwrap_or_default());
+        self.write_rsx_block(attributes, spreads, children, delimiters)?;
 
         Ok(())
     }
@@ -143,7 +168,8 @@ impl<'a> Writer<'a> {
         }
 
         write!(self.out, " ")?;
-        self.write_rsx_block(fields, spreads, &children.roots, &brace.unwrap_or_default())?;
+        let delimiters = BodyDelimiters::from(&brace.unwrap_or_default());
+        self.write_rsx_block(fields, spreads, &children.roots, delimiters)?;
 
         Ok(())
     }
@@ -272,8 +298,9 @@ impl<'a> Writer<'a> {
         let mut is_first = true;
 
         while let Some(child) = iter.next() {
-            if self.current_span_is_primary(child.span().start()) {
-                let comments = self.accumulate_full_line_comments(child.span().start());
+            let start = child.span().start();
+            if self.current_span_is_primary(start) {
+                let comments = self.accumulate_full_line_comments(start);
                 let has_real_comment = comments
                     .iter()
                     .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
@@ -301,7 +328,7 @@ impl<'a> Writer<'a> {
         attributes: &[Attribute],
         spreads: &[Spread],
         children: &[BodyNode],
-        brace: &Brace,
+        delimiters: BodyDelimiters,
     ) -> Result {
         #[derive(Debug)]
         enum ShortOptimization {
@@ -333,14 +360,14 @@ impl<'a> Writer<'a> {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let attr_len = self.is_short_attrs(brace, attributes, spreads);
-        let has_postbrace_comments = self.brace_has_trailing_comments(brace);
+        let attr_len = self.is_short_attrs(attributes, spreads);
+        let has_postbrace_comments = self.brace_has_trailing_comments(delimiters);
         let is_short_attr_list =
             ((attr_len + self.out.indent_level * 4) < 80) && !has_postbrace_comments;
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
-        let has_trailing_comments = self.has_trailing_comments(children, brace);
+        let has_trailing_comments = self.has_trailing_comments(children, delimiters);
         let is_small_children = children_len.is_some() && !has_trailing_comments;
 
         // if we have one long attribute and a lot of children, place the attrs on top
@@ -381,8 +408,8 @@ impl<'a> Writer<'a> {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
-            self.write_inline_comments(brace.span.span().start(), 1)?;
-            self.write_todo_body(brace)?;
+            self.write_inline_comments(delimiters.open, 1)?;
+            self.write_todo_body(delimiters)?;
         }
 
         // multiline handlers bump everything down, but not empty blocks
@@ -399,7 +426,7 @@ impl<'a> Writer<'a> {
             ShortOptimization::Oneliner => {
                 write!(self.out, " ")?;
 
-                self.write_attributes(attributes, spreads, true, brace, has_children)?;
+                self.write_attributes(attributes, spreads, true, delimiters, has_children)?;
 
                 if !children.is_empty() && !attributes.is_empty() {
                     write!(self.out, " ")?;
@@ -421,7 +448,7 @@ impl<'a> Writer<'a> {
                     write!(self.out, " ")?;
                 }
 
-                self.write_attributes(attributes, spreads, true, brace, has_children)?;
+                self.write_attributes(attributes, spreads, true, delimiters, has_children)?;
 
                 if !children.is_empty() {
                     self.out.new_line()?;
@@ -432,9 +459,9 @@ impl<'a> Writer<'a> {
             }
 
             ShortOptimization::NoOpt => {
-                self.write_inline_comments(brace.span.span().start(), 1)?;
+                self.write_inline_comments(delimiters.open, 1)?;
                 self.out.new_line()?;
-                self.write_attributes(attributes, spreads, false, brace, has_children)?;
+                self.write_attributes(attributes, spreads, false, delimiters, has_children)?;
 
                 if !children.is_empty() {
                     if !attributes.is_empty() || !spreads.is_empty() {
@@ -451,9 +478,9 @@ impl<'a> Writer<'a> {
         if matches!(
             opt_level,
             ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
-        ) && self.leading_row_is_empty(brace.span.span().end())
+        ) && self.leading_row_is_empty(delimiters.close)
         {
-            let comments = self.accumulate_full_line_comments(brace.span.span().end());
+            let comments = self.accumulate_full_line_comments(delimiters.close);
             let has_real_comment = comments
                 .iter()
                 .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
@@ -479,7 +506,7 @@ impl<'a> Writer<'a> {
         attributes: &[Attribute],
         spreads: &[Spread],
         props_same_line: bool,
-        brace: &Brace,
+        delimiters: BodyDelimiters,
         has_children: bool,
     ) -> Result {
         enum AttrType<'a> {
@@ -500,7 +527,7 @@ impl<'a> Writer<'a> {
 
             if !props_same_line {
                 self.write_attr_comments(
-                    brace,
+                    delimiters,
                     match attr {
                         AttrType::Attr(attr) => attr.span(),
                         AttrType::Spread(attr) => attr.expr.span(),
@@ -527,6 +554,7 @@ impl<'a> Writer<'a> {
                     .unwrap_or_else(|| self.total_span_of_attr(attr)),
                 AttrType::Spread(attr) => attr.span(),
             };
+            let attr_end = span.end();
 
             let has_more = attr_iter.peek().is_some();
             let should_finish_comma = has_attributes && has_children || !props_same_line;
@@ -536,11 +564,11 @@ impl<'a> Writer<'a> {
             }
 
             if !props_same_line {
-                self.write_inline_comments(span.end(), 0)?;
+                self.write_inline_comments(attr_end, 0)?;
             }
 
             if props_same_line && !has_more {
-                self.write_inline_comments(span.end(), 0)?;
+                self.write_inline_comments(attr_end, 0)?;
             }
 
             if props_same_line && has_more {
@@ -678,13 +706,13 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
+    fn write_attr_comments(&mut self, delimiters: BodyDelimiters, attr_span: Span) -> Result {
         // There's a chance this line actually shares the same line as the previous
         // Only write comments if the comments actually belong to this line
         //
         // to do this, we check if the attr span starts on the same line as the brace
         // if it doesn't, we write the comments
-        let brace_line = brace.span.span().start().line;
+        let brace_line = delimiters.open.line;
         let attr_line = attr_span.start().line;
 
         if brace_line != attr_line {
@@ -865,12 +893,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn is_short_attrs(
-        &mut self,
-        _brace: &Brace,
-        attributes: &[Attribute],
-        spreads: &[Spread],
-    ) -> usize {
+    fn is_short_attrs(&mut self, attributes: &[Attribute], spreads: &[Spread]) -> usize {
         let mut total = 0;
 
         // No more than 3 attributes before breaking the line
@@ -917,10 +940,9 @@ impl<'a> Writer<'a> {
         total
     }
 
-    fn write_todo_body(&mut self, brace: &Brace) -> std::fmt::Result {
-        let span = brace.span.span();
-        let start = span.start();
-        let end = span.end();
+    fn write_todo_body(&mut self, delimiters: BodyDelimiters) -> std::fmt::Result {
+        let start = delimiters.open;
+        let end = delimiters.close;
 
         if start.line == end.line {
             return Ok(());
@@ -1273,8 +1295,9 @@ impl<'a> Writer<'a> {
 
     fn children_have_comments(&self, children: &[BodyNode]) -> bool {
         for child in children {
-            if self.current_span_is_primary(child.span().start()) {
-                'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
+            let start = child.span().start();
+            if self.current_span_is_primary(start) {
+                'line: for line in self.src[..start.line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return true,
                         (_, true) => continue 'line,
@@ -1363,16 +1386,14 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn brace_has_trailing_comments(&self, brace: &Brace) -> bool {
-        let span = brace.span.span();
-        let line = self.src.get(span.start().line - 1).unwrap_or(&"");
-        let after_brace = line.get(span.start().column + 1..).unwrap_or("").trim();
+    fn brace_has_trailing_comments(&self, delimiters: BodyDelimiters) -> bool {
+        let open = delimiters.open;
+        let line = self.src.get(open.line - 1).unwrap_or(&"");
+        let after_brace = line.get(open.column + 1..).unwrap_or("").trim();
         after_brace.starts_with("//")
     }
 
-    fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
-        let brace_span = brace.span.span();
-
+    fn has_trailing_comments(&self, children: &[BodyNode], delimiters: BodyDelimiters) -> bool {
         let Some(last_node) = children.last() else {
             return false;
         };
@@ -1399,7 +1420,7 @@ impl<'a> Writer<'a> {
                 return true;
             }
 
-            if line == brace_span.end().line {
+            if line == delimiters.close.line {
                 // If we reached the end of the brace span, stop
                 break;
             }
