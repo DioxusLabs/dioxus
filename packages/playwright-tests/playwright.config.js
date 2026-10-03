@@ -61,6 +61,22 @@ const activeServers = specArgs.length > 0
     ? ALL_SERVERS.filter((s) => s.specs.some((spec) => spec.includes("windows")))
     : ALL_SERVERS.filter((s) => !s.specs.some((spec) => spec.includes("windows")));
 
+// Derive a build-only command from a server's run command so the app can be
+// compiled before Playwright starts the webServers. `dx run`/`cargo run` reuse
+// the artifacts as long as the build flags match, so startup becomes
+// launch-only instead of ~20 concurrent compiles racing at once.
+//
+// Hot-patch servers (`dx serve --hot-patch`) are excluded: their initial fat
+// build is not shared with a plain `dx build`.
+function preBuildCommand(s) {
+  if (s.command.includes("--hot-patch")) return null;
+  if (s.command.startsWith("cargo run")) return s.command.replace("cargo run", "cargo build");
+  return s.command
+    .replace(`${dx} run`, `${dx} build`)
+    .replace(/ --addr \S+/, "")
+    .replace(/ --port \S+/, "");
+}
+
 // Run any setup functions (e.g. copying source to temp dirs for hot-patch tests)
 // Only happens on initialize
 //
@@ -76,6 +92,19 @@ if (!process.env._DX_BUILT) {
     env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: "never" },
     stdio: "inherit",
   });
+
+  // Pre-build every active test app sequentially (cargo parallelizes
+  // internally) so the webServer commands only need to launch.
+  for (const s of activeServers) {
+    const command = preBuildCommand(s);
+    if (!command) continue;
+    console.log(`Pre-building ${s.cwd ?? s.specs[0]}: ${command}`);
+    execSync(command, {
+      cwd: s.cwd ? path.join(__dirname, s.cwd) : __dirname,
+      env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: "never", ...s.env },
+      stdio: "inherit",
+    });
+  }
 
   process.env._DX_BUILT = "1";
 }
@@ -96,7 +125,9 @@ module.exports = defineConfig({
     command: s.command,
     port: s.port,
     cwd: s.cwd ? path.join(__dirname, s.cwd) : __dirname,
-    timeout: 50 * 60 * 1000,
+    // Pre-built servers only need to relaunch; hot-patch servers still do
+    // their full fat build at startup.
+    timeout: (preBuildCommand(s) ? 10 : 50) * 60 * 1000,
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",
     stderr: "pipe",
