@@ -415,18 +415,11 @@ impl RenderDriver for SuspenseDriver {
         to: Option<&mut (dyn WriteMutations + '_)>,
         destroy_component_state: bool,
     ) {
-        // If this is a suspense boundary, remove the suspended nodes as well.
-        //
-        // When we are only moving a component out of the real DOM for an
-        // ancestor suspense boundary, the nested boundary's suspended nodes
-        // are still its background state. Keep them so the nested boundary
-        // can resume or continue diffing while hidden.
+        // A nested boundary's background branch stays alive unless this one is truly destroyed.
         if destroy_component_state {
             SuspenseContext::remove_suspended_nodes(dom, scope_id, destroy_component_state);
         }
 
-        // The scope's rendered output (children or fallback) is removed the
-        // same way a plain component's output is.
         remove_rendered_output(dom, scope_id, to, destroy_component_state);
     }
 }
