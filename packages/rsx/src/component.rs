@@ -34,7 +34,8 @@ pub struct Component {
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
     pub spreads: Vec<Spread>,
-    pub brace: Option<token::Brace>,
+    /// The tokens around the body: the brace of `Comp { }` or the tags of `<Comp></Comp>`
+    pub delimiter: NodeDelimiter,
     pub children: TemplateBody,
     pub diagnostics: Diagnostics,
 }
@@ -62,7 +63,7 @@ impl Parse for Component {
             fields,
             spreads,
             children,
-            Some(brace),
+            NodeDelimiter::Brace(brace),
             diagnostics,
         ))
     }
@@ -120,7 +121,7 @@ impl Component {
         fields: Vec<Attribute>,
         spreads: Vec<Spread>,
         children: Vec<BodyNode>,
-        brace: Option<token::Brace>,
+        delimiter: NodeDelimiter,
         diagnostics: Diagnostics,
     ) -> Self {
         let mut component = Self {
@@ -128,7 +129,7 @@ impl Component {
             name,
             generics,
             fields,
-            brace,
+            delimiter,
             spreads,
             diagnostics,
         };
@@ -238,11 +239,10 @@ impl Component {
 
         let name = &self.name;
         let generics = &self.generics;
-        let inner_scope_span = self
-            .brace
-            .as_ref()
-            .map(|b| b.span.join())
-            .unwrap_or(self.name.span());
+        let inner_scope_span = match &self.delimiter {
+            NodeDelimiter::Brace(brace) => brace.span.join(),
+            delimiter => delimiter.open_span().unwrap_or(self.name.span()),
+        };
 
         let mut tokens = if let Some(props) = manual_props.as_ref() {
             quote_spanned! { props.span() => let mut __manual_props = #props; }
@@ -387,7 +387,7 @@ impl Component {
         Component {
             name,
             generics,
-            brace: None,
+            delimiter: NodeDelimiter::Missing,
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),

@@ -154,6 +154,23 @@ impl BodyNode {
         }
     }
 
+    /// The span of the first token of the node
+    ///
+    /// This is the same as [`BodyNode::span`] except for nodes written in the tag syntax, which
+    /// start with a `<` rather than with their name.
+    pub fn first_token_span(&self) -> Span {
+        let tag = match self {
+            BodyNode::Element(el) => el.delimiter.tag(),
+            BodyNode::Component(component) => component.delimiter.tag(),
+            _ => None,
+        };
+
+        match tag {
+            Some(tag) => tag.lt.span,
+            None => self.span(),
+        }
+    }
+
     pub(crate) fn key(&self) -> Option<&AttributeValue> {
         match self {
             Self::Element(el) => el.key(),

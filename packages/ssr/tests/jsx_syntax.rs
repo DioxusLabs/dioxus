@@ -75,3 +75,33 @@ fn jsx_event_handlers_and_shorthand() {
         "<button disabled=true>Click me</button>"
     );
 }
+
+#[test]
+fn jsx_expressions_before_tags() {
+    let count = 3;
+    let label = "label";
+    assert_eq!(
+        dioxus_ssr::render_element(rsx! {
+            <ul>
+                {label}
+                <li>"first"</li>
+                match count {
+                    3 => rsx! { <li>"three"</li> },
+                    _ => rsx! {},
+                }
+            </ul>
+        }),
+        "<ul>label<li>first</li><li>three</li></ul>"
+    );
+}
+
+#[test]
+fn braced_comparison_attribute_values() {
+    let (a, b) = (1, 2);
+    assert_eq!(
+        dioxus_ssr::render_element(rsx! {
+            div { hidden: {a} < b }
+        }),
+        "<div hidden=true></div>"
+    );
+}
