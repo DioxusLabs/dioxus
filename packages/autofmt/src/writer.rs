@@ -11,27 +11,52 @@ use std::{
 use syn::{Expr, spanned::Spanned, token::Brace};
 
 /// The source locations of the delimiters around a body: the braces of an element, a component,
-/// or a `for`/`if` block
+/// or a `for`/`if` block, or the tags of the tag syntax (`<div> </div>`)
 ///
 /// Comments are not part of the parsed rsx, so they are recovered by looking at the source text
 /// around these locations.
 #[derive(Debug, Clone, Copy)]
 struct BodyDelimiters {
-    /// The start of the token that opens the body
+    /// The start of the token that opens the body: `{`, or the `>` (`/` if self-closing) of a tag
     open: LineColumn,
 
-    /// The end of the token that closes the body
+    /// The end of the token that starts the closing delimiter: `}`, or the `<` of a closing tag
     close: LineColumn,
 
     /// The end of the name that the body belongs to, if comments could be written between the two
     name_end: Option<LineColumn>,
+
+    /// Whether the node was written in the tag syntax
+    is_tag: bool,
 }
 
 impl BodyDelimiters {
-    fn after_name(brace: &Brace, name_end: LineColumn) -> Self {
-        Self {
-            name_end: Some(name_end),
-            ..brace.into()
+    /// The delimiters of a node whose name ends at `name_end`
+    ///
+    /// Returns `None` for tags that are incomplete, which can't be formatted
+    fn new(delimiter: &NodeDelimiter, name_end: LineColumn) -> Option<Self> {
+        match delimiter {
+            NodeDelimiter::Brace(brace) => Some(Self {
+                name_end: Some(name_end),
+                ..brace.into()
+            }),
+            NodeDelimiter::Missing => Some((&Brace::default()).into()),
+            NodeDelimiter::Tag(tag) if tag.is_complete() => {
+                let gt = tag.gt?;
+                Some(Self {
+                    open: match tag.slash {
+                        Some(slash) => slash.span.start(),
+                        None => gt.span.start(),
+                    },
+                    close: match &tag.close {
+                        Some(close) => close.lt.span.end(),
+                        None => gt.span.end(),
+                    },
+                    name_end: None,
+                    is_tag: true,
+                })
+            }
+            NodeDelimiter::Tag(_) => None,
         }
     }
 }
@@ -43,6 +68,7 @@ impl From<&Brace> for BodyDelimiters {
             open: span.start(),
             close: span.end(),
             name_end: None,
+            is_tag: false,
         }
     }
 }
@@ -158,12 +184,14 @@ impl<'a> Writer<'a> {
             raw_attributes: attributes,
             children,
             spreads,
-            brace,
+            delimiter,
             ..
         } = el;
 
+        let delimiters =
+            BodyDelimiters::new(delimiter, name.span().end()).ok_or(std::fmt::Error)?;
+
         write!(self.out, "{name} ")?;
-        let delimiters = BodyDelimiters::after_name(&brace.unwrap_or_default(), name.span().end());
         self.write_rsx_block(attributes, spreads, children, delimiters)?;
 
         Ok(())
@@ -177,7 +205,7 @@ impl<'a> Writer<'a> {
             children,
             generics,
             spreads,
-            brace,
+            delimiter,
             ..
         }: &Component,
     ) -> Result {
@@ -198,7 +226,7 @@ impl<'a> Writer<'a> {
             Some(generics) => generics.gt_token.span().end(),
             None => path.span().end(),
         };
-        let delimiters = BodyDelimiters::after_name(&brace.unwrap_or_default(), name_end);
+        let delimiters = BodyDelimiters::new(delimiter, name_end).ok_or(std::fmt::Error)?;
         self.write_rsx_block(fields, spreads, &children.roots, delimiters)?;
 
         Ok(())
@@ -404,7 +432,7 @@ impl<'a> Writer<'a> {
         let mut is_first = true;
 
         while let Some(child) = iter.next() {
-            let start = child.span().start();
+            let start = child.first_token_span().start();
             if self.current_span_is_primary(start) {
                 let comments = self.accumulate_full_line_comments(start);
                 let has_real_comment = comments
@@ -474,7 +502,7 @@ impl<'a> Writer<'a> {
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
         let has_attributes = !attributes.is_empty() || !spreads.is_empty();
-        let attr_comments = self.attr_comments(attributes, spreads);
+        let attr_comments = self.attr_comments(attributes, spreads, delimiters);
         let has_trailing_comments = self.has_trailing_comments(children, delimiters);
         // A comment after the last attribute ends its line, so the children can't follow on it
         let is_small_children = children_len.is_some()
@@ -644,8 +672,8 @@ impl<'a> Writer<'a> {
             }
 
             let attr_end = match attr {
-                AttrType::Attr(attr) => self.end_of_attr(attr),
-                AttrType::Spread(attr) => self.end_of_spread(attr),
+                AttrType::Attr(attr) => self.end_of_attr(attr, delimiters),
+                AttrType::Spread(attr) => self.end_of_spread(attr, delimiters),
             };
 
             let has_more = attr_iter.peek().is_some();
@@ -1169,7 +1197,12 @@ impl<'a> Writer<'a> {
 
     /// Where the attributes and spreads have comments: on the lines above them, or after them on
     /// the same line
-    fn attr_comments(&self, attributes: &[Attribute], spreads: &[Spread]) -> AttrComments {
+    fn attr_comments(
+        &self,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+        delimiters: BodyDelimiters,
+    ) -> AttrComments {
         if attributes
             .iter()
             .any(|attr| !self.attr_value_comments(attr).is_empty())
@@ -1179,10 +1212,13 @@ impl<'a> Writer<'a> {
 
         let attributes = attributes
             .iter()
-            .map(|attr| (attr.span().start(), self.end_of_attr(attr)));
-        let spreads = spreads
-            .iter()
-            .map(|spread| (spread.span().start(), self.end_of_spread(spread)));
+            .map(|attr| (attr.span().start(), self.end_of_attr(attr, delimiters)));
+        let spreads = spreads.iter().map(|spread| {
+            (
+                spread.span().start(),
+                self.end_of_spread(spread, delimiters),
+            )
+        });
 
         let mut comments = AttrComments::None;
         let mut iter = attributes.chain(spreads).peekable();
@@ -1223,15 +1259,15 @@ impl<'a> Writer<'a> {
     }
 
     /// The end of an attribute, including its trailing comma
-    fn end_of_attr(&self, attr: &Attribute) -> LineColumn {
+    fn end_of_attr(&self, attr: &Attribute, delimiters: BodyDelimiters) -> LineColumn {
         match &attr.comma {
             Some(comma) => comma.span().end(),
-            None => self.total_span_of_attr(attr).end(),
+            None => self.end_of_tag_value(delimiters, self.total_span_of_attr(attr).end()),
         }
     }
 
     /// The end of a spread, including its trailing comma
-    fn end_of_spread(&self, spread: &Spread) -> LineColumn {
+    fn end_of_spread(&self, spread: &Spread, delimiters: BodyDelimiters) -> LineColumn {
         let mut end = spread.expr.span().end();
 
         // The comma of a spread isn't exposed, so look for it in the source
@@ -1242,6 +1278,19 @@ impl<'a> Writer<'a> {
             end.column += whitespace.chars().count() + 1;
         }
 
+        self.end_of_tag_value(delimiters, end)
+    }
+
+    /// The values of attributes in the tag syntax can be wrapped in a brace that is not part of
+    /// the value itself: `class={value}`. This moves the end of a value past that brace.
+    fn end_of_tag_value(&self, delimiters: BodyDelimiters, mut end: LineColumn) -> LineColumn {
+        if delimiters.is_tag
+            && let Some(rest) = self.text_after(end)
+            && let Some((whitespace, _)) = rest.split_once('}')
+            && whitespace.trim().is_empty()
+        {
+            end.column += whitespace.chars().count() + 1;
+        }
         end
     }
 
@@ -1566,7 +1615,7 @@ impl<'a> Writer<'a> {
     fn children_have_comments(&self, children: &[BodyNode]) -> bool {
         children
             .iter()
-            .any(|child| self.has_leading_comments(child.span().start()))
+            .any(|child| self.has_leading_comments(child.first_token_span().start()))
     }
 
     // make sure the comments are actually relevant to this element.
@@ -1631,16 +1680,8 @@ impl<'a> Writer<'a> {
     fn final_span_of_node(node: &BodyNode) -> Span {
         // Get the ending span of the node
         match node {
-            BodyNode::Element(el) => el
-                .brace
-                .as_ref()
-                .map(|b| b.span.span())
-                .unwrap_or_else(|| el.name.span()),
-            BodyNode::Component(el) => el
-                .brace
-                .as_ref()
-                .map(|b| b.span.span())
-                .unwrap_or_else(|| el.name.span()),
+            BodyNode::Element(el) => el.delimiter.close_span().unwrap_or_else(|| el.name.span()),
+            BodyNode::Component(el) => el.delimiter.close_span().unwrap_or_else(|| el.name.span()),
             BodyNode::Text(txt) => txt.input.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(f) => f.brace.span.span(),

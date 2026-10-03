@@ -81,6 +81,14 @@ impl PartialExpr {
         syn::parse2(expr.to_token_stream())
     }
 
+    /// Create a braced expression (`{expr}`) from its brace and unparsed contents
+    pub(crate) fn from_braced(brace: Brace, expr: TokenStream2) -> Self {
+        Self {
+            brace: Some(brace),
+            expr,
+        }
+    }
+
     pub(crate) fn from_expr(expr: &Expr) -> Self {
         Self {
             brace: None,
