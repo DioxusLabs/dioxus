@@ -267,6 +267,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "version_code": {
+          "description": "The version code used for `versionCode` in the generated Gradle project.\n\nMust be between 1 and 2100000000 (the Google Play Store maximum).\n\nCan be overridden per-build with `--version-code` or the `DX_ANDROID_VERSION_CODE`\nenvironment variable. If unset, it is derived from the crate version as\n`major * 1000000 + minor * 1000 + patch`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         }
       }
     },
@@ -963,6 +972,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "bundle_version": {
+          "description": "The bundle version string (CFBundleVersion).\n\nThis is the machine-readable build number that must increase with every upload\nto App Store Connect. Can be overridden per-build with `--bundle-version` or the\n`DX_BUNDLE_VERSION` environment variable. Defaults to the crate version.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "category": {
           "description": "App category.\nOverrides `bundle.category` for iOS builds.",
