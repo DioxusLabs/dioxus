@@ -3,7 +3,11 @@ use crate::Workspace;
 use anyhow::{Context, bail};
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{borrow::Cow, fs, path::Path};
+use std::{
+    borrow::Cow,
+    fs,
+    path::{Path, PathBuf},
+};
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -52,8 +56,12 @@ impl Autoformat {
             // Format a single file
             refactor_file(file, split_line_attributes, format_rust_code)?;
         } else if let Some(raw) = raw {
-            // Format raw text.
-            let indent = indentation_for(".", self.split_line_attributes)?;
+            // Format raw text. There is no input file, so anchor rustfmt's
+            // `.rustfmt.toml` lookup on a representative project file (#5631).
+            let indent = indentation_for(
+                representative_config_file(&project_rs_files()),
+                self.split_line_attributes,
+            )?;
             let formatted =
                 dioxus_autofmt::fmt_block(&raw, 0, indent).context("error formatting codeblock")?;
             println!("{}", formatted);
@@ -87,7 +95,6 @@ fn refactor_file(
     split_line_attributes: bool,
     format_rust_code: bool,
 ) -> Result<(), Error> {
-    let indent = indentation_for(".", split_line_attributes)?;
     let file_content = if file == "-" {
         let mut contents = String::new();
         std::io::stdin().read_to_string(&mut contents)?;
@@ -96,6 +103,16 @@ fn refactor_file(
         fs::read_to_string(&file)
     };
     let mut s = file_content.context("failed to open file")?;
+
+    // Anchor rustfmt's `.rustfmt.toml` lookup on the input file itself; for
+    // stdin ("-") there is no file, so fall back to a representative project
+    // file (#5631).
+    let config_path = if file == "-" {
+        representative_config_file(&project_rs_files())
+    } else {
+        PathBuf::from(&file)
+    };
+    let indent = indentation_for(config_path, split_line_attributes)?;
 
     if format_rust_code {
         s = format_rust(&s)?;
@@ -197,6 +214,30 @@ fn autoformat_project(
     Ok(())
 }
 
+/// Pick a representative project `.rs` file to anchor rustfmt's `.rustfmt.toml`
+/// lookup for the file-less `--raw`/stdin modes, falling back to `"."` (rustfmt
+/// defaults) when the project has none.
+///
+/// `rustfmt -- --print-config current <path>` only walks up to find
+/// `.rustfmt.toml` when `<path>` is a concrete file; given a directory it
+/// silently falls back to defaults (#5631). The whole-project path already
+/// passes a real file (see `autoformat_project`); this gives the file-less
+/// modes the same treatment instead of the old `"."` directory.
+fn representative_config_file(project_files: &[PathBuf]) -> PathBuf {
+    project_files
+        .first()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Collect the project's `.rs` files so a representative one can anchor
+/// rustfmt's `.rustfmt.toml` lookup for the file-less `--raw`/stdin modes.
+fn project_rs_files() -> Vec<PathBuf> {
+    let mut files = vec![];
+    collect_rs_files(Path::new("."), &mut files);
+    files
+}
+
 fn indentation_for(
     file_or_dir: impl AsRef<Path>,
     split_line_attributes: bool,
@@ -282,4 +323,18 @@ async fn test_auto_fmt() {
     };
 
     fmt.autoformat().await.unwrap();
+}
+
+#[test]
+fn representative_config_file_prefers_a_real_file_over_the_cwd() {
+    // For the file-less modes, anchor on a representative project .rs file so
+    // rustfmt walks up to .rustfmt.toml, never the bare "." directory whose
+    // config it ignores (#5631).
+    let files = vec![PathBuf::from("src/lib.rs"), PathBuf::from("src/main.rs")];
+    assert_eq!(
+        representative_config_file(&files),
+        PathBuf::from("src/lib.rs")
+    );
+    // No .rs files discoverable: preserve the old default (".") rather than fail.
+    assert_eq!(representative_config_file(&[]), PathBuf::from("."));
 }
