@@ -563,13 +563,16 @@ impl BundleContext<'_> {
 
     /// Directory name used for bundled Linux resources.
     fn linux_resource_dir_name(&self) -> String {
-        self.product_name()
+        self.product_file_name()
     }
 
     /// Generate the contents of a .desktop file for the given bundle context.
     fn generate_linux_desktop_file(&self, desktop_template: Option<&Path>) -> Result<String> {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(false);
+        // `.desktop` files are plain text, not HTML, so Handlebars' default
+        // HTML escaping would corrupt names containing e.g. `&`.
+        handlebars.register_escape_fn(handlebars::no_escape);
 
         let template = match desktop_template {
             // Path to template
