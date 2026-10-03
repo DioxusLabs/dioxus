@@ -59,6 +59,7 @@
 //! Notice that we *could* feasibly build this ourselves :)
 
 use crate::BuildRequest;
+use crate::bundler::{copy_dir_recursive_skipping, is_build_output_dir};
 use crate::{BuildContext, Result};
 use anyhow::{Context, bail};
 use itertools::Itertools;
@@ -472,7 +473,7 @@ impl BuildRequest {
 
                 // Create module directory
                 let module_dir = plugins_dir.join(plugin_name);
-                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
+                copy_dir_recursive_skipping(&artifact_path, &module_dir, is_build_output_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
                 self.strip_gradle_plugin_versions(&module_dir)?;

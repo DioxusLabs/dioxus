@@ -2322,33 +2322,6 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Recursively copy a directory and its contents.
-    #[allow(clippy::only_used_in_recursion)]
-    pub(crate) fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
-        std::fs::create_dir_all(dst)?;
-
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-
-            if src_path.is_dir() {
-                // Skip build directories and hidden folders
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
-                    continue;
-                }
-
-                self.copy_build_dir_recursive(&src_path, &dst_path)?;
-            } else {
-                std::fs::copy(&src_path, &dst_path)?;
-            }
-        }
-
-        Ok(())
-    }
-
     /// Ensure the right dependencies are installed for linux apps.
     /// This varies by distro, so we just do nothing for now.
     ///

@@ -31,6 +31,7 @@
 //!     assets/
 //! ```
 
+use crate::bundler::{copy_dir_recursive_skipping, is_build_output_dir};
 use crate::{BuildContext, BundleFormat, Result};
 use crate::{BuildRequest, ManifestMapper};
 use anyhow::{Context, bail};
@@ -879,7 +880,7 @@ We checked the folders:
         }
 
         // Copy the entire framework bundle
-        self.copy_build_dir_recursive(framework_path, &dest)?;
+        copy_dir_recursive_skipping(framework_path, &dest, is_build_output_dir)?;
 
         tracing::debug!(
             "Installed Swift framework '{}' to {}",
@@ -1026,7 +1027,7 @@ We checked the folders:
                 std::fs::remove_dir_all(&dest_path)?;
             }
 
-            self.copy_build_dir_recursive(&appex_path, &dest_path)?;
+            copy_dir_recursive_skipping(&appex_path, &dest_path, is_build_output_dir)?;
 
             tracing::debug!(
                 "Installed widget extension '{}' to {}",
@@ -1086,7 +1087,7 @@ async fn compile_swift_sources(
         if dest_path.exists() {
             std::fs::remove_dir_all(&dest_path)?;
         }
-        copy_dir_recursive(&source_path, &dest_path)?;
+        copy_dir_recursive_skipping(&source_path, &dest_path, is_swift_build_dir)?;
 
         // Modify the Package.swift to produce a dynamic library
         if let Err(e) = modify_package_for_dynamic_library(&dest_path, product_name) {
@@ -1349,28 +1350,8 @@ async fn lookup_sdk_path(sdk_name: &str) -> Result<String> {
     Ok(sdk_path)
 }
 
-/// Recursively copy a directory
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)?;
-
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if ty.is_dir() {
-            // Skip .build directories
-            if entry.file_name() == ".build" {
-                continue;
-            }
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            std::fs::copy(&src_path, &dst_path)?;
-        }
-    }
-
-    Ok(())
+fn is_swift_build_dir(name: &str) -> bool {
+    name == ".build"
 }
 
 /// Extract Swift metadata from object files in link arguments
@@ -1602,7 +1583,7 @@ pub async fn compile_apple_widget(
     if source_dir.exists() {
         std::fs::remove_dir_all(&source_dir)?;
     }
-    copy_dir_recursive(&widget.source_path, &source_dir)?;
+    copy_dir_recursive_skipping(&widget.source_path, &source_dir, is_swift_build_dir)?;
 
     // Get Swift target triple and SDK
     let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
