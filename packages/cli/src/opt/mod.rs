@@ -54,8 +54,8 @@ impl AppManifest {
         ))?;
 
         let mut bundled_asset =
-            manganis::macro_helpers::create_bundled_asset(output_path_str, options);
-        add_hash_to_asset(&mut bundled_asset);
+            try_create_bundled_asset(output_path_str, BundledAsset::PLACEHOLDER_HASH, options)?;
+        add_hash_to_asset(&mut bundled_asset)?;
 
         self.assets
             .entry(asset_path.to_path_buf())
@@ -101,5 +101,84 @@ impl AppManifest {
             .values()
             .flat_map(|assets| assets.iter())
             .filter(move |asset| seen.insert(asset.bundled_path()))
+    }
+}
+
+pub(crate) fn try_create_bundled_asset(
+    absolute_source_path: &str,
+    bundled_path: &str,
+    options: manganis::AssetOptions,
+) -> anyhow::Result<BundledAsset> {
+    validate_asset_path("source", absolute_source_path, None)?;
+    validate_asset_path("bundled", bundled_path, Some(absolute_source_path))?;
+    Ok(BundledAsset::new(
+        absolute_source_path,
+        bundled_path,
+        options,
+    ))
+}
+
+fn validate_asset_path(kind: &str, path: &str, source_path: Option<&str>) -> anyhow::Result<()> {
+    let actual = path.len();
+    let maximum = BundledAsset::MAX_PATH_LEN;
+    if actual <= maximum {
+        return Ok(());
+    }
+
+    let excess = actual - maximum;
+    let unit = if excess == 1 { "byte" } else { "bytes" };
+    let source = source_path
+        .map(|source_path| format!(" for source {source_path:?}"))
+        .unwrap_or_default();
+    anyhow::bail!(
+        "Asset {kind} path {path:?}{source} is {actual} bytes long, exceeding the {maximum}-byte limit by {excess} {unit}"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options() -> manganis::AssetOptions {
+        manganis::AssetOptions::builder().into_asset_options()
+    }
+
+    #[test]
+    fn accepts_asset_paths_at_maximum_length() {
+        let path = "a".repeat(BundledAsset::MAX_PATH_LEN);
+        let asset = try_create_bundled_asset(&path, &path, options()).unwrap();
+        assert_eq!(asset.absolute_source_path(), path);
+        assert_eq!(asset.bundled_path(), path);
+    }
+
+    #[test]
+    fn rejects_overlong_source_path() {
+        let maximum = BundledAsset::MAX_PATH_LEN;
+        let actual = maximum + 1;
+        let path = "a".repeat(actual);
+        let error = try_create_bundled_asset(&path, "asset", options()).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Asset source path {path:?} is {actual} bytes long, exceeding the {maximum}-byte limit by 1 byte"
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_overlong_bundled_path() {
+        let maximum = BundledAsset::MAX_PATH_LEN;
+        let actual = maximum + 17;
+        let path = "a".repeat(actual);
+        let source = "source-file";
+        let error = try_create_bundled_asset(source, &path, options()).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Asset bundled path {path:?} for source {source:?} is {actual} bytes long, exceeding the {maximum}-byte limit by 17 bytes"
+            )
+        );
     }
 }
