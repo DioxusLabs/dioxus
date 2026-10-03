@@ -31,6 +31,7 @@ twoway![
     comments_attr_expr_blocks,
     comments,
     comments_attributes,
+    comments_constructs,
     comments_control_flow,
     comments_positions,
     comments_async_closure,
