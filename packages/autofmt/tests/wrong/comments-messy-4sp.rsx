@@ -122,6 +122,25 @@ fn positions() -> Element {
     }
 }
 
+// The lines between these comments and what they are above have trailing whitespace
+fn whitespace_lines() -> Element {
+    rsx! {
+        div {
+            // above a short child
+            "a"
+        }
+        div {
+            // above a short attribute
+            class: "a",
+        }
+        div {
+            class: "a",
+            // above a spread
+            ..attrs,
+        }
+    }
+}
+
 fn only_comment() -> Element {
     rsx! {
         // only a comment

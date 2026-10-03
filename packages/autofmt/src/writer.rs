@@ -887,17 +887,9 @@ impl<'a> Writer<'a> {
         }
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.span().start())
-                && let Some(lines) = self.src.get(..attr.span().start().line - 1)
-            {
-                'line: for line in lines.iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return 100000,
-                        (_, true) => continue 'line,
-                        _ => break 'line,
-                    }
-                }
-            };
+            if self.has_leading_comments(attr.span().start()) {
+                return 100000;
+            }
 
             total += match &attr.name {
                 AttributeName::BuiltIn(name) => {
@@ -1031,15 +1023,13 @@ impl<'a> Writer<'a> {
             return false;
         };
 
-        for line in lines.iter().rev() {
-            match (line.trim().starts_with("//"), line.is_empty()) {
-                (true, _) => return true,
-                (_, true) => continue,
-                _ => break,
-            }
-        }
-
-        false
+        // Blank lines can separate the comments from the location
+        lines
+            .iter()
+            .rev()
+            .map(|line| line.trim())
+            .find(|line| !line.is_empty())
+            .is_some_and(|line| line.starts_with("//"))
     }
 
     /// The end of an attribute, including its trailing comma
@@ -1384,20 +1374,9 @@ impl<'a> Writer<'a> {
     }
 
     fn children_have_comments(&self, children: &[BodyNode]) -> bool {
-        for child in children {
-            let start = child.span().start();
-            if self.current_span_is_primary(start) {
-                'line: for line in self.src[..start.line - 1].iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return true,
-                        (_, true) => continue 'line,
-                        _ => break 'line,
-                    }
-                }
-            }
-        }
-
-        false
+        children
+            .iter()
+            .any(|child| self.has_leading_comments(child.span().start()))
     }
 
     // make sure the comments are actually relevant to this element.
