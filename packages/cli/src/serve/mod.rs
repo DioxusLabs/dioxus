@@ -200,6 +200,8 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                     }
                                 }
                             }
+                            // Check builds never run through the dev server
+                            BuildMode::Check { .. } => {}
                             BuildMode::Base | BuildMode::Fat => {
                                 _ = builder
                                     .open(&bundle, &mut devserver)
