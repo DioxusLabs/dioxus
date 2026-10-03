@@ -20,7 +20,8 @@ const MARKER_REPLACE: &str = "𝕣𝕤𝕩! {}";
 pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
         src: &'a str,
-        formatted_stack: Vec<String>,
+        /// Each formatted block, and whether it has to be written on its own lines
+        formatted_stack: Vec<(String, bool)>,
         cfg: &'a IndentOptions,
     }
 
@@ -39,13 +40,17 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
                 let body = CallBody::parse_strict.parse2(i.tokens.clone()).unwrap();
-                let multiline = !Writer::is_short_rsx_call(&body.body().roots);
-                let mut formatted = {
-                    let mut writer = Writer::new(self.src, self.cfg.clone());
-                    _ = writer.write_body_nodes(&body.body().roots).ok();
-                    writer.consume()
-                }
-                .unwrap();
+                let mut writer = Writer::new(self.src, self.cfg.clone());
+
+                // A comment after the opening delimiter ends its line, so the body can't follow
+                // on it. The comment itself is written with the other comments of the expression.
+                let has_open_comment = writer
+                    .inline_comment(i.delimiter.span().open().start(), 1)
+                    .is_some();
+                let multiline = !Writer::is_short_rsx_call(&body.body().roots) || has_open_comment;
+
+                _ = writer.write_body_nodes(&body.body().roots).ok();
+                let mut formatted = writer.consume().unwrap();
 
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
@@ -72,7 +77,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 }
 
                 // Save this formatted block for later, when we apply it to the original expr
-                self.formatted_stack.push(formatted)
+                self.formatted_stack.push((formatted, multiline))
             }
 
             syn::visit_mut::visit_macro_mut(self, i);
@@ -94,15 +99,13 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     let mut unparsed = unparse_inner(&modified_expr);
 
     // now we can replace the macros with the formatted blocks
-    for fmted in replacer.formatted_stack.drain(..) {
-        let is_multiline = fmted.ends_with('}') || fmted.contains('\n');
+    for (fmted, multiline) in replacer.formatted_stack.drain(..) {
+        let is_multiline = multiline || fmted.ends_with('}') || fmted.contains('\n');
         let is_empty = fmted.trim().is_empty();
 
         let mut out_fmt = String::from("rsx! {");
-        if is_multiline {
-            out_fmt.push('\n');
-        } else if !is_empty {
-            out_fmt.push(' ');
+        if !is_empty {
+            out_fmt.push(if is_multiline { '\n' } else { ' ' });
         }
 
         let mut whitespace = 0;
