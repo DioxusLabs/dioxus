@@ -52,7 +52,7 @@ impl BodyDelimiters {
                         Some(close) => close.lt.span.end(),
                         None => gt.span.end(),
                     },
-                    name_end: None,
+                    name_end: Some(name_end),
                     is_tag: true,
                 })
             }
@@ -263,6 +263,14 @@ impl<'a> Writer<'a> {
 
         write!(self.out, "<{name}")?;
 
+        // A comment after the name stays there, with the rest of the open tag on the lines below
+        let name_comment = delimiters
+            .name_end
+            .and_then(|name_end| self.inline_comment(name_end, 0));
+        if let Some(comment) = name_comment {
+            write!(self.out, " {comment}")?;
+        }
+
         let attrs: Vec<_> = attributes
             .iter()
             .map(AttrType::Attr)
@@ -280,9 +288,13 @@ impl<'a> Writer<'a> {
                 ),
             })
             .collect();
-        let has_attr_comments = attr_spans.iter().any(|(start, end)| {
-            self.has_leading_comments(*start) || self.inline_comment(*end, 0).is_some()
-        });
+        let has_attr_comments = name_comment.is_some()
+            || attr_spans.iter().any(|(start, end)| {
+                self.has_leading_comments(*start) || self.inline_comment(*end, 0).is_some()
+            })
+            || attributes
+                .iter()
+                .any(|attr| !self.attr_value_comments(attr).is_empty());
 
         // Decide if the attributes fit in the open tag or need to be split across lines.
         // Comments on attributes can only be kept if each attribute is on its own line.
@@ -388,11 +400,31 @@ impl<'a> Writer<'a> {
             name => self.write_attribute_name(name)?,
         }
 
-        if attr.can_be_shorthand() {
+        // Comments before the value stay there, with the value on a line of its own below them
+        let comments = self.attr_value_comments(attr);
+        let has_comments = !comments.is_empty();
+
+        if attr.can_be_shorthand() && !has_comments {
             return Ok(());
         }
 
         write!(self.out, "=")?;
+
+        if has_comments {
+            let name_line = attr.name.span().end().line;
+            self.out.indent_level += 1;
+            for (line, comment) in comments {
+                if line == name_line {
+                    write!(self.out, " {comment}")?;
+                } else {
+                    self.out.new_line()?;
+                    self.out.indented_tab()?;
+                    write!(self.out, "{comment}")?;
+                }
+            }
+            self.out.new_line()?;
+            self.out.indented_tab()?;
+        }
 
         match &attr.value {
             AttributeValue::AttrLiteral(value) => write!(self.out, "{value}")?,
@@ -409,6 +441,10 @@ impl<'a> Writer<'a> {
                 self.write_attribute_value(value)?;
                 write!(self.out, "}}")?;
             }
+        }
+
+        if has_comments {
+            self.out.indent_level -= 1;
         }
 
         Ok(())
@@ -1923,12 +1959,13 @@ impl<'a> Writer<'a> {
     /// and any between the name and the delimiter, which can't stay where they are
     fn opening_comments(&self, delimiters: BodyDelimiters) -> Vec<&'a str> {
         let mut comments: Vec<&str> = match delimiters.name_end {
-            Some(name_end) => self
+            // The attributes of a tag come between its name and the delimiter
+            Some(name_end) if !delimiters.is_tag => self
                 .comments_between(name_end, delimiters.open)
                 .into_iter()
                 .map(|(_, comment)| comment)
                 .collect(),
-            None => Vec::new(),
+            _ => Vec::new(),
         };
         comments.extend(self.inline_comment(delimiters.open, 1));
         comments
