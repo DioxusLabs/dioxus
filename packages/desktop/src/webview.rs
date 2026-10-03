@@ -718,4 +718,32 @@ mod tests {
             );
         });
     }
+
+    /// The page-numbering invariant `redraw_reloaded_page` relies on: each served page gets a
+    /// strictly increasing number, and a page is replaced exactly when a later one has been served.
+    #[test]
+    fn serve_page_numbers_pages_and_detects_replacement() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_runtime(|| {
+            let target_id = Runtime::current().create_render_target();
+            let websocket = crate::edits::EditWebsocket::start();
+            let wry_queue = websocket.create_queue();
+            let edits = WebviewEdits::new(Runtime::current(), target_id, wry_queue);
+
+            let first = edits.serve_page();
+            let second = edits.serve_page();
+            assert_eq!(first, 1);
+            assert_eq!(second, 2);
+
+            assert!(
+                edits.is_replaced(first),
+                "an earlier page is replaced by a later one"
+            );
+            assert!(
+                !edits.is_replaced(second),
+                "the latest page has not been replaced"
+            );
+        });
+    }
 }

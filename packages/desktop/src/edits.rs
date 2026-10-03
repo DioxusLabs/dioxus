@@ -578,6 +578,53 @@ fn test_key_encoding_length() {
     }
 }
 
+/// `start_new_page` is the heart of recovering from a reloaded page: it must mint a fresh webview
+/// id, drop the old connection's queued edits, and reset the mutation/touched state so the new
+/// page doesn't inherit anything left over from the one it replaced.
+#[test]
+fn start_new_page_rotates_webview_id_and_resets_state() {
+    let websocket = EditWebsocket::start();
+    let queue = websocket.create_queue();
+
+    let old_id = queue.inner.borrow().location.webview_id;
+    queue.inner.borrow_mut().touched = true;
+
+    queue.start_new_page();
+
+    let new_id = queue.inner.borrow().location.webview_id;
+    assert_ne!(old_id, new_id, "start_new_page must mint a new webview id");
+    assert!(
+        !websocket.connections.read().unwrap().contains_key(&old_id),
+        "the old webview's connection must be forgotten"
+    );
+    assert!(
+        !queue.inner.borrow().touched,
+        "touched resets on a new page"
+    );
+    assert!(
+        queue.inner.borrow().edits_in_progress.is_none(),
+        "no edits are in flight for a page that hasn't rendered yet"
+    );
+}
+
+#[test]
+fn next_webview_id_is_strictly_increasing() {
+    let websocket = EditWebsocket::start();
+    let a = websocket.next_webview_id();
+    let b = websocket.next_webview_id();
+    assert!(b > a);
+}
+
+/// Every page's interpreter runs this script, so it must guard itself to the page it was sent for.
+#[test]
+fn connect_script_only_matches_its_own_page() {
+    let websocket = EditWebsocket::start();
+    let queue = websocket.create_queue();
+    let script = queue.connect_script(3);
+    assert!(script.contains("window.dioxusPage === 3"));
+    assert!(script.contains("waitForRequest"));
+}
+
 // Take an Arc<Notify> and create a future that waits for the notify to be triggered.
 fn owned_notify_future(notify: Arc<Notify>) -> Pin<Box<dyn Future<Output = ()>>> {
     let mut notify_owned = Box::pin(async move {
